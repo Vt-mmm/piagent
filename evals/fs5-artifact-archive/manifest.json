@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "kind": "fs5-historical-artifact-archive",
+  "executionAuthority": false,
+  "protocols": [
+    {
+      "path": "evals/fs5-pilot-protocol.v1.json",
+      "sha256": "3e57ca3c46e78bca6967d4670a357d1157af57bb70041a0b8cc46b3fdf18be0d"
+    },
+    {
+      "path": "evals/fs5-pilot-protocol.v2.json",
+      "sha256": "8d34915ea7cf0e6178308d0b549fd4e91d8fe73f9d9dab610526901632b3c0df"
+    },
+    {
+      "path": "evals/fs5-pilot-protocol.v3.json",
+      "sha256": "0af3d4297825cfadca3fb62852e1782c7e9450c56519a5ca30243ee1c81f2a8e"
+    },
+    {
+      "path": "evals/fs5-pilot-protocol.v4.json",
+      "sha256": "e275a07e3b3fdd5c19980b8b2a5e2ca650d0a373df792d4ffea099ed30756530"
+    },
+    {
+      "path": "evals/fs5-pilot-protocol.v5.json",
+      "sha256": "36787e288af378dc7f9cc24550ce07fafbb570793f5beb2db1131d71a32ec826"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/piagent-core/policy/authority-manifest.v1.json",
+      "sha256": "1f073f6d42c093a3182685e0e096144c8b3befd87594aeea1af05ce17653860c",
+      "byteLength": 16868,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/1f073f6d42c093a3182685e0e096144c8b3befd87594aeea1af05ce17653860c.txt"
+    },
+    {
+      "path": "benchmarks/capability-v1/suite.json",
+      "sha256": "29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706",
+      "byteLength": 4333,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706.txt"
+    },
+    {
+      "path": "benchmarks/production-v1/suite.json",
+      "sha256": "1ff46984c5ff668647dfad94248cd9dcfb72384a8aa529279345582f90d7486a",
+      "byteLength": 10890,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/1ff46984c5ff668647dfad94248cd9dcfb72384a8aa529279345582f90d7486a.txt"
+    },
+    {
+      "path": "schemas/task-contract.schema.json",
+      "sha256": "b936a604db87a697bf69581c33d753e26d9e5e2ccce40bf9c9b2070948f49919",
+      "byteLength": 26721,
+      "retrievedFromCommit": "b6acd17d16a66fbd4c4c4980796ea74e021231f3",
+      "archivePath": "sha256/b936a604db87a697bf69581c33d753e26d9e5e2ccce40bf9c9b2070948f49919.txt"
+    },
+    {
+      "path": "schemas/benchmark-assurance-evidence.schema.json",
+      "sha256": "5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8",
+      "byteLength": 7519,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8.txt"
+    },
+    {
+      "path": "schemas/task-contract.schema.json",
+      "sha256": "62ea354afb6816b148ae9bd95ffb1ee5e29580eb4a22473e1ae19dbb471ec36b",
+      "byteLength": 26702,
+      "retrievedFromCommit": "c7d2692fe9a8d064299346d94895b45e073a0b06",
+      "archivePath": "sha256/62ea354afb6816b148ae9bd95ffb1ee5e29580eb4a22473e1ae19dbb471ec36b.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-forensics.js",
+      "sha256": "976a9908adfd765ee7be0655616f39a44fff64824f5e8535d726082e550b02eb",
+      "byteLength": 43743,
+      "retrievedFromCommit": "fd486c9e2d05cdacee174781078a24d0fdd3ba64",
+      "archivePath": "sha256/976a9908adfd765ee7be0655616f39a44fff64824f5e8535d726082e550b02eb.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-record-validation.js",
+      "sha256": "37ecc65febe2c5947ac9288ad958bc149e0f08c6beda137edb1c660908853832",
+      "byteLength": 20594,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/37ecc65febe2c5947ac9288ad958bc149e0f08c6beda137edb1c660908853832.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js",
+      "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d",
+      "byteLength": 16028,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d.txt"
+    },
+    {
+      "path": "scripts/benchmark-runner-core.mjs",
+      "sha256": "bf91f69473f48fc3de7c7c55e7ce893ba0511074c4ec930d9f3bcb9615d8e9d5",
+      "byteLength": 54690,
+      "retrievedFromCommit": "c7d2692fe9a8d064299346d94895b45e073a0b06",
+      "archivePath": "sha256/bf91f69473f48fc3de7c7c55e7ce893ba0511074c4ec930d9f3bcb9615d8e9d5.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-forensics.js",
+      "sha256": "8987775b742f3b3650d75cce84e6d58fcdd3dfb835d03dac4c2bfe6d9eea3a2e",
+      "byteLength": 42597,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/8987775b742f3b3650d75cce84e6d58fcdd3dfb835d03dac4c2bfe6d9eea3a2e.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-phase-attribution.js",
+      "sha256": "9c07bda5bfe7bb7b0959844ccea6790735cc9f154d8d5972e18785148cea6d9a",
+      "byteLength": 3854,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/9c07bda5bfe7bb7b0959844ccea6790735cc9f154d8d5972e18785148cea6d9a.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-timing-diagnostics.js",
+      "sha256": "902e886d0920b66811f54d0d1d933d70f8fab8704813b46d578bee6af1f21eef",
+      "byteLength": 43309,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/902e886d0920b66811f54d0d1d933d70f8fab8704813b46d578bee6af1f21eef.txt"
+    },
+    {
+      "path": "scripts/benchmark-runner-core.mjs",
+      "sha256": "db97f444db8ba604512daf0aa26b3fe1e2a120ace2b21d4730db5b18aa0c528f",
+      "byteLength": 54979,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/db97f444db8ba604512daf0aa26b3fe1e2a120ace2b21d4730db5b18aa0c528f.txt"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-runtime-causal.js",
+      "sha256": "6057c7bf2f40f8e3db7e293f08d745133c05293b75e9f363fb4e2e53bd09a76a",
+      "byteLength": 11151,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/6057c7bf2f40f8e3db7e293f08d745133c05293b75e9f363fb4e2e53bd09a76a.txt"
+    },
+    {
+      "path": "scripts/benchmark-session.mjs",
+      "sha256": "20a5e1ef1cab3234a888b876b3cec52e702a05bc5ac000b691f94c651beed9ca",
+      "byteLength": 43235,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/20a5e1ef1cab3234a888b876b3cec52e702a05bc5ac000b691f94c651beed9ca.txt"
+    },
+    {
+      "path": "scripts/pi-usage-history.mjs",
+      "sha256": "ce4ed1b4a033f2a8cb4632d1336b0867edb3454ce1380f0642c4055149e6ac59",
+      "byteLength": 31419,
+      "retrievedFromCommit": "c993289a21c689e32d4764af6b73473e253790a5",
+      "archivePath": "sha256/ce4ed1b4a033f2a8cb4632d1336b0867edb3454ce1380f0642c4055149e6ac59.txt"
+    }
+  ]
+}

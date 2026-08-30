@@ -1,0 +1,930 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/task-contract.schema.json",
+  "title": "Pi Agent Task Implementation Contract",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskRunId",
+    "taskId",
+    "sessionId",
+    "changeMode",
+    "attempt",
+    "maxAttempts",
+    "previousAttempts",
+    "summary",
+    "riskLane",
+    "expectedOutput",
+    "acceptanceCriteria",
+    "scope",
+    "outOfScope",
+    "protectedPaths",
+    "requiredContext",
+    "contextManifest",
+    "memoryCitations",
+    "mcpCapabilities",
+    "verifyCommands",
+    "workPlan",
+    "reviewLenses",
+    "workingTreeDigestAlgorithm",
+    "baselineChangedFiles",
+    "baselineFileDigests",
+    "observedChangedFiles",
+    "finalWorkingTreeFiles",
+    "finalFileDigests",
+    "changedFiles",
+    "verifyEvidence",
+    "trace",
+    "createdAt",
+    "updatedAt"
+  ],
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "citation": {
+      "type": "object",
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileDigests": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(?:wt-content-v2|wt-content-v2-unavailable):[a-f0-9]{64}$"
+      }
+    },
+    "workingTreeDigestMigration": {
+      "type": "object",
+      "required": ["status", "source", "reasonCode", "requiredAction", "archivePath", "archiveDigest", "archiveBytes", "baselineEvidenceDigest", "finalEvidenceDigest", "recordedAt"],
+      "properties": {
+        "status": { "enum": ["verification-refresh-required", "refreshed", "new-attempt-required", "historical-unverifiable"] },
+        "source": { "const": "legacy-unversioned" },
+        "reasonCode": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "requiredAction": { "enum": ["rerun-exact-verifier", "none", "start-new-attempt", "historical-only"] },
+        "archivePath": { "type": "string", "pattern": "^\\.pi/piagent-state/digest-migrations/[a-z0-9-]+\\.legacy\\.json$" },
+        "archiveDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "archiveBytes": { "type": "integer", "minimum": 1 },
+        "baselineEvidenceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "finalEvidenceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "refreshedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "criterionGraph": {
+      "type": "object",
+      "required": ["schemaVersion", "compiler", "mode", "criterionDigest", "graphDigest", "createdAt", "nodes", "order"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "compiler": { "const": "criterion-graph-v1" },
+        "mode": { "enum": ["mechanical", "criterion-graph"] },
+        "criterionDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "graphDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "required": ["id", "criterionIndex", "obligation", "kind", "proofKinds", "targetHints", "dependsOn"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^criterion-[0-9]{2}$" },
+              "criterionIndex": { "type": "integer", "minimum": 0, "maximum": 11 },
+              "obligation": { "type": "string", "minLength": 1 },
+              "kind": { "enum": ["behavior", "boundary", "output", "scope", "verification", "investigation"] },
+              "proofKinds": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "enum": ["behavioral-check", "exact-verifier", "read-evidence", "scoped-diff"] }
+              },
+              "targetHints": { "$ref": "#/$defs/stringList" },
+              "dependsOn": { "$ref": "#/$defs/stringList" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "order": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^criterion-[0-9]{2}$" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceEvidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "summary",
+        "paths"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "paths": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "uniqueItems": true
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "workingTreeDigest": {
+          "type": "string",
+          "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceCriterion": {
+      "type": "object",
+      "required": [
+        "id",
+        "hash",
+        "obligation",
+        "priority",
+        "status",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "obligation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "priority": {
+          "enum": [
+            "normal",
+            "critical"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "satisfied",
+            "blocked"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/acceptanceEvidence"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceReceipt": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "source",
+        "promptHash",
+        "generatedAt",
+        "criteria"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "source": {
+          "enum": [
+            "model",
+            "runtime"
+          ]
+        },
+        "promptHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provenance": {
+          "type": "object",
+          "required": [
+            "assurance",
+            "disposition",
+            "repairCount",
+            "retryCount",
+            "finalRecoveryDisposition",
+            "failureRef",
+            "recoveryRef",
+            "handoffRef",
+            "recordedAt"
+          ],
+          "properties": {
+            "assurance": {
+              "const": "runtime-observed"
+            },
+            "disposition": {
+              "enum": [
+                "first-pass-success",
+                "repaired-success",
+                "blocked",
+                "partial",
+                "failed",
+                "pending"
+              ]
+            },
+            "repairCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "retryCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "finalRecoveryDisposition": {
+              "enum": [
+                "not-needed",
+                "succeeded",
+                "blocked",
+                "partial",
+                "failed",
+                "pending"
+              ]
+            },
+            "failureRef": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "evidenceDigest",
+                    "category",
+                    "captureRef"
+                  ],
+                  "properties": {
+                    "evidenceDigest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "category": {
+                      "enum": [
+                        "passed",
+                        "compile-typecheck",
+                        "test-assertion",
+                        "lint-format",
+                        "dependency-config",
+                        "environment",
+                        "provider-network",
+                        "permission-policy",
+                        "scope-protected-path",
+                        "flaky-infrastructure",
+                        "unknown"
+                      ]
+                    },
+                    "captureRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "recoveryRef": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "policyVersion",
+                    "action",
+                    "reasonCodes"
+                  ],
+                  "properties": {
+                    "policyVersion": {
+                      "const": "recovery-v1"
+                    },
+                    "action": {
+                      "enum": [
+                        "repair",
+                        "retry",
+                        "fresh-session",
+                        "ask-operator",
+                        "handoff",
+                        "blocked"
+                      ]
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "maxItems": 16,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9_.:-]+$"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "handoffRef": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-zA-Z0-9.][a-zA-Z0-9:._/-]{0,511}$"
+            },
+            "recordedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        },
+        "helperUsage": {
+          "type": "object",
+          "required": ["mode", "used", "reasonCodes", "helpers", "recordedAt"],
+          "properties": {
+            "mode": { "enum": ["off", "recommend", "on"] },
+            "used": { "type": "boolean" },
+            "decision": { "enum": ["dispatch", "skip"] },
+            "projectedSavingsRatio": { "type": ["number", "null"], "minimum": -10, "maximum": 1 },
+            "reasonCodes": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9_.:-]+$" } },
+            "helpers": {
+              "type": "array", "maxItems": 3,
+              "items": {
+                "type": "object",
+                "required": ["role", "disposition", "requestRef", "outputDigest", "calls", "tokens"],
+                "properties": {
+                  "role": { "enum": ["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"] },
+                  "disposition": { "type": "string", "pattern": "^[a-z0-9_.:-]+$" },
+                  "requestRef": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                  "outputDigest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+                  "calls": { "type": "integer", "minimum": 0, "maximum": 100 },
+                  "tokens": { "type": "integer", "minimum": 0, "maximum": 100000000 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "recordedAt": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/acceptanceCriterion"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "taskRunId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "sessionId": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "sessionName": {
+      "type": "string"
+    },
+    "changeMode": {
+      "enum": [
+        "source-change",
+        "read-only"
+      ]
+    },
+    "mutationPolicy": {
+      "enum": [
+        "required",
+        "forbidden"
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "maxAttempts": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "previousAttempts": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskRunId",
+          "attempt",
+          "outcome",
+          "recordedAt"
+        ],
+        "properties": {
+          "taskRunId": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "enum": [
+              "pending",
+              "completed",
+              "blocked",
+              "partial",
+              "failed"
+            ]
+          },
+          "failedAt": {
+            "enum": [
+              "research",
+              "plan",
+              "execute",
+              "verify",
+              "review"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ruledOut": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 10
+    },
+    "operatorRequest": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000
+    },
+    "operatorRequestDigest": {
+      "type": "string",
+      "pattern": "^operator-request-v1:[a-f0-9]{64}$"
+    },
+    "riskLane": {
+      "enum": [
+        "tiny",
+        "normal",
+        "high-risk"
+      ]
+    },
+    "intakeMode": {
+      "enum": [
+        "model",
+        "runtime"
+      ]
+    },
+    "expectedOutput": {
+      "type": "string",
+      "minLength": 10
+    },
+    "acceptanceCriteria": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/stringList"
+        },
+        {
+          "minItems": 1
+        }
+      ]
+    },
+    "criterionGraph": {
+      "$ref": "#/$defs/criterionGraph"
+    },
+    "scope": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/stringList"
+        },
+        {
+          "minItems": 1,
+          "maxItems": 2000
+        }
+      ]
+    },
+    "outOfScope": {
+      "$ref": "#/$defs/stringList"
+    },
+    "protectedPaths": {
+      "$ref": "#/$defs/stringList"
+    },
+    "requiredContext": {
+      "$ref": "#/$defs/stringList"
+    },
+    "contextManifest": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/citation"
+      }
+    },
+    "memoryCitations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/citation"
+      }
+    },
+    "mcpCapabilities": {
+      "$ref": "#/$defs/stringList"
+    },
+    "verifyGroup": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "verifyCommands": {
+      "$ref": "#/$defs/stringList"
+    },
+    "workPlan": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "role",
+          "mode",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "maxLength": 40
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "role": {
+            "enum": [
+              "parent",
+              "piagent-scout",
+              "piagent-planner",
+              "piagent-worker",
+              "piagent-reviewer",
+              "piagent-oracle"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "read-only",
+              "single-writer",
+              "review"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "in-progress",
+              "done",
+              "skipped",
+              "failed"
+            ]
+          },
+          "dependsOn": {
+            "$ref": "#/$defs/stringList"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "reviewLenses": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "correctness",
+          "tests",
+          "scope",
+          "security",
+          "docs",
+          "release",
+          "package"
+        ]
+      }
+    },
+    "workingTreeDigestAlgorithm": {
+      "enum": ["wt-content-v2", "legacy-untrusted"]
+    },
+    "workingTreeDigestMigration": {
+      "$ref": "#/$defs/workingTreeDigestMigration"
+    },
+    "orchestration": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "solo-first",
+            "bounded-subagents",
+            "parallel-readonly"
+          ]
+        },
+        "subagents": {
+          "enum": [
+            "not-used",
+            "optional",
+            "used"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "fieldGuidePath": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "modelRoles": {
+          "type": "object",
+          "properties": {
+            "planner": {
+              "type": "string"
+            },
+            "worker": {
+              "type": "string"
+            },
+            "reviewer": {
+              "type": "string"
+            },
+            "watchdog": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceReceipt": {
+      "$ref": "#/$defs/acceptanceReceipt"
+    },
+    "authoritySnapshot": {
+      "$ref": "https://github.com/Vt-mmm/piagent/schemas/task-authority-snapshot.schema.json"
+    },
+    "baselineChangedFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "baselineFileDigests": {
+      "$ref": "#/$defs/fileDigests"
+    },
+    "observedChangedFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "finalWorkingTreeFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "finalFileDigests": {
+      "$ref": "#/$defs/fileDigests"
+    },
+    "changedFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "verifyEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "command",
+          "exitCode",
+          "summary",
+          "recordedAt"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "exitCode": {
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observed": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isError": {
+            "type": "boolean"
+          },
+          "matchedProfileCommand": {
+            "type": "boolean"
+          },
+          "preWorkingTreeDigest": {
+            "type": "string",
+            "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+          },
+          "workingTreeDigest": {
+            "type": "string",
+            "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "trace": {
+      "type": "object",
+      "required": [
+        "outcome"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "pending",
+            "completed",
+            "blocked",
+            "partial",
+            "failed"
+          ]
+        },
+        "friction": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "failedAt": {
+      "enum": [
+        "research",
+        "plan",
+        "execute",
+        "verify",
+        "review"
+      ]
+    },
+    "failureReason": {
+      "type": "string"
+    },
+    "ruledOut": {
+      "type": "string"
+    },
+    "migratedFromSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "dependentRequired": {
+    "operatorRequest": ["operatorRequestDigest"],
+    "operatorRequestDigest": ["operatorRequest"]
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "changeMode": { "const": "read-only" } }, "required": ["changeMode"] },
+      "then": { "properties": { "mutationPolicy": { "const": "forbidden" } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" } }, "required": ["workingTreeDigestAlgorithm"] },
+      "then": {
+        "required": ["workingTreeDigestMigration"],
+        "properties": {
+          "baselineChangedFiles": { "maxItems": 0 },
+          "baselineFileDigests": { "maxProperties": 0 },
+          "observedChangedFiles": { "maxItems": 0 },
+          "finalWorkingTreeFiles": { "maxItems": 0 },
+          "finalFileDigests": { "maxProperties": 0 },
+          "changedFiles": { "maxItems": 0 },
+          "verifyEvidence": { "maxItems": 0 },
+          "trace": { "properties": { "outcome": { "not": { "const": "pending" } } } },
+          "acceptanceReceipt": {
+            "not": { "required": ["provenance"] },
+            "properties": { "criteria": { "items": { "properties": { "status": { "const": "pending" }, "evidence": { "maxItems": 0 } } } } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "verification-refresh-required" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "wt-content-v2" }, "workingTreeDigestMigration": { "properties": { "reasonCode": { "const": "clean-baseline-rebound" }, "requiredAction": { "const": "rerun-exact-verifier" } } }, "trace": { "properties": { "outcome": { "const": "pending" } } } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "refreshed" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "wt-content-v2" }, "workingTreeDigestMigration": { "required": ["refreshedAt"], "properties": { "reasonCode": { "const": "clean-baseline-rebound" }, "requiredAction": { "const": "none" } } } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "new-attempt-required" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" }, "workingTreeDigestMigration": { "properties": { "reasonCode": { "enum": ["semantic-repair-state-present", "read-only-legacy-task", "exact-verifier-plan-missing", "baseline-not-provably-clean", "evidence-root-unavailable", "current-snapshot-unavailable", "legacy-carrier-key-mismatch", "active-task-binding-unavailable", "schema-v1-unversioned", "legacy-untrusted"] }, "requiredAction": { "const": "start-new-attempt" } } }, "trace": { "properties": { "outcome": { "const": "blocked" } } } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "historical-unverifiable" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" }, "workingTreeDigestMigration": { "properties": { "reasonCode": { "enum": ["terminal-legacy-evidence", "schema-v1-unversioned", "legacy-untrusted"] }, "requiredAction": { "const": "historical-only" } } }, "trace": { "properties": { "outcome": { "not": { "const": "pending" } } } } } }
+    }
+  ],
+  "additionalProperties": false
+}

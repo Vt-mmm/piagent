@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { isolatedContainerArguments, isolatedContainerConfigurationMatches, runIsolatedContract } from "../packages/piagent-core/extensions/acceptance-isolated-executor.js";
 import { WORKER_VERSION, parseRequest, parseResponse } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
+import { cancelOnContainerStart, createCancellationBarrier, dockerJson } from "./helpers/isolated-executor-barriers.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -169,17 +170,61 @@ test("outer deadline and cancellation remove only the run-owned container", inte
   assert.equal(ids.trim(), "");
 });
 
-test("pathological native operations and in-flight cancellation stay bounded", integration, async (context) => {
+test("pathological native operations stay bounded", integration, async (context) => {
   const started = Date.now();
   const pathological = await run("export function run() { return /^(a+)+$/.test('a'.repeat(100) + '!'); }", undefined, { timeoutMs: 12000 });
   assert.ok(["timeout", "error"].includes(pathological.status), JSON.stringify(pathological));
   assert.equal(pathological.cleanupConfirmed, true);
   context.diagnostic(`pathological regex stopped in ${Date.now() - started}ms: ${pathological.reason ?? pathological.status}`);
+});
+
+test("in-flight cancellation follows the exact daemon START event and confirms removal", integration, async (context) => {
+  const executionRunId = randomUUID();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 150);
-  let cancelled;
-  try { cancelled = await run("export function run() { while (true) {} }", undefined, { signal: controller.signal }); }
-  finally { clearTimeout(timer); }
+  const watched = await cancelOnContainerStart(context, { dockerSocket, runId: executionRunId, controller });
+  const cancelled = await run("export function run() { while (true) {} }", undefined, { executionRunId, signal: controller.signal });
+  assert.equal(watched.error, null); assert.ok(watched.event, "cancellation requires a real START, not elapsed time");
   assert.equal(cancelled.status, "cancelled", JSON.stringify(cancelled));
+  assert.equal(cancelled.reason, "cancelled");
   assert.equal(cancelled.cleanupConfirmed, true);
+  assert.equal((await dockerJson(dockerSocket, "GET", `/containers/${watched.event.Actor.ID}/json`)).status, 404);
+});
+
+for (const phase of ["before-forward", "after-create"]) {
+  test(`CREATE cancellation at ${phase} preserves honest ownership and cleanup evidence`, integration, async (context) => {
+    const executionRunId = randomUUID(), controller = new AbortController();
+    const { socketPath, state } = await createCancellationBarrier(context, { dockerSocket, runId: executionRunId, imageId, phase, controller });
+    const result = await run("export const run=()=>true", undefined, { dockerSocket: socketPath, executionRunId, signal: controller.signal });
+    assert.equal(state.phaseReached, true); assert.deepEqual(state.errors, []); assert.equal(state.startRequests, 0);
+    assert.equal(result.observation, undefined);
+    if (phase === "before-forward") {
+      assert.equal(state.createdId, null); assert.equal(result.status, "error");
+      assert.equal(result.reason, "container-create-failed");
+      assert.equal(result.cleanupConfirmed, false, "the host cannot infer that an interrupted remote CREATE had no effect");
+    } else {
+      assert.match(state.createdId, /^[a-f0-9]{64}$/); assert.equal(result.status, "cancelled");
+      assert.equal(result.reason, "container-create-incomplete"); assert.equal(result.cleanupConfirmed, true);
+    }
+    assert.equal((await dockerJson(dockerSocket, "GET", `/containers/piagent-contract-${executionRunId}/json`)).status, 404);
+  });
+}
+
+test("a delayed CREATE can outlive the cancelled CLI without becoming confirmed cleanup or a retry", integration, async (context) => {
+  const executionRunId = randomUUID(), controller = new AbortController();
+  const barrier = await createCancellationBarrier(context, { dockerSocket, runId: executionRunId, imageId, phase: "after-host-settled", controller });
+  const result = await run("export const run=()=>true", undefined, { dockerSocket: barrier.socketPath, executionRunId, signal: controller.signal });
+  assert.equal(barrier.state.phaseReached, true); assert.deepEqual(barrier.state.errors, []);
+  assert.equal(result.status, "error"); assert.equal(result.cleanupConfirmed, false); assert.equal(result.observation, undefined);
+  assert.equal((await dockerJson(dockerSocket, "GET", `/containers/piagent-contract-${executionRunId}/json`)).status, 404);
+  const id = await barrier.releaseDelayedCreate();
+  const late = await dockerJson(dockerSocket, "GET", `/containers/${id}/json`);
+  assert.equal(late.status, 200); assert.equal(late.body.Id, id); assert.equal(late.body.State.Status, "created");
+  assert.equal(late.body.Image, imageId); assert.equal(late.body.Config.Labels["io.piagent.contract-execution"], executionRunId);
+  assert.equal(isolatedContainerConfigurationMatches(late.body), true);
+  const retry = await run("export const run=()=>true", undefined, { executionRunId });
+  assert.equal(retry.reason, "reserved-execution-id-conflict"); assert.equal(retry.cleanupConfirmed, false);
+  assert.equal((await dockerJson(dockerSocket, "GET", `/containers/${id}/json`)).body.State.Status, "created");
+  assert.equal(barrier.state.startRequests, 0);
+  assert.equal((await dockerJson(dockerSocket, "DELETE", `/containers/${id}?force=true`)).status, 204);
+  assert.equal((await dockerJson(dockerSocket, "GET", `/containers/${id}/json`)).status, 404);
 });

@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 
 import {
   evaluateFs5StageGate,
   fs5PilotProtocolValidationErrors,
   fs5StageArguments
 } from "../packages/piagent-core/benchmark/fs5-pilot-protocol.js";
+import { benchmarkArtifactBindingErrors } from "../packages/piagent-core/benchmark/benchmark-artifact-binding.js";
+import { materializeFs5ArtifactFixture, verifyFs5ArtifactArchive } from "./helpers/fs5-artifact-archive.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const protocolPath = path.join(root, "evals", "fs5-pilot-protocol.v1.json");
@@ -36,12 +40,75 @@ test("freezes the exact Piagent-versus-Codex Luna Medium product protocol", () =
   assert.deepEqual(protocol.stages.map((stage) => stage.maxSessions), [2, 2, 12]);
 });
 
-test("binds every declared protocol artifact to the current bytes", () => {
-  for (const value of [protocol, protocolV4, protocolV5]) {
-    for (const artifact of value.artifactBindings) {
-      const bytes = fs.readFileSync(path.join(root, artifact.path));
-      assert.equal(crypto.createHash("sha256").update(bytes).digest("hex"), artifact.sha256, `${value.id}:${artifact.path}`);
+test("all five immutable historical protocols retain the exact declared artifact bytes", () => {
+  assert.equal(verifyFs5ArtifactArchive().size, 17);
+});
+
+test("the archive verifies without Git history and refuses damaged retained bytes", async (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-fs5-portable-"));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(directory, "tests/helpers"), { recursive: true });
+  fs.cpSync(path.join(root, "evals/fs5-artifact-archive"), path.join(directory, "evals/fs5-artifact-archive"), { recursive: true });
+  for (let version = 1; version <= 5; version++) {
+    fs.copyFileSync(path.join(root, `evals/fs5-pilot-protocol.v${version}.json`), path.join(directory, `evals/fs5-pilot-protocol.v${version}.json`));
+  }
+  const checker = path.join(directory, "tests/helpers/fs5-artifact-archive.mjs");
+  fs.copyFileSync(path.join(root, "tests/helpers/fs5-artifact-archive.mjs"), checker);
+  assert.equal(fs.existsSync(path.join(directory, ".git")), false);
+  const verify = (await import(pathToFileURL(checker).href)).verifyFs5ArtifactArchive;
+  assert.equal(verify().size, 17);
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, "evals/fs5-artifact-archive/manifest.json")));
+  fs.appendFileSync(path.join(directory, "evals/fs5-artifact-archive", manifest.artifacts[0].archivePath), "\n");
+  assert.throws(() => verify());
+});
+
+test("historical readability never grants preflight or execution on changed current source", () => {
+  for (const value of [protocol, protocolV2, protocolV3, protocolV4, protocolV5]) {
+    assert.deepEqual(fs5PilotProtocolValidationErrors(value), []);
+    assert.ok(benchmarkArtifactBindingErrors(value.artifactBindings, root).includes("artifact-digest-mismatch:schemas/task-contract.schema.json"));
+    assert.ok(fs5StageArguments(value, value.stages[0].id).includes("--dry-run"));
+    for (const mode of ["preflight", "execute"]) {
+      assert.throws(() => fs5StageArguments(value, value.stages[0].id, { mode, operatorAuthorized: true }), /FS5 source binding refused/);
     }
+    const rebound = clone(value);
+    rebound.artifactBindings = rebound.artifactBindings.map((binding) => ({ ...binding,
+      sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, binding.path))).digest("hex") }));
+    assert.ok(fs5PilotProtocolValidationErrors(rebound).includes("historical artifactBindings must not be rebound"));
+    assert.throws(() => fs5StageArguments(rebound, rebound.stages[0].id, { mode: "execute", operatorAuthorized: true }), /must not be rebound/);
+  }
+});
+
+function historicalFixture(context, value = protocol) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-fs5-artifacts-"));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  materializeFs5ArtifactFixture(value, directory);
+  return directory;
+}
+
+async function fixtureStageArguments(candidateRoot) {
+  // Load the CURRENT checker under the fixture root; archived code is data only.
+  // Production has no caller-supplied root override for its source binding.
+  const checkerDirectory = path.join(candidateRoot, "packages/piagent-core/benchmark");
+  fs.mkdirSync(checkerDirectory, { recursive: true });
+  fs.writeFileSync(path.join(candidateRoot, "package.json"), '{"type":"module"}\n', { flag: "wx" });
+  const checker = path.join(checkerDirectory, "current-fs5-checker.mjs");
+  fs.copyFileSync(path.join(root, "packages/piagent-core/benchmark/fs5-pilot-protocol.js"), checker, fs.constants.COPYFILE_EXCL);
+  fs.copyFileSync(path.join(root, "packages/piagent-core/benchmark/benchmark-artifact-binding.js"),
+    path.join(checkerDirectory, "benchmark-artifact-binding.js"), fs.constants.COPYFILE_EXCL);
+  return (await import(pathToFileURL(checker).href)).fs5StageArguments;
+}
+
+test("stage command construction verifies its own source files and detects later drift without caching", async (context) => {
+  for (const value of [protocol, protocolV2, protocolV3, protocolV4, protocolV5]) {
+    const candidateRoot = historicalFixture(context, value), stage = value.stages[0].id;
+    const argumentsForFixture = await fixtureStageArguments(candidateRoot);
+    assert.deepEqual(benchmarkArtifactBindingErrors(value.artifactBindings, candidateRoot), []);
+    assert.ok(argumentsForFixture(value, stage, { mode: "preflight" }).includes("--preflight-only"));
+    assert.throws(() => argumentsForFixture(value, stage, { mode: "execute" }), /explicit operator authorization/);
+    assert.equal(argumentsForFixture(value, stage, { mode: "execute", operatorAuthorized: true }).at(-1), "--yes");
+    assert.throws(() => fs5StageArguments(value, stage, { mode: "execute", operatorAuthorized: true, candidateRoot }), /FS5 source binding refused/);
+    fs.appendFileSync(path.join(candidateRoot, value.artifactBindings[0].path), "\n");
+    assert.throws(() => argumentsForFixture(value, stage, { mode: "execute", operatorAuthorized: true }), /artifact-digest-mismatch/);
   }
 });
 
@@ -52,7 +119,7 @@ test("freezes FS5 v2 with one transparent known-zero provider retry and new run 
   assert.deepEqual(protocolV2.stages.map((stage) => stage.retryDelaySeconds), [15, 15, 15]);
   assert.equal(protocolV2.stages.every((stage) => stage.seed.endsWith("-v2")), true);
   assert.equal(protocolV2.usageContract.unknownUsageRetryAllowsAdvance, false);
-  const args = fs5StageArguments(protocolV2, "six-family-pilot", { mode: "execute", operatorAuthorized: true });
+  const args = fs5StageArguments(protocolV2, "six-family-pilot");
   assert.deepEqual(args.slice(args.indexOf("--infrastructure-retries"), args.indexOf("--infrastructure-retries") + 4), [
     "--infrastructure-retries", "1", "--retry-delay", "15"
   ]);
@@ -74,7 +141,7 @@ test("freezes FS5 v4 as one privacy-safe bounded-retry adjudication before any l
   assert.equal(protocolV4.stopRules.adjudicationMaximumPairs, 1);
   assert.equal(protocolV4.stopRules.adjudicationPassRelabelsHistoricalRun, false);
   assert.equal(protocolV4.phaseAttributionContract.rawCommandsPathsPromptsRetained, false);
-  const args = fs5StageArguments(protocolV4, "bounded-retry-adjudication", { mode: "execute", operatorAuthorized: true });
+  const args = fs5StageArguments(protocolV4, "bounded-retry-adjudication");
   assert.deepEqual(args.slice(args.indexOf("--scenarios"), args.indexOf("--scenarios") + 4), [
     "--scenarios", "bounded-retry", "--seed", "cf-fs5-bounded-retry-adjudication-luna-medium-v4"
   ]);
@@ -88,7 +155,7 @@ test("freezes FS5 v5 as the only post-infrastructure adjudication without a paid
   assert.equal(protocolV5.stopRules.paidTerminalProviderFailureClosesLane, true);
   assert.equal(protocolV5.stopRules.paidTerminalProviderFailureAllowsAutomaticRetry, false);
   assert.equal(protocolV5.stopRules.validCompletedPairRequiredToAdvance, true);
-  const args = fs5StageArguments(protocolV5, "bounded-retry-adjudication", { mode: "execute", operatorAuthorized: true });
+  const args = fs5StageArguments(protocolV5, "bounded-retry-adjudication");
   assert.deepEqual(args.slice(args.indexOf("--scenarios"), args.indexOf("--scenarios") + 4), [
     "--scenarios", "bounded-retry", "--seed", "cf-fs5-bounded-retry-adjudication-luna-medium-v5"
   ]);
@@ -105,7 +172,9 @@ test("freezes FS5 v5 as the only post-infrastructure adjudication without a paid
   }
 });
 
-test("builds dry-run and provider-free preflight commands without execution authority", () => {
+test("builds dry-run and provider-free preflight commands without execution authority", async (context) => {
+  const candidateRoot = historicalFixture(context);
+  const argumentsForFixture = await fixtureStageArguments(candidateRoot);
   const dryRun = fs5StageArguments(protocol, "canary-a-fullstack");
   assert.equal(dryRun.includes("--dry-run"), true);
   assert.equal(dryRun.includes("--yes"), false);
@@ -117,12 +186,12 @@ test("builds dry-run and provider-free preflight commands without execution auth
     "--codex-mode", "controlled",
     "--piagent-treatment", "local-safe"
   ]);
-  const preflight = fs5StageArguments(protocol, "canary-b-migration", { mode: "preflight" });
+  const preflight = argumentsForFixture(protocol, "canary-b-migration", { mode: "preflight" });
   assert.equal(preflight.includes("--preflight-only"), true);
   assert.equal(preflight.includes("--json"), true);
   assert.equal(preflight.includes("--yes"), false);
   assert.throws(() => fs5StageArguments(protocol, "canary-a-fullstack", { mode: "execute" }), /explicit operator authorization/);
-  assert.equal(fs5StageArguments(protocol, "canary-a-fullstack", { mode: "execute", operatorAuthorized: true }).at(-1), "--yes");
+  assert.equal(argumentsForFixture(protocol, "canary-a-fullstack", { mode: "execute", operatorAuthorized: true }).at(-1), "--yes");
 });
 
 test("rejects parity, retry, usage, stop-budget and claim-boundary drift", () => {

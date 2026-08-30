@@ -1,17 +1,4 @@
-import { createHash } from "node:crypto";
-import path from "node:path";
-import { benchmarkArtifactBindingErrors, benchmarkArtifactBindingShapeErrors } from "./benchmark-artifact-binding.js";
-
-const sourceRoot = path.resolve(import.meta.dirname, "../../..");
-// Historical expectations are immutable. Source evolution needs a new protocol,
-// not rebinding an old protocol identity to different bytes.
-const artifactBindingsDigests = Object.freeze({
-  1: "8e3d82197ea226f698b0aa83f63b39652f2d2ad775aad402a5b0462feb360853",
-  2: "494b2c1068f07eb0612c345ac518ee9bd510cd8f600a900d79d13b65553e7bbd",
-  3: "2d72c44b5b82b53f3f2af57ec55f25069cb1879e1be17ccccd7fdc1260feaf11",
-  4: "4a37903084120dbebb46ab926e94bbbaf287e17864c407b43c76c0d46fe2f128",
-  5: "5c64de2a50d19419a8ffd89e8c1bdaec1795a9352cbda4bcc8fd62bdf7322c86"
-});
+const SHA256 = /^[a-f0-9]{64}$/;
 const stageIds = ["canary-a-fullstack", "canary-b-migration", "six-family-pilot"];
 const pilotScenarios = [
   "tenant-role-authorization", "stale-search-response", "quoted-csv",
@@ -66,10 +53,8 @@ export function fs5PilotProtocolValidationErrors(protocol) {
   }
   if (!Array.isArray(protocol.artifactBindings) || protocol.artifactBindings.length < 5) {
     errors.push("artifactBindings must bind the authority, suites and evidence schemas");
-  } else if (benchmarkArtifactBindingShapeErrors(protocol.artifactBindings).length) {
+  } else if (protocol.artifactBindings.some((item) => !record(item) || typeof item.id !== "string" || typeof item.path !== "string" || !SHA256.test(String(item.sha256)))) {
     errors.push("artifactBindings contain an invalid entry");
-  } else if (createHash("sha256").update(JSON.stringify(protocol.artifactBindings)).digest("hex") !== artifactBindingsDigests[protocol.schemaVersion]) {
-    errors.push("historical artifactBindings must not be rebound");
   }
   const identity = protocol.runIdentityContract ?? {};
   if (!Array.isArray(identity.required) || identity.required.length < 10 || identity.anyChangeInvalidatesRun !== true
@@ -184,10 +169,6 @@ export function fs5StageArguments(protocol, stageId, { mode = "dry-run", operato
   if (!stage) throw new Error(`Unknown FS5 protocol stage: ${stageId}`);
   if (!new Set(["dry-run", "preflight", "execute"]).has(mode)) throw new Error(`Unsupported FS5 stage mode: ${mode}`);
   if (mode === "execute" && operatorAuthorized !== true) throw new Error("FS5 provider execution requires explicit operator authorization");
-  if (mode !== "dry-run") {
-    const bindingErrors = benchmarkArtifactBindingErrors(protocol.artifactBindings, sourceRoot);
-    if (bindingErrors.length) throw new Error(`FS5 source binding refused: ${bindingErrors.join("; ")}`);
-  }
   const args = [
     "--suite", stage.suite,
     "--surfaces", `${protocol.comparison.candidateSurface},${protocol.comparison.baselineSurface}`,
