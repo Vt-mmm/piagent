@@ -5,6 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { collectBenchmarkCandidate } from "../../packages/piagent-core/benchmark/benchmark-candidate.js";
+import { checkpointDirectory, checkpointDigest, readCheckpoint, writeCheckpoint, writeCheckpointBytes } from "../../packages/piagent-core/benchmark/benchmark-checkpoint.js";
+import { acquireBenchmarkRunLock } from "../../packages/piagent-core/benchmark/benchmark-run-lock.js";
 
 import { buildContextEfficiencyReport } from "../../packages/piagent-core/extensions/context-engine.js";
 import { recordCompletionAudit, recordTaskStartCheckpoint } from "../../packages/piagent-core/extensions/task-runtime-audit.js";
@@ -12,7 +15,7 @@ import { inspectTaskContinuationBudget, reserveTaskContinuation } from "../../pa
 import { buildHandoffProjection, readHandoffProjection, writeHandoffProjection } from "../../packages/piagent-core/runtime/recovery/handoff-projection.ts";
 import { inspectTaskResumeState } from "../../packages/piagent-core/runtime/recovery/resume-state.ts";
 import { createBoundTaskAuthority } from "../../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
-import { bindSessionTask, workingTreeSnapshot, writeTaskContract } from "../../packages/piagent-core/extensions/task-state.js";
+import { activeSessionTask, bindSessionTask, workingTreeSnapshot, writeTaskContract } from "../../packages/piagent-core/extensions/task-state.js";
 import { readTaskJournal } from "../../packages/piagent-core/extensions/task-journal.js";
 import { workingTreeEvidenceDigest } from "../../packages/piagent-core/extensions/working-tree-digest.js";
 
@@ -25,7 +28,7 @@ const option = (name) => {
   return index >= 0 ? argumentsList[index + 1] : undefined;
 };
 const calibrationFast = argumentsList.includes("--calibration-fast");
-const outputPath = path.resolve(option("--output") ?? path.join(process.cwd(), "long-horizon-report.json"));
+let outputPath = path.resolve(option("--output") ?? path.join(process.cwd(), "long-horizon-report.json"));
 const totalUnits = calibrationFast ? 9 : lane.totalUnits;
 const crashAfterUnit = calibrationFast ? 3 : lane.hardCrashAfterUnit;
 const handoffAfterUnit = calibrationFast ? 6 : lane.handoffAfterUnit;
@@ -33,18 +36,52 @@ const compactionUnits = calibrationFast ? [2, 4, 6, 8] : lane.compactionUnits;
 const tickMilliseconds = calibrationFast ? Number(option("--tick-ms") ?? 2) : lane.tickMilliseconds;
 const evidenceClass = calibrationFast ? "calibration-fast" : "provider-free-long-horizon";
 if (!calibrationFast && option("--tick-ms") !== undefined) throw new Error("wall-clock evidence cannot override tick duration");
+if (!Number.isFinite(tickMilliseconds) || tickMilliseconds < 0) throw new Error("invalid tick duration");
+if (argumentsList.includes("--state-directory") && !option("--state-directory")) throw new Error("--state-directory requires a path");
+fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+outputPath = path.join(fs.realpathSync.native(path.dirname(outputPath)), path.basename(outputPath));
 
-const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-long-horizon-"));
+const durable = Boolean(option("--state-directory"));
+const temporaryRoot = durable
+  ? checkpointDirectory(path.dirname(path.resolve(option("--state-directory"))), path.basename(path.resolve(option("--state-directory"))))
+  : fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-long-horizon-")));
+const releaseCoordinator = acquireBenchmarkRunLock(temporaryRoot, "long-horizon-coordinator");
+const workerRoot = path.join(temporaryRoot, "project/.pi/piagent-state/long-horizon");
+if (fs.existsSync(workerRoot)) {
+  const release = acquireBenchmarkRunLock(workerRoot, "long-horizon-worker-preflight"); release();
+}
+const coordinatorPath = path.join(temporaryRoot, "coordinator.json");
+const sourceDigest = collectBenchmarkCandidate(repositoryRoot).provenance.contentDigest;
+const coordinatorBinding = checkpointDigest({ sourceDigest, node: process.version, platform: process.platform,
+  arch: process.arch, lane, calibrationFast, tickMilliseconds, s0Binding: option("--binding") ?? null });
+let coordinator = readCheckpoint(coordinatorPath, coordinatorBinding);
+if (!coordinator) {
+  if (fs.readdirSync(temporaryRoot).some((name) => name !== ".benchmark-run.lock")) throw new Error("unbound long-horizon state directory is not empty");
+  coordinator = { phase: "initializing", startedAt: new Date().toISOString(), observations: {} };
+  writeCheckpoint(coordinatorPath, coordinatorBinding, coordinator);
+}
+function checkpointCoordinator(patch) {
+  coordinator = { ...coordinator, ...patch };
+  writeCheckpoint(coordinatorPath, coordinatorBinding, coordinator);
+}
+if (coordinator.phase === "complete") {
+  writeCheckpointBytes(outputPath, `${JSON.stringify(coordinator.report, null, 2)}\n`);
+  releaseCoordinator();
+  process.stdout.write(`${JSON.stringify(coordinator.report)}\n`);
+  process.exit(0);
+}
 const workspace = path.join(temporaryRoot, "project");
-const startedAtMs = Date.now();
-const startedAt = new Date(startedAtMs).toISOString();
+const startedAt = coordinator.startedAt;
+const startedAtMs = Date.parse(startedAt);
 const fixture = path.resolve(laneRoot, lane.fixture);
+if (coordinator.phase === "initializing") {
 fs.cpSync(fixture, workspace, { recursive: true });
-spawnSync("git", ["init", "-q", workspace], { stdio: "inherit" });
-spawnSync("git", ["-C", workspace, "config", "user.email", "long-horizon@example.invalid"], { stdio: "inherit" });
-spawnSync("git", ["-C", workspace, "config", "user.name", "Piagent Long Horizon"], { stdio: "inherit" });
-spawnSync("git", ["-C", workspace, "add", "."], { stdio: "inherit" });
-spawnSync("git", ["-C", workspace, "commit", "-qm", "fixture"], { stdio: "inherit" });
+for (const args of [["init", "-q", workspace], ["-C", workspace, "config", "user.email", "long-horizon@example.invalid"],
+  ["-C", workspace, "config", "user.name", "Piagent Long Horizon"], ["-C", workspace, "add", "."],
+  ["-C", workspace, "commit", "--allow-empty", "-qm", "fixture"]]) {
+  assert.equal(spawnSync("git", args, { stdio: "inherit" }).status, 0, "fixture Git initialization failed");
+}
+}
 
 const taskId = "long-horizon-90";
 const taskRunId = "long-horizon-90-run-1";
@@ -53,8 +90,10 @@ const sessionName = "LONG-HORIZON-90 repository audit";
 const createdAt = startedAt;
 const portableVerifier = path.join(workspace, ".pi", "piagent-state", "long-horizon", "verify.mjs");
 fs.mkdirSync(path.dirname(portableVerifier), { recursive: true, mode: 0o700 });
-fs.copyFileSync(path.join(laneRoot, "verify.mjs"), portableVerifier);
-fs.chmodSync(portableVerifier, 0o600);
+if (coordinator.phase === "initializing") {
+  fs.copyFileSync(path.join(laneRoot, "verify.mjs"), portableVerifier);
+  fs.chmodSync(portableVerifier, 0o600);
+}
 let task = {
   schemaVersion: 2,
   taskRunId,
@@ -106,10 +145,16 @@ let task = {
   createdAt,
   updatedAt: createdAt
 };
-task.authoritySnapshot = createBoundTaskAuthority({ taskId, taskRunId, createdAt });
-task = writeTaskContract(workspace, task);
-bindSessionTask(workspace, sessionId, sessionName, task);
-recordTaskStartCheckpoint({ cwd: workspace, ui: { notify() {} } }, task, "discovery", "automatic");
+if (coordinator.phase === "initializing") {
+  task.authoritySnapshot = createBoundTaskAuthority({ taskId, taskRunId, createdAt });
+  task = writeTaskContract(workspace, task);
+  bindSessionTask(workspace, sessionId, sessionName, task);
+  recordTaskStartCheckpoint({ cwd: workspace, ui: { notify() {} } }, task, "discovery", "automatic");
+  checkpointCoordinator({ phase: "crash" });
+} else {
+  task = activeSessionTask(workspace, sessionId);
+  assert.equal(task?.taskRunId, taskRunId, "durable task binding changed");
+}
 
 const runtimeBase = {
   laneId: lane.id,
@@ -119,7 +164,8 @@ const runtimeBase = {
   totalUnits,
   logicalDurationMinutes: lane.logicalDurationMinutes,
   compactionUnits,
-  tickMilliseconds
+  tickMilliseconds,
+  coordinatorBinding
 };
 const workerPath = path.join(laneRoot, "worker.mjs");
 const statePath = path.join(workspace, ".pi", "piagent-state", "long-horizon", "state.json");
@@ -129,23 +175,17 @@ function state() {
   catch (error) { if (error?.code === "ENOENT") return { currentUnit: 0 }; throw error; }
 }
 
-function startWorker(stopAfterUnit) {
-  const runtime = Buffer.from(JSON.stringify({ ...runtimeBase, stopAfterUnit })).toString("base64url");
-  const child = spawn(process.execPath, [workerPath, workspace, runtime], { stdio: ["ignore", "pipe", "pipe"] });
+function startWorker(stopAfterUnit, crashBoundary) {
+  const runtime = Buffer.from(JSON.stringify({ ...runtimeBase, stopAfterUnit, crashBoundary })).toString("base64url");
+  const child = spawn(process.execPath, [workerPath, workspace, runtime], { stdio: ["ignore", "pipe", "pipe", "ipc"] });
   let stdout = "", stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
-  return { child, result: new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal, stdout, stderr }))) };
-}
-
-async function waitForUnit(unit) {
-  const remaining = Math.max(1, unit - Number(state().currentUnit ?? 0));
-  const deadline = Date.now() + Math.max(30_000, tickMilliseconds * (remaining + 2));
-  while (Date.now() < deadline) {
-    if (state().currentUnit >= unit) return;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(100, Math.max(5, tickMilliseconds / 20))));
-  }
-  throw new Error(`timed out waiting for long-horizon unit ${unit}`);
+  const result = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
+  return { child, result };
 }
 
 function updatePendingTask(completed, active) {
@@ -182,15 +222,25 @@ function persistHandoff(reason) {
   return readHandoffProjection(workspace, taskRunId);
 }
 
-const first = startWorker(undefined);
-await waitForUnit(crashAfterUnit);
-first.child.kill("SIGKILL");
-const firstResult = await first.result;
-assert.equal(firstResult.signal, "SIGKILL", firstResult.stderr);
-assert.equal(state().currentUnit, crashAfterUnit);
+if (coordinator.phase === "crash") {
+  const first = startWorker(undefined, crashAfterUnit);
+  const atBoundary = new Promise((resolve) => first.child.once("message", resolve));
+  const observed = await Promise.race([atBoundary, first.result.then((result) => { throw new Error(`worker stopped before crash boundary: ${result.stderr}`); })]);
+  assert.deepEqual(observed, { type: "crash-boundary", unit: crashAfterUnit });
+  first.child.kill("SIGKILL");
+  const firstResult = await first.result;
+  assert.equal(firstResult.signal, "SIGKILL", firstResult.stderr);
+  assert.equal(state().currentUnit, crashAfterUnit);
+  checkpointCoordinator({ phase: "crash-recovery", observations: { hardCrash: { signal: firstResult.signal, unit: crashAfterUnit } } });
+}
+let firstContinuation = coordinator.observations.firstContinuation;
+let secondContinuation = coordinator.observations.secondContinuation;
+let crashHandoff = coordinator.observations.crashHandoff;
+let plannedHandoff = coordinator.observations.plannedHandoff;
+if (coordinator.phase === "crash-recovery") {
 updatePendingTask("discovery", "validation");
 const crashDigest = workingTreeEvidenceDigest(workingTreeSnapshot(workspace));
-const firstContinuation = reserveTaskContinuation(workspace, task, {
+const reservation = reserveTaskContinuation(workspace, task, {
   capabilityId: "CAP-12",
   classification: "infrastructure-retry",
   action: "retry",
@@ -198,8 +248,12 @@ const firstContinuation = reserveTaskContinuation(workspace, task, {
   reasonCodes: ["process-killed"],
   recordedAt: new Date().toISOString()
 });
-assert.equal(firstContinuation.allowed, true);
-const secondContinuation = reserveTaskContinuation(workspace, task, {
+assert.ok(reservation.allowed || reservation.reason === "repeated-progress-signature");
+// Re-reading the same consumed reservation does not authorize another turn.
+// The original allow observation is reconstructed only from that exact journal
+// signature, never from an exhausted-but-unrelated budget.
+firstContinuation = { ...reservation, allowed: true };
+secondContinuation = reserveTaskContinuation(workspace, task, {
   capabilityId: "CAP-12",
   classification: "infrastructure-retry",
   action: "retry",
@@ -209,23 +263,32 @@ const secondContinuation = reserveTaskContinuation(workspace, task, {
 });
 assert.equal(secondContinuation.allowed, false);
 assert.equal(secondContinuation.reason, "global-budget-exhausted");
-const crashHandoff = persistHandoff("hard process death at a durable checkpoint");
+crashHandoff = persistHandoff("hard process death at a durable checkpoint");
 assert.equal(crashHandoff?.identity.taskRunId, taskRunId);
 const crashResume = inspectTaskResumeState(workspace, task, sessionId);
 assert.equal(crashResume.enforcementSafe, true, crashResume.reason);
+checkpointCoordinator({ phase: "handoff", observations: { ...coordinator.observations, firstContinuation, secondContinuation, crashHandoff } });
+}
 
+if (coordinator.phase === "handoff") {
 const second = startWorker(handoffAfterUnit);
 const secondResult = await second.result;
 assert.equal(secondResult.code, 75, secondResult.stderr);
 assert.equal(state().currentUnit, handoffAfterUnit);
 updatePendingTask("validation", "synthesis");
-const plannedHandoff = persistHandoff("planned process handoff after validation stage");
+plannedHandoff = persistHandoff("planned process handoff after validation stage");
 assert.equal(plannedHandoff?.identity.taskRunId, taskRunId);
+checkpointCoordinator({ phase: "finish", observations: { ...coordinator.observations, plannedHandoff } });
+}
 
+if (coordinator.phase === "finish") {
 const third = startWorker(undefined);
 const thirdResult = await third.result;
 assert.equal(thirdResult.code, 0, thirdResult.stderr);
 assert.equal(state().currentUnit, totalUnits);
+checkpointCoordinator({ phase: "verify", completedAt: new Date().toISOString() });
+}
+assert.equal(coordinator.phase, "verify", "unknown coordinator phase");
 const beforeVerify = workingTreeEvidenceDigest(workingTreeSnapshot(workspace));
 const verifier = spawnSync(process.execPath, [portableVerifier, workspace, String(totalUnits)], { encoding: "utf8" });
 assert.equal(verifier.status, 0, verifier.stderr);
@@ -233,7 +296,7 @@ const afterVerify = workingTreeEvidenceDigest(workingTreeSnapshot(workspace));
 assert.equal(afterVerify, beforeVerify);
 const finalSnapshot = workingTreeSnapshot(workspace);
 const finalFiles = Object.keys(finalSnapshot).sort();
-const completedAt = new Date().toISOString();
+const completedAt = coordinator.completedAt;
 task = writeTaskContract(workspace, {
   ...task,
   workPlan: task.workPlan.map((step) => ({ ...step, status: "done" })),
@@ -270,11 +333,12 @@ const peakDurableStateBytes = Math.max(finalState.peakDurableStateBytes, finalDu
 const peakContextSample = stateSamples.reduce((peak, sample) => sample.contextProxyTokens > peak.contextProxyTokens ? sample : peak, stateSamples[0]);
 const endedAtMs = Date.now();
 const wallClockMilliseconds = endedAtMs - startedAtMs;
-const completedFromResume = finalState.processStarts === 3
+const completedFromResume = finalState.processStarts >= 3
   && finalState.resumedUnits.includes(crashAfterUnit)
   && finalState.resumedUnits.includes(handoffAfterUnit)
-  && terminalResume.decision === "terminal";
-const wallClockQualified = wallClockMilliseconds >= lane.minimumWallClockMinutes * 60_000;
+  && terminalResume.decision === "terminal"
+  && coordinator.observations.hardCrash.signal === "SIGKILL";
+const wallClockQualified = finalState.activeMilliseconds >= lane.minimumWallClockMinutes * 60_000;
 const report = {
   schemaVersion: 1,
   laneId: lane.id,
@@ -284,6 +348,7 @@ const report = {
   completedAt,
   logicalDurationMinutes: lane.logicalDurationMinutes,
   wallClockMilliseconds,
+  activeMilliseconds: finalState.activeMilliseconds,
   wallClockMinutes: Number((wallClockMilliseconds / 60_000).toFixed(4)),
   minimumWallClockMinutes: lane.minimumWallClockMinutes,
   wallClockQualified,
@@ -350,6 +415,9 @@ assert.equal(report.continuation.maximum, 1);
 assert.equal(report.verification.stableCurrentTree, true);
 if (!calibrationFast) assert.equal(report.wallClockQualified, true, `wall clock ${report.wallClockMinutes}m is below ${lane.minimumWallClockMinutes}m`);
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
-fs.rmSync(temporaryRoot, { recursive: true, force: true });
+assert.equal(collectBenchmarkCandidate(repositoryRoot).provenance.contentDigest, sourceDigest, "candidate changed during long-horizon execution");
+checkpointCoordinator({ phase: "complete", report });
+writeCheckpointBytes(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+releaseCoordinator();
+if (!durable) fs.rmSync(temporaryRoot, { recursive: true, force: true });
 process.stdout.write(`${JSON.stringify(report)}\n`);

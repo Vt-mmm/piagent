@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { acquireBenchmarkRunLock } from "./benchmark-run-lock.js";
+import { checkpointDirectory, readCheckpoint, writeCheckpoint, writeCheckpointBytes } from "./benchmark-checkpoint.js";
 
 const HASH = /^[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40,64}$/;
@@ -105,6 +106,7 @@ export function productionProviderFreeEvidenceBinding({
       treeAlgorithm: candidateProvenance.algorithm
     },
     providerFreeConfigurationDigest,
+    hostRuntime: { node: process.version, platform: process.platform, arch: process.arch },
     lanes: expectedLaneBindings(packageRoot)
   };
   return { ...binding, digest: receiptDigest(binding) };
@@ -218,11 +220,7 @@ function summaryPassed(id, summary) {
 }
 
 function privateWrite(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, value, { mode: 0o600 });
-  fs.renameSync(temporary, file);
-  try { fs.chmodSync(file, 0o600); } catch { /* Non-POSIX filesystem. */ }
+  writeCheckpointBytes(file, value);
 }
 
 export function productionProviderFreeEvidenceValidationErrors(receipt, expectedBinding) {
@@ -301,17 +299,8 @@ export async function collectProductionProviderFreeEvidence({
   providerFreeConfigurationDigest
 }) {
   const binding = productionProviderFreeEvidenceBinding({ packageRoot, source, candidateProvenance, providerFreeConfigurationDigest });
-  const cacheRoot = path.join(liveRoot, ".pi", "benchmarks", "provider-free-evidence", binding.digest);
+  const cacheRoot = checkpointDirectory(liveRoot, path.join(".pi", "benchmarks", "provider-free-evidence", binding.digest));
   const cachePath = path.join(cacheRoot, "receipt.json");
-  if (fs.existsSync(cachePath)) {
-    try {
-      const cached = JSON.parse(fs.readFileSync(cachePath, "utf8"));
-      if (productionProviderFreeEvidenceValidationErrors(cached, binding).length === 0) return cached;
-    } catch {
-      // The cache is untrusted local evidence. Malformed bytes are a cache miss,
-      // never a reason to skip or abort the frozen S0 lanes.
-    }
-  }
 
   const assertLiveSource = async (stage) => {
     const commit = await runCommand("git", ["-C", liveRoot, "rev-parse", "HEAD"], { cwd: liveRoot, timeoutMs: 15_000 });
@@ -327,22 +316,60 @@ export async function collectProductionProviderFreeEvidence({
     }
   };
 
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-provider-free-evidence-"));
+  const release = acquireBenchmarkRunLock(cacheRoot, `s0:${binding.digest}`);
   const lanes = [];
   try {
     await assertLiveSource("before-lanes");
+    if (fs.existsSync(cachePath)) {
+      try {
+        const cached = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+        if (productionProviderFreeEvidenceValidationErrors(cached, binding).length === 0) return cached;
+      } catch { /* Rebuild an invalid aggregate only from validated lane checkpoints. */ }
+    }
     for (const definition of LANE_DEFINITIONS) {
-      const output = path.join(temporaryRoot, `${definition.id}.json`);
-      const result = await runCommand(process.execPath, [path.join(liveRoot, definition.runner), "--output", output], {
-        cwd: liveRoot,
-        timeoutMs: definition.timeoutMilliseconds
-      });
-      if (result.code !== 0) {
-        throw new Error(`Required provider-free lane failed: ${definition.id} (${result.stderr.trim() || result.signal || `exit ${result.code}`})`);
+      const laneRoot = checkpointDirectory(cacheRoot, definition.id);
+      const checkpointPath = path.join(laneRoot, "checkpoint.json");
+      const output = path.join(laneRoot, "result.json");
+      const checkpoint = readCheckpoint(checkpointPath, binding.digest);
+      if (checkpoint?.status === "failed") throw new Error(`Required provider-free lane previously failed: ${definition.id}; evidence retained at ${laneRoot}`);
+      let bytes;
+      if (checkpoint?.status === "passed") {
+        bytes = fs.readFileSync(output);
+        if (checkpoint.resultDigest !== digestBytes(bytes) || !lanePassed(definition.id, JSON.parse(bytes))) {
+          throw new Error(`Provider-free lane checkpoint result changed: ${definition.id}`);
+        }
+      } else {
+        if (checkpoint && checkpoint.status !== "running" && checkpoint.status !== "interrupted") throw new Error("Invalid provider-free lane checkpoint state");
+        const checkIdle = acquireBenchmarkRunLock(laneRoot, "s0-lane-preflight"); checkIdle();
+        const attempt = crypto.randomUUID();
+        writeCheckpoint(checkpointPath, binding.digest, { status: "running", attempt, startedAt: new Date().toISOString() });
+        const args = ["--import", path.join(liveRoot, "packages/piagent-core/benchmark/benchmark-provider-free-owner.js"),
+          path.join(liveRoot, definition.runner), "--output", output];
+        if (definition.id === "long-horizon-v1") args.push("--state-directory", path.join(laneRoot, "execution"), "--binding", binding.digest);
+        const result = await runCommand(process.execPath, args, {
+          cwd: liveRoot,
+          timeoutMs: definition.timeoutMilliseconds,
+          env: { ...process.env, PIAGENT_S0_LANE_DIRECTORY: laneRoot, PIAGENT_S0_BINDING: binding.digest, PIAGENT_S0_ATTEMPT: attempt }
+        });
+        if (result.code !== 0) {
+          writeCheckpoint(checkpointPath, binding.digest, {
+            status: result.signal || result.code === 75 ? "interrupted" : "failed", code: result.code, signal: result.signal ?? null,
+            completedAt: new Date().toISOString()
+          });
+          throw new Error(`Required provider-free lane failed: ${definition.id} (${result.stderr.trim() || result.signal || `exit ${result.code}`})`);
+        }
+        try {
+          bytes = fs.readFileSync(output);
+          if (!lanePassed(definition.id, JSON.parse(bytes))) throw new Error("incomplete lane receipt");
+        } catch (error) {
+          writeCheckpoint(checkpointPath, binding.digest, { status: "failed", reason: "invalid-lane-receipt" });
+          throw new Error(`Required provider-free lane returned an incomplete receipt: ${definition.id}`, { cause: error });
+        }
       }
-      const bytes = fs.readFileSync(output);
       const parsed = JSON.parse(bytes.toString("utf8"));
       if (!lanePassed(definition.id, parsed)) throw new Error(`Required provider-free lane returned an incomplete receipt: ${definition.id}`);
+      await assertLiveSource(`after-${definition.id}`);
+      if (checkpoint?.status !== "passed") writeCheckpoint(checkpointPath, binding.digest, { status: "passed", resultDigest: digestBytes(bytes), completedAt: new Date().toISOString() });
       const expected = binding.lanes.find((lane) => lane.id === definition.id);
       lanes.push({
         schemaVersion: 1,
@@ -356,7 +383,6 @@ export async function collectProductionProviderFreeEvidence({
         resultDigest: digestBytes(bytes),
         summary: laneSummary(definition.id, parsed)
       });
-      await assertLiveSource(`after-${definition.id}`);
     }
     const receipt = {
       schemaVersion: 2,
@@ -370,7 +396,7 @@ export async function collectProductionProviderFreeEvidence({
     privateWrite(cachePath, `${JSON.stringify(receipt, null, 2)}\n`);
     return receipt;
   } finally {
-    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+    release();
   }
 }
 

@@ -2,7 +2,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { appendContextTelemetry, estimateContextTokens } from "../../packages/piagent-core/extensions/context-engine.js";
+import { appendContextTelemetry, contextEnginePaths, estimateContextTokens } from "../../packages/piagent-core/extensions/context-engine.js";
+import { checkpointDigest, readCheckpoint, writeCheckpoint, writeCheckpointBytes } from "../../packages/piagent-core/benchmark/benchmark-checkpoint.js";
+import { acquireBenchmarkRunLock } from "../../packages/piagent-core/benchmark/benchmark-run-lock.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "../../packages/piagent-core/extensions/local-state-path.js";
 import { appendTaskJournalEvent } from "../../packages/piagent-core/extensions/task-journal.js";
 import { workingTreeSnapshot } from "../../packages/piagent-core/extensions/task-state.js";
@@ -13,6 +15,10 @@ if (!workspaceArgument || !runtimeArgument) throw new Error("worker requires wor
 const workspace = path.resolve(workspaceArgument);
 const runtime = JSON.parse(Buffer.from(runtimeArgument, "base64url").toString("utf8"));
 const privateRoot = ensurePrivateStateDirectory(workspace, path.join(workspace, ".pi", "piagent-state", "long-horizon"), "Long-horizon state");
+const releaseWorker = acquireBenchmarkRunLock(privateRoot, runtime.taskRunId);
+// An orphan must stop before another coordinator starts it. IPC disconnect is
+// an observed loss of the parent, not a timeout-based guess about its liveness.
+if (process.connected) process.once("disconnect", () => process.exit(76));
 const statePath = resolveLocalStatePath(workspace, path.join(privateRoot, "state.json"), { label: "Long-horizon state" });
 const workingSetPath = resolveLocalStatePath(workspace, path.join(privateRoot, "working-set.json"), { label: "Long-horizon working set" });
 const telemetryPath = resolveLocalStatePath(workspace, path.join(privateRoot, "telemetry.jsonl"), { label: "Long-horizon telemetry" });
@@ -28,7 +34,7 @@ function processAlive(pid) {
 
 function removeDeadWriterTemps(directory) {
   for (const name of fs.readdirSync(directory)) {
-    const match = name.match(/\.(\d+)\.tmp$/);
+    const match = name.match(/\.(\d+)(?:\.[a-f0-9-]{36})?\.tmp$/);
     if (!match || processAlive(Number.parseInt(match[1], 10))) continue;
     const target = path.join(directory, name);
     try { if (fs.lstatSync(target).isFile()) fs.rmSync(target); } catch (error) { if (error?.code !== "ENOENT") throw error; }
@@ -44,10 +50,7 @@ function readJson(file, fallback) {
 }
 
 function writeAtomic(file, value, mode = 0o600) {
-  const temporary = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value)}\n`, { mode });
-  fs.renameSync(temporary, file);
-  fs.chmodSync(file, mode);
+  writeCheckpointBytes(file, `${JSON.stringify(value)}\n`, mode);
 }
 
 function projectSources() {
@@ -77,18 +80,17 @@ function treeBytes(root) {
   return bytes;
 }
 
-function appendTelemetry(value) {
-  fs.appendFileSync(telemetryPath, `${JSON.stringify(value)}\n`, { mode: 0o600 });
-  fs.chmodSync(telemetryPath, 0o600);
-}
-
 function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 const sources = projectSources();
 if (sources.length < runtime.totalUnits) throw new Error(`fixture has only ${sources.length} source files for ${runtime.totalUnits} units`);
-let state = readJson(statePath, {
+const { stopAfterUnit, crashBoundary, ...stableRuntime } = runtime;
+const binding = { runtime: stableRuntime, sources: sources.map((file) => [file, crypto.createHash("sha256").update(fs.readFileSync(path.join(workspace, file))).digest("hex")]) };
+const checkpointPath = path.join(privateRoot, "checkpoint.json");
+const checkpoint = readCheckpoint(checkpointPath, checkpointDigest(binding));
+let state = checkpoint?.state ?? readJson(statePath, {
   schemaVersion: 1,
   laneId: runtime.laneId,
   taskId: runtime.taskId,
@@ -98,14 +100,56 @@ let state = readJson(statePath, {
   compactions: 0,
   peakContextProxyTokens: 0,
   peakDurableStateBytes: 0,
+  activeMilliseconds: 0,
   resumedUnits: []
 });
 if (state.laneId !== runtime.laneId || state.taskId !== runtime.taskId || state.taskRunId !== runtime.taskRunId) throw new Error("long-horizon state identity mismatch");
+if (!checkpoint && state.currentUnit !== 0) throw new Error("legacy long-horizon progress has no atomic checkpoint");
+let workingSet = checkpoint?.workingSet ?? [];
+const telemetry = checkpoint?.telemetry ?? [];
+const contextEvents = checkpoint?.contextEvents ?? [];
+if (telemetry.length !== state.currentUnit || telemetry.some((entry, index) => entry.unit !== index + 1)) throw new Error("invalid long-horizon checkpoint sequence");
+for (let unit = 1; unit <= state.currentUnit; unit += 1) {
+  const actual = readJson(path.join(unitRoot, `${String(unit).padStart(3, "0")}.json`));
+  const [sourcePath, sourceDigest] = binding.sources[unit - 1];
+  if (actual?.unit !== unit || actual.sourcePath !== sourcePath || actual.sourceDigest !== sourceDigest) throw new Error("completed long-horizon artifact changed");
+}
+
+function projectCheckpoint() {
+  writeAtomic(statePath, state);
+  writeAtomic(workingSetPath, workingSet);
+  writeCheckpointBytes(telemetryPath, telemetry.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
+  const contextPath = resolveLocalStatePath(workspace, contextEnginePaths(workspace).telemetry);
+  ensurePrivateStateDirectory(workspace, path.dirname(contextPath));
+  // These events belong only to this owned provider-free fixture. The atomic
+  // checkpoint is authoritative; partial/uncommitted projections are rebuilt.
+  writeCheckpointBytes(contextPath, contextEvents.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
+  for (const entry of telemetry) appendTaskJournalEvent(workspace, {
+    eventType: "long-horizon-progress", taskId: runtime.taskId, taskRunId: runtime.taskRunId,
+    sessionId: runtime.sessionId, idempotencyKey: `long-horizon:${entry.unit}`,
+    data: { unit: entry.unit, logicalMinute: entry.unit, sourceDigest: binding.sources[entry.unit - 1][1], currentWorkingTreeDigest: entry.currentWorkingTreeDigest }
+  }, { recordedAt: entry.recordedAt });
+}
+
+function commitCheckpoint() {
+  writeCheckpoint(checkpointPath, checkpointDigest(binding), { state, workingSet, telemetry, contextEvents });
+  projectCheckpoint();
+}
+
 const startingUnit = state.currentUnit;
 state.processStarts += 1;
 if (startingUnit > 0) state.resumedUnits.push(startingUnit);
-writeAtomic(statePath, state);
-let workingSet = readJson(workingSetPath, []);
+commitCheckpoint();
+
+async function boundary(unit) {
+  if (unit === crashBoundary) {
+    process.send?.({ type: "crash-boundary", unit });
+    await new Promise(() => { setInterval(() => {}, 1_000); });
+  }
+  if (unit === stopAfterUnit && unit < runtime.totalUnits) process.exit(75);
+}
+await boundary(startingUnit);
+let activeSince = performance.now();
 
 for (let unit = startingUnit + 1; unit <= runtime.totalUnits; unit += 1) {
   const sourcePath = sources[(unit - 1) % sources.length];
@@ -119,19 +163,10 @@ for (let unit = startingUnit + 1; unit <= runtime.totalUnits; unit += 1) {
   if (runtime.compactionUnits.includes(unit)) {
     workingSet = [{ unit, compactedThrough: unit, retainedDigest: crypto.createHash("sha256").update(JSON.stringify(workingSet)).digest("hex") }];
     state.compactions += 1;
-    appendContextTelemetry(workspace, { event: "session_compact", taskRunId: runtime.taskRunId, unit, reason: "long-horizon-boundary", fromExtension: true });
+    contextEvents.push(appendContextTelemetry(workspace, { event: "session_compact", taskRunId: runtime.taskRunId, unit, reason: "long-horizon-boundary", fromExtension: true }));
   }
-  writeAtomic(workingSetPath, workingSet);
   const currentWorkingTreeDigest = workingTreeEvidenceDigest(workingTreeSnapshot(workspace));
-  appendTaskJournalEvent(workspace, {
-    eventType: "long-horizon-progress",
-    taskId: runtime.taskId,
-    taskRunId: runtime.taskRunId,
-    sessionId: runtime.sessionId,
-    idempotencyKey: `long-horizon:${unit}`,
-    data: { unit, logicalMinute: unit, sourceDigest, currentWorkingTreeDigest }
-  }, { recordedAt: new Date().toISOString() });
-  appendContextTelemetry(workspace, {
+  contextEvents.push(appendContextTelemetry(workspace, {
     event: "agent_prompt",
     taskRunId: runtime.taskRunId,
     unit,
@@ -140,13 +175,14 @@ for (let unit = startingUnit + 1; unit <= runtime.totalUnits; unit += 1) {
     toolSchemaTokens: 872,
     contextProxyTokens: beforeCompactionTokens,
     source: "deterministic-provider-free-proxy"
-  });
+  }));
   const durableStateBytes = treeBytes(path.join(workspace, ".pi", "piagent-state"));
   state.currentUnit = unit;
   state.peakDurableStateBytes = Math.max(state.peakDurableStateBytes, durableStateBytes);
   state.lastWorkingTreeDigest = currentWorkingTreeDigest;
   state.updatedAt = new Date().toISOString();
-  appendTelemetry({
+  state.activeMilliseconds += performance.now() - activeSince;
+  telemetry.push({
     schemaVersion: 1,
     recordedAt: state.updatedAt,
     processId: process.pid,
@@ -158,8 +194,9 @@ for (let unit = startingUnit + 1; unit <= runtime.totalUnits; unit += 1) {
     compactions: state.compactions,
     currentWorkingTreeDigest
   });
-  writeAtomic(statePath, state);
-  if (unit === runtime.stopAfterUnit && unit < runtime.totalUnits) process.exit(75);
+  commitCheckpoint();
+  activeSince = performance.now();
+  await boundary(unit);
   if (unit < runtime.totalUnits) await sleep(runtime.tickMilliseconds);
 }
 
@@ -174,4 +211,5 @@ writeAtomic(path.join(artifactRoot, "report.json"), {
   logicalDurationMinutes: runtime.logicalDurationMinutes,
   aggregateDigest: aggregate.digest("hex")
 }, 0o644);
+releaseWorker();
 process.exit(0);

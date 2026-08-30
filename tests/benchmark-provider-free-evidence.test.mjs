@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { readCheckpoint } from "../packages/piagent-core/benchmark/benchmark-checkpoint.js";
 
 import {
   collectProductionProviderFreeEvidence,
@@ -96,13 +97,19 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
   const providerFreeConfigurationDigest = "b".repeat(64);
   let laneCalls = 0;
   let failArchitecture = false;
+  let interruptLongHorizon = false;
   const runCommand = async (command, args) => {
     if (command === "git") {
       try { return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8" }), stderr: "" }; }
       catch (error) { return { code: error.status ?? 1, stdout: String(error.stdout ?? ""), stderr: String(error.stderr ?? "") }; }
     }
     laneCalls += 1;
-    const runner = args[0];
+    const runner = args.find((value) => value.endsWith(".mjs"));
+    if (runner.includes("long-horizon") && interruptLongHorizon) {
+      assert.ok(args.includes("--state-directory"));
+      assert.ok(args.includes("--binding"));
+      return { code: null, signal: "SIGTERM", stdout: "", stderr: "interrupted" };
+    }
     const output = args[args.indexOf("--output") + 1];
     if (runner.includes("architecture-conformance") && failArchitecture) {
       return { code: 1, stdout: "", stderr: "architecture gate failed" };
@@ -125,9 +132,19 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
     return { code: 0, stdout: "", stderr: "" };
   };
 
+  interruptLongHorizon = true;
+  await assert.rejects(() => collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
+    source, candidateProvenance, providerFreeConfigurationDigest }), /Required provider-free lane failed: long-horizon-v1/);
+  assert.equal(laneCalls, 3);
+  const binding = productionProviderFreeEvidenceBinding({ packageRoot: root, source, candidateProvenance, providerFreeConfigurationDigest });
+  const checkpointRoot = path.join(fs.realpathSync.native(root), ".pi/benchmarks/provider-free-evidence", binding.digest);
+  assert.equal(readCheckpoint(path.join(checkpointRoot, "architecture-conformance-v1/checkpoint.json"), binding.digest).status, "passed");
+  assert.equal(readCheckpoint(path.join(checkpointRoot, "long-horizon-v1/checkpoint.json"), binding.digest).status, "interrupted");
+  assert.equal(fs.existsSync(path.join(checkpointRoot, "receipt.json")), false);
+  interruptLongHorizon = false;
   const receipt = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
     source, candidateProvenance, providerFreeConfigurationDigest });
-  assert.equal(laneCalls, 4);
+  assert.equal(laneCalls, 5, "completed architecture/runtime lanes are not re-executed after interruption");
   assert.deepEqual(receipt.lanes.map((lane) => lane.id), ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"]);
   assert.deepEqual(productionProviderFreeEvidenceValidationErrors(receipt, receipt.binding), []);
   assert.deepEqual(productionProviderFreeEvidenceContextValidationErrors(receipt, {
@@ -140,7 +157,7 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
 
   const cached = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
     source, candidateProvenance, providerFreeConfigurationDigest });
-  assert.equal(laneCalls, 4, "an exact same-binding S12 invocation reuses the S0 receipt without rerunning the lanes");
+  assert.equal(laneCalls, 5, "an exact same-binding S12 invocation reuses the S0 receipt without rerunning the lanes");
   assert.deepEqual(cached, receipt);
 
   const cachePath = path.join(root, ".pi", "benchmarks", "provider-free-evidence", receipt.binding.digest, "receipt.json");
@@ -152,15 +169,23 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
   fs.writeFileSync(cachePath, `${JSON.stringify(corruptedCache)}\n`);
   const recovered = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
     source, candidateProvenance, providerFreeConfigurationDigest });
-  assert.equal(laneCalls, 8, "a tampered architecture receipt reruns the full source-bound S0 lane set");
+  assert.equal(laneCalls, 5, "a tampered aggregate is reconstructed only from the independently validated settled lane records");
   assert.deepEqual(productionProviderFreeEvidenceValidationErrors(recovered, recovered.binding), []);
 
   fs.writeFileSync(cachePath, "{not-json\n");
   const recoveredFromMalformedCache = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root,
     runCommand, source, candidateProvenance, providerFreeConfigurationDigest });
-  assert.equal(laneCalls, 12, "malformed local cache bytes cannot abort or bypass the frozen S0 lanes");
+  assert.equal(laneCalls, 5, "malformed aggregate bytes do not discard valid settled lane evidence");
   assert.deepEqual(productionProviderFreeEvidenceValidationErrors(recoveredFromMalformedCache,
     recoveredFromMalformedCache.binding), []);
+  const architectureOutput = path.join(checkpointRoot, "architecture-conformance-v1/result.json");
+  const originalOutput = fs.readFileSync(architectureOutput);
+  fs.writeFileSync(cachePath, "{invalid-aggregate\n");
+  fs.writeFileSync(architectureOutput, JSON.stringify({ passed: true }));
+  await assert.rejects(() => collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
+    source, candidateProvenance, providerFreeConfigurationDigest }), /checkpoint result changed/);
+  assert.equal(laneCalls, 5, "corrupt partial evidence is retained and rejected, never silently rerun or accepted");
+  fs.writeFileSync(architectureOutput, originalOutput);
 
   let resumedLaneCalls = 0;
   const resumed = await prepareProductionProviderFreeEvidence({ required: true, packageRoot: root,
@@ -192,12 +217,20 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
   assert.throws(() => productionProviderFreeEvidenceBinding({ packageRoot: root,
     source: { ...source, dirty: true }, candidateProvenance, providerFreeConfigurationDigest }), /exact clean Git commit/);
 
-  fs.writeFileSync(cachePath, "{force-cache-miss\n");
+  // A changed semantic binding starts a new S0 and must stop at its first
+  // failing lane; neither an old aggregate nor old partial progress is reused.
+  const changedConfiguration = "d".repeat(64);
   failArchitecture = true;
   const callsBeforeFailure = laneCalls;
   await assert.rejects(() => collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
-    source, candidateProvenance, providerFreeConfigurationDigest }), /Required provider-free lane failed: architecture-conformance-v1/);
+    source, candidateProvenance, providerFreeConfigurationDigest: changedConfiguration }), /Required provider-free lane failed: architecture-conformance-v1/);
   assert.equal(laneCalls, callsBeforeFailure + 1, "architecture failure stops S0 before any slower lane starts");
+  await assert.rejects(() => collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
+    source, candidateProvenance, providerFreeConfigurationDigest: changedConfiguration }), /previously failed/);
+  assert.equal(laneCalls, callsBeforeFailure + 1, "repeating the invocation does not silently retry a failed S0");
+  write(root, "evals/runtime-conformance-v1/runner.mjs", "// changed source\n");
+  await assert.rejects(() => collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
+    source, candidateProvenance, providerFreeConfigurationDigest }), /source changed/);
 });
 
 test("architecture S0 adapter emits a private zero-token passing receipt", (t) => {

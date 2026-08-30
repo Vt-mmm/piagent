@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { checkpointDirectory, readCheckpoint, writeCheckpoint } from "../packages/piagent-core/benchmark/benchmark-checkpoint.js";
+
+test("durable checkpoints bind complete payloads and reject corruption and filesystem aliases", (t) => {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-checkpoint-test-")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const directory = checkpointDirectory(root, "state");
+  const file = path.join(directory, "checkpoint.json");
+  const binding = "a".repeat(64);
+  assert.equal(readCheckpoint(file, binding), null);
+  writeCheckpoint(file, binding, { status: "passed", unit: 58 });
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  assert.deepEqual(readCheckpoint(file, binding), { status: "passed", unit: 58 });
+  assert.throws(() => readCheckpoint(file, "b".repeat(64)), /binding mismatch/);
+  const bytes = fs.readFileSync(file);
+  const changed = JSON.parse(bytes); changed.data.unit = 90;
+  fs.writeFileSync(file, JSON.stringify(changed));
+  assert.throws(() => readCheckpoint(file, binding), /integrity/);
+  fs.writeFileSync(file, bytes);
+  const alias = path.join(directory, "alias.json");
+  fs.symlinkSync(file, alias);
+  assert.throws(() => readCheckpoint(alias, binding), /regular unlinked file/);
+  assert.throws(() => writeCheckpoint(alias, binding, {}), /regular unlinked file/);
+  const link = path.join(directory, "hard.json"); fs.linkSync(file, link);
+  assert.throws(() => readCheckpoint(link, binding), /regular unlinked file/);
+  assert.throws(() => writeCheckpoint(file, binding, {}), /regular unlinked file/);
+  assert.throws(() => checkpointDirectory(root, "../escape"), /Invalid checkpoint/);
+  fs.symlinkSync(directory, path.join(root, "linked"));
+  assert.throws(() => checkpointDirectory(root, "linked/child"), /not symlinked/);
+});
