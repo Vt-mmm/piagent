@@ -13,6 +13,20 @@ verifier digest, scenario IDs and exact public operator-request digests.
 Expected answers come from independently reviewed plans, not candidate output,
 hidden graders, model-provided tests or a textual similarity heuristic.
 
+Before authoring a catalog, run the same suite/surface configuration with
+`--dry-run` and without `--verification-plan`. The `Frozen verification binding`
+line supplies `suiteDigest` and `verifierDigest` from the actual frozen runtime,
+with `approval: "not-granted"`. It starts no provider executable or model
+session and creates no verification authority. Use that binding in the reviewed
+catalog, then preview the catalog and approve it separately. A later source,
+suite or executed-verifier change is still refused.
+
+Do not calculate that binding from the live author checkout: a built checkout
+can contain Git-ignored served browser assets that the source snapshot does not
+execute. Those assets remain covered by live runtime integrity; they are not
+removed from the digest to make live and frozen installations appear equal.
+WebUI benchmark assets retain their separate exact build/measurement binding.
+
 Each scenario can have up to 32 exact requests. Each request retains the existing
 bounded host-contract format. Schema-version-2 host plan sets and authenticated
 `approved-host-contract-set-v1` payloads support multiple requests; the existing

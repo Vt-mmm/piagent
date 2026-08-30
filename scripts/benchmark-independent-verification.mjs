@@ -28,6 +28,13 @@ export function resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry) {
   }));
 }
 
+/** Preview the actual frozen runtime, not a live checkout with different build assets. */
+export function benchmarkVerificationBinding({ installedRoot, suiteDigest }) {
+  if (!HASH.test(suiteDigest)) throw new TypeError("Invalid frozen verification suite digest");
+  return Object.freeze({ kind: "benchmark-verification-binding-v1", suiteDigest,
+    verifierDigest: installedContractVerifierDigest(installedRoot), approval: "not-granted" });
+}
+
 export function prepareBenchmarkVerification({ options, resumeState, ...scope }) {
   if (resumeState) {
     if (options.verificationPlan && options.verificationPlan !== resumeState.manifest.verificationPlan?.file) throw new Error("Cannot change the verification plan on resume");

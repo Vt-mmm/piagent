@@ -4,7 +4,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadBenchmarkVerificationPlan, validateBenchmarkVerificationPlan } from "../scripts/benchmark-independent-verification.mjs";
+import { benchmarkVerificationBinding, loadBenchmarkVerificationPlan, validateBenchmarkVerificationPlan } from "../scripts/benchmark-independent-verification.mjs";
+import { materializeBenchmarkCandidate } from "../packages/piagent-core/benchmark/benchmark-candidate.js";
+import { cleanupBenchmarkExecutionSnapshot } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
+import { discoverRuntimeIntegrityFiles } from "../packages/piagent-core/capabilities/runtime-integrity.js";
 import { parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { installedContractVerifierDigest, openHostContractConfiguration } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 import { IndependentAcceptanceRuntime } from "../packages/piagent-core/runtime/verification/independent-acceptance-runtime.ts";
@@ -62,6 +65,39 @@ test("catalog preview binds exact requests and exposes only digests/counts, neve
   assert.equal(prepared.observe([]).status, "partial", "provisioned authority is not observed execution");
   assert.equal(prepared.observe([]).attempts, 0);
   assert.throws(() => f.prepare(loaded), /EEXIST/);
+});
+
+test("verification binding follows the frozen candidate while live served assets remain integrity-bound", (t) => {
+  const f = fixture(t), snapshot = path.join(f.directory, "snapshot");
+  fs.writeFileSync(path.join(f.installedRoot, ".gitignore"), "/packages/piagent-webui/dist/\n");
+  for (const args of [["init", "-q"], ["add", "."], ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]]) {
+    execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { cwd: f.installedRoot, stdio: "pipe" });
+  }
+  const asset = "packages/piagent-webui/dist/client/index.html", liveAsset = path.join(f.installedRoot, asset);
+  fs.mkdirSync(path.dirname(liveAsset), { recursive: true }); fs.writeFileSync(liveAsset, "<p>built browser</p>\n");
+  try {
+    materializeBenchmarkCandidate(f.installedRoot, snapshot);
+    assert.equal(fs.existsSync(path.join(snapshot, asset)), false, "Git-ignored live output is not a frozen source input");
+    assert.ok(discoverRuntimeIntegrityFiles(f.installedRoot).includes(asset), "served assets must not be removed from integrity discovery");
+    const live = benchmarkVerificationBinding({ installedRoot: f.installedRoot, suiteDigest: f.catalog.suiteDigest });
+    const frozen = benchmarkVerificationBinding({ installedRoot: snapshot, suiteDigest: f.catalog.suiteDigest });
+    assert.equal(frozen.approval, "not-granted"); assert.equal(Object.isFrozen(frozen), true);
+    assert.notEqual(live.verifierDigest, frozen.verifierDigest);
+    f.catalog.verifierDigest = live.verifierDigest; f.save();
+    assert.throws(() => f.load({ installedRoot: snapshot }), /does not match/);
+    f.catalog.verifierDigest = frozen.verifierDigest; f.save();
+    const loaded = f.load({ installedRoot: snapshot });
+    assert.equal(loaded.isCurrent(), true); assert.equal(fs.existsSync(f.authority), false);
+    fs.appendFileSync(liveAsset, "<p>changed live asset</p>\n");
+    assert.notEqual(benchmarkVerificationBinding({ installedRoot: f.installedRoot, suiteDigest: f.catalog.suiteDigest }).verifierDigest, live.verifierDigest,
+      "live served-asset changes still change the live verifier identity");
+    assert.equal(loaded.isCurrent(), true, "an unchanged frozen runtime does not borrow live build state");
+    const frozenVerifier = path.join(snapshot, "packages/piagent-core/extensions/acceptance-durable-execution.js");
+    fs.chmodSync(frozenVerifier, 0o600); // Simulate owner-level tampering with this test-owned read-only snapshot.
+    fs.appendFileSync(frozenVerifier, "// changed frozen verifier\n");
+    assert.equal(loaded.isCurrent(), false, "changed executed verifier still revokes the plan");
+    assert.throws(() => benchmarkVerificationBinding({ installedRoot: snapshot, suiteDigest: "bad" }), /Invalid/);
+  } finally { cleanupBenchmarkExecutionSnapshot(snapshot); }
 });
 
 for (const [name, mutate] of [

@@ -37,7 +37,6 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
 import { runBenchmarkSession } from "../scripts/benchmark-session.mjs";
-import { installedContractVerifierDigest } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 
@@ -2997,7 +2996,6 @@ probeFs.appendFileSync(${JSON.stringify(probe)}, JSON.stringify({tool:${JSON.str
   }
   const catalog = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/benchmark-independent-verification-plan.valid.json")));
   catalog.suiteDigest = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true }).contentDigest;
-  catalog.verifierDigest = installedContractVerifierDigest(root);
   catalog.scenarios[0].scenarioId = "write-result";
   catalog.scenarios[0].plans[0].operatorRequestDigest = operatorRequestDigest(fs.readFileSync(path.join(suiteRoot, "prompt.md"), "utf8").trim());
   fs.writeFileSync(file, JSON.stringify(catalog), { mode: 0o600 });
@@ -3007,6 +3005,14 @@ probeFs.appendFileSync(${JSON.stringify(probe)}, JSON.stringify({tool:${JSON.str
   const run = (args) => spawnSync(process.execPath, [runner, ...args], { cwd: root, encoding: "utf8", timeout: 60000, env });
   const args = ["--suite", value.suite, "--surfaces", "piagent,codex-cli", "--model", "test/fake-model", "--thinking", "high",
     "--repeats", "2", "--verification-plan", file, "--yes", "--output", value.output, "--max-sessions", "2"];
+  const preview = run(["--suite", value.suite, "--surfaces", "piagent,codex-cli", "--model", "test/fake-model", "--dry-run"]);
+  assert.equal(preview.status, 0, `${preview.stdout}\n${preview.stderr}`);
+  const binding = JSON.parse(preview.stdout.match(/^Frozen verification binding: (.+)$/m)?.[1] ?? "null");
+  assert.equal(binding?.kind, "benchmark-verification-binding-v1");
+  assert.equal(binding.approval, "not-granted"); assert.equal(binding.suiteDigest, catalog.suiteDigest);
+  catalog.verifierDigest = binding.verifierDigest;
+  fs.writeFileSync(file, JSON.stringify(catalog), { mode: 0o600 });
+  assert.equal(fs.existsSync(probe), false, "binding preview cannot start a provider executable");
   const refused = run(args);
   assert.notEqual(refused.status, 0); assert.match(refused.stderr, /explicit --approve-verification/);
   assert.equal(fs.existsSync(probe), false, "no provider executable is started before verification approval");

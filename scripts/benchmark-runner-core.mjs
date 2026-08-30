@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
-import { prepareBenchmarkVerification } from "./benchmark-independent-verification.mjs";
+import { benchmarkVerificationBinding, prepareBenchmarkVerification } from "./benchmark-independent-verification.mjs";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
@@ -414,6 +414,7 @@ async function main() {
     rootSeedDigest
   });
   if (options.dryRun) {
+    process.stdout.write(`Frozen verification binding: ${JSON.stringify(benchmarkVerificationBinding({ installedRoot: packageRoot, suiteDigest }))}\n`);
     if (verificationPlan) process.stdout.write(`Independent verification: ${JSON.stringify(verificationPlan.identity)} (preview only)\n`);
     process.stdout.write(`${plan}${codexPlan}\n  manifest:  ${manifestPath}\nDRY RUN: no model session started.\n`);
     return;
