@@ -3,6 +3,8 @@
 !package-lock.json
 !worker.mjs
 !protocol.mjs
+!values.mjs
+!intrinsics.mjs
 !guest.mjs
 !node_modules/
 !node_modules/**

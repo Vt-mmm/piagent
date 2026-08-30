@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { runIsolatedContract } from "./acceptance-isolated-executor.js";
 import { parseRequest, validateValue } from "./acceptance-executor/protocol.mjs";
+import { canonicalValue } from "./acceptance-executor/values.mjs";
 
-export const INDEPENDENT_CONTRACT_VERSION = "primitive-contract-comparison-v1";
+export const INDEPENDENT_CONTRACT_VERSION = "bounded-data-contract-comparison-v2";
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"];
@@ -23,8 +24,9 @@ function freeze(value) {
   return value;
 }
 
-function validateExpected(expected, args) {
-  shape(expected, ["outcome", "value", "errorClass", "clockReads", "dateArgsAfter"], ["outcome"]);
+function validateExpected(expected, item) {
+  const { args } = item;
+  shape(expected, ["outcome", "value", "errorClass", "clockReads", "dateArgsAfter", "argsAfter"], ["outcome"]);
   if (expected.outcome === "return") {
     validateValue(expected.value, false);
     if (Object.hasOwn(expected, "errorClass")) throw new TypeError("Conflicting expected result");
@@ -42,6 +44,10 @@ function validateExpected(expected, args) {
       if (arg.index !== indexes[index]) throw new TypeError("Wrong expected Date argument");
       validateValue({ type: "number", value: arg.value }, false);
     });
+  }
+  if (Object.hasOwn(expected, "argsAfter")) {
+    if (!item.observeArgs || !Array.isArray(expected.argsAfter) || expected.argsAfter.length !== args.length) throw new TypeError("Incomplete expected argument state");
+    expected.argsAfter.forEach((arg) => validateValue(arg));
   }
 }
 
@@ -61,7 +67,7 @@ export function compileIndependentContract(planText) {
       || check.cases.length < 1 || check.cases.length > 256) throw new TypeError("Invalid independent check");
     ids.add(check.id);
     for (const item of check.cases) {
-      shape(item, ["id", "args", "clock", "expected"], ["id", "args", "expected"]);
+      shape(item, ["id", "args", "clock", "expected", "sequence", "exportName", "reset", "observeArgs"], ["id", "args", "expected"]);
       const { expected, ...input } = item;
       cases.push(input);
       if (cases.length > 256) throw new TypeError("Too many independent cases");
@@ -69,16 +75,28 @@ export function compileIndependentContract(planText) {
   }
   const requestText = JSON.stringify({ schemaVersion: 1, source: plan.source, exportName: plan.exportName, cases });
   parseRequest(requestText); // Validate all guest inputs before validating dependent expected state.
-  for (const check of plan.checks) for (const item of check.cases) validateExpected(item.expected, item.args);
+  // Every failing step can retain its full replay prefix. Bound the worst-case
+  // repeated input bytes before execution, not after a large receipt is built.
+  let sequence, prefixBytes = 2, historyBytes = 0;
+  for (const item of cases) {
+    if (!item.sequence || item.sequence !== sequence) prefixBytes = 2;
+    sequence = item.sequence;
+    if (!sequence) continue;
+    prefixBytes += Buffer.byteLength(JSON.stringify(item)) + 1;
+    historyBytes += prefixBytes;
+    if (historyBytes > 2 * 1024 * 1024) throw new TypeError("Counterexample history budget exceeded");
+  }
+  for (const check of plan.checks) for (const item of check.cases) validateExpected(item.expected, item);
   return freeze({ plan, requestText, planDigest: hash(JSON.stringify([INDEPENDENT_CONTRACT_VERSION, plan])) });
 }
 
 function matches(expected, observed) {
   if (expected.outcome !== observed.outcome) return false;
-  if (expected.outcome === "return" && !isDeepStrictEqual(expected.value, observed.value)) return false;
+  if (expected.outcome === "return" && !isDeepStrictEqual(canonicalValue(expected.value), canonicalValue(observed.value))) return false;
   if (expected.outcome === "throw" && expected.errorClass !== observed.errorClass) return false;
   if (Object.hasOwn(expected, "clockReads") && expected.clockReads !== observed.clockReads) return false;
   if (Object.hasOwn(expected, "dateArgsAfter") && !isDeepStrictEqual(expected.dateArgsAfter, observed.dateArgsAfter)) return false;
+  if (Object.hasOwn(expected, "argsAfter") && !isDeepStrictEqual(expected.argsAfter.map(canonicalValue), observed.argsAfter?.map(canonicalValue))) return false;
   return true;
 }
 
@@ -99,9 +117,13 @@ export async function runIndependentContract({ planText, ...backend } = {}) {
 export function compareIndependentExecution(compiled, execution) {
   const counterexamples = [];
   const observations = new Map((execution.observation?.cases ?? []).map((item) => [item.id, item]));
+  let sequence, history = [];
   const checks = compiled.plan.checks.map((check) => {
     let caseCount = 0, incomplete = false, error = false, counterexampleRef;
     for (const item of check.cases) {
+      const { expected: _expected, ...input } = item;
+      if (!item.sequence || item.sequence !== sequence) history = [];
+      sequence = item.sequence; history.push(input);
       const observed = observations.get(item.id);
       if (!observed || observed.outcome === "unsupported") { incomplete = true; continue; }
       if (observed.outcome === "error") { error = true; continue; }
@@ -109,7 +131,7 @@ export function compareIndependentExecution(compiled, execution) {
       if (!matches(item.expected, observed)) {
         const evidence = { version: INDEPENDENT_CONTRACT_VERSION, planDigest: compiled.planDigest,
           runId: execution.runId, sourceDigest: execution.sourceDigest, imageId: execution.imageId,
-          checkId: check.id, input: { id: item.id, args: item.args, ...(Object.hasOwn(item, "clock") ? { clock: item.clock } : {}) },
+          checkId: check.id, input: { ...input, ...(sequence ? { prefix: history.slice() } : {}) },
           expected: item.expected, observed };
         const digest = hash(JSON.stringify(evidence));
         counterexamples.push({ digest, evidence });

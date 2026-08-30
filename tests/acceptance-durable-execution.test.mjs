@@ -65,6 +65,30 @@ test("missing current project verification and pre-cancellation reserve no attem
   assert.equal(store.latest(scope), null);
 });
 
+test("durable admission authenticates structured sequence results and their complete counterexample history", integration, async (context) => {
+  const f = fixture(context), record = (total) => ({ type: "record", value: [{ key: "total", value: { type: "number", value: total } }] });
+  fs.writeFileSync(f.sourceFile, "let total=0; export function sum(input){ total+=input.total; return {total}; }\n");
+  const history = [{ id: "history", cases: [
+    { id: "one", sequence: "sum-history", args: [record(2)], expected: { outcome: "return", value: record(2) } },
+    { id: "two", sequence: "sum-history", args: [record(3)], expected: { outcome: "return", value: record(5) } }
+  ] }];
+  const runner = createDurableContractRunner({ ...f.options, checks: history });
+  const first = await runner.run(request), accepted = await runner.assess(first, { policy: "allow" });
+  assert.equal(accepted.verdict, "pass", JSON.stringify(accepted));
+  assert.equal(accepted.completionAllowed, true);
+  const cached = await runner.run(request);
+  assert.equal(cached.reused, true);
+  assert.equal(f.store.latest(scope).attempt, 1);
+  fs.writeFileSync(f.sourceFile, "let total=0; export function sum(input){ total+=input.total+(total>0?1:0); return {total}; }\n");
+  const failed = await runner.run(request), rejected = await runner.assess(failed, { policy: "allow" });
+  assert.equal(rejected.verdict, "fail", JSON.stringify(rejected));
+  assert.equal(rejected.repairEligible, true);
+  assert.equal(rejected.sourceMutationAllowed, false);
+  assert.deepEqual(rejected.counterexamples[0].evidence.input.prefix.map((item) => item.id), ["one", "two"]);
+  assert.deepEqual(rejected.counterexamples[0].evidence.observed.value, record(6));
+  assert.equal(f.store.latest(scope).attempt, 2);
+});
+
 test("unavailable backend errors are durably settled without implicit retries", async (context) => {
   const { options, store } = fixture(context);
   const runner = createDurableContractRunner({ ...options, dockerSocket: "/piagent-test-backend-does-not-exist.sock" });

@@ -25,16 +25,43 @@
         { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "string" }, "value": { "type": "string", "maxLength": 4096 } } }
       ]
     },
-    "argument": { "oneOf": [
+    "inputValue": { "oneOf": [
       { "$ref": "#/$defs/primitive" },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } }
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
+        "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/inputValue" } }
+      } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
+        "type": { "const": "record" }, "value": { "type": "array", "maxItems": 64, "items": {
+          "type": "object", "additionalProperties": false, "required": ["key", "value"],
+          "properties": { "key": { "type": "string", "maxLength": 4096 }, "value": { "$ref": "#/$defs/inputValue" } }
+        } }
+      } }
+    ] },
+    "outputValue": { "oneOf": [
+      { "$ref": "#/$defs/primitive" },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
+        "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/outputValue" } }
+      } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
+        "type": { "const": "record" }, "value": { "type": "array", "maxItems": 64, "items": {
+          "type": "object", "additionalProperties": false, "required": ["key", "value"],
+          "properties": { "key": { "type": "string", "maxLength": 4096 }, "value": { "$ref": "#/$defs/outputValue" } }
+        } }
+      } }
+    ] },
+    "argument": { "oneOf": [
+      { "$ref": "#/$defs/inputValue" },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"],
+        "properties": { "type": { "const": "result" }, "value": { "$ref": "#/$defs/id" } } }
     ] },
     "expected": {
       "type": "object", "additionalProperties": false, "required": ["outcome"],
       "properties": {
-        "outcome": { "enum": ["return", "throw"] }, "value": { "$ref": "#/$defs/primitive" },
+        "outcome": { "enum": ["return", "throw"] }, "value": { "$ref": "#/$defs/outputValue" },
         "errorClass": { "enum": ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"] },
         "clockReads": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "argsAfter": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/inputValue" } },
         "dateArgsAfter": { "type": "array", "maxItems": 16, "items": {
           "type": "object", "additionalProperties": false, "required": ["index", "value"],
           "properties": { "index": { "type": "integer", "minimum": 0, "maximum": 15 }, "value": { "$ref": "#/$defs/numeric" } }
@@ -48,6 +75,8 @@
     "case": {
       "type": "object", "additionalProperties": false, "required": ["id", "args", "expected"],
       "properties": { "id": { "$ref": "#/$defs/id" }, "args": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/argument" } },
+        "sequence": { "$ref": "#/$defs/id" }, "reset": { "const": true }, "observeArgs": { "type": "boolean" },
+        "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" },
         "clock": { "type": "integer", "minimum": -8640000000000000, "maximum": 8640000000000000 }, "expected": { "$ref": "#/$defs/expected" } }
     },
     "backend": {

@@ -5,7 +5,8 @@ const EXECUTOR_REASONS = new Set([
 ]);
 const CASE_REASONS = new Set([
   "guest-timeout", "module-import-unsupported", "module-initialization-failed", "async-module-unsupported",
-  "callable-export-missing", "guest-resource-error", "returned-string-limit", "return-type-unsupported", "guest-observation-failed"
+  "callable-export-missing", "guest-resource-error", "returned-string-limit", "return-type-unsupported", "guest-observation-failed",
+  "structured-value-unsupported", "value-observation-limit", "referenced-result-unavailable"
 ]);
 
 /** Formatting of authenticated host observations, never a source-failure oracle. */

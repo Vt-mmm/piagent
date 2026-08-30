@@ -64,7 +64,7 @@ test("real comparison rejects wrong boundaries with a host-captured reproducible
 });
 
 test("unsupported code and backend faults remain distinct from an observed wrong behavior", integration, async () => {
-  const unsupported = await execute(plan("export const run = () => ({value:true})"));
+  const unsupported = await execute(plan("export const run = () => Promise.resolve(true)"));
   assert.equal(unsupported.verdict, "unknown");
   assert.equal(unsupported.counterexamples.length, 0);
   const infinite = await execute(plan("export function run() { while (true) {} }"));

@@ -116,6 +116,29 @@ test("published schemas describe the host plan and approval without treating JSO
   assert.equal(fs.existsSync(f.directory), false, "preview/schema validation creates no authority");
 });
 
+test("host approval binds structured histories and rejects references or snapshots outside their contract", (t) => {
+  const f = fixture(t), value = { type: "record", value: [{ key: "value", value: { type: "number", value: 1 } }] };
+  f.options.contracts[0].checks[0].cases = [
+    { id: "saved", sequence: "history", exportName: "snapshot", args: [], expected: { outcome: "return", value } },
+    { id: "restored", sequence: "history", exportName: "restore", reset: true, args: [{ type: "result", value: "saved" }], observeArgs: true,
+      expected: { outcome: "return", value, argsAfter: [value] } }
+  ];
+  const payload = prepareHostContractApproval(f.options), schema = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  assert.equal(ajv.validate(schema, payload), true, JSON.stringify(ajv.errors));
+  for (const mutate of [
+    (cases) => { cases[1].sequence = "foreign"; },
+    (cases) => { cases[1].observeArgs = false; },
+    (cases) => { cases[0].expected.value.value.push(structuredClone(cases[0].expected.value.value[0])); }
+  ]) {
+    const wrong = structuredClone(f.options); mutate(wrong.contracts[0].checks[0].cases);
+    assert.throws(() => prepareHostContractApproval(wrong));
+    assert.equal(fs.existsSync(f.directory), false);
+  }
+  writeHostContractApproval(f.options);
+  assert.deepEqual(f.open().payload.contracts[0].checks[0].cases, payload.contracts[0].checks[0].cases);
+});
+
 test("the installed dispatcher previews approval without writes, then creates authority only with --approve", (t) => {
   const f = fixture(t), executable = path.join(f.root, "piagent"), planPath = path.join(f.root, "plan.json");
   fs.symlinkSync(path.join(repositoryRoot, "scripts/piagent-cli.mjs"), executable);
