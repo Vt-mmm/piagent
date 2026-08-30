@@ -2,6 +2,7 @@ import { classifyContextTask } from "../../extensions/context-engine.js";
 import { matchesProtectedPath, normalizePathCandidate } from "../../extensions/policy-core.js";
 import type { ReviewLens } from "../../extensions/guard-types.js";
 import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
+import { classifyConditionalRepairIntent } from "./task-repair-intent.ts";
 import {
   foldChangeIntent,
   hasChangeIntent,
@@ -175,7 +176,7 @@ export function automaticTaskMutationPolicy(
   if (changeMode === "read-only" || noMutationBoundarySignals(text).taskWide || hasGlobalReadOnlyBoundary(text)) {
     return "forbidden";
   }
-  return hasConditionalRepairIntent(text) ? "allowed" : "required";
+  return classifyConditionalRepairIntent(text) === "conditional-only" ? "allowed" : "required";
 }
 
 export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {

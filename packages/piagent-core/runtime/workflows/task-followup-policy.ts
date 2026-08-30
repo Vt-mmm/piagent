@@ -1,15 +1,7 @@
 import { normalizePathCandidate } from "../../extensions/policy-core.js";
 import { isCurrentWorkingTreeDigest } from "../../extensions/working-tree-digest.js";
 import { foldChangeIntent } from "./change-clarification.ts";
-
-const CONDITIONAL_INSPECTION_INTENT = /\b(?:audit|check|inspect|review|tests?|verify|validate|rerun|re-run|recheck|re-check|kiem tra|ra soat|xac minh|danh gia|chay lai)\b/i;
-const CONDITIONAL_REPAIR_INTENT = [
-  /\b(?:if|when)\b.{0,140}\b(?:address|change|correct(?:ing)?|edit|fix|patch|repair|resolve|update)\b/i,
-  /\b(?:address|change|correct(?:ing)?|edit|fix|patch|repair|resolve|update)\b.{0,120}\b(?:(?:if|when|as)\s+(?:needed|necessary|required)|any\s+(?:failures?|issues?|errors?|problems?|defects?|findings?)|whatever\s+fails|(?:failures?|issues?|errors?|problems?|defects?|findings?)\s+(?:(?:(?:if|when)\s+)?(?:found|detected|discovered)|if\s+any|(?:you|we)\s+find))\b/i,
-  /\b(?:audit|check|inspect|review|tests?|verify|validate|rerun|re-run|recheck|re-check)\b.{0,180}\b(?:address|correct(?:ing)?|fix|patch|repair|resolve)\b.{0,80}\b(?:failures?|issues?|errors?|problems?|defects?|findings?|failing\s+tests?)\b/i,
-  /\b(?:neu|khi)\b.{0,140}\b(?:cap nhat|chinh sua|fix|khac phuc|sua)\b/i,
-  /\b(?:cap nhat|chinh sua|fix|khac phuc|sua)\b.{0,120}\b(?:neu can|khi can|neu co|loi|van de)\b/i
-];
+import { classifyConditionalRepairIntent } from "./task-repair-intent.ts";
 
 export type PriorTaskScopeEvidence = {
   trace?: { outcome?: string };
@@ -35,9 +27,7 @@ type FollowupAcceptanceTask = PriorTaskScopeEvidence & {
 type FileDigestRecord = Record<string, string>;
 
 export function hasConditionalRepairIntent(text: string): boolean {
-  const folded = foldChangeIntent(text);
-  return CONDITIONAL_INSPECTION_INTENT.test(folded)
-    && CONDITIONAL_REPAIR_INTENT.some((pattern) => pattern.test(folded));
+  return classifyConditionalRepairIntent(text) !== "none";
 }
 
 function refersToEarlierImplementation(prompt: string): boolean {

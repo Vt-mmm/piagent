@@ -5003,6 +5003,49 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
+  for (const [scenario, prompt] of [
+    ["direct", "Implement the new API in src/platform/config.js. Verify it and fix if needed."],
+    ["modal", "You must implement the new API in src/platform/config.js. Verify it and fix if needed."],
+    ["local-prohibition", "Implement the new API in src/platform/config.js (do not change README). Verify it and fix if needed."]
+  ]) it(`keeps mandatory implementation required when an automatic request also contains conditional repair (${scenario})`, async (t) => {
+    const { root, piagentGuard } = await loadGuardFixture(), cwd = createProject(root);
+    fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+    const sourcePath = "src/platform/config.js", source = "export const enabled = true;\n";
+    fs.writeFileSync(path.join(cwd, sourcePath), source);
+    execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    execFileSync("git", ["-C", cwd, "add", sourcePath]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "clean baseline"]);
+    const ctx = createContext(cwd, { sessionId: "mixed-required-implementation" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    t.after(async () => { await harness.handlers.get("session_shutdown")?.({}, ctx); });
+    await harness.handlers.get("session_start")({}, ctx);
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const started = await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] } }, ctx);
+    assert.equal(started.message.details.runtimeTask.mutationPolicy, "required");
+    assert.doesNotMatch(started.message.content, /zero task delta is valid/i);
+    await harness.handlers.get("tool_result")({ toolName: "read", input: { path: sourcePath },
+      content: [{ type: "text", text: source }], isError: false }, ctx);
+    // Controlled hook observations isolate intake/completion policy here; the
+    // independent-execution scenarios below run actual project verifiers.
+    for (const [index, command] of started.message.details.runtimeTask.verifyCommands.entries()) {
+      const toolCallId = `mixed-required-verify-${index}`;
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command }, toolCallId);
+      assert.notEqual(allowed.block, true, allowed.reason);
+      await harness.handlers.get("tool_result")({ toolCallId, toolName: "bash", input: { command },
+        content: [{ type: "text", text: "pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
+    }
+    await harness.handlers.get("message_end")({ message: { role: "assistant",
+      content: [{ type: "text", text: "Implemented the new API and verified the result." }] } }, ctx);
+    const task = activeSessionTask(cwd, "mixed-required-implementation");
+    assert.equal(task.mutationPolicy, "required");
+    assert.deepEqual(task.changedFiles, []);
+    assert.notEqual(task.trace.outcome, "completed", "passing verifier events cannot replace a required implementation delta");
+    assert.equal(fs.readFileSync(path.join(cwd, sourcePath), "utf8"), source);
+  });
+
   for (const scenario of ["valid", "counterexample", "repair", "modular-valid", "modular-counterexample", "modular-repair", "family-valid", "family-counterexample", "family-repair", "iso-valid", "iso-counterexample", "iso-repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
     skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 120000
   }, async (t) => {
@@ -5041,7 +5084,7 @@ describe("piagent guard integration", () => {
     await harness.handlers.get("session_start")({}, ctx);
     const isoDescription = isoSelection ? JSON.parse(fs.readFileSync(path.join(root, "adapters/node-typescript/contract-families.json"), "utf8"))
       .families.find(family => family.id === "iso-expiry-millisecond-profile").description : "";
-    const prompt = isoSelection ? `Verify src/expiry.js; if verification exposes a defect, fix it. isExpired(expiresAt, now) must satisfy this exact application profile: ${isoDescription}` : familySelection
+    const prompt = isoSelection ? `Verify src/expiry.js. isExpired(expiresAt, now) must satisfy this exact application profile: ${isoDescription} Fix a defect only if verification exposes one.` : familySelection
       ? "Verify src/math.js: sum(a,b) must return a+b for two finite numbers and reject non-number or nonfinite arguments with TypeError. Fix a defect only if verification exposes one."
       : "Verify src/math.js: sum(a,b) must return a+b for numbers and reject non-number arguments with TypeError. Fix a defect only if verification exposes one.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
