@@ -1295,6 +1295,7 @@ describe("runtime session modules", () => {
     const telemetry = [];
     const bindings = [];
     const flushed = [];
+    const writtenTasks = [];
 
     state.cacheTaskIdentity(ctx, task);
     state.rememberObservedContext(ctx, { path: "src/a.ts", reason: "read" });
@@ -1304,7 +1305,7 @@ describe("runtime session modules", () => {
       maxManifestFiles: 4,
       telemetry: writeTelemetry,
       activeTask: () => task,
-      writeTask: (_cwd, value) => value,
+      writeTask: (_cwd, value) => { writtenTasks.push(structuredClone(value)); return value; },
       bindTask: (...args) => bindings.push(args),
       appendTrace: (_cwd, payload) => traces.push(payload),
       flushObservedTaskContext: (_pi, _ctx, pending, maximum, event) => {
@@ -1325,6 +1326,11 @@ describe("runtime session modules", () => {
     assert.equal(task.sessionName, "TASK-2");
     assert.equal(bindings.length, 1);
     assert.equal(traces[0].event, "task_session_renamed");
+    assert.equal(writtenTasks.length, 1);
+    await handlers.get("session_info_changed")({ name: " TASK-2 " }, ctx);
+    assert.equal(writtenTasks.length, 1, "announcing the same normalized name must not rewrite the task");
+    assert.equal(bindings.length, 1, "duplicate host name announcements must not rebind the task");
+    assert.equal(traces.length, 1, "duplicate host name announcements must not invent a rename");
 
     stageContextDelivery(ctx, {
       deliveryId: "delivery-1",

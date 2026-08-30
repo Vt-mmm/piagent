@@ -268,9 +268,15 @@ describe("recovery chaos and interruption safety", () => {
   it("surfaces a corrupt journal tail and refuses a symlink handoff escape", () => {
     const cwd = workspace();
     const current = task("corrupt-symlink");
-    recordVerificationCheckpoint({ cwd, ui: { notify() {} } }, current, {
+    const rejected = recordVerificationCheckpoint({ cwd, ui: { notify() {} } }, current, {
       commandHash: "c".repeat(64), workingTreeDigest: "d".repeat(64), exitCode: 1
     });
+    assert.equal(rejected, undefined, "an unversioned digest cannot seed trusted verification evidence");
+    assert.equal(fs.existsSync(taskJournalPaths(cwd).events), false);
+    // Seed a valid journal independently; the corruption test must not depend
+    // on accepting the deliberately invalid verifier observation above.
+    writeTaskContract(cwd, current);
+    assert.equal(readTaskJournal(cwd).corruptions.length, 0);
     fs.appendFileSync(taskJournalPaths(cwd).events, "{truncated\n");
     const resumed = inspectTaskResumeState(cwd, current, current.sessionId);
     assert.equal(resumed.decision, "blocked");

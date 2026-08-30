@@ -52,7 +52,7 @@ function compactRecoveryField(value: unknown, maximum: number): string {
   return text.length > maximum ? `${text.slice(0, Math.max(0, maximum - 1)).trimEnd()}…` : text;
 }
 
-function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProjection[]): string[] {
+function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProjection[], includeProofHints = true): string[] {
   if (projections.length === 0) return [];
   const lines = ["Critical proof targets (derived only from the current task contract and working tree):"];
   for (const projection of projections.slice(0, 8)) {
@@ -61,7 +61,7 @@ function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProject
     const criterion = compactRecoveryField(projection.criterionText, 700);
     lines.push(`- Target: ${targets.join(", ") || "task-scoped behavior"}; missing proof: ${dimensions.join(", ") || "focused-evidence"}; criterion: ${criterion}`);
   }
-  const hints = [...new Set(projections.flatMap((projection) => projection.proofHints)
+  const hints = [...new Set((includeProofHints ? projections : []).flatMap((projection) => projection.proofHints)
     .map((hint) => compactRecoveryField(hint, 300))
     .filter(Boolean))].slice(0, 8);
   if (hints.length > 0) lines.push("Proof requirements:", ...hints.map((hint) => `- ${hint}`));
@@ -392,6 +392,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
           ]
         : selectedRecovery.reasonCodes.includes("unknown-diagnostic-pass") || task.changeMode === "read-only" || task.mutationPolicy === "forbidden"
         ? [
+            ...criticalAcceptanceRecoveryGuidance(criticalRecovery, false),
             ...(gate.missingVerifyCommands.length > 0
               ? ["Run only the missing exact verifier commands against the current working tree.", ...verifierInstructions(gate.missingVerifyCommands)]
               : [(task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && gate.missing.length > 0 && gate.missing.every((item) => /^completed work plan\b/i.test(item)) ? "Complete only the pending read-only review checkpoint, then re-emit the complete substantive assessment from the immediately preceding response; do not repeat repository reads or replace it with checkpoint evidence." : "Run one bounded diagnostic pass using targeted reads and report the concrete evidence or unknown."]),

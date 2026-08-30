@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -22,6 +23,7 @@ import { classifyVerificationFailure } from "../packages/piagent-core/extensions
 import { allVerifyCommandsPassCurrentTree } from "../packages/piagent-core/extensions/task-contract-view.js";
 import { taskContractValidationErrors } from "../packages/piagent-core/extensions/task-state.js";
 import { versionWorkingTreeHash } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { currentWorkspaceRevisionDigest } from "../packages/piagent-core/extensions/workspace-revision.js";
 import { decideSemanticRepairHandshake } from "../packages/piagent-core/runtime/recovery/semantic-repair-handshake.ts";
 
 const fixture = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/task-contract.valid.json"), "utf8"));
@@ -318,6 +320,20 @@ describe("acceptance receipt recovery provenance", () => {
       assert.deepEqual(pending[0].targets, ["parseCount"]);
       assert.deepEqual(pending[0].missingDimensions, ["executable-focused-test"]);
       assert.match(pending[0].proofHints.join(" "), /live entrypoint-bound rejection assertions/i);
+
+      execFileSync("git", ["init", "-q", cwd]);
+      const revision = currentWorkspaceRevisionDigest(cwd);
+      assert.match(revision, /^workspace-revision-v1:[a-f0-9]{64}$/);
+      Object.assign(candidate.verifyEvidence[0], { preWorkspaceRevisionDigest: revision, workspaceRevisionDigest: revision });
+      const boundOptions = { cwd, changedFiles, currentWorkingTreeDigest: treeDigest("d") };
+      assert.deepEqual(acceptanceCriticalRecoveryProjection(candidate, boundOptions)[0].missingDimensions, ["executable-focused-test"],
+        "a current baseline-bound verifier must not be reported missing");
+      for (const field of ["preWorkspaceRevisionDigest", "workspaceRevisionDigest"]) {
+        const stale = structuredClone(candidate);
+        stale.verifyEvidence[0][field] = `workspace-revision-v1:${"f".repeat(64)}`;
+        assert.ok(acceptanceCriticalRecoveryProjection(stale, boundOptions)[0].missingDimensions.includes("current-verifier"),
+          `stale ${field} must remain missing verification evidence`);
+      }
 
       fs.writeFileSync(path.join(cwd, "test", "contract.test.js"), fs.readFileSync(path.join(cwd, "test", "contract.test.js"), "utf8").replace("let cases", "const cases"));
       assert.deepEqual(acceptanceCriticalRecoveryProjection(candidate, {

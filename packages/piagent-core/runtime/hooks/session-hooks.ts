@@ -59,6 +59,9 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
     const task = activeTask(ctx.cwd, sessionId);
     if (!task) return;
     const sessionName = String(event.name ?? "").trim() || undefined;
+    // Hosts can announce the existing name again during startup. This is not
+    // a task change and must not rewrite its timestamp or append a journal event.
+    if (task.sessionName === sessionName) return;
     task.sessionName = sessionName;
     const written = writeTask(ctx.cwd, task);
     bindTask(ctx.cwd, sessionId, sessionName, written);

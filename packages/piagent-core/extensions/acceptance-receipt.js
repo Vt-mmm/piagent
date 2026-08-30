@@ -6,7 +6,7 @@ import { matchesAnyPath, normalizePathCandidate } from "./policy-core.js";
 import { baselineReturnRepresentationConflicts, returnRepresentationGuidance } from "./return-contract.js";
 import { hasLengthPrefixedIdentityKey, tenantAssertionSignals } from "./tenant-contract.js";
 import { criterionBehaviorProofDisposition, criterionRequiresBehavioralProof, durableBehaviorProofRequired, genericCriterionEvidence, genericFallbackEvidence, isVerificationOnlyCriterion, verifierCommandsCoverTests } from "./acceptance-behavior-proof.js";
-import { allConfiguredVerifierEvidenceCurrent as hasCurrentPassingVerifier, latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree } from "./verification-intelligence.js";
+import { allConfiguredVerifierEvidenceCurrent as hasCurrentPassingVerifier, latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree, verificationProjectionWorkspaceRevision } from "./verification-intelligence.js";
 import {
   acceptanceContractProofGuidance,
   acceptanceContractSemanticConflicts,
@@ -16,7 +16,6 @@ import { malformedIdentifierCriterionText } from "./acceptance-identifier-criter
 import { contextualTemporalCriterion } from "./acceptance-temporal-contract.js";
 import { acceptancePrecedenceContractGuidance, acceptancePrecedenceReceiptEvidence } from "./acceptance-precedence-contract.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
-import { currentWorkspaceRevisionDigest } from "./workspace-revision.js";
 import { independentAcceptanceState, applyIndependentCriterionAssessment } from "./acceptance-independent-registry.js";
 export const ACCEPTANCE_RECEIPT_SCHEMA_VERSION = 1;
 export const ACCEPTANCE_STATUSES = new Set(["pending", "satisfied", "blocked"]);
@@ -827,11 +826,7 @@ export function refreshAcceptanceReceipt(task, options = {}) {
   const cwd = options.cwd;
   const changedFiles = uniqueStrings(options.changedFiles ?? task.changedFiles ?? task.observedChangedFiles ?? []);
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest;
-  // Historical unbound records remain readable by this projection. Runtime
-  // completion/reuse requires a fresh baseline-bound verifier independently.
-  const workspaceRevisionDigest = options.workspaceRevisionDigest !== undefined ? options.workspaceRevisionDigest
-    : task?.verifyEvidence?.some((entry) => entry.preWorkspaceRevisionDigest !== undefined || entry.workspaceRevisionDigest !== undefined)
-      ? currentWorkspaceRevisionDigest(cwd) : undefined;
+  const workspaceRevisionDigest = verificationProjectionWorkspaceRevision(task, options);
   const recordedAt = options.recordedAt ?? new Date().toISOString();
   const corpus = cwd ? changedFileAcceptanceCorpus(cwd, changedFiles) : emptyAcceptanceCorpus(changedFiles);
   const independent = independentAcceptanceState(cwd, task, currentWorkingTreeDigest).assessments;
@@ -881,7 +876,8 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
   const corpus = changedFileAcceptanceCorpus(cwd, changedFiles);
   if (!corpus.adapter.proofCapable) return [];
   if (corpus.sourceEntries.length === 0 && corpus.testEntries.length === 0) return [];
-  const verifierCurrent = hasCurrentPassingVerifier(task, currentWorkingTreeDigest);
+  const workspaceRevisionDigest = verificationProjectionWorkspaceRevision(task, options);
+  const verifierCurrent = hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest);
   const projections = [];
   for (const criterion of receipt.criteria.filter((item) => item.priority === "critical")) {
     const disposition = criterionBehaviorProofDisposition({ obligation: criterion.obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, passingVerifier: verifierCurrent });
@@ -889,7 +885,7 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
       .find((text) => typeof text === "string" && sha256(text) === criterion.hash && !GENERATED_ACCEPTANCE_TEXTS.has(text));
     if (!criterionText) continue;
     if (disposition === "unknown") { projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: [], missingDimensions: ["adapter-linkage"], proofHints: ["Add a focused executable test with a direct relative import to the changed source, or configure a deterministic language adapter that resolves this helper/barrel path; then rerun the exact verifier."] }); continue; }
-    if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd)) continue;
+    if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest)) continue;
     const evidenceCriterionText = criterion.obligation === "invalid-input-rejection" ? invalidInputCriterionText(task, criterion) : criterionText;
     const targets = namedCodeTargets(task, criterion, corpus.sourceText, evidenceCriterionText);
     const missingDimensions = [], sourceProofReasons = [];

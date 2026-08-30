@@ -385,7 +385,7 @@ function messageText(message) {
     : "";
 }
 
-async function runActualSession({ host, piAi, guard, cwd, temporary, id, prompt, turns, customTools = [] }) {
+async function runActualSession({ host, piAi, guard, cwd, temporary, id, prompt, turns, customTools = [], initializeExtensions = true }) {
   const agentDir = path.join(temporary, "agents", id);
   const sessionDir = path.join(temporary, "sessions", id);
   fs.mkdirSync(agentDir, { recursive: true });
@@ -418,7 +418,13 @@ async function runActualSession({ host, piAi, guard, cwd, temporary, id, prompt,
     settingsManager,
     resourceLoader,
     sessionManager,
-    customTools
+    customTools: [host.createBashToolDefinition(cwd, { spawnHook: (input) => {
+      // Keep the real Pi shell implementation, but do not let this outer test
+      // runner tell a nested project verifier to silently skip all test files.
+      const env = { ...input.env };
+      delete env.NODE_TEST_CONTEXT;
+      return { ...input, env };
+    } }), ...customTools]
   });
   const events = [];
   const extensionErrors = [];
@@ -426,9 +432,23 @@ async function runActualSession({ host, piAi, guard, cwd, temporary, id, prompt,
   const unsubscribe = session.subscribe((event) => events.push(event));
   const unsubscribeErrors = session.extensionRunner.onError((error) => extensionErrors.push(error));
   try {
+    // createAgentSession constructs the SDK session; bindExtensions emits
+    // session_start, as the real print/JSON modes do before accepting input.
+    if (initializeExtensions) await session.bindExtensions({ mode: "json" });
     await session.prompt(prompt, { expandPromptTemplates: false });
     activeTools = resourceLoader.getExtensions().runtime.getActiveTools();
+    for (const turn of turns) {
+      const call = turn.content.find((item) => item.type === "toolCall" && item.name === "bash" && /^node --test /.test(item.arguments?.command));
+      if (!call) continue;
+      const event = toolEvent(events, call.id);
+      if (!event) continue; // The finite policy can stop before a scripted turn.
+      const output = event.result?.content?.map((item) => item.text ?? "").join("\n") ?? "";
+      assert.doesNotMatch(output, /skipping running files|being called recursively/);
+      assert.match(output, /(?:#|ℹ)\s+tests [1-9]\d*\b/, `project verifier must execute tests: ${call.id}: ${output}`);
+      assert.match(output, /(?:#|ℹ)\s+skipped 0\b/, `project verifier must not skip its assertions: ${call.id}: ${output}`);
+    }
   } finally {
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "exit" });
     unsubscribe();
     unsubscribeErrors();
     session.dispose();
@@ -714,6 +734,7 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       "import test from 'node:test';",
       "import { canManage } from '../src/backend/auth.js';",
       "test('allows an active owner', () => assert.equal(canManage({ tenantId: 'a', role: 'owner', active: true }, { tenantId: 'a' }), true));",
+      "test('denies a cross-tenant owner', () => assert.equal(canManage({ tenantId: 'a', role: 'owner', active: true }, { tenantId: 'b' }), false));",
       ""
     ].join("\n");
     const repairedSource = [
@@ -758,14 +779,18 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
         toolTurn(weakSourceId, "write", { path: "src/backend/auth.js", content: weakSource }),
         toolTurn(weakTestId, "write", { path: "test/auth.test.js", content: weakTest }),
         toolTurn(firstVerifyId, "bash", { command: "node --test test/auth.test.js" }),
-        textTurn("Implemented canManage and the configured verifier passed."),
+        textTurn("Implemented canManage, but the configured verifier exposed a cross-tenant denial failure."),
         toolTurn(sourceRepairId, "write", { path: "src/backend/auth.js", content: repairedSource }),
         toolTurn(testRepairId, "write", { path: "test/auth.test.js", content: focusedTest }),
         toolTurn(finalVerifyId, "bash", { command: "node --test test/auth.test.js" }),
         textTurn("Task complete: the repaired tenant boundary and focused tests pass the exact configured verifier.")
       ]
     });
-    assert.equal(toolEvent(run.events, firstVerifyId)?.isError, false);
+    assert.equal(toolEvent(run.events, weakSourceId)?.isError, false, contextText(toolEvent(run.events, weakSourceId)));
+    assert.equal(toolEvent(run.events, weakTestId)?.isError, false, contextText(toolEvent(run.events, weakTestId)));
+    assert.equal(toolEvent(run.events, firstVerifyId)?.isError, true,
+      `source repair requires an observed failure, not just missing proof: ${contextText(toolEvent(run.events, firstVerifyId))}`);
+    assert.match(toolEvent(run.events, firstVerifyId)?.result?.content?.[0]?.text ?? "", /AssertionError|ERR_ASSERTION/);
     const continuationEntries = run.sessionEntries.filter((entry) => entry.type === "custom_message");
     const continuationTypes = continuationEntries.map((entry) => entry.customType);
     const recoveryDiagnostic = continuationEntries.find((entry) => entry.customType === "piagent-completion-recovery");
@@ -795,7 +820,8 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     assert.ok(task.acceptanceReceipt.criteria.every((criterion) => criterion.status === "satisfied"));
     assert.ok(task.verifyEvidence.some((entry) => entry.command === "node --test test/auth.test.js" && entry.exitCode === 0));
     const transitions = readJsonl(path.join(cwd, ".pi", "piagent-state", "trajectory", `${task.taskRunId}.events.jsonl`));
-    assert.equal(transitions.filter((entry) => entry.cause === "recovery-requested" && entry.to === "repair").length, 1);
+    assert.deepEqual(transitions.filter((entry) => entry.to === "repair").map((entry) => entry.cause), ["verification-failed"],
+      "the observed failed verifier opens exactly one repair before completion recovery is requested");
     const handoff = JSON.parse(fs.readFileSync(
       path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`),
       "utf8"
@@ -834,6 +860,7 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     const sourceId = "guidance-source";
     const testId = "guidance-test";
     const verifyId = "guidance-verify";
+    const unauthorizedRepairId = "guidance-unproven-repair";
     const run = await runActualSession({
       host,
       piAi,
@@ -848,6 +875,7 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
         toolTurn(testId, "write", { path: "test/count.test.js", content: validOnlyTest }),
         toolTurn(verifyId, "bash", { command: "node --test test/count.test.js" }),
         textTurn("Implemented parseCount and the exact configured verifier passes; the task is complete."),
+        toolTurn(unauthorizedRepairId, "write", { path: "src/count.js", content: "export const parseCount = () => 0;\n" }),
         textTurn("The focused proof repair is still in progress and is not complete.")
       ]
     });
@@ -862,6 +890,12 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     assert.match(guidance, /\[C2\].*rejects zero, negative, and fractional values with `TypeError`/i);
     assert.doesNotMatch(guidance, /\bac-\d/i, "opaque receipt ids remain in structured audit details, not model recovery guidance");
     assert.doesNotMatch(guidance, /\b(?:oracle|benchmark scenario)\b/i);
+    assert.equal(recoveries[0].details.recovery.failureCategory, "unknown");
+    assert.equal(recoveries[0].details.recovery.sourceMutationAllowed, false);
+    assert.match(guidance, /Do not mutate project source/);
+    assert.doesNotMatch(guidance, /Add live entrypoint|Add or correct focused tests/, "diagnostic guidance must not request edits");
+    assert.equal(toolEvent(run.events, unauthorizedRepairId)?.isError, true, "advisory proof targets cannot authorize a source repair");
+    assert.equal(fs.readFileSync(path.join(cwd, "src/count.js"), "utf8"), guardedSource);
 
     const task = taskForSession(cwd, "runtime-recovery-guidance");
     assert.ok(task);
@@ -1173,6 +1207,24 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     assert.equal(replacement.authoritySnapshot.profile, "mechanical-only");
     assert.deepEqual(replacement.changedFiles, []);
     assert.deepEqual(replacement.verifyEvidence, []);
+  });
+
+  await t.test("an SDK caller that omits extension startup cannot approve a completed task", async () => {
+    const cwd = createProject(path.join(temporary, "workspaces", "runtime-uninitialized"));
+    const run = await runActualSession({ host, piAi, guard, cwd, temporary, id: "runtime-uninitialized", initializeExtensions: false,
+      prompt: "Implement the greeting update in src/greeting.js and run the configured verifier.",
+      turns: [
+        toolTurn("uninitialized-read", "read", { path: "src/greeting.js" }),
+        toolTurn("uninitialized-edit", "edit", { path: "src/greeting.js", edits: [{ oldText: "Hello,", newText: "Welcome," }] }),
+        toolTurn("uninitialized-verify", "bash", { command: "node --test test/greeting.test.js" }),
+        textTurn("Implemented the greeting update and verified the project. Task complete.")
+      ] });
+    assert.deepEqual(run.extensionErrors, []);
+    assert.equal(toolEvent(run.events, "uninitialized-verify")?.isError, false);
+    assert.equal(taskForSession(cwd, "runtime-uninitialized").trace.outcome, "pending");
+    assert.ok(run.sessionEntries.some(entry => entry.type === "message" && entry.message?.role === "assistant"
+      && /completion gate: NOT APPROVED/.test(messageText(entry.message))));
+    assert.equal(run.sessionEntries.filter(entry => entry.type === "custom" && entry.data?.event === "task_auto_completed").length, 0);
   });
 
   await t.test("automatic normal source intake reads, edits, verifies, and reaches an approved terminal receipt", async () => {

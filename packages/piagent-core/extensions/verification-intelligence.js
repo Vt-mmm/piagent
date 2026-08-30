@@ -126,6 +126,13 @@ export function verificationEvidenceProvesCurrentWorkspace(entry, digest, cwd) {
   return verificationEvidenceProvesStableTree(entry, digest, currentWorkspaceRevisionDigest(cwd));
 }
 
+/** Historical projections are readable; they do not grant runtime completion/reuse. */
+export function verificationProjectionWorkspaceRevision(task, options = {}) {
+  return options.workspaceRevisionDigest !== undefined ? options.workspaceRevisionDigest
+    : task?.verifyEvidence?.some((entry) => entry.preWorkspaceRevisionDigest !== undefined || entry.workspaceRevisionDigest !== undefined)
+      ? currentWorkspaceRevisionDigest(options.cwd) : undefined;
+}
+
 export function allConfiguredVerifierEvidenceCurrent(task, digest, workspaceRevisionDigest) {
   if (task?.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || !isCurrentWorkingTreeDigest(digest)) return false;
   const commands = meaningfulVerificationCommands(task?.verifyCommands ?? []);
