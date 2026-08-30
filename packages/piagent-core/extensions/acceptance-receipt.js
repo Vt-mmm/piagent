@@ -894,20 +894,21 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
     if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd)) continue;
     const evidenceCriterionText = criterion.obligation === "invalid-input-rejection" ? invalidInputCriterionText(task, criterion) : criterionText;
     const targets = namedCodeTargets(task, criterion, corpus.sourceText, evidenceCriterionText);
-    const missingDimensions = [];
+    const missingDimensions = [], sourceProofReasons = [];
     if (!verifierCurrent) missingDimensions.push("current-verifier");
     if (criterion.obligation === "invalid-input-rejection") {
       if (corpus.sourceFiles.length === 0 || corpus.testFiles.length === 0) continue;
       const proof = acceptanceInvalidInputEvidence({
         taskText: evidenceCriterionText, sourceText: corpus.sourceText, testText: corpus.testText,
         sourceEntries: corpus.sourceEntries, testEntries: corpus.testEntries,
-        namedTargets: targets, provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, evidenceCriterionText)
+        namedTargets: targets, provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, evidenceCriterionText), includeDiagnostics: true
       });
-      if (!proof.sourceOk) missingDimensions.push("source-rejection");
+      if (!proof.sourceOk) { missingDimensions.push("source-rejection"); sourceProofReasons.push(...(proof.sourceReasons ?? [])); }
       if (!proof.testOk) missingDimensions.push("executable-focused-test");
     }
     if (missingDimensions.length === 0) missingDimensions.push("focused-evidence");
     const proofHints = acceptanceContractProofGuidance(evidenceCriterionText);
+    if (sourceProofReasons.length > 0) proofHints.unshift(`Source proof abstained: ${sourceProofReasons.join(", ")}. Inspect that dataflow or guard; do not replace an already-correct implementation merely to match variable names or statement order.`);
     if (missingDimensions.includes("source-rejection")) proofHints.push("Add a reachable entrypoint-bound rejection guard for every explicitly invalid partition and requested error class.");
     if (missingDimensions.includes("executable-focused-test")) proofHints.push("Add live entrypoint-bound rejection assertions; dynamic, skipped, dead, mutable, or unresolved proof remains pending.");
     if (missingDimensions.includes("current-verifier")) proofHints.push("Run the exact configured verifier against one unchanged current working-tree snapshot.");

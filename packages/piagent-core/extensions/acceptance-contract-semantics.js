@@ -7,7 +7,7 @@ import { inputDerivedNames } from "./acceptance-input-provenance.js";
 import { consumeJavaScriptStringEscape, eraseJavaScriptLexeme as erasedLexeme, isJavaScriptLineTerminator, normalizedJavaScriptLineTerminator, regexLiteralSentinel, stringLiteralSentinel, validJavaScriptRegexLiteral } from "./acceptance-lexical-sentinels.js";
 import { exactNormalizerInvocation, synchronousNormalizerProof } from "./acceptance-normalizer-evidence.js";
 import { casePreservingCallableBodies } from "./acceptance-expiry-calendar-proof.js";
-import { invalidSentinelRejectionProof } from "./acceptance-invalid-sentinel-proof.js";
+import { invalidSentinelRejectionProof, withInvalidSentinelDiagnostics } from "./acceptance-invalid-sentinel-proof.js";
 import { statefulTerminalRejectionEvidence } from "./acceptance-state-machine-evidence.js";
 import { malformedTaggedEventEvidence } from "./acceptance-tagged-event-evidence.js";
 import { boundRejectionTestEvidence, callableAssertionMode } from "./acceptance-test-binding-evidence.js";
@@ -955,7 +955,7 @@ export function acceptanceInvalidInputEvidence(input = {}) {
     : inferred.map((item) => [{ raw: testByPath.get(item.testPath), names: new Set([item.testName]) }]);
   const tagged = malformedTaggedEventEvidence({ requirements: taggedRequirements, requestedErrors, sourceGroups, testGroups,
     sourceCorpus: sourceEntries.map((entry) => entry.text).join("\n"), testCorpus: testEntries.map((entry) => entry.text).join("\n") });
-  return { sourceOk: sourceOk && tagged.sourceOk && !ambiguousErrorIntent, testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && temporal.testOk && tagged.testOk && !ambiguousErrorIntent };
+  return withInvalidSentinelDiagnostics({ sourceOk: sourceOk && tagged.sourceOk && !ambiguousErrorIntent, testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && temporal.testOk && tagged.testOk && !ambiguousErrorIntent }, { enabled: input.includeDiagnostics === true, bodyMaps, namedTargets, requestedErrors, requestedPartitions });
 }
 
 export function acceptanceContractProofGuidance(raw) {

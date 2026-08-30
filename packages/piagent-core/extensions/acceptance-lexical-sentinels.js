@@ -2,6 +2,8 @@ export function stringLiteralSentinel(value) {
   const raw = String(value ?? ""), normalized = raw.toLowerCase();
   if (raw.length === 0) return "__pi_empty_string_literal__";
   if (raw === "00") return "__pi_two_digit_zero_string_literal__";
+  if (raw === "000") return "__pi_millisecond_padding_string_literal__";
+  if (raw === "+") return "__pi_positive_sign_string_literal__";
   if (raw === "Z") return "__pi_utc_z_string_literal__";
   if (raw === '"') return "__pi_double_quote_string_literal__";
   if (/^\s+$/u.test(raw)) return "__pi_whitespace_string_literal__";
@@ -103,6 +105,7 @@ export function regexLiteralSentinel(value, flags = "") {
   const strictTimestamp = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$`;
   const strictTimestampNoncapturingFraction = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$`;
   const strictTimestampOptionalSecondsCapturingFraction = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})$`;
+  const strictTimestampOptionalSecondsDotFraction = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$`;
   const isoCalendarCaptures = new Set([
     String.raw`^(\d{4})-(\d{2})-(\d{2})t`,
     String.raw`^(\d{4})-(\d{2})-(\d{2})(?:t|$)`,
@@ -116,6 +119,9 @@ export function regexLiteralSentinel(value, flags = "") {
   }
   if (exactPattern === strictTimestampOptionalSecondsCapturingFraction) {
     return "__pi_strict_iso_timestamp_optional_seconds_capturing_fraction_regex_literal__";
+  }
+  if (exactPattern === strictTimestampOptionalSecondsDotFraction) {
+    return "__pi_strict_iso_timestamp_optional_seconds_dot_fraction_regex_literal__";
   }
   return isoCalendarCaptures.has(pattern)
     ? "__pi_iso_calendar_capture_regex_literal__" : "__pi_regex_literal__";
