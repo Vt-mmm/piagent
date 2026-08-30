@@ -10,6 +10,13 @@ const root = path.resolve(import.meta.dirname, "..");
 const runner = path.join(root, "evals/long-horizon-v1/runner.mjs");
 const read = (file) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { if (error.code === "ESRCH") return false; throw error; } };
+function assertUniqueProgress(execution, totalUnits) {
+  const events = fs.readFileSync(path.join(execution, "project/.pi/piagent-state/task-journal/events.jsonl"), "utf8")
+    .trim().split("\n").map((line) => JSON.parse(line)).filter((entry) => entry.eventType === "long-horizon-progress");
+  assert.deepEqual(events.map((entry) => entry.data.unit), Array.from({ length: totalUnits }, (_, index) => index + 1),
+    "checkpoint replay must restore every committed unit exactly once, including projection crash windows");
+  assert.equal(new Set(events.map((entry) => entry.idempotencyKey)).size, totalUnits);
+}
 async function until(predicate, description) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) { if (predicate()) return; await new Promise((resolve) => setTimeout(resolve, 15)); }
@@ -99,6 +106,7 @@ fs.renameSync = function(from, to) {
   assert.equal(report.continuation.consumed, 1);
   assert.equal(report.continuation.secondAllowed, false);
   assert.equal(report.verification.stableCurrentTree, true);
+  assertUniqueProgress(execution, 9);
   assert.deepEqual(fs.readFileSync(artifact), artifactBytes);
   assert.equal(fs.statSync(artifact).mtimeMs, artifactTime, "committed units are not executed or rewritten on resume");
   const after = read(workerCheckpoint);
@@ -164,4 +172,5 @@ fs.renameSync = function(from, to) {
   assert.equal(report.continuation.consumed, 1);
   assert.equal(report.continuation.secondAllowed, false);
   assert.deepEqual(report.lifecycle.journalCorruptions, []);
+  assertUniqueProgress(execution, 9);
 });

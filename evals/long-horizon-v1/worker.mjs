@@ -6,7 +6,7 @@ import { appendContextTelemetry, contextEnginePaths, estimateContextTokens } fro
 import { checkpointDigest, readCheckpoint, writeCheckpoint, writeCheckpointBytes } from "../../packages/piagent-core/benchmark/benchmark-checkpoint.js";
 import { acquireBenchmarkRunLock } from "../../packages/piagent-core/benchmark/benchmark-run-lock.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "../../packages/piagent-core/extensions/local-state-path.js";
-import { appendTaskJournalEvent } from "../../packages/piagent-core/extensions/task-journal.js";
+import { appendTaskJournalEventAtMost } from "../../packages/piagent-core/extensions/task-journal.js";
 import { workingTreeSnapshot } from "../../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../../packages/piagent-core/extensions/working-tree-digest.js";
 
@@ -124,11 +124,20 @@ function projectCheckpoint() {
   // These events belong only to this owned provider-free fixture. The atomic
   // checkpoint is authoritative; partial/uncommitted projections are rebuilt.
   writeCheckpointBytes(contextPath, contextEvents.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
-  for (const entry of telemetry) appendTaskJournalEvent(workspace, {
-    eventType: "long-horizon-progress", taskId: runtime.taskId, taskRunId: runtime.taskRunId,
-    sessionId: runtime.sessionId, idempotencyKey: `long-horizon:${entry.unit}`,
-    data: { unit: entry.unit, logicalMinute: entry.unit, sourceDigest: binding.sources[entry.unit - 1][1], currentWorkingTreeDigest: entry.currentWorkingTreeDigest }
-  }, { recordedAt: entry.recordedAt });
+  // Replay the committed prefix to repair a checkpoint-before-projection crash,
+  // but never append the same unit again. The raw append API does not dedupe.
+  for (const entry of telemetry) {
+    const data = { unit: entry.unit, logicalMinute: entry.unit, sourceDigest: binding.sources[entry.unit - 1][1], currentWorkingTreeDigest: entry.currentWorkingTreeDigest };
+    const { record } = appendTaskJournalEventAtMost(workspace, {
+      eventType: "long-horizon-progress", taskId: runtime.taskId, taskRunId: runtime.taskRunId,
+      sessionId: runtime.sessionId, idempotencyKey: `long-horizon:${entry.unit}`, data
+    }, { maximum: runtime.totalUnits, recordedAt: entry.recordedAt });
+    // A conflicting key or exhausted budget must not silently erase evidence.
+    if (!record || record.taskId !== runtime.taskId || record.sessionId !== runtime.sessionId
+      || record.recordedAt !== entry.recordedAt || JSON.stringify(record.data) !== JSON.stringify(data)) {
+      throw new Error(`long-horizon journal projection mismatch at unit ${entry.unit}`);
+    }
+  }
 }
 
 function commitCheckpoint() {

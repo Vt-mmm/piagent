@@ -28,3 +28,22 @@ not provider/model context usage. This lane can prove lifecycle durability,
 bounded local-state growth, compaction, continuation enforcement, and stable
 final verification. It cannot prove model quality, token or latency savings,
 90-minute wall-clock behavior, generalization, or release readiness.
+
+## Checkpoint projection and growth
+
+The atomic worker checkpoint is authoritative. Reopening it repairs incomplete
+telemetry and journal projections without rerunning committed units. Progress
+journal entries use the bounded, idempotent append API: one event per committed
+unit, with the original task/session, timestamp and source/digest data. An
+existing key with conflicting content fails; unrelated journal history is not
+replaced. Replaying only the newest unit would lose evidence when a process
+dies between checkpoint commit and projection.
+
+The prior raw-append projection on `ea08496` produced 4,185 progress events for
+90 units (including the two restart prefixes), exceeding the unchanged 2 MiB
+state ceiling. This was a fixture projection defect, not journal corruption.
+The full-unit worker regression now checks exact-once projection, byte growth,
+SIGKILL/resume and committed artifacts at accelerated timing. Existing runner
+tests additionally cover before/after checkpoint crash windows. Accelerated
+tests remain development evidence; the production S0 still requires the
+unchanged 90-unit, at-least-30-minute run.

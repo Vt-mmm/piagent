@@ -208,7 +208,7 @@
     {
       "path": "evals/long-horizon-v1",
       "fileCount": 6,
-      "sha256": "5dfe8b84a1491fb6dcb848dbd193aa1b1e4cc7e59dc93a8f260cdd44c12ae41c"
+      "sha256": "9bbaeca407f49546cd2461ce1fb869f2934eedd7e0272cab01fe10348414e2ec"
     },
     {
       "path": "evals/runtime-conformance-v1",
@@ -222,8 +222,8 @@
     },
     {
       "path": "tests",
-      "fileCount": 303,
-      "sha256": "58c1b3f9c09eb157a415211ca98c3081d13cdfbaadd2d56ab378cd919eaa1f93"
+      "fileCount": 304,
+      "sha256": "6772d64b1a0a90fa4287830d123da9e681ec4a019ec7582835ed62c1a1e302d8"
     }
   ],
   "custodianComparisonRules": {
