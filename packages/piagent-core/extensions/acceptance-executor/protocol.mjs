@@ -1,8 +1,9 @@
 import { protocolShape as shape, validateValue } from "./values.mjs";
 import { MAX_SOURCE_BYTES, validateModuleGraph } from "./module-graph.mjs";
+import { CASE_CPU_MICROS } from "./budget.mjs";
 export { MAX_STRING_LENGTH, numberValue, validateValue } from "./values.mjs";
 
-export const WORKER_VERSION = "quickjs-contract-worker-v4";
+export const WORKER_VERSION = "quickjs-contract-worker-v5";
 export const MAX_REQUEST_BYTES = 512 * 1024;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
@@ -56,7 +57,7 @@ export function parseResponse(text, request, requestDigest) {
     || response.cases.length > request.cases.length
     || (response.status === "completed" && response.cases.length !== request.cases.length)) throw new TypeError("Invalid worker response");
   for (const [index, item] of response.cases.entries()) {
-    shape(item, ["id", "outcome", "value", "errorClass", "reason", "dateArgsAfter", "clockReads", "argsAfter"], ["id", "outcome"]);
+    shape(item, ["id", "outcome", "value", "errorClass", "reason", "dateArgsAfter", "clockReads", "argsAfter", "resources"], ["id", "outcome"]);
     if (item.id !== request.cases[index].id || !["return", "throw", "unsupported", "error"].includes(item.outcome)) throw new TypeError("Invalid case observation");
     if (item.outcome === "return") {
       validateValue(item.value, false);
@@ -66,6 +67,14 @@ export function parseResponse(text, request, requestDigest) {
         || Object.hasOwn(item, "value") || Object.hasOwn(item, "reason")) throw new TypeError("Invalid throw observation");
     } else if (typeof item.reason !== "string" || !/^[a-z-]{1,64}$/.test(item.reason)
       || Object.hasOwn(item, "value") || Object.hasOwn(item, "errorClass")) throw new TypeError("Invalid incomplete observation");
+    const resourceStop = item.outcome === "error" && ["guest-cpu-budget", "guest-wall-deadline"].includes(item.reason);
+    if (resourceStop) {
+      shape(item.resources, ["caseCpuMicros", "caseThreadCpuMicros", "caseWallMicros"]);
+      if (!Object.values(item.resources).every(value => Number.isSafeInteger(value) && value >= 0)
+        || (item.reason === "guest-cpu-budget" && item.resources.caseCpuMicros < CASE_CPU_MICROS)) {
+        throw new TypeError("Invalid resource stop observation");
+      }
+    } else if (Object.hasOwn(item, "resources")) throw new TypeError("Unexpected resource stop observation");
     if (["return", "throw"].includes(item.outcome)) {
       const expectedIndexes = request.cases[index].args.flatMap((arg, argIndex) => arg.type === "date" ? [argIndex] : []);
       if (!Array.isArray(item.dateArgsAfter) || item.dateArgsAfter.length !== expectedIndexes.length

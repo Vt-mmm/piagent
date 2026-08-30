@@ -56,7 +56,8 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
   }
   function execute(item) {
     interruption = null; budget.beginCase();
-    const incomplete = (reason, outcome = "error") => ({ id: item.id, outcome, reason });
+    const incomplete = (reason, outcome = "error") => ({ id: item.id, outcome, reason,
+      ...(outcome === "error" && budget.diagnostics() ? { resources: budget.diagnostics() } : {}) });
     try {
       if (interrupted()) return incomplete(interruption);
       if (initializationFailure) return { id: item.id, ...initializationFailure };
@@ -71,7 +72,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
           const timedOut = interrupted();
           initializationFailure = { outcome: importDenied && !timedOut ? "unsupported" : "error",
             reason: timedOut ? interruption : importDenied ? "module-import-unsupported" : "module-initialization-failed" };
-          return { id: item.id, ...initializationFailure };
+          return incomplete(initializationFailure.reason, initializationFailure.outcome);
         }
         namespace = retain(moduleResult.value);
         const promise = context.getPromiseState(namespace);
