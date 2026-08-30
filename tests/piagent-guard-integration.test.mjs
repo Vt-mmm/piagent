@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
+import { calendarExpirySource } from "./fixtures/iso-expiry-profile.mjs";
 import {
   callToolCall,
   callToolResult,
@@ -5002,27 +5003,32 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
-  for (const scenario of ["valid", "counterexample", "repair", "modular-valid", "modular-counterexample", "modular-repair", "family-valid", "family-counterexample", "family-repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
+  for (const scenario of ["valid", "counterexample", "repair", "modular-valid", "modular-counterexample", "modular-repair", "family-valid", "family-counterexample", "family-repair", "iso-valid", "iso-counterexample", "iso-repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
     skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 120000
   }, async (t) => {
     const { root, piagentGuard } = await loadGuardFixture(), cwd = createProject(root);
-    const modular = scenario.startsWith("modular-"), familySelection = scenario.startsWith("family-");
-    const scenarioKind = scenario.replace(/^(?:modular-|family-)/, ""), valid = scenarioKind === "valid";
-    const validSource = `export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number'${familySelection ? " || !Number.isFinite(a) || !Number.isFinite(b)" : ""}) throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n`;
+    const modular = scenario.startsWith("modular-"), isoSelection = scenario.startsWith("iso-");
+    const familySelection = scenario.startsWith("family-") || isoSelection;
+    const scenarioKind = scenario.replace(/^(?:modular-|family-|iso-)/, ""), valid = scenarioKind === "valid";
+    const sourcePath = isoSelection ? "src/expiry.js" : "src/math.js", exportName = isoSelection ? "isExpired" : "sum";
+    const validSource = isoSelection ? calendarExpirySource.replace("function run(", "function isExpired(")
+      : `export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number'${familySelection ? " || !Number.isFinite(a) || !Number.isFinite(b)" : ""}) throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n`;
     const implementation = ({
       valid: validSource, "backend-unavailable": validSource, pending: validSource, exhausted: validSource,
       unsupported: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') return Promise.resolve(0); return a+b; }\n",
       timeout: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') { while(true) {} } return a+b; }\n",
       shutdown: validSource.replace("return a+b;", "const deadline=Date.now()+50; while(Date.now()<deadline) {} return a+b;")
-    })[scenarioKind] ?? "export function sum(a,b) { return a+b; }\n";
+    })[scenarioKind] ?? (isoSelection ? validSource.replace("day > days[month - 1]", "day > 31") : "export function sum(a,b) { return a+b; }\n");
     const source = modular ? "export {sum} from './sum-implementation.js';\n" : implementation;
-    fs.writeFileSync(path.join(cwd, "src", "math.js"), source);
+    fs.writeFileSync(path.join(cwd, sourcePath), source);
     if (modular) fs.writeFileSync(path.join(cwd, "src", "sum-implementation.js"), implementation);
     fs.writeFileSync(path.join(cwd, ".gitignore"), ".env\n.pi/\nscreenshots/\nREADME.md\n");
     fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ type: "module", scripts: { test: "node test.mjs" } }));
-    fs.writeFileSync(path.join(cwd, "test.mjs"), "import assert from 'node:assert/strict'; import {sum} from './src/math.js'; assert.equal(sum(2,3),5); console.log('ACTUAL_PROJECT_TEST_PASSED');\n");
+    fs.writeFileSync(path.join(cwd, "test.mjs"), isoSelection
+      ? "import assert from 'node:assert/strict'; import {isExpired} from './src/expiry.js'; assert.equal(isExpired('1970-01-01T00:00Z',0),true); console.log('ACTUAL_PROJECT_TEST_PASSED');\n"
+      : "import assert from 'node:assert/strict'; import {sum} from './src/math.js'; assert.equal(sum(2,3),5); console.log('ACTUAL_PROJECT_TEST_PASSED');\n");
     execFileSync("git", ["-C", cwd, "config", "user.name", "Test"]); execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
-    execFileSync("git", ["-C", cwd, "add", "src/math.js", ...(modular ? ["src/sum-implementation.js"] : []), "package.json", "test.mjs", ".gitignore"]); execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
+    execFileSync("git", ["-C", cwd, "add", sourcePath, ...(modular ? ["src/sum-implementation.js"] : []), "package.json", "test.mjs", ".gitignore"]); execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
     const prior = process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG;
     const directory = path.join(fs.realpathSync.native(root), "host-approval");
     process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = path.join(directory, "approval.json");
@@ -5033,7 +5039,9 @@ describe("piagent guard integration", () => {
       if (prior === undefined) delete process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG; else process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = prior;
     });
     await harness.handlers.get("session_start")({}, ctx);
-    const prompt = familySelection
+    const isoDescription = isoSelection ? JSON.parse(fs.readFileSync(path.join(root, "adapters/node-typescript/contract-families.json"), "utf8"))
+      .families.find(family => family.id === "iso-expiry-millisecond-profile").description : "";
+    const prompt = isoSelection ? `Verify src/expiry.js; if verification exposes a defect, fix it. isExpired(expiresAt, now) must satisfy this exact application profile: ${isoDescription}` : familySelection
       ? "Verify src/math.js: sum(a,b) must return a+b for two finite numbers and reject non-number or nonfinite arguments with TypeError. Fix a defect only if verification exposes one."
       : "Verify src/math.js: sum(a,b) must return a+b for numbers and reject non-number arguments with TypeError. Fix a defect only if verification exposes one.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
@@ -5052,13 +5060,13 @@ describe("piagent guard integration", () => {
     const backend = { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID,
       dockerSocket: scenario === "backend-unavailable" ? "/piagent-test-unavailable.sock" : process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 };
     let contracts = task.acceptanceReceipt.criteria.map((criterion) => ({ criterionId: criterion.id, criterionHash: criterion.hash,
-      sourcePath: "src/math.js", ...(modular ? { modulePaths: ["src/sum-implementation.js"] } : {}), exportName: "sum", maxAttempts: 2, checks }));
+      sourcePath, ...(modular ? { modulePaths: ["src/sum-implementation.js"] } : {}), exportName, maxAttempts: 2, checks }));
     if (familySelection) {
       const { compileContractSelection } = await import("../packages/piagent-core/extensions/acceptance-contract-selection.js");
       const selections = task.acceptanceReceipt.criteria.flatMap((criterion, index) =>
         ["verification-evidence", "backward-compatibility"].includes(criterion.obligation) ? [] : [{
           criterion: { text: task.acceptanceCriteria[index], obligation: criterion.obligation },
-          family: { id: "finite-scalar-sum", version: 1 }, parameters: { call: "sum" }, sourcePath: "src/math.js", maxAttempts: 2
+          family: { id: isoSelection ? "iso-expiry-millisecond-profile" : "finite-scalar-sum", version: 1 }, parameters: { call: exportName }, sourcePath, maxAttempts: 2
         }]);
       const preview = compileContractSelection({ taskText: JSON.stringify(task),
         recipeText: JSON.stringify({ schemaVersion: 1, backend, selections }),
@@ -5069,7 +5077,7 @@ describe("piagent guard integration", () => {
       contracts = preview.plan.contracts;
     }
     writeHostContractApproval({ directory, projectRoot: cwd, installedRoot: root, operatorRequestDigest: task.operatorRequestDigest, approved: true, backend, contracts });
-    await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/math.js" }, content: [{ type: "text", text: source }], isError: false }, ctx);
+    await harness.handlers.get("tool_result")({ toolName: "read", input: { path: sourcePath }, content: [{ type: "text", text: source }], isError: false }, ctx);
     if (modular) await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/sum-implementation.js" }, content: [{ type: "text", text: implementation }], isError: false }, ctx);
     async function verifyProject(suffix) {
       for (const [index, command] of started.message.details.runtimeTask.verifyCommands.entries()) {
@@ -5146,7 +5154,7 @@ describe("piagent guard integration", () => {
         }, undefined, undefined, ctx), (error) => /independent verification stopped with the session/.test(error.message)
           && error.piagentToolResult?.isError === true);
         assert.notEqual(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed");
-        assert.equal(fs.readFileSync(path.join(cwd, "src/math.js"), "utf8"), source);
+        assert.equal(fs.readFileSync(path.join(cwd, sourcePath), "utf8"), source);
       } finally { await harness.handlers.get("session_shutdown")({}, ctx); await completing; authority.close(); }
       return;
     }
@@ -5192,12 +5200,12 @@ describe("piagent guard integration", () => {
       assert.equal(recovery?.payload.details.recovery.action, "repair", JSON.stringify(recovery));
       assert.equal(recovery.payload.details.recovery.failureCategory, "test-assertion");
       assert.match(recovery.payload.details.recovery.hypothesisRef, /^counterexample:[a-f0-9]{64}$/);
-      assert.match(recovery.payload.content, familySelection ? /text-left/ : /bad-left/);
+      assert.match(recovery.payload.content, isoSelection ? /invalid-common-leap/ : familySelection ? /text-left/ : /bad-left/);
       assert.match(recovery.payload.content, /TypeError/);
     }
-    assert.equal(fs.readFileSync(path.join(cwd, "src", "math.js"), "utf8"), source, "verification never rewrites the source");
+    assert.equal(fs.readFileSync(path.join(cwd, sourcePath), "utf8"), source, "verification never rewrites the source");
     if (scenarioKind === "repair") {
-      const input = { path: modular ? "src/sum-implementation.js" : "src/math.js", content: validSource };
+      const input = { path: modular ? "src/sum-implementation.js" : sourcePath, content: validSource };
       const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input, "repair-observed-counterexample");
       assert.notEqual(allowed.block, true, allowed.reason);
       fs.writeFileSync(path.join(cwd, input.path), input.content);

@@ -9,11 +9,24 @@ These declarative families provide reusable, bounded JavaScript behavioral check
 | `finite-scalar-sum` | Sum two finite numbers; reject nonnumeric/nonfinite arguments with TypeError |
 | `finite-list-sum` | Sum a dense finite-number array; empty, signed, fractional and invalid-element partitions |
 | `deadline-status` | Numeric/Date expiry and numeric now; inclusive expiry, clamped remaining duration, input validity and Date stability |
+| `iso-expiry-millisecond-profile` | Boolean inclusive expiry for a strict, explicitly selected Gregorian timestamp/Date profile; invalid-input rejection, millisecond fractions, offsets, literal small years and lazy default clock |
 | `defined-config-precedence` | Three records, three configurable keys; first non-undefined wins, preserving explicit falsy/null values |
 | `idempotent-accumulator-checkpoint` | Explicit event deduplication and public checkpoint schema; restore after fresh-realm reset |
 | `secret-redaction-literals` | Four literal text/storage/source-text observations; not an exhaustive security audit |
 
 Read the selected family's complete `description` and checks in `contract-families.json`. For example, `deadline-status` does not specify ISO parsing or a default wall clock. The checkpoint family specifies a public data format; do not impose it on an API that permits other checkpoint representations. Its reset tests component behavior, not filesystem durability.
+
+### ISO expiry profile: review before selection
+
+Select `iso-expiry-millisecond-profile` version 1 with `parameters: {"call":"isExpired"}` only when its exact semantics are intended. The parameter renames the export, not the data format or behavior. The public phrase “ISO timestamp” alone does not establish all of the following decisions; the family must not be selected automatically from that phrase.
+
+- Accept a valid Date or a four-digit proleptic Gregorian date with uppercase `T`, hour/minute, optional seconds and optional fractional seconds, followed by `Z` or a colon-separated signed offset. Fractions require seconds and truncate/right-pad to milliseconds. Year `0000` is literal, as are years `0001–0099`.
+- Require a real calendar date, hours `00–23`, minutes/seconds `00–59`, offsets at most `23:59`. Treat both signed zero offsets as zero. Reject missing zones, lowercase separators, surrounding whitespace, basic offsets, expanded years, leap seconds and `24:00`. This is an application profile, not full ISO 8601, RFC 3339 or ECMAScript `Date.parse` conformance.
+- Return a boolean using an inclusive comparison. Explicit `now` accepts a finite number or valid Date; numeric `now` is not truncated or constrained to Date's representable range. Explicit invalid/falsey values never select the default clock. Only omission reads `Date.now`, exactly once and after expiry validation; validation errors are TypeError. Preserve both Date arguments even on error.
+
+The 209 literal cases comprise 129 boundary observations over 43 valid timestamp forms, 58 invalid syntax/type/calendar observations and 22 Date/clock/API observations. Every case supplies an instrumented clock, including explicit-`now` cases, so zero clock reads are observed rather than assumed. Expected epochs were authored from calendar arithmetic and separately checked against V8 for the declared valid forms; invalid calendars are explicitly labelled, not normalized by a parser. No candidate output or hidden grader supplies expectations.
+
+This is finite development coverage. It does not specify named time zones, daylight-saving rules, arbitrary object coercion, Date subclasses, proxies, asynchronous functions, arbitrary timestamp length or sub-millisecond ordering. Existing source and equivalent implementations must be calibrated before approving a new API mapping. Passing this family cannot discharge unrelated verification, compatibility or safety obligations.
 
 ## Selection and approval
 
