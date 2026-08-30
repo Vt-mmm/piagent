@@ -4,14 +4,17 @@ This directory contains only the public, provider-free boundary for `CF-FS4-04`.
 It does not contain a holdout suite, private repository, prompt, grader, oracle,
 reference solution, reviewer identity, raw score sheet, or private locator.
 
-The operational handoff is documented in `CUSTODIAN_RUNBOOK.md`. The readiness
+The current operational handoff starts with `CURRENT_BOUNDARY.md`, which
+supersedes the old exposure-file binding without changing the retained v1
+history. The remaining custody procedure is in `CUSTODIAN_RUNBOOK.md`. The readiness
 CLI checks the closed receipt, while the independent FS4-05 auditor must verify
 its custody origin outside this repository; authors cannot self-attest E3.
 
 The external custodian must:
 
 1. compare every private task-family lineage and repository lineage with
-   `public-exposure.v1.json` inside the controlled environment;
+   the current `public-exposure.v2.json`, its predecessor and the declared public
+   development trees inside the controlled environment;
 2. keep candidate authors outside the custodian, reviewer, and adjudicator roles;
 3. expose an execute-only interface to the benchmark operator after an exact RC
    is frozen;

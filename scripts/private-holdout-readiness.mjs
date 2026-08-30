@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { benchmarkAssuranceEvidenceValidationErrors } from "../packages/piagent-core/benchmark/benchmark-assurance.js";
+import { verifyPublicExposure } from "./public-evaluation-exposure.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const usage = "Usage: node scripts/private-holdout-readiness.mjs --evidence /secure/path/assurance.json";
@@ -46,11 +47,15 @@ const errors = benchmarkAssuranceEvidenceValidationErrors(evidence);
 if (errors.length > 0) refuse(errors.join("; "));
 if (evidence.schemaVersion !== 2) refuse("legacy assurance evidence is historical-only and cannot establish E3 readiness");
 
+let publicExposure;
+try { publicExposure = verifyPublicExposure(root); }
+catch { refuse("current public exposure inventory is unavailable, stale or incomplete"); }
+
 const bindings = {
   accessPolicyDigest: digestFile("evals/private-holdout-v1/access-policy.v1.json"),
   humanRubricDigest: digestFile("evals/private-holdout-v1/human-rubric.v1.json"),
   taxonomyDigest: digestFile("evals/real-task-taxonomy.v1.json"),
-  publicExposureDigest: digestFile("evals/private-holdout-v1/public-exposure.v1.json")
+  publicExposureDigest: publicExposure.sha256
 };
 for (const [field, expected] of Object.entries(bindings)) {
   const actual = field in evidence ? evidence[field] : evidence.disjointness?.[field];
@@ -64,6 +69,7 @@ const receipt = {
   protocolVersion: "e3-custody-v1",
   ready: true,
   evidenceManifestDigest: crypto.createHash("sha256").update(buffer).digest("hex"),
+  publicExposure,
   claimTier: evidence.claimTier,
   visibility: evidence.visibility,
   access: {

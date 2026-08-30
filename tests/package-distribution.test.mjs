@@ -235,6 +235,9 @@ describe("package distribution", () => {
     assert.ok(entries.includes("evals/private-holdout-v1/access-policy.v1.json"));
     assert.ok(entries.includes("evals/private-holdout-v1/human-rubric.v1.json"));
     assert.ok(entries.includes("evals/private-holdout-v1/public-exposure.v1.json"));
+    assert.ok(entries.includes("evals/private-holdout-v1/public-exposure.v2.json"));
+    assert.ok(entries.includes("evals/private-holdout-v1/CURRENT_BOUNDARY.md"));
+    assert.ok(entries.includes("scripts/public-evaluation-exposure.mjs"));
     assert.ok(entries.includes("evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md"));
     assert.ok(entries.includes("evals/fs4-readiness-matrix.v1.json"));
     assert.ok(entries.includes("evals/fs5-pilot-protocol.v1.json"));
@@ -389,6 +392,9 @@ describe("package distribution", () => {
     assert.equal(files.has("evals/private-holdout-v1/access-policy.v1.json"), true);
     assert.equal(files.has("evals/private-holdout-v1/human-rubric.v1.json"), true);
     assert.equal(files.has("evals/private-holdout-v1/public-exposure.v1.json"), true);
+    assert.equal(files.has("evals/private-holdout-v1/public-exposure.v2.json"), true);
+    assert.equal(files.has("evals/private-holdout-v1/CURRENT_BOUNDARY.md"), true);
+    assert.equal(files.has("scripts/public-evaluation-exposure.mjs"), true);
     assert.equal(files.has("evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md"), true);
     assert.equal(files.has("evals/fs4-readiness-matrix.v1.json"), true);
     assert.equal(files.has("evals/fs5-pilot-protocol.v1.json"), true);
@@ -469,6 +475,13 @@ describe("package distribution", () => {
       encoding: "utf8"
     });
     assert.equal(installed.status, 0, installed.stderr || installed.stdout);
+
+    // Public development tests are deliberately not shipped in the runtime
+    // package. Custody freshness must refuse, not silently omit that exposure.
+    const exposureCheck = spawnSync(process.execPath, [path.join(root, "lib", "node_modules", "@piagent", "platform",
+      "scripts", "public-evaluation-exposure.mjs"), "--check"], { cwd: root, encoding: "utf8" });
+    assert.equal(exposureCheck.status, 1);
+    assert.match(exposureCheck.stderr, /public exposure inventory is unavailable, stale or incomplete/);
 
     for (const name of Object.keys(pkg.bin)) {
       const executable = path.join(root, "bin", name);

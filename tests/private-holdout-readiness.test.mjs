@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { verifyPublicExposure } from "../scripts/public-evaluation-exposure.mjs";
 
 import {
   benchmarkAssuranceEvidenceValidationErrors,
@@ -18,7 +19,7 @@ const script = path.join(root, "scripts", "private-holdout-readiness.mjs");
 const sha256 = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const load = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 
-test("public E3 boundary enumerates author-visible exposure without private content", () => {
+test("historical public E3 boundary preserves its declared exposure without private content", () => {
   const policy = load(path.join(boundaryRoot, "access-policy.v1.json"));
   const rubric = load(path.join(boundaryRoot, "human-rubric.v1.json"));
   const exposure = load(path.join(boundaryRoot, "public-exposure.v1.json"));
@@ -97,6 +98,9 @@ test("custodian CLI emits a redacted readiness receipt and never the private inp
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "SECRET-HOLDOUT-CANARY-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const evidence = load(fixturePath);
+  // Synthetic test data only. A real custody receipt must be reissued by the
+  // independent custodian; the historical fixture remains byte-for-byte intact.
+  evidence.disjointness.publicExposureDigest = verifyPublicExposure(root).sha256;
   evidence.accessControl.issuedAt = new Date(Date.now() - 60_000).toISOString();
   evidence.accessControl.expiresAt = new Date(Date.now() + 60_000).toISOString();
   const evidencePath = path.join(directory, "private-assurance.json");

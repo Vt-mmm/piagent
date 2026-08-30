@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { evaluateFs4Readiness } from "../packages/piagent-core/benchmark/fs4-readiness-gates.js";
+import { verifyPublicExposure } from "./public-evaluation-exposure.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let matrixPath = path.join(root, "evals", "fs4-readiness-matrix.v1.json");
@@ -37,6 +38,9 @@ const artifactManifest = matrix.artifacts.map((artifact) => {
   return { id: artifact.id, path: artifact.path, sha256: actual, bytes: bytes.byteLength };
 });
 const byId = new Map(matrix.artifacts.map((artifact) => [artifact.id, artifact]));
+// The retained v1 matrix describes historical inputs. Current readiness also
+// requires the complete current exposure inventory, even before running tests.
+const currentPublicExposure = verifyPublicExposure(root);
 const artifactJson = (id) => readJson(byId.get(id).path);
 const core = artifactJson("e0-core-suite");
 const production = artifactJson("e1-public-suite");
@@ -67,7 +71,8 @@ function executeTestGroup(id, files) {
     durationMs: Number((performance.now() - started).toFixed(3))
   };
 }
-const testGroups = Object.fromEntries(Object.entries(matrix.deterministicTests).map(([id, files]) => [id, executeTestGroup(id, files)]));
+const testGroups = Object.fromEntries(Object.entries(matrix.deterministicTests).map(([id, files]) => [id,
+  executeTestGroup(id, id === "e3" ? [...new Set([...files, "tests/public-evaluation-exposure.test.mjs"])] : files)]));
 const evaluation = evaluateFs4Readiness({
   artifactBindingsCurrent: true,
   e0: { testsPassed: testGroups.e0.passed, suiteId: core.id, scenarioCount: core.scenarios?.length },
@@ -120,6 +125,7 @@ const report = {
   generatedAt: new Date().toISOString(),
   workItem: "CF-FS4-05",
   matrix: { path: path.relative(root, matrixPath), sha256: digest(matrixBytes), artifactManifestSha256: digest(JSON.stringify(artifactManifest)), artifacts: artifactManifest },
+  currentPublicExposure,
   tests: Object.values(testGroups),
   evaluation,
   claimBoundary: matrix.claimBoundary,
