@@ -1,0 +1,170 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import test from "node:test";
+import { isolatedContainerArguments, isolatedContainerConfigurationMatches, runIsolatedContract } from "../packages/piagent-core/extensions/acceptance-isolated-executor.js";
+import { WORKER_VERSION, parseRequest, parseResponse } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
+
+const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
+const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
+const integration = { skip: !imageId || !dockerSocket, timeout: 60000 };
+const value = (type, payload) => payload === undefined ? { type } : { type, value: payload };
+const number = (payload) => value("number", payload);
+const sourceRequest = (source, cases = [{ id: "one", args: [] }], exportName = "run") => JSON.stringify({ schemaVersion: 1, source, exportName, cases });
+const run = (source, cases, options = {}) => runIsolatedContract({ requestText: sourceRequest(source, cases), imageId, dockerSocket, ...options });
+
+test("isolated request protocol excludes answers, ambient paths, coercions, and unbounded inputs", () => {
+  const good = JSON.parse(sourceRequest("export const run = x => x"));
+  for (const mutation of [
+    { ...good, expected: true }, { ...good, mounts: ["/"] }, { ...good, source: "x".repeat(128 * 1024 + 1) },
+    { ...good, cases: [] }, { ...good, cases: [good.cases[0], good.cases[0]] },
+    { ...good, cases: [{ id: "one", args: [], expected: true }] },
+    { ...good, cases: [{ id: "one", args: [number("123")] }] },
+    { ...good, cases: [{ id: "one", args: [value("undefined", 1)] }] },
+    { ...good, cases: [{ id: "one", args: [{ type: "object", value: {} }] }] }
+  ]) assert.throws(() => parseRequest(JSON.stringify(mutation)));
+  assert.equal(parseRequest(JSON.stringify(good)).source, good.source);
+});
+
+test("container configuration is pinned, non-root, networkless, read-only, and bounded without mounts", () => {
+  const args = isolatedContainerArguments(`sha256:${"a".repeat(64)}`, "a".repeat(36));
+  for (const [flag, expected] of [["--network", "none"], ["--cap-drop", "ALL"], ["--security-opt", "no-new-privileges"],
+    ["--user", "65534:65534"], ["--pids-limit", "32"], ["--memory", "256m"], ["--memory-swap", "256m"]]) {
+    assert.equal(args[args.indexOf(flag) + 1], expected);
+  }
+  assert.ok(args.includes("--read-only"));
+  assert.ok(args.includes("cpu=10:12"));
+  assert.equal(args[args.indexOf("--pull") + 1], "never");
+  for (const flag of ["--mount", "--volume", "-v", "--privileged", "--env-file", "--pid", "--entrypoint"]) assert.ok(!args.includes(flag));
+  assert.throws(() => isolatedContainerArguments("node:latest", "a".repeat(36)));
+});
+
+test("actual container configuration is checked before any candidate starts", () => {
+  const valid = { Config: { User: "65534:65534", WorkingDir: "/executor",
+    Entrypoint: ["timeout", "--signal=KILL", "8s", "node", "--max-old-space-size=96", "/executor/worker.mjs"] },
+    HostConfig: { NetworkMode: "none", ReadonlyRootfs: true, Privileged: false, Init: true,
+      CapDrop: ["ALL"], SecurityOpt: ["no-new-privileges"], PidsLimit: 32, Memory: 268435456, MemorySwap: 268435456,
+      NanoCpus: 1e9, IpcMode: "private", Ulimits: [{ Name: "cpu", Soft: 10, Hard: 12 }, { Name: "nofile", Soft: 64, Hard: 64 }] }, Mounts: [] };
+  assert.equal(isolatedContainerConfigurationMatches(valid), true);
+  for (const [field, value] of [["NetworkMode", "host"], ["ReadonlyRootfs", false], ["Privileged", true], ["CapDrop", []],
+    ["SecurityOpt", []], ["Memory", 0], ["PidsLimit", 0], ["IpcMode", "host"], ["PidMode", "host"], ["Ulimits", []]]) {
+    assert.equal(isolatedContainerConfigurationMatches({ ...valid, HostConfig: { ...valid.HostConfig, [field]: value } }), false, field);
+  }
+  assert.equal(isolatedContainerConfigurationMatches({ ...valid, Mounts: [{ Source: "/" }] }), false);
+  assert.equal(isolatedContainerConfigurationMatches({ ...valid, Config: { ...valid.Config, Entrypoint: ["node"] } }), false);
+});
+
+test("worker responses require exact request, complete ordered cases, and typed observations", () => {
+  const text = sourceRequest("export const run = () => true");
+  const request = parseRequest(text);
+  const digest = createHash("sha256").update(text).digest("hex");
+  const good = { schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest: digest, status: "completed",
+    cases: [{ id: "one", outcome: "return", value: value("boolean", true), dateArgsAfter: [], clockReads: 0 }] };
+  assert.deepEqual(parseResponse(JSON.stringify(good), request, digest), good);
+  for (const mutation of [
+    { ...good, requestDigest: "0".repeat(64) }, { ...good, cases: [] },
+    { ...good, cases: [{ ...good.cases[0], id: "other" }] },
+    { ...good, cases: [{ ...good.cases[0], value: value("boolean", "true") }] },
+    { ...good, cases: [{ ...good.cases[0], errorClass: "TypeError" }] },
+    { ...good, cases: [{ ...good.cases[0], dateArgsAfter: undefined }] }
+  ]) assert.throws(() => parseResponse(JSON.stringify(mutation), request, digest));
+});
+
+test("unavailable backend never falls back to host evaluation", async () => {
+  const result = await runIsolatedContract({ requestText: sourceRequest("process.exit(42)"),
+    imageId: `sha256:${"a".repeat(64)}`, dockerSocket: "/nonexistent/piagent-contract-test.sock" });
+  assert.equal(result.status, "error");
+  assert.equal(result.reason, "local-backend-unavailable");
+  assert.ok(!result.observation);
+});
+
+test("real isolated worker observes primitives, invalid values, and fresh realms", integration, async () => {
+  const result = await run("let count = 0; export function run(x) { if (++count > 1) return 999; return x; }", [
+    { id: "boolean", args: [value("boolean", true)] }, { id: "nan", args: [number("NaN")] },
+    { id: "negative-zero", args: [number("-0")] }, { id: "undefined", args: [value("undefined")] },
+    { id: "null", args: [value("null")] }, { id: "string", args: [value("string", "hello")] }
+  ]);
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.cleanupConfirmed, true);
+  assert.deepEqual(result.observation.cases.map((item) => item.value), [value("boolean", true), number("NaN"), number("-0"), value("undefined"), value("null"), value("string", "hello")]);
+});
+
+test("real isolated worker distinguishes actual TypeError from a forged name", integration, async () => {
+  const result = await run("export function run(real) { if (real) throw new TypeError('invalid'); throw { name: 'TypeError', message: 'invalid' }; }", [
+    { id: "real", args: [value("boolean", true)] }, { id: "fake", args: [value("boolean", false)] }
+  ]);
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.observation.cases.map((item) => item.errorClass), ["TypeError", "non-error"]);
+});
+
+test("real isolated worker cannot forge primitive outcomes with JSON or prototype tampering", integration, async () => {
+  const result = await run(`JSON.stringify = () => '{"outcome":"return","value":true}';
+    Object.prototype.isPrototypeOf = () => true;
+    export function run() { return { toJSON: () => true, valueOf: () => true }; }`);
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.observation.cases[0].outcome, "unsupported");
+  const forgedError = await run("Object.prototype.isPrototypeOf = () => true; export function run() { throw {name:'TypeError'}; }");
+  assert.equal(forgedError.observation.cases[0].errorClass, "non-error");
+});
+
+test("real isolated worker has no Node, process, network, file, or receipt bindings", integration, async () => {
+  const result = await run(`export function run() {
+    return [typeof process, typeof require, typeof fetch, typeof XMLHttpRequest, typeof print,
+      typeof console, typeof observeExecution, typeof std, typeof os,
+      Function('return typeof process')()].join(',');
+  }`);
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.observation.cases[0].value.value, Array(10).fill("undefined").join(","));
+  const imported = await run("import fs from 'node:fs'; export const run = () => fs.readFileSync('/etc/passwd', 'utf8');");
+  assert.equal(imported.observation.cases[0].outcome, "unsupported");
+});
+
+test("real isolated worker captures original Date state and clock use despite tampering", integration, async () => {
+  const result = await run(`const originalGetTime = Date.prototype.getTime;
+    export function run(date) {
+      const now = Date.now(); date.setTime(5);
+      Date.prototype.getTime = () => 100;
+      globalThis.Date = function() { return { getTime: () => 100 }; };
+      return now;
+    }`, [{ id: "date", args: [value("date", 100)], clock: 1234 }]);
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.observation.cases[0].value.value, 1234);
+  assert.equal(result.observation.cases[0].clockReads, 1);
+  assert.deepEqual(result.observation.cases[0].dateArgsAfter, [{ index: 0, value: 5 }]);
+});
+
+test("real isolated worker reports timeout and memory faults without success", integration, async () => {
+  const infinite = await run("export function run() { while (true) {} }");
+  assert.equal(infinite.status, "timeout", JSON.stringify(infinite));
+  assert.equal(infinite.cleanupConfirmed, true);
+  const memory = await run("export function run() { return new ArrayBuffer(128 * 1024 * 1024); }");
+  assert.equal(memory.status, "error", JSON.stringify(memory));
+  assert.equal(memory.cleanupConfirmed, true);
+});
+
+test("outer deadline and cancellation remove only the run-owned container", integration, async () => {
+  const timed = await run("export function run() { while (true) {} }", undefined, { timeoutMs: 25 });
+  assert.equal(timed.status, "timeout", JSON.stringify(timed));
+  assert.equal(timed.cleanupConfirmed, true);
+  const controller = new AbortController();
+  controller.abort();
+  const cancelled = await run("export const run = () => true", undefined, { signal: controller.signal });
+  assert.equal(cancelled.status, "cancelled");
+  const ids = execFileSync("docker", ["--host", `unix://${dockerSocket}`, "ps", "--all", "--quiet", "--filter", `label=io.piagent.contract-execution=${timed.runId}`], { encoding: "utf8" });
+  assert.equal(ids.trim(), "");
+});
+
+test("pathological native operations and in-flight cancellation stay bounded", integration, async (context) => {
+  const started = Date.now();
+  const pathological = await run("export function run() { return /^(a+)+$/.test('a'.repeat(100) + '!'); }", undefined, { timeoutMs: 12000 });
+  assert.ok(["timeout", "error"].includes(pathological.status), JSON.stringify(pathological));
+  assert.equal(pathological.cleanupConfirmed, true);
+  context.diagnostic(`pathological regex stopped in ${Date.now() - started}ms: ${pathological.reason ?? pathological.status}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 150);
+  let cancelled;
+  try { cancelled = await run("export function run() { while (true) {} }", undefined, { signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+  assert.equal(cancelled.status, "cancelled", JSON.stringify(cancelled));
+  assert.equal(cancelled.cleanupConfirmed, true);
+});

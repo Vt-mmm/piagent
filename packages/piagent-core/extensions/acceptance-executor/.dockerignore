@@ -1,0 +1,8 @@
+*
+!package.json
+!package-lock.json
+!worker.mjs
+!protocol.mjs
+!guest.mjs
+!node_modules/
+!node_modules/**

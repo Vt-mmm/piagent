@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "harness-next-evidence-v1",
+  "status": "implementation-in-progress",
+  "researchDate": "2026-08-30",
+  "baselineCommit": "db4bbca147bb9c6a181a4758239035e95d41504b",
+  "primaryHypotheses": [
+    "verifier-abstention-does-not-authorize-source-repair",
+    "equivalent-implementations-pass-independent-contract-checks",
+    "known-defects-and-forged-evidence-remain-rejected",
+    "durable-verification-does-not-repeat-paid-attempts"
+  ],
+  "offlineGates": {
+    "graderCalibration": {
+      "validFixtures": "retained-correct-plus-independently-labelled-structural-variants",
+      "invalidFixtures": "retained-defects-plus-mutants-with-independent-counterexamples",
+      "report": ["falseAcceptance", "falseRejection", "unknown", "executorError", "unsupportedContract"],
+      "maximumKnownFalseAcceptance": 0,
+      "maximumKnownFalseRejection": 0,
+      "unknownMustNotBeCountedAsPass": true,
+      "equivalentMutantsReportedSeparately": true
+    },
+    "requiredDomains": ["pure-function", "temporal-input", "configuration-precedence", "stateful-recovery"],
+    "requiredAdversaries": [
+      "forged-receipt", "stale-tree", "verifier-drift", "contract-drift", "partial-checks", "duplicate-checks",
+      "counterexample-omitted", "test-tampering", "source-mutation-during-check", "infinite-loop", "memory-exhaustion",
+      "filesystem-access", "network-access", "process-spawn", "cross-run-state-leak", "crash-during-checkpoint"
+    ],
+    "heldOut": {
+      "separateFromDevelopmentFixtures": true,
+      "freezeManifestBeforeCandidateEvaluation": true,
+      "doNotPromoteDiagnosticReplays": true,
+      "reportEveryFailureAndUnknown": true
+    }
+  },
+  "experiments": [
+    { "id": "verification-mechanism", "vary": "assessment-and-independent-verification", "hold": ["model", "thinking", "service-tier", "task-contract", "permission-policy"] },
+    { "id": "recovery-interface", "vary": "bounded-evidence-directed-recovery", "hold": ["verified-correctness-mechanism", "model", "thinking", "permission-policy"] },
+    { "id": "prompt-ablation", "vary": "one-redundant-prompt-group-at-a-time", "after": "correctness-and-recovery-gates", "hold": ["model", "tools-required-for-task", "safety-policy", "release-outcome-floor"] }
+  ],
+  "release": {
+    "requiredCampaign": "production-v2",
+    "requiredSessions": 108,
+    "frozenCandidate": true,
+    "singleOutputLineage": true,
+    "allProviderAttemptsAccounted": true,
+    "closedCampaignsRemainImmutable": true,
+    "requireExistingQualitySafetyEfficiencyGates": true,
+    "zeroEdgeCasesClaimAllowed": false
+  }
+}
