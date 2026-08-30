@@ -80,19 +80,26 @@ async function inspectOwned(socket, target, imageId, runId) {
  * No host workspace mounts, environment forwarding, image pulling, or fallback
  * to host evaluation. Expected answers are not part of the worker protocol.
  */
-export async function runIsolatedContract({ requestText, imageId, dockerSocket, timeoutMs = 10000, signal } = {}) {
+export async function runIsolatedContract({ requestText, imageId, dockerSocket, timeoutMs = 10000, signal, executionRunId } = {}) {
   const request = parseRequest(requestText);
   if (typeof imageId !== "string" || !IMAGE_ID.test(imageId) || typeof dockerSocket !== "string"
     || !isAbsolute(dockerSocket) || dockerSocket.includes("\0")
-    || !Number.isSafeInteger(timeoutMs) || timeoutMs < 25 || timeoutMs > 30000) throw new TypeError("Invalid isolated executor configuration");
+    || !Number.isSafeInteger(timeoutMs) || timeoutMs < 25 || timeoutMs > 30000
+    || (executionRunId !== undefined && (typeof executionRunId !== "string"
+      || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(executionRunId)))) throw new TypeError("Invalid isolated executor configuration");
   const requestDigest = hash(requestText);
   const sourceDigest = hash(request.source);
-  const runId = randomUUID();
+  // A durable host reservation can provide its freshly generated UUID so a
+  // restarted host can locate exactly its worker, never by a broad name scan.
+  const runId = executionRunId ?? randomUUID();
   const base = { runId, requestDigest, sourceDigest, imageId };
   let socketReady = false;
   try { socketReady = (await stat(dockerSocket)).isSocket(); } catch {}
   if (!socketReady) return { ...base, status: "error", reason: "local-backend-unavailable", cleanupConfirmed: true };
   if (signal?.aborted) return { ...base, status: "cancelled", reason: "cancelled-before-create", cleanupConfirmed: true };
+  if (executionRunId && await inspectOwned(dockerSocket, `piagent-contract-${runId}`, imageId, runId)) {
+    return { ...base, status: "error", reason: "reserved-execution-id-conflict", cleanupConfirmed: false };
+  }
   let containerId = null;
   let result = { ...base, status: "error", reason: "container-create-failed" };
   let cleanupConfirmed = false;

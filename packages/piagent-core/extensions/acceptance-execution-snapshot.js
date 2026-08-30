@@ -86,11 +86,11 @@ export function captureExecutionSnapshot({ projectRoot, sourcePath, authorizeSou
  * ignored source bytes, so both are bound independently here.
  */
 export async function runSnapshotBoundContract({ projectRoot, sourcePath, authorizeSourceRead, exportName, checks,
-  imageId, dockerSocket, timeoutMs, signal } = {}) {
+  imageId, dockerSocket, timeoutMs, signal, executionRunId } = {}) {
   const request = { projectRoot, sourcePath, authorizeSourceRead };
   const before = captureExecutionSnapshot(request);
   const result = await runIndependentContract({
-    planText: JSON.stringify({ schemaVersion: 1, source: before.source, exportName, checks }), imageId, dockerSocket, timeoutMs, signal
+    planText: JSON.stringify({ schemaVersion: 1, source: before.source, exportName, checks }), imageId, dockerSocket, timeoutMs, signal, executionRunId
   });
   let after;
   try { after = captureExecutionSnapshot(request); }

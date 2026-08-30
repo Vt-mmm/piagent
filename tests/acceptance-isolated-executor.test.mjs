@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { isolatedContainerArguments, isolatedContainerConfigurationMatches, runIsolatedContract } from "../packages/piagent-core/extensions/acceptance-isolated-executor.js";
@@ -76,6 +76,21 @@ test("unavailable backend never falls back to host evaluation", async () => {
   assert.equal(result.status, "error");
   assert.equal(result.reason, "local-backend-unavailable");
   assert.ok(!result.observation);
+  for (const executionRunId of [true, "existing-container", "-".repeat(36)]) {
+    await assert.rejects(runIsolatedContract({ requestText: sourceRequest("export const run=()=>true"), imageId: `sha256:${"a".repeat(64)}`,
+      dockerSocket: "/nonexistent/piagent-contract-test.sock", executionRunId }), /Invalid isolated/);
+  }
+});
+
+test("a reused durable execution identity cannot start or remove an existing worker", integration, async (context) => {
+  const executionRunId = randomUUID();
+  const docker = (...args) => execFileSync("docker", ["--host", `unix://${dockerSocket}`, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 5000 }).trim();
+  const id = docker(...isolatedContainerArguments(imageId, executionRunId));
+  context.after(() => { docker("rm", "--force", id); });
+  const result = await run("export const run = () => true", undefined, { executionRunId });
+  assert.equal(result.status, "error"); assert.equal(result.reason, "reserved-execution-id-conflict");
+  const [remaining] = JSON.parse(docker("inspect", id));
+  assert.equal(remaining.Id, id); assert.equal(remaining.State.Status, "created");
 });
 
 test("real isolated worker observes primitives, invalid values, and fresh realms", integration, async () => {

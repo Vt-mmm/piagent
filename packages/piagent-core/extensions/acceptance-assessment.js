@@ -65,7 +65,7 @@ function observedCheck(input, required) {
   if (!required.has(id) || !STATUSES.has(input.status)
     || !Number.isSafeInteger(input.caseCount) || input.caseCount < 0
     || (["pass", "fail"].includes(input.status) && input.caseCount === 0)) throw new TypeError("Invalid observed check result");
-  const counterexampleRef = input.counterexampleRef === undefined ? null : hash(input.counterexampleRef, "counterexample reference");
+  const counterexampleRef = input.counterexampleRef === undefined || input.counterexampleRef === null ? null : hash(input.counterexampleRef, "counterexample reference");
   if ((input.status === "fail") !== (counterexampleRef !== null)) throw new TypeError("Counterexample must identify a failed check");
   return Object.freeze({ id, status: input.status, caseCount: input.caseCount, counterexampleRef });
 }

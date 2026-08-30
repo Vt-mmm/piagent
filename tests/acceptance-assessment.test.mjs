@@ -141,6 +141,7 @@ test("malformed, duplicate, vacuous, or contradictory check observations are rej
     [{ id: "boundary", status: "pass", caseCount: 0 }],
     [{ id: "boundary", status: "pass", caseCount: 1, counterexampleRef: digest("e") }],
     [{ id: "boundary", status: "fail", caseCount: 1 }],
+    [{ id: "boundary", status: "fail", caseCount: 1, counterexampleRef: null }],
     [{ id: "boundary", status: "fail", caseCount: 1, counterexampleRef: "untrusted prose" }],
     [{ id: "boundary", status: "pass", caseCount: Infinity }],
     [{ id: "boundary", status: "pass", caseCount: -1 }],
