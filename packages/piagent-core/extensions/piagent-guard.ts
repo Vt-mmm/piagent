@@ -4309,7 +4309,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
         });
         return { block: true, reason: `Blocked ${event.toolName}: ${helperPreflight.reason} Do not retry this helper; continue in the parent.` };
       }
-      const verifierReuse = reuseCurrentTreeExactVerifier({ cwd: ctx.cwd, task, toolName: event.toolName, toolInput, sessionEntries: ctx.sessionManager.getEntries() as unknown[] });
+      const verifierReuse = reuseCurrentTreeExactVerifier({ cwd: ctx.cwd, task, toolName: event.toolName, toolInput, sessionEntries: ctx.sessionManager.getEntries() as unknown[],
+        getHostProjectVerificationDigest: (snapshot, command) => task ? runtimeState.projectVerification.currentDigest(ctx, task, snapshot, command) : null });
       if (verifierReuse.reused) {
         telemetry(ctx, { event: "verifier_evidence_reused", recordedAt: nowIso(), taskRunId: task?.taskRunId, toolCallId: event.toolCallId, reasonCode: verifierReuse.reasonCode, commandDigest: verifierReuse.commandDigest, workingTreeDigest: verifierReuse.workingTreeDigest }); return;
       }

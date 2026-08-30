@@ -46,7 +46,9 @@ test("a clean HEAD change invalidates verifier reuse even when the dirty-tree di
   assert.equal(reuseCurrentTreeExactVerifier({ cwd, task, toolName: "bash", toolInput: input }).reused, false);
   assert.equal(input.command, "npm test");
   task.verifyEvidence = [observation(after)];
-  assert.equal(reuseCurrentTreeExactVerifier({ cwd, task, toolName: "bash", toolInput: { command: "npm test" } }).reused, true);
+  assert.equal(reuseCurrentTreeExactVerifier({ cwd, task, toolName: "bash", toolInput: { command: "npm test" } }).reused, false, "task JSON alone cannot skip an actual verifier");
+  assert.equal(reuseCurrentTreeExactVerifier({ cwd, task, toolName: "bash", toolInput: { command: "npm test" },
+    getHostProjectVerificationDigest: () => "a".repeat(64) }).reused, true);
 });
 
 test("workspace identity covers every child baseline, topology, canonical root, and unborn/detached HEAD", (context) => {

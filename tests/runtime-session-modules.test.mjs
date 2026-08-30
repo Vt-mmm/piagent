@@ -1081,6 +1081,7 @@ describe("runtime session modules", () => {
     const state = {
       taskIdentity: () => ({ taskId: task.taskId, taskRunId: task.taskRunId }),
       observedContext: () => [], qualifiedTaskContext: () => [], consumeShellVerificationSnapshot: () => ({ snapshot: shellSnapshotBefore }),
+      projectVerification: { observe() {} },
       completeAuthorizedModelMutationEvidence: (_identity, _call, _success, snapshot) => {
         downstreamSnapshots.push(snapshot); return { changedPaths: [], recordedDigests: {}, beforeSnapshot: null,
           targetPaths: [], recordedContentDigests: {}, proofModes: {} };

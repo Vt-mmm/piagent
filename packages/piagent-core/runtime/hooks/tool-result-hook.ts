@@ -1,5 +1,4 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import { estimateContextTokens, toolResultFingerprint } from "../../extensions/context-engine.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { changedSnapshotFiles, taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
@@ -138,6 +137,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     const eventTree = currentTask
       ? captureWorkspaceVerificationSnapshot(ctx.cwd)
       : undefined;
+    dependencies.state.projectVerification.observe(ctx, currentTask, event, shellVerificationBefore, eventTree);
     dependencies.recordObservedTaskChanges(pi, ctx, event, pendingContext, dependencies.maxManifestFiles, shellSnapshotBefore, eventTree);
     if (observed) {
       dependencies.recordObservedTaskVerification(

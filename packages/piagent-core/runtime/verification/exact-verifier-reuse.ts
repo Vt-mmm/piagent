@@ -81,6 +81,7 @@ export function reuseCurrentTreeExactVerifier(input: {
   toolName: string;
   toolInput: Record<string, unknown>;
   sessionEntries?: unknown[];
+  getHostProjectVerificationDigest?: (snapshot: ReturnType<typeof captureWorkspaceVerificationSnapshot>, exactCommand: string) => string | null;
 }): ExactVerifierReuseDecision {
   if (!input.task || !SHELL_TOOLS.has(input.toolName)) {
     return { reused: false, reasonCode: "not-applicable", commandDigest: null, workingTreeDigest: null };
@@ -91,6 +92,10 @@ export function reuseCurrentTreeExactVerifier(input: {
     return { reused: false, reasonCode: "not-exact-verifier", commandDigest: null, workingTreeDigest: null };
   }
   const snapshot = captureWorkspaceVerificationSnapshot(input.cwd);
+  const observedDigest = input.getHostProjectVerificationDigest?.(snapshot, command);
+  if (typeof observedDigest !== "string" || !/^[a-f0-9]{64}$/.test(observedDigest)) {
+    return { reused: false, reasonCode: "host-project-verifier-observation-missing", commandDigest: null, workingTreeDigest: snapshot.digest };
+  }
   return evaluateExactVerifierReuse({ ...input, workingTreeDigest: snapshot.proofCapable ? snapshot.digest : null,
     workspaceRevisionDigest: snapshot.workspaceRevisionDigest });
 }

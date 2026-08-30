@@ -3,6 +3,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
 import { ShellVerificationSnapshots } from "../verification/shell-verification-snapshots.ts";
+import { HostProjectVerification } from "../verification/host-project-verification.ts";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import type { RecoveryHistoryEntry } from "../recovery/recovery-policy.ts";
 import type { ResumeState } from "../recovery/resume-state.ts";
@@ -89,6 +90,7 @@ export class RuntimeSessionState {
   readonly #preTaskContextBySession = new Map<string, { turnId: string; entries: Map<string, ObservedTaskContext> }>();
   readonly #qualifiedContextEvidenceByTask = new Map<string, Map<string, ObservedTaskContext>>();
   readonly #shellMutationSnapshots = new ShellVerificationSnapshots();
+  readonly projectVerification = new HostProjectVerification(this.#shellMutationSnapshots);
   readonly #sourceCheckoutReadGrants = new SourceCheckoutReadGrants();
 
   constructor(options: { maxObservedContext: number }) { this.#maxObservedContext = options.maxObservedContext; }
@@ -235,6 +237,7 @@ export class RuntimeSessionState {
 
   clearShellMutationSnapshots(ctx: ExtensionContext): void {
     this.#shellMutationSnapshots.clear(ctx);
+    this.projectVerification.clear(ctx);
   }
 
   hasAutoPackedPrompt(key: string): boolean {
