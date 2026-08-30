@@ -53,6 +53,11 @@ export function extractTaskRequest(text: string): string {
   return stripLeadingWorkflowCommand(text.trim());
 }
 
+/** Normalize the delivered agent prompt, not the earlier surface input. */
+export function agentStartTaskRequest(prompt: string): string {
+  return looksLikeGovernedBoilerplate(prompt) ? extractTaskRequest(prompt) : prompt.trim();
+}
+
 export function trimTaskForInline(input: string): string {
   const normalized = stripLeadingWorkflowCommand(input).trim().replace(/\n{3,}/g, "\n\n");
   if (normalized.length <= MAX_INLINE_COLLAPSED_TASK_CHARS) return normalized;

@@ -36,7 +36,7 @@ import {
   rewriteLegacyProjectInstructions
 } from "../session/system-prompt.ts";
 import { PIAGENT_TOOL_NAMES } from "../tools/tool-groups.ts";
-import { extractTaskRequest, looksLikeGovernedBoilerplate } from "../workflows/input-routing.ts";
+import { agentStartTaskRequest } from "../workflows/input-routing.ts";
 import {
   AUTO_INTAKE_SNAPSHOT_PATTERNS,
   automaticTaskIntakeMode,
@@ -50,7 +50,7 @@ import type { AgentStartHookDependencies } from "./agent-start-types.ts";
 export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStartHookDependencies): void {
   pi.on("before_agent_start", async (event, ctx) => {
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
-    const query = looksLikeGovernedBoilerplate(event.prompt) ? extractTaskRequest(event.prompt) : event.prompt.trim();
+    const query = agentStartTaskRequest(event.prompt);
     const signal = classifyContextTask(query);
     const uncertainSendContinuation = isUncertainSendContinuation(query);
     // A mutation clarification still goes to the provider unchanged and never

@@ -7,6 +7,13 @@ import { compileIndependentContract, compareIndependentExecution, INDEPENDENT_CO
 import { EXECUTION_SNAPSHOT_VERSION } from "../packages/piagent-core/extensions/acceptance-execution-snapshot.js";
 import { parseRequest, parseResponse } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
+import { redactSensitiveText } from "../packages/piagent-core/extensions/redaction-core.js";
+import { extractLocalImagePathCandidates } from "../packages/piagent-core/runtime/input/chat-images.ts";
+import { boundedOperatorRequest } from "../packages/piagent-core/runtime/registration/operator-request-intake.ts";
+import { LONG_INPUT_CHARS } from "../packages/piagent-core/runtime/runtime-limits.ts";
+import { agentStartTaskRequest, looksLikeGovernedBoilerplate } from "../packages/piagent-core/runtime/workflows/input-routing.ts";
+import { buildWebUiWorkflowCommand, isWebUiWorkflowId } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
+import { buildWorkflowFollowUp } from "../packages/piagent-core/runtime/workflows/workflow-follow-up.ts";
 
 export const BENCHMARK_VERIFICATION_PLAN_VERSION = "benchmark-independent-verification-plan-v1";
 const HASH = /^[a-f0-9]{64}$/;
@@ -19,13 +26,35 @@ const inside = (root, file) => { const relative = path.relative(fs.realpathSync.
 
 export function resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry) {
   if (!scenario.userJourney) return null;
-  return scenario.userJourney.turns.map((turn) => ({
-    id: turn.id,
-    message: fs.readFileSync(resolveSuiteEntry(suiteRoot, turn.prompt, `journey prompt ${scenario.id}/${turn.id}`), "utf8").trim(),
-    reconnectBefore: turn.reconnectBefore === true,
-    receiptUncertain: turn.receiptUncertain === true,
-    ...(turn.workflow ? { workflow: turn.workflow } : {})
-  }));
+  return scenario.userJourney.turns.map((turn) => {
+    if (Object.hasOwn(turn, "workflow") && !isWebUiWorkflowId(turn.workflow)) throw new TypeError("Unsupported verification workflow");
+    return {
+      id: turn.id,
+      message: fs.readFileSync(resolveSuiteEntry(suiteRoot, turn.prompt, `journey prompt ${scenario.id}/${turn.id}`), "utf8").trim(),
+      reconnectBefore: turn.reconnectBefore === true,
+      receiptUncertain: turn.receiptUncertain === true,
+      ...(turn.workflow ? { workflow: turn.workflow } : {})
+    };
+  });
+}
+
+/** Prospective Piagent request identity only; no task admission, criterion or approval authority. */
+export function benchmarkVerificationRequestDigest({ message, workflow }) {
+  if (workflow != null && !isWebUiWorkflowId(workflow)) throw new TypeError("Unsupported verification workflow");
+  const request = buildWebUiWorkflowCommand(null, message);
+  // Raw input may be rewritten by commands, boilerplate collapse or a context-
+  // dependent fresh-session handoff. Explicit workflow follow-ups originate
+  // from the extension, so those preflight rewrites do not apply to them.
+  if (!workflow && (request.startsWith("/") || looksLikeGovernedBoilerplate(request) || request.length >= LONG_INPUT_CHARS)) {
+    throw new TypeError("Unsupported verification request ingress: declare a workflow or use bounded plain prose");
+  }
+  const delivered = workflow ? buildWorkflowFollowUp(workflow, request) : request;
+  // Attachment rewriting depends on project files and policy. Detect possible
+  // paths without reading them; never guess which image will be attached.
+  if (extractLocalImagePathCandidates(delivered, "/").length) throw new TypeError("Unsupported verification image request ingress");
+  const safeRequest = boundedOperatorRequest(agentStartTaskRequest(delivered), value => redactSensitiveText(value).text);
+  if (!safeRequest) throw new TypeError("Unbound verification operator request");
+  return operatorRequestDigest(safeRequest);
 }
 
 /** Preview the actual frozen runtime, not a live checkout with different build assets. */
@@ -99,10 +128,16 @@ export function loadBenchmarkVerificationPlan({ file, installedRoot, suiteDigest
   for (const entry of value.scenarios) {
     const scenario = known.get(entry.scenarioId);
     if (!scenario) throw new Error("Unknown verification scenario");
-    // WebUI journeys send their declared turns, not the ordinary CLI prompt.
-    const prompts = scenario.userJourney ? scenario.userJourney.turns.map(turn => turn.prompt) : [scenario.prompt];
-    const requests = new Set(prompts.map(prompt => operatorRequestDigest(fs.readFileSync(
-      resolveSuiteEntry(suiteRoot, prompt, "verification public prompt"), "utf8").trim())));
+    // Piagent journeys dispatch workflow metadata before automatic intake.
+    // Baseline surfaces receive no approval and keep their own raw turn text.
+    const turns = resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry) ?? [{ message: fs.readFileSync(
+      resolveSuiteEntry(suiteRoot, scenario.prompt, "verification public prompt"), "utf8").trim() }];
+    const requests = new Map();
+    for (const turn of turns) {
+      const digest = benchmarkVerificationRequestDigest(turn), source = JSON.stringify([turn.workflow ?? null, turn.message]);
+      if (requests.has(digest) && requests.get(digest) !== source) throw new Error("Ambiguous verification request identity after normalization");
+      requests.set(digest, source);
+    }
     if (entry.plans.some(plan => !requests.has(plan.operatorRequestDigest))) throw new Error("Verification plan authorizes a request not sent by this scenario");
   }
   const catalog = freeze(value);

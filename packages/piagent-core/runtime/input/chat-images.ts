@@ -105,7 +105,7 @@ function normalizeImagePathCandidate(candidate: string, cwd: string, options: { 
   return path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
 }
 
-function extractLocalImagePathCandidates(text: string, cwd: string): string[] {
+export function extractLocalImagePathCandidates(text: string, cwd: string): string[] {
   const candidates = new Set<string>();
   const imageExt = "(?:png|jpe?g|gif|webp|bmp)";
   const wholeTextPath = normalizeImagePathCandidate(text, cwd, { allowBareRelative: false });

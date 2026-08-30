@@ -4,14 +4,20 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { benchmarkVerificationBinding, loadBenchmarkVerificationPlan, validateBenchmarkVerificationPlan } from "../scripts/benchmark-independent-verification.mjs";
+import { benchmarkVerificationBinding, benchmarkVerificationRequestDigest, loadBenchmarkVerificationPlan, validateBenchmarkVerificationPlan } from "../scripts/benchmark-independent-verification.mjs";
 import { materializeBenchmarkCandidate } from "../packages/piagent-core/benchmark/benchmark-candidate.js";
 import { cleanupBenchmarkExecutionSnapshot } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { discoverRuntimeIntegrityFiles } from "../packages/piagent-core/capabilities/runtime-integrity.js";
 import { parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { installedContractVerifierDigest, openHostContractConfiguration } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 import { IndependentAcceptanceRuntime } from "../packages/piagent-core/runtime/verification/independent-acceptance-runtime.ts";
-import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
+import { OPERATOR_REQUEST_MAX_CHARS, operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
+import { redactSensitiveText } from "../packages/piagent-core/extensions/redaction-core.js";
+import { registerWorkflowCommands } from "../packages/piagent-core/runtime/registration/workflow-commands.ts";
+import { boundedOperatorRequest } from "../packages/piagent-core/runtime/registration/operator-request-intake.ts";
+import { buildWebUiWorkflowCommand } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
+import { extractTaskRequest, looksLikeGovernedBoilerplate } from "../packages/piagent-core/runtime/workflows/input-routing.ts";
+import { LONG_INPUT_CHARS } from "../packages/piagent-core/runtime/runtime-limits.ts";
 import { resolveBenchmarkSuiteEntry } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
 import { createRootSchemaRegistry } from "./helpers/root-schema-registry.mjs";
 import { benchmarkResumeCommand } from "../scripts/benchmark-runner-support.mjs";
@@ -44,6 +50,36 @@ function fixture(t) {
   const load = (overrides = {}) => loadBenchmarkVerificationPlan({ ...options, ...overrides });
   const prepare = (loaded = load(), overrides = {}) => loaded.prepare({ scenarioId: "identity", surface: "piagent", projectRoot, directory: authority, approved: true, ...overrides });
   return { directory, projectRoot, suiteRoot, installedRoot, authority, file, catalog, plan, scenarios, options, save, load, prepare };
+}
+
+async function dispatchedJourneyRequest(workflow, request) {
+  const commands = new Map(), sent = [];
+  registerWorkflowCommands({}, {
+    registerRuntimeCommand(_pi, name, definition) { commands.set(name, definition); },
+    // Match the actual guard parser. Splitting and rejoining tokens would erase
+    // newlines and silently change the operator-request digest in this test.
+    commandArgs(raw) {
+      const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(String(raw ?? "").trim());
+      const action = (match?.[1] ?? "").toLowerCase(), rest = match?.[2] ?? "";
+      return { action, rest, tokens: rest.split(/\s+/).filter(Boolean) };
+    },
+    sendWorkflowFollowUp(value) { sent.push(value); }
+  });
+  const ingress = buildWebUiWorkflowCommand(workflow ?? null, request);
+  if (workflow) await commands.get("workflow").handler(ingress.slice("/workflow ".length), { ui: { notify() {} } });
+  else sent.push(ingress);
+  assert.equal(sent.length, 1, "capture the real namespace dispatcher without a provider or authority write");
+  const dispatched = sent[0];
+  // Independently follow before_agent_start and task-start persistence, rather
+  // than calling the benchmark projection that these regressions verify.
+  const query = looksLikeGovernedBoilerplate(dispatched) ? extractTaskRequest(dispatched) : dispatched.trim();
+  const persisted = boundedOperatorRequest(query, value => redactSensitiveText(value).text);
+  return { ingress, dispatched, query, persisted };
+}
+
+function setJourneyRequest(f, workflow, request) {
+  fs.writeFileSync(path.join(f.suiteRoot, "journey-request.md"), request);
+  f.scenarios[0].userJourney = { turns: [{ id: "request", prompt: "journey-request.md", ...(workflow ? { workflow } : {}) }] };
 }
 
 test("catalog preview binds exact requests and exposes only digests/counts, never expected answers", (t) => {
@@ -125,6 +161,195 @@ test("journey approval follows the actual turn prompts and detects post-preview 
   assert.equal(loaded.isCurrent(), false);
   assert.equal(prepared.observe([]).status, "unavailable");
   assert.throws(() => f.prepare(loaded, { directory: path.join(f.directory, "other") }), /changed/);
+});
+
+for (const workflow of ["task", "scout", "platform-improve", "review"]) {
+  test(`catalog workflow binding accepts the actual ${workflow} dispatch with multiline whitespace`, async (t) => {
+    const f = fixture(t), request = "  Inspect `src/value.js`.\n\nPreserve  double spaces and\ttabs.\nRun the configured checks.\n  ";
+    setJourneyRequest(f, workflow, request);
+    const observed = await dispatchedJourneyRequest(workflow, request);
+    assert.equal(observed.dispatched, `/${workflow} ${request.trim()}`);
+    assert.equal(observed.persisted, observed.dispatched);
+    f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+    assert.equal(f.load().identity.scenarios[0].requests[0].operatorRequestDigest, f.plan.operatorRequestDigest);
+    assert.equal(fs.existsSync(f.authority), false);
+  });
+
+  test(`catalog workflow binding rejects raw and wrong-workflow hashes for ${workflow}`, async (t) => {
+    const f = fixture(t), request = "Inspect src/value.js and report its behavior.";
+    setJourneyRequest(f, workflow, request);
+    const observed = await dispatchedJourneyRequest(workflow, request);
+    const other = await dispatchedJourneyRequest(workflow === "task" ? "scout" : "task", request);
+    for (const wrong of [request, other.persisted]) {
+      assert.notEqual(operatorRequestDigest(wrong), operatorRequestDigest(observed.persisted));
+      f.plan.operatorRequestDigest = operatorRequestDigest(wrong); f.save();
+      assert.throws(() => f.load(), "only the actual dispatched request may bind the plan");
+    }
+    assert.equal(fs.existsSync(f.authority), false);
+  });
+}
+
+test("catalog workflow binding keeps a simple no-workflow journey request unchanged", async (t) => {
+  const f = fixture(t), request = "  Preserve the number.\n";
+  setJourneyRequest(f, null, request);
+  const observed = await dispatchedJourneyRequest(null, request);
+  assert.equal(observed.persisted, request.trim());
+  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+  assert.doesNotThrow(() => f.load());
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+for (const command of ["task", "custom"]) test(`catalog workflow binding refuses an unprojected bare /${command} command`, (t) => {
+  const f = fixture(t), request = `/${command} Fix src/value.js and verify the result.`;
+  setJourneyRequest(f, null, request);
+  f.plan.operatorRequestDigest = operatorRequestDigest(request); f.save();
+  assert.throws(() => f.load(), "a bare slash command can invoke a template or custom dispatcher before intake");
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+for (const workflow of ["", "missing-workflow"]) test(`catalog workflow binding refuses ${workflow || "empty"} workflow metadata`, (t) => {
+  const f = fixture(t), request = "Fix src/value.js and verify the result.";
+  setJourneyRequest(f, null, request);
+  f.scenarios[0].userJourney.turns[0].workflow = workflow;
+  f.plan.operatorRequestDigest = operatorRequestDigest(request); f.save();
+  assert.throws(() => f.load());
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding uses the generated onboarding request, not a direct-command guess", async (t) => {
+  const f = fixture(t), request = "Inspect src/value.js and the repository conventions.";
+  setJourneyRequest(f, "onboard", request);
+  const observed = await dispatchedJourneyRequest("onboard", request);
+  assert.match(observed.dispatched, /^Run the Pi Agent Platform first-read onboarding workflow/);
+  assert.ok(observed.dispatched.includes(`Optional focus: ${request}`));
+  assert.notEqual(observed.persisted, `/onboard ${request}`);
+  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+  assert.doesNotThrow(() => f.load());
+  for (const wrong of [request, `/onboard ${request}`]) {
+    f.plan.operatorRequestDigest = operatorRequestDigest(wrong); f.save();
+    assert.throws(() => f.load());
+  }
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+for (const workflow of [null, "task"]) test(`catalog workflow binding ${workflow ? "follows explicit-workflow governed extraction" : "refuses unprojected raw governed boilerplate"}`, async (t) => {
+  const f = fixture(t), inner = "Fix src/value.js.\nPreserve  spacing and verify the change.";
+  const request = `Mandatory flow:\npiagent_context\npiagent_task_start\nOutput format:\nRequest:\n\`\`\`text\n${inner}\n\`\`\`\n`;
+  setJourneyRequest(f, workflow, request);
+  const observed = await dispatchedJourneyRequest(workflow, request);
+  assert.equal(looksLikeGovernedBoilerplate(observed.dispatched), true);
+  assert.equal(observed.persisted, inner);
+  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+  // Raw interactive input may be collapsed or freshened before agent-start,
+  // depending on context pressure. Explicit workflow follow-ups have extension
+  // origin, so the input hook preserves them and agent-start owns extraction.
+  if (workflow) assert.doesNotThrow(() => f.load());
+  else assert.throws(() => f.load(), "do not guess context-dependent input-hook transformations");
+  f.plan.operatorRequestDigest = operatorRequestDigest(request.trim()); f.save();
+  assert.throws(() => f.load());
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding uses the redacted persisted request identity", async (t) => {
+  const f = fixture(t), token = `sk-proj-${"A".repeat(24)}`;
+  const request = `Fix src/value.js. Synthetic test credential: ${token}.`;
+  setJourneyRequest(f, "task", request);
+  const observed = await dispatchedJourneyRequest("task", request);
+  assert.ok(observed.query.includes(token));
+  assert.ok(observed.persisted.includes("[REDACTED_SECRET]"));
+  assert.equal(observed.persisted.includes(token), false);
+  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+  assert.doesNotThrow(() => f.load());
+  for (const wrong of [request, observed.query]) {
+    f.plan.operatorRequestDigest = operatorRequestDigest(wrong); f.save();
+    assert.throws(() => f.load());
+  }
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding preserves requests exactly at the Unicode persistence limit", async (t) => {
+  const f = fixture(t), request = "🧩".repeat(OPERATOR_REQUEST_MAX_CHARS - "/task ".length);
+  setJourneyRequest(f, "task", request);
+  const observed = await dispatchedJourneyRequest("task", request);
+  assert.equal(Array.from(observed.query).length, OPERATOR_REQUEST_MAX_CHARS);
+  assert.ok(observed.query.length > OPERATOR_REQUEST_MAX_CHARS, "the limit is code points, not UTF-16 units");
+  assert.equal(observed.persisted, observed.query);
+  // This is prospective storage-bound identity, not proof that automatic task
+  // admission accepts a request of this size or that a workflow has executed.
+  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+  assert.doesNotThrow(() => f.load());
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding refuses a request that cannot receive a persisted identity", async (t) => {
+  const f = fixture(t), request = "x".repeat(OPERATOR_REQUEST_MAX_CHARS);
+  setJourneyRequest(f, "task", request);
+  const observed = await dispatchedJourneyRequest("task", request);
+  assert.equal(observed.persisted, undefined, "the workflow prefix pushes the actual request over the bound");
+  f.plan.operatorRequestDigest = operatorRequestDigest(request); f.save();
+  assert.throws(() => f.load(), "do not authorize an undelivered raw request when persisted request identity is unavailable");
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding refuses local image paths without inspecting files", (t) => {
+  const f = fixture(t), requests = [
+    "Inspect /not-a-real-fixture/preview.png and fix src/value.js.",
+    'Inspect "./design.webp" and fix src/value.js.',
+    "Inspect file:///not-a-real-fixture/preview.jpg and fix src/value.js."
+  ];
+  const methods = ["readFileSync", "openSync", "statSync", "lstatSync", "existsSync", "realpathSync", "readdirSync"];
+  const reads = methods.map(name => t.mock.method(fs, name, () => { throw new Error("unexpected projection filesystem read"); }));
+  try {
+    for (const message of requests) for (const workflow of [undefined, "task"]) {
+      assert.throws(() => benchmarkVerificationRequestDigest({ message, workflow }), /Unsupported verification image request ingress/);
+    }
+    assert.equal(reads.reduce((count, mocked) => count + mocked.mock.callCount(), 0), 0);
+  } finally { t.mock.restoreAll(); }
+  setJourneyRequest(f, "task", requests[0]);
+  f.plan.operatorRequestDigest = operatorRequestDigest(`/task ${requests[0]}`); f.save();
+  assert.throws(() => f.load(), /Unsupported verification image request ingress/);
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding refuses raw input at the UTF-16 freshening threshold", (t) => {
+  const f = fixture(t), below = "x".repeat(LONG_INPUT_CHARS - 1);
+  setJourneyRequest(f, null, below);
+  f.plan.operatorRequestDigest = operatorRequestDigest(below); f.save();
+  assert.doesNotThrow(() => f.load(), "bounded plain prose retains its prospective identity");
+  for (const request of ["x".repeat(LONG_INPUT_CHARS), "x".repeat(LONG_INPUT_CHARS + 1), "🧩".repeat(LONG_INPUT_CHARS / 2)]) {
+    assert.ok(request.length >= LONG_INPUT_CHARS);
+    setJourneyRequest(f, null, request);
+    f.plan.operatorRequestDigest = operatorRequestDigest(request); f.save();
+    assert.throws(() => f.load(), /Unsupported verification request ingress/);
+  }
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding refuses different raw turns that redact to the same identity", async (t) => {
+  const f = fixture(t), first = `Fix src/value.js. Synthetic credential: sk-proj-${"A".repeat(24)}.`,
+    second = `Fix src/value.js. Synthetic credential: sk-proj-${"B".repeat(24)}.`;
+  setJourneyRequest(f, "task", first);
+  fs.writeFileSync(path.join(f.suiteRoot, "second-request.md"), second);
+  f.scenarios[0].userJourney.turns.push({ id: "second", prompt: "second-request.md", workflow: "task" });
+  const a = await dispatchedJourneyRequest("task", first), b = await dispatchedJourneyRequest("task", second);
+  assert.notEqual(a.dispatched, b.dispatched);
+  assert.equal(a.persisted, b.persisted);
+  f.plan.operatorRequestDigest = operatorRequestDigest(a.persisted); f.save();
+  assert.throws(() => f.load(), /Ambiguous verification request identity after normalization/);
+  assert.equal(fs.existsSync(f.authority), false);
+});
+
+test("catalog workflow binding allows identical repeated turn inputs", async (t) => {
+  const f = fixture(t), request = "Fix src/value.js.\nPreserve  whitespace and run the checks.";
+  setJourneyRequest(f, "task", request);
+  fs.writeFileSync(path.join(f.suiteRoot, "repeat-request.md"), request);
+  f.scenarios[0].userJourney.turns.push({ id: "repeat", prompt: "repeat-request.md", workflow: "task" });
+  const observed = await dispatchedJourneyRequest("task", request);
+  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
+  const loaded = f.load();
+  assert.equal(loaded.identity.scenarios[0].requests.length, 1, "repeated identical input does not create a second authority identity");
+  assert.equal(loaded.identity.scenarios[0].requests[0].operatorRequestDigest, f.plan.operatorRequestDigest);
+  assert.equal(fs.existsSync(f.authority), false);
 });
 
 test("catalog schema and semantic validation agree, including nested plan constraints", (t) => {

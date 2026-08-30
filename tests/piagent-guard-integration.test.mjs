@@ -2766,6 +2766,54 @@ describe("piagent guard integration", () => {
     assert.match(messages[2], /backend API/);
   });
 
+  it("binds multiline task workflow dispatch to the benchmark verification request identity", async () => {
+    // This runs the copied guard's dispatcher and hooks against host-runtime
+    // stubs; it does not execute an installed SDK, provider, or verifier worker.
+    const { root, piagentGuard } = await loadGuardFixture();
+    const { benchmarkVerificationRequestDigest } = await import(
+      pathToFileURL(path.join(root, "scripts", "benchmark-independent-verification.mjs")).href
+    );
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "src", "invoice.ts"), "export function invoiceQuantity(value) { return value; }\n");
+    fs.writeFileSync(path.join(cwd, "package.json"), `${JSON.stringify({
+      name: "workflow-request-identity-fixture", private: true, scripts: { test: "node --test" }
+    })}\n`);
+    const ctx = createContext(cwd, { sessionId: "workflow-request-identity", sessionName: "WORKFLOW-IDENTITY" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const message = [
+      "Fix invoice quantity handling in src/invoice.ts.",
+      "",
+      "Constraints:",
+      "- Keep the public function name unchanged.",
+      "- Run npm test after the change."
+    ].join("\n");
+
+    await harness.commands.get("workflow").handler(`task ${message}`, ctx);
+    const dispatched = harness.entries.filter((entry) => entry.type === "user-message");
+    assert.equal(dispatched.length, 1);
+    const prompt = dispatched[0].payload.message;
+    assert.equal(prompt, `/task ${message}`, "dispatch retains the workflow prefix and every internal newline");
+    assert.deepEqual(dispatched[0].payload.options, { deliverAs: "followUp" });
+    const input = await harness.handlers.get("input")({ text: prompt, source: "extension" }, ctx);
+    assert.equal(input.action, "continue");
+    const started = await harness.handlers.get("before_agent_start")({
+      prompt, systemPrompt: "Stable fixture instructions.",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    assert.equal(started.message.customType, "piagent-runtime-task-intake");
+    const taskRunId = started.message.details.runtimeTask.taskRunId;
+    const task = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${taskRunId}.json`), "utf8"));
+    assert.equal(task.operatorRequest, `/task ${message}`);
+    assert.equal(task.operatorRequestDigest, benchmarkVerificationRequestDigest({ message, workflow: "task" }));
+    assert.equal(task.trace.outcome, "pending", "request identity does not establish completion");
+    assert.ok(task.acceptanceReceipt.criteria.some((criterion) => criterion.status === "pending"));
+    assert.equal(ctx.confirmations.length, 0);
+    assert.equal(harness.entries.filter((entry) => entry.type === "user-message").length, 1,
+      "intake adds no extra provider continuation");
+  });
+
   it("reports solo-first orchestration policy and records task work plans", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

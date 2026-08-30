@@ -34,6 +34,26 @@ single-request formats remain supported. Duplicate request digests, nested sets,
 mixed single/set approval and mismatched criterion IDs/hashes are refused.
 The same criterion ID in different requests does not share expected results.
 
+Request digests must follow Piagent intake, not merely hash a public prompt file.
+For a journey with explicit `workflow`, the namespace dispatcher first emits
+its exact follow-up (normally `/<workflow> <request>`; onboarding has its own
+generated text). `benchmarkVerificationRequestDigest` in
+`scripts/benchmark-independent-verification.mjs` shares that dispatch builder,
+agent-start request extraction and bounded/redacted persistence projection.
+Internal whitespace is significant. Baseline surfaces still receive their raw
+journey messages and no Piagent verification approval.
+
+This preview supports bounded plain prose and canonical workflow metadata. It
+refuses bare commands, raw governed boilerplate, raw inputs eligible for
+context-dependent freshening, possible local-image attachment rewriting,
+unbound requests and distinct inputs that collapse to the same scenario request
+identity. Those are catalog limitations, not new restrictions on runtime input.
+Identical repeated requests remain permitted. A projected digest is not proof
+that automatic intake will admit a task: policy, UTF-16 intake length, pending
+tasks and uncertain-send continuation still apply. Persistence uses its separate
+Unicode-code-point limit after redaction. Preview does not derive or approve
+criterion IDs/hashes, expected results or a second task for a recovery turn.
+
 Dry run and preflight validate and expose digest/count/criterion identity only;
 they create no session approval. Starting sessions requires the separate
 `--approve-verification` flag. `--yes` confirms cost/run count only. A resume
