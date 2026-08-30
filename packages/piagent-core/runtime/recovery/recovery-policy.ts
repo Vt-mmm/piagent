@@ -40,6 +40,7 @@ export type RecoveryPolicyInput = {
   exactVerifierAvailable?: boolean;
   currentTreeMatchesEvidence?: boolean;
   dependencyMutationAuthorized?: boolean;
+  independentDisposition?: "cancelled" | "reconcile" | "unsupported" | "halt" | "approval";
 };
 
 export type RecoveryDecision = {
@@ -161,6 +162,15 @@ export function selectRecoveryDecision(input: RecoveryPolicyInput): RecoveryDeci
   if (input.classification.category === "scope-protected-path") {
     return decision(input, "handoff", ["protected-path-forbidden"]);
   }
+  const independentCategories = { cancelled: "unknown", reconcile: "environment", unsupported: "unknown", halt: "unknown", approval: "environment" };
+  if (input.independentDisposition !== undefined && (typeof input.independentDisposition !== "string"
+    || !Object.hasOwn(independentCategories, input.independentDisposition)
+    || independentCategories[input.independentDisposition] !== input.classification.category)) return decision(input, "blocked", ["invalid-input"]);
+  if (input.independentDisposition === "cancelled") return decision(input, "handoff", ["independent-execution-cancelled"]);
+  if (input.independentDisposition === "reconcile") return decision(input, "ask-operator", ["independent-execution-reconciliation-required"], { continuation: "operator" });
+  if (input.independentDisposition === "unsupported") return decision(input, "handoff", ["independent-verifier-unsupported"]);
+  if (input.independentDisposition === "halt") return decision(input, "handoff", ["independent-verification-halted"]);
+  if (input.independentDisposition === "approval") return decision(input, "ask-operator", ["operator-environment-action"], { continuation: "operator" });
 
   const counts = countsFor(input);
   if (input.currentTreeMatchesEvidence === false && input.exactVerifierAvailable === true) {

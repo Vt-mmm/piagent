@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 import { openAcceptanceEvidenceStore } from "../packages/piagent-core/extensions/acceptance-evidence-store.js";
 import { createDurableContractRunner } from "../packages/piagent-core/extensions/acceptance-durable-execution.js";
 import { createAuthenticatedAdmission, currentAuthenticatedAssessment } from "../packages/piagent-core/extensions/acceptance-authenticated-admission.js";
+import { registerIndependentAcceptanceProvider } from "../packages/piagent-core/extensions/acceptance-independent-registry.js";
+import { independentVerificationRecovery } from "../packages/piagent-core/runtime/recovery/independent-verification-recovery.ts";
+import { selectRecoveryDecision, recoveryDecisionValidationErrors } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
+import { compileIndependentContract, compareIndependentExecution } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -37,6 +41,20 @@ function fixture(context) {
   return { projectRoot, sourceFile, options, open, store, storeOptions };
 }
 
+function recoveryFor(context, options, receipt) {
+  const task = { ...scope, taskId: "sum", sessionId: "session-1", acceptanceReceipt: { criteria: [{ id: scope.criterionId, hash: request.criterionHash }] } };
+  context.after(registerIndependentAcceptanceProvider(options.projectRoot, task, () => ({ projectVerificationDigest: "d".repeat(64),
+    entries: [{ criterionId: scope.criterionId, criterionHash: request.criterionHash, receipt }] })));
+  const recovery = independentVerificationRecovery(options.projectRoot, task, receipt.workingTreeDigest);
+  assert.ok(recovery, JSON.stringify(receipt));
+  const decision = selectRecoveryDecision({ featureEnabled: true, task: { taskId: "sum", taskRunId: scope.taskRunId, attempt: 1, maxAttempts: 2, changeMode: "source-change" },
+    classification: recovery.classification, currentPhase: "verify", proposedHypothesisRef: recovery.hypothesisRef,
+    independentDisposition: recovery.independentDisposition, exactVerifierAvailable: true });
+  assert.deepEqual(recoveryDecisionValidationErrors(decision), []);
+  assert.equal(decision.sourceMutationAllowed, false);
+  return { recovery, decision };
+}
+
 test("missing current project verification and pre-cancellation reserve no attempt", async (context) => {
   const { options, store } = fixture(context);
   const missing = createDurableContractRunner({ ...options, getProjectVerificationDigest: () => null });
@@ -52,11 +70,36 @@ test("unavailable backend errors are durably settled without implicit retries", 
   const runner = createDurableContractRunner({ ...options, dockerSocket: "/piagent-test-backend-does-not-exist.sock" });
   const first = await runner.run(request);
   assert.equal(first.verdict, "error"); assert.equal(first.reused, false); assert.equal(first.completionAllowed, false);
+  const assessment = await runner.assess(first, { policy: "allow" });
+  assert.equal(assessment.verdict, "error", JSON.stringify(assessment));
+  assert.ok(assessment.reasons.includes("local-backend-unavailable"));
+  assert.equal(assessment.repairEligible, false);
+  assert.equal(recoveryFor(context, options, assessment).decision.action, "ask-operator");
   const second = await runner.run(request);
   assert.equal(second.verdict, "error"); assert.equal(second.reused, true);
   assert.equal(store.latest(scope).attempt, 1);
   assert.equal((await runner.run({ ...request, retry: true })).reused, false);
   assert.equal(store.latest(scope).attempt, 2);
+});
+
+for (const [name, source, verdict, reason, action] of [
+  ["unsupported return type", "export const sum = (a,b) => Promise.resolve(a+b);", "unknown", "return-type-unsupported", "handoff"],
+  ["unsupported import", "import {x} from './other.mjs'; export const sum = (a,b) => a+b;", "unknown", "module-import-unsupported", "handoff"],
+  ["guest deadline", "export const sum = () => { while(true) {} };", "error", "guest-timeout", "retry"]
+]) test(`authenticated ${name} diagnostics never authorize source repair`, integration, async (context) => {
+  const { options, sourceFile, store } = fixture(context);
+  fs.writeFileSync(sourceFile, source);
+  const runner = createDurableContractRunner(options), actual = await runner.run(request);
+  const assessment = await runner.assess(actual, { policy: "allow" });
+  assert.equal(assessment.verdict, verdict, JSON.stringify({ actual, assessment }));
+  assert.equal(assessment.completionAllowed, false); assert.equal(assessment.repairEligible, false);
+  assert.ok(assessment.reasons.includes(reason), JSON.stringify(assessment));
+  const { recovery, decision } = recoveryFor(context, options, assessment);
+  assert.equal(decision.action, action, JSON.stringify(decision));
+  assert.match(recovery.guidance.join(" "), /No source mutation/);
+  assert.equal((await runner.run(request)).reused, true, "diagnosis does not automatically launch an identical execution");
+  assert.equal(store.latest(scope).attempt, 1);
+  assert.equal(fs.readFileSync(sourceFile, "utf8"), source);
 });
 
 test("real execution can be authenticated and reused after reopening the host store", integration, async (context) => {
@@ -118,9 +161,9 @@ test("authenticated admission rejects malformed signed observations and newer pe
   const actual = await runner.run(request), accepted = await runner.assess(actual, { policy: "allow" });
   assert.equal(accepted.verdict, "pass");
   const original = store.latest(scope), snapshotRequest = { projectRoot: options.projectRoot, sourcePath: options.sourcePath, authorizeSourceRead: () => true };
-  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId });
+  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId, exportName: options.exportName, checks: options.checks });
   const expectedChecks = [{ id: "sum", caseCount: 1 }];
-  const unbranded = createAuthenticatedAdmission({ store: { ...store }, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId });
+  const unbranded = createAuthenticatedAdmission({ store: { ...store }, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId, exportName: options.exportName, checks: options.checks });
   assert.equal(unbranded.issue({ scope, binding: original.binding, event: original, expectedChecks }).completionAllowed, false);
   for (const [index, mutate] of [
     (e) => { e.observed.result.checks = []; },
@@ -131,6 +174,11 @@ test("authenticated admission rejects malformed signed observations and newer pe
     (e) => { e.observed.result.execution.cleanupConfirmed = false; },
     (e) => { e.observed.result.execution.runId = "another-run"; },
     (e) => { e.observed.result.execution.sourceDigest = "0".repeat(64); },
+    (e) => { e.observed.result.execution.requestDigest = "0".repeat(64); },
+    (e) => { delete e.observed.result.execution.observation; },
+    (e) => { e.observed.result.execution.observation.cases[0].value.value = 999; },
+    (e) => { e.observed.result.execution.observation.cases = []; },
+    (e) => { e.observed.result.execution.observation.status = "error"; },
     (e) => { e.observed.result.execution.imageId = `sha256:${"0".repeat(64)}`; },
     (e) => { e.observed.result.planDigest = "0".repeat(64); },
     (e) => { e.verdict = "fail"; },
@@ -152,6 +200,35 @@ test("authenticated admission rejects malformed signed observations and newer pe
   assert.equal(currentAuthenticatedAssessment(accepted, { ...scope, criterionHash: request.criterionHash,
     workingTreeDigest: accepted.workingTreeDigest, projectVerificationDigest: "d".repeat(64), policy: "allow" }), null);
   assert.equal((await runner.assess(actual, { policy: "allow" })).completionAllowed, false);
+});
+
+test("authenticated cancellation and cleanup uncertainty stop automatic continuation", integration, async (context) => {
+  const { options, store, sourceFile } = fixture(context);
+  const runner = createDurableContractRunner(options), actual = await runner.run(request);
+  const original = store.latest(scope);
+  const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: fs.readFileSync(sourceFile, "utf8"), exportName: options.exportName, checks: options.checks }));
+  const snapshotRequest = { projectRoot: options.projectRoot, sourcePath: options.sourcePath, authorizeSourceRead: () => true };
+  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId, exportName: options.exportName, checks: options.checks });
+  for (const [status, cleanupConfirmed, reason, action] of [
+    ["cancelled", true, "cancelled", "handoff"],
+    ["error", false, "container-cleanup-unconfirmed", "ask-operator"]
+  ]) {
+    // Synthetic signed host events test admission/recovery semantics here; the
+    // actual running-worker cancellation is covered by the completion hook test.
+    const reserved = store.reserve({ scope, binding: original.binding, maxAttempts: 3, retry: true });
+    const { observation, ...identity } = actual.evidence.observed.result.execution;
+    const result = compareIndependentExecution(compiled, { ...identity, runId: reserved.event.attemptId, status, cleanupConfirmed, reason });
+    const evidence = structuredClone(actual.evidence);
+    evidence.verdict = evidence.observed.verdict = result.verdict; evidence.observed.result = result;
+    const event = store.settle(reserved.reservation, JSON.stringify(evidence));
+    const receipt = admission.issue({ scope, binding: original.binding, event, expectedChecks: [{ id: "sum", caseCount: 1 }] });
+    assert.equal(receipt.verdict, "error", JSON.stringify(receipt));
+    assert.equal(receipt.completionAllowed, false); assert.equal(receipt.repairEligible, false);
+    assert.equal(recoveryFor(context, options, receipt).decision.action, action);
+    const current = { ...scope, criterionHash: request.criterionHash, workingTreeDigest: receipt.workingTreeDigest, projectVerificationDigest: "d".repeat(64), policy: "allow" };
+    assert.equal(currentAuthenticatedAssessment(receipt, current), receipt);
+    assert.equal(currentAuthenticatedAssessment(structuredClone(receipt), current), null, "serialized diagnostics cannot become recovery authority");
+  }
 });
 
 test("project-verifier drift during execution or cache admission never reuses a passing verdict", integration, async (context) => {

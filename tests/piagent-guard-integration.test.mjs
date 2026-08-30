@@ -2887,6 +2887,7 @@ describe("piagent guard integration", () => {
     const ctx = createContext(cwd, { sessionId: "session-lifecycle", sessionName: "TASK-101" });
     const harness = createPiHarness();
     piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
 
     const started = await harness.tools.get("piagent_task_start").execute("start", {
       taskId: "TASK-101",
@@ -4611,6 +4612,7 @@ describe("piagent guard integration", () => {
     const ctx = createContext(cwd, { sessionId: "session-readonly", sessionName: "SCOUT-1" });
     const harness = createPiHarness();
     piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
     const started = await harness.tools.get("piagent_task_start").execute("start-read", {
       taskId: "SCOUT-1",
       summary: "Inspect the authentication flow without changing project state",
@@ -5000,15 +5002,18 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
-  for (const scenario of ["valid", "counterexample", "repair"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
+  for (const scenario of ["valid", "counterexample", "repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
     skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 120000
   }, async (t) => {
     const { root, piagentGuard } = await loadGuardFixture(), cwd = createProject(root);
     const valid = scenario === "valid";
     const validSource = "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n";
-    const source = valid
-      ? validSource
-      : "export function sum(a,b) { return a+b; }\n";
+    const source = ({
+      valid: validSource, "backend-unavailable": validSource, pending: validSource, exhausted: validSource,
+      unsupported: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') return Promise.resolve(0); return a+b; }\n",
+      timeout: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') { while(true) {} } return a+b; }\n",
+      shutdown: validSource.replace("return a+b;", "const deadline=Date.now()+50; while(Date.now()<deadline) {} return a+b;")
+    })[scenario] ?? "export function sum(a,b) { return a+b; }\n";
     fs.writeFileSync(path.join(cwd, "src", "math.js"), source);
     fs.writeFileSync(path.join(cwd, ".gitignore"), ".env\n.pi/\nscreenshots/\nREADME.md\n");
     fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ type: "module", scripts: { test: "node test.mjs" } }));
@@ -5036,8 +5041,12 @@ describe("piagent guard integration", () => {
       { id: "bad-left", args: [{ type: "string", value: "2" }, { type: "number", value: 3 }], expected: { outcome: "throw", errorClass: "TypeError" } },
       { id: "bad-right", args: [{ type: "number", value: 2 }, { type: "null" }], expected: { outcome: "throw", errorClass: "TypeError" } }
     ] }];
+    if (scenario === "shutdown") for (let index = 0; index < 64; index += 1) {
+      checks[0].cases.push({ ...checks[0].cases[0], id: `slow-${index}` });
+    }
     writeHostContractApproval({ directory, projectRoot: cwd, installedRoot: root, operatorRequestDigest: task.operatorRequestDigest, approved: true,
-      backend: { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID, dockerSocket: process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 },
+      backend: { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID,
+        dockerSocket: scenario === "backend-unavailable" ? "/piagent-test-unavailable.sock" : process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 },
       contracts: task.acceptanceReceipt.criteria.map((criterion) => ({ criterionId: criterion.id, criterionHash: criterion.hash,
         sourcePath: "src/math.js", exportName: "sum", maxAttempts: 2, checks })) });
     await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/math.js" }, content: [{ type: "text", text: source }], isError: false }, ctx);
@@ -5053,7 +5062,74 @@ describe("piagent guard integration", () => {
       }
     }
     await verifyProject("initial");
-    const final = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Verification complete: the configured project tests passed." }] } }, ctx);
+    if (["pending", "exhausted"].includes(scenario)) {
+      const { openHostContractConfiguration } = await import("../packages/piagent-core/extensions/acceptance-host-configuration.js");
+      const authority = openHostContractConfiguration({ configPath: path.join(directory, "approval.json"), projectRoot: cwd, installedRoot: root });
+      try {
+        const criterion = task.acceptanceReceipt.criteria[0], scope = { taskRunId: task.taskRunId, criterionId: criterion.id };
+        // Existing host reservation state is intentionally bound to a different
+        // source. Changing source must not bypass a pending run or renew budget.
+        const binding = { criterionHash: criterion.hash, snapshotDigest: "a".repeat(64), verifierDigest: "b".repeat(64),
+          projectVerificationDigest: "c".repeat(64), planDigest: "d".repeat(64), backendDigest: "e".repeat(64) };
+        for (let index = 0; index < (scenario === "exhausted" ? 2 : 1); index += 1) {
+          const reserved = authority.store.reserve({ scope, binding, maxAttempts: 2, retry: index > 0 });
+          if (scenario === "exhausted") authority.store.recordStoppedAttempt({ scope, attemptId: reserved.event.attemptId, executorStopped: true });
+        }
+      } finally { authority.close(); }
+    }
+    const completing = harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Verification complete: the configured project tests passed." }] } }, ctx);
+    if (scenario === "shutdown") {
+      const { openHostContractConfiguration } = await import("../packages/piagent-core/extensions/acceptance-host-configuration.js");
+      const authority = openHostContractConfiguration({ configPath: path.join(directory, "approval.json"), projectRoot: cwd, installedRoot: root });
+      const scope = { taskRunId: task.taskRunId, criterionId: task.acceptanceReceipt.criteria[0].id };
+      let attemptId, observedRunning = false;
+      const inspect = () => {
+        if (!attemptId) return null;
+        try {
+          const [container] = JSON.parse(execFileSync("docker", ["--host", `unix://${process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET}`, "inspect", "--type", "container", `piagent-contract-${attemptId}`],
+            { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }));
+          assert.equal(container.Image, process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID);
+          assert.equal(container.Config.Labels["io.piagent.contract-execution"], attemptId);
+          return container;
+        } catch (error) { if (error.status === 1) return null; throw error; }
+      };
+      try {
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline) {
+          attemptId = authority.store.latest(scope)?.attemptId;
+          if (inspect()?.State.Running) { observedRunning = true; break; }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        assert.equal(observedRunning, true, "shutdown must interrupt a real running owned worker");
+        const shuttingDown = harness.handlers.get("session_shutdown")({}, ctx);
+        const late = await harness.handlers.get("message_end")({ message: { role: "assistant", content: "Verification complete." } }, ctx);
+        assert.match(JSON.stringify(late), /NOT APPROVED/);
+        await shuttingDown;
+        const final = await completing;
+        assert.match(JSON.stringify(final), /stopped with the session/);
+        assert.match(JSON.stringify(final), /NOT APPROVED/);
+        assert.notEqual(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed");
+        assert.equal(harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 0);
+        const settled = authority.store.latest(scope);
+        assert.equal(settled.phase, "settled", "shutdown waits for the durable terminal write");
+        const evidence = JSON.parse(settled.evidenceText);
+        assert.equal(evidence.observed.result.execution.status, "cancelled");
+        assert.equal(evidence.observed.result.execution.cleanupConfirmed, true);
+        assert.equal(settled.attempt, 1);
+        for (const criterion of task.acceptanceReceipt.criteria.slice(1)) {
+          assert.equal(authority.store.latest({ taskRunId: task.taskRunId, criterionId: criterion.id }), null, "shutdown does not reserve subsequent criteria");
+        }
+        assert.equal(inspect(), null, "the cancelled container has been removed before shutdown returns");
+        await assert.rejects(() => harness.tools.get("piagent_trace_record").execute("late-manual-completion", {
+          taskId: task.taskId, outcome: "completed", changedFiles: [], notes: "Late completion after session shutdown."
+        }, undefined, undefined, ctx), (error) => /independent verification stopped with the session/.test(error.message)
+          && error.piagentToolResult?.isError === true);
+        assert.notEqual(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed");
+        assert.equal(fs.readFileSync(path.join(cwd, "src/math.js"), "utf8"), source);
+      } finally { await harness.handlers.get("session_shutdown")({}, ctx); await completing; authority.close(); }
+      return;
+    }
+    const final = await completing;
     const after = activeSessionTask(cwd, "independent-completion");
     const { independentAcceptanceState } = await import(pathToFileURL(path.join(root, "packages/piagent-core/extensions/acceptance-independent-registry.js")).href);
     const observedAdmission = independentAcceptanceState(cwd, after, workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
@@ -5063,6 +5139,30 @@ describe("piagent guard integration", () => {
       assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.verdict === "pass"), "completion does not erase the current authenticated projection");
       assert.ok(after.acceptanceReceipt.criteria.every((criterion) => criterion.status === "satisfied"));
       assert.ok(after.acceptanceReceipt.criteria.some((criterion) => criterion.evidence.some((entry) => entry.kind === "independent-contract")));
+    } else if (["pending", "exhausted"].includes(scenario)) {
+      assert.notEqual(after.trace.outcome, "completed", diagnostic);
+      assert.equal(observedAdmission.stopReason, scenario, diagnostic);
+      assert.equal(observedAdmission.assessments.size, 0, "a reservation/budget stop is not executed correctness evidence");
+      assert.equal(harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 0);
+      assert.match(JSON.stringify(final), /NOT APPROVED/);
+      assert.match(JSON.stringify(final), scenario === "pending" ? /Reconcile the exact reserved execution/ : /budget is exhausted/);
+    } else if (["backend-unavailable", "unsupported", "timeout"].includes(scenario)) {
+      assert.notEqual(after.trace.outcome, "completed", diagnostic);
+      const expectedVerdict = scenario === "unsupported" ? "unknown" : "error";
+      assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.verdict === expectedVerdict && !assessment.repairEligible), diagnostic);
+      const reason = { "backend-unavailable": "local-backend-unavailable", unsupported: "return-type-unsupported", timeout: "guest-timeout" }[scenario];
+      assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.reasons.includes(reason)), diagnostic);
+      const recoveries = harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery");
+      if (scenario === "timeout") {
+        assert.equal(recoveries.length, 1);
+        assert.equal(recoveries[0].payload.details.recovery.action, "retry");
+        assert.equal(recoveries[0].payload.details.recovery.sourceMutationAllowed, false);
+        assert.match(recoveries[0].payload.content, /guest-timeout/);
+      } else {
+        assert.equal(recoveries.length, 0, "environment and unsupported results do not start model continuations");
+        assert.match(JSON.stringify(final), new RegExp(reason));
+        assert.match(JSON.stringify(final), /NOT APPROVED/);
+      }
     } else {
       assert.notEqual(after.trace.outcome, "completed", JSON.stringify(final));
       assert.ok([...observedAdmission.assessments.values()].some((assessment) => assessment.verdict === "fail"), diagnostic);
@@ -5092,8 +5192,11 @@ describe("piagent guard integration", () => {
     const { openHostContractConfiguration } = await import("../packages/piagent-core/extensions/acceptance-host-configuration.js");
     const authority = openHostContractConfiguration({ configPath: path.join(directory, "approval.json"), projectRoot: cwd, installedRoot: root });
     try {
-      for (const criterion of task.acceptanceReceipt.criteria) assert.equal(authority.store.latest({ taskRunId: task.taskRunId, criterionId: criterion.id }).attempt,
-        scenario === "repair" ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
+      for (const [index, criterion] of task.acceptanceReceipt.criteria.entries()) {
+        const latest = authority.store.latest({ taskRunId: task.taskRunId, criterionId: criterion.id });
+        if (["pending", "exhausted"].includes(scenario) && index > 0) assert.equal(latest, null, "a host-state stop does not start later checks");
+        else assert.equal(latest.attempt, ["repair", "exhausted"].includes(scenario) ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
+      }
     } finally { authority.close(); }
   });
 

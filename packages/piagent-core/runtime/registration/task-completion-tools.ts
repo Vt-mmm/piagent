@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { completionPreparationCurrent } from "../verification/completion-preparation.ts";
 import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 import { durableContextEvidenceEntries, isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { mergeObservedTaskContext } from "../../extensions/task-contract-view.js";
@@ -306,7 +307,9 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
           isError: true
         };
       }
-      if (params.outcome === "completed") await deps.prepareIndependentAcceptance?.(ctx, task);
+      if (params.outcome === "completed" && !completionPreparationCurrent(await deps.prepareIndependentAcceptance?.(ctx, task))) {
+        return { content: [{ type: "text", text: "Trace refused: independent verification stopped with the session." }], isError: true };
+      }
       const finalFileDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
       let nextTask: TaskContract = {
         ...task,

@@ -19,7 +19,14 @@ export function independentAcceptanceState(cwd, task, workingTreeDigest) {
     const provider = providers.get(key(cwd, task));
     if (!provider) return empty(process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG ? "independent verification has not been prepared" : undefined);
     const value = provider.read(task, workingTreeDigest);
-    if (value.block) return empty(value.block);
+    if (value.block) {
+      const stopped = empty(value.block);
+      if (["stopping", "approval", "pending", "interrupted", "exhausted", "unavailable"].includes(value.stopReason)) {
+        stopped.stopReason = value.stopReason;
+        if (typeof value.stopAttemptId === "string" && /^[a-f0-9-]{36}$/.test(value.stopAttemptId)) stopped.stopAttemptId = value.stopAttemptId;
+      }
+      return stopped;
+    }
     const assessments = new Map();
     for (const entry of value.entries) {
       const criterion = task.acceptanceReceipt?.criteria.find((item) => item.id === entry.criterionId && item.hash === entry.criterionHash);

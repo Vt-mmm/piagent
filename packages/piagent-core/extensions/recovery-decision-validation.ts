@@ -13,6 +13,7 @@ export const RECOVERY_REASON_CODES = Object.freeze([
   "provider-retry-exhausted", "permission-expansion-forbidden", "protected-path-forbidden", "scope-replan-required",
   "transient-verifier-retry", "transient-retry-unavailable", "unknown-diagnostic-pass", "unknown-diagnostic-exhausted",
   "deterministic-adapter-proof-required",
+  "independent-execution-cancelled", "independent-execution-reconciliation-required", "independent-verifier-unsupported", "independent-verification-halted",
   "global-continuation-budget-exhausted", "repeated-progress-signature", "continuation-journal-unavailable", "manual-lifecycle-handoff"
 ] as const);
 export type RecoveryReasonCode = typeof RECOVERY_REASON_CODES[number];
@@ -32,6 +33,7 @@ const ACTIONS_BY_REASON: Record<string, readonly string[]> = {
   "scope-replan-required": ["ask-operator", "handoff"], "transient-verifier-retry": ["retry"],
   "transient-retry-unavailable": ["handoff"], "unknown-diagnostic-pass": ["retry"], "unknown-diagnostic-exhausted": ["handoff"],
   "deterministic-adapter-proof-required": ["handoff"],
+  "independent-execution-cancelled": ["handoff"], "independent-execution-reconciliation-required": ["ask-operator"], "independent-verifier-unsupported": ["handoff"], "independent-verification-halted": ["handoff"],
   "global-continuation-budget-exhausted": ["handoff"], "repeated-progress-signature": ["handoff"],
   "continuation-journal-unavailable": ["handoff"], "manual-lifecycle-handoff": ["handoff"]
 };
@@ -42,7 +44,8 @@ const CATEGORIES_BY_REASON: Record<string, readonly string[]> = {
   "operator-environment-action": ["environment"], "provider-transient-retry": ["provider-network"], "provider-retry-exhausted": ["provider-network"],
   "permission-expansion-forbidden": ["permission-policy"], "protected-path-forbidden": ["scope-protected-path"],
   "scope-replan-required": ["scope-protected-path"], "transient-verifier-retry": ["flaky-infrastructure"],
-  "unknown-diagnostic-pass": ["unknown"], "unknown-diagnostic-exhausted": ["unknown"]
+  "unknown-diagnostic-pass": ["unknown"], "unknown-diagnostic-exhausted": ["unknown"],
+  "independent-execution-cancelled": ["unknown"], "independent-execution-reconciliation-required": ["environment"], "independent-verifier-unsupported": ["unknown"], "independent-verification-halted": ["unknown"]
 };
 
 function record(value: unknown): Record<string, any> | undefined {

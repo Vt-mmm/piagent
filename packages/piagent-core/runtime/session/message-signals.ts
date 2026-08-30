@@ -17,6 +17,12 @@ export function assistantMessageHasToolCall(message: unknown): boolean {
   return Array.isArray(content) && content.some((item) => item && typeof item === "object" && (item as { type?: unknown }).type === "toolCall");
 }
 
+export function prependAssistantNotice<T extends { content?: unknown }>(message: T, notice: string) {
+  const content = Array.isArray(message.content) ? [{ type: "text" as const, text: notice }, ...message.content]
+    : [{ type: "text" as const, text: `${notice}${typeof message.content === "string" ? message.content : assistantMessageText(message)}` }];
+  return { ...message, content };
+}
+
 export function modelLabel(ctx: ExtensionContext): string {
   const model = ctx.model as { provider?: string; id?: string; name?: string } | undefined;
   if (!model) return "none";

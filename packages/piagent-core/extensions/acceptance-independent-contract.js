@@ -92,6 +92,11 @@ function matches(expected, observed) {
 export async function runIndependentContract({ planText, ...backend } = {}) {
   const compiled = compileIndependentContract(planText);
   const execution = await runIsolatedContract({ ...backend, requestText: compiled.requestText });
+  return compareIndependentExecution(compiled, execution);
+}
+
+/** Host comparison only: this pure projection does not certify an execution. */
+export function compareIndependentExecution(compiled, execution) {
   const counterexamples = [];
   const observations = new Map((execution.observation?.cases ?? []).map((item) => [item.id, item]));
   const checks = compiled.plan.checks.map((check) => {

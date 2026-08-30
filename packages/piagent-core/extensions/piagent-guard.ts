@@ -116,7 +116,7 @@ import type { ObservedTaskContext } from "../runtime/session/runtime-state.ts";
 import { reuseCurrentTreeExactVerifier } from "../runtime/verification/exact-verifier-reuse.ts";
 import { IndependentAcceptanceRuntime } from "../runtime/verification/independent-acceptance-runtime.ts";
 import { independentAcceptanceState } from "./acceptance-independent-registry.js";
-import { independentCounterexampleRecovery } from "../runtime/recovery/independent-counterexample-recovery.ts";
+import { independentVerificationRecovery } from "../runtime/recovery/independent-verification-recovery.ts";
 import {
   PIAGENT_TOOL_GROUPS,
   PIAGENT_TOOL_NAMES,
@@ -3525,7 +3525,7 @@ function evaluateTaskGate(
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest ?? workingTreeEvidenceDigest(currentDigests);
   const independentState = independentAcceptanceState(cwd, task, currentWorkingTreeDigest);
   if (independentState.block) missing.push(independentState.block);
-  for (const [id, assessment] of independentState.assessments) if (assessment.verdict !== "pass") missing.push(`independent contract evidence (${id}:${assessment.verdict})`);
+  for (const [id, assessment] of independentState.assessments) if (assessment.verdict !== "pass") missing.push(`independent contract evidence (${id}:${assessment.verdict}${assessment.executionDiagnostics?.reasons.length ? `; ${assessment.executionDiagnostics.reasons.join(", ")}` : ""})`);
   if (task.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || task.workingTreeDigestMigration?.status === "verification-refresh-required" || !workingTreeSnapshotUsesCurrentAlgorithm(currentDigests) || !isCurrentWorkingTreeDigest(currentWorkingTreeDigest) || currentWorkingTreeDigest !== workingTreeEvidenceDigest(currentDigests) || Object.values(task.baselineFileDigests).some((digest) => !isCurrentWorkingTreeDigest(digest)) || (task.workingTreeDigestMigration && (!taskDigestMigrationArchiveStatus(cwd, task).valid || replayTaskCheckpoints(cwd, task.taskRunId, task).corruptions.length > 0))) missing.push("current working-tree digest evidence");
   if (workingTreeSnapshotHasUnavailableEvidence(currentDigests)) missing.push("complete working-tree content evidence");
   if (taskContractValidationErrors(task).length > 0) missing.push("valid session-bound task contract v2");
@@ -4039,7 +4039,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       summary,
       failed?.exitCode ?? 1
     );
-    const independentRecovery = independentCounterexampleRecovery(ctx.cwd, task, currentTreeDigest ?? workingTreeEvidenceDigest(workingTreeSnapshot(ctx.cwd)));
+    const independentRecovery = independentVerificationRecovery(ctx.cwd, task, currentTreeDigest ?? workingTreeEvidenceDigest(workingTreeSnapshot(ctx.cwd)));
     const classification = gateClassification.category === "scope-protected-path"
       ? gateClassification : independentRecovery?.classification ?? gateClassification;
     const trajectory = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
@@ -4065,7 +4065,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
         ? currentTreeDigest === latestExactVerifier.workingTreeDigest && latestExactVerifier.preWorkspaceRevisionDigest === currentWorkspaceRevisionDigest(ctx.cwd)
           && latestExactVerifier.workspaceRevisionDigest === latestExactVerifier.preWorkspaceRevisionDigest
         : true,
-      dependencyMutationAuthorized
+      dependencyMutationAuthorized,
+      independentDisposition: independentRecovery?.independentDisposition
     });
     return gate?.missing.some((item) => /^critical acceptance evidence adapter-unresolved\b/i.test(item))
       ? { ...selected, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false, reasonCodes: ["deterministic-adapter-proof-required"] }
@@ -4136,6 +4137,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     },
     telemetry,
     afterStart: async (ctx) => {
+      await independentAcceptance.activate(ctx);
       const serviceTier = serviceTierRuntime.restore(ctx);
       if (serviceTier.enabled && serviceTier.reasonCode === "provider-not-supported") {
         ctx.ui.notify("Piagent Fast mode is enabled, but the active provider is not OpenAI Codex; no service tier was changed.", "warning");
@@ -4156,8 +4158,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     flushObservedTaskContext,
     onTurnEnd: activityInspector.refresh,
     onAgentSettled: activityInspector.refresh,
-    beforeShutdown: (ctx) => {
-      independentAcceptance.clear(ctx);
+    beforeShutdown: async (ctx) => {
+      await independentAcceptance.clear(ctx);
       serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
       editFreshnessGuard.clear(ctx);

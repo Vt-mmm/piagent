@@ -17,6 +17,11 @@ export type AuthenticatedAssessment = Readonly<{
   workingTreeDigest?: string;
   snapshotDigest?: string;
   projectVerificationDigest?: string;
+  executionDiagnostics?: Readonly<{
+    status: "completed" | "timeout" | "cancelled" | "error";
+    cleanupConfirmed: boolean; reasons: readonly string[];
+    unsupportedCaseCount: number; errorCaseCount: number;
+  }>;
   counterexamples?: readonly Readonly<{ digest: string; evidence: Readonly<{
     checkId: string; input: unknown; expected: unknown; observed: unknown;
   }> }>[];

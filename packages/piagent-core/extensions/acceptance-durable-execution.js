@@ -38,7 +38,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
   const template = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder = 0;", exportName, checks }));
   const approvedChecks = template.plan.checks;
   const snapshotRequest = { projectRoot, sourcePath, authorizeSourceRead };
-  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId });
+  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks: approvedChecks });
   const completed = new WeakMap();
   const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, INDEPENDENT_CONTRACT_VERSION,
     EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, timeoutMs]));

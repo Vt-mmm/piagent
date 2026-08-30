@@ -25,7 +25,7 @@ type SessionHookDependencies = {
   ) => TaskContract | undefined;
   onTurnEnd?: (ctx: ExtensionContext) => void;
   onAgentSettled?: (ctx: ExtensionContext) => void;
-  beforeShutdown?: (ctx: ExtensionContext) => void;
+  beforeShutdown?: (ctx: ExtensionContext) => void | Promise<void>;
 };
 
 export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHookDependencies): void {
@@ -112,7 +112,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
   });
 
   pi.on("session_shutdown", async (event, ctx) => {
-    dependencies.beforeShutdown?.(ctx);
+    await dependencies.beforeShutdown?.(ctx);
     flushObservedTaskContext(
       pi,
       ctx,

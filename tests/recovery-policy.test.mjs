@@ -53,6 +53,33 @@ function history(inputValue, action, disposition = "failed", overrides = {}) {
 }
 
 describe("bounded recovery policy v1", () => {
+  it("keeps independent cancellation, cleanup reconciliation and unsupported coverage non-mutating", () => {
+    for (const [independentDisposition, category, action, continuation, reason] of [
+      ["cancelled", "unknown", "handoff", "none", "independent-execution-cancelled"],
+      ["reconcile", "environment", "ask-operator", "operator", "independent-execution-reconciliation-required"],
+      ["unsupported", "unknown", "handoff", "none", "independent-verifier-unsupported"],
+      ["halt", "unknown", "handoff", "none", "independent-verification-halted"],
+      ["approval", "environment", "ask-operator", "operator", "operator-environment-action"]
+    ]) {
+      const result = selectRecoveryDecision(input(category, { independentDisposition, currentTreeMatchesEvidence: false }));
+      assert.deepEqual(recoveryDecisionValidationErrors(result), []);
+      assert.equal(result.action, action);
+      assert.equal(result.continuation, continuation);
+      assert.equal(result.sourceMutationAllowed, false);
+      assert.deepEqual(result.reasonCodes, [reason], "executor disposition takes priority over stale-verifier retries");
+      const mismatch = selectRecoveryDecision(input("test-assertion", { independentDisposition }));
+      assert.equal(mismatch.action, "blocked");
+      assert.equal(mismatch.sourceMutationAllowed, false);
+      assert.deepEqual(mismatch.reasonCodes, ["invalid-input"]);
+      const protectedPath = selectRecoveryDecision(input("scope-protected-path", { independentDisposition }));
+      assert.deepEqual(protectedPath.reasonCodes, ["protected-path-forbidden"]);
+    }
+    for (const independentDisposition of [null, "invented", "toString", {}, { toString: () => "cancelled" }]) {
+      const result = selectRecoveryDecision(input("unknown", { independentDisposition }));
+      assert.equal(result.action, "blocked");
+      assert.deepEqual(result.reasonCodes, ["invalid-input"]);
+    }
+  });
   it("emits validator-clean decisions for every reachable valid-input policy branch", () => {
     const compile = input("compile-typecheck", { proposedHypothesisRef: "hypothesis:compile" });
     const flaky = input("flaky-infrastructure");

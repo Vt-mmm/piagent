@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { createAcceptanceAssessmentSession } from "./acceptance-assessment.js";
 import { isAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
 import { captureExecutionSnapshot } from "./acceptance-execution-snapshot.js";
-import { INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
+import { compileIndependentContract, compareIndependentExecution, INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
+import { parseRequest, parseResponse } from "./acceptance-executor/protocol.mjs";
+import { executionDiagnostics } from "./acceptance-execution-diagnostics.js";
 
 export const AUTHENTICATED_ADMISSION_VERSION = "authenticated-acceptance-admission-v1";
 const receipts = new WeakMap();
@@ -18,7 +20,8 @@ export function unavailableAuthenticatedAssessment(reason) {
 }
 
 /** Host-only factory. Only a branded, authenticated store can admit evidence. */
-export function createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId }) {
+export function createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks }) {
+  const approved = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder=0;", exportName, checks }));
   function issue({ scope, binding, event, expectedChecks }) {
     if (!isAcceptanceEvidenceStore(store)) return unavailableAuthenticatedAssessment("untrusted-evidence-store");
     const current = store.latest(scope);
@@ -27,12 +30,23 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
     // Read authenticated bytes, never the caller's diagnostic result object.
     const evidence = JSON.parse(current.evidenceText), observed = evidence.observed, result = observed?.result;
     const snapshot = captureExecutionSnapshot(snapshotRequest);
+    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: snapshot.source, exportName, checks: approved.plan.checks }));
     if (snapshot.snapshotDigest !== binding.snapshotDigest || evidence.snapshotDigest !== binding.snapshotDigest
       || evidence.planDigest !== binding.planDigest || observed?.snapshotDigest !== binding.snapshotDigest
       || result?.version !== INDEPENDENT_CONTRACT_VERSION || result.planDigest !== binding.planDigest
       || result.execution?.runId !== current.attemptId || result.execution.sourceDigest !== snapshot.binding.sourceDigest
-      || result.execution.imageId !== imageId || result.execution.status !== "completed" || result.execution.cleanupConfirmed !== true) {
+      || result.execution.imageId !== imageId || compiled.planDigest !== binding.planDigest
+      || result.execution.requestDigest !== hash(compiled.requestText)) {
       return unavailableAuthenticatedAssessment("execution-admission-binding-mismatch");
+    }
+    if (result.execution.observation) {
+      const response = parseResponse(JSON.stringify(result.execution.observation), parseRequest(compiled.requestText), result.execution.requestDigest);
+      if (response.status !== result.execution.status) return unavailableAuthenticatedAssessment("execution-observation-status-conflict");
+    } else if (result.execution.status === "completed") return unavailableAuthenticatedAssessment("execution-observation-missing");
+    const compared = compareIndependentExecution(compiled, result.execution);
+    if (compared.verdict !== result.verdict || JSON.stringify(compared.checks) !== JSON.stringify(result.checks)
+      || JSON.stringify(compared.counterexamples) !== JSON.stringify(result.counterexamples)) {
+      return unavailableAuthenticatedAssessment("execution-comparison-conflict");
     }
     if (!Array.isArray(result.checks) || result.checks.length !== expectedChecks.length || !Array.isArray(result.counterexamples)) {
       return unavailableAuthenticatedAssessment("execution-admission-coverage-missing");
@@ -53,18 +67,23 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
     }
     const session = createAcceptanceAssessmentSession({ taskRunId: scope.taskRunId, criterionHash: binding.criterionHash,
       workingTreeDigest: snapshot.binding.workingTreeDigest, verifierDigest, requiredCheckIds: expectedChecks.map((check) => check.id) });
+    const diagnostic = executionDiagnostics(result);
+    // Non-completed execution or uncertain cleanup can be authenticated as a
+    // diagnostic, but never as completion or source-repair evidence.
+    const completion = !diagnostic.cleanupConfirmed || diagnostic.status === "error" ? "crashed" : diagnostic.status;
     const receipt = session.observeExecution({ runId: current.attemptId, taskRunId: scope.taskRunId, criterionHash: binding.criterionHash,
       verifierDigest, beforeWorkingTreeDigest: snapshot.binding.workingTreeDigest, afterWorkingTreeDigest: snapshot.binding.workingTreeDigest,
-      completion: "completed", checks: result.checks });
+      completion, checks: result.checks });
     const assessment = session.assess({ receipt, currentWorkingTreeDigest: snapshot.binding.workingTreeDigest, policy: "allow", projectVerifierCurrent: true });
     if (assessment.verdict !== evidence.verdict || assessment.verdict !== observed.verdict || assessment.verdict !== result.verdict) {
       return unavailableAuthenticatedAssessment("execution-admission-verdict-conflict");
     }
-    const admitted = freeze({ ...assessment, version: AUTHENTICATED_ADMISSION_VERSION, attemptId: current.attemptId,
+    const admitted = freeze({ ...assessment, reasons: [...new Set([...assessment.reasons, ...diagnostic.reasons])],
+      executionDiagnostics: diagnostic, version: AUTHENTICATED_ADMISSION_VERSION, attemptId: current.attemptId,
       criterionId: scope.criterionId, taskRunId: scope.taskRunId, criterionHash: binding.criterionHash,
       sourcePath: snapshot.binding.sourcePath, workingTreeDigest: snapshot.binding.workingTreeDigest,
       snapshotDigest: binding.snapshotDigest, projectVerificationDigest: binding.projectVerificationDigest,
-      counterexamples: result.checks.filter((check) => check.status === "fail").map((check) => ({
+      counterexamples: result.checks.filter((check) => assessment.verdict === "fail" && check.status === "fail").map((check) => ({
         digest: check.counterexampleRef, evidence: counterexamples.get(check.counterexampleRef)
       })) });
     receipts.set(admitted, { store, snapshotRequest, scope: { ...scope }, binding: { ...binding }, sequence: current.sequence,

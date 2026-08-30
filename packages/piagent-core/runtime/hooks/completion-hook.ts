@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { completionPreparationCurrent } from "../verification/completion-preparation.ts";
+import type { CompletionPreparation } from "../verification/completion-preparation.ts";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   acceptanceCriticalRecoveryProjection,
@@ -16,12 +18,13 @@ import { latestObservedVerification, verificationEvidenceProvesStableTree } from
 import {
   assistantMessageHasToolCall,
   assistantMessageText,
+  prependAssistantNotice,
   looksLikeCompletionClaim,
   looksLikeIncompleteHandoff
 } from "../session/message-signals.ts";
 import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
 import type { RecoveryDecision } from "../recovery/recovery-policy.ts";
-import { independentCounterexampleRecovery } from "../recovery/independent-counterexample-recovery.ts";
+import { independentVerificationRecovery } from "../recovery/independent-verification-recovery.ts";
 import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { evaluateExactFinalOutputContract } from "../quality/exact-output-contract.ts";
 import { performanceReviewGuidance, taskPerformanceAssurance } from "../quality/performance-assurance.ts";
@@ -44,7 +47,6 @@ function exactPathCoverage(expectedPaths: string[], reviewedPaths: string[] | un
     && expected.length === reviewed.length
     && expected.every((file, index) => file === reviewed[index]);
 }
-
 function compactRecoveryField(value: unknown, maximum: number): string {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length > maximum ? `${text.slice(0, Math.max(0, maximum - 1)).trimEnd()}…` : text;
@@ -68,7 +70,7 @@ function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProject
 
 type CompletionHookDependencies = {
   state: RuntimeSessionState;
-  prepareIndependentAcceptance?: (ctx: ExtensionContext, task: TaskContract) => Promise<void>;
+  prepareIndependentAcceptance?: (ctx: ExtensionContext, task: TaskContract) => Promise<CompletionPreparation | boolean | void>;
   maxManifestFiles: number; semanticReviewAllowed: (task: TaskContract) => boolean;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
   flushObservedTaskContext: (
@@ -195,7 +197,8 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
       || readOnlyEvidenceObserved;
     if (!completionClaim && (incompleteHandoff || !potentiallyFinalEvidence)) return;
 
-    await dependencies.prepareIndependentAcceptance?.(ctx, task);
+    if (!completionPreparationCurrent(await dependencies.prepareIndependentAcceptance?.(ctx, task))) return { message: prependAssistantNotice(event.message,
+      "[Piagent completion gate: NOT APPROVED]\nIndependent verification stopped with the session; no completion or follow-up was scheduled.\n\n") };
     const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
     const currentDigest = workingTreeEvidenceDigest(currentDigests);
     const currentPassingVerifierObserved = verificationEvidenceProvesStableTree(latestExactVerifier, currentDigest, currentWorkspaceRevisionDigest(ctx.cwd));
@@ -410,7 +413,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         "[Piagent continuation required]",
         `Task ${task.taskId} cannot finish yet. Missing: ${missingSummary}.`,
         `Recovery: ${selectedRecovery.action}; class: ${selectedRecovery.failureCategory}; reasons: ${selectedRecovery.reasonCodes.join(", ")}.`,
-        ...(independentCounterexampleRecovery(ctx.cwd, task, currentDigest)?.guidance ?? []),
+        ...(independentVerificationRecovery(ctx.cwd, task, currentDigest)?.guidance ?? []),
         ...recoveryGuidance
       ].join("\n");
       pi.sendMessage(
@@ -453,10 +456,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         `Task ${task.taskId} needs one bounded ${selectedRecovery.action} pass before handoff.`,
         ""
       ].join("\n");
-      const content = Array.isArray(event.message.content)
-        ? [{ type: "text" as const, text: continuingNotice }, ...event.message.content]
-        : [{ type: "text" as const, text: `${continuingNotice}${text}` }];
-      return { message: { ...event.message, content } };
+      return { message: prependAssistantNotice(event.message, continuingNotice) };
     }
 
     const finalRecovery = continuation.recovery;
@@ -465,13 +465,12 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
       `Task ${task.taskId} (${task.taskRunId}) is still open.`,
       `Missing: ${gate.missing.join(", ") || "a completed task trace"}.`,
       `Recovery disposition: ${finalRecovery.action} (${finalRecovery.reasonCodes.join(", ")}).`,
+      ...(independentVerificationRecovery(ctx.cwd, task, currentDigest)?.guidance ?? []),
       ...verifierInstructions(gate.missingVerifyCommands),
       "The response below is preserved as work in progress and must not be treated as a completion report.",
       ""
     ].join("\n");
-    const content = Array.isArray(event.message.content)
-      ? [{ type: "text" as const, text: notice }, ...event.message.content]
-      : [{ type: "text" as const, text: `${notice}${text}` }];
+    const blockedMessage = prependAssistantNotice(event.message, notice);
     const trace = {
       event: "completion_claim_blocked",
       taskId: task.taskId,
@@ -495,6 +494,6 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         recovery: finalRecovery
       }
     });
-    persistHandoff(ctx, task, gate, currentDigests, finalRecovery); return { message: { ...event.message, content } };
+    persistHandoff(ctx, task, gate, currentDigests, finalRecovery); return { message: blockedMessage };
   });
 }
