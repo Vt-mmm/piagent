@@ -89,3 +89,53 @@ error-class hint also covers coercion without adding another hint or raising the
 existing context cap. The interpreter retains its existing ordinary-intrinsic
 Date-method assumption; it is not proof against arbitrary overridden methods or
 a hostile JavaScript host.
+
+## Follow-up: intrinsic Date reads and signed-offset counterexamples
+
+The frozen `eb99de1` candidate passed its focused tests, full offline verifier and
+all four provider-free lanes, then stopped after six measured sessions. Its
+temporal run again passed the sampled correctness checks but did not satisfy the
+critical source-proof obligation. The stopped campaign remains terminal and is
+not a completed 108-session result.
+
+The retained public implementation used the safer intrinsic
+`Date.prototype.getTime.call(value)`, nullish defaults for optional regex
+captures, and a helper receiving a locally constructed Date. The bounded
+interpreter did not yet support these forms. That abstention was not itself a
+finding of incorrect behavior.
+
+A separate executable counterexample demonstrated incorrect offset direction.
+For `2026-01-01T00:00:00-00:30`, the expiry instant is `00:30Z`; one millisecond
+before that instant must still return false. The implementation returned true
+because it subtracted an unsigned offset. Its negative-offset tests asserted
+only values after expiry, which cannot detect premature expiry. The same defect
+was reproduced for `-07:00`, with `+07:00` serving as a correct-direction control.
+
+Any extension must preserve both facts: intrinsic reads and safely borrowed
+timestamp values can be valid, while boxing an incorrect timestamp in a Date
+does not make it correct. Positive proof and executable boundary triplets must
+cover correct signed offsets; missing signs, wrong scales, unproved TimeClip,
+mutation, reference escapes and arbitrary calls must remain unproved. Neither
+source uncertainty nor an ordinary passing test grants extra recovery authority.
+
+The bounded implementation now interprets optional-capture nullish defaults with
+short-circuit semantics and recognizes only the exact intrinsic Date getter
+chain. A synchronous local helper may receive an immutable view of an owned
+Date's timestamp; it cannot mutate or return that reference. Date construction
+from arithmetic retains the original expression and is admitted only when
+TimeClip is proven to preserve finite, integral, in-range values. The existing
+per-model and aggregate proof limits are unchanged.
+
+Arithmetic and TimeClip abstentions now retain their specific diagnostic reasons.
+The diagnostic-only continuation can show an independently derived negative
+sub-hour example without declaring that source is wrong or granting mutation.
+Initial expiry guidance explicitly asks for false/true/true before/at/after the
+same independently derived instant; non-expiry parsers do not receive those
+Boolean expectations. Hint counts and character ceilings remain unchanged.
+
+Development verification includes equivalent intrinsic/helper implementations,
+independent UTC boundary triplets and adversarial TimeClip/alias/mutation cases.
+The registered guard accepts a correctly signed implementation but still blocks
+an unsigned implementation even when its weak after-only project tests pass.
+These local results do not qualify a new frozen campaign or supply any of its
+108 measured sessions.

@@ -13,15 +13,23 @@ function uniqueStrings(values) {
 
 export function isoTimestampProofGuidance(raw) {
   if (!/\biso\b[^.\n]{0,80}\btimestamp\b|\btimestamp\b[^.\n]{0,80}\biso\b/.test(normalizedText(raw))) return [];
+  const expiryPredicate = /\b(?:isexpired|expir(?:ed|es|y|ation))\b/.test(normalizedText(raw));
   return [
     "For ISO timestamps, prove valid shapes with and without fractional seconds and contract-supported omitted seconds; optional capturing groups shift later match indexes. Prove leap-day validity for years 0000 through 0099; Date.UTC(year, ...) remaps years 0 through 99.",
-    "Test numeric UTC offsets of both signs, including a negative sub-hour offset, immediately before, at, and after the same instant. Preserve millisecond truncation for long fractional strings: converting the whole fraction to a floating-point number can round into the next second."
+    expiryPredicate
+      ? "Test numeric UTC offsets of both signs, including a negative sub-hour offset: independently derive t, then assert false/true/true immediately before, at, and after t. After-only checks miss lost signs. Preserve millisecond truncation for long fractional strings without rounding into the next second."
+      : "Test numeric UTC offsets of both signs, including a negative sub-hour offset, immediately before, at, and after the same instant. Preserve millisecond truncation for long fractional strings: converting the whole fraction to a floating-point number can round into the next second."
   ];
 }
 
 export function temporalProofReasonGuidance(reasons = []) {
-  if (!reasons.some((reason) => ["typeerror-rejection-unproven", "rejection-message-effect-unproven"].includes(reason))) return [];
-  return ["Check an invalid Date whose toString or Symbol.toPrimitive throws RangeError, in each argument position. Coercing invalid input while formatting a TypeError can throw the wrong class; repair only after reproducing the counterexample."];
+  if (reasons.some((reason) => ["typeerror-rejection-unproven", "rejection-message-effect-unproven"].includes(reason))) {
+    return ["Check an invalid Date whose toString or Symbol.toPrimitive throws RangeError, in each argument position. Coercing invalid input while formatting a TypeError can throw the wrong class; repair only after reproducing the counterexample."];
+  }
+  if (reasons.some((reason) => ["unsupported-temporal-syntax", "temporal-helper-composition-unproven", "iso-offset-arithmetic-unproven", "date-timeclip-unproven"].includes(reason))) {
+    return ["For an expiry predicate, independently trace 1970-01-01T00:00:00-00:30 to UTC t=1800000 ms. At t-1/t/t+1 expect false/true/true. After-only assertions cannot detect premature expiry. This is a diagnostic example, not proof that the source is wrong or permission to edit it."];
+  }
+  return [];
 }
 
 export function rejectionClassProofGuidance(raw, errorName) {

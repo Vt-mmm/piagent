@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { acceptanceContractProofGuidance, acceptanceInvalidInputEvidence, sanitizeJavaScriptEvidence } from "../packages/piagent-core/extensions/acceptance-contract-semantics.js";
-import { temporalProofReasonGuidance } from "../packages/piagent-core/extensions/acceptance-boundary-guidance.js";
+import { isoTimestampProofGuidance, temporalProofReasonGuidance } from "../packages/piagent-core/extensions/acceptance-boundary-guidance.js";
 
 const source = fs.readFileSync(new URL("./fixtures/temporal-composed-helpers.js", import.meta.url), "utf8");
 const contract = "`isExpired(expiresAt, now)` accepts an ISO timestamp string or `Date` for `expiresAt`, and a millisecond number or `Date` for `now`. Invalid dates must throw `TypeError`; do not use the machine's current time when an explicit falsey value is provided.";
@@ -158,4 +158,20 @@ test("padding marker is distinct and reason-specific recovery does not claim a p
   assert.equal(initial.length, 5);
   assert.ok(initial.every((hint) => hint.length <= 300));
   assert.ok(initial.some((hint) => /invalid Date objects with throwing toString\/Symbol\.toPrimitive/.test(hint)));
+  assert.ok(initial.some((hint) => /independently derive t.*false\/true\/true.*After-only checks miss lost signs/.test(hint)));
+});
+
+test("temporal arithmetic diagnostics give a bounded counterexample recipe without claiming a defect", () => {
+  for (const reason of ["unsupported-temporal-syntax", "temporal-helper-composition-unproven", "iso-offset-arithmetic-unproven", "date-timeclip-unproven"]) {
+    const hints = temporalProofReasonGuidance([reason]);
+    assert.equal(hints.length, 1);
+    assert.ok(hints[0].length <= 300);
+    assert.match(hints[0], /1970-01-01T00:00:00-00:30.*1800000/);
+    assert.match(hints[0], /t-1\/t\/t\+1.*false\/true\/true/);
+    assert.match(hints[0], /not proof that the source is wrong or permission to edit it/);
+  }
+  assert.deepEqual(temporalProofReasonGuidance(["closed-temporal-module-unproven"]), []);
+  const parserHints = isoTimestampProofGuidance("Parse an ISO timestamp string into a timestamp number.");
+  assert.ok(parserHints.length > 0);
+  assert.ok(parserHints.every((hint) => !hint.includes("false/true/true")), "a numeric parser is not an expiry predicate");
 });

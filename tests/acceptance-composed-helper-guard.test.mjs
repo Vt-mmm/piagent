@@ -15,6 +15,12 @@ const safeSource = fs.readFileSync(new URL("./fixtures/temporal-composed-helpers
 const staticRejection = 'throw new TypeError("Invalid timestamp");';
 const unsafeSource = safeSource.replace(staticRejection, 'throw new TypeError(`Invalid timestamp: ${String(value)}`);');
 assert.notEqual(unsafeSource, safeSource);
+const intrinsicSource = fs.readFileSync(new URL("./fixtures/temporal-intrinsic-helper.js", import.meta.url), "utf8")
+  .replace("export function deadlinePassed(deadline, currentTime)", "export function isExpired(expiresAt, now)")
+  .replace("deadlineValue(deadline)", "deadlineValue(expiresAt)")
+  .replace("referenceValue(currentTime)", "referenceValue(now)");
+const unsignedSource = intrinsicSource.replace('(zone[0] === "+" ? 1 : -1) * ', "");
+assert.notEqual(unsignedSource, intrinsicSource);
 
 const prompt = "Fix `isExpired(expiresAt, now)` in `src/expiry.js`. An item is expired when now is equal to or later than its expiry instant. Accept an ISO timestamp string or Date for expiresAt, and a millisecond number or Date for now. Invalid dates must throw TypeError; do not use the machine's current time when an explicit falsey value is provided. Preserve the API and verify the project.";
 // Both implementations pass these ordinary, live, directly imported tests.
@@ -52,6 +58,14 @@ const focused = [
   '});',
   ''
 ].join("\n");
+// Reproduce the weak after-expiry-only coverage without modifying a retained
+// benchmark artifact. The source proof must reject the lost sign even when
+// this configured verifier passes all of its ordinary assertions.
+const afterOnlyFocused = focused.replace(
+  '    assert.equal(isExpired(iso, timestamp - 1), false);',
+  '    if (!iso.includes("-00:30")) assert.equal(isExpired(iso, timestamp - 1), false);'
+);
+assert.notEqual(afterOnlyFocused, focused);
 
 async function guardFixture(context, label) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-composed-helper-guard-"));
@@ -96,12 +110,15 @@ async function guardFixture(context, label) {
 
 // Independent fresh tasks: an unknown-proof handoff is not permission to
 // mutate its source. Neither case changes the profile, ceilings or intake.
-for (const correct of [false, true]) {
-  const label = correct ? "static-safe" : "dynamic-coercion";
+for (const { correct, label, source, tests } of [
+  { correct: false, label: "dynamic-coercion", source: unsafeSource, tests: focused },
+  { correct: true, label: "static-safe", source: safeSource, tests: focused },
+  { correct: false, label: "unsigned-offset", source: unsignedSource, tests: afterOnlyFocused },
+  { correct: true, label: "intrinsic-safe", source: intrinsicSource, tests: focused }
+]) {
   test(`registered completion guard handles ${label} without expanded authority`, async (context) => {
     assert.deepEqual(RECOVERY_CEILINGS, { sourceRepairPasses: 1, transientVerifierRetries: 1, unknownDiagnosticPasses: 1, providerRetries: 1 });
     const { cwd, ctx, harness, sessionId, initial, profile } = await guardFixture(context, label);
-    const source = correct ? safeSource : unsafeSource;
     let sequence = 0;
     const authorize = async (toolName, input) => {
       const toolCallId = `${label}-${++sequence}`;
@@ -115,7 +132,7 @@ for (const correct of [false, true]) {
     }, ctx);
     const read = { path: "src/expiry.js" };
     await finish(await authorize("read", read), "read", read, fs.readFileSync(path.join(cwd, read.path), "utf8"));
-    for (const input of [{ path: "src/expiry.js", content: source }, { path: "test/expiry.test.js", content: focused }]) {
+    for (const input of [{ path: "src/expiry.js", content: source }, { path: "test/expiry.test.js", content: tests }]) {
       const id = await authorize("write", input);
       fs.writeFileSync(path.join(cwd, input.path), input.content);
       await finish(id, "write", input, `Wrote ${input.path}`);
@@ -170,8 +187,15 @@ for (const correct of [false, true]) {
       assert.equal(recovery.details.recovery.sourceMutationAllowed, false);
       assert.equal(recovery.details.recovery.counts.sourceRepairPasses, 0);
       assert.deepEqual(recovery.details.recovery.ceilings, RECOVERY_CEILINGS);
-      assert.match(recovery.content, /invalid Date.*toString.*Symbol\.toPrimitive.*RangeError/);
-      assert.match(recovery.content, /repair only after reproducing the counterexample/);
+      if (label === "dynamic-coercion") {
+        assert.match(recovery.content, /invalid Date.*toString.*Symbol\.toPrimitive.*RangeError/);
+        assert.match(recovery.content, /repair only after reproducing the counterexample/);
+      } else {
+        assert.match(recovery.content, /iso-offset-arithmetic-unproven/);
+        assert.match(recovery.content, /1970-01-01T00:00:00-00:30.*1800000/);
+        assert.match(recovery.content, /false\/true\/true/);
+        assert.match(recovery.content, /not proof that the source is wrong or permission to edit it/);
+      }
       assert.match(recovery.content, /missing verification evidence, not an observed implementation defect/);
       const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi/piagent-state/handoffs", `${task.taskRunId}.json`), "utf8"));
       assert.equal(handoff.state.completionApproved, false);

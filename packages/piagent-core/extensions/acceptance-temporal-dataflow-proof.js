@@ -7,6 +7,8 @@ const number = (value) => term("number", value);
 const part = (name) => term("part", name);
 const INPUT = term("input"), UNDEFINED = term("undefined"), ZONE = part("zone");
 const ABRUPT = term("abrupt");
+const INTRINSIC_DATE_GET_TIME = ["member", ["member", ["member", ["id", "Date"], "prototype"], "getTime"], "call"];
+const containsDateReference = (value) => /"(?:owned-date|date-view)"/.test(key(value));
 const YEAR = part("year"), MONTH = part("month"), DAY = part("day");
 const HOUR = part("hour"), MINUTE = part("minute"), SECOND = part("second");
 const DAYS = part("days-in-month"), MILLISECOND = part("millisecond");
@@ -132,6 +134,7 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       if (same(item, OFFSET_HOUR)) return variable("hour", 99);
       if (same(item, OFFSET_MINUTE)) return variable("minute", 99);
       if (item[0] === "offset-hours-in-minutes") return scale(variable("hour", 99), 60);
+      if (item[0] === "iso-time") return sum(variable("local", 400_000_000_000_000), scale(sum(scale(variable("hour", 99), 60), variable("minute", 99)), -sign * 60000));
       if (["offset-minutes", "zone-offset-minutes", "signed-offset-minutes", "signed-offset-milliseconds"].includes(item[0])) {
         const offset = sum(scale(variable("hour", 99), 60), variable("minute", 99));
         return item[0] === "offset-minutes" ? offset : item[0] === "zone-offset-minutes" ? scale(offset, sign === 0 ? 0 : 1)
@@ -160,6 +163,29 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       const expected = new Map([["local", 1], ...sign === 0 ? [] : [["hour", -sign * 3_600_000], ["minute", -sign * 60_000]]]);
       return actual && actual.size === expected.size && [...expected].every(([name, coefficient]) => actual.get(name) === coefficient);
     });
+  }
+  function timeClipIsIdentity(value, path) {
+    // The affine model contains only finite integer atoms, and bounds every
+    // intermediate arithmetic result. TimeClip is identity only inside the
+    // actual Date range; finite/fractional/overflowing unknowns do not qualify.
+    return [[zoneZ, 0], [zonePlus, 1], [zoneMinus, -1]].every(([zone, sign]) => {
+      const selected = logic.and(path, zone);
+      if (implies(selected, 0)) return true;
+      const result = linearTime(value, selected, sign);
+      return result !== null && result.bound <= 8_640_000_000_000_000;
+    });
+  }
+  function dateTimestamp(receiver, state) {
+    if (same(receiver, INPUT)) {
+      if (!implies(state.path, isDate)) fail("date-input-type-unproven");
+      return term("date-time");
+    }
+    if (receiver[0] === "date-view") return receiver[1];
+    if (receiver[0] !== "owned-date") fail("date-read-provenance-unproven");
+    const value = state.heap.get(receiver[1]);
+    if (value?.[0] === "timeclipped-date") return value[1];
+    if (value?.[0] === "proleptic-utc" || civilCalendar(value)) return term("local-milliseconds");
+    fail("proleptic-year-unproven");
   }
   function choose(condition, yes, no, path = 1) {
     if (condition === 1 || same(yes, no)) return yes;
@@ -228,6 +254,16 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
     if (kind === "binary") {
       const left = evaluate(b, state);
       if (state.path === 0) return ABRUPT;
+      if (a === "??") {
+        if (!["optional-second", "optional-fraction"].includes(left[0])) fail("nullish-capture-provenance-unproven");
+        // These captures are strings or undefined, never null. Evaluate the
+        // fallback only on the missing branch, preserving abrupt completion.
+        const missing = atom(`capture:${left[0] === "optional-second" ? "second" : "fraction"}-missing`);
+        const present = defaulted(left, left[0] === "optional-second" ? number(0) : term("string", ""));
+        const right = branch(state, missing, c);
+        state.path = logic.or(logic.and(state.path, logic.not(missing)), right.state.path);
+        return right.state.path === 0 ? present : defaulted(left, right.value);
+      }
       if (a === "&&" || a === "||") {
         const condition = asBoolean(left), selected = a === "&&" ? condition : logic.not(condition);
         const right = branch(state, selected, c);
@@ -237,7 +273,8 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       }
       const right = evaluate(c, state);
       if (state.path === 0) return ABRUPT;
-      if (a === "instanceof") return same(left, INPUT) && same(right, term("intrinsic", "Date")) ? boolean(isDate) : fail();
+      if (a === "instanceof") return !same(right, term("intrinsic", "Date")) ? fail() : same(left, INPUT) ? boolean(isDate)
+        : ["owned-date", "date-view"].includes(left[0]) ? boolean(1) : fail();
       return ["===", "!==", "<", "<=", ">", ">="].includes(a) ? boolean(comparison(a, left, right)) : arithmetic(a, left, right);
     }
     if (kind === "select") {
@@ -264,11 +301,17 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
     if (kind === "new") {
       if (!same(evaluate(a, state), term("intrinsic", "Date")) || b.length !== 1) fail();
       const value = evaluate(b[0], state);
-      if (value[0] !== "utc" && !same(value, number(0))) fail();
-      const initial = value[0] === "utc" ? value : term("civil-date", ...[1970, 0, 1, 0, 0, 0, 0].map(number));
+      if (state.path === 0) return ABRUPT;
+      const initial = value[0] === "utc" ? value : same(value, number(0)) ? term("civil-date", ...[1970, 0, 1, 0, 0, 0, 0].map(number))
+        : timeClipIsIdentity(value, state.path) ? term("timeclipped-date", value) : fail("date-timeclip-unproven");
       const id = ++allocations; state.heap.set(id, initial); return term("owned-date", id);
     }
     if (kind !== "call") fail();
+    if (same(a, INTRINSIC_DATE_GET_TIME)) {
+      if (b.length !== 1) fail("intrinsic-date-read-arity-unproven");
+      const receiver = evaluate(b[0], state);
+      return state.path === 0 ? ABRUPT : dateTimestamp(receiver, state);
+    }
     if (a[0] === "id" && Object.values(helperNames).includes(a[1])) {
       if (b.length !== 1) fail();
       const value = evaluate(b[0], state);
@@ -297,13 +340,14 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       if (mode === "public" || b.length !== 1) fail("unproven-temporal-helper-call");
       const value = evaluate(b[0], state);
       if (state.path === 0) return ABRUPT;
-      // Callees cannot borrow a caller-owned mutable allocation. They may
-      // allocate private Dates, but only immutable normal values leave a frame.
-      if (key(value).includes('"owned-date"')) fail("temporal-helper-owned-escape");
+      // A closed synchronous reader receives an immutable timestamp view, not
+      // the caller's heap. No setter or reference return accepts that view.
+      const argument = value[0] === "owned-date" ? term("date-view", dateTimestamp(value, state)) : value;
+      if (containsDateReference(argument) && argument[0] !== "date-view") fail("temporal-helper-owned-escape");
       const { callable, ast } = graph.get(a[1]);
       if (frames.includes(a[1]) || frames.length >= 8) fail("cyclic-temporal-helper");
       const callee = { path: state.path, env: new Map(), heap: new Map() };
-      bind(callee, callable.exactParameters[0], value);
+      bind(callee, callable.exactParameters[0], argument);
       frames.push(a[1]); visitedTrees.add(ast);
       let results;
       try { results = execute(ast, [callee]); } finally { frames.pop(); }
@@ -312,7 +356,7 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
         if (result.path === 0) continue;
         if (!result.terminal) fail("unterminated-temporal-helper");
         if (result.terminal === "throw") continue;
-        if (key(result.value).includes('"owned-date"')) fail("temporal-helper-owned-escape");
+        if (containsDateReference(result.value)) fail("temporal-helper-owned-escape");
         returned = normal === 0 ? result.value : choose(result.path, result.value, returned);
         normal = logic.or(normal, result.path);
       }
@@ -341,6 +385,7 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
           assumptions = logic.and(assumptions, logic.or(logic.not(stringValid), finite));
           return boolean(member === "isFinite" ? finite : logic.not(finite));
         }
+        if (timeClipIsIdentity(args[0], state.path)) return boolean(Number(member === "isFinite"));
       }
       if (receiver[1] === "Math" && member === "trunc" && args.length === 1 && same(args[0], MILLISECOND)) return MILLISECOND;
       if (receiver[1] === "Date" && member === "parse" && args.length === 1 && same(args[0], INPUT)) return term("iso-time");
@@ -359,15 +404,11 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       if (!implies(state.path, isString)) fail("iso-input-type-unproven");
       return term("match", args[0][1]);
     }
-    if (member === "getTime" && args.length === 0 && same(receiver, INPUT)) {
-      if (!implies(state.path, isDate)) fail("date-input-type-unproven");
-      return term("date-time");
-    }
+    if (member === "getTime" && args.length === 0) return dateTimestamp(receiver, state);
     if (receiver[0] === "owned-date") {
       const value = state.heap.get(receiver[1]);
       if (["getUTCFullYear", "getUTCMonth", "getUTCDate"].includes(member) && args.length === 0 && value?.[0] === "civil-date") return calendarRoundtrip(member, value, state);
       if (member === "getUTCDate" && args.length === 0 && value.length === 4 && value[1][0] === "number" && value[1][1] >= 100 && value[1][1] <= 9999 && !leapYear(value[1][1]) && same(value[2], MONTH) && same(value[3], number(0))) return term("nonleap-month-days");
-      if (member === "getTime" && args.length === 0 && (value[0] === "proleptic-utc" || civilCalendar(value))) return term("local-milliseconds");
       fail("proleptic-year-unproven");
     }
     if (member === "slice") {
@@ -470,7 +511,7 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       } else if (result.value[0] === "date-time") domain = dateValid;
       else if (mode === "expiry" && isIsoTime(result.value, result.path)) domain = stringValid;
       else if (mode === "now" && same(result.value, INPUT)) domain = numberValid;
-      else fail("temporal-return-provenance-unproven");
+      else fail(mode === "expiry" && timeClipIsIdentity(result.value, result.path) ? "iso-offset-arithmetic-unproven" : "temporal-return-provenance-unproven");
       if (!implies(result.path, domain)) fail(mode === "expiry" ? "calendar-or-zone-validation-unproven" : "finite-now-validation-unproven");
       success = logic.or(success, result.path);
     }
@@ -562,6 +603,13 @@ export function temporalDataflowModuleProof(bodies, publicName) {
     }
     const publicFailure = failures.find((entry) => entry.role === "public");
     if (publicFailure) throw publicFailure.error;
+    // Only report a failed expiry obligation from an actual public callee
+    // which reaches the strict parser. Failed speculative leaf-role trials
+    // are not diagnostics for the public implementation.
+    const reachesParser = (name) => directParsers.some((parser) => parser.exactDeclarationName === name)
+      || [...graph.get(name).edges].some(reachesParser);
+    const expiryFailure = failures.find((entry) => entry.role === "expiry" && graph.get(publicName).edges.has(entry.name) && reachesParser(entry.name));
+    if (expiryFailure) throw expiryFailure.error;
     fail("temporal-helper-composition-unproven");
   } catch (error) {
     return { proven: false, reasons: [error instanceof Error && /^[a-z-]+$/.test(error.message) ? error.message : "unsupported-temporal-dataflow"] };

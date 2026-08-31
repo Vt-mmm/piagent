@@ -1,11 +1,11 @@
 // A deliberately bounded grammar for already-sanitized, native-syntax-checked
 // evidence. Unknown syntax abstains; this never evaluates project JavaScript.
-const PRECEDENCE = { "||": 1, "&&": 2, "===": 3, "!==": 3, "<": 4, "<=": 4, ">": 4, ">=": 4, instanceof: 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
+const PRECEDENCE = { "??": 1, "||": 2, "&&": 3, "===": 4, "!==": 4, "<": 5, "<=": 5, ">": 5, ">=": 5, instanceof: 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7 };
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 export function parseEvidenceStatements(source) {
   const tokens = [];
-  const lexer = /\s+|[A-Za-z_$][A-Za-z0-9_$]*|(?:0|[1-9](?:_?[0-9])*)|===|!==|>=|<=|&&|\|\||[{}()[\].,;?:%+\-*/<>!=]/gy;
+  const lexer = /\s+|[A-Za-z_$][A-Za-z0-9_$]*|(?:0|[1-9](?:_?[0-9])*)|===|!==|>=|<=|&&|\|\||\?\?|[{}()[\].,;?:%+\-*/<>!=]/gy;
   let offset = 0;
   while (offset < source.length) {
     lexer.lastIndex = offset;
