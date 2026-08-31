@@ -782,6 +782,39 @@ describe("piagent guard integration", () => {
     assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0);
   });
 
+  it("delivers compacted semantic proof hints in the initial runtime context without a follow-up", async () => {
+    // Real registered hooks with existing runtime stubs; no SDK/provider claim.
+    const { root, piagentGuard } = await loadGuardFixture();
+    const { acceptanceProofGuidance } = await import("../packages/piagent-core/extensions/acceptance-receipt.js");
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "src", "invoice.ts"), "export const initial = 0;\n");
+    const ctx = createContext(cwd, { sessionId: "initial-semantic-proof", sessionName: "SEMANTIC-PROOF-CONTRACT-PRESERVATION-BEFORE-VERIFICATION" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = [
+      "Fix `isDeadlineReached(timestamp, now)` in `src/invoice.ts`.",
+      "A deadline is reached when `now` is equal to or later than its timestamp.",
+      "Accept an ISO timestamp string or `Date` for `timestamp`, and a millisecond number or `Date` for `now`.",
+      "Invalid dates must throw `TypeError`; do not use the machine's current time when an explicit falsey value is provided.",
+      "Preserve the API and verify the project."
+    ].join("\n");
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const toolsBefore = [...harness.activeTools];
+    const started = await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd, selectedTools: toolsBefore } }, ctx);
+    const task = activeSessionTask(cwd, "initial-semantic-proof");
+    const hints = acceptanceProofGuidance(task);
+    assert.equal(hints.length, 4);
+    assert.match(started.message.content, /Piagent intake guidance compacted/);
+    for (const hint of hints) assert.ok(started.message.content.includes(hint), `Initial context lost generated proof: ${hint}`);
+    assert.equal(task.trace.outcome, "pending");
+    assert.equal(task.verifyEvidence.length, 0);
+    assert.deepEqual([...harness.activeTools], toolsBefore, "advisory proof does not expand tool authority");
+    assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0,
+      "initial proof guidance must not schedule another provider message");
+  });
+
   it("derives a mutation-forbidden runtime task when verification is requested without edits", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

@@ -19,17 +19,38 @@ function legacyHeadTail(text: string): string {
   return `${text.slice(0, head).trimEnd()}${marker}${text.slice(-(available - head)).trimStart()}`;
 }
 
-function minimalCriticalProof(lines: string[]): string[] {
+function compactProofTag(tag: string): string {
+  const identity = tag.match(/^\[(criterion-[0-9]{2}|fallback)/)?.[1] ?? "fallback";
+  if (tag.includes(":fallback")) return `[${identity}:fallback]`;
+  if (tag.includes(":")) return `[${identity}:candidate]`;
+  return `[${identity}]`;
+}
+
+/** Compress locations and repeated boilerplate, never semantic proof bodies. */
+function semanticCriticalProof(lines: string[]): string[] {
   if (lines.length === 0) return [];
-  const tags = [...new Set((lines.join("\n").match(/\[(?:criterion-[0-9]{2}|fallback)(?::[^\]]+)?\]/g) ?? []).map((tag) => {
-    const identity = tag.match(/^\[(criterion-[0-9]{2}|fallback)/)?.[1] ?? "fallback";
-    if (tag.includes(":fallback")) return `[${identity}:fallback]`;
-    if (tag.includes(":")) return `[${identity}:candidate]`;
-    return `[${identity}]`;
-  }))].slice(0, 12);
+  const bodies = new Map<string, Set<string>>();
+  for (const line of lines.slice(1)) {
+    if (!line.trim() || /^(?:Candidate tags |No concrete criterion-linked |Exact final-output contract:)/.test(line)) continue;
+    const match = line.match(/^- ((?:\[(?:criterion-[0-9]{2}|fallback)(?::[^\]]+)?\])*)\s*(.+)$/);
+    const body = match?.[2] ?? line;
+    const tags = bodies.get(body) ?? new Set<string>();
+    for (const tag of match?.[1].match(/\[(?:criterion-[0-9]{2}|fallback)(?::[^\]]+)?\]/g) ?? []) tags.add(compactProofTag(tag));
+    bodies.set(body, tags);
+  }
   return [
     "Critical behavioral proof:",
-    `- ${tags.join("")} Prove every tagged observable clause with linked durable live assertions; the generic verifier alone is insufficient.`,
+    ...[...bodies].map(([body, tags]) => `- ${tags.size ? `${[...tags].join("")} ` : ""}${body}`),
+    "Use linked durable live assertions after final mutation and before exact verifiers; candidate tags are locations, not proof. Fallback tags require focused tests."
+  ];
+}
+
+function minimalCriticalProof(lines: string[]): string[] {
+  if (lines.length === 0) return [];
+  const tags = [...new Set((lines.join("\n").match(/\[(?:criterion-[0-9]{2}|fallback)(?::[^\]]+)?\]/g) ?? []).map(compactProofTag))].slice(0, 12);
+  return [
+    "Critical behavioral proof:",
+    `- ${tags.join("")} Detailed semantic proof hints omitted; consult the complete operator contract.`,
     "Fallback tags require a focused test. Run proof after final mutation and before exact verifiers; prose or transient probes are insufficient."
   ];
 }
@@ -111,6 +132,22 @@ function structuredCompaction(text: string): string | undefined {
   ].filter(Boolean).join("\n");
   const preferred = compose(criticalLines, executionLines);
   if (preferred.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS) return preferred;
+  // An ordinary contract can overflow because of navigation and repeated
+  // instructions. Preserve its actionable partitions before discarding hints.
+  const semanticProof = semanticCriticalProof(criticalLines);
+  const proofPreserving = compose(semanticProof, minimalExecutionMap(executionLines), true);
+  if (proofPreserving.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS) return proofPreserving;
+  const compactProofPreserving = [
+    ...prefix.slice(0, 1).map((line) => edgeBounded(line, 120)),
+    COMPACTION_MARKER,
+    ...semanticProof,
+    ...exactOutputLines,
+    ...displayExactLines,
+    ...identityOnlyExecutionMap(executionLines),
+    edgeBounded(lines[reuse], 120),
+    edgeBounded(finalGuidance, 120)
+  ].filter(Boolean).join("\n");
+  if (compactProofPreserving.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS) return compactProofPreserving;
   const minimal = compose(minimalCriticalProof(criticalLines), minimalExecutionMap(executionLines), true);
   if (minimal.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS) return minimal;
   const guaranteed = [
