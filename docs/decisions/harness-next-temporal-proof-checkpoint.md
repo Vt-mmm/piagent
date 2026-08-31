@@ -52,3 +52,40 @@ used to derive these changes. Development fixtures and public-regression replays
 are not held-out or generalization evidence. Full qualification and the next
 source-bound campaign must establish the actual result before any completion or
 token-saving claim.
+
+## Follow-up: compositional helpers and rejection coercion
+
+The frozen `a121a9b` campaign also stopped after six sessions. Its temporal run
+passed the sampled correctness checks and its executable focused-test evidence,
+but the closed-module source proof required exactly two helpers. Splitting the
+ISO parser and shared rejection into additional local functions therefore
+produced an abstention before their behavior could be assessed.
+
+This abstention is separate from a newly reproduced implementation defect:
+formatting an error with `String(value)` can invoke user-controlled coercion
+before constructing `TypeError`. An invalid Date with a `toString` or
+`Symbol.toPrimitive` method that throws `RangeError` violates the requested error
+class in either argument position. Passing ordinary date cases does not cover
+this rejection path.
+
+The follow-up extends the same bounded interpreter to closed, acyclic direct
+helper calls with separate local scopes and explicit abrupt completion. It does
+not execute project JavaScript, admit arbitrary call graphs, or turn a helper's
+name into proof. Unsupported effects, recursion, dynamic coercion, wrong input
+provenance and incomplete valid-domain coverage still abstain. Exact fractional
+digit slicing and zero padding retain their millisecond semantics.
+
+Recovery guidance identifies a concrete coercion experiment only when the
+rejection-message proof abstains. It does not describe the abstention itself as
+a demonstrated defect or grant source-mutation authority. A source repair still
+requires an observed counterexample; completion still requires the same current
+source, bound focused tests and configured verifier. The stopped campaign's
+attempts remain immutable and are not credited to a future candidate.
+
+The diagnostic-only continuation now renders the bounded abstention reason and
+counterexample experiment without rendering general source-repair instructions.
+Its mutation policy and continuation ceiling remain unchanged. The initial
+error-class hint also covers coercion without adding another hint or raising the
+existing context cap. The interpreter retains its existing ordinary-intrinsic
+Date-method assumption; it is not proof against arbitrary overridden methods or
+a hostile JavaScript host.

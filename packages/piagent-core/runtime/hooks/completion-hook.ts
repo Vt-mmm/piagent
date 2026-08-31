@@ -38,7 +38,7 @@ type CriticalRecoveryProjection = {
   criterionText: string;
   targets: string[];
   missingDimensions: string[];
-  proofHints: string[];
+  proofHints: string[]; diagnosticHints?: string[];
 };
 function exactPathCoverage(expectedPaths: string[], reviewedPaths: string[] | undefined): boolean {
   const expected = [...new Set(expectedPaths)].sort();
@@ -61,10 +61,10 @@ function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProject
     const criterion = compactRecoveryField(projection.criterionText, 700);
     lines.push(`- Target: ${targets.join(", ") || "task-scoped behavior"}; missing proof: ${dimensions.join(", ") || "focused-evidence"}; criterion: ${criterion}`);
   }
-  const hints = [...new Set((includeProofHints ? projections : []).flatMap((projection) => projection.proofHints)
+  const hints = [...new Set(projections.flatMap((projection) => includeProofHints ? projection.proofHints : projection.diagnosticHints ?? [])
     .map((hint) => compactRecoveryField(hint, 300))
     .filter(Boolean))].slice(0, 8);
-  if (hints.length > 0) lines.push("Proof requirements:", ...hints.map((hint) => `- ${hint}`));
+  if (hints.length > 0) lines.push(includeProofHints ? "Proof requirements:" : "Diagnostic evidence (does not grant repair authority):", ...hints.map((hint) => `- ${hint}`));
   return lines;
 }
 

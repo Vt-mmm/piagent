@@ -14,6 +14,7 @@ import {
 } from "./acceptance-contract-semantics.js";
 import { malformedIdentifierCriterionText } from "./acceptance-identifier-criteria.js";
 import { contextualTemporalCriterion } from "./acceptance-temporal-contract.js";
+import { temporalProofReasonGuidance } from "./acceptance-boundary-guidance.js";
 import { acceptancePrecedenceContractGuidance, acceptancePrecedenceReceiptEvidence } from "./acceptance-precedence-contract.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
 import { independentAcceptanceState, applyIndependentCriterionAssessment } from "./acceptance-independent-registry.js";
@@ -901,12 +902,12 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
       if (!proof.testOk) missingDimensions.push("executable-focused-test");
     }
     if (missingDimensions.length === 0) missingDimensions.push("focused-evidence");
-    const proofHints = acceptanceContractProofGuidance(evidenceCriterionText);
-    if (sourceProofReasons.length > 0) proofHints.unshift(`Source proof abstained: ${sourceProofReasons.join(", ")}. This is missing verification evidence, not an observed implementation defect.`);
+    const diagnosticHints = sourceProofReasons.length > 0 ? [`Source proof abstained: ${sourceProofReasons.join(", ")}. This is missing verification evidence, not an observed implementation defect.`, ...temporalProofReasonGuidance(sourceProofReasons)] : [];
+    const proofHints = [...diagnosticHints, ...acceptanceContractProofGuidance(evidenceCriterionText)];
     if (missingDimensions.includes("source-proof-unknown")) proofHints.push("Use an approved independent validator for the declared invalid partitions and error classes. Do not rewrite source solely to satisfy the analyzer; source repair needs a concrete observed counterexample.");
     if (missingDimensions.includes("executable-focused-test")) proofHints.push("Add live entrypoint-bound rejection assertions; dynamic, skipped, dead, mutable, or unresolved proof remains pending.");
     if (missingDimensions.includes("current-verifier")) proofHints.push("Run the exact configured verifier against one unchanged current working-tree snapshot.");
-    projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: uniqueStrings(targets).slice(0, 8), missingDimensions: uniqueStrings(missingDimensions), proofHints: uniqueStrings(proofHints).slice(0, 6).map((hint) => hint.slice(0, 300)) });
+    projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: uniqueStrings(targets).slice(0, 8), missingDimensions: uniqueStrings(missingDimensions), proofHints: uniqueStrings(proofHints).slice(0, 6).map((hint) => hint.slice(0, 300)), diagnosticHints: uniqueStrings(diagnosticHints).slice(0, 2).map((hint) => hint.slice(0, 300)) });
   }
   return projections.slice(0, MAX_CRITERIA);
 }

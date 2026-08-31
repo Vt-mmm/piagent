@@ -6,6 +6,7 @@ const same = (left, right) => key(left) === key(right);
 const number = (value) => term("number", value);
 const part = (name) => term("part", name);
 const INPUT = term("input"), UNDEFINED = term("undefined"), ZONE = part("zone");
+const ABRUPT = term("abrupt");
 const YEAR = part("year"), MONTH = part("month"), DAY = part("day");
 const HOUR = part("hour"), MINUTE = part("minute"), SECOND = part("second");
 const DAYS = part("days-in-month"), MILLISECOND = part("millisecond");
@@ -16,7 +17,7 @@ const REGEX_FRACTIONS = new Map([
   ["__pi_strict_iso_timestamp_optional_seconds_dot_fraction_regex_literal__", "dot"]
 ]);
 const LITERALS = new Map([
-  ["__pi_empty_string_literal__", ""], ["__pi_two_digit_zero_string_literal__", "00"],
+  ["__pi_empty_string_literal__", ""], ["__pi_zero_string_literal__", "0"], ["__pi_two_digit_zero_string_literal__", "00"],
   ["__pi_millisecond_padding_string_literal__", "000"], ["__pi_positive_sign_string_literal__", "+"],
   ["__pi_negative_sign_string_literal__", "-"],
   ["__pi_utc_z_string_literal__", "Z"], ["__pi_typeof_string_literal__", "string"],
@@ -25,7 +26,14 @@ const LITERALS = new Map([
 const fail = (reason = "unsupported-temporal-dataflow") => { throw new Error(reason); };
 const leapYear = (year) => year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 
-function temporalModel(mode, helperNames = {}) {
+function proveTypeError(expression) {
+  if (expression[0] !== "new" || !same(expression[1], ["id", "TypeError"]) || expression[2].length > 1) fail("typeerror-rejection-unproven");
+  // Template markers deliberately retain no claim that interpolation is pure.
+  // Coercing an invalid Date can execute user code before TypeError exists.
+  if (expression[2].some((arg) => arg[0] !== "id" || !/^__pi_[a-z0-9_]*(?:string|number)_literal__$/.test(arg[1]))) fail("rejection-message-effect-unproven");
+}
+
+function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { remaining: 15000 }) {
   const logic = evidenceBooleanAlgebra();
   const boolean = (value) => term("boolean", value);
   const atom = (name) => logic.atom(name);
@@ -112,7 +120,7 @@ function temporalModel(mode, helperNames = {}) {
     const constant = (value) => value && [...value.coefficients.keys()].every((name) => name === "constant") ? value.coefficients.get("constant") ?? 0 : null;
     const cache = new Map();
     const visit = (item) => {
-      if (++steps > 5000) fail("temporal-proof-complexity-limit");
+      if (++steps > 5000 || --budget.remaining < 0) fail("temporal-proof-complexity-limit");
       if (cache.has(item)) return cache.get(item);
       const result = calculate(item);
       cache.set(item, result);
@@ -159,6 +167,7 @@ function temporalModel(mode, helperNames = {}) {
     if (condition === atom("capture:second-missing") && same(yes, number(0)) && no[0] === "optional-second-number") return SECOND;
     if (condition === atom("capture:second-missing") && same(yes, term("string", "00")) && no[0] === "optional-second") return term("capture", "second");
     if (condition === atom("capture:fraction-missing") && same(yes, term("string", "")) && no[0] === "optional-fraction") return term(no[1] === "dot" ? "fraction-dot" : "fraction-digits");
+    if (condition === atom("capture:fraction-missing") && same(yes, number(0)) && same(no, MILLISECOND)) return MILLISECOND;
     if (condition === logic.and(comparison("===", MONTH, number(2)), leap) && same(yes, number(29)) && no[0] === "nonleap-month-days") return DAYS;
     if (condition === zoneZ && same(yes, number(0)) && no[0] === "offset-minutes") return term("zone-offset-minutes");
     if (condition === zonePlus && ["offset-minutes", "zone-offset-minutes"].includes(yes[0]) && same(no, term("negative", yes))) return term("signed-offset-minutes");
@@ -181,14 +190,24 @@ function temporalModel(mode, helperNames = {}) {
   };
   let allocations = 0, steps = 0, expiryCoverage = 0, nowCoverage = 0, clockCoverage = 0;
   const visited = new Set();
-  const withPath = (state, path, action) => { const previous = state.path; state.path = logic.and(previous, path); try { return action(); } finally { state.path = previous; } };
+  const visitedTrees = new Set(), frames = [];
+  const branch = (state, condition, expression) => {
+    const selected = clone(state, condition);
+    return { state: selected, value: evaluate(expression, selected) };
+  };
   const publicArgument = (value, path) => {
     if (value[0] === "choose") return publicArgument(value[2], logic.and(path, value[1])) && publicArgument(value[3], logic.and(path, logic.not(value[1])));
     return value[0] === "clock" ? implies(path, omitted) : value[0] === "now-input" && implies(path, logic.not(omitted));
   };
+  const missingNowCall = (value, path) => value[0] === "choose"
+    ? logic.or(missingNowCall(value[2], logic.and(path, value[1])), missingNowCall(value[3], logic.and(path, logic.not(value[1]))))
+    : value[0] === "now-input" ? logic.and(path, noArguments) : 0;
   const cover = (previous, path) => { if (!implies(logic.and(previous, path), 0)) fail("duplicate-temporal-effect"); return logic.or(previous, path); };
   function evaluate(node, state) {
-    if (++steps > 5000) fail("temporal-proof-complexity-limit");
+    if (++steps > 5000 || --budget.remaining < 0) fail("temporal-proof-complexity-limit");
+    // A proven abrupt callee has no normal value. In particular its caller
+    // must not evaluate the remainder of a binary expression or argument list.
+    if (state.path === 0) return ABRUPT;
     const [kind, a, b, c] = node;
     if (kind === "number") return node;
     if (kind === "id") {
@@ -196,6 +215,7 @@ function temporalModel(mode, helperNames = {}) {
       if (LITERALS.has(a)) return term("string", LITERALS.get(a));
       if (REGEX_FRACTIONS.has(a)) return term("regex", REGEX_FRACTIONS.get(a));
       if (/^__pi_[a-z0-9_]*string_literal__$/.test(a)) return term("static-message");
+      if (a === "arguments" && (mode !== "public" || frames.length > 0)) fail("helper-arguments-unproven");
       if (["Date", "Number", "Math", "TypeError", "arguments"].includes(a)) return term("intrinsic", a);
       if (a === "undefined") return UNDEFINED;
       if (a === "true" || a === "false") return boolean(Number(a === "true"));
@@ -207,18 +227,26 @@ function temporalModel(mode, helperNames = {}) {
     }
     if (kind === "binary") {
       const left = evaluate(b, state);
+      if (state.path === 0) return ABRUPT;
       if (a === "&&" || a === "||") {
-        const condition = asBoolean(left), right = withPath(state, a === "&&" ? condition : logic.not(condition), () => asBoolean(evaluate(c, state)));
-        return boolean(a === "&&" ? logic.and(condition, right) : logic.or(condition, right));
+        const condition = asBoolean(left), selected = a === "&&" ? condition : logic.not(condition);
+        const right = branch(state, selected, c);
+        state.path = logic.or(logic.and(state.path, logic.not(selected)), right.state.path);
+        const rightCondition = right.state.path === 0 ? 0 : asBoolean(right.value);
+        return boolean(a === "&&" ? logic.and(condition, rightCondition) : logic.or(condition, rightCondition));
       }
       const right = evaluate(c, state);
+      if (state.path === 0) return ABRUPT;
       if (a === "instanceof") return same(left, INPUT) && same(right, term("intrinsic", "Date")) ? boolean(isDate) : fail();
       return ["===", "!==", "<", "<=", ">", ">="].includes(a) ? boolean(comparison(a, left, right)) : arithmetic(a, left, right);
     }
     if (kind === "select") {
       const condition = asBoolean(evaluate(a, state));
-      const yes = withPath(state, condition, () => evaluate(b, state)), no = withPath(state, logic.not(condition), () => evaluate(c, state));
-      return choose(condition, yes, no, state.path);
+      const yes = branch(state, condition, b), no = branch(state, logic.not(condition), c);
+      state.path = logic.or(yes.state.path, no.state.path);
+      if (yes.state.path === 0) return no.value;
+      if (no.state.path === 0) return yes.value;
+      return choose(condition, yes.value, no.value, state.path);
     }
     if (kind === "array") return term("array", a.map((item) => evaluate(item, state)));
     if (kind === "index") {
@@ -257,8 +285,39 @@ function temporalModel(mode, helperNames = {}) {
         state.path = logic.and(state.path, logic.not(noArguments));
         return term("expiry-time");
       }
+      // A proven current-time normalizer rejects the absent second input when
+      // called before expiry normalization. This abrupt path has no later
+      // clock read or expiry call; explicit undefined is never a clock fallback.
+      state.path = logic.and(state.path, logic.not(missingNowCall(value, state.path)));
+      if (state.path === 0) return ABRUPT;
       if (!publicArgument(value, state.path)) fail("explicit-now-provenance-unproven");
       nowCoverage = cover(nowCoverage, state.path); return term("current-time");
+    }
+    if (a[0] === "id" && graph.has(a[1])) {
+      if (mode === "public" || b.length !== 1) fail("unproven-temporal-helper-call");
+      const value = evaluate(b[0], state);
+      if (state.path === 0) return ABRUPT;
+      // Callees cannot borrow a caller-owned mutable allocation. They may
+      // allocate private Dates, but only immutable normal values leave a frame.
+      if (key(value).includes('"owned-date"')) fail("temporal-helper-owned-escape");
+      const { callable, ast } = graph.get(a[1]);
+      if (frames.includes(a[1]) || frames.length >= 8) fail("cyclic-temporal-helper");
+      const callee = { path: state.path, env: new Map(), heap: new Map() };
+      bind(callee, callable.exactParameters[0], value);
+      frames.push(a[1]); visitedTrees.add(ast);
+      let results;
+      try { results = execute(ast, [callee]); } finally { frames.pop(); }
+      let normal = 0, returned = ABRUPT;
+      for (const result of results) {
+        if (result.path === 0) continue;
+        if (!result.terminal) fail("unterminated-temporal-helper");
+        if (result.terminal === "throw") continue;
+        if (key(result.value).includes('"owned-date"')) fail("temporal-helper-owned-escape");
+        returned = normal === 0 ? result.value : choose(result.path, result.value, returned);
+        normal = logic.or(normal, result.path);
+      }
+      state.path = normal;
+      return returned;
     }
     if (a[0] === "id" && a[1] === "Number") {
       if (b.length !== 1) fail();
@@ -316,8 +375,12 @@ function temporalModel(mode, helperNames = {}) {
       if (same(receiver, ZONE) && (same(args, [number(4)]) || same(args, [number(4), number(6)]))) return term("offset-minute-text");
       if (receiver[0] === "fraction-dot" && same(args, [number(1)])) return term("fraction-digits");
       if (receiver[0] === "padded-fraction" && same(args, [number(0), number(3)])) return term("millisecond-text");
+      if ((receiver[0] === "fraction-digits" || (receiver[0] === "optional-fraction" && receiver[1] === "digits"
+        && implies(state.path, logic.not(atom("capture:fraction-missing")))))
+        && same(args, [number(0), number(3)])) return term("millisecond-prefix");
       fail("zone-or-fraction-capture-unproven");
     }
+    if (member === "padEnd" && receiver[0] === "millisecond-prefix" && same(args, [number(3), term("string", "0")])) return term("millisecond-text");
     if (member === "startsWith" && same(receiver, ZONE) && args.length === 1 && args[0][0] === "string") {
       if (args[0][1] === "+") return boolean(zonePlus);
       if (args[0][1] === "-") return boolean(zoneMinus);
@@ -325,7 +388,7 @@ function temporalModel(mode, helperNames = {}) {
     fail();
   }
   const bind = (state, name, value) => {
-    if (RESERVED.test(name) || Object.values(helperNames).some((known) => known.toLowerCase() === name.toLowerCase()) || [...state.env.keys()].some((known) => known.toLowerCase() === name.toLowerCase())) fail("temporal-binding-collision");
+    if (RESERVED.test(name) || [...graph.keys(), ...Object.values(helperNames)].some((known) => known.toLowerCase() === name.toLowerCase()) || [...state.env.keys()].some((known) => known.toLowerCase() === name.toLowerCase())) fail("temporal-binding-collision");
     state.env.set(name, value);
   };
   const clone = (state, condition) => ({ ...state, env: new Map(state.env), heap: new Map(state.heap), path: logic.and(state.path, condition) });
@@ -345,6 +408,7 @@ function temporalModel(mode, helperNames = {}) {
         if (kind === "const") {
           for (const [binding, expression] of a) {
             const value = evaluate(expression, state);
+            if (state.path === 0) break;
             if (binding[0] === "bind") bind(state, binding[1], value);
             else binding[1].forEach((slot, index) => {
               if (slot) bind(state, slot[0], slot[1] ? defaulted(captures(value, index, state), evaluate(slot[1], state)) : captures(value, index, state));
@@ -352,9 +416,14 @@ function temporalModel(mode, helperNames = {}) {
           }
         } else if (kind === "return") { state.terminal = "return"; state.value = evaluate(a, state); }
         else if (kind === "throw") {
-          if (a[0] !== "new" || !same(a[1], ["id", "TypeError"]) || a[2].length > 1 || a[2].some((arg) => arg[0] !== "id" || !/^__pi_[a-z0-9_]*(?:string|number)_literal__$/.test(arg[1]))) fail("typeerror-rejection-unproven");
+          proveTypeError(a);
           state.terminal = "throw";
         } else if (kind === "expression") {
+          if (a[0] === "call" && a[1][0] === "id" && graph.has(a[1][1])) {
+            evaluate(a, state);
+            if (state.path !== 0) fail("discarded-temporal-helper-return");
+            next.push(state); continue;
+          }
           if (a[0] !== "call" || a[1][0] !== "member") fail("unapproved-temporal-effect");
           const receiver = evaluate(a[1][1], state), args = a[2].map((item) => evaluate(item, state)), value = state.heap.get(receiver[1]);
           if (receiver[0] !== "owned-date") fail("owned-date-effect-unproven");
@@ -381,11 +450,16 @@ function temporalModel(mode, helperNames = {}) {
   }
   function prove(callable) {
     const parameters = callable.exactParameters;
-    const ast = parseEvidenceStatements(callable.exactBody);
+    const ast = graph.get(callable.exactDeclarationName)?.ast ?? parseEvidenceStatements(callable.exactBody);
+    visitedTrees.add(ast);
     const state = { path: 1, env: new Map(parameters.map((name, index) => [name, mode === "public" ? term(index === 0 ? "expiry-input" : "now-input") : INPUT])), heap: new Map() };
     const results = execute(ast, [state]).filter((item) => item.path !== 0);
     let success = 0;
-    for (const result of results) {
+    const splitReturns = (result) => result.terminal === "return" && result.value[0] === "choose"
+      ? [...splitReturns({ ...result, path: logic.and(result.path, result.value[1]), value: result.value[2] }),
+        ...splitReturns({ ...result, path: logic.and(result.path, logic.not(result.value[1])), value: result.value[3] })]
+      : result.path === 0 ? [] : [result];
+    for (const result of results.flatMap(splitReturns)) {
       if (!result.terminal) fail("unterminated-temporal-path");
       if (result.terminal === "throw") { if (mode === "public") fail(); continue; }
       let domain;
@@ -402,10 +476,10 @@ function temporalModel(mode, helperNames = {}) {
     }
     const expected = mode === "public" ? logic.not(noArguments) : logic.or(dateValid, mode === "expiry" ? stringValid : numberValid);
     if (!implies(expected, success)) fail("valid-temporal-input-rejected");
-    if (mode === "public" && (!implies(1, expiryCoverage) || !implies(logic.not(omitted), nowCoverage) || !implies(logic.and(omitted, logic.not(noArguments)), clockCoverage))) fail("public-temporal-normalization-unproven");
+    if (mode === "public" && (!implies(logic.not(noArguments), expiryCoverage) || !implies(logic.not(omitted), nowCoverage) || !implies(logic.and(omitted, logic.not(noArguments)), clockCoverage))) fail("public-temporal-normalization-unproven");
     const everyStatementVisited = (items) => items.every((item) => (visited.has(item) || (item[0] === "block" && item[1].length === 0)) && (item[0] !== "block" || everyStatementVisited(item[1])) && (item[0] !== "if" || everyStatementVisited([item[2], item[3]])));
-    if (!everyStatementVisited(ast)) fail("unreachable-temporal-statement");
-    return true;
+    if (![...visitedTrees].every(everyStatementVisited)) fail("unreachable-temporal-statement");
+    return new Set([...graph].filter(([, entry]) => visitedTrees.has(entry.ast)).map(([name]) => name));
   }
   return { prove };
 }
@@ -419,15 +493,76 @@ export function temporalDataflowModuleProof(bodies, publicName) {
   try {
     const declarations = bodies.exactDeclarations ?? [];
     if (declarations.some((item) => RESERVED.test(item.name))) fail("temporal-binding-collision");
-    const helpers = declarations.filter((item) => item.name !== publicName).map((item) => bodies.get(item.name.toLowerCase()));
-    if (helpers.length !== 2) fail("closed-temporal-module-unproven");
-    const expiry = helpers.filter((item) => [...REGEX_FRACTIONS.keys()].some((regex) => item.exactBody.includes(regex)));
-    if (expiry.length !== 1) fail("iso-capture-topology-unproven");
-    const now = helpers.find((item) => item !== expiry[0]);
-    temporalModel("expiry").prove(expiry[0]);
-    temporalModel("now", { expiry: expiry[0].exactDeclarationName }).prove(now);
-    temporalModel("public", { expiry: expiry[0].exactDeclarationName, now: now.exactDeclarationName }).prove(bodies.get(publicName.toLowerCase()));
-    return { proven: true, reasons: [], expiry: expiry[0], now };
+    if (declarations.length < 3 || declarations.length > 9) fail("closed-temporal-module-unproven");
+    const graph = new Map(declarations.map((item) => {
+      const callable = bodies.get(item.name.toLowerCase());
+      return [item.name, { callable, ast: parseEvidenceStatements(callable.exactBody), edges: new Set() }];
+    }));
+    let nodes = 0;
+    const budget = { remaining: 15000 };
+    const walk = (node, action) => {
+      if (!Array.isArray(node)) return;
+      if (++nodes > 5000) fail("temporal-proof-complexity-limit");
+      action(node); for (const child of node) walk(child, action);
+    };
+    for (const entry of graph.values()) walk(entry.ast, (node) => {
+      if (node[0] === "throw") proveTypeError(node[1]);
+      if (node[0] === "call" && node[1][0] === "id" && graph.has(node[1][1])) {
+        if (node[2].length !== 1) fail("unproven-temporal-helper-call");
+        entry.edges.add(node[1][1]);
+      }
+    });
+    const reached = new Set(), active = new Set();
+    const visit = (name) => {
+      if (active.has(name)) fail("cyclic-temporal-helper");
+      if (reached.has(name)) return;
+      active.add(name); reached.add(name);
+      for (const edge of graph.get(name).edges) visit(edge);
+      active.delete(name);
+    };
+    visit(publicName);
+    if (reached.size !== graph.size) fail("unreachable-temporal-helper");
+    const helpers = [...graph.values()].map((item) => item.callable).filter((item) => item.exactDeclarationName !== publicName);
+    const requireClosedCoverage = (...coverages) => {
+      const covered = new Set(coverages.flatMap((coverage) => [...coverage]));
+      if ([...graph.keys()].some((name) => !covered.has(name))) fail("unreachable-temporal-helper");
+    };
+    const directParsers = helpers.filter((item) => [...REGEX_FRACTIONS.keys()].some((regex) => item.exactBody.includes(regex)));
+    // Preserve precise diagnostics for the original closed two-helper surface.
+    if (helpers.length === 2 && directParsers.length === 1) {
+      const expiry = directParsers[0], now = helpers.find((item) => item !== expiry);
+      const expiryCoverage = temporalModel("expiry", {}, graph, budget).prove(expiry);
+      const nowCoverage = temporalModel("now", { expiry: expiry.exactDeclarationName }, graph, budget).prove(now);
+      const publicCoverage = temporalModel("public", { expiry: expiry.exactDeclarationName, now: now.exactDeclarationName }, graph, budget).prove(graph.get(publicName).callable);
+      requireClosedCoverage(expiryCoverage, nowCoverage, publicCoverage);
+      return { proven: true, reasons: [], expiry, now };
+    }
+    const failures = [];
+    const proveRole = (role, callable, names = {}) => {
+      try { return temporalModel(role, names, graph, budget).prove(callable); }
+      catch (error) {
+        if (budget.remaining < 0) throw error;
+        failures.push({ role, name: callable.exactDeclarationName, error }); return null;
+      }
+    };
+    const expiryCandidates = helpers.map((callable) => ({ callable, coverage: proveRole("expiry", callable) })).filter((item) => item.coverage);
+    for (const { callable: expiry, coverage: expiryCoverage } of expiryCandidates) {
+      const nowCandidates = helpers.filter((item) => item !== expiry)
+        .map((callable) => ({ callable, coverage: proveRole("now", callable, { expiry: expiry.exactDeclarationName }) })).filter((item) => item.coverage);
+      for (const { callable: now, coverage: nowCoverage } of nowCandidates) {
+        try {
+          const publicCoverage = temporalModel("public", { expiry: expiry.exactDeclarationName, now: now.exactDeclarationName }, graph, budget).prove(graph.get(publicName).callable);
+          requireClosedCoverage(expiryCoverage, nowCoverage, publicCoverage);
+          return { proven: true, reasons: [], expiry, now };
+        } catch (error) {
+          if (budget.remaining < 0) throw error;
+          failures.push({ role: "public", name: publicName, error });
+        }
+      }
+    }
+    const publicFailure = failures.find((entry) => entry.role === "public");
+    if (publicFailure) throw publicFailure.error;
+    fail("temporal-helper-composition-unproven");
   } catch (error) {
     return { proven: false, reasons: [error instanceof Error && /^[a-z-]+$/.test(error.message) ? error.message : "unsupported-temporal-dataflow"] };
   }

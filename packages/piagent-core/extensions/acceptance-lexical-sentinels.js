@@ -1,6 +1,7 @@
 export function stringLiteralSentinel(value) {
   const raw = String(value ?? ""), normalized = raw.toLowerCase();
   if (raw.length === 0) return "__pi_empty_string_literal__";
+  if (raw === "0") return "__pi_zero_string_literal__";
   if (raw === "00") return "__pi_two_digit_zero_string_literal__";
   if (raw === "000") return "__pi_millisecond_padding_string_literal__";
   if (raw === "+") return "__pi_positive_sign_string_literal__";

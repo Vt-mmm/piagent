@@ -19,6 +19,17 @@ export function isoTimestampProofGuidance(raw) {
   ];
 }
 
+export function temporalProofReasonGuidance(reasons = []) {
+  if (!reasons.some((reason) => ["typeerror-rejection-unproven", "rejection-message-effect-unproven"].includes(reason))) return [];
+  return ["Check an invalid Date whose toString or Symbol.toPrimitive throws RangeError, in each argument position. Coercing invalid input while formatting a TypeError can throw the wrong class; repair only after reproducing the counterexample."];
+}
+
+export function rejectionClassProofGuidance(raw, errorName) {
+  const coercion = /\bdates?\b/.test(normalizedText(raw))
+    ? " Include invalid Date objects with throwing toString/Symbol.toPrimitive; formatting the error must not change its class." : "";
+  return `Assert ${errorName} for every rejected partition named by the request; a different error class is not equivalent.${coercion}`;
+}
+
 export function identifierFieldNames(raw) {
   const source = String(raw ?? "");
   const names = [];

@@ -415,7 +415,7 @@ function closedInlineDirectThrowModuleProof(bodies, publicName) {
   const reject = (reasons = ["closed-temporal-module-unproven"]) => ({ candidate: true, proof: null, reasons });
   if (!bodies.exactScanComplete || bodies.exactMappingComplete === false
     || (bodies.exactCaseFoldCollisions?.size ?? 0) > 0
-    || statements.length !== 3 || declarations.length !== 3
+    || declarations.length < 3 || declarations.length > 9 || statements.length !== declarations.length
     || !exactFunction(callable, 2) || !exactClosedModuleParses(callable)
     || exactParameters(callable).some((parameter) => declarations.some((item) => item.name.toLowerCase() === parameter.toLowerCase()))
     || declarations.some((item) => !exactFunction(exactCallable(bodies, item.name), item.name === publicName ? 2 : 1))

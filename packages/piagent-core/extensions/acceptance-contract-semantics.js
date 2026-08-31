@@ -1,6 +1,6 @@
 import path from "node:path";
 import { callableBodies } from "./acceptance-callable-scanner.js";
-import { acceptanceBoundaryProofGuidance, isoTimestampProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements } from "./acceptance-boundary-guidance.js";
+import { acceptanceBoundaryProofGuidance, isoTimestampProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements, rejectionClassProofGuidance } from "./acceptance-boundary-guidance.js";
 import { executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract, hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
 import { inputDerivedNames } from "./acceptance-input-provenance.js";
@@ -963,7 +963,7 @@ export function acceptanceContractProofGuidance(raw) {
   const guidance = [...acceptanceBoundaryProofGuidance(raw)];
   if (onlyUndefinedContract(raw)) guidance.push("Prove undefined falls through while null, false, 0, and empty string are each preserved at the highest-precedence position.");
   const requestedSpecificErrors = hasAmbiguousErrorClassIntent(raw) ? [] : requestedErrorClasses(raw).map((errorClass) => ERROR_CONSTRUCTOR_DISPLAY_NAMES[errorClass]).filter(Boolean);
-  if (requestedSpecificErrors.length === 1) guidance.push(`Assert ${requestedSpecificErrors[0]} for every rejected partition named by the request; a different error class is not equivalent.`);
+  if (requestedSpecificErrors.length === 1) guidance.push(rejectionClassProofGuidance(raw, requestedSpecificErrors[0]));
   if (requestedSpecificErrors.length > 1) guidance.push(`Preserve the request's partition-to-error mapping: assert each rejected partition with its explicitly named class (${requestedSpecificErrors.join(", ")}); do not apply one class to every partition.`);
   const integerTargets = integerConstraintTargets(raw); if (integerTargets.length > 0) guidance.push(`Reject fractional values for every integer-constrained argument (${integerTargets.join(", ")}).`);
   const nullRejectingTargets = nullRejectingDefaultTargets(raw);
