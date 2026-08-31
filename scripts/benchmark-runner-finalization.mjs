@@ -40,15 +40,23 @@ import {
 import { recoverOrphanedBenchmarkAttempts } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { benchmarkResumeCommand, benchmarkRunKey } from "./benchmark-runner-support.mjs";
 
+export function benchmarkReportExecutionMode({ options = {}, manifest = {} } = {}) {
+  const measurementOnly = options.measurementOnly === true || manifest.measurementOnly === true;
+  return { measurementOnly, executionMode: measurementOnly ? "measurement-only" : "release-gated" };
+}
+
 export function finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot }) {
   if (!productionCampaign) return null;
+  const measurementOnly = manifest.measurementOnly === true || report.environment?.measurementOnly === true || report.measurementOnly === true;
+  if (measurementOnly) applyBenchmarkClaimRestrictions(report, { measurementOnly: true, surfaces: [] });
   const allowed = report.comparison?.tokenClaimAllowed === true;
   const verdict = /^[a-z0-9._-]{1,120}$/i.test(String(report.verdict?.status ?? ""))
     ? report.verdict.status
     : "unavailable";
   manifest.campaignEvidence = productionCampaign.finalizeClaim({
     allowed,
-    reason: allowed ? "release-token-claim-allowed" : `release-token-claim-not-allowed:${verdict}`
+    reason: measurementOnly ? "measurement-only-completed-no-release-claim"
+      : allowed ? "release-token-claim-allowed" : `release-token-claim-not-allowed:${verdict}`
   });
   writeBenchmarkRunManifest(runRoot, manifest);
   const publicEvidence = publicProductionBenchmarkCampaignEvidence(manifest.campaignEvidence);
@@ -264,6 +272,7 @@ export function finalizeBenchmarkRun(context) {
     repeats: options.repeats,
     environment: {
       runId,
+      ...benchmarkReportExecutionMode({ options, manifest }),
       platformVersion: packageVersion,
       suiteDigest,
       variantRootSeed: suite.scenarios.some((scenario) => scenario.variantGenerator) ? rootSeed : null,
@@ -329,7 +338,7 @@ export function finalizeBenchmarkRun(context) {
     ...comparison
   });
   report.ledger = ledgerBinding;
-  applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, surfaces: options.surfaces });
+  applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, surfaces: options.surfaces, measurementOnly: report.environment.measurementOnly });
   const reportLedger = inspectBenchmarkLedger(ledgerPath);
   assertBenchmarkLedgerBinding(ledgerBinding, reportLedger.binding, "benchmark report ledger");
   validateBenchmarkLedgerPrefix(reportLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest, manifest.verificationPlan?.identity));

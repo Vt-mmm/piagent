@@ -6,6 +6,7 @@ import readline from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { productionStageResumeWindow } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+import { assertBenchmarkMeasurementOptions } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { benchmarkLedgerCheckpoint, inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
 import { benchmarkSurfaceLabel } from "../packages/piagent-core/benchmark/benchmark-core.js";
@@ -20,6 +21,16 @@ export function fail(message, code = 2) {
 export function applyBenchmarkResumeOptions(options, resumeState) {
   if (!resumeState) return;
   const manifest = resumeState.manifest;
+  if (manifest.measurementOnly !== undefined && typeof manifest.measurementOnly !== "boolean") {
+    fail("Cannot resume benchmark: manifest measurementOnly must be a boolean", 1);
+  }
+  const measurementOnly = manifest.measurementOnly === true;
+  if (options.measurementOnly === true && !measurementOnly) {
+    fail("Cannot enable --measurement-only on an existing release manifest; start a new measurement-only run", 1);
+  }
+  assertBenchmarkMeasurementOptions({ ...options, measurementOnly });
+  assertBenchmarkMeasurementOptions({ ...manifest, measurementOnly });
+  options.measurementOnly = measurementOnly;
   options.suite = manifest.suite?.source ?? manifest.suite?.manifestPath ?? manifest.suite?.id ?? options.suite;
   options.surfaces = manifest.surfaces;
   options.model = manifest.model ?? undefined;
@@ -194,6 +205,7 @@ export function benchmarkExecutionPlan({
     "Piagent automatic benchmark",
     `  platform:  v${packageVersion}`,
     `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
+    ...(options.measurementOnly === true ? ["  mode:      measurement-only · full 108-session observation · no release claim"] : []),
     `  digest:    ${suiteDigest.slice(0, 16)}`,
     `  surfaces:  ${options.surfaces.join(", ")}`,
     `  compare:   ${benchmarkSurfaceLabel(comparison.candidateSurface)} vs ${benchmarkSurfaceLabel(comparison.baselineSurface)}`,

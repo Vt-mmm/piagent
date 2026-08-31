@@ -97,7 +97,8 @@ export function benchmarkPreflightReceipt({
       infrastructureRetries: options.infrastructureRetries,
       retryDelaySeconds: options.retryDelaySeconds,
       maxSessions: options.maxSessions ?? null,
-      stopAfterFailedPair: options.stopAfterFailedPair
+      stopAfterFailedPair: options.stopAfterFailedPair,
+      ...(options.measurementOnly === true ? { measurementOnly: true } : {})
     },
     ...(hostReadiness ? { hostReadiness } : {}),
     ...(providerFreeEvidence ? { providerFreeEvidence } : {}),

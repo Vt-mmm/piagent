@@ -162,7 +162,8 @@ async function main() {
     fail(`Production spend-control contract is invalid (${productionSpendControlErrors.join(", ")})`, 1);
   }
   const productionAllStageBoundaries = productionSpendControl
-    ? productionSpendControl.stages.map((stage) => stage.cumulativeSessions)
+    ? options.measurementOnly ? [0, productionExpectedSessions]
+      : productionSpendControl.stages.map((stage) => stage.cumulativeSessions)
     : [];
   const productionStageBoundaries = productionAllStageBoundaries.slice(1);
   const assuranceEvidence = loadBenchmarkAssuranceEvidence(suite, suiteRoot);
@@ -184,6 +185,11 @@ async function main() {
   const productionFullMatrixRequested = Boolean(productionSpendControl)
     && !options.replayRuns
     && suite.scenarios.length === declaredScenarioCount;
+  // Buy one full observation window; graders, integrity and release thresholds stay unchanged.
+  if (options.measurementOnly && (builtInId !== "production-v2" || !productionFullMatrixRequested
+    || productionExpectedSessions !== 108 || options.codexMode !== "controlled" || options.piagentTreatment !== "release-defaults")) {
+    fail("--measurement-only requires the complete production-v2 controlled release-defaults matrix, without selection, replay, a runtime limit or outcome early-stop", 1);
+  }
   if (productionFullMatrixRequested) {
     const spendExecution = productionSpendControl.execution;
     if (options.seed === undefined) options.seed = productionSpendControl.rootSeed;
@@ -420,7 +426,7 @@ async function main() {
     return;
   }
   if (productionSpendControlled) {
-    if (options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
+    if (!options.measurementOnly && options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
       fail("Production spend control requires --stop-after-failed-pair before any provider session", 1);
     }
     const completedRuns = resumeState?.completedRuns.length ?? 0;
@@ -497,6 +503,7 @@ async function main() {
     retryDelaySeconds: options.retryDelaySeconds,
     transportCircuitBreaker: BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
     stopAfterFailedPair: options.stopAfterFailedPair,
+    ...(options.measurementOnly ? { measurementOnly: true } : {}),
     order: fullOrder.map((item) => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat }))
   };
   const configurationDigest = crypto.createHash("sha256").update(JSON.stringify(configuration)).digest("hex");
@@ -654,6 +661,7 @@ async function main() {
     retryDelaySeconds: options.retryDelaySeconds,
     transportCircuitBreaker: createBenchmarkTransportCircuit(),
     stopAfterFailedPair: options.stopAfterFailedPair,
+    ...(options.measurementOnly ? { measurementOnly: true } : {}),
     scenarioIds: options.scenarioIds ?? null,
     ...(productionSpendControlled ? {
       productionGuards: productionSpendControl.productionGuards,

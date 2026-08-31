@@ -1,7 +1,8 @@
 const RESTRICTION_VERDICTS = new Set([
   "token-claim-withheld",
   "diagnostic-native-codex",
-  "diagnostic-replay"
+  "diagnostic-replay",
+  "measurement-only-no-claim"
 ]);
 
 function restrictionCanReplaceVerdict(status, includeObservational) {
@@ -38,7 +39,7 @@ function diagnostic(report, { tier, purpose, reason, limitation, flag, verdictSt
   };
 }
 
-export function applyBenchmarkClaimRestrictions(report, { tokenReason, replaySource, codexMode, surfaces }) {
+export function applyBenchmarkClaimRestrictions(report, { tokenReason, replaySource, codexMode, surfaces, measurementOnly = false }) {
   if (tokenReason) {
     withholdTokenClaim(report, {
       reason: tokenReason,
@@ -64,6 +65,17 @@ export function applyBenchmarkClaimRestrictions(report, { tokenReason, replaySou
       limitation: "replay-results-cannot-support-release-token-or-generalization-claims",
       verdictStatus: "diagnostic-replay",
       flag: "replayDiagnosticOnly"
+    });
+  }
+  if (measurementOnly === true || report.environment?.measurementOnly === true) {
+    report.environment = { ...report.environment, measurementOnly: true, executionMode: "measurement-only" };
+    diagnostic(report, {
+      tier: "diagnostic-measurement-only",
+      purpose: "measurement-only",
+      reason: "measurement-only-execution-no-release-claim",
+      limitation: "measurement-only-results-cannot-support-release-token-or-generalization-claims",
+      verdictStatus: "measurement-only-no-claim",
+      flag: "measurementOnly"
     });
   }
   return report;

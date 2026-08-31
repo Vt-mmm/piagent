@@ -189,6 +189,29 @@ fail-closed. Measurement `configurationDigest` đầy đủ vẫn giữ private 
 để khóa ledger, campaign và resume lineage, nên tối ưu cache này không nới
 quyền hay trộn hai paid run.
 
+Khi operator muốn **đo đủ 108 phiên trước rồi mới sửa**, có thể chủ động chọn
+`--measurement-only` thay cho chuỗi release theo giai đoạn:
+
+```bash
+node scripts/benchmark-runner.mjs --suite production-v2 --measurement-only --max-sessions 108 --keep-workspaces --output /path/to/measurement-report --yes
+```
+
+Chế độ này chỉ áp dụng cho ma trận production-v2 đầy đủ, controlled Codex và
+Pi release-defaults. Bài, thứ tự, seed, model/medium/Fast, hai repeat, zero retry,
+chấm điểm, ràng buộc source sạch, bốn lane S0 và sổ mọi provider attempt vẫn
+giữ nguyên. Operator cấp một cửa sổ `0→108`; điểm thấp, thất bại của agent và tỷ
+lệ token xấu không kết thúc sớm cửa sổ đó. Lỗi hạ tầng, source thay đổi hoặc
+usage không xác định vẫn không được bỏ qua. Không kết hợp với lọc bài, replay,
+giới hạn thời gian toàn lượt hay `--stop-after-failed-pair`.
+
+Lựa chọn được khóa vào configuration digest, manifest, preflight và report;
+không thể chuyển một campaign release cũ sang chế độ này khi resume. Các số đo,
+PASS/FAIL và release gate trong report vẫn là số thật, nhưng report luôn ghi
+measurement-only, campaign kết thúc `no-claim`, không cấp token-saving hay
+generalization claim. Exit code có thể khác 0 dù đã đo đủ 108, nếu release gate
+không đạt; phải kiểm tra report và ledger thay vì gọi đó là benchmark chưa chạy.
+Đây không phải chứng nhận full offline qualification hay production readiness.
+
 Production-v2 bind một paid campaign vào exact suite, candidate, configuration
 và output directory. Nếu campaign đã khởi động provider nhưng dừng giữa chừng,
 fail gate hoặc kết thúc `no-claim`, cùng lineage chỉ được resume đúng output đó;

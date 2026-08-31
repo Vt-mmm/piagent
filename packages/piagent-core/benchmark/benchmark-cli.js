@@ -43,6 +43,7 @@ Options:
   --max-sessions <n>           Stop cleanly after n new sessions and resume later.
   --max-runtime-minutes <n>    Stop cleanly after the current session once the budget is used.
   --stop-after-failed-pair      Terminal-stop after a Piagent outcome falls below the suite floor.
+  --measurement-only           Observe the full production-v2 108-session matrix; no release claim.
   --yes                        Skip the cost/run-count confirmation.
   --dry-run                    Validate and print the execution plan only.
   --preflight-only             Freeze assets and verify auth/tools without starting a model.
@@ -73,6 +74,19 @@ function positiveInteger(raw, name, minimum, maximum) {
   return value;
 }
 
+export function assertBenchmarkMeasurementOptions(options) {
+  if (options.measurementOnly !== true) return;
+  const incompatible = [
+    [options.stopAfterFailedPair === true, "--stop-after-failed-pair"],
+    [options.scenarioIds !== undefined && options.scenarioIds !== null, "--scenarios"],
+    [options.replayFailures != null || options.replayRuns != null || options.replaySource != null, "--replay-failures"],
+    [options.maxRuntimeMinutes !== undefined && options.maxRuntimeMinutes !== null, "--max-runtime-minutes"]
+  ].filter(([enabled]) => enabled).map(([, name]) => name);
+  if (incompatible.length > 0) {
+    fail(`--measurement-only cannot be combined with ${incompatible.join(", ")}; it requires a full-matrix observational run`);
+  }
+}
+
 export function parseBenchmarkArgs(argv) {
   const options = {
     suite: "core-v1",
@@ -100,6 +114,7 @@ export function parseBenchmarkArgs(argv) {
     maxSessions: undefined,
     maxRuntimeMinutes: undefined,
     stopAfterFailedPair: false,
+    measurementOnly: false,
     yes: false,
     dryRun: false,
     preflightOnly: false,
@@ -231,6 +246,10 @@ export function parseBenchmarkArgs(argv) {
       case "--stop-after-failed-pair":
         options.stopAfterFailedPair = true;
         break;
+      case "--measurement-only":
+        if (options.measurementOnly) fail("--measurement-only may only be supplied once");
+        options.measurementOnly = true;
+        break;
       case "--yes":
         options.yes = true;
         break;
@@ -253,5 +272,6 @@ export function parseBenchmarkArgs(argv) {
   }
   if (options.dryRun && options.preflightOnly) fail("--dry-run and --preflight-only are mutually exclusive");
   if (options.preflightOnly && (options.resume || options.replayFailures)) fail("--preflight-only cannot resume or replay a prior run");
+  assertBenchmarkMeasurementOptions(options);
   return options;
 }
