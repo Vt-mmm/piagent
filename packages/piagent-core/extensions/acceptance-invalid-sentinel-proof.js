@@ -86,13 +86,17 @@ function exactFunction(callable, parameterCount) {
     && uniqueCaseFolded([exactName(callable), ...parameters]);
 }
 
-function intrinsicEnvironmentIsClosed(source, names) {
+function intrinsicEnvironmentIsClosed(source, names, { caseSensitive = false } = {}) {
   const code = String(source ?? "");
+  const intrinsics = caseSensitive ? [...INTRINSICS, "Math"] : INTRINSICS;
   if (hasRestrictedProductionLineTerminator(code)) return false;
-  for (const intrinsic of INTRINSICS) {
+  // Legacy recognizers use folded identifiers. The dataflow interpreter instead
+  // binds exact identifiers, so a local `date` is not the intrinsic `Date`.
+  for (const intrinsic of caseSensitive ? [] : INTRINSICS) {
     if ([...code.matchAll(new RegExp(`\\b${intrinsic}\\b`, "gi"))].some((match) => match[0] !== intrinsic)) return false;
   }
-  if (names.some((name) => INTRINSICS.some((intrinsic) => name.toLowerCase() === intrinsic.toLowerCase()))) return false;
+  if (names.some((name) => intrinsics.some((intrinsic) => caseSensitive ? name === intrinsic : name.toLowerCase() === intrinsic.toLowerCase()))) return false;
+  if (caseSensitive && /\b(?:const|let|var|class|function)\s+Math\b|\bMath\s*(?:=|\+\+|--|[+*/%&|^-]=)|\bMath\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*\s*(?:=|\+\+|--|[+*/%&|^-]=)/.test(code)) return false;
   if (/\b(?:const|let|var|class|function)\s+(?:NaN|Date|Number|RegExp|TypeError)\b/.test(code)) return false;
   if (/(?:\{|\[)[^}\]]*\b(?:NaN|Date|Number|RegExp|TypeError)\b[^}\]]*(?:\}|\])\s*=/.test(code)) return false;
   if (/\b(?:NaN|Date|Number|RegExp|TypeError)\b\s*(?:=|\+\+|--|[+*/%&|^-]=)/.test(code)) return false;
@@ -416,7 +420,7 @@ function closedInlineDirectThrowModuleProof(bodies, publicName) {
     || exactParameters(callable).some((parameter) => declarations.some((item) => item.name.toLowerCase() === parameter.toLowerCase()))
     || declarations.some((item) => !exactFunction(exactCallable(bodies, item.name), item.name === publicName ? 2 : 1))
     || statements.some((item) => !compact(item.source).startsWith(`${item.declarationName === publicName ? "export" : ""}function${item.declarationName}(`))
-    || !intrinsicEnvironmentIsClosed(exactSource(callable), declarations.flatMap((item) => [item.name, ...item.parameters]))) return reject();
+    || !intrinsicEnvironmentIsClosed(exactSource(callable), declarations.flatMap((item) => [item.name, ...item.parameters]), { caseSensitive: true })) return reject();
   const result = temporalDataflowModuleProof(bodies, publicName);
   if (!result.proven) return reject(result.reasons);
   return { candidate: true, proof: {

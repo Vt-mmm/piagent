@@ -66,6 +66,9 @@ test("bounded automatic intake preserves generated semantic proof bodies and cri
   assert.ok(hints.some((hint) => hint.includes("explicitly supplied undefined")), "omission-sensitive requirements must be generated");
   assert.ok(hints.some((hint) => hint.includes("TypeError")));
   assert.ok(hints.some((hint) => hint.includes("numeric UTC offsets")), "valid input forms must also remain visible");
+  assert.ok(hints.some((hint) => hint.includes("both signs") && hint.includes("negative sub-hour offset")));
+  assert.ok(hints.some((hint) => hint.includes("millisecond truncation for long fractional strings")));
+  assert.ok(hints.every((hint) => hint.length <= 300), "each semantic hint must also survive the recovery projection's per-hint cap");
   const proofLines = proof.join("\n").split("\n");
   for (const hint of hints) {
     const taggedLine = proofLines.find((line) => line.endsWith(hint));

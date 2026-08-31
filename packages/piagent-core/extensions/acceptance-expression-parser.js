@@ -5,7 +5,7 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 export function parseEvidenceStatements(source) {
   const tokens = [];
-  const lexer = /\s+|[A-Za-z_$][A-Za-z0-9_$]*|\d+|===|!==|>=|<=|&&|\|\||[{}()[\].,;?:%+\-*/<>!=]/gy;
+  const lexer = /\s+|[A-Za-z_$][A-Za-z0-9_$]*|(?:0|[1-9](?:_?[0-9])*)|===|!==|>=|<=|&&|\|\||[{}()[\].,;?:%+\-*/<>!=]/gy;
   let offset = 0;
   while (offset < source.length) {
     lexer.lastIndex = offset;
@@ -47,7 +47,11 @@ export function parseEvidenceStatements(source) {
       let target = ["id", identifier()];
       while (take(".")) target = ["member", target, identifier()];
       result = ["new", target, argumentsList()];
-    } else if (/^\d+$/.test(tokens[cursor] ?? "")) result = ["number", Number(tokens[cursor++])];
+    } else if (/^(?:0|[1-9](?:_?[0-9])*)$/.test(tokens[cursor] ?? "")) {
+      const value = Number(tokens[cursor++].replaceAll("_", ""));
+      if (!Number.isSafeInteger(value)) fail();
+      result = ["number", value];
+    }
     else result = ["id", identifier()];
     while (true) {
       if (take(".")) result = ["member", result, identifier()];

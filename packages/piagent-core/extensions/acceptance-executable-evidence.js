@@ -1,3 +1,5 @@
+import { INVALID_DATE_CONSTRUCTION, tupleRegistrationIsClosed } from "./acceptance-tuple-shapes.js";
+
 const ERROR_CONSTRUCTORS = ["typeerror", "rangeerror", "syntaxerror", "referenceerror", "urierror", "evalerror", "aggregateerror", "error"];
 
 function uniqueStrings(values) {
@@ -296,12 +298,16 @@ function annotateInvalidArgumentCoverage(assertions) {
     const value = selected.value;
     const values = value.startsWith("[") && balancedEnd(value, 0, "[", "]") === value.length
       ? topLevelArgumentRanges(value, 0, value.length).map((item) => item.text.trim()) : [value];
-    const partitions = new Set([...evidencePartitionSignals(value)].filter((item) => proofPartitions.has(item)));
-    if (values.some((item) => /^new\s+date\s*\(\s*(?:undefined|(?:number\.)?(?:nan|positive_infinity|negative_infinity|infinity)|__pi_(?:empty|whitespace)_string_literal__|__pi_invalid_(?:calendar_)?date_string_literal__)\s*\)$/i.test(item))) partitions.add("invalid-date-object");
-    if (values.some((item) => /^__pi_invalid_(?:calendar_)?date_string_literal__$/.test(item))) partitions.add("invalid-date-string");
-    if (values.some((item) => item === "__pi_invalid_calendar_date_string_literal__")) partitions.add("invalid-calendar-date-string");
-    if (values.some((item) => /^(?:number\.)?(?:nan|positive_infinity|negative_infinity|infinity)$/i.test(item))) {
-      partitions.add("non-finite-number");
+    const partitions = new Set();
+    for (const item of values) {
+      if (/^new\s+date\b/i.test(item)) {
+        if (INVALID_DATE_CONSTRUCTION.test(item)) partitions.add("invalid-date-object");
+        continue; // Constructor arguments are not the value passed to the entrypoint.
+      }
+      for (const partition of evidencePartitionSignals(item)) if (proofPartitions.has(partition)) partitions.add(partition);
+      if (/^__pi_(?:invalid_(?:calendar_)?date|unparseable_date)_string_literal__$/.test(item)) partitions.add("invalid-date-string");
+      if (item === "__pi_invalid_calendar_date_string_literal__") partitions.add("invalid-calendar-date-string");
+      if (/^(?:number\.)?(?:nan|positive_infinity|negative_infinity|infinity)$/i.test(item)) partitions.add("non-finite-number");
     }
     return partitions;
   };
@@ -485,6 +491,59 @@ function literalArrayPartitionSignals(literal) {
   return signals;
 }
 
+function constantTupleRows(literal, testText) {
+  const atom = String.raw`(?:undefined|null|true|false|nan|infinity|number\.(?:nan|(?:positive_|negative_)?infinity)|-?(?:\d+(?:\.\d+)?|\.\d+)|__pi_[a-z0-9_]*string_literal__)`;
+  const cell = new RegExp(`^${atom}$`, "i");
+  const elements = (text) => {
+    const values = topLevelArgumentRanges(text, 0, text.length).map((item) => item.text);
+    if (values.at(-1) === "" && /,\s*\]$/.test(text)) values.pop();
+    return values;
+  };
+  const rows = elements(literal);
+  if (rows.length === 0 || rows.length > 24) return undefined;
+  const values = rows.map((row) => boundedNonEmptyArrayLiteral(row)
+    ? elements(row) : []);
+  if (values.some((row) => row.length !== 2 || row.some((value) => !cell.test(value) && !INVALID_DATE_CONSTRUCTION.test(value)))) return undefined;
+  // A literal Date allocation is the only admitted cell call. Its constructor
+  // and the primitive intrinsic values must not be rebound or escape by alias.
+  const intrinsic = "(?:date|number|nan|infinity|undefined)";
+  if (new RegExp(`\\b(?:const|let|var|class|function)\\s+${intrinsic}\\b|\\b(?:import|function|catch)\\b[^;{}]{0,300}\\b${intrinsic}\\b`, "i").test(testText)
+    || new RegExp(`\\b(?:const|let|var)\\s*(?:\\{[^}]{0,500}\\b${intrinsic}\\b|\\[[^\\]]{0,500}\\b${intrinsic}\\b)|(?:\\([^)]*\\b${intrinsic}\\b[^)]*\\)|\\b${intrinsic})\\s*=>`, "i").test(testText)
+    || new RegExp(`\\b${intrinsic}\\b(?:\\s*\\.\\s*[a-z_$][a-z0-9_$]*)?\\s*(?:=(?!=|>)|\\+\\+|--|[+*/%&|^-]=)`, "i").test(testText)) return undefined;
+  for (const match of testText.matchAll(/\b(?:date|number)\b/gi)) {
+    const before = testText.slice(0, match.index), after = testText.slice(match.index + match[0].length);
+    if (match[0].toLowerCase() === "date" && /\bnew\s*$/.test(before) && /^\s*\(/.test(after)) continue;
+    if (/^\s*\.\s*(?:parse|now|utc|isfinite|isnan|isinteger|issafeinteger)\s*\(/i.test(after)) continue;
+    if (/^\s*\.\s*(?:nan|(?:positive_|negative_)?infinity)\b(?!\s*(?:\[|\.|=|\+\+|--))/i.test(after)) continue;
+    return undefined;
+  }
+  return values;
+}
+
+function tupleTargetImportsAreStable(testText, callableNames) {
+  const imports = [...testText.matchAll(/\bimport\s+([^;]{1,800}?)\s+from\s+__pi_[a-z0-9_]+__\s*;?/gi)];
+  return [...callableNames].every((name) => {
+    const root = name.split(".")[0];
+    if (!/^[a-z_$][a-z0-9_$]*$/i.test(root)) return false;
+    const matches = imports.filter((item) => new RegExp(`\\b${escapeRegex(root)}\\b`, "i").test(item[1]));
+    const bindings = matches.map((item) => ({ name: root, start: item.index, end: item.index + item[0].length }));
+    return bindings.length === 1 && importedCallableBindingIsStable(testText, bindings[0], bindings);
+  });
+}
+
+function tupleExpectedErrorClasses(assertion) {
+  const invocation = assertion.match(/^[a-z_$][a-z0-9_$]*\.(?:throws|rejects)\s*\(/i);
+  if (!invocation) return undefined;
+  const open = invocation[0].length - 1, end = balancedEnd(assertion, open);
+  if (end !== assertion.length) return undefined;
+  const args = topLevelArgumentRanges(assertion, open, end).map((item) => item.text);
+  if (args.length !== 2 && args.length !== 3) return undefined;
+  if (args.length === 3 && !/^__pi_(?:[a-z0-9_]*string|error_name_[a-z]+)_literal__$/.test(args[2])) return undefined;
+  const expected = ERROR_CONSTRUCTORS.find((name) => args[1] === name
+    || new RegExp(`^\\{\\s*name\\s*:\\s*__pi_error_name_${name}_literal__\\s*,?\\s*\\}$`).test(args[1]));
+  return expected ? [expected] : undefined;
+}
+
 function assertionHelperDeclarations(testText) {
   const declarations = [];
   for (const match of testText.matchAll(/\bfunction\s+([a-z_$][a-z0-9_$]*)\s*\(([^)]*)\)\s*\{/gi)) {
@@ -593,7 +652,7 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const callback = callbackBodyRange(testText, argumentsList.at(-1));
     if (liveRunnerBindings.get(match[1].toLowerCase()) !== "suite"
       || !registrationArgumentsEnabled(argumentsList) || !callback) skippedRanges.push({ start: match.index, end });
-    else suiteRanges.push({ ...callback, callStart: match.index });
+    else suiteRanges.push({ ...callback, callStart: match.index, tupleCallbackClosed: tupleRegistrationIsClosed(argumentsList) });
   }
   for (const match of testText.matchAll(registrationPattern(testNames, "(?:\\.(?:concurrent|only))?"))) {
     const open = testText.indexOf("(", match.index);
@@ -603,7 +662,7 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const callback = callbackBodyRange(testText, argumentsList.at(-1));
     if (liveRunnerBindings.get(match[1].toLowerCase()) !== "test"
       || !registrationArgumentsEnabled(argumentsList) || !callback) skippedRanges.push({ start: match.index, end });
-    else registeredRanges.push({ ...callback, callStart: match.index });
+    else registeredRanges.push({ ...callback, callStart: match.index, tupleCallbackClosed: tupleRegistrationIsClosed(argumentsList) });
   }
   const bracedDepthAt = (offset) => {
     let depth = 0;
@@ -735,6 +794,24 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
   };
   const iterationRanges = [];
   const unsupportedControlRanges = [];
+  const tupleAncestryIsClosed = (start) => {
+    const callbacks = [...suiteRanges, ...registeredRanges];
+    const ancestry = callbacks.filter((range) => start >= range.start && start < range.end).sort((a, b) => a.start - b.start);
+    if (ancestry.some((range) => !range.tupleCallbackClosed)) return false;
+    let parentStart = 0;
+    for (const child of [...ancestry, { callStart: start }]) {
+      const masked = callbacks.filter((range) => range.start >= parentStart && range.end <= child.callStart);
+      let prefix = testText.slice(parentStart, child.callStart);
+      for (const range of masked.sort((a, b) => b.start - a.start)) {
+        prefix = `${prefix.slice(0, range.start - parentStart)}${" ".repeat(range.end - range.start)}${prefix.slice(range.end - parentStart)}`;
+      }
+      if (/\b(?:return|throw|break|continue|if|switch|try|catch|finally|while|do|yield|await|with)\b/.test(prefix)
+        || unsupportedControlRanges.some((range) => range.start >= parentStart && range.end <= child.callStart
+          && !masked.some((callback) => range.start >= callback.start && range.end <= callback.end))) return false;
+      parentStart = child.start;
+    }
+    return true;
+  };
   for (const match of testText.matchAll(/\bfor\s*\(/g)) {
     if (!structurallyConnected(match.index)) continue;
     const open = testText.indexOf("(", match.index);
@@ -746,7 +823,22 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const iterationBody = testText[body.start] === "{" ? { start: body.start + 1, end: body.end - 1, braced: true } : { ...body, braced: false };
     const forOf = header.match(/^\s*(?:const|let)\s+([a-z_$][a-z0-9_$]*)\s+of\s+([\s\S]+?)\s*$/i);
     const iterable = forOf && literalIterationStable && iterationLiteral(forOf[2], match.index);
+    const tuple = header.match(/^\s*const\s+\[\s*([a-z_$][a-z0-9_$]*)\s*,\s*([a-z_$][a-z0-9_$]*)\s*,?\s*\]\s+of\s+([\s\S]+?)\s*$/i);
+    const tupleIterable = tuple && literalIterationStable && iterationLiteral(tuple[3], match.index);
+    const tupleRows = tupleIterable && constantTupleRows(tupleIterable.literal, testText);
+    const tupleVariables = tuple?.slice(1, 3);
+    const protectedNames = new Set([...ERROR_CONSTRUCTORS, "date", "number", "nan", "infinity", "undefined",
+      ...assertionCarriers, ...liveRunnerBindings.keys(), ...[...callableNames].flatMap((name) => name.split("."))]);
+    const tupleBindingClosed = tupleIterable && (!tupleIterable.binding
+      || [...testText.matchAll(new RegExp(`\\b${escapeRegex(tupleIterable.binding)}\\b`, "g"))].length === 2);
+    const tupleContainerStart = registrationAt(match.index)?.start ?? 0;
+    const tupleReachable = !abruptBefore(tupleContainerStart, match.index, bracedDepthAt(tupleContainerStart));
     if (iterable) iterationRanges.push({ ...iterationBody, ...iterable, kind: "for-of", variable: forOf[1] });
+    else if (tupleRows && tupleBindingClosed && tupleReachable && tupleAncestryIsClosed(match.index)
+      && tupleTargetImportsAreStable(testText, callableNames) && new Set(tupleVariables).size === 2
+      && tupleVariables.every((name) => !protectedNames.has(name))) {
+      iterationRanges.push({ ...iterationBody, ...tupleIterable, kind: "for-of", tupleRows, tupleVariables });
+    }
     else if (modeHintsOnly && forOf) iterationRanges.push({ ...iterationBody, kind: "for-of", variable: forOf[1] });
     else unsupportedControlRanges.push(body);
   }
@@ -814,6 +906,34 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
       const promisePrefix = prefix.slice(boundary + 1).trim();
       const returnedConciseCallback = registeredRanges.some((range) => !range.braced && start === range.start);
       if (!/^(?:await|return(?:\s+await)?)$/.test(promisePrefix) && !returnedConciseCallback) return;
+    }
+    const tupleIteration = containingIterations.find((range) => range.tupleRows);
+    if (tupleIteration) {
+      const tuplePrefix = testText.slice(tupleIteration.start, start).trim();
+      if (containingIterations.length !== 1 || !["throws", "rejects"].includes(mode)
+        || tuplePrefix !== (mode === "rejects" ? "await" : "")
+        || testText.slice(end, tupleIteration.end).replace(/;/g, "").trim()) return;
+      const callback = String(operation ?? "").trim();
+      const expectedErrors = tupleExpectedErrorClasses(assertion);
+      if (!expectedErrors) return;
+      if (mode === "throws" && /^async\b/.test(callback)) return;
+      const invocation = callback.match(/^(?:async\s+)?\(\s*\)\s*=>\s*([a-z_$][a-z0-9_$.]*)\s*\(/i);
+      const open = invocation ? callback.indexOf("(", invocation[0].length - 1) : -1;
+      const callEnd = open < 0 ? -1 : balancedEnd(callback, open);
+      const argumentsList = callEnd === callback.length ? topLevelArgumentRanges(callback, open, callEnd).map((item) => item.text) : [];
+      if (argumentsList.length !== 2 || new Set(argumentsList).size !== 2
+        || argumentsList.some((argument) => !tupleIteration.tupleVariables.includes(argument))) return;
+      const targets = operationTargets(operation, callableNames);
+      if (targets.length !== 1) return;
+      // Expand each closed row independently. Values never migrate between
+      // argument positions or assertions with different expected error classes.
+      for (const row of tupleIteration.tupleRows) {
+        const values = argumentsList.map((argument) => row[tupleIteration.tupleVariables.indexOf(argument)]);
+        const expanded = `${callback.slice(0, open + 1)}${values.join(", ")})`;
+        assertions.push({ targets, errorClasses: expectedErrors, partitions: evidencePartitionSignals(expanded), mode, operation: expanded,
+          iterationLiterals: [], iterationVariables: [], iterationBindings: [] });
+      }
+      return;
     }
     const referencedIterations = containingIterations.filter((range) => (
       new RegExp(`\\b${escapeRegex(range.variable)}\\b`, "i").test(assertion)

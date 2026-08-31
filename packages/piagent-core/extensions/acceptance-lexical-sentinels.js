@@ -4,6 +4,7 @@ export function stringLiteralSentinel(value) {
   if (raw === "00") return "__pi_two_digit_zero_string_literal__";
   if (raw === "000") return "__pi_millisecond_padding_string_literal__";
   if (raw === "+") return "__pi_positive_sign_string_literal__";
+  if (raw === "-") return "__pi_negative_sign_string_literal__";
   if (raw === "Z") return "__pi_utc_z_string_literal__";
   if (raw === '"') return "__pi_double_quote_string_literal__";
   if (/^\s+$/u.test(raw)) return "__pi_whitespace_string_literal__";
@@ -21,7 +22,7 @@ export function stringLiteralSentinel(value) {
     if (day < 1 || day > limit) return "__pi_invalid_calendar_date_string_literal__";
   }
   if (/^\d{1,4}[/.]\d{1,2}[/.]\d{1,4}(?:\s|t|$)/i.test(normalized)) return "__pi_invalid_date_string_literal__";
-  if (/^(?:invalid(?:[- ]date)?|not[- ]a[- ]date)$/i.test(normalized)) return "__pi_invalid_date_string_literal__";
+  if (/^(?:invalid(?:[- ]date)?|not[- ]a[- ]date)$/i.test(normalized)) return "__pi_unparseable_date_string_literal__";
   const errorName = raw.match(/^(TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError|Error)$/)?.[1]?.toLowerCase();
   return errorName ? `__pi_error_name_${errorName}_literal__` : "__pi_string_literal__";
 }

@@ -147,7 +147,7 @@ export function rejectionStatementErrorClass(text, requestedErrors) {
   }
   if (close === -1) return null;
   const argument = text.slice(open + 1, close - 1).trim();
-  if (argument && !/^__pi_(?:(?:empty|double_quote|whitespace)_string|invalid_(?:calendar_)?date_string|string|node_assert_module|code_generation_module|module_loader_module|error_name_[a-z]+)_literal__$/i.test(argument)) return null;
+  if (argument && !/^__pi_(?:(?:empty|double_quote|whitespace)_string|invalid_(?:calendar_)?date_string|unparseable_date_string|string|node_assert_module|code_generation_module|module_loader_module|error_name_[a-z]+)_literal__$/i.test(argument)) return null;
   if (!/^(?:[ \t]*;|[ \t]*(?:\}|$))/u.test(text.slice(close))) return null;
   return requestedErrors.length === 0 || requestedErrors.includes(errorClass) ? errorClass : null;
 }

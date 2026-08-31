@@ -211,6 +211,10 @@ test("ISO recovery guidance identifies optional captures and proleptic calendar 
   assert.match(guidance, /with and without fractional seconds/i);
   assert.match(guidance, /optional capturing groups shift later match indexes/i);
   assert.match(guidance, /years 0000 through 0099/i);
+  assert.match(guidance, /numeric UTC offsets of both signs/i);
+  assert.match(guidance, /negative sub-hour offset/i);
+  assert.match(guidance, /immediately before, at, and after/i);
+  assert.match(guidance, /millisecond truncation for long fractional strings/i);
   assert.match(guidance, /Date\.UTC\(year/i);
 });
 

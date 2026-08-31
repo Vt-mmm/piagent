@@ -805,7 +805,7 @@ describe("piagent guard integration", () => {
       systemPromptOptions: { cwd, selectedTools: toolsBefore } }, ctx);
     const task = activeSessionTask(cwd, "initial-semantic-proof");
     const hints = acceptanceProofGuidance(task);
-    assert.equal(hints.length, 4);
+    assert.equal(hints.length, 5);
     assert.match(started.message.content, /Piagent intake guidance compacted/);
     for (const hint of hints) assert.ok(started.message.content.includes(hint), `Initial context lost generated proof: ${hint}`);
     assert.equal(task.trace.outcome, "pending");
@@ -3931,6 +3931,90 @@ describe("piagent guard integration", () => {
     assert.deepEqual(completed.finalWorkingTreeFiles, ["src/order.js", "test/order.test.js"]);
     assert.deepEqual(Object.keys(completed.finalFileDigests).sort(), completed.finalWorkingTreeFiles);
     assert.equal(harness.entries.filter((entry) => entry.type === "message" && entry.payload.customType === "piagent-performance-review").length, 1);
+  });
+
+  it("settles proved owned-Date and tuple evidence while blocking unsigned offsets after a real passing verifier", async () => {
+    // Exercise actual registered lifecycle hooks and a real local project
+    // verifier. The model/tool transport is a fixture, not a provider session.
+    const owned = fs.readFileSync(new URL("./fixtures/temporal-owned-date.js", import.meta.url), "utf8")
+      .replace("function isExpired(", "function deadlinePassed(");
+    for (const correct of [true, false]) {
+      const { root, piagentGuard } = await loadGuardFixture();
+      const cwd = createProject(root);
+      fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+      fs.writeFileSync(path.join(cwd, "src/deadline.js"), "export function deadlinePassed(timestamp, now) { return false; }\n");
+      fs.writeFileSync(path.join(cwd, "test/deadline.test.js"), "// baseline\n");
+      fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ type: "module", scripts: { test: "node --test test/deadline.test.js" } }));
+      execFileSync("git", ["-C", cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "add", "src/deadline.js", "test/deadline.test.js", "package.json"]);
+      execFileSync("git", ["-C", cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "deadline baseline"]);
+      const sessionId = `owned-date-${correct ? "correct" : "unsigned"}`;
+      const ctx = createContext(cwd, { sessionId, sessionName: sessionId });
+      const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+      piagentGuard(harness.pi);
+      await harness.handlers.get("session_start")({}, ctx);
+      const prompt = "Fix `deadlinePassed(timestamp, now)` in `src/deadline.js`. A deadline is reached when now is equal to or later than its timestamp. Accept an ISO timestamp string or Date for timestamp, and a millisecond number or Date for now. Invalid dates must throw TypeError; do not use the machine's current time when an explicit falsey value is provided. Preserve the API and verify the project.";
+      await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+      await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable system prompt" }, ctx);
+      const source = correct ? owned : owned.replace('(zone[0] === "+" ? offset : -offset)', "offset");
+      assert.equal(source === owned, correct);
+      const focused = [
+        'import assert from "node:assert/strict";',
+        'import { deadlinePassed } from "../src/deadline.js";',
+        'for (const [first, second] of [["January 1, 2026", 0], ["2026-02-30T00:00:00Z", 0], [new Date(NaN), 0]]) {',
+        '  assert.throws(() => deadlinePassed(first, second), TypeError);',
+        '}',
+        'for (const value of [undefined, null, false, new Date(NaN), NaN, Infinity]) assert.throws(() => deadlinePassed("2026-01-01T00:00:00Z", value), TypeError);',
+        'assert.equal(deadlinePassed(new Date(0), 0), true);',
+        'assert.equal(deadlinePassed("2026-01-01T00:00:00Z", Date.parse("2026-01-01T00:00:00Z") - 1), false);',
+        'assert.equal(deadlinePassed("2026-01-01T00:00:00Z", Date.parse("2026-01-01T00:00:00Z")), true);',
+        'assert.equal(deadlinePassed("9999-01-01T00:00:00Z"), false);',
+        ''
+      ].join("\n");
+      let sequence = 0;
+      const authorize = async (toolName, input) => {
+        const toolCallId = `owned-date-${++sequence}`;
+        const result = await harness.handlers.get("tool_call")({ toolCallId, toolName, input }, ctx) ?? {};
+        assert.equal(result.block, undefined, result.reason);
+        return toolCallId;
+      };
+      const finish = (toolCallId, toolName, input, output) => harness.handlers.get("tool_result")({
+        toolCallId, toolName, input, content: [{ type: "text", text: output }], details: { exitCode: 0 }, isError: false, timestamp: Date.now()
+      }, ctx);
+      const contextInput = { path: "src/deadline.js" };
+      await finish(await authorize("read", contextInput), "read", contextInput, fs.readFileSync(path.join(cwd, contextInput.path), "utf8"));
+      for (const input of [{ path: "src/deadline.js", content: source }, { path: "test/deadline.test.js", content: focused }]) {
+        const id = await authorize("write", input);
+        fs.writeFileSync(path.join(cwd, input.path), input.content);
+        await finish(id, "write", input, `Wrote ${input.path}`);
+      }
+      const verifier = { command: "npm test" }, verifyId = await authorize("bash", verifier);
+      const projectEnv = { ...process.env, PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH}`, npm_config_offline: "true", npm_config_audit: "false", npm_config_fund: "false" };
+      delete projectEnv.NODE_TEST_CONTEXT; // The nested project must execute its tests, not inherit the parent runner's worker marker.
+      const output = execFileSync("npm", ["test"], { cwd, encoding: "utf8", env: projectEnv });
+      assert.match(output, /# fail 0/);
+      await finish(verifyId, "bash", verifier, output);
+      const review = { command: "git diff --no-ext-diff HEAD -- src/deadline.js test/deadline.test.js && git status --short" };
+      const reviewId = await authorize("bash", review);
+      await finish(reviewId, "bash", review, execFileSync("sh", ["-c", review.command], { cwd, encoding: "utf8" }));
+      const claim = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "The deadline change, focused tests and current-tree review are complete." }] } }, ctx);
+      const task = activeSessionTask(cwd, sessionId);
+      const criterion = task.acceptanceReceipt.criteria.find((item) => item.obligation === "invalid-input-rejection");
+      assert.ok(criterion);
+      assert.equal(task.verifyEvidence.at(-1).exitCode, 0);
+      assert.equal(workingTreeEvidenceDigest(task.finalFileDigests), workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
+      if (correct) {
+        assert.equal(claim, undefined, JSON.stringify({ claim, recovery: harness.entries.find((entry) => entry.payload?.customType === "piagent-completion-recovery")?.payload, workPlan: task.workPlan }));
+        assert.equal(criterion.status, "satisfied");
+        assert.equal(task.trace.outcome, "completed");
+        assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-completion-recovery"), false);
+      } else {
+        assert.notEqual(task.trace.outcome, "completed");
+        assert.equal(criterion.status, "pending");
+        const recovery = harness.entries.find((entry) => entry.payload?.customType === "piagent-completion-recovery");
+        assert.equal(recovery.payload.details.recovery.sourceMutationAllowed, false);
+        assert.equal(recovery.payload.details.recovery.failureCategory, "unknown");
+      }
+    }
   });
 
   it("blocks completion when critical acceptance obligations lack evidence", async () => {

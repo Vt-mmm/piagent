@@ -11,6 +11,14 @@ function uniqueStrings(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+export function isoTimestampProofGuidance(raw) {
+  if (!/\biso\b[^.\n]{0,80}\btimestamp\b|\btimestamp\b[^.\n]{0,80}\biso\b/.test(normalizedText(raw))) return [];
+  return [
+    "For ISO timestamps, prove valid shapes with and without fractional seconds and contract-supported omitted seconds; optional capturing groups shift later match indexes. Prove leap-day validity for years 0000 through 0099; Date.UTC(year, ...) remaps years 0 through 99.",
+    "Test numeric UTC offsets of both signs, including a negative sub-hour offset, immediately before, at, and after the same instant. Preserve millisecond truncation for long fractional strings: converting the whole fraction to a floating-point number can round into the next second."
+  ];
+}
+
 export function identifierFieldNames(raw) {
   const source = String(raw ?? "");
   const names = [];

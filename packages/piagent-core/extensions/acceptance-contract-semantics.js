@@ -1,6 +1,6 @@
 import path from "node:path";
 import { callableBodies } from "./acceptance-callable-scanner.js";
-import { acceptanceBoundaryProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements } from "./acceptance-boundary-guidance.js";
+import { acceptanceBoundaryProofGuidance, isoTimestampProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements } from "./acceptance-boundary-guidance.js";
 import { executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract, hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
 import { inputDerivedNames } from "./acceptance-input-provenance.js";
@@ -972,7 +972,7 @@ export function acceptanceContractProofGuidance(raw) {
   if (/\bnon-negative\b/.test(value)) guidance.push("Exercise zero as valid and a negative value as invalid for every non-negative constraint.");
   if (/\binclusive\b|\bthrough\b|\bfrom\b[^.\n]{0,80}\bto\b/.test(value)) guidance.push("Exercise both inclusive endpoints and the nearest value outside each endpoint.");
   if (/\bround(?:ing)?\b|\bceil(?:ing)?\b|\bclamp\b/.test(value)) guidance.push("Exercise zero, exact, partial/rounding, below-minimum, and above-maximum behavior where applicable.");
-  if (/\biso\b[^.\n]{0,80}\btimestamp\b|\btimestamp\b[^.\n]{0,80}\biso\b/.test(value)) guidance.push("For ISO timestamps, prove valid shapes with and without fractional seconds, numeric UTC offsets, and any contract-supported omitted-seconds form; optional capturing groups shift later match indexes, so bind/test the zone capture explicitly. Prove leap-day validity for proleptic years 0000 through 0099: Date.UTC(year, ...) remaps years 0 through 99 unless handled explicitly.");
+  guidance.push(...isoTimestampProofGuidance(raw));
   return uniqueStrings(guidance).slice(0, 8);
 }
 
