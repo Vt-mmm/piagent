@@ -3,7 +3,10 @@ import type { captureExecutionSnapshot } from "./acceptance-execution-snapshot.j
 import type { AuthenticatedAssessment } from "./acceptance-authenticated-admission.js";
 
 export const DURABLE_EXECUTION_VERSION: "durable-module-contract-v2";
-export type DurableContractScope = { taskRunId: string; criterionId: string };
+export type LegacyDurableContractScope = { taskRunId: string; criterionId: string };
+export type FactDurableContractScope = { version: "authenticated-contract-fact-scope-v2";
+  taskRunId: string; criterionId: string; factId: string };
+export type DurableContractScope = LegacyDurableContractScope | FactDurableContractScope;
 export type ProjectVerificationRequest = DurableContractScope & {
   criterionHash: string;
   snapshot: ReturnType<typeof captureExecutionSnapshot>["binding"];
@@ -17,6 +20,7 @@ export type DurableContractConfiguration = {
   authorizeSourceRead: (input: { projectRoot: string; sourcePath: string }) => boolean;
   exportName: string;
   checks: unknown[];
+  profile?: Readonly<{ id: string; digest: string; workerVersion: string }>;
   imageId: string;
   dockerSocket: string;
   verifierDigest: string;

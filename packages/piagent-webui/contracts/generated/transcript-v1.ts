@@ -33,7 +33,7 @@ export type TranscriptItem = {
 } & {
   messageRef: string;
   parentMessageRef: string | null;
-  role: "user" | "assistant" | "tool-result";
+  role: "user" | "assistant" | "tool-result" | "custom";
   recordedAt: string;
   agentOperationId: string | null;
   messageRequestId?: string | null;

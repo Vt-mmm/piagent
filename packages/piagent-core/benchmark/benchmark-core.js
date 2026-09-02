@@ -4,6 +4,7 @@ import { comparableAttemptUsage, comparableDuration, comparisonProtocol, complet
   familyClusteredFailureAwareUsage, familyClusteredFixedWorkloadUsage, pairedDurationBands, pairedUsageBands,
   selectPrimaryEfficiencyEstimate, tokensPerResolvedOutcome } from "./benchmark-comparison.js";
 import { benchmarkProviderWireEvidenceMatchesRequest } from "./benchmark-provider-wire.js";
+import { validateBenchmarkSuite } from "./benchmark-suite.js";
 import { canonicalProductionSuiteId, summarizeBenchmarkReleaseClaimControls } from "./benchmark-release-claim-controls.js";
 import { canonicalBenchmarkTimingDiagnostics, summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
 import { summarizeBenchmarkCausalContextEvidence } from "./benchmark-record-validation.js";
@@ -61,6 +62,8 @@ export function summarizeBenchmark({
   candidateSurface = "piagent"
 }) {
   if (baselineSurface === candidateSurface) throw new Error("Benchmark surfaces must be different");
+  // Validate numerical opt-in only; it grants no claim and leaves unversioned behavior unchanged.
+  if (suite.releaseGate?.efficiencyProtocol !== undefined) validateBenchmarkSuite(suite);
   if (canonicalProductionSuite && !canonicalProductionSuiteId(suite.id)) {
     throw new Error("Canonical production gate requires a built-in production suite identity");
   }
@@ -793,6 +796,11 @@ export function summarizeBenchmark({
         [candidateKey]: rounded(candidateFreshPerResolvedOutcome, 2)
       },
       failureAwareFreshTokenRatio: rounded(failureAwareFreshTokenRatio, 4),
+      ...(releaseGate.efficiencyProtocol === undefined ? {} : { efficiencyProtocol: {
+        version: releaseGate.efficiencyProtocol,
+        allAttemptPooledRatioRaw: allAttemptPooledEfficiency.ratioRaw, familyRatioUpper95Raw: primaryEfficiencyRatioConfidence95Raw?.upper ?? null,
+        numericGatesPassed: allAttemptPooledEfficiencyGate === true && primaryEfficiencyConfidenceGate === true
+      } }),
       allAttemptPooledEfficiency,
       allAttemptPooledEfficiencyGate,
       campaignEvidence,

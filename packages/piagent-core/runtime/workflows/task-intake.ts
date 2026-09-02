@@ -42,13 +42,18 @@ const AUTO_NO_MUTATION_CANDIDATES = [
 const AUTO_BOUNDARY_TAIL_PREFIX = "^(?:\\s|[,.;:!?()\\[\\]{}—–-])*(?:but\\s+)?";
 const AUTO_LOCAL_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:outside|beyond|under|within|inside|in|on|for(?!\\s+now\\b)|except(?:\\s+for)?|other\\s+than|apart\\s+from|to\\b|only\\s+(?:(?:edit|change|modify|mutate|touch|write)\\b|(?:in|under|within|outside)\\b|(?:[a-z0-9_.@*?-]+\\/))|ngo(?:a|à)i\\b|tr(?:u|ừ)\\b)`, "i");
 const AUTO_TEMPORARY_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:(?:not\\s+)?yet\\b|right\\s+now\\b|for\\s+now\\b|at\\s+(?:(?:this|the\\s+current)\\s+(?:step|stage|phase|time)|the\\s+moment)\\b|during\\s+(?:(?:this|the\\s+current)\\s+)?(?:step|stage|phase|planning)\\b|while\\b|unless\\b|until\\b|before\\b|hi(?:e|ệ)n\\s+t(?:a|ạ)i\\b|b(?:a|â)y\\s+gi(?:o|ờ)\\b)`, "i");
+const AUTO_GLOBAL_NO_ACCESS_BOUNDARY = /\b(?:do not|don't|must not|never)\s+(?:read|execute|write|delete|restore|hash|echo|compare)(?:\s*,\s*(?:read|execute|write|delete|restore|hash|echo|compare)){1,6}(?:\s*,?\s*or\s+(?:read|execute|write|delete|restore|hash|echo|compare))?\s+(?:any\s+|the\s+|this\s+)?(?:project|workspace|repository|repo|audit|environment)(?:\s+or\s+(?:project|workspace|repository|repo|audit|environment))?\s+(?:content|data|files?|records?|history)\b/i;
 const AUTO_GLOBAL_READ_ONLY_PATTERNS = [
   /^\s*\/?read-only\s*(?:$|[.!?:;—–-])/im,
   /^\s*\/?read-only\s+(?:task|run|session)\s*(?:$|[.!?:;—–-]|\b(?:to|for)\b)/im,
   /^\s*\/?read-only\s+(?:assessment|review)\s*(?:$|[.!?:;—–-]|\b(?:of|for)\b)/im,
   /\b(?:as|in)\s+(?:a\s+)?read-only\s+(?:mode|task|run|session|assessment|review)\b/i,
   /\b(?:use|perform|conduct|run)\s+(?:a\s+)?read-only\s+(?:task|run|assessment|review)\b/i,
-  /\b(?:keep\s+)?(?:this\s+|the\s+)?(?:task|run|session|workspace|project|repo|repository)\s+(?:(?:is|must|should)\s+(?:be\s+|remain\s+)?|remain\s+)?read-only\b/i
+  /\b(?:keep\s+)?(?:this\s+|the\s+)?(?:task|run|session|workspace|project|repo|repository)\s+(?:(?:is|must|should)\s+(?:be\s+|remain\s+)?|remain\s+)?read-only\b/i,
+  // A task-wide refusal may forbid every material operation without using the
+  // literal phrase "read-only" or naming a file mutation. Keep this narrow:
+  // require a compound operation list and a global project/audit data object.
+  AUTO_GLOBAL_NO_ACCESS_BOUNDARY
 ];
 const AUTO_EXECUTION_INTENT = /(?:\b(?:run|execute|execution|rerun|re-run|chay)\b.{0,80}\b(?:tests?|build|checks?|gates?|lint|typecheck|package|pack|verify|verification)\b|\b(?:npm|pnpm|yarn|bun)\s+(?:test|pack|run\s+(?:build|check|lint|typecheck|verify))\b)/i;
 
@@ -101,6 +106,10 @@ function hasGlobalReadOnlyBoundary(text: string): boolean {
   return AUTO_GLOBAL_READ_ONLY_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function hasGlobalNoAccessBoundary(text: string): boolean {
+  return AUTO_GLOBAL_NO_ACCESS_BOUNDARY.test(text);
+}
+
 const PLAUSIBLE_SCOPE_ROOT = /^(?:\.github|app|apps|bin|config|docs|examples|lib|logs|packages|pages|public|scripts|spec|src|test|tests|vendor|__tests__)(?:\/|$)/i;
 const PLAUSIBLE_SCOPE_FILE = /(?:^|\/)(?:\.[^/]+|[^/]+\.(?:bash|c|cc|cjs|cpp|css|csv|env|go|graphql|gql|h|hpp|html|java|js|json|jsx|kt|kts|md|mdx|mjs|php|proto|py|rb|rs|scss|sh|sql|svg|swift|toml|ts|tsx|txt|xml|yaml|yml))$/i;
 
@@ -123,6 +132,7 @@ export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: 
   if (isNonAuthorizingChangeClarification(text)) return false;
   const noMutationBoundary = noMutationBoundarySignals(text);
   if (noMutationBoundary.temporary && !noMutationBoundary.taskWide) return false;
+  if (hasGlobalReadOnlyBoundary(text)) return false;
   const signal = classifyContextTask(text);
   const conditionalRepair = hasConditionalRepairIntent(text);
   // Explicit non-execution workflows own their operation semantics; an implementation verb inside
@@ -156,7 +166,8 @@ export function automaticReadOnlyTaskIntakeEligible(prompt: string, readProtecte
   if (!AUTO_READ_ONLY_INTENT.test(folded) && !readOnlyBoundary) return false;
   if (hasChangeIntent(folded) && !readOnlyBoundary) return false;
   if (/\bpiagent_task_start\b/i.test(text)) return false;
-  return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
+  const protectedTarget = signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
+  return !protectedTarget || hasGlobalNoAccessBoundary(text);
 }
 
 export function automaticTaskIntakeMode(prompt: string, readProtectedPaths: string[]): "source-change" | "read-only" | undefined {
@@ -185,7 +196,7 @@ export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {
 
 const ATOMIC_CLAUSE_LEAD = /^(?:accept|add|build|change|correct|create|do not|emit|ensure|fail|fix|handle|implement|invalid|missing|modify|must|never|parse|preserve|reject|repair|return|support|throw|treat|update|verify|without)\b/i;
 
-function topLevelImperativeClauses(value: string): string[] {
+function topLevelImperativeClauses(value: string, preserveSeparator = false): string[] {
   const clauses: string[] = [];
   let current = "", quote = "", round = 0, square = 0, curly = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -207,7 +218,7 @@ function topLevelImperativeClauses(value: string): string[] {
     else if (character === "{") curly += 1;
     else if (character === "}") curly = Math.max(0, curly - 1);
     if (character === ";" && round === 0 && square === 0 && curly === 0 && ATOMIC_CLAUSE_LEAD.test(value.slice(index + 1).trimStart())) {
-      if (current.trim().length >= 8) clauses.push(current.trim());
+      if (current.trim()) clauses.push(`${current.trim()}${preserveSeparator ? ";" : ""}`);
       current = "";
       continue;
     }
@@ -217,33 +228,20 @@ function topLevelImperativeClauses(value: string): string[] {
   return clauses;
 }
 
-function splitAcceptanceCriterion(value: string): string[] {
+function splitAcceptanceCriterion(value: string, grouped = false): string[] {
   const normalized = value.replace(/^\s*(?:[-*+] |\d+[.)]\s+)/, "").replace(/\s+/g, " ").trim();
-  if (!normalized || normalized.length < 8) return [];
-  const label = normalized.match(/^(\[[^\]\n]{1,40}\])\s+/)?.[1] ?? "";
+  if (!normalized) return [];
+  const label = grouped ? "" : normalized.match(/^(\[[^\]\n]{1,40}\])\s+/)?.[1] ?? "";
   const body = label ? normalized.slice(label.length).trim() : normalized;
   const prefix = label ? `${label} ` : "";
   const available = AUTO_ACCEPTANCE_CRITERION_CHARS - prefix.length;
   const fragments: string[] = [];
-  const units = topLevelImperativeClauses(body)
+  const units = topLevelImperativeClauses(body, grouped)
     .flatMap((clause) => clause.split(/(?<=[.!?])\s+(?=(?:[`"'([{]|[\p{Lu}\p{N}]|(?:do|must|never|verify)\b))/u))
-    .filter((item) => item.trim().length >= 8);
+    .filter((item) => item.trim());
   for (const unit of units) {
-    let remaining = unit.trim();
-    while (remaining.length > available) {
-      const window = remaining.slice(0, available + 1);
-      const sentence = [...window.matchAll(/[.!?;:]\s+/g)].at(-1);
-      const clause = [...window.matchAll(/,\s+/g)].at(-1);
-      const whitespace = window.lastIndexOf(" ");
-      const preferred = sentence && sentence.index! + sentence[0].trimEnd().length >= Math.floor(available / 3)
-        ? sentence.index! + sentence[0].trimEnd().length
-        : clause && clause.index! + 1 >= Math.floor(available / 2)
-          ? clause.index! + 1
-          : whitespace;
-      const cut = preferred > 0 ? preferred : available;
-      fragments.push(`${prefix}${remaining.slice(0, cut).trim()}`);
-      remaining = remaining.slice(cut).trim();
-    }
+    const remaining = unit.trim();
+    if (remaining.length > available) throw acceptanceCriteriaOverflow();
     if (remaining) fragments.push(`${prefix}${remaining}`);
   }
   return fragments;
@@ -257,66 +255,35 @@ function isPathOnlyCriterion(value: string): boolean {
   return /^(?:[A-Za-z0-9_@.-]+\/)+[A-Za-z0-9_@.-]+$/.test(normalized);
 }
 
-function evenlySpacedCriteria(values: string[], limit: number): string[] {
-  if (limit <= 0) return [];
-  if (values.length <= limit) return values;
-  if (limit === 1) return [values[values.length - 1]];
-  return Array.from({ length: limit }, (_entry, index) => (
-    values[Math.round((index * (values.length - 1)) / (limit - 1))]
-  ));
+function acceptanceCriteriaOverflow(): RangeError {
+  return new RangeError(`Automatic intake cannot retain every requirement within ${AUTO_ACCEPTANCE_CRITERIA_MAX} criteria of ${AUTO_ACCEPTANCE_CRITERION_CHARS} characters. No task was created by this intake. Use explicit bounded tasks without omitting requirements.`);
 }
 
-function boundedAcceptanceCriteria(values: string[], limit: number): string[] {
-  if (limit <= 0 || values.length === 0) return [];
-  if (values.length <= limit) return values;
-  const highSignal = /\b(?:do not|fail(?:s|ed)?(?:[-\s]+)closed|invalid|missing|must|never|reject(?:s|ed|ion)?|throws?|typeerror|without mutat(?:e|ing)|unchanged)\b/i;
-  const required = values.filter((criterion) => highSignal.test(criterion));
-  const selectedRequired = evenlySpacedCriteria(required, Math.min(limit, required.length));
-  const selected = new Set(selectedRequired);
-  const remaining = values.filter((criterion) => !selected.has(criterion));
-  for (const criterion of evenlySpacedCriteria(remaining, limit - selected.size)) selected.add(criterion);
-  return values.filter((criterion) => selected.has(criterion));
-}
-
-type AtomicCriterionGroup = { criteria: string[]; index: number };
-
-function atomicCriterionScore(value: string): number {
-  const weighted = [
-    [/(?:\bdo not\b|\bdoes not\b|\bcannot\b|\bnever\b|\binvalid\b|\breject|\bthrow|\bfail(?:s|ed)?[- ]closed\b)/i, 8],
-    [/(?:\bidentical\b|\breplay|\bcanonical|\bidempoten)/i, 6],
-    [/(?:\bstale\b|changed owner|inclusive boundary)/i, 5],
-    [/\bexact(?:ly)?\b/i, 4],
-    [/(?:\bnon-finite\b|\bnon-json\b|\bmutat|\bdigest\b|\breturn|\boutput\b)/i, 3]
-  ] as const;
-  return weighted.reduce((score, [pattern, weight]) => score + (pattern.test(value) ? weight : 0), 0);
-}
-
-function atomicCoverageCriteria(groups: AtomicCriterionGroup[], limit: number): string[] {
-  const candidates = groups.flatMap((group) => group.criteria.map((criterion, clause) => ({ criterion, group: group.index, clause })));
-  if (candidates.length <= limit) return uniqueStrings(candidates.map((item) => item.criterion));
-  const representatives = groups.filter((group) => group.criteria.length > 0).map((group) => group.criteria.at(-1)!);
-  const selected = new Set(boundedAcceptanceCriteria(representatives, Math.min(limit, representatives.length)));
-  const ranked = candidates.filter((item) => !selected.has(item.criterion)).sort((left, right) => (
-    atomicCriterionScore(right.criterion) - atomicCriterionScore(left.criterion)
-    || left.group - right.group
-    || left.clause - right.clause
-  ));
-  for (const item of ranked) {
-    if (selected.size < limit) { selected.add(item.criterion); continue; }
-    if (groups.length <= limit || atomicCriterionScore(item.criterion) === 0) continue;
-    const sameGroupAlreadyCovered = candidates.some((candidate) => candidate.group === item.group && selected.has(candidate.criterion));
-    if (!sameGroupAlreadyCovered) continue;
-    const removable = candidates
-      .filter((candidate) => selected.has(candidate.criterion) && candidate.group !== item.group)
-      .sort((left, right) => (
-        Number(/^\[/.test(left.criterion)) - Number(/^\[/.test(right.criterion))
-        || atomicCriterionScore(left.criterion) - atomicCriterionScore(right.criterion)
-        || right.group - left.group
-      ))
-      .find((candidate) => atomicCriterionScore(candidate.criterion) < atomicCriterionScore(item.criterion));
-    if (removable) { selected.delete(removable.criterion); selected.add(item.criterion); }
+function groupedAcceptanceCriteria(values: string[], limit: number): string[] {
+  // Repack the source text, not a ranked sample of its obligations. Keep generic
+  // verification/safety criteria separate so they cannot stand in for user clauses.
+  // Preserve clause boundaries as line breaks: receipts require independent
+  // evidence for the whole multiline criterion, including unpunctuated bullets.
+  const groups: string[] = [];
+  let current = "";
+  for (const value of values) {
+    if (current && current.length + 1 + value.length > AUTO_ACCEPTANCE_CRITERION_CHARS) {
+      groups.push(current);
+      current = "";
+    }
+    current = current ? `${current}\n${value}` : value;
   }
-  return uniqueStrings(candidates.filter((item) => selected.has(item.criterion)).map((item) => item.criterion)).slice(0, limit);
+  if (current) groups.push(current);
+  if (groups.length > limit) throw acceptanceCriteriaOverflow();
+  return groups;
+}
+
+function isStandaloneOpaqueMetadata(line: string, current: string): boolean {
+  // Preserve JSON, code, Markdown separators and punctuated exact tokens. A
+  // lone identifier-like token after a closed sentence is metadata/padding,
+  // not a criterion; the lossless operatorRequest remains the authority for it.
+  return /^[A-Za-z0-9_]+$/.test(line) && !/[.!?;:]$/.test(line)
+    && (!current || /[.!?;:]$/.test(current));
 }
 
 export function automaticAcceptanceCriteria(
@@ -325,31 +292,29 @@ export function automaticAcceptanceCriteria(
   mutationPolicy: "required" | "allowed" | "forbidden" = changeMode === "read-only" ? "forbidden" : "required"
 ): string[] {
   const lines = String(prompt ?? "").split(/\r?\n/);
-  const criterionGroups: AtomicCriterionGroup[] = [];
-  const obligation = /\b(?:accept|add|build|change|change only|correct|create|do not|emits?|ensure|exactly|fail(?:s|ed)?(?:[-\s]+)closed|fix|handle|implement|invalid|missing|modify|must|never|parse|preserve|reject|repair|returns?|support|throw|treat|update|without)\b/i;
+  const criterionGroups: Array<{ source: string; criteria: string[] }> = [];
   let current = "";
-  let currentIsBullet = false;
   const push = (value: string) => {
     if (isPathOnlyCriterion(value)) return;
-    criterionGroups.push({ criteria: splitAcceptanceCriterion(value), index: criterionGroups.length });
+    const source = value.replace(/^\s*(?:[-*+] |\d+[.)]\s+)/, "").replace(/\s+/g, " ").trim();
+    criterionGroups.push({ source, criteria: splitAcceptanceCriterion(source) });
   };
   const flush = () => {
-    if (current && (currentIsBullet || obligation.test(current))) push(current);
+    if (current) push(current);
     current = "";
-    currentIsBullet = false;
   };
   for (const line of lines) {
     const trimmed = line.trim();
     if (/^(?:[-*+] |\d+[.)]\s+)/.test(trimmed)) {
       flush();
       current = trimmed;
-      currentIsBullet = true;
       continue;
     }
     if (!trimmed) {
       flush();
       continue;
     }
+    if (isStandaloneOpaqueMetadata(trimmed, current)) continue;
     current = current ? `${current} ${trimmed}` : trimmed;
   }
   flush();
@@ -358,13 +323,14 @@ export function automaticAcceptanceCriteria(
     : mutationPolicy === "allowed"
       ? ["Every configured verification command passes against the final working tree."]
       : ["The configured verification command passes after the final mutation."];
-  const groupCount = criterionGroups.filter((group) => group.criteria.length > 0).length;
-  const reservedGeneric = Math.min(generic.length, Math.max(0, AUTO_ACCEPTANCE_CRITERIA_MAX - groupCount));
-  const uniqueCriteria = atomicCoverageCriteria(criterionGroups, AUTO_ACCEPTANCE_CRITERIA_MAX - reservedGeneric);
-  const selected = boundedAcceptanceCriteria(uniqueCriteria, AUTO_ACCEPTANCE_CRITERIA_MAX);
-  if (selected.length === AUTO_ACCEPTANCE_CRITERIA_MAX) return selected;
-  const missingGeneric = generic.filter((criterion) => !selected.includes(criterion));
-  return [...selected, ...missingGeneric].slice(0, AUTO_ACCEPTANCE_CRITERIA_MAX);
+  const limit = AUTO_ACCEPTANCE_CRITERIA_MAX - generic.length;
+  const atomic = criterionGroups.flatMap((group) => group.criteria);
+  const selected = atomic.length <= limit
+    ? atomic
+    : groupedAcceptanceCriteria(criterionGroups.flatMap((group) => splitAcceptanceCriterion(group.source, true)), AUTO_ACCEPTANCE_CRITERIA_MAX);
+  if (new Set(selected).size !== selected.length) throw acceptanceCriteriaOverflow();
+  const available = AUTO_ACCEPTANCE_CRITERIA_MAX - selected.length;
+  return [...selected, ...generic.filter((criterion) => !selected.includes(criterion)).slice(0, available)];
 }
 
 export function manualTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {

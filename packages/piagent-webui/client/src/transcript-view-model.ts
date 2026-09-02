@@ -51,6 +51,7 @@ export function persistedUserTextMatches(persisted: string | null | undefined, o
 }
 
 function persistedUserMatchesLiveIdentity(item: TranscriptItem, identity: LiveTranscriptIdentity): boolean {
+  if (item.agentOperationId && identity.operationRef && item.agentOperationId !== identity.operationRef) return false;
   if (item.messageRequestId && identity.messageRequestId) return item.messageRequestId === identity.messageRequestId;
   if (item.agentOperationId && identity.operationRef) return item.agentOperationId === identity.operationRef;
   const recordedAt = Date.parse(item.recordedAt), startedAt = Date.parse(identity.startedAt ?? "");
@@ -84,7 +85,7 @@ export function persistedLiveConversationMatches(items: readonly TranscriptItem[
   for (let index = userIndex + 1; index < items.length; index += 1) {
     const candidate = items[index];
     if (candidate?.role === "user") return false;
-    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if ((candidate?.role !== "assistant" && candidate?.role !== "custom") || candidate.toolCalls.length > 0) continue;
     if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
     if (successfulAssistantText(candidate.content.text ?? "")?.trim() === expectedAssistant) return true;
   }
@@ -99,7 +100,7 @@ export function persistedLiveConversationHasFinal(items: readonly TranscriptItem
   for (let index = userIndex + 1; index < items.length; index += 1) {
     const candidate = items[index];
     if (candidate?.role === "user") return false;
-    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if ((candidate?.role !== "assistant" && candidate?.role !== "custom") || candidate.toolCalls.length > 0) continue;
     if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
     if (successfulAssistantText(candidate.content.text ?? "")) return true;
   }
@@ -122,7 +123,7 @@ export function persistedConversationMatches(
   const userRef = userIndex >= 0 ? items[userIndex]?.messageRef ?? null : null;
   for (let index = userIndex + 1; index < items.length; index += 1) {
     const candidate = items[index];
-    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if ((candidate?.role !== "assistant" && candidate?.role !== "custom") || candidate.toolCalls.length > 0) continue;
     if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
     if (successfulAssistantText(candidate.content.text ?? "")?.trim() === expectedAssistant) return true;
   }
@@ -142,7 +143,7 @@ export function persistedConversationHasFinal(items: readonly TranscriptItem[], 
   for (let index = userIndex + 1; index < items.length; index += 1) {
     const candidate = items[index];
     if (candidate?.role === "user") return false;
-    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if ((candidate?.role !== "assistant" && candidate?.role !== "custom") || candidate.toolCalls.length > 0) continue;
     if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
     if (successfulAssistantText(candidate.content.text ?? "")) return true;
   }
@@ -158,7 +159,7 @@ export function conversationTranscriptItems(items: readonly TranscriptItem[]): T
     if (item.role === "user") {
       assistantIndexes.clear(); precedingUsers.add(item.messageRef); currentUserRef = item.messageRef; visible.push(item); continue;
     }
-    if (item.role !== "assistant") continue;
+    if (item.role !== "assistant" && item.role !== "custom") continue;
     // A bounded page may begin inside a tool-heavy turn. Never display a
     // durable response until its user anchor is present earlier in the page.
     if (item.parentMessageRef ? !precedingUsers.has(item.parentMessageRef) : currentUserRef === null) continue;
@@ -167,9 +168,10 @@ export function conversationTranscriptItems(items: readonly TranscriptItem[]): T
     if (item.toolCalls.length > 0) continue;
     const text = successfulAssistantText(item.content.text ?? "");
     if (!text) continue;
-    const previous = assistantIndexes.get(text.trim());
+    const key = `${item.role}:${text.trim()}`;
+    const previous = assistantIndexes.get(key);
     if (previous === undefined) {
-      assistantIndexes.set(text.trim(), visible.length); visible.push(item);
+      assistantIndexes.set(key, visible.length); visible.push(item);
     } else visible[previous] = item;
   }
   return visible;

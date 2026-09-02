@@ -17,7 +17,7 @@ function git(root, args) {
   }).trim();
 }
 
-function repositoryHead(root) {
+export function repositoryHeadIdentity(root) {
   if (fs.realpathSync.native(git(root, ["rev-parse", "--show-toplevel"])) !== root) throw new Error("Execution project must be the repository root");
   try {
     const head = git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]);
@@ -71,7 +71,7 @@ export function captureExecutionSnapshot({ projectRoot, sourcePath, modulePaths,
     if (authorizeSourceRead({ projectRoot: root, sourcePath: candidate }) !== true) throw new Error("Execution source read is not authorized");
   };
   paths.forEach(authorize);
-  const head = repositoryHead(root);
+  const head = repositoryHeadIdentity(root);
   const captured = paths.map((candidate) => { if (dependencies) authorize(candidate); return { path: candidate, ...sourceBytes(root, candidate) }; });
   const size = captured.reduce((bytes, file) => bytes + file.sourceBytes, 0);
   if (size > MAX_SOURCE_BYTES) throw new Error("Module source budget exceeded");
@@ -86,7 +86,7 @@ export function captureExecutionSnapshot({ projectRoot, sourcePath, modulePaths,
     const current = sourceBytes(root, file.path);
     if (current.sourceDigest !== file.sourceDigest || current.sourceMode !== file.sourceMode) throw new Error("Execution source graph changed during capture");
   }
-  if (!observation.proofCapable || repositoryHead(root) !== head) throw new Error("Repository snapshot is incomplete or changed");
+  if (!observation.proofCapable || repositoryHeadIdentity(root) !== head) throw new Error("Repository snapshot is incomplete or changed");
   const moduleGraph = dependencies && Object.freeze({ entry: sourcePath,
     dependencies: Object.freeze(captured.slice(1).map((file) => Object.freeze({ path: file.path, source: file.source }))) });
   const source = captured[0].source;
@@ -96,6 +96,52 @@ export function captureExecutionSnapshot({ projectRoot, sourcePath, modulePaths,
     ...(moduleGraph ? { moduleFiles: Object.freeze(captured.map((file) => Object.freeze({ sourcePath: file.path,
       sourceDigest: file.sourceDigest, sourceBytes: file.sourceBytes, sourceMode: file.sourceMode }))) } : {}) });
   return Object.freeze({ binding, snapshotDigest: hash(JSON.stringify(binding)), source, ...(moduleGraph ? { moduleGraph } : {}) });
+}
+
+function compositeMaterialBytes(root, binding, maximumBytes) {
+  if (binding.mode === "protected") return Object.freeze({ id: binding.id, mode: binding.mode,
+    relativePath: binding.relativePath, byteLength: 0, sha256: null, text: null });
+  const captured = sourceBytes(root, binding.relativePath);
+  if (captured.sourceBytes > maximumBytes || binding.mode === "frozen" && captured.sourceDigest !== binding.sha256) {
+    throw new Error("Composite material does not match its approved identity");
+  }
+  return Object.freeze({ id: binding.id, mode: binding.mode, relativePath: binding.relativePath,
+    byteLength: captured.sourceBytes, sha256: captured.sourceDigest, text: captured.source });
+}
+
+/** Stable host capture for signed composite bindings; protected bytes are never opened. */
+export function captureCompositeExecutionSnapshot({ projectRoot, materialBindings, declarations } = {}) {
+  if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot) || !Array.isArray(materialBindings)
+    || !declarations || !Array.isArray(declarations.materials)) throw new TypeError("Invalid composite snapshot request");
+  const root = fs.realpathSync.native(projectRoot), head = repositoryHeadIdentity(root);
+  const declared = new Map(declarations.materials.map(material => [material.id, material.byteLength]));
+  if (declared.size !== declarations.materials.length || materialBindings.length !== declared.size) {
+    throw new TypeError("Composite material declarations do not match bindings");
+  }
+  const protectedPaths = new Set(materialBindings.filter(binding => binding.mode === "protected").map(binding => binding.relativePath));
+  const observe = () => workingTreeObservation(workingTreeSnapshot(root, {
+    isProtectedProjectPath: candidate => protectedPaths.has((path.isAbsolute(candidate) ? path.relative(root, candidate) : candidate).split(path.sep).join("/"))
+  }));
+  const beforeTree = observe();
+  const materials = materialBindings.map(binding => {
+    if (!declared.has(binding.id)) throw new TypeError("Composite material binding is undeclared");
+    return compositeMaterialBytes(root, binding, declared.get(binding.id));
+  });
+  if (materials.reduce((total, material) => total + material.byteLength, 0) > 1024 * 1024) {
+    throw new Error("Composite material byte budget exceeded");
+  }
+  const after = materialBindings.map(binding => compositeMaterialBytes(root, binding, declared.get(binding.id)));
+  const afterTree = observe();
+  const materialIdentity = rows => rows.map(({ text: _text, ...identity }) => identity);
+  if (JSON.stringify(materialIdentity(materials)) !== JSON.stringify(materialIdentity(after))
+    || beforeTree.digest !== afterTree.digest || repositoryHeadIdentity(root) !== head) {
+    throw new Error("Composite source or material changed during capture");
+  }
+  const identities = materialIdentity(materials);
+  return Object.freeze({ projectId: hash(root), projectHead: head,
+    sourceDigest: hash(JSON.stringify([head, beforeTree.digest])), materialSnapshotDigest: hash(JSON.stringify(identities)),
+    workingTreeDigest: beforeTree.digest, proofCapable: beforeTree.proofCapable,
+    materials: Object.freeze(materials), identities: Object.freeze(identities) });
 }
 
 export function snapshotPlanSource(snapshot) {
@@ -109,11 +155,13 @@ export function snapshotPlanSource(snapshot) {
  * ignored source bytes, so both are bound independently here.
  */
 export async function runSnapshotBoundContract({ projectRoot, sourcePath, modulePaths, authorizeSourceRead, exportName, checks,
-  imageId, dockerSocket, timeoutMs, signal, executionRunId } = {}) {
+  profile, imageId, dockerSocket, timeoutMs, signal, executionRunId } = {}) {
   const request = { projectRoot, sourcePath, modulePaths, authorizeSourceRead };
   const before = captureExecutionSnapshot(request);
+  const nodeProfile = profile !== undefined;
   const result = await runIndependentContract({
-    planText: JSON.stringify({ schemaVersion: 1, ...snapshotPlanSource(before), exportName, checks }), imageId, dockerSocket, timeoutMs, signal, executionRunId
+    planText: JSON.stringify({ schemaVersion: nodeProfile ? 2 : 1, ...(nodeProfile ? { profile } : {}),
+      ...snapshotPlanSource(before), exportName, checks }), imageId, dockerSocket, timeoutMs, signal, executionRunId
   });
   let after;
   try { after = captureExecutionSnapshot(request); }

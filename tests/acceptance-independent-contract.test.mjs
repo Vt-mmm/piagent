@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { compileIndependentContract, runIndependentContract } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -36,6 +37,23 @@ test("vacuous, contradictory, duplicate, and undefined expectations are rejected
     { ...good, checks: [{ id: "wrong", cases: [{ id: "one", args: [], expected: { outcome: "pass", value: bool(true) } }] }] },
     { ...good, checks: [{ id: "wrong", cases: [{ id: "one", args: [], expected: ret(bool(true), { errorClass: "Error" }) }] }] }
   ]) assert.throws(() => compileIndependentContract(JSON.stringify(bad)));
+});
+
+test("compiler plan v2 binds the public Node profile and finite invocation data without sending expected answers", () => {
+  const input = { schemaVersion: 2, profile: expectedNodeProfile(), source: "export class Cache{set(){}get(){return 1}}", exportName: "Cache", checks: [
+    { id: "receiver", cases: [
+      { id: "new", sequence: "s", args: [], invocation: { kind: "construct", receiverId: "cache" }, expected: { outcome: "constructed" } },
+      { id: "get", sequence: "s", args: [], invocation: { kind: "method", receiverId: "cache", method: "get" }, expected: ret(num(1)) }
+    ] }
+  ] };
+  const compiled = compileIndependentContract(JSON.stringify(input)), request = JSON.parse(compiled.requestText);
+  assert.equal(compiled.version, "bounded-node-profile-contract-comparison-v1");
+  assert.deepEqual(request.profile, expectedNodeProfile());
+  assert.ok(request.cases.every(item => !Object.hasOwn(item, "expected")));
+  for (const mutate of [value => { value.profile.digest = "0".repeat(64); }, value => { delete value.checks[0].cases[0].invocation; },
+    value => { value.checks[0].cases[0].expected = ret(num(1)); }, value => { value.checks[0].cases[1].invocation.method = "delete"; }]) {
+    const invalid = structuredClone(input); mutate(invalid); assert.throws(() => compileIndependentContract(JSON.stringify(invalid)));
+  }
 });
 
 test("real comparison accepts structurally different implementations of the same bounded contract", integration, async () => {

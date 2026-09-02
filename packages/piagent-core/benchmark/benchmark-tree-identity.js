@@ -136,7 +136,7 @@ export function assertBenchmarkTreeIdentity(expected, observed, label) {
   return observed;
 }
 
-export function benchmarkTreeStatIdentity(root, { rejectEscapingSymlinks = false } = {}) {
+export function benchmarkTreeStatIdentity(root, { rejectSymlinks = false, rejectEscapingSymlinks = false } = {}) {
   const canonical = fs.realpathSync(root);
   const hash = crypto.createHash("sha256");
   const pending = [canonical];
@@ -152,6 +152,7 @@ export function benchmarkTreeStatIdentity(root, { rejectEscapingSymlinks = false
       entryCount += 1;
       field(hash, relative);
       if (stat.isSymbolicLink()) {
+        if (rejectSymlinks) fail(`Benchmark tree rejects symbolic link: ${relative}`);
         const payload = fs.readlinkSync(target);
         if (rejectEscapingSymlinks) {
           if (path.isAbsolute(payload)) fail(`Benchmark tree symlink must be relative: ${relative}`);

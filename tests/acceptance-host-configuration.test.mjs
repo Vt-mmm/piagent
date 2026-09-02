@@ -5,9 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import Ajv from "ajv";
-import { HOST_CONTRACT_SET_VERSION, installedContractVerifierDigest, openHostContractConfiguration, prepareHostContractApproval, validateHostContractPlan, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { HOST_CONTRACT_SET_VERSION, NODE_HOST_CONTRACT_CONFIGURATION_VERSION, NODE_HOST_CONTRACT_SET_VERSION, installedContractVerifierDigest, openHostContractConfiguration, prepareHostContractApproval, validateHostContractPlan, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 import { discoverRuntimeIntegrityFiles } from "../packages/piagent-core/capabilities/runtime-integrity.js";
 import { checkpointCases } from "./helpers/async-production-cases.mjs";
+import { BENCHMARK_VERIFICATION_PLAN_VERSION, NODE_BENCHMARK_VERIFICATION_PLAN_VERSION,
+  validateBenchmarkVerificationPlan } from "../scripts/benchmark-independent-verification.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
@@ -62,6 +65,65 @@ function requestSet(options) {
   second.contracts[0].checks[0].cases[0].expected.value.value = 4;
   return { ...host, plans: [first, second] };
 }
+
+function nodePlan(options, request = options.operatorRequestDigest) {
+  const contracts = structuredClone(options.contracts);
+  for (const contract of contracts) {
+    contract.route = "code";
+    for (const check of contract.checks) for (const item of check.cases) item.invocation = { kind: "call" };
+  }
+  return { schemaVersion: 3, operatorRequestDigest: request,
+    backend: { ...options.backend, profile: expectedNodeProfile() }, contracts };
+}
+
+test("host plans 3/4 and approvals v2 bind the exact Node profile while legacy 1/2 remain distinct", t => {
+  const f = fixture(t), first = nodePlan(f.options), second = nodePlan(f.options, `operator-request-v1:${"d".repeat(64)}`);
+  second.contracts[0].criterionHash = "e".repeat(64);
+  assert.equal(validateHostContractPlan(first), first);
+  assert.equal(validateHostContractPlan({ schemaVersion: 4, plans: [first, second] }).plans.length, 2);
+  const single = prepareHostContractApproval({ ...f.options, backend: first.backend, contracts: first.contracts });
+  assert.equal(single.version, NODE_HOST_CONTRACT_CONFIGURATION_VERSION);
+  const set = prepareHostContractApproval({ ...requestSet(f.options), plans: [first, second] });
+  assert.equal(set.version, NODE_HOST_CONTRACT_SET_VERSION);
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const approvalSchema = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  ajv.addSchema(approvalSchema);
+  const planSchema = ajv.compile(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/host-contract-plan.schema.json"))));
+  assert.equal(planSchema(first), true, JSON.stringify(planSchema.errors));
+  assert.equal(planSchema({ schemaVersion: 4, plans: [first, second] }), true, JSON.stringify(planSchema.errors));
+  assert.equal(ajv.validate(approvalSchema.$id, single), true, JSON.stringify(ajv.errors));
+  assert.equal(ajv.validate(approvalSchema.$id, set), true, JSON.stringify(ajv.errors));
+  writeHostContractApproval({ ...requestSet(f.options), plans: [first, second] });
+  const config = f.open();
+  assert.deepEqual(config.forRequest(first.operatorRequestDigest).backend.profile, expectedNodeProfile());
+  for (const mutate of [value => { value.backend.harness = "legacy"; }, value => { value.backend.profile.digest = "0".repeat(64); },
+    value => { delete value.contracts[0].route; }, value => { value.contracts[0].route = "composite"; },
+    value => { delete value.contracts[0].checks[0].cases[0].invocation; }]) {
+    const invalid = structuredClone(first); mutate(invalid); assert.throws(() => validateHostContractPlan(invalid));
+  }
+  assert.throws(() => validateHostContractPlan({ schemaVersion: 4, plans: [first, { ...second, schemaVersion: 1 }] }));
+});
+
+test("benchmark catalogs version host plan sets symmetrically for legacy and Node profile execution", t => {
+  const f = fixture(t), legacy = requestSet(f.options).plans[0], node = nodePlan(f.options);
+  const base = { suiteDigest: "d".repeat(64), verifierDigest: "e".repeat(64) };
+  const v1 = { schemaVersion: 1, kind: BENCHMARK_VERIFICATION_PLAN_VERSION, ...base,
+    scenarios: [{ scenarioId: "legacy", plans: [legacy] }] };
+  const v2 = { schemaVersion: 2, kind: NODE_BENCHMARK_VERIFICATION_PLAN_VERSION, ...base,
+    scenarios: [{ scenarioId: "node", plans: [node] }] };
+  assert.equal(validateBenchmarkVerificationPlan(v1), v1);
+  assert.equal(validateBenchmarkVerificationPlan(v2), v2);
+  for (const invalid of [{ ...structuredClone(v2), kind: BENCHMARK_VERIFICATION_PLAN_VERSION },
+    { ...structuredClone(v2), scenarios: [{ scenarioId: "node", plans: [legacy] }] },
+    { ...structuredClone(v1), scenarios: [{ scenarioId: "legacy", plans: [node] }] }]) {
+    assert.throws(() => validateBenchmarkVerificationPlan(invalid));
+  }
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  ajv.addSchema(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json"))));
+  const validate = ajv.compile(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/benchmark-independent-verification-plan.schema.json"))));
+  assert.equal(validate(v1), true, JSON.stringify(validate.errors));
+  assert.equal(validate(v2), true, JSON.stringify(validate.errors));
+});
 
 test("a host-owned request set selects only exact requests with isolated immutable contracts", (t) => {
   const f = fixture(t), options = requestSet(f.options);

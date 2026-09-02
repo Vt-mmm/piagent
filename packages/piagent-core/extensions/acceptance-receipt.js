@@ -1,11 +1,10 @@
-import crypto from "node:crypto";
 import path from "node:path";
 import { changedFileAcceptanceCorpus, emptyAcceptanceCorpus, isAcceptanceTestPath } from "./acceptance-language-adapters.js";
 import { durableContextEvidenceEntries, hasDurableContextEvidence } from "./context-evidence.js";
 import { matchesAnyPath, normalizePathCandidate } from "./policy-core.js";
 import { baselineReturnRepresentationConflicts, returnRepresentationGuidance } from "./return-contract.js";
 import { hasLengthPrefixedIdentityKey, tenantAssertionSignals } from "./tenant-contract.js";
-import { criterionBehaviorProofDisposition, criterionRequiresBehavioralProof, durableBehaviorProofRequired, genericCriterionEvidence, genericFallbackEvidence, isVerificationOnlyCriterion, verifierCommandsCoverTests } from "./acceptance-behavior-proof.js";
+import { acceptanceTextHash as sha256, acceptanceEvidenceKey as evidenceKey, compoundAcceptanceCriterion, acceptanceCriterionBindingValid, resetUnprovenCriterion, criterionBehaviorProofDisposition, criterionRequiresBehavioralProof, durableBehaviorProofRequired, genericCriterionEvidence, genericFallbackEvidence, isVerificationOnlyCriterion, verifierCommandsCoverTests } from "./acceptance-behavior-proof.js";
 import { allConfiguredVerifierEvidenceCurrent as hasCurrentPassingVerifier, latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree, verificationProjectionWorkspaceRevision } from "./verification-intelligence.js";
 import {
   acceptanceContractProofGuidance,
@@ -47,9 +46,6 @@ const FAILURE_CATEGORIES = new Set(["passed", "compile-typecheck", "test-asserti
 const HASH = /^[a-f0-9]{64}$/;
 const SAFE_REF = /^[a-z0-9.][a-z0-9:._/-]{0,511}$/i;
 const READ_ONLY_BOUNDARY = /\b(?:read-only|no\s+(?:code|source|project|file|workspace|repo(?:sitory)?)?\s*(?:edits?|changes?|mutations?)|do not\s+(?:edit|change|modify|mutate|touch)(?: files?| source| project| repo| workspace)?|leave\s+(?:the\s+)?(?:source|project|repo|workspace)\s+(?:unchanged|unmodified)|khong\s+(?:sua|edit|thay\s+doi)(?: file| source| project)?)\b/;
-function sha256(value) {
-  return crypto.createHash("sha256").update(String(value ?? "")).digest("hex");
-}
 function compactId(value, fallback = "criterion") {
   return String(value ?? fallback)
     .trim()
@@ -118,9 +114,9 @@ function acceptanceReadOnlyInferenceOptions(input, text) {
 
 export function inferAcceptanceObligations(text, changeMode = "source-change", options = {}) {
   const value = normalizedText(text);
-  const accessControlText = value
-    .replace(/`[^`\n]*`/g, " ")
-    .replace(/\b(?:[a-z0-9_.@-]+\/)+[a-z0-9_.@/-]+\b/g, " ");
+  // A source path locates the change; it does not declare a storage API.
+  const storageText = value.replace(/\b(?:[a-z0-9_.@-]+\/)+[a-z0-9_.@/-]+\b/g, " ");
+  const accessControlText = storageText.replace(/`[^`\n]*`/g, " ");
   const obligations = [];
   if (changeMode === "read-only" || options.mutationPolicy === "forbidden" || options.readOnlyBoundary === true) {
     obligations.push("read-only-evidence");
@@ -139,7 +135,7 @@ export function inferAcceptanceObligations(text, changeMode = "source-change", o
     obligations.push("authorization-deny-case");
   }
   const tenantMentioned = includesAny(value, [/\btenants?\b/, /\bcross[- ]tenant\b/, /\bsame[- ]tenant\b/, /\btenantid\b/]);
-  const tenantStorage = tenantMentioned && includesAny(value, [
+  const tenantStorage = tenantMentioned && includesAny(storageText, [
     /\bcache\b/, /\bcache[- ]?key\b/, /\bstorage\b/, /\bcollision\b/, /\bentity\b/, /\bsame tuple\b/
   ]);
   const strongAuthorization = includesAny(accessControlText, [
@@ -323,7 +319,7 @@ export function buildAcceptanceReceipt(input = {}) {
       id: criterionId(text, obligation, index),
       hash: sha256(text),
       obligation,
-      priority: CRITICAL_OBLIGATIONS.has(obligation) || (durableBehaviorProof && obligation !== "verification-evidence") ? "critical" : "normal",
+      priority: compoundAcceptanceCriterion(text) || CRITICAL_OBLIGATIONS.has(obligation) || (durableBehaviorProof && obligation !== "verification-evidence") ? "critical" : "normal",
       status: "pending",
       evidence: []
     };
@@ -564,17 +560,6 @@ function normalizeAcceptanceEvidence(value) {
     workingTreeDigest: isCurrentWorkingTreeDigest(value.workingTreeDigest) ? value.workingTreeDigest : undefined,
     recordedAt: typeof value.recordedAt === "string" && Number.isFinite(Date.parse(value.recordedAt)) ? value.recordedAt : undefined
   };
-}
-
-function evidenceKey(evidence) {
-  return JSON.stringify({
-    kind: evidence.kind,
-    summary: evidence.summary,
-    paths: evidence.paths ?? [],
-    command: evidence.command,
-    exitCode: evidence.exitCode,
-    workingTreeDigest: evidence.workingTreeDigest
-  });
 }
 
 function addEvidence(criterion, evidence, recordedAt) {
@@ -832,8 +817,18 @@ export function refreshAcceptanceReceipt(task, options = {}) {
   const corpus = cwd ? changedFileAcceptanceCorpus(cwd, changedFiles) : emptyAcceptanceCorpus(changedFiles);
   const independent = independentAcceptanceState(cwd, task, currentWorkingTreeDigest).assessments;
   let changed = false;
-  for (const criterion of receipt.criteria) {
+  for (const [index, criterion] of receipt.criteria.entries()) {
+    if (!acceptanceCriterionBindingValid(task, receipt, criterion, index)) {
+      changed = resetUnprovenCriterion(criterion) || changed;
+      continue;
+    }
+    const compound = compoundAcceptanceCriterion(task.acceptanceCriteria[index]);
+    if (compound && criterion.priority !== "critical") { criterion.priority = "critical"; changed = true; }
     if (independent.has(criterion.id)) { changed = applyIndependentCriterionAssessment(criterion, independent.get(criterion.id), currentWorkingTreeDigest, recordedAt) || changed; continue; }
+    if (compound) {
+      changed = resetUnprovenCriterion(criterion) || changed;
+      continue;
+    }
     if (task?.changeMode === "source-change" && cwd) {
       const previousStatus = criterion.status;
       const previousEvidence = (criterion.evidence ?? []).map(evidenceKey);
@@ -879,12 +874,21 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
   if (corpus.sourceEntries.length === 0 && corpus.testEntries.length === 0) return [];
   const workspaceRevisionDigest = verificationProjectionWorkspaceRevision(task, options);
   const verifierCurrent = hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest);
+  const independent = independentAcceptanceState(cwd, task, currentWorkingTreeDigest).assessments;
   const projections = [];
   for (const criterion of receipt.criteria.filter((item) => item.priority === "critical")) {
+    // Advisory recovery must honor the same live authority as receipt refresh.
+    // A copied status or stale/failed assessment cannot suppress missing proof.
+    const assessment = independent.get(criterion.id);
+    if (assessment?.verdict === "pass" && assessment.completionAllowed === true) continue;
     const disposition = criterionBehaviorProofDisposition({ obligation: criterion.obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, passingVerifier: verifierCurrent });
     const criterionText = (Array.isArray(task?.acceptanceCriteria) ? task.acceptanceCriteria : [])
       .find((text) => typeof text === "string" && sha256(text) === criterion.hash && !GENERATED_ACCEPTANCE_TEXTS.has(text));
     if (!criterionText) continue;
+    if (compoundAcceptanceCriterion(criterionText)) {
+      projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText, targets: [], missingDimensions: ["independent-compound-proof"], proofHints: ["Use an approved independent assessment covering every clause of this exact criterion. A partial verifier or source heuristic cannot prove the group; do not edit source solely to satisfy that heuristic."] });
+      continue;
+    }
     if (disposition === "unknown") { projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: [], missingDimensions: ["adapter-linkage"], proofHints: ["Add a focused executable test with a direct relative import to the changed source, or configure a deterministic language adapter that resolves this helper/barrel path; then rerun the exact verifier."] }); continue; }
     if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest)) continue;
     const evidenceCriterionText = criterion.obligation === "invalid-input-rejection" ? invalidInputCriterionText(task, criterion) : criterionText;

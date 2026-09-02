@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
@@ -31,6 +33,33 @@ test("measurement-only is an explicit boolean opt-in with an observational claim
   assert.match(benchmarkUsage, /--measurement-only\s+Observe the full production-v2 108-session matrix; no release claim/);
   assert.throws(() => parseBenchmarkArgs(["--measurement-only", "--measurement-only"]), /only be supplied once/);
   assert.throws(() => parseBenchmarkArgs(["--measurement-only", "false"]), /Unknown benchmark option/);
+});
+
+test("registered measurement requires one absolute manifest and remains distinct from legacy measurement-only", () => {
+  const manifest = path.join(os.tmpdir(), "approved-registration.json");
+  const options = parseBenchmarkArgs(["--registered-measurement", manifest]);
+  assert.equal(options.registeredMeasurement, manifest);
+  assert.equal(options.measurementOnly, false);
+  assert.match(benchmarkUsage, /--registered-measurement <absolute-manifest>/);
+  assert.throws(() => parseBenchmarkArgs(["--registered-measurement", "relative.json"]), /absolute approved manifest path/);
+  assert.throws(() => parseBenchmarkArgs(["--registered-measurement", manifest,
+    "--registered-measurement", manifest]), /only be supplied once/);
+});
+
+test("registered measurement rejects ad hoc suite, matrix, resource and legacy verification overrides", () => {
+  const manifest = path.join(os.tmpdir(), "approved-registration.json");
+  const cases = [["--suite", "production-v2"], ["--measurement-only"], ["--surfaces", "piagent,codex-cli"],
+    ["--model", "openai-codex/gpt-5.6-luna"], ["--thinking", "medium"], ["--service-tier", "default"],
+    ["--repeats", "2"], ["--infrastructure-retries", "0"], ["--scenarios", "one"],
+    ["--seed", "fixed"], ["--timeout", "900"], ["--verification-plan", "/tmp/plan.json"],
+    ["--approve-verification"], ["--max-runtime-minutes", "10"], ["--stop-after-failed-pair"]];
+  for (const args of cases) for (const argv of [["--registered-measurement", manifest, ...args],
+    [...args, "--registered-measurement", manifest]]) {
+    assert.throws(() => parseBenchmarkArgs(argv), error => error.message.includes("--registered-measurement")
+      && error.message.includes(args[0]), args[0]);
+  }
+  assert.doesNotThrow(() => parseBenchmarkArgs(["--registered-measurement", manifest,
+    "--max-sessions", "12", "--keep-workspaces", "--dry-run", "--yes"]));
 });
 
 test("measurement-only rejects early quality stops and filtered/runtime-limited runs in either argument order", () => {

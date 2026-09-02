@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,8 +17,245 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import * as observationRecovery from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
+import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
+import { writeBenchmarkRunManifest } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
+import { loadResumeState } from "../scripts/benchmark-runner-support.mjs";
 
 const hash = "a".repeat(64);
+
+function observationFixture(t) {
+  const runRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-observation-custody-")));
+  fs.chmodSync(runRoot, 0o700);
+  let release = acquireBenchmarkRunLock(runRoot, "public-run");
+  t.after(() => { release(); fs.rmSync(runRoot, { recursive: true, force: true }); });
+  const keys = crypto.generateKeyPairSync("ed25519"), journalPath = path.join(runRoot, "observer.jsonl");
+  fs.writeFileSync(journalPath, "", { mode: 0o600 });
+  const digest = value => crypto.createHash("sha256").update(value).digest("hex");
+  const identity = { protocol: "runtime-observation-v2", runId: "public-run", attemptId: "public-attempt", armId: "public-arm",
+    candidateDigest: hash, configurationDigest: "b".repeat(64), keyId: digest(keys.publicKey.export({ type: "spki", format: "der" })) };
+  const manifest = { schemaVersion: 1, runId: identity.runId, configurationDigest: identity.configurationDigest,
+    candidateProvenance: { contentDigest: identity.candidateDigest }, ledger: emptyBenchmarkLedgerBinding() };
+  writeBenchmarkRunManifest(runRoot, manifest);
+  const options = { runRoot, manifest, identity, journalPath, publicKey: keys.publicKey,
+    requests: [{ messageRequestId: "request", operatorInputSha256: hash }] };
+  const open = () => observationRecovery.createBenchmarkObservationCustody(options);
+  const envelope = (checkpoint, event, changes = {}) => {
+    const material = JSON.stringify({ protocol: identity.protocol, armId: identity.armId, candidateDigest: identity.candidateDigest,
+      custodyIdentity: checkpoint.identityDigest, sequence: checkpoint.sequence + 1, previousHash: checkpoint.previousHash, event, ...changes });
+    return { material, signature: crypto.sign(null, Buffer.from(material), keys.privateKey).toString("base64") };
+  };
+  const append = (custody, event) => {
+    const row = envelope(custody.observer.readCheckpoint(), event), token = custody.observer.reserve(row);
+    const fd = fs.openSync(journalPath, fs.constants.O_WRONLY | fs.constants.O_APPEND);
+    try { fs.writeSync(fd, JSON.stringify(row) + "\n"); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    custody.observer.acknowledge(token);
+    return row;
+  };
+  return { runRoot, manifest, journalPath, identity, keys, digest, options, open, envelope, append,
+    release: () => release(), relock: () => { release = acquireBenchmarkRunLock(runRoot, "public-run"); } };
+}
+
+const generationEvent = (overrides = {}) => ({ kind: "generation-created", runtimeInstanceRef: "runtime", runtimeGeneration: 1,
+  sessionId: "session", cwd: "/public-workspace", ...overrides });
+
+test("observation custody reserves a signed append before child write and resumes the exact tail", t => {
+  const f = observationFixture(t), custody = f.open();
+  const empty = custody.observer.readCheckpoint();
+  assert.equal(empty.sequence, 0); assert.equal(empty.resumable, true);
+  const row = f.envelope(empty, generationEvent()), token = custody.observer.reserve(row);
+  const stored = JSON.parse(fs.readFileSync(path.join(f.runRoot, "run-manifest.json")));
+  assert.equal(stored.observationCheckpoints[0].pending.envelopeSha256, f.digest(JSON.stringify(row) + "\n"));
+  assert.equal(fs.readFileSync(f.journalPath, "utf8"), "", "reservation is durable before child journal write");
+  fs.appendFileSync(f.journalPath, JSON.stringify(row) + "\n"); custody.observer.acknowledge(token);
+  const checkpoint = custody.observer.readCheckpoint();
+  assert.equal(checkpoint.sequence, 1); assert.equal(checkpoint.previousHash, f.digest(JSON.stringify(row)));
+  assert.equal(checkpoint.journalBinding.sha256, f.digest(fs.readFileSync(f.journalPath)));
+  const reopened = f.open().observer.readCheckpoint();
+  assert.deepEqual(reopened, checkpoint); assert.equal(reopened.runtimes[0].runtimeGeneration, 1);
+});
+
+function observationOperation(f, custody) {
+  f.append(custody, generationEvent());
+  f.append(custody, { kind: "generation-bound", runtimeInstanceRef: "runtime", runtimeGeneration: 1 });
+  f.append(custody, { kind: "operation-accepted", runtimeInstanceRef: "runtime", runtimeGeneration: 1,
+    operationRef: "operation", messageRequestId: "request", operatorInputSha256: hash });
+}
+function observationCallback(kind, fields = {}) {
+  return { kind, runtimeInstanceRef: "runtime", runtimeGeneration: 1, sequence: 1, operationRef: "operation", ...fields };
+}
+const observationRetire = () => ({ kind: "runtime-retired", runtimeInstanceRef: "runtime", generation: 1, reason: "test-closed" });
+
+for (const [name, changes] of [
+  ["foreign custody", { custodyIdentity: "c".repeat(64) }],
+  ["wrong sequence", { sequence: 2 }],
+  ["wrong predecessor", { previousHash: "d".repeat(64) }],
+  ["wrong candidate", { candidateDigest: "e".repeat(64) }]
+]) test(`observation custody rejects ${name} before reserving`, t => {
+  const f = observationFixture(t), custody = f.open(), row = f.envelope(custody.observer.readCheckpoint(), generationEvent(), changes);
+  assert.throws(() => custody.observer.reserve(row), /envelope-binding-mismatch/);
+  assert.equal(fs.readFileSync(f.journalPath, "utf8"), "");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.runRoot, "run-manifest.json"))).observationCheckpoints[0].pending, null);
+});
+
+test("observation custody rejects forged signature and stale opaque acknowledgement", t => {
+  const f = observationFixture(t), custody = f.open(), row = f.envelope(custody.observer.readCheckpoint(), generationEvent());
+  row.signature = Buffer.alloc(64).toString("base64");
+  assert.throws(() => custody.observer.reserve(row), /signature-invalid/);
+  const fresh = f.open(), valid = f.envelope(fresh.observer.readCheckpoint(), generationEvent());
+  fresh.observer.reserve(valid);
+  assert.throws(() => fresh.observer.acknowledge({}), /reservation-token-invalid/);
+  assert.equal(f.open().observer.readCheckpoint().resumable, false);
+});
+
+test("observation custody missing append remains reserved across reopen and cannot dispatch again", t => {
+  const f = observationFixture(t), custody = f.open(), row = f.envelope(custody.observer.readCheckpoint(), generationEvent());
+  const token = custody.observer.reserve(row);
+  assert.throws(() => custody.observer.acknowledge(token), /reserved-append-missing/);
+  const reopened = f.open(), checkpoint = reopened.observer.readCheckpoint();
+  assert.equal(checkpoint.sequence, 0); assert.ok(checkpoint.pending); assert.equal(checkpoint.resumable, false);
+  assert.throws(() => reopened.observer.reserve(row), /reservation-pending/);
+});
+
+test("observation custody recovers only the reserved adjacent append without rewriting journal bytes", t => {
+  const f = observationFixture(t), custody = f.open(), row = f.envelope(custody.observer.readCheckpoint(), generationEvent());
+  custody.observer.reserve(row); fs.appendFileSync(f.journalPath, JSON.stringify(row) + "\n");
+  const bytes = fs.readFileSync(f.journalPath), reopened = f.open().observer.readCheckpoint();
+  assert.equal(reopened.sequence, 1); assert.equal(reopened.pending, null);
+  assert.deepEqual(fs.readFileSync(f.journalPath), bytes);
+  assert.equal(reopened.resumable, false, "unfinished generation is not a clean restart");
+});
+
+test("observation custody rejects valid signed prefix rollback and unreserved append", t => {
+  const f = observationFixture(t), custody = f.open(); f.append(custody, generationEvent());
+  fs.writeFileSync(f.journalPath, "");
+  assert.throws(f.open, /shorter than its committed manifest checkpoint/);
+  const g = observationFixture(t), other = g.open(), row = g.envelope(other.observer.readCheckpoint(), generationEvent());
+  fs.appendFileSync(g.journalPath, JSON.stringify(row) + "\n");
+  assert.throws(g.open, /unreserved-journal-append/);
+});
+
+test("observation custody rejects a second suffix and a reserved row substitution", t => {
+  const f = observationFixture(t), custody = f.open(), row = f.envelope(custody.observer.readCheckpoint(), generationEvent());
+  custody.observer.reserve(row); fs.appendFileSync(f.journalPath, JSON.stringify(row) + "\n" + JSON.stringify(row) + "\n");
+  assert.throws(f.open, /single recoverable append/);
+  const g = observationFixture(t), other = g.open(), planned = g.envelope(other.observer.readCheckpoint(), generationEvent());
+  other.observer.reserve(planned);
+  fs.appendFileSync(g.journalPath, JSON.stringify(g.envelope(other.observer.readCheckpoint(), generationEvent({ sessionId: "other" }))) + "\n");
+  assert.throws(g.open, /reserved-append-mismatch/);
+});
+
+test("observation custody detects lock loss, parent alias and journal inode replacement", t => {
+  const f = observationFixture(t), custody = f.open(); f.release(); f.relock();
+  assert.throws(() => custody.observer.readCheckpoint(), /run-lock-changed/);
+  const g = observationFixture(t); g.open(); const bytes = fs.readFileSync(g.journalPath);
+  fs.renameSync(g.journalPath, g.journalPath + ".old"); fs.writeFileSync(g.journalPath, bytes, { mode: 0o600 });
+  assert.throws(g.open, /journal-custody-mismatch/);
+  const h = observationFixture(t), active = h.open(), moved = h.runRoot + "-moved";
+  fs.renameSync(h.runRoot, moved); fs.symlinkSync(moved, h.runRoot);
+  try { assert.throws(() => active.observer.readCheckpoint(), /custody-directory-changed/); }
+  finally { fs.unlinkSync(h.runRoot); fs.renameSync(moved, h.runRoot); }
+});
+
+test("observation custody copied checkpoint does not confer authority and wrong key cannot resume", t => {
+  const f = observationFixture(t), custody = f.open(), checkpoint = custody.observer.readCheckpoint();
+  checkpoint.identity.armId = "forged"; checkpoint.journalBinding.records = 20;
+  assert.equal(custody.observer.readCheckpoint().identity.armId, "public-arm");
+  assert.equal(custody.observer.readCheckpoint().sequence, 0);
+  const wrong = crypto.generateKeyPairSync("ed25519");
+  assert.throws(() => observationRecovery.createBenchmarkObservationCustody({ ...f.options, publicKey: wrong.publicKey }), /key-mismatch/);
+});
+
+test("observation custody does not settle a returned callback through operation end or retirement", t => {
+  const f = observationFixture(t), custody = f.open(); observationOperation(f, custody);
+  for (const kind of ["outer-attempt", "sdk-returned", "return-ready"]) f.append(custody, observationCallback(kind));
+  f.append(custody, { kind: "operation-ended", runtimeInstanceRef: "runtime", runtimeGeneration: 1, operationRef: "operation", reason: "completed" });
+  f.append(custody, observationRetire());
+  assert.equal(f.open().observer.readCheckpoint().resumable, false);
+  assert.equal(Object.hasOwn(custody.observer, "settleOperation"), false, "child cannot access parent settlement");
+  const outcome = { attemptId: f.identity.attemptId, runtimeInstanceRef: "runtime", operationRef: "operation", messageRequestId: "request",
+    usageStatus: "measured", usage: record().usage };
+  assert.throws(() => custody.settleOperation({ ...outcome, usageStatus: "unknown-after-provider-start" }), /operation-outcome-unproven/);
+  const reopened = f.open(); reopened.settleOperation(outcome);
+  assert.equal(f.open().observer.readCheckpoint().resumable, true);
+  assert.deepEqual(f.manifest.observationCheckpoints[0].runtimes[0].operations[0].outcome.usage, record().usage);
+});
+
+test("observation custody records late rejection after retirement without fabricating callback return", t => {
+  const f = observationFixture(t), custody = f.open(); observationOperation(f, custody);
+  f.append(custody, observationCallback("outer-attempt")); f.append(custody, observationRetire());
+  assert.equal(custody.observer.readCheckpoint().resumable, false);
+  f.append(custody, observationCallback("outer-rejected"));
+  assert.equal(f.open().observer.readCheckpoint().resumable, true);
+});
+
+test("observation custody clean wire metadata cannot close an outstanding callback", t => {
+  const f = observationFixture(t), custody = f.open(); observationOperation(f, custody);
+  f.append(custody, observationCallback("outer-attempt")); f.append(custody, observationRetire());
+  const checkpoint = { protocol: "host-wire-checkpoint-v1", schemaVersion: 1, manifestDigest: hash,
+    workingDirectory: "/public-workspace", sessionId: "session", runtimeInstanceRef: "runtime", sequence: 0,
+    previousReceiptHash: null, task: null, events: [{ type: "operation-closed" }], operationActive: false,
+    inputAccepted: false, pending: false, fault: null };
+  const event = { kind: "wire-checkpoint", runtimeInstanceRef: "runtime", runtimeGeneration: 1, checkpoint };
+  f.append(custody, event); assert.equal(custody.observer.readCheckpoint().resumable, false);
+  f.append(custody, observationCallback("outer-rejected")); assert.equal(custody.observer.readCheckpoint().resumable, true);
+  const broken = structuredClone(event); delete broken.checkpoint.pending;
+  assert.throws(() => f.append(custody, broken), /wire-checkpoint-shape/);
+});
+
+for (const appendBeforeCrash of [false, true]) test(`observation custody survives actual child interruption ${appendBeforeCrash ? "after" : "before"} append`, t => {
+  const f = observationFixture(t), custody = f.open(), row = f.envelope(custody.observer.readCheckpoint(), generationEvent());
+  const recoveryModule = new URL("../packages/piagent-core/benchmark/benchmark-resume-recovery.js", import.meta.url).href;
+  const lockModule = new URL("../packages/piagent-core/benchmark/benchmark-run-lock.js", import.meta.url).href;
+  const input = { identity: f.identity, requests: f.options.requests, row, journalPath: f.journalPath,
+    publicKey: f.keys.publicKey.export({ type: "spki", format: "pem" }) };
+  const fixture = path.join(f.runRoot, "public-crash-fixture.json"); fs.writeFileSync(fixture, JSON.stringify(input), { mode: 0o600 });
+  f.release();
+  const program = `import fs from 'node:fs';
+    import {createBenchmarkObservationCustody} from ${JSON.stringify(recoveryModule)};
+    import {acquireBenchmarkRunLock} from ${JSON.stringify(lockModule)};
+    const root=process.argv[1], fixture=JSON.parse(fs.readFileSync(root+'/public-crash-fixture.json'));
+    acquireBenchmarkRunLock(root,'public-run');
+    const manifest=JSON.parse(fs.readFileSync(root+'/run-manifest.json'));
+    const custody=createBenchmarkObservationCustody({runRoot:root,manifest,...fixture});
+    custody.observer.reserve(fixture.row);
+    if(process.argv[2]==='append') {
+      const fd=fs.openSync(fixture.journalPath,fs.constants.O_WRONLY|fs.constants.O_APPEND);
+      fs.writeSync(fd,JSON.stringify(fixture.row)+'\\n');fs.fsyncSync(fd);fs.closeSync(fd);
+    }
+    process.kill(process.pid,'SIGKILL');`;
+  const child = spawnSync(process.execPath, ["--input-type=module", "-e", program, f.runRoot, appendBeforeCrash ? "append" : "reserved"],
+    { encoding: "utf8", timeout: 5000, maxBuffer: 64 * 1024, env: { ...process.env, JITI_FS_CACHE: "0" } });
+  assert.equal(child.error, undefined); assert.equal(child.signal, "SIGKILL"); assert.equal(child.status, null);
+  assert.equal(child.stdout, ""); assert.equal(child.stderr, "");
+  f.relock(); const checkpoint = f.open().observer.readCheckpoint();
+  assert.equal(checkpoint.sequence, appendBeforeCrash ? 1 : 0);
+  assert.equal(checkpoint.pending === null, appendBeforeCrash);
+  assert.equal(checkpoint.resumable, false, "interruption never manufactures completed generation or provider usage");
+  console.log(JSON.stringify({ observationCrash: appendBeforeCrash ? "after-append" : "before-append", signal: child.signal,
+    checkpointSequence: checkpoint.sequence, pending: checkpoint.pending !== null, providerCalls: 0 }));
+});
+
+test("observation custody resume loader preserves legacy no-config and blocks unresolved state under run lock", t => {
+  const legacy = observationFixture(t); legacy.release();
+  const old = loadResumeState(legacy.runRoot);
+  try { assert.deepEqual(old.observationCheckpoints, []); } finally { old.releaseRunLock(); }
+  const f = observationFixture(t), custody = f.open(); f.append(custody, generationEvent()); f.release();
+  assert.throws(() => loadResumeState(f.runRoot), /resume-has-unresolved-attempt/);
+  assert.equal(fs.existsSync(path.join(f.runRoot, ".benchmark-run.lock")), false, "blocked load releases only its owned lock");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.runRoot, "run-manifest.json"))).observationCheckpoints[0].sequence, 1);
+});
+
+test("observation custody clean retired history resumes through actual parent loader without new generation", t => {
+  const f = observationFixture(t), custody = f.open(); f.append(custody, generationEvent()); f.append(custody, observationRetire());
+  const journalBytes = fs.readFileSync(f.journalPath); f.release(); const resumed = loadResumeState(f.runRoot);
+  try {
+    assert.equal(resumed.observationCheckpoints[0].resumable, true);
+    assert.equal(resumed.observationCheckpoints[0].sequence, 2);
+    assert.equal(resumed.observationCheckpoints[0].runtimes[0].runtimeGeneration, 1);
+    assert.deepEqual(fs.readFileSync(f.journalPath), journalBytes);
+  } finally { resumed.releaseRunLock(); }
+});
 
 function notApplicableCausalContextReceipt() {
   return {

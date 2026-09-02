@@ -11,6 +11,7 @@ export type AuthenticatedAssessment = Readonly<{
   missingChecks: readonly string[];
   attemptId?: string;
   criterionId?: string;
+  factId?: string;
   taskRunId?: string;
   criterionHash?: string;
   sourcePath?: string;
@@ -18,6 +19,12 @@ export type AuthenticatedAssessment = Readonly<{
   workingTreeDigest?: string;
   snapshotDigest?: string;
   projectVerificationDigest?: string;
+  contractVersion?: string;
+  profileDigest?: string;
+  planDigest?: string;
+  backendDigest?: string;
+  checks?: readonly Readonly<{ id: string; status: "pass" | "fail" | "unknown" | "error";
+    caseCount: number; counterexampleRef?: string }> [];
   executionDiagnostics?: Readonly<{
     status: "completed" | "timeout" | "cancelled" | "error";
     cleanupConfirmed: boolean; reasons: readonly string[];
@@ -30,5 +37,5 @@ export type AuthenticatedAssessment = Readonly<{
 export function unavailableAuthenticatedAssessment(reason: string): AuthenticatedAssessment;
 export function currentAuthenticatedAssessment(receipt: unknown, current: {
   taskRunId: string; criterionId: string; criterionHash: string;
-  workingTreeDigest: string; projectVerificationDigest: string | null; policy?: string;
+  workingTreeDigest: string; projectVerificationDigest: string | null; factId?: string; policy?: string;
 }): AuthenticatedAssessment | null;

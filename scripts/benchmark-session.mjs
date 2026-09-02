@@ -2,18 +2,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-
 import {
-  aggregateCodexTurnUsage,
-  aggregateSessionUsage,
-  createCodexExecJsonlCollector,
-  evaluateWorkflowEvidence
+  aggregateSessionUsage, createCodexExecJsonlCollector, evaluateWorkflowEvidence
 } from "../packages/piagent-core/benchmark/benchmark-core.js";
-import { codexExecArgs, codexExecResumeArgs } from "../packages/piagent-core/benchmark/benchmark-codex.js";
+import { codexExecArgs } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import {
   benchmarkEnvironment,
   benchmarkGitEnvironment,
-  codexProcessEnvironment,
   piagentProcessEnvironment
 } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import {
@@ -31,7 +26,7 @@ import { inspectContextTelemetry } from "../packages/piagent-core/extensions/con
 import { matchesAnyPath } from "../packages/piagent-core/extensions/policy-core.js";
 import { listTaskContracts, workingTreeFiles, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
-import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
+import { buildBenchmarkProviderWireEvidence, freezeBenchmarkWireInvocation, readBenchmarkWireReceipts, validateBenchmarkWireManifest } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { buildCodexInvocationReceipt, inspectCodexRolloutServiceTierEvidence } from "../packages/piagent-core/benchmark/benchmark-codex-rollout.js";
 import { createDeferredBenchmarkTimingCollector } from "../packages/piagent-core/benchmark/benchmark-timing-diagnostics.js";
 import { walkJsonl } from "./pi-usage-history.mjs";
@@ -39,6 +34,11 @@ import { inspectBenchmarkSessionDirectory } from "./benchmark-session-usage.mjs"
 import { runPiagentWebUiJourney } from "./benchmark-webui-journey.mjs";
 import { resolvedJourneyTurns } from "./benchmark-independent-verification.mjs";
 import { benchmarkVerificationFailure } from "../packages/piagent-core/benchmark/benchmark-independent-verification-observation.js";
+import { BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION, BENCHMARK_SCOPED_SESSION_FACTORY_VERSION,
+  BENCHMARK_SCOPED_SESSION_REQUEST_VERSION, controlledCodexEnvironment, isCodexScopedBrokerTurnFactory,
+  requireScopedCodexHome, resolveCodexJourneyScopedBrokers,
+  runCodexUserJourney } from "./benchmark-codex-journey.mjs";
+export { runCodexUserJourney } from "./benchmark-codex-journey.mjs";
 
 const coldStartRuntimeManagedPaths = [
   ".pi/project-context.md",
@@ -53,18 +53,86 @@ function fail(message) {
   throw error;
 }
 
+const scopedHash = /^[a-f0-9]{64}$/;
+const scopedId = /^[A-Za-z0-9][A-Za-z0-9:._~-]{0,159}$/;
+
+function scopedRequire(value, code) {
+  if (!value) throw Object.assign(new Error(code), { brokerCode: code });
+}
+
+function scopedExact(value, names, code) {
+  scopedRequire(value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name)), code);
+}
+
+function frozenScopedTurns(turns) {
+  scopedRequire(Array.isArray(turns) && turns.length > 0, "session-boundary-turns");
+  return Object.freeze(turns.map(turn => {
+    scopedRequire(turn && typeof turn === "object" && typeof turn.id === "string" && scopedId.test(turn.id)
+      && typeof turn.message === "string" && turn.message.length > 0 && turn.message.isWellFormed(),
+    "session-boundary-turns");
+    return Object.freeze({ id: turn.id, message: turn.message, workflow: turn.workflow ?? null,
+      reconnectBefore: turn.reconnectBefore === true, receiptUncertain: turn.receiptUncertain === true });
+  }));
+}
+
+function validScopedPiRouter(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value)
+    && value.version === "scoped-pi-operation-router-v1" && value.authority === "none"
+    && Array.isArray(value.toolNames) && typeof value.extensionFactory === "function"
+    && typeof value.beginOperation === "function" && typeof value.settlementEvidence === "function"
+    && typeof value.assertOwnership === "function" && typeof value.dispose === "function"
+    && typeof value.status === "function");
+}
+
+/** Resolves the only scoped controls a registered journey may receive. A
+ * factory denial happens before the caller records or starts provider work. */
+export async function resolveBenchmarkScopedSessionControls({ factory, directCodexScopedBroker,
+  directPiScopedBrokerRouter, journeyTurns, runId, suiteId, scenarioId, surface, repeat,
+  infrastructureAttempt, configurationSha256, workspace, model, thinking, serviceTier }) {
+  if (factory == null) return Object.freeze({ codexScopedBroker: directCodexScopedBroker ?? null,
+    piScopedBrokerRouter: directPiScopedBrokerRouter ?? null });
+  scopedExact(factory, ["version", "authority", "openSession"], "session-boundary-factory");
+  scopedRequire(factory.version === BENCHMARK_SCOPED_SESSION_FACTORY_VERSION && factory.authority === "none"
+    && typeof factory.openSession === "function", "session-boundary-factory");
+  scopedRequire(directCodexScopedBroker == null && directPiScopedBrokerRouter == null,
+    "session-boundary-direct-control-conflict");
+  scopedRequire(Array.isArray(journeyTurns) && journeyTurns.length > 0, "session-boundary-journey-required");
+  scopedRequire([runId, suiteId, scenarioId].every(value => typeof value === "string" && scopedId.test(value))
+    && ["piagent", "codex-cli"].includes(surface) && Number.isSafeInteger(repeat) && repeat >= 1
+    && repeat <= 10 && Number.isSafeInteger(infrastructureAttempt) && infrastructureAttempt >= 1
+    && infrastructureAttempt <= 3 && scopedHash.test(configurationSha256)
+    && typeof model === "string" && model.length > 0 && typeof thinking === "string" && thinking.length > 0
+    && (serviceTier === null || typeof serviceTier === "string" && serviceTier.length > 0),
+  "session-boundary-request");
+  scopedRequire(typeof workspace === "string" && path.isAbsolute(workspace)
+    && fs.realpathSync.native(workspace) === workspace, "session-boundary-workspace");
+  const request = Object.freeze({ version: BENCHMARK_SCOPED_SESSION_REQUEST_VERSION, authority: "none",
+    runId, suiteId, scenarioId, surface, repeat, infrastructureAttempt, configurationSha256, workspace,
+    model, thinking, serviceTier, turns: frozenScopedTurns(journeyTurns) });
+  const controller = await factory.openSession(request);
+  scopedExact(controller, ["version", "authority", "surface", "piScopedBrokerRouter", "codexScopedBroker"],
+    "session-boundary-controller");
+  scopedRequire(controller.version === BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION
+    && controller.authority === "none" && controller.surface === surface, "session-boundary-controller");
+  if (surface === "piagent") scopedRequire(controller.codexScopedBroker === null
+    && validScopedPiRouter(controller.piScopedBrokerRouter), "session-boundary-pi-controller");
+  else scopedRequire(controller.piScopedBrokerRouter === null
+    && isCodexScopedBrokerTurnFactory(controller.codexScopedBroker), "session-boundary-codex-controller");
+  return Object.freeze({ codexScopedBroker: controller.codexScopedBroker,
+    piScopedBrokerRouter: controller.piScopedBrokerRouter });
+}
+
 function privateDirectory(target) {
   fs.mkdirSync(target, { recursive: true, mode: 0o700 });
   try { fs.chmodSync(target, 0o700); } catch { /* Non-POSIX filesystem. */ }
   return target;
 }
-
 function privateTemporaryDirectory(prefix) {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   try { fs.chmodSync(target, 0o700); } catch { /* Non-POSIX filesystem. */ }
   return target;
 }
-
 function makeFixtureWritable(root) {
   const pending = [root];
   while (pending.length > 0) {
@@ -390,137 +458,7 @@ export function persistedJourneyReceipt(receipt) {
   };
 }
 
-export async function runCodexUserJourney({
-  runCommand,
-  codexCommand,
-  workspace,
-  turns,
-  options,
-  disabledFeatures, codexRuntime,
-  environment,
-  timeoutMs,
-  forbiddenOutputSubstrings
-}) {
-  const started = Date.now();
-  const deadline = started + timeoutMs;
-  const outputs = [];
-  const errors = [];
-  const usages = [];
-  const diagnostics = [];
-  const forbiddenHits = new Set();
-  const turnReceipts = [];
-  let threadId = null;
-  let code = 0;
-  let signal = null;
-  let timedOut = false;
-
-  for (const [index, turn] of turns.entries()) {
-    const remainingMs = deadline - Date.now();
-    if (remainingMs <= 0) {
-      code = 1;
-      timedOut = true;
-      errors.push(`journey-timeout-before-turn-${index + 1}`);
-      break;
-    }
-    const collector = createCodexExecJsonlCollector({
-      model: options.model,
-      thinkingLevel: options.thinking,
-      requestedServiceTier: options.serviceTier,
-      onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, forbiddenHits)
-    });
-    const timing = createDeferredBenchmarkTimingCollector({ surface: "codex-cli" });
-    const args = threadId
-      ? codexExecResumeArgs({ threadId, options, disabledFeatures })
-      : codexExecArgs({ workspace, options, disabledFeatures, persistent: true });
-    const result = await runCommand(codexCommand, args, {
-      cwd: workspace,
-      input: turn.message,
-      timeoutMs: remainingMs,
-      forbiddenSubstrings: forbiddenOutputSubstrings,
-      onStdoutChunk: (chunk, observation) => {
-        timing.write(chunk, observation?.observedAtSeconds);
-        collector.write(chunk);
-      },
-      env: environment
-    });
-    outputs.push(result.stdout ?? "");
-    errors.push(result.stderr ?? "");
-    for (const value of result.forbiddenHits ?? []) forbiddenHits.add(value);
-    let turnUsage = null;
-    try {
-      const parsedUsage = collector.finish();
-      turnUsage = {
-        ...parsedUsage,
-        codexInvocationReceipt: buildCodexInvocationReceipt({
-          command: codexCommand, args, runtime: codexRuntime, environment, workspace, requestedModel: options.model,
-          requestedThinking: options.thinking, requestedServiceTier: options.serviceTier, resumed: index > 0, result, usage: parsedUsage
-        })
-      };
-      if (threadId && turnUsage.providerSessionId !== threadId) {
-        throw new Error("Codex CLI resumed journey changed thread identity");
-      }
-      threadId ??= turnUsage.providerSessionId;
-      usages.push(turnUsage);
-    } catch (error) {
-      diagnostics.push({ type: "journey-usage", message: error instanceof Error ? error.message : String(error) });
-      turnUsage = null;
-    }
-    diagnostics.push(...collector.diagnostics());
-    turnReceipts.push({
-      index: index + 1,
-      id: turn.id,
-      promptHash: crypto.createHash("sha256").update(turn.message).digest("hex"),
-      resumed: index > 0,
-      exitCode: result.code,
-      timedOut: result.timedOut,
-      durationSeconds: result.durationSeconds,
-      usageExact: Boolean(turnUsage),
-      timingDiagnostics: timing.finish(result.durationSeconds)
-    });
-    if (result.code !== 0 || result.timedOut || !turnUsage) {
-      code = result.code || 1;
-      signal = result.signal ?? null;
-      timedOut = result.timedOut === true;
-      break;
-    }
-  }
-
-  let usage;
-  try {
-    if (usages.length !== turnReceipts.length) throw new Error("Codex journey started-attempt usage is incomplete");
-    usage = aggregateCodexTurnUsage(usages);
-    if (turnReceipts.length !== turns.length) {
-      diagnostics.push({ type: "journey-lifecycle", message: "Codex journey stopped before every requested turn started" });
-    }
-  } catch (error) {
-    diagnostics.push({ type: "journey-usage", message: error instanceof Error ? error.message : String(error) });
-    usage = aggregateSessionUsage([]);
-    code ||= 1;
-  }
-  return {
-    agent: {
-      code,
-      signal,
-      timedOut,
-      stdout: outputs.join("\n"),
-      stderr: errors.filter(Boolean).join("\n"),
-      durationSeconds: (Date.now() - started) / 1000,
-      forbiddenHits: [...forbiddenHits],
-      requiredHits: []
-    },
-    usage,
-    diagnostics,
-    journeyReceipt: {
-      schemaVersion: 1,
-      channel: "codex-cli-resume",
-      threadId,
-      turns: turnReceipts,
-      completed: code === 0 && turnReceipts.length === turns.length
-    }
-  };
-}
-
-export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, onProviderAttemptStart = () => {}, onProviderAttemptReturned = () => {}, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, verificationPlan, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed, piagentWebUiJourney = runPiagentWebUiJourney }) {
+export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, onProviderAttemptStart = () => {}, onProviderAttemptReturned = () => {}, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, verificationPlan, providerWirePlan, candidateDigest, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, codexScopedBroker, piScopedBrokerRouter, scopedBrokerSessionFactory, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed, piagentWebUiJourney = runPiagentWebUiJourney }) {
   if (surface !== "codex-cli" && !piRuntimeHome?.path) fail("Pi benchmark session is missing its controlled writable runtime home");
   const attemptSuffix = infrastructureAttempt > 1 ? `-infra-${infrastructureAttempt}` : "";
   const key = `${String(repeat).padStart(2, "0")}-${scenario.id}-${surface}${attemptSuffix}`;
@@ -528,6 +466,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const workspace = path.join(workspaceRoot, "project");
   const sessions = privateDirectory(path.join(workspaceRoot, "sessions"));
   fs.cpSync(resolveSuiteEntry(suiteRoot, scenario.fixture, "fixture"), workspace, { recursive: true, errorOnExist: true });
+  fs.chmodSync(workspace, 0o700);
   makeFixtureWritable(workspace);
   applySetupFiles(workspace, scenario.setupFiles);
   const profile = scenario.profile ?? suite.profile;
@@ -551,12 +490,30 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     }
   }
   await initializeGit(runCommand, systemCommands.git, workspace, scenario.setupFiles);
-  const prompt = fs.readFileSync(resolveSuiteEntry(suiteRoot, scenario.prompt, "prompt"), "utf8").trim();
-  const journeyTurns = resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry);
+  // Registered measurements dispatch the exact signed public input catalog to
+  // both arms. Integrity-only registration is insufficient: the 14 approved
+  // amendments must replace the corresponding primary turn bytes in practice.
+  const registeredInput = verificationPlan?.registeredInput?.(scenario.id) ?? null;
+  const prompt = registeredInput?.prompt
+    ?? fs.readFileSync(resolveSuiteEntry(suiteRoot, scenario.prompt, "prompt"), "utf8").trim();
+  const journeyTurns = registeredInput?.turns
+    ?? resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry);
+  const scopedSessionControls = await resolveBenchmarkScopedSessionControls({ factory: scopedBrokerSessionFactory,
+    directCodexScopedBroker: codexScopedBroker, directPiScopedBrokerRouter: piScopedBrokerRouter,
+    journeyTurns, runId, suiteId: verificationPlan?.registeredSuiteId ?? suite.id,
+    scenarioId: scenario.id, surface, repeat, infrastructureAttempt,
+    configurationSha256: verificationPlan?.measurementConfigurationDigest ?? configurationDigest,
+    workspace: fs.realpathSync.native(workspace), model: options.model,
+    thinking: options.thinking, serviceTier: options.serviceTier ?? null });
+  const effectiveCodexScopedBroker = scopedSessionControls.codexScopedBroker;
+  const effectivePiScopedBrokerRouter = scopedSessionControls.piScopedBrokerRouter;
   const independent = verificationPlan?.prepare({ scenarioId: scenario.id, surface, projectRoot: workspace,
     directory: surface === "piagent" ? path.join(privateDirectory(path.join(fs.realpathSync.native(runRoot), "independent-verification")), key) : undefined,
     approved: options.approveVerification });
   const graderPath = resolveSuiteEntry(suiteRoot, scenario.grader, "grader");
+  const codexJourneyScopedBrokers = journeyTurns && surface === "codex-cli"
+    ? isCodexScopedBrokerTurnFactory(effectiveCodexScopedBroker) ? effectiveCodexScopedBroker
+      : resolveCodexJourneyScopedBrokers(effectiveCodexScopedBroker, journeyTurns) : null;
   let sessionId = crypto.randomUUID();
   const attemptId = crypto.randomUUID();
   const piArgs = ["--print", "--mode", "json", "--session-dir", sessions, "--session-id", sessionId, "--name", `BENCH ${scenario.id} ${surface} r${repeat}`, "--approve", "--no-skills", "--no-prompt-templates", "--no-extensions", "--no-context-files"];
@@ -573,6 +530,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     workspace,
     options,
     disabledFeatures: codexDisabledFeatures,
+    scopedBroker: journeyTurns ? undefined : effectiveCodexScopedBroker,
     persistent: options.serviceTier === "fast"
   }) : piArgs;
   const codexForbiddenHits = new Set();
@@ -592,17 +550,22 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   };
   const inflightPath = path.join(workspaceRoot, "inflight.json");
   const attemptIdentity = { attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt };
+  if (providerWirePlan && (surface !== "piagent" || !journeyTurns)) fail("Provider-wire manifest requires the qualified Piagent WebUI route");
+  if (providerWirePlan) validateBenchmarkWireManifest(providerWirePlan.manifest, { template: true,
+    model: options.model, thinking: options.thinking, requestedTier: options.serviceTier });
+  const wireInvocation = providerWirePlan ? freezeBenchmarkWireInvocation({ plan: providerWirePlan, workingDirectory: workspace, platformRoot: packageRoot, custodyRoot: fs.realpathSync.native(runRoot), configurationDigest, candidateDigest }) : null;
+  const processEnvironment = surface === "codex-cli"
+    ? controlledCodexEnvironment(codexRuntime, environment)
+    : surface === "piagent"
+      ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, ...independent?.environment, ...wireInvocation?.environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
+      : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path });
+  if (surface === "codex-cli") requireScopedCodexHome(effectiveCodexScopedBroker, codexRuntime, processEnvironment);
   writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, ...attemptIdentity, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
   onProviderAttemptStart(attemptIdentity);
   let agent;
   let usageOverride;
   let journeyReceipt = null;
   let codexDiagnostics = [];
-  const processEnvironment = surface === "codex-cli"
-    ? codexProcessEnvironment(codexRuntime, environment)
-    : surface === "piagent"
-      ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, ...independent?.environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
-      : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path });
   try {
     if (journeyTurns && surface === "piagent") {
       agent = await piagentWebUiJourney({
@@ -614,7 +577,8 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
         turns: journeyTurns,
         expectedTerminalSettlement: scenario.userJourney.expectedTerminalSettlement,
         timeoutMs: options.timeoutSeconds * 1_000,
-        environment: processEnvironment
+        environment: processEnvironment,
+        ...(effectivePiScopedBrokerRouter ? { scopedBrokerRouter: effectivePiScopedBrokerRouter } : {})
       });
       journeyReceipt = agent.journeyReceipt;
       agent.forbiddenHits = observedSubstrings(agent.stdout, forbiddenOutputSubstrings);
@@ -627,6 +591,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
         turns: journeyTurns,
         options,
         disabledFeatures: codexDisabledFeatures, codexRuntime,
+        scopedBroker: codexJourneyScopedBrokers,
         environment: processEnvironment,
         timeoutMs: options.timeoutSeconds * 1_000,
         forbiddenOutputSubstrings
@@ -785,6 +750,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
       ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
     grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
+    ...(wireInvocation ? { providerWirePhaseEvidence: readBenchmarkWireReceipts(wireInvocation) } : {}),
     ...(independentVerification ? { independentVerification } : {}),
     durationSeconds: agent.durationSeconds, timingDiagnostics,
     promptHash: crypto.createHash("sha256").update(promptBinding).digest("hex"),

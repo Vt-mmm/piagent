@@ -53,7 +53,9 @@ function diagnosticRecovery(assessment: AuthenticatedAssessment) {
 export function independentVerificationRecovery(cwd: string, task: TaskContract, workingTreeDigest: string) {
   const state = independentAcceptanceState(cwd, task, workingTreeDigest);
   if (state.stopReason) return blockedRecovery(task, workingTreeDigest, state.stopReason, state.stopAttemptId);
-  if (state.block) return undefined;
+  // A host configuration/binding failure is not an unknown source defect.
+  // Preserve the operator-only path instead of spending a model diagnostic.
+  if (state.block) return blockedRecovery(task, workingTreeDigest, "approval");
   const diagnostics = [...state.assessments.values()].map(diagnosticRecovery).filter((value) => value !== undefined);
   const stop = diagnostics.find((value) => ["reconcile", "cancelled"].includes(value.independentDisposition ?? ""));
   if (stop) return stop;

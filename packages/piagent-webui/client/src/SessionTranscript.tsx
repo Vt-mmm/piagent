@@ -58,7 +58,8 @@ function TranscriptMessage({ item, locale }: { item: TranscriptItem; locale: UiL
   </Box>;
   if (!text) return null;
   return <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}><Box className="brand-mark" aria-hidden="true">π</Box>
-    <Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>Piagent</Typography>
+    <Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>{item.role === "custom"
+      ? localize(locale, "Biên nhận Piagent", "Piagent receipt") : "Piagent"}</Typography>
       {text && <Box sx={{ mt: .6 }}><AssistantText>{text}</AssistantText></Box>}
       {(item.content.redacted || item.content.truncated) && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .8 }}>
         {item.content.redacted ? localize(locale, "Đã ẩn dữ liệu nhạy cảm", "Sensitive data hidden") : localize(locale, "Nội dung đã rút gọn", "Content truncated")}

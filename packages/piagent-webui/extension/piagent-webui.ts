@@ -313,6 +313,7 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
       task: () => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()),
       activityEvents: () => readContextTelemetry(ctx.cwd, { limit: 5_000 }) as unknown[],
       currentActivity: () => [], sessionEntries: () => ctx.sessionManager.getBranch(), protectedPaths: () => protectedPaths(ctx),
+      sessionFile: () => ctx.sessionManager.getSessionFile(),
       documentReadRoots: () => documentReadRoots(ctx),
       contextUsage: () => ctx.getContextUsage(), model: () => ctx.model,
       thinkingLevel: () => ctx.thinkingLevel ?? pi.getThinkingLevel(),

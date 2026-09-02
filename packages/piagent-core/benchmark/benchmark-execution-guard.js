@@ -25,7 +25,7 @@ function assetError(stage, asset, cause) {
   return error;
 }
 
-export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suiteIdentity, piAgentHome, codexCredential, runtimeDependencies, webUiAssets, commands, verifyCommandAssets = true }) {
+export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suiteIdentity, piAgentHome, codexCredential, runtimeDependencies, webUiAssets, registeredAssets, commands, verifyCommandAssets = true }) {
   const observeAssets = (stage, runtimeHomes = []) => {
     try {
       const suite = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true });
@@ -50,6 +50,14 @@ export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suite
         assertBenchmarkTreeIdentity(webUiAssets.tree, assets, "frozen WebUI assets");
       } catch (error) {
         throw assetError(stage, "webui-assets", error);
+      }
+    }
+    if (registeredAssets) {
+      try {
+        const assets = benchmarkTreeIdentity(registeredAssets.assetRoot, { rejectSymlinks: true });
+        assertBenchmarkTreeIdentity(registeredAssets.tree, assets, "registered measurement assets");
+      } catch (error) {
+        throw assetError(stage, "registered-assets", error);
       }
     }
     if (piAgentHome?.seedIdentity) {
@@ -96,6 +104,8 @@ export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suite
       suite: suiteIdentity,
       runtimeDependencies,
       webUiAssets: webUiAssets ? Object.fromEntries(Object.entries(webUiAssets).filter(([key]) => key !== "root")) : null,
+      registeredAssets: registeredAssets ? { identity: registeredAssets.identity,
+        inventory: registeredAssets.inventory, tree: registeredAssets.tree } : null,
       piAgentHome: piAgentHome ? {
         copied: piAgentHome.copied,
         globalInstructions: piAgentHome.globalInstructions,

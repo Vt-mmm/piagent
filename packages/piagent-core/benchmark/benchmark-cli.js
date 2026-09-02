@@ -26,7 +26,7 @@ Options:
   --service-tier <tier>        default|fast. Fast is pinned on both Piagent and Codex CLI.
   --fast                       Alias for --service-tier fast.
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
-  --piagent-treatment <id>     release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, or feature-off.
+  --piagent-treatment <id>     release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, configured-independent-v2, or feature-off.
   --allow-pi-auth-writeback    Allow same-account OAuth refresh CAS writeback under Pi's auth lock.
   --verification-plan <file>  Private operator-reviewed independent verification catalog.
   --approve-verification      Explicitly authorize that catalog for this run/resume; --yes does not imply it.
@@ -44,6 +44,8 @@ Options:
   --max-runtime-minutes <n>    Stop cleanly after the current session once the budget is used.
   --stop-after-failed-pair      Terminal-stop after a Piagent outcome falls below the suite floor.
   --measurement-only           Observe the full production-v2 108-session matrix; no release claim.
+  --registered-measurement <absolute-manifest>
+                              Run only an approved production-v2-da2 complete108 registration.
   --yes                        Skip the cost/run-count confirmation.
   --dry-run                    Validate and print the execution plan only.
   --preflight-only             Freeze assets and verify auth/tools without starting a model.
@@ -88,6 +90,7 @@ export function assertBenchmarkMeasurementOptions(options) {
 }
 
 export function parseBenchmarkArgs(argv) {
+  const registeredIncompatible = new Set();
   const options = {
     suite: "core-v1",
     surfaces: ["piagent", "codex-cli"],
@@ -115,6 +118,7 @@ export function parseBenchmarkArgs(argv) {
     maxRuntimeMinutes: undefined,
     stopAfterFailedPair: false,
     measurementOnly: false,
+    registeredMeasurement: undefined,
     yes: false,
     dryRun: false,
     preflightOnly: false,
@@ -127,19 +131,24 @@ export function parseBenchmarkArgs(argv) {
       case "run":
         break;
       case "--suite":
+        registeredIncompatible.add("--suite");
         options.suite = requireValue(argv, index, arg);
         index += 1;
         break;
       case "--production":
+        registeredIncompatible.add("--production");
         options.suite = "production-v1";
         break;
       case "--deep":
+        registeredIncompatible.add("--deep");
         options.suite = "deep-logic-v1";
         break;
       case "--capability":
+        registeredIncompatible.add("--capability");
         options.suite = "capability-v1";
         break;
       case "--surfaces": {
+        registeredIncompatible.add("--surfaces");
         const values = requireValue(argv, index, arg).split(",").map((value) => value.trim()).filter(Boolean);
         if (values.length !== 2 || new Set(values).size !== 2 || values.some((value) => !benchmarkSurfaces.has(value))) {
           fail("--surfaces must contain two different values from raw-pi, piagent, codex-cli");
@@ -152,28 +161,34 @@ export function parseBenchmarkArgs(argv) {
         break;
       }
       case "--model":
+        registeredIncompatible.add("--model");
         options.model = requireValue(argv, index, arg);
         index += 1;
         break;
       case "--thinking":
+        registeredIncompatible.add("--thinking");
         options.thinking = requireValue(argv, index, arg);
         if (!thinkingLevels.has(options.thinking)) fail(`--thinking must be one of ${[...thinkingLevels].join(", ")}`);
         index += 1;
         break;
       case "--service-tier":
+        registeredIncompatible.add("--service-tier");
         options.serviceTier = requireValue(argv, index, arg);
         if (!["default", "fast"].includes(options.serviceTier)) fail("--service-tier must be default or fast");
         index += 1;
         break;
       case "--fast":
+        registeredIncompatible.add("--fast");
         options.serviceTier = "fast";
         break;
       case "--codex-mode":
+        registeredIncompatible.add("--codex-mode");
         options.codexMode = requireValue(argv, index, arg);
         if (!codexModes.has(options.codexMode)) fail("--codex-mode must be controlled or native");
         index += 1;
         break;
       case "--piagent-treatment":
+        registeredIncompatible.add("--piagent-treatment");
         options.piagentTreatment = requireValue(argv, index, arg);
         if (!Object.hasOwn(PIAGENT_BENCHMARK_TREATMENTS, options.piagentTreatment)) {
           fail(`--piagent-treatment must be one of ${Object.keys(PIAGENT_BENCHMARK_TREATMENTS).join(", ")}`);
@@ -181,30 +196,37 @@ export function parseBenchmarkArgs(argv) {
         index += 1;
         break;
       case "--allow-pi-auth-writeback":
+        registeredIncompatible.add("--allow-pi-auth-writeback");
         options.allowPiAuthWriteback = true;
         break;
       case "--verification-plan":
+        registeredIncompatible.add("--verification-plan");
         if (options.verificationPlan) fail("--verification-plan may only be supplied once");
         options.verificationPlan = path.resolve(requireValue(argv, index, arg));
         index += 1;
         break;
       case "--approve-verification":
+        registeredIncompatible.add("--approve-verification");
         if (options.approveVerification) fail("--approve-verification may only be supplied once");
         options.approveVerification = true;
         break;
       case "--repeats":
+        registeredIncompatible.add("--repeats");
         options.repeats = positiveInteger(requireValue(argv, index, arg), arg, 1, 10);
         index += 1;
         break;
       case "--infrastructure-retries":
+        registeredIncompatible.add("--infrastructure-retries");
         options.infrastructureRetries = positiveInteger(requireValue(argv, index, arg), arg, 0, 3);
         index += 1;
         break;
       case "--retry-delay":
+        registeredIncompatible.add("--retry-delay");
         options.retryDelaySeconds = positiveInteger(requireValue(argv, index, arg), arg, 0, 120);
         index += 1;
         break;
       case "--scenarios": {
+        registeredIncompatible.add("--scenarios");
         const values = requireValue(argv, index, arg).split(",").map((value) => value.trim()).filter(Boolean);
         if (values.length === 0 || new Set(values).size !== values.length) fail("--scenarios must contain unique scenario ids");
         options.scenarioIds = values;
@@ -212,11 +234,13 @@ export function parseBenchmarkArgs(argv) {
         break;
       }
       case "--seed":
+        registeredIncompatible.add("--seed");
         options.seed = requireValue(argv, index, arg);
         if (options.seed.length > 200) fail("--seed must contain at most 200 characters");
         index += 1;
         break;
       case "--timeout":
+        registeredIncompatible.add("--timeout");
         options.timeoutSeconds = positiveInteger(requireValue(argv, index, arg), arg, 30, 3600);
         index += 1;
         break;
@@ -228,6 +252,7 @@ export function parseBenchmarkArgs(argv) {
         options.keepWorkspaces = true;
         break;
       case "--replay-failures":
+        registeredIncompatible.add("--replay-failures");
         options.replayFailures = path.resolve(requireValue(argv, index, arg));
         index += 1;
         break;
@@ -240,16 +265,27 @@ export function parseBenchmarkArgs(argv) {
         index += 1;
         break;
       case "--max-runtime-minutes":
+        registeredIncompatible.add("--max-runtime-minutes");
         options.maxRuntimeMinutes = positiveInteger(requireValue(argv, index, arg), arg, 1, 24 * 60);
         index += 1;
         break;
       case "--stop-after-failed-pair":
+        registeredIncompatible.add("--stop-after-failed-pair");
         options.stopAfterFailedPair = true;
         break;
       case "--measurement-only":
+        registeredIncompatible.add("--measurement-only");
         if (options.measurementOnly) fail("--measurement-only may only be supplied once");
         options.measurementOnly = true;
         break;
+      case "--registered-measurement": {
+        if (options.registeredMeasurement) fail("--registered-measurement may only be supplied once");
+        const value = requireValue(argv, index, arg);
+        if (!path.isAbsolute(value)) fail("--registered-measurement requires an absolute approved manifest path");
+        options.registeredMeasurement = path.normalize(value);
+        index += 1;
+        break;
+      }
       case "--yes":
         options.yes = true;
         break;
@@ -272,6 +308,9 @@ export function parseBenchmarkArgs(argv) {
   }
   if (options.dryRun && options.preflightOnly) fail("--dry-run and --preflight-only are mutually exclusive");
   if (options.preflightOnly && (options.resume || options.replayFailures)) fail("--preflight-only cannot resume or replay a prior run");
+  if (options.registeredMeasurement && registeredIncompatible.size > 0) {
+    fail(`--registered-measurement cannot be combined with ${[...registeredIncompatible].join(", ")}; its approved registration pins the complete matrix and resources`);
+  }
   assertBenchmarkMeasurementOptions(options);
   return options;
 }

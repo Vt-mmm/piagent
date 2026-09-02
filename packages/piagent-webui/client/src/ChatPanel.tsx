@@ -187,7 +187,8 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
           <article className="chat-tool-result" key={item.messageRef}><strong>{item.toolCalls[0]?.toolName ?? "Tool"}</strong><span>{localize(locale, "Kết quả chi tiết nằm trong Activity", "Detailed output is available in Activity")}</span></article>
         ) : (
           <article className={`chat-message chat-${item.role}`} key={item.messageRef}>
-            <div><strong>{item.role === "user" ? localize(locale, "Anh", "You") : "Pi"}</strong><time>{new Date(item.recordedAt).toLocaleTimeString(locale === "vi" ? "vi-VN" : "en-US", { hour: "2-digit", minute: "2-digit" })}</time></div>
+            <div><strong>{item.role === "user" ? localize(locale, "Anh", "You") : item.role === "custom"
+              ? localize(locale, "Biên nhận Piagent", "Piagent receipt") : "Pi"}</strong><time>{new Date(item.recordedAt).toLocaleTimeString(locale === "vi" ? "vi-VN" : "en-US", { hour: "2-digit", minute: "2-digit" })}</time></div>
             <p>{item.content.text || (item.content.imageCount ? `${item.content.imageCount} ${localize(locale, "ảnh đính kèm", "attached images")}` : localize(locale, "Message trống", "Empty message"))}</p>
             {(item.content.redacted || item.content.truncated) && <small>{item.content.redacted ? localize(locale, "Đã che dữ liệu nhạy cảm", "Sensitive data redacted") : localize(locale, "Nội dung đã rút gọn", "Content truncated")}</small>}
           </article>

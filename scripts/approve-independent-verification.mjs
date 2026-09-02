@@ -9,7 +9,7 @@ Without --approve, validate and preview a host-owned verification plan only.
 With --approve, create a new private authority outside the project. Never overwrite it.
 No command here executes project code, starts a worker, or calls a model provider.
 
-Plan schema: schemas/host-contract-plan.schema.json (one request, or a schemaVersion 2 set).
+Plan schema: schemas/host-contract-plan.schema.json (legacy 1/2 or Node-profile 3/4).
 Every request in a set is exact and independently reviewed; duplicate request
 digests are rejected. A set does not authorize unlisted requests or new oracles.
 The operator must review the expected results independently of the candidate.
@@ -44,7 +44,7 @@ try {
   if (parent !== path.dirname(directory)) throw new Error("Authority parent must be canonical");
   const relative = path.relative(projectRoot, directory);
   if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) throw new Error("Authority must be outside the candidate project");
-  const request = { projectRoot, installedRoot, ...(plan.schemaVersion === 2 ? { plans: plan.plans }
+  const request = { projectRoot, installedRoot, ...([2, 4].includes(plan.schemaVersion) ? { plans: plan.plans }
     : { operatorRequestDigest: plan.operatorRequestDigest, backend: plan.backend, contracts: plan.contracts }) };
   const preview = prepareHostContractApproval(request);
   const result = options.approved

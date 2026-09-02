@@ -183,7 +183,7 @@
       "properties": {
         "messageRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "parentMessageRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
-        "role": { "enum": ["user", "assistant", "tool-result"] },
+        "role": { "enum": ["user", "assistant", "tool-result", "custom"] },
         "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
         "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
         "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },

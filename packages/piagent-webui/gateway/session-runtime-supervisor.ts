@@ -1,10 +1,10 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { webUiModelRef, webUiTaskRevision } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
 import { activeSessionTask } from "../../piagent-core/extensions/task-state.js";
+import { settleIndependentWebUiOperation } from "../../piagent-core/extensions/acceptance-independent-registry.js";
 import { inspectTaskControlState } from "../../piagent-core/runtime/inspection/task-control-journal.ts";
 import { piApprovalBroker, type ApprovalAuthority, type ApprovalBrokerEvent } from "../../piagent-core/runtime/inspection/approval-broker.ts";
-import type { SessionOwnerProjection, PiSessionInfo } from "./session-catalog.ts";
-import { isUserConversationSession, projectRefForCwd, sessionRefForPath } from "./session-catalog.ts";
+import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type SessionOwnerProjection, type PiSessionInfo } from "./session-catalog.ts";
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
@@ -12,37 +12,29 @@ import { executePermissionCommand, executeRuntimeCommand } from "./runtime-sessi
 import { inspectEffectiveSessionOptions, effectiveModelRef, effectiveThinkingLevel, type EffectiveSessionOptions } from "./session-effective-options.ts";
 import { launchSessionPrompt, type LaunchedSessionPrompt, type SessionSendResult } from "./session-prompt-dispatch.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../shared/message-correlation.ts";
-import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation,
-  type SessionOperationDeadlinePolicy, type SessionOperationWatchdogOptions } from "./session-operation-watchdog.ts";
-import { createProductionRuntimeFactory, type RuntimeFactory, type RuntimeHandle } from "./session-runtime-factory.ts";
+import { terminalDeliveryRequest, terminalDeliveryReceiptCommitter, terminalDeliverySessionEntries } from "../server/terminal-delivery-receipt.ts";
+import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation, type SessionOperationDeadlinePolicy, type SessionOperationWatchdogOptions } from "./session-operation-watchdog.ts";
+import { createProductionRuntimeFactory, type RuntimeFactory, type RuntimeHandle, type ScopedBrokerRouter } from "./session-runtime-factory.ts";
 import { projectSessionRuntimeOwnership } from "./session-runtime-ownership.ts";
 const MAX_WARM_RUNTIMES = 10;
 type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info: PiSessionInfo; operationRef: string | null;
-  messageRequestId: string | null;
+  messageRequestId: string | null; cancelWire: ((reason: string) => void) | null;
   stream: GatewaySessionStream | null; unsubscribe: (() => void) | null; completion: Promise<void> | null; settling: boolean; approvalWaiting: boolean;
   unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null; sessionManager: any | null;
   watchdog: SessionOperationWatchdog | null; lastSessionRevision: string | null };
-type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" };
-type RuntimeCommandResult = Awaited<ReturnType<typeof executeRuntimeCommand>>;
+type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" }; type RuntimeCommandResult = Awaited<ReturnType<typeof executeRuntimeCommand>>;
 export type { EffectiveSessionOptions } from "./session-effective-options.ts";
 export type SessionCreateResult = { sessionRef: string; effectiveOptions: EffectiveSessionOptions };
 export type CurrentOperationProjection = { operationRef: string; state: "running" | "waiting-approval" | "settling";
   abortable: boolean; messageRequestId?: string };
 export class SessionRuntimeSupervisor {
-  readonly #gatewayInstanceRef: string;
-  readonly #key: Buffer;
-  readonly #leases: SessionLeaseStore;
-  readonly #listSessions: () => Promise<PiSessionInfo[]>;
-  readonly #runtimeFactory: RuntimeFactory;
-  readonly #events: GatewayEventStore;
-  readonly #host: any | null;
-  readonly #operationDeadlinePolicy: SessionOperationDeadlinePolicy;
-  readonly #resolveProject: ((projectRef: string) => string | null) | null;
-  readonly #active = new Map<string, ActiveRuntime>();
-  readonly #opening = new Map<string, Promise<SessionLeaseSnapshot>>();
-  readonly #created = new Map<string, PiSessionInfo>();
-  #closed = false;
-  #readProjection: ((sessionRef: string) => Promise<Projection>) | null = null;
+  readonly #gatewayInstanceRef: string; readonly #key: Buffer;
+  readonly #leases: SessionLeaseStore; readonly #listSessions: () => Promise<PiSessionInfo[]>;
+  readonly #runtimeFactory: RuntimeFactory; readonly #events: GatewayEventStore;
+  readonly #host: any | null; readonly #operationDeadlinePolicy: SessionOperationDeadlinePolicy;
+  readonly #resolveProject: ((projectRef: string) => string | null) | null; readonly #compositeSettlementEvidence: (() => unknown | Promise<unknown>) | null;
+  readonly #active = new Map<string, ActiveRuntime>(); readonly #opening = new Map<string, Promise<SessionLeaseSnapshot>>();
+  readonly #created = new Map<string, PiSessionInfo>(); #closed = false; #readProjection: ((sessionRef: string) => Promise<Projection>) | null = null;
   constructor(options: {
     gatewayInstanceRef: string;
     key: Buffer;
@@ -53,9 +45,11 @@ export class SessionRuntimeSupervisor {
     agentDir?: string;
     packageRoot?: string;
     modelRuntime?: any;
+    scopedBrokerRouter?: ScopedBrokerRouter;
     events?: GatewayEventStore;
     operationWatchdog?: SessionOperationWatchdogOptions;
     resolveProject?(projectRef: string): string | null;
+    compositeSettlementEvidence?(): unknown | Promise<unknown>;
   }) {
     this.#gatewayInstanceRef = options.gatewayInstanceRef;
     this.#key = options.key;
@@ -65,21 +59,21 @@ export class SessionRuntimeSupervisor {
     this.#host = options.host ?? null;
     this.#operationDeadlinePolicy = sessionOperationDeadlinePolicy(options.operationWatchdog);
     this.#resolveProject = options.resolveProject ?? null;
+    this.#compositeSettlementEvidence = options.compositeSettlementEvidence
+      ?? (options.scopedBrokerRouter ? () => options.scopedBrokerRouter!.settlementEvidence() : null);
     if (options.runtimeFactory) this.#runtimeFactory = options.runtimeFactory;
     else {
       if (!options.host || !options.agentDir || !options.packageRoot) throw new Error("session-runtime-factory-unavailable");
       this.#runtimeFactory = createProductionRuntimeFactory({ host: options.host, agentDir: options.agentDir,
-        packageRoot: options.packageRoot, modelRuntime: options.modelRuntime });
+        packageRoot: options.packageRoot, modelRuntime: options.modelRuntime,
+        scopedBrokerRouter: options.scopedBrokerRouter });
     }
   }
-  get activeCount(): number { return this.#active.size; }
-  setProjectionReader(reader: (sessionRef: string) => Promise<Projection>): void { this.#readProjection = reader; }
+  get activeCount(): number { return this.#active.size; } setProjectionReader(reader: (sessionRef: string) => Promise<Projection>): void { this.#readProjection = reader; }
   async listSessions(): Promise<PiSessionInfo[]> {
     const persisted = (await this.#listSessions()).filter(isUserConversationSession);
     const paths = new Set(persisted.map((info) => info.path));
-    for (const [sessionRef, info] of this.#created) {
-      if (paths.has(info.path)) this.#created.delete(sessionRef);
-    }
+    for (const [sessionRef, info] of this.#created) if (paths.has(info.path)) this.#created.delete(sessionRef);
     return [...persisted, ...[...this.#created.values()].filter((info) => !paths.has(info.path))];
   }
   async create(projectRef: string, placeRef: string, modelRef: string | null, thinkingLevel: string): Promise<string> {
@@ -148,7 +142,7 @@ export class SessionRuntimeSupervisor {
         await runtime.dispose().catch(() => undefined);
         throw new Error("session-owner-continuity-lost");
       }
-      const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, messageRequestId: null,
+      const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, messageRequestId: null, cancelWire: null,
         stream: null, unsubscribe: null, completion: null,
         settling: false, approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null,
         sessionManager: sessionManager ?? runtime.session?.sessionManager ?? null, watchdog: null, lastSessionRevision: null };
@@ -217,19 +211,27 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");
     if (payload.delivery !== "new-operation") {
+      if (active.runtime.beginWireOperation) throw new Error("provider-wire-queued-input-unsupported");
       if (!active.operationRef || active.operationRef !== payload.expectedOperationRef || active.settling || !session.isStreaming) throw new Error("session-operation-conflict");
       const images = payload.images?.length ? payload.images : undefined;
       if (payload.delivery === "follow-up") { await session.followUp(payload.message, images); return { resultCode: "queued", operationRef: active.operationRef }; }
       await session.steer(payload.message, images); return { resultCode: "steered", operationRef: active.operationRef };
     }
     if (payload.expectedOperationRef !== null || active.operationRef || active.settling || !session.isIdle) throw new Error("session-operation-conflict");
-    const operationRef = `operation_${randomBytes(24).toString("base64url")}`;
-    const messageRequestId = payload.messageRequestId ?? null;
-    const stream = new GatewaySessionStream({ sessionRef, operationRef, messageRequestId, events: this.#events });
+    const operationRef = `operation_${randomBytes(24).toString("base64url")}`, messageRequestId = payload.messageRequestId ?? null;
+    const recoveryRequest = terminalDeliveryRequest(payload.message, payload.images);
+    const stream = new GatewaySessionStream({ sessionRef, operationRef, messageRequestId, events: this.#events,
+      commitTerminalDeliveryReceipt: terminalDeliveryReceiptCommitter({ cwd: active.info.cwd, sessionId: active.info.id,
+        operationRef, messageRequestId, request: recoveryRequest,
+        entries: () => (active.sessionManager ?? session.sessionManager)?.getBranch?.() ?? [],
+        persistedEntries: () => terminalDeliverySessionEntries(active.info.path, active.info.id),
+        // The committer fails closed on missing/throwing persistence methods.
+        appendCustomEntry: (type, data) => (active.sessionManager ?? session.sessionManager).appendCustomEntry(type, data) }) });
     const watchdog = new SessionOperationWatchdog(this.#operationDeadlinePolicy);
     active.operationRef = operationRef; active.messageRequestId = messageRequestId;
     active.stream = stream; active.watchdog = watchdog; active.lastSessionRevision = sessionRevision;
     try {
+      active.cancelWire = active.runtime.beginWireOperation?.({ operationRef, messageRequestId, inputText: payload.message }) ?? null;
       active.unsubscribe = armSessionOperationWatchdog({ watchdog, subscribe: (listener) => session.subscribe(listener), retrySession: session,
         observe: (event) => stream.observe(event), expire: (reasonCode) => { void this.#terminateOperation(sessionRef,
           operationRef, "error", reasonCode, reasonCode, true).catch(() => undefined); } });
@@ -247,14 +249,16 @@ export class SessionRuntimeSupervisor {
           const manager = active.sessionManager ?? session.sessionManager;
           if (messageRequestId && typeof manager?.appendCustomEntry === "function") {
             manager.appendCustomEntry(WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE,
-              { schemaVersion: 1, messageRequestId, operationRef });
+              { schemaVersion: 1, messageRequestId, operationRef,
+                ...(recoveryRequest !== undefined ? { terminalDeliveryRequest: recoveryRequest } : {}) });
           }
           return session.prompt(payload.message, payload.images?.length ? { images: payload.images } : undefined);
         }, finish: () => this.#finishOperation(sessionRef, operationRef, stream) }); active.completion = launched.completion;
     };
     const cancel = () => {
       if (launched || cancelled || this.#active.get(sessionRef) !== active || active.operationRef !== operationRef) return false;
-      cancelled = true; bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; watchdog.close();
+      cancelled = true; active.cancelWire?.("cancelled-before-dispatch"); active.cancelWire = null;
+      bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; watchdog.close();
       active.operationRef = null; active.messageRequestId = null;
       active.stream = null; active.watchdog = null; active.settling = false; return true;
     };
@@ -270,7 +274,7 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef), session = active?.runtime.session, stream = active?.stream, watchdog = active?.watchdog;
     if (!active || !session || !stream || !watchdog || active.operationRef !== operationRef) throw new Error("session-operation-conflict");
     if (active.settling && !watchdog.terminating) throw new Error("session-operation-conflict");
-    active.settling = true; active.approvalWaiting = false;
+    active.cancelWire?.(reasonCode); active.cancelWire = null; active.settling = true; active.approvalWaiting = false;
     const result = await terminateWatchedSessionOperation({ watchdog, settlement, reasonCode, forcedReasonCode, stream,
       completion: () => active.completion,
       settledCleanly: () => this.#active.get(sessionRef) === active && active.operationRef !== operationRef
@@ -284,6 +288,7 @@ export class SessionRuntimeSupervisor {
   async #quarantineRuntime(sessionRef: string, operationRef: string, active: ActiveRuntime,
     stream: GatewaySessionStream, reasonCode: string): Promise<void> {
     if (this.#active.get(sessionRef) !== active) return;
+    active.cancelWire?.(reasonCode); active.cancelWire = null;
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.watchdog = null;
     const messageRequestId = active.messageRequestId;
     if (active.operationRef === operationRef) { active.operationRef = null; active.messageRequestId = null; stream.complete(null); }
@@ -443,8 +448,14 @@ export class SessionRuntimeSupervisor {
   async #finishOperation(sessionRef: string, operationRef: string, stream: GatewaySessionStream): Promise<void> {
     const active = this.#active.get(sessionRef);
     if (!active || active.operationRef !== operationRef) return;
+    active.cancelWire?.("operation-settled"); active.cancelWire = null;
     const restartRequired = stream.runtimeRestartRequired, messageRequestId = active.messageRequestId; let projection: Projection | null = null;
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.settling = true;
+    const task = activeSessionTask(active.info.cwd, active.info.id);
+    const settlement = await settleIndependentWebUiOperation(active.info.cwd, task, { operationRef, messageRequestId,
+      manager: active.sessionManager ?? active.runtime.session?.sessionManager,
+      evidence: this.#compositeSettlementEvidence ?? (() => { throw new Error("composite-settlement-evidence-unavailable"); }) });
+    if (settlement.status === "blocked") stream.markError("composite-settlement-blocked");
     try {
       if (this.#readProjection) {
         const read = await boundedResult(this.#readProjection(sessionRef), this.#operationDeadlinePolicy.projectionTimeoutMs);

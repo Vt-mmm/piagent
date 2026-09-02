@@ -4,6 +4,7 @@ import test from "node:test";
 import Ajv from "ajv";
 import { compileIndependentContract, runIndependentContract } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
 import { parseResponse, WORKER_VERSION } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 import { data, plan, returns, throws, errorObserved } from "./helpers/async-contract-cases.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID, dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -98,4 +99,21 @@ test("reference observation never executes getters or proxy traps introduced int
     assert.equal(result.execution.observation.cases[0].reason, "reference-path-unsupported");
     assert.equal(result.execution.cleanupConfirmed, true);
   }
+});
+
+test("Node backing-store projection distinguishes a shared Buffer view from a byte-equal copy", integration, async () => {
+  const input = { type: "buffer", value: { backingBase64: "YWJjZA==", byteOffset: 0, byteLength: 4 } };
+  const pair = { id: "shared-backing", left: { root: "return", path: [], projection: "backing-store" },
+    right: { root: "argument", index: 0, path: [], projection: "backing-store" } };
+  const item = { id: "view", invocation: { kind: "call" }, args: [input], referencePairs: [pair],
+    expected: { outcome: "return", value: { type: "buffer", value: { backingBase64: "YWJjZA==", byteOffset: 1, byteLength: 3 } },
+      referenceIdentity: [{ id: "shared-backing", same: true }] } };
+  const execute = source => runIndependentContract({ imageId, dockerSocket, timeoutMs: 30000, planText: JSON.stringify({ schemaVersion: 2,
+    profile: expectedNodeProfile(), source, exportName: "run", checks: [{ id: "backing", cases: [item] }] }) });
+  const shared = await execute("export const run=value=>value.subarray(1)");
+  assert.equal(shared.verdict, "pass", JSON.stringify(shared));
+  assert.deepEqual(shared.execution.observation.cases[0].referenceIdentity, [{ id: "shared-backing", same: true }]);
+  const copied = await execute("export const run=value=>Buffer.from(value).subarray(1)");
+  assert.equal(copied.verdict, "fail", JSON.stringify(copied));
+  assert.deepEqual(copied.execution.observation.cases[0].referenceIdentity, [{ id: "shared-backing", same: false }]);
 });

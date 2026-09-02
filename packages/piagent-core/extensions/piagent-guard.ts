@@ -305,7 +305,6 @@ const TECH_OPTIONS: TechOption[] = [
   { id: "node-typescript", label: "Node TypeScript", role: "runtime", description: "Node.js TypeScript library/tooling project.", context7Query: "typescript node.js", topics: ["typescript", "node", "testing"] },
   { id: "python", label: "Python", role: "runtime", description: "Python app/library runtime.", context7Query: "python", topics: ["packaging", "typing", "testing"] }
 ];
-
 const PROFILE_TECH_ROLES: Record<string, TechRole[]> = {
   "web-frontend": ["frontend", "database"],
   "backend-api": ["backend", "database"],
@@ -319,7 +318,6 @@ const PROFILE_TECH_ROLES: Record<string, TechRole[]> = {
   docs: ["docs"],
   generic: ["runtime"]
 };
-
 const DEFAULT_MEMORY_SETTINGS: Required<MemorySettings> = {
   enabled: true,
   mode: "manual",
@@ -332,7 +330,6 @@ const DEFAULT_MEMORY_SETTINGS: Required<MemorySettings> = {
   maxInjectedChars: 4000,
   externalPackages: []
 };
-
 const DEFAULT_CONTEXT_INDEX_SETTINGS: Required<ContextIndexSettings> = {
   enabled: true,
   path: CONTEXT_INDEX_FILE,
@@ -343,14 +340,12 @@ const DEFAULT_CONTEXT_INDEX_SETTINGS: Required<ContextIndexSettings> = {
   includeTechStack: true,
   includeMemoryPointers: true
 };
-
 const DEFAULT_RUNTIME_POLICY: Required<RuntimePolicySettings> = {
   execPolicy: "enforce",
   contextBudget: "enforce",
   toolRegistry: "advisory",
   finalGate: "enforce"
 };
-
 const DEFAULT_ORCHESTRATION_POLICY: ResolvedOrchestrationPolicy = {
   defaultMode: "solo-first",
   maxConcurrentSubagents: 1,
@@ -376,7 +371,6 @@ const DEFAULT_ORCHESTRATION_POLICY: ResolvedOrchestrationPolicy = {
     "Keep review lenses explicit so cheap review work catches drift before release."
   ]
 };
-
 const PERMISSION_PROFILE_MODES = ["read-only", "workspace-write", "trusted-full-access"] as const;
 const PERMISSION_PROFILE_ALIASES: Record<string, PermissionProfileMode> = {
   readonly: "read-only",
@@ -397,14 +391,11 @@ const WRITE_TOOL_NAMES = new Set(["write", "edit"]);
 const SHELL_TOOL_NAMES = new Set(["bash", "shell", "exec"]);
 const MAX_MCP_PROXY_ARGS_CHARS = 131_072;
 const SESSION_PERMISSION_OVERRIDES = new Map<string, PermissionProfileMode>();
-
 const DEFAULT_POLICY = fallbackBasePolicy(CONTEXT_INDEX_FILE, DEFAULT_ORCHESTRATION_POLICY);
-
 // Which platform supplies the adapters is fixed by where this file is installed,
 // so it is resolved once here rather than threaded through every profile load.
 const PLATFORM_ROOT = findPlatformRoot(path.dirname(fileURLToPath(import.meta.url)));
 const UPDATE_CHECK_MODULE = fileURLToPath(new URL("./update-check.js", import.meta.url));
-
 // The installed version, read from the package this file ships in. A maintainer
 // working in the repository is not running a release and has nothing to update
 // to, so only a tree Pi or npm placed is given a version to compare.
@@ -412,7 +403,6 @@ function installedPlatformVersion(): string | undefined {
   if (!isInstalledPlatform(PLATFORM_ROOT)) return undefined;
   return readJsonFile<{ version?: string }>(path.join(PLATFORM_ROOT, "package.json"))?.version;
 }
-
 function updateAvailabilityNotice(): string | undefined {
   const installed = installedPlatformVersion();
   if (!installed) return undefined;
@@ -3525,15 +3515,22 @@ function evaluateTaskGate(
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest ?? workingTreeEvidenceDigest(currentDigests);
   const independentState = independentAcceptanceState(cwd, task, currentWorkingTreeDigest);
   if (independentState.block) missing.push(independentState.block);
-  for (const [id, assessment] of independentState.assessments) if (assessment.verdict !== "pass") missing.push(`independent contract evidence (${id}:${assessment.verdict}${assessment.executionDiagnostics?.reasons.length ? `; ${assessment.executionDiagnostics.reasons.join(", ")}` : ""})`);
+  const compositeFacts = new Set<string>();
+  for (const [id, assessment] of independentState.assessments) {
+    if (assessment.verdict !== "pass") missing.push(`independent contract evidence (${id}:${assessment.verdict}${assessment.executionDiagnostics?.reasons.length ? `; ${assessment.executionDiagnostics.reasons.join(", ")}` : ""})`);
+    else if (assessment.assurance === "bounded-composite-contract-tested" && Array.isArray(assessment.factKinds)) {
+      for (const kind of assessment.factKinds) if (typeof kind === "string") compositeFacts.add(kind);
+    }
+  }
+  const compositeContext = compositeFacts.has("context-current"), compositeVerifier = compositeFacts.has("project-verifier-current");
   if (task.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || task.workingTreeDigestMigration?.status === "verification-refresh-required" || !workingTreeSnapshotUsesCurrentAlgorithm(currentDigests) || !isCurrentWorkingTreeDigest(currentWorkingTreeDigest) || currentWorkingTreeDigest !== workingTreeEvidenceDigest(currentDigests) || Object.values(task.baselineFileDigests).some((digest) => !isCurrentWorkingTreeDigest(digest)) || (task.workingTreeDigestMigration && (!taskDigestMigrationArchiveStatus(cwd, task).valid || replayTaskCheckpoints(cwd, task.taskRunId, task).corruptions.length > 0))) missing.push("current working-tree digest evidence");
   if (workingTreeSnapshotHasUnavailableEvidence(currentDigests)) missing.push("complete working-tree content evidence");
   if (taskContractValidationErrors(task).length > 0) missing.push("valid session-bound task contract v2");
   if (task.attempt > task.maxAttempts) missing.push(`attempt within maxAttempts (${task.attempt}/${task.maxAttempts})`);
   const plannedVerifyCommands = meaningfulVerificationCommands(task.verifyCommands);
-  if (task.changeMode === "source-change" && plannedVerifyCommands.length === 0) missing.push("meaningful verify command");
-  if (finalGate.requireContextManifest && !hasDurableContextEvidence(task)) missing.push("context manifest");
-  if (task.changeMode === "source-change" && finalGate.requireVerifyEvidence && task.verifyEvidence.length === 0) missing.push("verify evidence");
+  if (task.changeMode === "source-change" && plannedVerifyCommands.length === 0 && !compositeVerifier) missing.push("meaningful verify command");
+  if (finalGate.requireContextManifest && !hasDurableContextEvidence(task) && !compositeContext) missing.push("context manifest");
+  if (task.changeMode === "source-change" && finalGate.requireVerifyEvidence && task.verifyEvidence.length === 0 && !compositeVerifier) missing.push("verify evidence");
   if (task.verifyEvidence.some((evidence) => evidence.observed !== true)) {
     warnings.push("Unobserved verify evidence is ignored by the passing verify gate.");
   }
@@ -3548,7 +3545,7 @@ function evaluateTaskGate(
     warnings.push("Verification evidence from a different working-tree snapshot is stale and is ignored.");
   }
   let missingVerifyCommands: string[] = [];
-  if (task.changeMode === "source-change" && finalGate.requirePassingVerify && plannedVerifyCommands.length > 0) {
+  if (task.changeMode === "source-change" && finalGate.requirePassingVerify && plannedVerifyCommands.length > 0 && !compositeVerifier) {
     const passingCommands = passingVerifyCommandsForDigest(task, currentWorkingTreeDigest, currentWorkspaceRevisionDigest(cwd));
     missingVerifyCommands = plannedVerifyCommands.filter((command) => !passingCommands.has(command.trim()));
     if (missingVerifyCommands.length > 0) missing.push(`observed passing verify evidence for every configured command (${missingVerifyCommands.length} missing)`);
@@ -3783,6 +3780,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
   const independentAcceptance = new IndependentAcceptanceRuntime({ state: runtimeState, installedRoot: PLATFORM_ROOT,
     configPath: process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG,
+    writeTask,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     authorizeSourceRead: (ctx, sourcePath) => {
       if (!ctx.isProjectTrusted()) return false;
@@ -4167,6 +4165,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
     }
   });
+  pi.on("turn_end", (event, ctx) => independentAcceptance.observeTurnEnd(ctx, event.message));
 
   registerInputHook(pi, {
     state: runtimeState,
@@ -4218,7 +4217,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   registerCompletionHook(pi, {
     state: runtimeState,
-    prepareIndependentAcceptance: (ctx, task) => independentAcceptance.prepare(ctx, task),
+    prepareIndependentAcceptance: (ctx, task, response) => independentAcceptance.prepare(ctx, task, response),
+    deferIndependentCompletion: (ctx, task, response, finalizer) => independentAcceptance.deferCompletion(ctx, task, response, finalizer),
+    projectIndependentLifecycle: (ctx, task, candidate) => independentAcceptance.projectLifecycle(ctx, task, candidate),
     maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     flushObservedTaskContext,
@@ -4900,7 +4901,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     createTaskRunId, crypto, currentSessionName, defaultRolePolicy, defaultWorkPlan, digestJson,
     dynamicToolsEnabled, effectiveProtectedPaths, emitRuntimeMessage, ensureContextIndexV2, estimateContextTokens,
     evaluateExecPolicy, evaluateModelRoute, evaluateRetrievalRoute, evaluateRuntimeSolver, evaluateTaskGate, evaluateToolPolicy, execPolicyConfig,
-    prepareIndependentAcceptance: (ctx: ExtensionContext, task: TaskContract) => independentAcceptance.prepare(ctx, task),
+    prepareIndependentAcceptance: (ctx: ExtensionContext, task: TaskContract, response?: { origin: "assistant"; bytes: string }) =>
+      independentAcceptance.prepare(ctx, task, response),
     extensionDir, externalActionPolicyConfig, extractDocument, finalGateConfig, findMatchingObservedBashResult,
     formatContextPreflight, formatCount, formatLiveTaskStatus, formatPercent, formatTechOptionsText, formatTechSelectionSummary,
     formatToolResultCaptureStatus, formatUsageSnapshot, fs, hasGitEvidenceRoot, hasOperatorSessionName, helpersMode,

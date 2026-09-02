@@ -7,7 +7,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { openAcceptanceEvidenceStore } from "../packages/piagent-core/extensions/acceptance-evidence-store.js";
+import { FACT_EVIDENCE_SCOPE_VERSION, openAcceptanceEvidenceStore, ROOT_AGGREGATE_FACT_ID } from "../packages/piagent-core/extensions/acceptance-evidence-store.js";
 import { createAcceptanceAssessmentSession } from "../packages/piagent-core/extensions/acceptance-assessment.js";
 
 const modulePath = fileURLToPath(new URL("../packages/piagent-core/extensions/acceptance-evidence-store.js", import.meta.url));
@@ -43,6 +43,17 @@ test("settled authenticated evidence survives closing and reopening with the hos
   assert.equal(cached.event.evidenceText, payload);
   assert.equal(Object.isFrozen(cached.event.binding), true);
   assert.equal(reopened.latest(scope).sequence, 2);
+});
+
+test("versioned fact scopes separate sibling children while preserving the legacy criterion scope", (context) => {
+  const { open } = fixture(context), store = open();
+  const code = { version: FACT_EVIDENCE_SCOPE_VERSION, taskRunId: scope.taskRunId, criterionId: scope.criterionId, factId: "code" };
+  const sibling = { ...code, factId: "code-sibling" }, root = { ...code, factId: ROOT_AGGREGATE_FACT_ID };
+  const started = reserve(store, { scope: code }); store.settle(started.reservation, payload);
+  assert.equal(store.latest(code).phase, "settled"); assert.equal(store.latest(sibling), null); assert.equal(store.latest(scope), null);
+  assert.equal(reserve(store, { scope: root }).status, "reserved", "the reserved root identity is explicit, never aliased to a child");
+  assert.throws(() => store.latest({ ...code, extra: true }), /fields/);
+  assert.throws(() => store.latest({ ...code, version: "unknown-scope-v2" }), /fields/);
 });
 
 test("pending attempts cannot pass or silently execute again after restart", (context) => {

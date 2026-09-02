@@ -54,3 +54,47 @@ test("production runtime factory rejects an unavailable initial model before ses
   }), /session-model-unavailable/);
   assert.equal(creations.length, 0);
 });
+
+test("production runtime factory wires one host-only scoped router with exact tools and native session identity", async () => {
+  const tools = ["scoped_read", "scoped_write_document", "scoped_verify"], observed = {
+    services: null, creation: null, ownership: 0, begins: [], finishes: [], disposed: 0
+  };
+  const router = {
+    toolNames: tools,
+    extensionFactory() {},
+    assertOwnership() { observed.ownership++; },
+    beginOperation(identity) { observed.begins.push(identity);
+      return reason => observed.finishes.push(reason); },
+    settlementEvidence() { return { version: "fixture" }; },
+    async dispose() { observed.disposed++; }
+  };
+  const host = {
+    async createAgentSessionServices(options) {
+      observed.services = options;
+      return { modelRuntime: { getAvailableSnapshot: () => [] }, diagnostics: [],
+        resourceLoader: { getExtensions: () => ({ errors: [], extensions: [] }) } };
+    },
+    async createAgentSessionFromServices(options) {
+      observed.creation = options;
+      return { session: { getActiveToolNames: () => tools, async bindExtensions() {} } };
+    },
+    async createAgentSessionRuntime(createRuntime, options) {
+      const created = await createRuntime(options);
+      return { session: created.session, setRebindSession() {}, async dispose() {} };
+    }
+  };
+  const manager = { getSessionId: () => "native-session" };
+  const runtime = await createProductionRuntimeFactory({ host, agentDir: "/private/pi-home", packageRoot,
+    scopedBrokerRouter: router })(info, "runtime_ref", manager);
+  const finish = runtime.beginWireOperation({ operationRef: "operation-one",
+    messageRequestId: "message-one", inputText: "first turn" });
+  finish("operation-settled"); await runtime.dispose();
+  assert.equal(observed.ownership, 1);
+  assert.equal(observed.services.resourceLoaderOptions.noExtensions, true);
+  assert.equal(observed.services.resourceLoaderOptions.noSkills, true);
+  assert.deepEqual(observed.services.resourceLoaderOptions.extensionFactories, [router.extensionFactory]);
+  assert.equal(observed.creation.noTools, "all"); assert.deepEqual(observed.creation.tools, tools);
+  assert.deepEqual(observed.begins, [{ sessionId: "native-session", operationRef: "operation-one",
+    messageRequestId: "message-one", inputText: "first turn" }]);
+  assert.deepEqual(observed.finishes, ["operation-settled"]); assert.equal(observed.disposed, 1);
+});

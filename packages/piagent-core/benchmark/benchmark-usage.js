@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
 
 const CODEX_NON_TOOL_ITEMS = new Set(["agent_message", "reasoning", "plan", "user_message"]);
@@ -427,6 +428,10 @@ function consumeCodexEvent(state, event, lineNumber) {
     state.threadId ??= event.thread_id;
     return;
   }
+  if (event.type === "turn.started") {
+    state.startedTurns += 1;
+    return;
+  }
   if (event.type === "item.completed" && plainObject(event.item)) {
     const type = event.item.type;
     if (type === "agent_message") state.messages += 1;
@@ -525,6 +530,18 @@ function finishCodexUsage(state) {
       source: "codex-exec-jsonl-thread-started",
       events: state.threadIds.length,
       threadIds: uniqueThreadIds
+    },
+    turnLifecycleEvidence: {
+      schemaVersion: 1,
+      source: "codex-exec-jsonl-turn-lifecycle",
+      startedEvents: state.startedTurns,
+      completedEvents: state.completedTurns
+    },
+    jsonlEvidence: {
+      schemaVersion: 1,
+      source: "codex-exec-jsonl-stdout-bytes",
+      bytes: state.jsonlBytes,
+      sha256: state.jsonlHash.digest("hex")
     }
   };
 }
@@ -541,12 +558,15 @@ export function createCodexExecJsonlCollector(options = {}) {
     threadIds: [],
     completedUsages: [],
     completedTurns: 0,
+    startedTurns: 0,
     messages: 0,
     toolNames: {},
     toolFingerprints: new Set(),
     execution: emptyExecutionAggregate("codex-exec-jsonl"),
     diagnostics: [],
-    serviceTiers: []
+    serviceTiers: [],
+    jsonlBytes: 0,
+    jsonlHash: createHash("sha256")
   };
   let buffer = "";
   let lineNumber = 0;
@@ -565,7 +585,10 @@ export function createCodexExecJsonlCollector(options = {}) {
     write(chunk) {
       if (failure) return;
       try {
-        buffer += typeof chunk === "string" ? chunk : decoder.write(Buffer.from(chunk));
+        const bytes = Buffer.from(chunk);
+        state.jsonlBytes += bytes.length;
+        state.jsonlHash.update(bytes);
+        buffer += typeof chunk === "string" ? chunk : decoder.write(bytes);
         let newline;
         while ((newline = buffer.indexOf("\n")) >= 0) {
           consumeLine(buffer.slice(0, newline));

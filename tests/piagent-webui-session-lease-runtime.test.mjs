@@ -8,6 +8,8 @@ import { describe, it } from "node:test";
 
 import { webUiModelRef } from "../packages/piagent-core/runtime/inspection/webui-snapshot.ts";
 import { piApprovalBroker } from "../packages/piagent-core/runtime/inspection/approval-broker.ts";
+import { registerIndependentAcceptanceProvider } from "../packages/piagent-core/extensions/acceptance-independent-registry.js";
+import { bindSessionTask, writeTaskContract } from "../packages/piagent-core/extensions/task-state.js";
 import { buildSessionCatalog, projectRefForCwd, sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { GatewayEventStore } from "../packages/piagent-webui/gateway/gateway-events.ts";
 import { GatewaySessionStream, runtimeRestartReasonCode } from "../packages/piagent-webui/gateway/gateway-session-stream.ts";
@@ -416,6 +418,73 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(observed.filter((event) => event.kind === "message.completed"
       && event.payload.operationRef === started.operationRef).length, 1);
     await supervisor.close();
+  });
+
+  it("does not request composite evidence for ordinary turns and withholds success when composite settlement blocks", async (t) => {
+    const { root, key } = state(t), cwd = path.join(root, "project"); fs.mkdirSync(cwd);
+    const makeSession = () => {
+      const listeners = new Set(), emit = event => { for (const listener of listeners) listener(event); };
+      return { isIdle: true, isStreaming: false,
+        subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+        async prompt() {
+          this.isIdle = false; this.isStreaming = true; emit({ type: "agent_start" });
+          emit({ type: "message_start", message: { role: "assistant" } });
+          emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Durable gateway result." } });
+          emit({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+            content: [{ type: "text", text: "Durable gateway result." }] } });
+          this.isIdle = true; this.isStreaming = false; emit({ type: "agent_settled" });
+        } };
+    };
+
+    let ordinaryEvidenceCalls = 0;
+    const ordinary = { ...info(root, "ordinary-settlement.jsonl"), cwd, id: "ordinary-settlement-session" };
+    const ordinaryEvents = new GatewayEventStore(), ordinaryObserved = [];
+    ordinaryEvents.subscribe(event => ordinaryObserved.push(event));
+    const ordinarySupervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_ordinary_settlement", key,
+      leases: new SessionLeaseStore(path.join(root, "ordinary-leases"), key), listSessions: async () => [ordinary],
+      events: ordinaryEvents, runtimeFactory: async () => ({ session: makeSession(), async dispose() {} }),
+      compositeSettlementEvidence() { ordinaryEvidenceCalls += 1; throw new Error("ordinary-evidence-must-not-run"); } });
+    ordinarySupervisor.setProjectionReader(async () => ({ sessionRevision: "revision_ordinary_settlement", liveState: "idle" }));
+    const ordinaryStarted = await ordinarySupervisor.send(sessionRefForPath(key, ordinary.path), { delivery: "new-operation",
+      message: "Finish an ordinary turn.", expectedOperationRef: null }, "revision_ordinary_start");
+    await waitFor(() => ordinaryObserved.some(event => event.kind === "operation.settled"
+      && event.payload.operationRef === ordinaryStarted.operationRef));
+    assert.equal(ordinaryEvidenceCalls, 0);
+    assert.equal(ordinaryObserved.find(event => event.kind === "operation.settled")?.payload.settlement, "completed");
+    assert.equal(ordinaryObserved.filter(event => event.kind === "message.completed").length, 1);
+    await ordinarySupervisor.close();
+
+    const composite = { ...info(root, "composite-settlement.jsonl"), cwd, id: "composite-settlement-session" };
+    const taskTemplate = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals/fixtures/task-contract.valid.json"), "utf8"));
+    const task = writeTaskContract(cwd, { ...taskTemplate, taskId: "composite-settlement-task",
+      taskRunId: "composite-settlement-task-run", sessionId: composite.id, sessionName: "Composite settlement",
+      trace: { outcome: "pending", recordedAt: new Date().toISOString() } });
+    bindSessionTask(cwd, composite.id, task.sessionName, task);
+    let compositeEvidenceCalls = 0, settlementCalls = 0;
+    const unregister = registerIndependentAcceptanceProvider(cwd, task, { read: () => ({ entries: [] }),
+      async settleWebUi(_task, input) { settlementCalls += 1; await input.evidence();
+        return { status: "blocked", reason: "fixture composite settlement blocked" }; } });
+    t.after(unregister);
+    const compositeEvents = new GatewayEventStore(), compositeObserved = [];
+    compositeEvents.subscribe(event => compositeObserved.push(event));
+    const compositeSupervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_composite_settlement", key,
+      leases: new SessionLeaseStore(path.join(root, "composite-leases"), key), listSessions: async () => [composite],
+      events: compositeEvents, runtimeFactory: async () => ({ session: makeSession(), async dispose() {} }),
+      compositeSettlementEvidence() { compositeEvidenceCalls += 1; return { fixture: true }; } });
+    compositeSupervisor.setProjectionReader(async () => ({ sessionRevision: "revision_composite_settlement", liveState: "idle" }));
+    const compositeStarted = await compositeSupervisor.send(sessionRefForPath(key, composite.path), { delivery: "new-operation",
+      message: "Finish a composite turn.", messageRequestId: "request_composite_settlement",
+      expectedOperationRef: null }, "revision_composite_start");
+    await waitFor(() => compositeObserved.some(event => event.kind === "operation.settled"
+      && event.payload.operationRef === compositeStarted.operationRef));
+    assert.equal(settlementCalls, 1); assert.equal(compositeEvidenceCalls, 1);
+    const terminal = compositeObserved.find(event => event.kind === "operation.settled"
+      && event.payload.operationRef === compositeStarted.operationRef);
+    assert.equal(terminal?.payload.settlement, "error");
+    assert.equal(terminal?.payload.reasonCode, "composite-settlement-blocked");
+    assert.equal(compositeObserved.some(event => event.kind === "message.completed"
+      && event.payload.operationRef === compositeStarted.operationRef), false);
+    await compositeSupervisor.close();
   });
 
   it("does not let a late idle projection overwrite recovery-required authority", async (t) => {

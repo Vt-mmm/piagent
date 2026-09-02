@@ -12,8 +12,8 @@ export const CASE_CAPABILITY_FIELDS = ["awaitResult", "observeIdentity", "observ
 export const OBSERVATION_CAPABILITY_FIELDS = ["callbackTrace", "returnIdentity", "errorObservation", "referenceIdentity"];
 export const callbackIds = item => new Set((item.callbacks ?? []).map(callback => callback.id));
 
-export function validateCaseCapabilities(item) {
-  validateReferencePairs(item);
+export function validateCaseCapabilities(item, { nodeProfile = false, budget } = {}) {
+  validateReferencePairs(item, { backingStore: nodeProfile });
   for (const key of ["awaitResult", "observeIdentity", "observeError"]) {
     if (Object.hasOwn(item, key) && item[key] !== true) throw new TypeError("Invalid case capability");
   }
@@ -26,7 +26,7 @@ export function validateCaseCapabilities(item) {
         || typeof error.message !== "string" || error.message.length > MAX_STRING_LENGTH) throw new TypeError("Invalid error input");
       errors.add(error.id);
       if (Object.hasOwn(error, "properties")) {
-        validateValue(error.properties);
+        validateValue(error.properties, true, new Set(), { typedBytes: nodeProfile, budget });
         if (error.properties.type !== "record") throw new TypeError("Error properties must be a record");
       }
     }
@@ -43,7 +43,7 @@ export function validateCaseCapabilities(item) {
       if (Object.hasOwn(callback, "settleAfterJobs") && (callback.mode !== "promise" || !Number.isSafeInteger(callback.settleAfterJobs)
         || callback.settleAfterJobs < 1 || callback.settleAfterJobs > MAX_CALLBACK_DELAY_JOBS)) throw new TypeError("Invalid callback settlement delay");
       for (const step of callback.steps) {
-        if (step.outcome === "return") { shape(step, ["outcome", "value"]); validateValue(step.value); }
+        if (step.outcome === "return") { shape(step, ["outcome", "value"]); validateValue(step.value, true, new Set(), { typedBytes: nodeProfile, budget }); }
         else if (step.outcome === "throw") {
           shape(step, ["outcome", "error"]);
           if (!errors.has(step.error)) throw new TypeError("Unknown callback error");
@@ -54,7 +54,7 @@ export function validateCaseCapabilities(item) {
   return callbacks;
 }
 
-export function validateCallbackTrace(trace, item) {
+export function validateCallbackTrace(trace, item, { nodeProfile = false, typedOutputBudget } = {}) {
   if (!item.callbacks || !Array.isArray(trace) || trace.length > MAX_CALLBACK_CALLS * 2
     || JSON.stringify(trace).length > MAX_CALLBACK_TRACE_CHARS) throw new TypeError("Invalid callback trace");
   const ids = callbackIds(item);
@@ -65,7 +65,7 @@ export function validateCallbackTrace(trace, item) {
       shape(call, ["callback", "call", "event", "args"]);
       if (!ids.has(call.callback) || call.call !== (calls.get(call.callback) ?? 0) || ++total > MAX_CALLBACK_CALLS
         || !Array.isArray(call.args) || call.args.length > 16) throw new TypeError("Invalid callback call");
-      for (const value of call.args) validateValue(value, true, ids);
+      for (const value of call.args) validateValue(value, true, ids, { typedBytes: nodeProfile, typedOutputBudget });
       calls.set(call.callback, call.call + 1);
     } else {
       shape(call, ["callback", "call", "event", "outcome"]);
@@ -90,29 +90,29 @@ export function validateReturnIdentity(value, item) {
   let previous = -1;
   for (const index of value) {
     if (!Number.isSafeInteger(index) || index <= previous || index >= item.args.length
-      || !["array", "record", "date", "result", "error-property"].includes(item.args[index].type)) throw new TypeError("Invalid identity argument");
+      || !["array", "record", "date", "uint8array", "buffer", "arraybuffer", "dataview", "result", "error-property"].includes(item.args[index].type)) throw new TypeError("Invalid identity argument");
     previous = index;
   }
 }
 
-export function validateErrorObservation(value, item) {
+export function validateErrorObservation(value, item, { nodeProfile = false, typedOutputBudget } = {}) {
   shape(value, ["identity", "properties"]);
   if (!item.observeError || value.identity !== null && !(item.errors ?? []).some(error => error.id === value.identity)) {
     throw new TypeError("Invalid error identity");
   }
-  validateValue(value.properties, true, callbackIds(item));
+  validateValue(value.properties, true, callbackIds(item), { typedBytes: nodeProfile, typedOutputBudget });
   if (value.properties.type !== "record") throw new TypeError("Invalid observed error properties");
 }
 
-export function validateObservedCapabilities(observation, item) {
-  const settled = ["return", "throw"].includes(observation.outcome);
+export function validateObservedCapabilities(observation, item, { nodeProfile = false, typedOutputBudget } = {}) {
+  const settled = ["return", "throw", "constructed"].includes(observation.outcome);
   for (const [field, required, validate] of [
     ["callbackTrace", settled && Boolean(item.callbacks), validateCallbackTrace],
     ["returnIdentity", observation.outcome === "return" && item.observeIdentity, validateReturnIdentity],
     ["errorObservation", observation.outcome === "throw" && item.observeError, validateErrorObservation],
     ["referenceIdentity", settled && Boolean(item.referencePairs), validateReferenceIdentity]
   ]) {
-    if (required) validate(observation[field], item);
+    if (required) validate(observation[field], item, { nodeProfile, typedOutputBudget });
     else if (Object.hasOwn(observation, field)) throw new TypeError("Unexpected capability observation");
   }
 }

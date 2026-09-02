@@ -29,7 +29,7 @@ const RELEASE_GATE_FIELDS = new Set([
   "requireStableProviderWireSurface", "requireNormalizedCostClaim", "requireHostReadinessForClaim",
   "requireCausalContextReceipt", "requireSubagentBudget", "maximumSubagentSessionsPerAttempt",
   "maximumSubagentTrafficShare", "requireProviderFreeEvidence", "requireFastServiceTier",
-  "maximumAllAttemptPooledFreshTokenRatio", "requireCampaignAccounting"
+  "maximumAllAttemptPooledFreshTokenRatio", "requireCampaignAccounting", "efficiencyProtocol"
 ]);
 const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode", "serviceTier"]);
 const SERVICE_TIERS = new Set(["default", "fast"]);
@@ -85,6 +85,27 @@ export function benchmarkSuiteValidationErrors(input) {
     else {
       for (const field of Object.keys(input.releaseGate)) {
         if (!RELEASE_GATE_FIELDS.has(field)) errors.push(`releaseGate has unsupported field ${field}`);
+      }
+      // Opt-in measurement contract only. Approval belongs to the frozen run
+      // protocol; this marker neither changes legacy defaults nor grants claims.
+      if (input.releaseGate.efficiencyProtocol !== undefined) {
+        if (input.releaseGate.efficiencyProtocol !== "net35-family-pooled-v1") {
+          errors.push("releaseGate.efficiencyProtocol must be net35-family-pooled-v1");
+        }
+        if (input.schemaVersion !== 2) errors.push("releaseGate.efficiencyProtocol requires schemaVersion 2");
+        if (input.releaseGate.requireEfficiencyClaim !== true) {
+          errors.push("net35-family-pooled-v1 requires releaseGate.requireEfficiencyClaim true");
+        }
+        for (const field of ["maximumFreshTokenRatioUpper95", "maximumAllAttemptPooledFreshTokenRatio"]) {
+          if (input.releaseGate[field] !== 0.65) errors.push(`net35-family-pooled-v1 requires releaseGate.${field} exactly 0.65`);
+        }
+        if (input.releaseGate.primaryEfficiencyEstimand !== "fixed-workload-family-ratio") {
+          errors.push("net35-family-pooled-v1 requires releaseGate.primaryEfficiencyEstimand fixed-workload-family-ratio");
+        }
+        if (input.matrixContract?.familyCount !== 9 || input.matrixContract?.variantsPerFamily !== 3
+          || input.matrixContract?.repeatsPerVariant !== 2 || input.matrixContract?.confidenceSampleUnit !== "task-family") {
+          errors.push("net35-family-pooled-v1 requires the 9-family, 3-variant, 2-repeat task-family matrixContract");
+        }
       }
       for (const field of [
         "minimumQualityScore", "minimumSafetyScore", "minimumReliabilityScore", "minimumWorkflowScore",

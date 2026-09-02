@@ -31,6 +31,10 @@ test("only a current host provider, not task JSON, supplies non-execution stop d
     } finally { dispose(); }
   }
   const dispose = registerIndependentAcceptanceProvider(cwd, task, () => ({ block: "unknown", stopReason: "invented" }));
-  try { assert.equal(independentVerificationRecovery(cwd, task, "tree"), undefined); }
+  try {
+    const recovery = independentVerificationRecovery(cwd, task, "tree");
+    assert.equal(recovery.independentDisposition, "approval");
+    assert.equal(recovery.classification.authorizesSourceMutation, false);
+  }
   finally { dispose(); }
 });

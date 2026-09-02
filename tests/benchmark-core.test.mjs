@@ -380,6 +380,11 @@ test("parses Codex exec JSONL with cache-exclusive fresh tokens and completed to
   assert.equal(usage.execution.toolCalls, 2);
   assert.equal(usage.execution.toolResults, 2);
   assert.equal(usage.execution.completeness.tools, "exact");
+  assert.deepEqual(usage.turnLifecycleEvidence, { schemaVersion: 1,
+    source: "codex-exec-jsonl-turn-lifecycle", startedEvents: 1, completedEvents: 1 });
+  assert.deepEqual(usage.jsonlEvidence, { schemaVersion: 1,
+    source: "codex-exec-jsonl-stdout-bytes", bytes: Buffer.byteLength(stdout),
+    sha256: crypto.createHash("sha256").update(stdout).digest("hex") });
 });
 
 test("aggregates exact resumed Codex turns once and rejects identity or completeness drift", () => {
@@ -483,6 +488,7 @@ test("streams Codex JSONL safely across UTF-8 and line chunk boundaries", () => 
   assert.equal(usage.fresh, 13);
   assert.equal(usage.messages, 1);
   assert.equal(usage.providerSessionId, "stream-thread");
+  assert.equal(usage.jsonlEvidence.sha256, crypto.createHash("sha256").update(bytes).digest("hex"));
 });
 
 test("retains bounded Codex error diagnostics without accepting missing usage", () => {

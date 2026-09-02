@@ -1,0 +1,42 @@
+{
+  "receipt": {
+    "version": 2,
+    "kind": "scoped-project-verification-receipt-v2",
+    "protocol": "scoped-project-verifier-v1",
+    "verificationId": "fixture",
+    "action": 1,
+    "attemptId": "00000000-0000-4000-8000-000000000000",
+    "broker": {
+      "identitySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "capabilityDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "planDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "requestDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "sourceDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "environmentDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "verifierDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "worker": {
+      "runId": "00000000-0000-4000-8000-000000000000",
+      "version": null
+    },
+    "status": "error",
+    "verdict": "observation-unavailable",
+    "cleanup": {
+      "confirmed": false
+    },
+    "evidence": {
+      "executionSha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "observationSha256": null,
+      "reason": "fixture",
+      "outcome": null,
+      "failedCommands": ["unknown"]
+    },
+    "startedAtMs": 0,
+    "deadlineAtMs": 1,
+    "settledAtMs": 1,
+    "completionAllowed": false
+  },
+  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+}

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { newQuickJSWASMModuleFromVariant } from "quickjs-emscripten-core";
 import variant from "@jitl/quickjs-wasmfile-release-sync";
-import { MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, WORKER_VERSION, parseRequest } from "./protocol.mjs";
+import { MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, NODE_WORKER_VERSION, WORKER_VERSION, parseRequest } from "./protocol.mjs";
 import { createGuestSession } from "./guest.mjs";
 import { CPU_EXHAUSTED, WALL_EXHAUSTED, REQUEST_WALL_MS } from "./budget.mjs";
 import { resolveArguments } from "./references.mjs";
@@ -25,17 +25,30 @@ try {
   let status = "completed";
   let timeoutReason;
   const observations = new Map();
+  const typedOutputBudget = { rawBytes: 0 };
+  const timerTrace = [];
+  let quiescence = { pendingTimers: 0, liveDecoders: 0, receivers: 0 };
   let session, sequence;
+  const disposeSession = () => {
+    const summary = session?.dispose();
+    for (const item of summary?.timerTrace ?? []) timerTrace.push({ ...item, sequence: timerTrace.length });
+    if (summary?.quiescence) quiescence = summary.quiescence;
+    session = undefined;
+  };
   try {
     for (const item of request.cases) {
       if (performance.now() >= deadline) { status = "timeout"; timeoutReason = WALL_EXHAUSTED; break; }
       if (!session || !item.sequence || sequence !== item.sequence || item.reset) {
-        session?.dispose(); session = createGuestSession(QuickJS, request, deadline); sequence = item.sequence;
+        disposeSession(); session = createGuestSession(QuickJS, request, deadline, typedOutputBudget); sequence = item.sequence;
       }
-      const args = resolveArguments(item.args, observations);
+      const args = resolveArguments(item.args, observations, { nodeProfile: request.schemaVersion === 2 });
       const observation = args.some((arg) => arg === undefined)
-        ? { id: item.id, outcome: "unsupported", reason: "referenced-result-unavailable" }
-        : session.execute({ ...item, args });
+        ? request.schemaVersion === 2
+          ? { id: item.id, outcome: "unsupported", reason: "referenced-result-unavailable",
+            invocationTrace: { ...item.invocation, ...(item.invocation.kind === "call" ? { exportName: item.exportName ?? request.exportName } : {}), outcome: "unsupported" },
+            services: { calls: 0, rawBytes: 0, textBytes: 0, decodersCreated: 0, timersScheduled: 0, denials: 0 } }
+          : { id: item.id, outcome: "unsupported", reason: "referenced-result-unavailable" }
+        : await session.execute({ ...item, args });
       cases.push(observation);
       observations.set(item.id, observation);
       if (observation.outcome === "error") {
@@ -44,10 +57,15 @@ try {
         break;
       }
     }
-  } finally { session?.dispose(); }
+  } finally { disposeSession(); }
   if (status === "completed" && performance.now() >= deadline) { status = "timeout"; timeoutReason = WALL_EXHAUSTED; }
-  const output = JSON.stringify({ schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest, status, cases,
-    ...(timeoutReason ? { timeoutReason } : {}) });
+  const output = JSON.stringify(request.schemaVersion === 1
+    ? { schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest, status, cases, ...(timeoutReason ? { timeoutReason } : {}) }
+    : { schemaVersion: 2, workerVersion: NODE_WORKER_VERSION, profileDigest: request.profile.digest, requestDigest, status, cases,
+      ...(timeoutReason ? { timeoutReason } : {}), services: cases.reduce((total, item) => {
+        for (const key of Object.keys(total)) total[key] += item.services?.[key] ?? 0; return total;
+      }, { calls: 0, rawBytes: 0, textBytes: 0, decodersCreated: 0, timersScheduled: 0, denials: 0 }),
+      quiescence, ...(timerTrace.length ? { timerTrace } : {}) });
   if (Buffer.byteLength(output) > MAX_RESPONSE_BYTES) throw new Error("Response size exceeded");
   process.stdout.write(output);
 } catch {

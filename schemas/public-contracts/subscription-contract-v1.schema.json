@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Subscription contract comparison public input contract v1",
+  "$comment": "Approved in DA2; schema describes the existing positional arguments using a JSON wrapper, not a replacement API. Normative finite-number, own-data-property, validation-order and Unicode rules are documented in docs/benchmark-public-contract-addendum-v2.md. Structural validation does not issue verification authority.",
+  "type": "object",
+  "required": [
+    "backend",
+    "frontend"
+  ],
+  "properties": {
+    "backend": {
+      "type": "object",
+      "required": [
+        "statuses",
+        "fields",
+        "version"
+      ],
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "frontend": {
+      "type": "object",
+      "required": [
+        "statuses",
+        "fields",
+        "version"
+      ],
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+  "$id": "urn:piagent:public-contract:subscription-contract-v1"
+}

@@ -112,7 +112,10 @@ const runtimeValidators = {
 // These existing document formats have producers/resolvers rather than a
 // standalone refusing parser. Keep that distinction explicit, not implicit
 // coverage from a fixture filename. Their structural fixtures run below.
-const schemaOnlyFixtures = new Set(["codex-relative-efficiency-v1", "context-index", "project-profile"]);
+const schemaOnlyFixtures = new Set([
+  "codex-relative-efficiency-v1", "composite-criterion", "context-index", "project-profile",
+  "scoped-project-verification-receipt-v2", "scoped-verification-receipt-v1"
+]);
 const schemaValidators = createRootSchemaRegistry(repositoryRoot);
 
 // These cases exist to make a refactor argue with the rule rather than with a

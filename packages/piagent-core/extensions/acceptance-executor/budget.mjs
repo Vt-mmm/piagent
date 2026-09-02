@@ -17,7 +17,7 @@ export function createExecutionBudget(overallDeadline, clocks = { now: () => per
     if (![user, system, user + system].every((value) => Number.isSafeInteger(value) && value >= 0)) throw new Error("Invalid resource observation");
     return user + system;
   };
-  let initialCpu = readCpu(), previousCpu = initialCpu, reason = null, diagnostic = null;
+  let initialCpu = readCpu(), previousCpu = initialCpu, reason = null, diagnostic = null, caseActive = false;
   let initialThread = readCpu(clocks.threadCpu), startedAt = clocks.now();
   let previousThread = initialThread;
   if (!Number.isFinite(startedAt)) throw new Error("Invalid resource observation");
@@ -29,7 +29,7 @@ export function createExecutionBudget(overallDeadline, clocks = { now: () => per
       if (initialThread < previousThread) throw new Error("Invalid resource observation");
       previousThread = initialThread;
       if (!Number.isFinite(startedAt)) throw new Error("Invalid resource observation");
-      reason = null; diagnostic = null;
+      reason = null; diagnostic = null; caseActive = true;
     },
     poll() {
       if (reason) return reason;
@@ -38,7 +38,7 @@ export function createExecutionBudget(overallDeadline, clocks = { now: () => per
       if (!Number.isFinite(now) || now < startedAt || current < previousCpu || currentThread < previousThread) throw new Error("Invalid resource observation");
       previousCpu = current; previousThread = currentThread;
       if (now >= overallDeadline) reason = WALL_EXHAUSTED;
-      else if (caseThreadCpuMicros >= CASE_THREAD_CPU_MICROS) reason = CPU_EXHAUSTED;
+      else if (caseActive && caseThreadCpuMicros >= CASE_THREAD_CPU_MICROS) reason = CPU_EXHAUSTED;
       if (reason) {
         const caseWallMicros = Math.ceil((now - startedAt) * 1000);
         if (![caseThreadCpuMicros, caseWallMicros].every(value => Number.isSafeInteger(value) && value >= 0)) {

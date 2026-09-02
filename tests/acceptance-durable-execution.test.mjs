@@ -13,6 +13,7 @@ import { registerIndependentAcceptanceProvider } from "../packages/piagent-core/
 import { independentVerificationRecovery } from "../packages/piagent-core/runtime/recovery/independent-verification-recovery.ts";
 import { selectRecoveryDecision, recoveryDecisionValidationErrors } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
 import { compileIndependentContract, compareIndependentExecution } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 import { checkpointSources } from "./helpers/async-production-cases.mjs";
 import { checkpointFamilyCases as checkpointCases } from "./helpers/production-family-cases.mjs";
 
@@ -208,6 +209,23 @@ test("real execution can be authenticated and reused after reopening the host st
   assert.equal((await resumed.assess(first, { policy: "allow" })).completionAllowed, false, "another runner cannot admit the old result object");
   const restored = await resumed.assess(cached, { policy: "allow" });
   assert.equal(currentAuthenticatedAssessment(restored, admissionContext).verdict, "pass");
+});
+
+test("authenticated durable admission binds protocol v2 profile, compiler, typed bytes and current source", integration, async (context) => {
+  const f = fixture(context), profile = structuredClone(expectedNodeProfile());
+  fs.writeFileSync(f.sourceFile, "export const sum = value => Buffer.from(value).toString('utf8');\n");
+  const nodeChecks = [{ id: "decode", cases: [{ id: "one", invocation: { kind: "call" },
+    args: [{ type: "buffer", value: { backingBase64: "eGhlbGxveQ==", byteOffset: 1, byteLength: 5 } }],
+    expected: { outcome: "return", value: { type: "string", value: "hello" } } }] }];
+  const runner = createDurableContractRunner({ ...f.options, profile, checks: nodeChecks });
+  profile.digest = "0".repeat(64);
+  const first = await runner.run(request), admitted = await runner.assess(first, { policy: "allow" });
+  assert.equal(first.verdict, "pass", JSON.stringify(first));
+  assert.equal(admitted.completionAllowed, true, JSON.stringify(admitted));
+  assert.equal(admitted.contractVersion, "bounded-node-profile-contract-comparison-v1");
+  assert.equal(admitted.profileDigest, expectedNodeProfile().digest);
+  assert.equal(first.evidence.observed.result.execution.profileDigest, expectedNodeProfile().digest);
+  assert.equal((await runner.run(request)).reused, true);
 });
 
 test("a changed clean commit runs again and its captured counterexample replaces the cached pass", integration, async (context) => {

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { WebSocket } from "ws";
 
@@ -24,6 +25,23 @@ function fail(message) {
   const error = new Error(message);
   error.code = "BENCHMARK_WEBUI_JOURNEY_FAILED";
   throw error;
+}
+
+async function candidateJourneyModules(packageRoot) {
+  const root = fs.realpathSync(packageRoot);
+  const load = async relative => {
+    const file = fs.realpathSync(path.join(root, relative));
+    if (!file.startsWith(root + path.sep)) fail("webui-candidate-module-outside-root");
+    return await import(pathToFileURL(file).href);
+  };
+  const [control, gateway, profile, project] = await Promise.all([
+    load("packages/piagent-webui/gateway/control-socket.ts"),
+    load("packages/piagent-webui/gateway/gateway-service.ts"),
+    load("packages/piagent-webui/gateway/profile-state.ts"),
+    load("packages/piagent-webui/gateway/project-registry.ts")]);
+  return { root, requestGatewayControl: control.requestGatewayControl,
+    startPiagentGateway: gateway.startPiagentGateway, gatewayProfileState: profile.gatewayProfileState,
+    readOrCreateCatalogKey: profile.readOrCreateCatalogKey, ProjectRegistry: project.ProjectRegistry };
 }
 
 function terminalSettlementOutcome(expectedSettlement, observedSettlement, turnIndex) {
@@ -274,7 +292,8 @@ function successfulReceipt(receipt) {
 }
 
 function durableTurnPosition(items, message, operationRef, messageRequestId,
-  { allowBlockedAssistant = false, requireExactCorrelation = false, requireUniqueUser = false } = {}) {
+  { allowBlockedAssistant = false, allowedUnavailableReasons = [], requireExactCorrelation = false,
+    requireUniqueUser = false } = {}) {
   const correlatedUsers = items.some((item) => item?.role === "user" && typeof item?.messageRequestId === "string");
   const userMatches = items.flatMap((item, index) => item?.role === "user"
     && String(item?.content?.text ?? "").trim().endsWith(message.trim())
@@ -289,7 +308,8 @@ function durableTurnPosition(items, message, operationRef, messageRequestId,
     && (!operationRef || !item.agentOperationId || item.agentOperationId === operationRef)
     && (typeof item?.content?.text === "string" && item.content.text.trim()
       || allowBlockedAssistant && ["assistant-completion-continuing", "assistant-completion-not-approved"]
-        .includes(item?.content?.reasonCode)));
+        .includes(item?.content?.reasonCode)
+      || allowedUnavailableReasons.includes(item?.content?.reasonCode)));
   if (assistantIndex <= userIndex) return null;
   return { userIndex, assistantIndex, durableUserCount: userMatches.length,
     assistantText: typeof items[assistantIndex].content.text === "string" ? items[assistantIndex].content.text : "" };
@@ -344,12 +364,17 @@ export async function runPiagentWebUiJourney(options) {
   const manifest = JSON.parse(fs.readFileSync(path.join(options.packageRoot, "package.json"), "utf8"));
   const expectedPiVersion = manifest.peerDependencies?.["@earendil-works/pi-coding-agent"];
   if (typeof expectedPiVersion !== "string") fail("webui-pi-version-missing");
+  const modules = options.qualifiedGatewayLauncher ? await candidateJourneyModules(options.packageRoot) : {
+    root: options.packageRoot, requestGatewayControl, startPiagentGateway, gatewayProfileState,
+    readOrCreateCatalogKey, ProjectRegistry };
   const bootstrap = benchmarkBootstrapMetadata();
-  const staticRoot = bootstrap?.webUiAssets?.root;
+  const staticRoot = options.qualifiedGatewayLauncher
+    ? options.staticRoot ?? path.join(modules.root, "packages/piagent-webui/dist/client")
+    : bootstrap?.webUiAssets?.root;
   if (typeof staticRoot !== "string") fail("webui-frozen-assets-missing");
-  const state = gatewayProfileState(options.agentDir);
-  const key = readOrCreateCatalogKey(state);
-  const project = new ProjectRegistry(state.root, key).register(options.workspace);
+  const state = modules.gatewayProfileState(options.agentDir);
+  const key = modules.readOrCreateCatalogKey(state);
+  const project = new modules.ProjectRegistry(state.root, key).register(options.workspace);
   let gateway = null;
   let client = null;
   const receipt = {
@@ -368,10 +393,15 @@ export async function runPiagentWebUiJourney(options) {
     if (typeof value === "string") process.env[key] = value;
   }
   try {
-    gateway = await withTimeout(startPiagentGateway({ packageRoot: options.packageRoot, expectedPiVersion,
-      agentDir: options.agentDir, staticRoot }), remaining(deadline, "gateway-start"), "gateway-start");
-    const launch = await requestGatewayControl(state.controlSocket, { action: "issue-launch-url" }, remaining(deadline, "launch-url"));
-    const launchUrl = launch.ok && launch.value && typeof launch.value === "object" ? launch.value.launchUrl : null;
+    const launchGateway = options.qualifiedGatewayLauncher ?? modules.startPiagentGateway;
+    if (typeof launchGateway !== "function") fail("webui-qualified-launcher-invalid");
+    gateway = await withTimeout(launchGateway({ packageRoot: modules.root, expectedPiVersion,
+      agentDir: options.agentDir, staticRoot, ...(options.scopedBrokerRouter
+        ? { scopedBrokerRouter: options.scopedBrokerRouter } : {}) }),
+    remaining(deadline, "gateway-start"), "gateway-start");
+    const launch = typeof gateway?.launchUrl === "string" ? null
+      : await modules.requestGatewayControl(state.controlSocket, { action: "issue-launch-url" }, remaining(deadline, "launch-url"));
+    const launchUrl = gateway?.launchUrl ?? (launch?.ok && launch.value && typeof launch.value === "object" ? launch.value.launchUrl : null);
     if (typeof launchUrl !== "string") fail("webui-launch-url-unavailable");
     const browser = await bootstrapBrowserSession(launchUrl, deadline);
     client = new GatewayJourneyClient(browser);
@@ -427,6 +457,7 @@ export async function runPiagentWebUiJourney(options) {
       let commandReceipt = null;
       let operationRef = null;
       let recovery = null;
+      let abortReceipt = null;
       if (turn.receiptUncertain === true) {
         if (!receipt.sessionRef) fail("webui-uncertain-send-requires-existing-session");
         const replayCursor = client.lastSequence;
@@ -462,6 +493,20 @@ export async function runPiagentWebUiJourney(options) {
         if (receipt.sessionRef !== commandReceipt.sessionRef) fail("webui-session-identity-changed");
         operationRef = commandReceipt.operationRef;
       }
+      if (turn.abortAfterMs !== undefined) {
+        if (!Number.isSafeInteger(turn.abortAfterMs) || turn.abortAfterMs < 0 || turn.abortAfterMs > 5000)
+          fail("webui-abort-delay-invalid");
+        if (turn.abortAfterMs) await withTimeout(new Promise(resolve => setTimeout(resolve, turn.abortAfterMs)),
+          remaining(deadline, `turn-${index + 1}-abort-delay`), `turn-${index + 1}-abort-delay`);
+        const current = await catalog(client, deadline), row = current.sessions.find(item => item.sessionRef === receipt.sessionRef);
+        if (!row) fail("webui-abort-session-missing");
+        abortReceipt = await client.request("sessions.command", { command: {
+          ...commandBase("session.abort", current.catalogRevision, receipt.sessionRef, row.sessionRevision),
+          payload: { operationRef, clearQueued: true }
+        } }, deadline);
+        if (abortReceipt.phase !== "settled" || !["aborted", "no-change"].includes(abortReceipt.resultCode))
+          fail(`webui-abort-not-settled:${abortReceipt?.resultCode ?? "unknown"}`);
+      }
       const settlement = await client.waitForEvent((event) => event.kind === "operation.settled"
         && event.payload?.sessionRef === receipt.sessionRef
         && event.payload?.messageRequestId === messageRequestId
@@ -482,6 +527,7 @@ export async function runPiagentWebUiJourney(options) {
           receiptResult: commandReceipt?.resultCode ?? null,
           receiptUncertain: turn.receiptUncertain === true,
           ...(recovery ? { recovery } : {}),
+          ...(abortReceipt ? { abortResult: abortReceipt.resultCode } : {}),
           expectedSettlement,
           settlement: settlement.payload.settlement,
           outcome: candidateOutcome,
@@ -494,6 +540,7 @@ export async function runPiagentWebUiJourney(options) {
       }
       const durable = await waitForDurableTurn(browser, receipt.sessionRef, turn.message, operationRef,
         messageRequestId, deadline, { allowBlockedAssistant: settlement.payload?.settlement === "blocked",
+          allowedUnavailableReasons: settlement.payload?.settlement === "aborted" ? ["assistant-message-aborted"] : [],
           requireExactCorrelation: turn.receiptUncertain === true, requireUniqueUser: turn.receiptUncertain === true });
       if (recovery) recovery.durableUserCopies = durable.durableUserCount;
       receipt.turns.push({
@@ -505,6 +552,7 @@ export async function runPiagentWebUiJourney(options) {
         receiptResult: commandReceipt?.resultCode ?? null,
         receiptUncertain: turn.receiptUncertain === true,
         ...(recovery ? { recovery } : {}),
+        ...(abortReceipt ? { abortResult: abortReceipt.resultCode } : {}),
         expectedSettlement,
         settlement: settlement.payload.settlement,
         durableUserIndex: durable.userIndex,

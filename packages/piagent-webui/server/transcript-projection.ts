@@ -7,6 +7,7 @@ import { workflowCommandPattern } from "../../piagent-core/runtime/workflows/web
 import { hasVisibleText } from "../shared/text-visibility.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE, webUiMessageCorrelationEntry,
   type WebUiMessageCorrelation } from "../shared/message-correlation.ts";
+import { terminalDeliveryPairs, type TerminalDeliveryPair, type TerminalDeliveryReceipt } from "./terminal-delivery-receipt.ts";
 
 const MAX_ENTRIES = 50_000;
 const MAX_ITEMS = 200;
@@ -24,7 +25,7 @@ type TranscriptRevision = { runtimeRevision: string; taskRevision: string | null
 type TranscriptContent = { state: "available" | "redacted" | "unavailable"; text: string | null; textChars: number | null; digest: string | null;
   truncated: boolean; redacted: boolean; imageCount: number; reasonCode: string | null };
 type TranscriptAttachment = { displayName: string; kind: "file" | "image" | "document"; mimeType: string; truncated: boolean };
-type TranscriptItem = { messageRef: string; parentMessageRef: string | null; role: "user" | "assistant" | "tool-result"; recordedAt: string;
+type TranscriptItem = { messageRef: string; parentMessageRef: string | null; role: "user" | "assistant" | "tool-result" | "custom"; recordedAt: string;
   agentOperationId: string | null; messageRequestId?: string; turnIndex: number | null; content: TranscriptContent;
   attachments?: TranscriptAttachment[];
   toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown" }> };
@@ -41,6 +42,8 @@ export type TranscriptProjectionInput = {
   limit?: number;
   generatedAt?: string;
   taskOutcome?: string | null;
+  terminalDeliveryReceipt?: TerminalDeliveryReceipt;
+  terminalDeliveryEntries?: unknown[];
 };
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
@@ -148,10 +151,10 @@ function isInternalFreshTransition(message: any): boolean {
 function unavailableContent(reasonCode: string): TranscriptContent {
   return { state: "unavailable", text: null, textChars: null, digest: null, truncated: false, redacted: false, imageCount: 0, reasonCode };
 }
-function item(entry: any, identity: TranscriptIdentity): TranscriptItem | null {
+function item(entry: any, identity: TranscriptIdentity, customReceipt = false): TranscriptItem | null {
   if (!entry || entry.type !== "message" || !entry.message) return null;
   if (isInternalFreshTransition(entry.message)) return null;
-  const itemRole = role(entry.message), recordedAt = timestamp(entry.timestamp ?? entry.message.timestamp);
+  const itemRole = customReceipt ? "custom" : role(entry.message), recordedAt = timestamp(entry.timestamp ?? entry.message.timestamp);
   if (!itemRole || !recordedAt || typeof entry.id !== "string" || entry.id.length === 0) return null;
   const userProjection = userMessageProjection(entry.message);
   const projectedToolCalls = toolCalls(entry.message, identity.sessionRef, itemRole);
@@ -170,11 +173,24 @@ function item(entry: any, identity: TranscriptIdentity): TranscriptItem | null {
 
 type ProjectedTranscriptItem = { entry: any; item: TranscriptItem; cursor: string };
 
-function correlatedTranscriptItems(entries: unknown[], identity: TranscriptIdentity): ProjectedTranscriptItem[] {
+function correlatedTranscriptItems(entries: unknown[], identity: TranscriptIdentity,
+  receiptPairs: Map<unknown, TerminalDeliveryPair>): ProjectedTranscriptItem[] {
   let pending: WebUiMessageCorrelation | null = null;
   let turn: WebUiMessageCorrelation | null = null;
   const values: ProjectedTranscriptItem[] = [];
   for (const entry of entries as any[]) {
+    const pair = receiptPairs.get(entry);
+    if (pair) {
+      // Project the admitted request and real custom receipt without writing
+      // fabricated user/assistant messages into Pi's durable model history.
+      for (const [source, itemRole, content] of [[pair.requestEntry, "user", pair.request],
+        [pair.receiptEntry, "custom", pair.receipt.content]] as const) {
+        const projected = item({ ...source, type: "message", message: { role: itemRole, content } }, identity, itemRole === "custom");
+        if (projected) values.push({ entry: source, item: { ...projected, agentOperationId: pair.correlation.operationRef,
+          messageRequestId: pair.correlation.messageRequestId }, cursor: opaque("transcript", [identity.sessionRef, source.id]) });
+      }
+      pending = null; turn = null; continue;
+    }
     if (entry?.type === "custom" && entry.customType === WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE) {
       // A newer marker supersedes an older marker that never reached a user
       // message. Invalid markers fail closed instead of leaking correlation
@@ -227,7 +243,7 @@ function suppressOpenTaskHandoff(values: ProjectedTranscriptItem[], taskOutcome:
 }
 
 function durableAssistant(item: TranscriptItem): boolean {
-  return item.role === "assistant" && item.toolCalls.length === 0
+  return (item.role === "assistant" || item.role === "custom") && item.toolCalls.length === 0
     && (item.content.state === "available" || item.content.state === "redacted")
     && hasVisibleText(item.content.text ?? "");
 }
@@ -284,7 +300,13 @@ function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit
 export function projectTranscript(input: TranscriptProjectionInput): TranscriptDocument {
   const limit = Math.max(1, Math.min(MAX_ITEMS, Number.isInteger(input.limit) ? Number(input.limit) : 50));
   if (!Array.isArray(input.entries) || input.entries.length > MAX_ENTRIES) return unavailable(input, "transcript-history-unavailable", limit);
-  const projected = suppressOpenTaskHandoff(linkTranscriptTurns(correlatedTranscriptItems(input.entries, input.identity)), input.taskOutcome);
+  const receipt = input.terminalDeliveryReceipt;
+  const boundReceipt = receipt?.details.taskId === input.identity.taskId && receipt?.details.taskRunId === input.identity.taskRunId
+    && receipt?.details.outcome === input.taskOutcome ? receipt : undefined;
+  const receiptPairs = new Map(terminalDeliveryPairs(input.entries, boundReceipt, input.terminalDeliveryEntries)
+    .map((pair) => [pair.receiptEntry, pair]));
+  const projected = suppressOpenTaskHandoff(linkTranscriptTurns(correlatedTranscriptItems(input.entries, input.identity,
+    receiptPairs)), input.taskOutcome);
   const cursors = projected.map((value) => value.cursor);
   let end = projected.length;
   if (input.beforeCursor) {
@@ -296,5 +318,6 @@ export function projectTranscript(input: TranscriptProjectionInput): TranscriptD
   return { schemaVersion: 1, version: "piagent-webui-transcript-v1", generatedAt: input.generatedAt ?? new Date().toISOString(),
     identity: structuredClone(input.identity), revision: structuredClone(input.revision), eventCursor: input.eventCursor,
     state: "ready", items: selected, page: { beforeCursor: input.beforeCursor ?? null, nextBeforeCursor: hasOlder ? cursors[page.start] : null,
-      hasOlder, limit, truncated: page.compacted || projected.length !== input.entries.filter((entry: any) => entry?.type === "message").length }, reasonCode: null };
+      hasOlder, limit, truncated: page.compacted || projected.length !== input.entries.filter((entry: any) => entry?.type === "message").length
+        + receiptPairs.size * 2 }, reasonCode: null };
 }

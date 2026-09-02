@@ -1,4 +1,5 @@
 *
+!Dockerfile
 !package.json
 !package-lock.json
 !worker.mjs
@@ -13,5 +14,7 @@
 !module-graph.mjs
 !guest.mjs
 !budget.mjs
+!invocation.mjs
+!node-profile.mjs
 !node_modules/
 !node_modules/**

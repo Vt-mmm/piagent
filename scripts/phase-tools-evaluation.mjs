@@ -27,6 +27,7 @@ async function registeredTools() {
   try {
     writeRuntimeStubs(root);
     fs.cpSync(path.join(repoRoot, "packages", "piagent-core"), path.join(root, "packages", "piagent-core"), { recursive: true });
+    fs.cpSync(path.join(repoRoot, "adapters", "common"), path.join(root, "adapters", "common"), { recursive: true });
     fs.copyFileSync(path.join(repoRoot, "package.json"), path.join(root, "package.json"));
     const moduleUrl = pathToFileURL(path.join(root, "packages", "piagent-core", "extensions", "piagent-guard.ts")).href;
     const guard = (await import(`${moduleUrl}?evaluation=${Date.now()}`)).default;

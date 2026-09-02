@@ -169,8 +169,8 @@ describe("safe task resume state", () => {
   it("restores authoritative clauses omitted from the summary and selected criteria", () => {
     const cwd = workspace();
     const cases = [
-      ["concurrent-lease-lifecycle.md", "calls `operation(renew)` with a bare `renew(now)` callback"],
-      ["durable-session-control-plane.md", "The stored receipt contains exactly `idempotencyKey`"]
+      ["concurrent-lease-lifecycle.md", "- [L4] `withLease` throws an error containing `busy` when acquisition fails."],
+      ["durable-session-control-plane.md", "- [D5] A newly admitted command increments revision exactly once and returns"]
     ];
     for (const [file, omittedClause] of cases) {
       const operatorRequest = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8");

@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { compileIndependentContract, INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
+import { compileIndependentContract } from "./acceptance-independent-contract.js";
 import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_VERSION, runSnapshotBoundContract, snapshotPlanSource } from "./acceptance-execution-snapshot.js";
 import { validateModulePaths } from "./acceptance-executor/module-graph.mjs";
 import { createAuthenticatedAdmission, unavailableAuthenticatedAssessment } from "./acceptance-authenticated-admission.js";
+import { FACT_EVIDENCE_SCOPE_VERSION, ROOT_AGGREGATE_FACT_ID } from "./acceptance-evidence-store.js";
 
 export const DURABLE_EXECUTION_VERSION = "durable-module-contract-v2";
 const HASH = /^[a-f0-9]{64}$/;
@@ -29,33 +30,42 @@ const unavailable = (reason, attemptId) => Object.freeze({ version: DURABLE_EXEC
  * before the store's recordStoppedAttempt capability can be used.
  */
 export function createDurableContractRunner({ store, projectRoot, sourcePath, modulePaths, authorizeSourceRead,
-  exportName, checks, imageId, dockerSocket, verifierDigest, getProjectVerificationDigest, timeoutMs = 10000 } = {}) {
+  exportName, checks, profile, imageId, dockerSocket, verifierDigest, getProjectVerificationDigest, timeoutMs = 10000 } = {}) {
   if (!store || typeof store.reserve !== "function" || typeof store.settle !== "function"
     || typeof verifierDigest !== "string" || !HASH.test(verifierDigest) || typeof getProjectVerificationDigest !== "function"
     || typeof imageId !== "string" || !/^sha256:[a-f0-9]{64}$/.test(imageId)
     || typeof dockerSocket !== "string" || !dockerSocket.startsWith("/") || dockerSocket.includes("\0")
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 25 || timeoutMs > 30000) throw new TypeError("Invalid approved durable verifier configuration");
   // Compile before retaining the plan to detach it from later caller mutations.
-  const template = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder = 0;", exportName, checks }));
+  const nodeProfile = profile !== undefined;
+  const template = compileIndependentContract(JSON.stringify({ schemaVersion: nodeProfile ? 2 : 1,
+    ...(nodeProfile ? { profile } : {}), source: "export const placeholder = 0;", exportName, checks }));
+  const plan = source => ({ schemaVersion: nodeProfile ? 2 : 1,
+    ...(nodeProfile ? { profile: template.plan.profile } : {}), ...source, exportName, checks });
   const approvedChecks = template.plan.checks;
   const snapshotRequest = { projectRoot, sourcePath, authorizeSourceRead,
     ...(modulePaths === undefined ? {} : { modulePaths: Object.freeze(validateModulePaths(sourcePath, modulePaths)) }) };
-  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks: approvedChecks });
+  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks: approvedChecks,
+    ...(nodeProfile ? { profile: template.plan.profile } : {}) });
   const completed = new WeakMap();
-  const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, INDEPENDENT_CONTRACT_VERSION,
-    EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, timeoutMs]));
+  const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, template.version,
+    EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, timeoutMs, template.plan.profile ?? null]));
 
   async function run({ scope, criterionHash, maxAttempts, retry = false, signal } = {}) {
     if (typeof criterionHash !== "string" || !HASH.test(criterionHash)) throw new TypeError("Invalid current criterion hash");
+    const factScoped = scope?.version === FACT_EVIDENCE_SCOPE_VERSION;
+    if (factScoped && scope.factId === ROOT_AGGREGATE_FACT_ID) throw new TypeError("The root aggregate is not a code child fact");
     // Freeze identities before awaiting a host callback; the caller cannot swap
     // tasks or criteria midway through a reserved execution.
-    const identity = Object.freeze({ taskRunId: scope?.taskRunId, criterionId: scope?.criterionId, criterionHash });
-    const exactScope = Object.freeze({ taskRunId: identity.taskRunId, criterionId: identity.criterionId });
+    const identity = Object.freeze({ ...(factScoped ? { version: FACT_EVIDENCE_SCOPE_VERSION, factId: scope.factId } : {}),
+      taskRunId: scope?.taskRunId, criterionId: scope?.criterionId, criterionHash });
+    const exactScope = Object.freeze({ ...(factScoped ? { version: FACT_EVIDENCE_SCOPE_VERSION } : {}),
+      taskRunId: identity.taskRunId, criterionId: identity.criterionId, ...(factScoped ? { factId: identity.factId } : {}) });
     const before = captureExecutionSnapshot(snapshotRequest);
     if (before.binding.projectId !== store.projectId) throw new Error("Evidence store belongs to another project");
     const verificationDigest = await getProjectVerificationDigest({ ...identity, snapshot: before.binding, snapshotDigest: before.snapshotDigest });
     if (typeof verificationDigest !== "string" || !HASH.test(verificationDigest)) return unavailable("current-project-verifier-missing");
-    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, ...snapshotPlanSource(before), exportName, checks: approvedChecks }));
+    const compiled = compileIndependentContract(JSON.stringify({ ...plan(snapshotPlanSource(before)), checks: approvedChecks }));
     const binding = { criterionHash, snapshotDigest: before.snapshotDigest, verifierDigest,
       projectVerificationDigest: verificationDigest, planDigest: compiled.planDigest, backendDigest };
     if (signal?.aborted) return unavailable("cancelled-before-reservation");
@@ -88,7 +98,8 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, mo
 
     let observed;
     try {
-      observed = await runSnapshotBoundContract({ ...snapshotRequest, exportName, checks: approvedChecks, imageId, dockerSocket,
+      observed = await runSnapshotBoundContract({ ...snapshotRequest, exportName, checks: approvedChecks,
+        ...(nodeProfile ? { profile: template.plan.profile } : {}), imageId, dockerSocket,
         timeoutMs, signal, executionRunId: reserved.event.attemptId });
     } catch {
       observed = { verdict: "error", reason: "independent-execution-threw" };

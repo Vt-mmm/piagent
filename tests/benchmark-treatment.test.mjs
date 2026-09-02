@@ -18,7 +18,7 @@ test("parses and validates explicit Piagent benchmark treatments", () => {
   assert.equal(parseBenchmarkArgs(["--piagent-treatment", "intelligence-engine"]).piagentTreatment, "intelligence-engine");
   assert.throws(
     () => parseBenchmarkArgs(["--piagent-treatment", "unknown"]),
-    /release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, feature-off/
+    /release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, configured-independent-v2, feature-off/
   );
 });
 

@@ -1,6 +1,7 @@
 import { MAX_COLLECTION_LENGTH, MAX_STRING_LENGTH, MAX_VALUE_DEPTH, MAX_VALUE_NODES, MAX_VALUE_TEXT } from "./values.mjs";
 import { CALLBACK_INTRINSICS } from "./callback-intrinsics.mjs";
 import { REFERENCE_INTRINSICS } from "./reference-identity.mjs";
+import { INVOCATION_INTRINSICS } from "./invocation.mjs";
 
 // This closure is evaluated before the candidate. Only the worker retains its
 // handle; it installs no host callback, oracle, serializer or receipt writer.
@@ -9,6 +10,9 @@ export const INTRINSICS = `(() => {
   const getTime = D.prototype.getTime, originalNow = D.now, define = Object.defineProperty, create = Object.create;
   const ownKeys = Reflect.ownKeys, descriptor = Object.getOwnPropertyDescriptor, own = Object.hasOwn;
   const prototype = Object.getPrototypeOf, objectPrototype = Object.prototype, isArray = Array.isArray;
+  const bytePrototype = prototype(Uint8Array.prototype), byteBuffer = descriptor(bytePrototype, 'buffer').get;
+  const dataViewBuffer = descriptor(DataView.prototype, 'buffer').get;
+  const arrayBufferLength = descriptor(ArrayBuffer.prototype, 'byteLength').get;
   const stringify = JSON.stringify, finite = Number.isFinite, same = Object.is, numberString = Number.prototype.toString;
   const WS = WeakSet, add = WS.prototype.add, has = WS.prototype.has, remove = WS.prototype.delete;
   const dataDescriptor = (value, enumerable) => {
@@ -40,7 +44,7 @@ export const INTRINSICS = `(() => {
   };
   const numeric = value => same(value, -0) ? '"-0"' : finite(value) ? apply(numberString, value, [])
     : value !== value ? '"NaN"' : value < 0 ? '"-Infinity"' : '"Infinity"';
-  function observeValue(root, allowDate, allowCallbacks) {
+  function observeValue(root, allowDate, allowCallbacks, typedObserver) {
     let nodes = 0, text = 0;
     const active = new WS();
     function quote(value) {
@@ -59,6 +63,11 @@ export const INTRINSICS = `(() => {
       const callback = allowCallbacks ? callbackId(value) : undefined;
       if (callback !== undefined) return '{"type":"callback","value":' + quote(callback) + '}';
       if (type !== 'object' || apply(has, proxies, [value])) throw 'return-type-unsupported';
+      if (typedObserver !== undefined) {
+        const typedValue = apply(typedObserver, undefined, [value]);
+        if (typeof typedValue !== 'string') throw 'return-type-unsupported';
+        if (typedValue) return typedValue;
+      }
       let timestamp, date = false;
       try { timestamp = apply(getTime, value, []); date = true; } catch {}
       if (date) {
@@ -91,17 +100,18 @@ export const INTRINSICS = `(() => {
     }
     try { return '{"value":' + visit(root, 0) + '}'; }
     catch (reason) {
-      const code = reason === 'value-observation-limit' ? reason
+      const code = reason === 'value-observation-limit' || reason === 'typed-backing-limit' ? reason
         : reason === 'structured-value-unsupported' ? reason : 'return-type-unsupported';
       return '{"reason":' + stringify(code) + '}';
     }
   }
   ${CALLBACK_INTRINSICS}
   ${REFERENCE_INTRINSICS}
+  ${INVOCATION_INTRINSICS}
   return {
     makeDate: value => new D(value), dateTime: value => apply(getTime, value, []),
     defineData: (object, key, value) => { define(object, key, dataDescriptor(value, true)); },
-    typeOf: value => typeof value, observeValue, referenceIdentity, clockReads: () => reads,
+    typeOf: value => typeof value, observeValue, referenceIdentity, invokeTarget, clockReads: () => reads,
     beginCapabilities, makeError, makeCallback, callback: id => callbacks[id],
     callbackFault: () => callbackFault, callbackTrace: () => '[' + trace + ']', errorObservation,
     awaitValue: value => apply(promiseResolve, NativePromise, [value]),

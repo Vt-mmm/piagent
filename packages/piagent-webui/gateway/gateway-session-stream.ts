@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { hasVisibleText } from "../shared/text-visibility.ts";
+import type { TerminalDeliveryReceipt } from "../server/terminal-delivery-receipt.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { SessionOperationLifecycle, type SessionOperationObservation,
   type SessionOperationPhase, type SessionOperationRetryPolicyOptions } from "./session-operation-lifecycle.ts";
@@ -147,6 +148,9 @@ export class GatewaySessionStream {
   readonly #toolLabels = new Map<string, string>();
   readonly #toolFileLabels = new Map<string, string | null>();
   readonly #lifecycle: SessionOperationLifecycle;
+  readonly #commitTerminalDeliveryReceipt: ((message: unknown) => TerminalDeliveryReceipt | undefined) | undefined;
+  #terminalDeliveryMessage: unknown;
+  #receiptOnly = true;
 
   get runtimeRestartRequired(): boolean { return this.#runtimeRestartRequired; }
   get lifecycleTerminationReasonCode(): string | null { return this.#lifecycleTerminationReasonCode; }
@@ -166,10 +170,12 @@ export class GatewaySessionStream {
   }
 
   constructor(options: { sessionRef: string; operationRef: string; messageRequestId?: string | null; events: GatewayEventStore;
-    retryPolicy?: SessionOperationRetryPolicyOptions }) {
+    retryPolicy?: SessionOperationRetryPolicyOptions;
+    commitTerminalDeliveryReceipt?: (message: unknown) => TerminalDeliveryReceipt | undefined }) {
     this.sessionRef = options.sessionRef; this.operationRef = options.operationRef;
     this.messageRequestId = options.messageRequestId ?? null; this.#events = options.events;
     this.#lifecycle = new SessionOperationLifecycle({ operationRef: options.operationRef, retryPolicy: options.retryPolicy });
+    this.#commitTerminalDeliveryReceipt = options.commitTerminalDeliveryReceipt;
   }
 
   #correlation(): { messageRequestId?: string } {
@@ -190,6 +196,9 @@ export class GatewaySessionStream {
     const wasStarted = this.#lifecycle.started, wasSettled = this.#lifecycle.hostSettled;
     const observation = this.#lifecycle.observe(event);
     if (!observation.accepted) return observation;
+    if (event?.type === "agent_start" || event?.message?.role === "assistant" || event?.assistantMessageEvent
+      || String(event?.type ?? "").startsWith("tool_execution_")) this.#receiptOnly = false;
+    if (event?.type === "message_end" && event.message?.role === "custom") this.#terminalDeliveryMessage = event.message;
     if (!wasStarted && this.#lifecycle.started) for (const resolve of this.#startListeners.splice(0)) resolve();
     if (!wasSettled && this.#lifecycle.hostSettled) for (const resolve of this.#settleListeners.splice(0)) resolve();
     if (observation.retry === "abort") this.markError(observation.reasonCode ?? "automatic-retry-blocked");
@@ -276,6 +285,17 @@ export class GatewaySessionStream {
 
   complete(sessionRevision: string | null, taskOutcome: string | null = null): void {
     if (!this.#lifecycle.markTerminal()) return;
+    const receipt = this.#receiptOnly && !this.#forcedSettlement && !this.#runtimeRestartRequired
+      && sessionRevision !== null && taskOutcome !== null && taskOutcome !== "pending"
+      ? this.#commitTerminalDeliveryReceipt?.(this.#terminalDeliveryMessage) : undefined;
+    if (receipt) {
+      // The canonical transcript renders a custom receipt. Never stream it as
+      // assistant text or open a model turn just to supply a final message.
+      this.#lastMessageRef = ref("receipt");
+      this.#settlement = receipt.details.outcome === "completed" && receipt.details.completionApproved
+        && receipt.details.gateDecision === "pass" ? { outcome: "completed", reasonCode: null }
+        : { outcome: "blocked", reasonCode: "terminal-receipt-not-approved" };
+    }
     this.#flush(true);
     this.#settleActiveTools("operation-settled-before-tool-result");
     let settlement = this.#forcedSettlement ?? (this.#runtimeRestartRequired

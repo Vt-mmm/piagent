@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { captureExecutionSnapshot, runSnapshotBoundContract } from "../packages/piagent-core/extensions/acceptance-execution-snapshot.js";
+import { captureCompositeExecutionSnapshot, captureExecutionSnapshot,
+  runSnapshotBoundContract } from "../packages/piagent-core/extensions/acceptance-execution-snapshot.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
 const integration = { skip: !imageId || !dockerSocket, timeout: 60000 };
 const authorizeSourceRead = () => true;
 const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { stdio: "pipe" });
+const sha = value => createHash("sha256").update(value).digest("hex");
 
 function fixture(context, commit = true) {
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-execution-snapshot-"));
@@ -78,6 +82,46 @@ test("unborn repositories and ignored target bytes still have explicit identitie
   assert.notEqual(before.snapshotDigest, after.snapshotDigest);
 });
 
+test("composite material declarations are finite caps while snapshots bind exact current bytes", (context) => {
+  const request = fixture(context);
+  fs.mkdirSync(path.join(request.projectRoot, "materials"));
+  const currentPath = path.join(request.projectRoot, "materials/current.txt");
+  fs.writeFileSync(currentPath, "short\n");
+  git(request.projectRoot, "add", "materials/current.txt");
+  git(request.projectRoot, "commit", "-qm", "composite material");
+  const input = { projectRoot: request.projectRoot,
+    materialBindings: [{ id: "current", mode: "current", relativePath: "materials/current.txt", sha256: null }],
+    declarations: { materials: [{ id: "current", byteLength: 64 }] } };
+  const before = captureCompositeExecutionSnapshot(input);
+  assert.deepEqual(before.identities, [{ id: "current", mode: "current", relativePath: "materials/current.txt",
+    byteLength: 6, sha256: before.materials[0].sha256 }]);
+  fs.writeFileSync(currentPath, "a longer current value\n");
+  const after = captureCompositeExecutionSnapshot(input);
+  assert.equal(after.materials[0].byteLength, 23);
+  assert.notEqual(after.materialSnapshotDigest, before.materialSnapshotDigest);
+  assert.throws(() => captureCompositeExecutionSnapshot({ ...input,
+    declarations: { materials: [{ id: "current", byteLength: 22 }] } }), /approved identity/);
+});
+
+test("composite frozen materials retain exact content identity under a size cap", (context) => {
+  const request = fixture(context);
+  fs.mkdirSync(path.join(request.projectRoot, "materials"));
+  const frozenPath = path.join(request.projectRoot, "materials/frozen.txt");
+  fs.writeFileSync(frozenPath, "frozen\n");
+  git(request.projectRoot, "add", "materials/frozen.txt");
+  git(request.projectRoot, "commit", "-qm", "frozen material");
+  const first = captureCompositeExecutionSnapshot({ projectRoot: request.projectRoot,
+    materialBindings: [{ id: "frozen", mode: "frozen", relativePath: "materials/frozen.txt",
+      sha256: sha("frozen\n") }],
+    declarations: { materials: [{ id: "frozen", byteLength: 64 }] } });
+  assert.equal(first.materials[0].text, "frozen\n");
+  fs.writeFileSync(frozenPath, "changed\n");
+  assert.throws(() => captureCompositeExecutionSnapshot({ projectRoot: request.projectRoot,
+    materialBindings: [{ id: "frozen", mode: "frozen", relativePath: "materials/frozen.txt",
+      sha256: first.materials[0].sha256 }], declarations: { materials: [{ id: "frozen", byteLength: 64 }] } }),
+  /approved identity/);
+});
+
 test("real contract execution uses captured bytes and rejects post-run source or revision drift", integration, async (context) => {
   const request = fixture(context);
   const options = { ...request, imageId, dockerSocket, exportName: "run", checks: [{ id: "sum", cases: [{ id: "one",
@@ -96,4 +140,19 @@ test("real contract execution uses captured bytes and rejects post-run source or
   assert.equal(changed.result.verdict, "pass");
   assert.equal(changed.verdict, "unknown");
   assert.equal(changed.reason, "execution-snapshot-drift");
+});
+
+test("snapshot-bound protocol v2 retains the exact Node profile and typed input contract", integration, async (context) => {
+  const request = fixture(context), profile = expectedNodeProfile();
+  fs.writeFileSync(path.join(request.projectRoot, "source.mjs"), "export const run = value => Buffer.from(value).toString('utf8');\n");
+  git(request.projectRoot, "add", "source.mjs"); git(request.projectRoot, "commit", "-qm", "node profile source");
+  const checks = [{ id: "decode", cases: [{ id: "one", invocation: { kind: "call" },
+    args: [{ type: "uint8array", value: { backingBase64: "aGVsbG8=", byteOffset: 0, byteLength: 5 } }],
+    expected: { outcome: "return", value: { type: "string", value: "hello" } } }] }];
+  const result = await runSnapshotBoundContract({ ...request, profile, imageId, dockerSocket, exportName: "run", checks });
+  assert.equal(result.verdict, "pass", JSON.stringify(result));
+  assert.equal(result.result.version, "bounded-node-profile-contract-comparison-v1");
+  assert.equal(result.result.execution.profileDigest, profile.digest);
+  const invalid = { ...profile, digest: "0".repeat(64) };
+  await assert.rejects(runSnapshotBoundContract({ ...request, profile: invalid, imageId, dockerSocket, exportName: "run", checks }));
 });

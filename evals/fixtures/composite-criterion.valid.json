@@ -1,0 +1,33 @@
+{
+  "route": "composite",
+  "compositeContractVersion": "composite-criterion-v1",
+  "criterionIndex": 0,
+  "criterionId": "fixture",
+  "criterionText": "x",
+  "criterionHash": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+  "coverage": [
+    {
+      "id": "whole",
+      "startByte": 0,
+      "endByte": 1,
+      "textHash": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+      "roles": ["behavior"],
+      "requiredFactIds": ["code"]
+    }
+  ],
+  "facts": [
+    {
+      "id": "code",
+      "kind": "bounded-code-checks",
+      "specDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "producerId": "producer",
+      "producerDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "ruleDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "stage": "content",
+      "parameters": {
+        "codePlanDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "backendProfileDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    }
+  ]
+}

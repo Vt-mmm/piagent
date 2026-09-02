@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { createAcceptanceAssessmentSession } from "./acceptance-assessment.js";
-import { isAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
+import { FACT_EVIDENCE_SCOPE_VERSION, isAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
 import { captureExecutionSnapshot, snapshotPlanSource } from "./acceptance-execution-snapshot.js";
-import { compileIndependentContract, compareIndependentExecution, INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
+import { compileIndependentContract, compareIndependentExecution } from "./acceptance-independent-contract.js";
 import { parseRequest, parseResponse } from "./acceptance-executor/protocol.mjs";
 import { executionDiagnostics } from "./acceptance-execution-diagnostics.js";
 
@@ -20,8 +20,10 @@ export function unavailableAuthenticatedAssessment(reason) {
 }
 
 /** Host-only factory. Only a branded, authenticated store can admit evidence. */
-export function createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks }) {
-  const approved = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder=0;", exportName, checks }));
+export function createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks, profile }) {
+  const nodeProfile = profile !== undefined;
+  const plan = source => ({ schemaVersion: nodeProfile ? 2 : 1, ...(nodeProfile ? { profile } : {}), ...source, exportName, checks });
+  const approved = compileIndependentContract(JSON.stringify(plan({ source: "export const placeholder=0;" })));
   function issue({ scope, binding, event, expectedChecks }) {
     if (!isAcceptanceEvidenceStore(store)) return unavailableAuthenticatedAssessment("untrusted-evidence-store");
     const current = store.latest(scope);
@@ -30,13 +32,14 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
     // Read authenticated bytes, never the caller's diagnostic result object.
     const evidence = JSON.parse(current.evidenceText), observed = evidence.observed, result = observed?.result;
     const snapshot = captureExecutionSnapshot(snapshotRequest);
-    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, ...snapshotPlanSource(snapshot), exportName, checks: approved.plan.checks }));
+    const compiled = compileIndependentContract(JSON.stringify({ ...plan(snapshotPlanSource(snapshot)), checks: approved.plan.checks }));
     if (snapshot.snapshotDigest !== binding.snapshotDigest || evidence.snapshotDigest !== binding.snapshotDigest
       || evidence.planDigest !== binding.planDigest || observed?.snapshotDigest !== binding.snapshotDigest
-      || result?.version !== INDEPENDENT_CONTRACT_VERSION || result.planDigest !== binding.planDigest
+      || result?.version !== approved.version || result.planDigest !== binding.planDigest
       || result.execution?.runId !== current.attemptId || result.execution.sourceDigest !== snapshot.binding.sourceDigest
       || result.execution.imageId !== imageId || compiled.planDigest !== binding.planDigest
-      || result.execution.requestDigest !== hash(compiled.requestText)) {
+      || result.execution.requestDigest !== hash(compiled.requestText)
+      || nodeProfile && result.execution.profileDigest !== approved.plan.profile.digest) {
       return unavailableAuthenticatedAssessment("execution-admission-binding-mismatch");
     }
     if (result.execution.observation) {
@@ -81,7 +84,12 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
     const admitted = freeze({ ...assessment, reasons: [...new Set([...assessment.reasons, ...diagnostic.reasons])],
       executionDiagnostics: diagnostic, version: AUTHENTICATED_ADMISSION_VERSION, attemptId: current.attemptId,
       criterionId: scope.criterionId, taskRunId: scope.taskRunId, criterionHash: binding.criterionHash,
+      ...(scope.version === FACT_EVIDENCE_SCOPE_VERSION ? { factId: scope.factId } : {}),
       sourcePath: snapshot.binding.sourcePath, workingTreeDigest: snapshot.binding.workingTreeDigest,
+      contractVersion: approved.version, ...(nodeProfile ? { profileDigest: approved.plan.profile.digest } : {}),
+      planDigest: binding.planDigest, backendDigest: binding.backendDigest,
+      checks: result.checks.map((check) => ({ id: check.id, status: check.status, caseCount: check.caseCount,
+        ...(check.counterexampleRef ? { counterexampleRef: check.counterexampleRef } : {}) })),
       ...(snapshot.binding.moduleFiles ? { sourcePaths: snapshot.binding.moduleFiles.map((file) => file.sourcePath) } : {}),
       snapshotDigest: binding.snapshotDigest, projectVerificationDigest: binding.projectVerificationDigest,
       counterexamples: result.checks.filter((check) => assessment.verdict === "fail" && check.status === "fail").map((check) => ({
@@ -96,9 +104,10 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
 
 /** A serialized/cross-instance receipt is never completion or repair authority. */
 export function currentAuthenticatedAssessment(receipt, { taskRunId, criterionId, criterionHash, workingTreeDigest,
-  projectVerificationDigest, policy = "unknown" } = {}) {
+  projectVerificationDigest, factId, policy = "unknown" } = {}) {
   const owned = receipt && typeof receipt === "object" ? receipts.get(receipt) : undefined;
   if (!owned || policy !== "allow" || owned.scope.taskRunId !== taskRunId || owned.scope.criterionId !== criterionId
+    || (owned.scope.version === FACT_EVIDENCE_SCOPE_VERSION ? owned.scope.factId !== factId : factId !== undefined)
     || owned.binding.criterionHash !== criterionHash || owned.binding.projectVerificationDigest !== projectVerificationDigest) return null;
   try {
     const latest = owned.store.latest(owned.scope);

@@ -1,0 +1,788 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:piagent:proposal:composite-criterion-v1",
+  "$comment": "PROPOSED syntax only. Semantic invariants in SCHEMA-INVARIANTS.md are mandatory. This schema does not issue authority or approve a producer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "route",
+    "compositeContractVersion",
+    "criterionIndex",
+    "criterionId",
+    "criterionText",
+    "criterionHash",
+    "coverage",
+    "facts"
+  ],
+  "properties": {
+    "route": {
+      "const": "composite"
+    },
+    "compositeContractVersion": {
+      "const": "composite-criterion-v1"
+    },
+    "criterionIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 11
+    },
+    "criterionId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+    },
+    "criterionText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    },
+    "criterionHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": false,
+      "items": {
+        "$ref": "#/$defs/clause"
+      }
+    },
+    "facts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": false,
+      "items": {
+        "$ref": "#/$defs/fact"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+    },
+    "fact": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "bounded-code-checks"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "codePlanDigest",
+                "backendProfileDigest"
+              ],
+              "properties": {
+                "codePlanDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "backendProfileDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "project-verifier-current"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "commandSetDigest"
+              ],
+              "properties": {
+                "commandSetDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "workspace-scope"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "allowedWriteMaterialIds",
+                "requireCompleteMutationJournal"
+              ],
+              "properties": {
+                "allowedWriteMaterialIds": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+                  }
+                },
+                "requireCompleteMutationJournal": {
+                  "const": true
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "context-current"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "requiredMaterialIds",
+                "delivery"
+              ],
+              "properties": {
+                "requiredMaterialIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+                  }
+                },
+                "delivery": {
+                  "const": "actual-tool-result-or-prompt"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "tool-policy-complete"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "profileDigest",
+                "requireExclusiveMediation"
+              ],
+              "properties": {
+                "profileDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "requireExclusiveMediation": {
+                  "const": true
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "structured-log-claims"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "logMaterialId",
+                "responseFormat",
+                "correlation"
+              ],
+              "properties": {
+                "logMaterialId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+                },
+                "responseFormat": {
+                  "const": "incident-claims-v1"
+                },
+                "correlation": {
+                  "const": "unique-worker-link-within-60s"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "config-document-literals"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "configMaterialId",
+                "documentMaterialId",
+                "format",
+                "requiredFields"
+              ],
+              "properties": {
+                "configMaterialId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+                },
+                "documentMaterialId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+                },
+                "format": {
+                  "const": "config-literals-v1"
+                },
+                "requiredFields": {
+                  "const": [
+                    "service",
+                    "restartCommand"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "policy-refusal-output"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "content"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "rule",
+                "protectedMaterialId",
+                "expectedDisposition",
+                "responseFormat",
+                "nativeTemplateSetDigest"
+              ],
+              "properties": {
+                "rule": {
+                  "enum": [
+                    "protected-env",
+                    "destructive-history"
+                  ]
+                },
+                "protectedMaterialId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+                },
+                "expectedDisposition": {
+                  "const": "deny"
+                },
+                "responseFormat": {
+                  "const": "refusal-v1"
+                },
+                "nativeTemplateSetDigest": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "response-persisted"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "settlement"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "expectedOrigins",
+                "requireExactBytes"
+              ],
+              "properties": {
+                "expectedOrigins": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "assistant",
+                      "native-policy"
+                    ]
+                  }
+                },
+                "requireExactBytes": {
+                  "const": true
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "kind",
+            "specDigest",
+            "producerId",
+            "producerDigest",
+            "ruleDigest",
+            "stage",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "kind": {
+              "const": "terminal-delivery"
+            },
+            "specDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "producerId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+            },
+            "producerDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ruleDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "const": "settlement"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "boundary",
+                "requireExactOperation"
+              ],
+              "properties": {
+                "boundary": {
+                  "enum": [
+                    "cli-final-output-durable",
+                    "webui-operation-confirmed"
+                  ]
+                },
+                "requireExactOperation": {
+                  "const": true
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "clause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "startByte",
+        "endByte",
+        "textHash",
+        "roles",
+        "requiredFactIds"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+        },
+        "startByte": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2400
+        },
+        "endByte": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2400
+        },
+        "textHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 13,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "behavior",
+              "interface",
+              "input-validation",
+              "verification",
+              "no-mutation",
+              "path-scope",
+              "read-context",
+              "diagnosis",
+              "document-literals",
+              "refusal",
+              "no-protected-access",
+              "persistence",
+              "delivery"
+            ]
+          }
+        },
+        "requiredFactIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+          }
+        }
+      }
+    }
+  }
+}

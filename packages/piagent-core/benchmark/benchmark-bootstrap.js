@@ -17,11 +17,15 @@ import { inspectBenchmarkLedger } from "./benchmark-ledger.js";
 import { completedBenchmarkRecord } from "./benchmark-record-validation.js";
 import { benchmarkGitEnvironment, benchmarkHostEnvironment } from "./benchmark-runtime.js";
 import {
+  assertRegisteredBenchmarkPublicAssets,
   canonicalBuiltInBenchmarkSuiteId,
-  isReservedBenchmarkSuiteId
+  isReservedBenchmarkSuiteId,
+  loadRegisteredBenchmarkMeasurement
 } from "./benchmark-suite-identity.js";
 
 const metadataVariable = "PIAGENT_BENCHMARK_BOOTSTRAP_METADATA";
+export const registeredApprovalFileVariable = "PIAGENT_BENCHMARK_REGISTERED_APPROVAL_FILE";
+export const registeredApprovalKeyVariable = "PIAGENT_BENCHMARK_REGISTERED_APPROVAL_PUBLIC_KEY_FILE";
 
 function fail(message) {
   const error = new Error(message);
@@ -32,6 +36,49 @@ function fail(message) {
 function optionValue(argv, name) {
   const index = argv.lastIndexOf(name);
   return index >= 0 ? argv[index + 1] : undefined;
+}
+
+function stableHostFile(file, label, maximum = 2 * 1024 * 1024) {
+  if (typeof file !== "string" || !path.isAbsolute(file) || path.normalize(file) !== file || file.includes("\0")) {
+    fail(`${label} path must be canonical and absolute`);
+  }
+  let resolved, before;
+  try { resolved = fs.realpathSync(file); before = fs.lstatSync(resolved, { bigint: true }); }
+  catch (error) { fail(`Cannot read ${label}: ${error.message}`); }
+  if (resolved !== file || !before.isFile() || before.isSymbolicLink() || before.nlink !== 1n
+    || before.size < 1n || before.size > BigInt(maximum)
+    || typeof process.getuid === "function" && before.uid !== BigInt(process.getuid())
+    || (before.mode & 0o022n) !== 0n) fail(`${label} must be one host-owned non-writable-linked regular file`);
+  const fd = fs.openSync(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  try {
+    const descriptor = fs.fstatSync(fd, { bigint: true }), bytes = fs.readFileSync(fd),
+      after = fs.fstatSync(fd, { bigint: true }), current = fs.lstatSync(resolved, { bigint: true }),
+      fields = ["dev", "ino", "mode", "nlink", "size", "mtimeNs", "ctimeNs"];
+    if (bytes.length !== Number(before.size) || fields.some(name => before[name] !== descriptor[name]
+      || before[name] !== after[name] || before[name] !== current[name])) fail(`${label} changed while read`);
+    return { path: resolved, bytes };
+  } finally { fs.closeSync(fd); }
+}
+
+function registeredManifestRequest(argv, cwd) {
+  const direct = optionValue(argv, "--registered-measurement");
+  if (direct) return direct;
+  const resume = optionValue(argv, "--resume");
+  if (!resume) return null;
+  const manifestPath = path.join(runRootFromResume(resume, cwd), "run-manifest.json");
+  if (!fs.existsSync(manifestPath)) return null;
+  const prior = jsonFile(manifestPath, "benchmark resume manifest")?.registeredMeasurement?.manifestOrigin;
+  return typeof prior === "string" ? prior : null;
+}
+
+function registeredAssetRoot(manifestFile) {
+  if (path.basename(manifestFile) !== "registered-suite.json"
+    || path.basename(path.dirname(manifestFile)) !== "measurement") {
+    fail("Registered measurement manifest must be measurement/registered-suite.json inside its exact asset root");
+  }
+  const root = path.dirname(path.dirname(manifestFile));
+  if (fs.realpathSync(root) !== root) fail("Registered measurement asset root must be canonical");
+  return root;
 }
 
 function runRootFromResume(input, cwd) {
@@ -124,6 +171,7 @@ export function requestedSuite(argv, cwd, replaySnapshot) {
   if (argv.includes("--production")) return "production-v1";
   if (argv.includes("--deep")) return "deep-logic-v1";
   if (argv.includes("--capability")) return "capability-v1";
+  if (optionValue(argv, "--registered-measurement")) return "production-v2";
   return optionValue(argv, "--suite") ?? "core-v1";
 }
 
@@ -216,6 +264,16 @@ function validateOutputIsolation(argv, cwd, repositoryRoot, suiteManifest) {
     } catch {
       fail(`Benchmark output inside the candidate repository must be Git-ignored: ${relative}`);
     }
+  }
+}
+
+function validateRegisteredOutputIsolation(argv, cwd, assetRoot) {
+  const resume = optionValue(argv, "--resume");
+  const requested = resume
+    ? runRootFromResume(resume, cwd)
+    : optionValue(argv, "--output") ? path.resolve(cwd, optionValue(argv, "--output")) : null;
+  if (requested && inside(assetRoot, canonicalProspective(requested))) {
+    fail("Benchmark output must not be nested inside the registered measurement asset source");
   }
 }
 
@@ -530,6 +588,53 @@ function gitSourceIdentity(root) {
   };
 }
 
+export function snapshotRegisteredBenchmarkMeasurement({ argv, cwd, temporaryRoot, scenarioIds }) {
+  const requested = registeredManifestRequest(argv, cwd);
+  if (!requested) return null;
+  if (!path.isAbsolute(requested) || path.normalize(requested) !== requested || requested.includes("\0")) {
+    fail("Registered measurement manifest path must be canonical and absolute");
+  }
+  let manifestFile;
+  try { manifestFile = fs.realpathSync(requested); }
+  catch (error) { fail(`Cannot resolve registered measurement manifest: ${error.message}`); }
+  if (manifestFile !== requested) fail("Registered measurement manifest path must be canonical and absolute");
+  const approval = stableHostFile(process.env[registeredApprovalFileVariable],
+    "registered measurement detached approval");
+  const publicKeyFile = stableHostFile(process.env[registeredApprovalKeyVariable],
+    "registered measurement trusted public key", 64 * 1024);
+  let publicKey;
+  try { publicKey = crypto.createPublicKey(publicKeyFile.bytes); }
+  catch { fail("Registered measurement trusted public key is invalid"); }
+  const registration = loadRegisteredBenchmarkMeasurement(manifestFile, {
+    approvalFile: approval.path,
+    approvalPublicKey: publicKey,
+    scenarioIds
+  });
+  const sourceRoot = registeredAssetRoot(manifestFile);
+  validateRegisteredOutputIsolation(argv, cwd, sourceRoot);
+  const sourceInventory = assertRegisteredBenchmarkPublicAssets(registration, sourceRoot, scenarioIds);
+  const targetRoot = path.join(temporaryRoot, "registered-assets");
+  copyTree(sourceRoot, targetRoot);
+  chmodTree(targetRoot, false);
+  const snapshotRoot = fs.realpathSync(targetRoot), snapshotManifest = path.join(snapshotRoot,
+    "measurement", "registered-suite.json"), snapshotInventory = assertRegisteredBenchmarkPublicAssets(
+      registration, snapshotRoot, scenarioIds);
+  if (JSON.stringify(sourceInventory) !== JSON.stringify(snapshotInventory)
+    || fileDigest(snapshotManifest) !== registration.identity.manifestSha256) {
+    fail("Registered measurement snapshot identity changed while it was frozen");
+  }
+  return {
+    schemaVersion: 1,
+    manifestOrigin: manifestFile,
+    manifestSnapshot: snapshotManifest,
+    assetRoot: snapshotRoot,
+    payload: registration.payload,
+    identity: registration.identity,
+    inventory: snapshotInventory,
+    tree: benchmarkTreeIdentity(snapshotRoot, { rejectSymlinks: true })
+  };
+}
+
 export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
   const root = fs.realpathSync(liveRoot);
   let temporaryRoot;
@@ -571,6 +676,12 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
       suiteRoot = path.join(candidateRoot, "benchmarks", suite.origin);
     }
     const frozenSuiteManifest = suiteSnapshot ?? path.join(suiteRoot, "suite.json");
+    const frozenSuite = jsonFile(frozenSuiteManifest, "frozen benchmark suite manifest");
+    const registeredMeasurement = snapshotRegisteredBenchmarkMeasurement({ argv, cwd, temporaryRoot,
+      scenarioIds: frozenSuite.scenarios?.map(value => value.id) });
+    if (registeredMeasurement && suite.origin !== registeredMeasurement.payload.baseSuiteId) {
+      fail("Registered measurement base suite does not match its frozen benchmark suite");
+    }
     const webUiAssets = suiteNeedsWebUiAssets(frozenSuiteManifest)
       ? snapshotWebUiAssets(candidateRoot, root, temporaryRoot, candidate.provenance)
       : null;
@@ -588,6 +699,7 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
       providerFreeFinalization,
       piAgentHome,
       codexCredential,
+      registeredMeasurement,
       replay: replay ? {
         origin: replay.origin,
         snapshot: replay.snapshot,
@@ -625,6 +737,8 @@ export function cleanupBenchmarkExecutionSnapshot(temporaryRoot, runtimeParent, 
 export function benchmarkBootstrapEnvironment(metadata, base = process.env) {
   const environment = benchmarkHostEnvironment(base);
   delete environment.PI_CODING_AGENT_DIR;
+  delete environment[registeredApprovalFileVariable];
+  delete environment[registeredApprovalKeyVariable];
   return {
     ...environment,
     ...(metadata.codexCredential ? { PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT: metadata.codexCredential.path } : {}),
@@ -669,6 +783,25 @@ export function benchmarkBootstrapMetadata(env = process.env) {
     || (value.codexCredential !== null && (
       typeof value.codexCredential?.path !== "string"
       || typeof value.codexCredential?.privateIdentity?.contentDigest !== "string"
+    ))
+    || (value.registeredMeasurement !== undefined && value.registeredMeasurement !== null && (
+      value.registeredMeasurement?.schemaVersion !== 1
+      || typeof value.registeredMeasurement?.manifestOrigin !== "string"
+      || typeof value.registeredMeasurement?.manifestSnapshot !== "string"
+      || typeof value.registeredMeasurement?.assetRoot !== "string"
+      || value.registeredMeasurement?.payload?.suiteId !== "production-v2-da2"
+      || value.registeredMeasurement?.payload?.baseSuiteId !== "production-v2"
+      || !/^[a-f0-9]{64}$/.test(String(value.registeredMeasurement?.identity?.manifestSha256 ?? ""))
+      || !/^[a-f0-9]{64}$/.test(String(value.registeredMeasurement?.identity?.payloadSha256 ?? ""))
+      || !/^[a-f0-9]{64}$/.test(String(value.registeredMeasurement?.identity?.approvalRecordSha256 ?? ""))
+      || !/^[a-f0-9]{64}$/.test(String(value.registeredMeasurement?.identity?.authorityKeyId ?? ""))
+      || value.registeredMeasurement?.inventory?.version !== "registered-public-asset-inventory-v1"
+      || !/^[a-f0-9]{64}$/.test(String(value.registeredMeasurement?.inventory?.publicAssetsDigest ?? ""))
+      || value.registeredMeasurement?.inventory?.publicAssetsDigest !== value.registeredMeasurement?.payload?.publicAssetsDigest
+      || value.registeredMeasurement?.inventory?.publicContractDigest !== value.registeredMeasurement?.payload?.publicContractDigest
+      || !Array.isArray(value.registeredMeasurement?.inventory?.entries)
+      || value.registeredMeasurement.inventory.entries.length !== 48
+      || !/^[a-f0-9]{64}$/.test(String(value.registeredMeasurement?.tree?.contentDigest ?? ""))
     ))
     || typeof value.suite?.origin !== "string"
     || !(value.suite?.builtInId === null || isReservedBenchmarkSuiteId(value.suite?.builtInId))

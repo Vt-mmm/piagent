@@ -3,7 +3,11 @@ export const MAX_VALUE_DEPTH = 8;
 export const MAX_VALUE_NODES = 256;
 export const MAX_COLLECTION_LENGTH = 64;
 export const MAX_VALUE_TEXT = 64 * 1024;
+export const MAX_TYPED_BACKING_BYTES = 4096;
+export const MAX_CASE_RAW_AND_TEXT_BYTES = 64 * 1024;
+export const MAX_TYPED_OUTPUT_BYTES = 64 * 1024;
 const SPECIAL_NUMBERS = new Set(["NaN", "Infinity", "-Infinity", "-0"]);
+const TYPED_BYTES = new Set(["uint8array", "buffer", "arraybuffer", "dataview"]);
 
 export function protocolShape(value, keys, required = keys) {
   if (!value || typeof value !== "object" || Array.isArray(value)
@@ -13,8 +17,11 @@ export function protocolShape(value, keys, required = keys) {
 }
 
 /** Typed trees with optional approved callback IDs, never executable code or history references. */
-export function validateValue(value, allowDate = true, callbackIds = new Set()) {
-  let nodes = 0, text = 0;
+export function validateValue(value, allowDate = true, callbackIds = new Set(), options = {}) {
+  let nodes = 0, text = 0, textUtf8 = 0, rawBytes = 0;
+  const typedBytes = options.typedBytes === true;
+  const shared = options.budget;
+  const typedOutput = options.typedOutputBudget;
   function visit(item, depth) {
     if (++nodes > MAX_VALUE_NODES || depth > MAX_VALUE_DEPTH) throw new TypeError("Value tree limit exceeded");
     protocolShape(item, ["type", "value"], ["type"]);
@@ -30,7 +37,26 @@ export function validateValue(value, allowDate = true, callbackIds = new Set()) 
       if (typeof item.value !== "boolean") throw new TypeError("Invalid boolean payload");
     } else if (item.type === "string") {
       if (typeof item.value !== "string" || item.value.length > MAX_STRING_LENGTH) throw new TypeError("Invalid string payload");
-      text += item.value.length;
+      text += item.value.length; textUtf8 += Buffer.byteLength(item.value);
+    } else if (typedBytes && TYPED_BYTES.has(item.type)) {
+      protocolShape(item, ["type", "value"]);
+      protocolShape(item.value, ["backingBase64", "byteOffset", "byteLength"]);
+      const { backingBase64, byteOffset, byteLength } = item.value;
+      if (typeof backingBase64 !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(backingBase64)
+        || !Number.isSafeInteger(byteOffset) || byteOffset < 0 || !Number.isSafeInteger(byteLength) || byteLength < 0) {
+        throw new TypeError("Invalid typed byte payload");
+      }
+      const backing = Buffer.from(backingBase64, "base64");
+      if (backing.toString("base64") !== backingBase64 || backing.length > MAX_TYPED_BACKING_BYTES
+        || byteOffset + byteLength > backing.length
+        || item.type === "arraybuffer" && (byteOffset !== 0 || byteLength !== backing.length)) {
+        throw new TypeError("Invalid typed byte range");
+      }
+      rawBytes += backing.length;
+      if (typedOutput) {
+        typedOutput.rawBytes = (typedOutput.rawBytes ?? 0) + backing.length;
+        if (typedOutput.rawBytes > MAX_TYPED_OUTPUT_BYTES) throw new TypeError("Aggregate typed output budget exceeded");
+      }
     } else if (["array", "record"].includes(item.type)) {
       if (!Array.isArray(item.value) || item.value.length > MAX_COLLECTION_LENGTH
         || Object.keys(item.value).length !== item.value.length) throw new TypeError("Invalid collection payload");
@@ -40,13 +66,18 @@ export function validateValue(value, allowDate = true, callbackIds = new Set()) 
         else {
           protocolShape(child, ["key", "value"]);
           if (typeof child.key !== "string" || child.key.length > MAX_STRING_LENGTH || keys.has(child.key)) throw new TypeError("Invalid record key");
-          keys.add(child.key); text += child.key.length; visit(child.value, depth + 1);
+          keys.add(child.key); text += child.key.length; textUtf8 += Buffer.byteLength(child.key); visit(child.value, depth + 1);
         }
       }
     } else throw new TypeError("Unsupported value type");
     if (text > MAX_VALUE_TEXT) throw new TypeError("Value text limit exceeded");
   }
   visit(value, 0);
+  if (shared) {
+    shared.rawBytes = (shared.rawBytes ?? 0) + rawBytes;
+    shared.textBytes = (shared.textBytes ?? 0) + textUtf8;
+    if (shared.rawBytes + shared.textBytes > MAX_CASE_RAW_AND_TEXT_BYTES) throw new TypeError("Case byte and text budget exceeded");
+  }
   return value;
 }
 

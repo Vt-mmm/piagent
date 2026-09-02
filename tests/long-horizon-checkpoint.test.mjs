@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { readCheckpoint } from "../packages/piagent-core/benchmark/benchmark-checkpoint.js";
 
@@ -23,6 +23,80 @@ async function until(predicate, description) {
   throw new Error(`Timed out: ${description}`);
 }
 
+function pauseAtCheckpointPreload(workerCheckpoint, pauseMarker, interruptedUnit) {
+  return `import fs from 'node:fs';
+import { writeCheckpointBytes } from ${JSON.stringify(new URL("../packages/piagent-core/benchmark/benchmark-checkpoint.js", import.meta.url).href)};
+const rename = fs.renameSync;
+fs.renameSync = function(from, to) {
+  const result = rename(from, to);
+  if (String(to) === ${JSON.stringify(workerCheckpoint)} && !fs.existsSync(${JSON.stringify(pauseMarker)})) {
+    const value = JSON.parse(fs.readFileSync(to, 'utf8'));
+    if (value.data?.state?.currentUnit === ${interruptedUnit}) {
+      // The parent may read concurrently even while this process writes synchronously.
+      writeCheckpointBytes(${JSON.stringify(pauseMarker)}, JSON.stringify({ pid: process.pid, unit: ${interruptedUnit} }));
+      process.kill(process.pid, 'SIGSTOP');
+    }
+  }
+  return result;
+};\n`;
+}
+
+test("pause marker publication never exposes empty or partial JSON to its strict reader", { timeout: 15_000 }, (t) => {
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pause-publication-")));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const workerCheckpoint = path.join(directory, "checkpoint.json"), pauseMarker = path.join(directory, "paused-worker.json");
+  const checkpoint = { data: { state: { currentUnit: 2 } } };
+  const reader = `import fs from 'node:fs';
+let observation;
+try { observation = { status: 'read', value: (${read.toString()})(process.argv[1]) }; }
+catch (error) { observation = { status: 'error', name: error.name, message: error.message }; }
+process.stdout.write(JSON.stringify(observation));`;
+  // Run the same preload used by the real SIGKILL tests in an isolated process.
+  // A nested reader runs synchronously at both publication windows, so this
+  // regression does not depend on polling frequency or scheduler load.
+  const probe = `import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
+const checkpoint = ${JSON.stringify(workerCheckpoint)}, marker = ${JSON.stringify(pauseMarker)};
+const payload = JSON.stringify({ pid: process.pid, unit: 2 });
+const write = fs.writeFileSync, duringWrite = [], signals = [];
+write(checkpoint + '.pending', ${JSON.stringify(JSON.stringify(checkpoint))});
+const inspect = () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', ${JSON.stringify(reader)}, marker], { encoding: 'utf8', timeout: 3_000 });
+  assert.equal(result.status, 0, result.stderr);
+  duringWrite.push(JSON.parse(result.stdout));
+};
+fs.writeFileSync = function(target, bytes, ...options) {
+  if (bytes !== payload) return write(target, bytes, ...options);
+  const ownsDescriptor = typeof target !== 'number';
+  const fd = ownsDescriptor ? fs.openSync(target, 'w') : target;
+  try {
+    inspect();
+    fs.writeSync(fd, '{"pid":', 0, 'utf8');
+    inspect();
+    return write(fd, bytes, ...options);
+  } finally { if (ownsDescriptor) fs.closeSync(fd); }
+};
+process.kill = (pid, signal) => { assert.equal(pid, process.pid); assert.equal(signal, 'SIGSTOP'); signals.push(signal); };
+await import(${JSON.stringify(`data:text/javascript;base64,${Buffer.from(pauseAtCheckpointPreload(workerCheckpoint, pauseMarker, 2)).toString("base64")}`)});
+fs.renameSync(checkpoint + '.pending', checkpoint);
+process.stdout.write(JSON.stringify({ duringWrite, signals, marker: JSON.parse(fs.readFileSync(marker, 'utf8')) }));`;
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", probe], { env, encoding: "utf8", timeout: 12_000 });
+  assert.equal(result.status, 0, result.stderr);
+  const observed = JSON.parse(result.stdout);
+  assert.deepEqual(observed.duringWrite, [{ status: "read", value: null }, { status: "read", value: null }]);
+  assert.deepEqual(observed.marker, { pid: result.pid, unit: 2 });
+  assert.deepEqual(observed.signals, ["SIGSTOP"]);
+  assert.deepEqual(read(workerCheckpoint), checkpoint);
+  assert.deepEqual(read(pauseMarker), observed.marker);
+  const corrupt = path.join(directory, "corrupt-marker.json");
+  for (const bytes of ["", '{"pid":']) {
+    fs.writeFileSync(corrupt, bytes);
+    assert.throws(() => read(corrupt), SyntaxError, "malformed published JSON must still fail, not be retried or ignored");
+  }
+});
+
 for (const interruptedUnit of [2, 5, 8]) test(`long-horizon resumes after coordinator SIGKILL at unit ${interruptedUnit}`, { timeout: 60_000 }, async (t) => {
   const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-s0-resume-")));
   const execution = path.join(directory, "execution");
@@ -34,19 +108,7 @@ for (const interruptedUnit of [2, 5, 8]) test(`long-horizon resumes after coordi
   // checkpoint, then awaiting a competing process, lets the worker advance
   // under load before SIGKILL and does not test the advertised restart unit.
   // Injection remains outside production source and runs only once.
-  fs.writeFileSync(preload, `import fs from 'node:fs';
-const rename = fs.renameSync;
-fs.renameSync = function(from, to) {
-  const result = rename(from, to);
-  if (String(to) === ${JSON.stringify(workerCheckpoint)} && !fs.existsSync(${JSON.stringify(pauseMarker)})) {
-    const value = JSON.parse(fs.readFileSync(to, 'utf8'));
-    if (value.data?.state?.currentUnit === ${interruptedUnit}) {
-      fs.writeFileSync(${JSON.stringify(pauseMarker)}, JSON.stringify({ pid: process.pid, unit: ${interruptedUnit} }));
-      process.kill(process.pid, 'SIGSTOP');
-    }
-  }
-  return result;
-};\n`);
+  fs.writeFileSync(preload, pauseAtCheckpointPreload(workerCheckpoint, pauseMarker, interruptedUnit));
   const children = [];
   const start = (...extra) => {
     const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;

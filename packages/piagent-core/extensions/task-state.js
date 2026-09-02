@@ -42,7 +42,6 @@ import {
   prefixedGitPath
 } from "./workspace-evidence-roots.js";
 export { isGitWorkingTree } from "./workspace-evidence-roots.js";
-
 export const TASK_CONTRACT_SCHEMA_VERSION = 2; export const DEFAULT_MAX_TASK_ATTEMPTS = 3;
 export const OPERATOR_REQUEST_MAX_CHARS = 8_000;
 export const TASK_SUMMARY_MAX_CHARS = 2_000;
@@ -76,26 +75,21 @@ export function safeTaskId(value) {
     .replace(/-+$/g, "");
   return normalized || "task";
 }
-
 function stateRoot(cwd) { return path.join(cwd, ".pi", "piagent-state"); }
 function tasksRoot(cwd) { return path.join(stateRoot(cwd), "tasks"); }
 function sessionsRoot(cwd) { return path.join(stateRoot(cwd), "session-tasks"); }
-
 function taskRunPath(cwd, taskRunId) {
   return path.join(tasksRoot(cwd), `${safeTaskId(taskRunId)}.json`);
 }
-
 function sessionBindingPath(cwd, sessionId) {
   const digest = crypto.createHash("sha256").update(String(sessionId || "unknown")).digest("hex");
   return path.join(sessionsRoot(cwd), `${digest}.json`);
 }
-
 function readTaskRun(cwd, taskRunId) {
   const raw = readJson(cwd, taskRunPath(cwd, taskRunId));
   const task = normalizeTaskContract(raw, { sourceName: taskRunId });
   return task?.taskRunId === safeTaskId(taskRunId) ? task : undefined;
 }
-
 function readJson(cwd, filePath) {
   try {
     const safePath = resolveLocalStatePath(cwd, filePath, { label: "Task state", kind: "file" });
@@ -114,21 +108,34 @@ function readJson(cwd, filePath) {
     return undefined;
   }
 }
-
 function writeJsonAtomic(cwd, filePath, value) {
   const parent = ensurePrivateStateDirectory(cwd, path.dirname(filePath), "Task state directory");
   const safePath = resolveLocalStatePath(cwd, filePath, { label: "Task state" });
   const temporary = path.join(parent, `${path.basename(safePath)}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`);
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(temporary, safePath);
   try {
+    const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+    const descriptor = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT
+      | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
+    try {
+      for (let offset = 0; offset < bytes.length;) {
+        const written = fs.writeSync(descriptor, bytes, offset, bytes.length - offset);
+        if (written < 1) throw new Error("Task state write was incomplete");
+        offset += written;
+      }
+      fs.fsyncSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    fs.renameSync(temporary, safePath);
     fs.chmodSync(parent, 0o700);
     fs.chmodSync(safePath, 0o600);
+    const directory = fs.openSync(parent, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
   } catch {
-    // Best effort on filesystems that do not expose POSIX modes.
+    try { fs.unlinkSync(temporary); } catch {}
+    throw new Error("Task state atomic persistence failed");
   }
 }
-
 function appendTaskStateJournalEvent(cwd, event) {
   try {
     return appendTaskJournalEvent(cwd, event);
@@ -138,42 +145,33 @@ function appendTaskStateJournalEvent(cwd, event) {
     return undefined;
   }
 }
-
 function stringArray(value) {
   return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))] : [];
 }
-
 function exactCommandArray(value) {
   return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string" && item.trim()))] : [];
 }
-
 function stringRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value)
     .filter(([key, item]) => key && typeof item === "string")
     .map(([key, item]) => [key.replaceAll("\\", "/"), item]));
 }
-
 function positiveInteger(value, fallback, maximum = Number.MAX_SAFE_INTEGER) {
   return Number.isInteger(value) && value > 0 ? Math.min(value, maximum) : fallback;
 }
-
 function validTimestamp(value) {
   return typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
 }
-
 export function operatorRequestDigest(value) {
   return `operator-request-v1:${crypto.createHash("sha256").update(String(value ?? "")).digest("hex")}`;
 }
-
 function normalizedTimestamp(value, fallback) {
   return validTimestamp(value) ? value : fallback;
 }
-
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-
 function unsupportedObjectField(value, allowed) {
   if (!isRecord(value)) return undefined;
   return Object.keys(value).find((key) => !allowed.has(key));
@@ -529,6 +527,37 @@ export function writeTaskContract(cwd, task) {
     }
   });
   return normalized;
+}
+
+/** Confirms the exact normalized task bytes through a stable, fsync-backed read. */
+export function durableTaskContractMatches(cwd, expected) {
+  try {
+    const normalized = normalizeTaskContract(expected);
+    if (!normalized || taskContractValidationErrors(normalized).length > 0) return false;
+    const safePath = resolveLocalStatePath(cwd, taskRunPath(cwd, normalized.taskRunId), {
+      label: "Task state", kind: "file"
+    });
+    const descriptor = fs.openSync(safePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      fs.fsyncSync(descriptor);
+      const before = fs.fstatSync(descriptor, { bigint: true });
+      if (!before.isFile() || before.nlink !== 1n || before.size < 1n
+        || before.size > BigInt(8 * 1024 * 1024)) return false;
+      const bytes = fs.readFileSync(descriptor);
+      const after = fs.fstatSync(descriptor, { bigint: true });
+      const atPath = fs.lstatSync(safePath, { bigint: true });
+      const fields = ["dev", "ino", "mode", "nlink", "size", "mtimeNs", "ctimeNs"];
+      if (bytes.length !== Number(before.size) || atPath.isSymbolicLink()
+        || fields.some((field) => before[field] !== after[field] || after[field] !== atPath[field])) return false;
+      const observed = normalizeTaskContract(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
+      return observed?.taskRunId === normalized.taskRunId
+        && JSON.stringify(observed) === JSON.stringify(normalized);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch {
+    return false;
+  }
 }
 
 export function listTaskContracts(cwd) {

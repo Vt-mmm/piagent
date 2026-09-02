@@ -182,8 +182,8 @@
   "visibleTrees": [
     {
       "path": "adapters",
-      "fileCount": 13,
-      "sha256": "25cd6435231dd720f09cc590c36847d1ac6ddbb7cd80083f4cf87662f550e000"
+      "fileCount": 15,
+      "sha256": "f49f1170cfadb4a4a7ba18ed80370fc94272956ac058275b758755219da2274a"
     },
     {
       "path": "benchmarks",
@@ -222,8 +222,8 @@
     },
     {
       "path": "tests",
-      "fileCount": 318,
-      "sha256": "c95cb3700270218266c991fd31253dc4b95570b4d7533179f2fbb9518e0d0a57"
+      "fileCount": 351,
+      "sha256": "87f677c6593adfa30ae7b7d537b7b1228bc5a9f20bbe1aff9c8f18168b00f8ff"
     }
   ],
   "custodianComparisonRules": {

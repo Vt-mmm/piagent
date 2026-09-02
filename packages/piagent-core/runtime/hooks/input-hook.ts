@@ -3,7 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { classifyContextTask } from "../../extensions/context-engine.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
-import { attachLocalImagesFromText } from "../input/chat-images.ts";
+import { attachLocalImagesFromText, extractLocalImagePathCandidates } from "../input/chat-images.ts";
 import type { ChatImageAccessPolicy } from "../input/chat-images.ts";
 import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
 import type { AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
@@ -14,11 +14,13 @@ import {
 } from "../session/uncertain-send-continuation.ts";
 import { buildContextPreflight, buildUsageSnapshot } from "../session/usage.ts";
 import { registerAdaptiveContextGovernor } from "../session/adaptive-context-governor.ts";
-import { activeTaskToolGroups, toolGroupsForPrompt } from "../tools/tool-groups.ts";
+import { activeTaskToolGroups, toolGroupsForPrompt, PIAGENT_TOOL_NAMES, PIAGENT_TOOL_ORDER, PIAGENT_TOOL_GROUPS } from "../tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../tools/tool-groups.ts";
 import type { RuntimeSessionState } from "../session/runtime-state.ts";
+import { observeHostWireInput } from "../session/runtime-state.ts";
 import {
   buildFreshCommand,
+  agentStartTaskRequest,
   chooseFreshWorkflow,
   extractTaskRequest,
   isFreshOrUtilityInput,
@@ -42,6 +44,48 @@ type InputHookDependencies = {
   activateToolGroups: (ctx: ExtensionContext, groups: PiagentToolGroup[]) => unknown;
   telemetry: (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
 };
+
+/** Predict configured input definitions; unknown task or replacement state cannot create an allowed wire state. */
+export function projectPiagentWireInput(input: {
+  text: string; expandedPrompt?: string; source: string; activeTask: TaskContract | null;
+  readProtectedPaths: string[]; currentTools: string[]; availableToolNames: string[];
+  dynamicToolsEnabled: boolean; replacementIntake: boolean; hasImages: boolean; phase?: string | null;
+}): Record<string, any> {
+  const blocked = (reason: string) => ({ disposition: "blocked", reason });
+  if (input.activeTask === undefined || !Array.isArray(input.readProtectedPaths)
+    || typeof input.replacementIntake !== "boolean" || typeof input.dynamicToolsEnabled !== "boolean") return blocked("input-state-unfrozen");
+  const text = input.text.trim();
+  if (input.hasImages !== false || extractLocalImagePathCandidates(text, "/").length > 0) return blocked("input-images-unprojected");
+  if (!text || isFreshOrUtilityInput(text) || /^\/piagent-workflow\b/i.test(text)) return blocked("input-transform-unprojected");
+  if (!["rpc", "interactive", "extension"].includes(input.source)) return blocked("input-source-unfrozen");
+  if (input.source !== "extension" && (looksLikeGovernedBoilerplate(text) || isPiagentWorkflowInput(text)
+    || text.length >= LONG_INPUT_CHARS)) return blocked("input-preflight-unfrozen");
+  const signal = classifyContextTask(text), activeTask = input.activeTask?.trace.outcome === "pending" ? input.activeTask : undefined;
+  const onlyProtected = signal.paths.length > 0 && signal.paths.every((p) => matchesProtectedPath(p, input.readProtectedPaths));
+  const runtimeMode = !activeTask ? automaticTaskIntakeMode(text, input.readProtectedPaths) : undefined;
+  const manual = !activeTask && !runtimeMode && manualTaskIntakeEligible(text, input.readProtectedPaths);
+  const groups = onlyProtected ? [] : toolGroupsForPrompt(text).filter((group) => !runtimeMode || group !== "intake" && group !== "task");
+  if (manual && !groups.includes("intake")) groups.push("intake");
+  const selectedGroups = activeTask ? [...groups.filter((group) => input.replacementIntake || group !== "intake"),
+    ...(input.replacementIntake ? ["intake" as const] : activeTaskToolGroups(activeTask))] : groups;
+  const builtins = input.currentTools.filter((name) => !PIAGENT_TOOL_NAMES.has(name));
+  if (builtins.includes("apply_patch")) {
+    const firstWriter = builtins.findIndex((name) => name === "edit" || name === "write");
+    if (firstWriter >= 0) { builtins.splice(builtins.indexOf("apply_patch"), 1); builtins.splice(builtins.findIndex((name) => name === "edit" || name === "write"), 0, "apply_patch"); }
+  }
+  const selectedTools = input.dynamicToolsEnabled ? [...builtins, ...PIAGENT_TOOL_ORDER.filter((name) =>
+    selectedGroups.some((group) => PIAGENT_TOOL_GROUPS[group].includes(name as never)))] : [...input.currentTools];
+  if (selectedTools.some((name) => !input.availableToolNames.includes(name))) return blocked("tool-definition-missing");
+  const query = agentStartTaskRequest(input.expandedPrompt ?? text), querySignal = classifyContextTask(query);
+  const protectedQuery = querySignal.paths.length > 0 && querySignal.paths.every((p) => matchesProtectedPath(p, input.readProtectedPaths));
+  const agentStartRuntimeMode = !activeTask ? automaticTaskIntakeMode(query, input.readProtectedPaths) : undefined;
+  if (runtimeMode || agentStartRuntimeMode || input.replacementIntake) return blocked("automatic-task-state-unprojected");
+  if (activeTask && !input.phase) return blocked("current-task-phase-unfrozen");
+  return { disposition: "known", reason: null, groups: selectedGroups, selectedTools,
+    compactMode: protectedQuery ? "protected" : activeTask?.intakeMode === "runtime" ? "automatic" : null,
+    taskPresence: activeTask ? "current" : "none", phase: activeTask ? input.phase : null,
+    inputHash: signal.promptHash, inputText: text };
+}
 
 export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDependencies): void {
   registerAdaptiveContextGovernor(pi, {
@@ -98,6 +142,9 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
     const turn = dependencies.state.beginTurn(ctx, taskSignal.promptHash, {
       lightweightNonAuthorizingChange: isLightweightNonAuthorizingChangeContinuation(text)
     });
+    observeHostWireInput(ctx.cwd, ctx.sessionManager.getSessionId(), { turnId: turn.turnId,
+      promptHash: taskSignal.promptHash, text, source: event.source,
+      hasImages: Boolean(event.images?.length || extractLocalImagePathCandidates(text, ctx.cwd).length) });
     const authorityPolicy = activeTask?.trace.outcome === "pending" ? dependencies.authorityPolicy(ctx, activeTask) : undefined;
     let authorityHandoffReady = false;
     if (activeTask && authorityPolicy?.disposition === "new-attempt-required") {

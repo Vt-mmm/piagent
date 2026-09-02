@@ -263,6 +263,7 @@ export class SessionInspectionRegistry {
       // time so transcript/activity projection cannot freeze at the pre-turn
       // snapshot while the live manager continues appending entries.
       sessionEntries: () => safeRead(() => manager.getBranch(), []),
+      sessionFile: () => info.path,
       protectedPaths: () => runtimeProtectedPaths(this.#packageRoot, info.cwd),
       // The document workspace lists the project plus whatever the operator
       // granted in the profile. Without this it silently shows the project only,

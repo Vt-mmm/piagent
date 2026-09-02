@@ -9,6 +9,7 @@ import { productionStageResumeWindow } from "../packages/piagent-core/benchmark/
 import { assertBenchmarkMeasurementOptions } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { benchmarkLedgerCheckpoint, inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
+import { recoverBenchmarkObservationCheckpoints } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { benchmarkSurfaceLabel } from "../packages/piagent-core/benchmark/benchmark-core.js";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 
@@ -155,6 +156,7 @@ export function loadResumeState(input) {
     if (manifest?.schemaVersion !== 1 || typeof manifest.runId !== "string") {
       fail(`Cannot resume ${runRoot}: run-manifest.json has an unsupported shape`, 1);
     }
+    const observationCheckpoints = recoverBenchmarkObservationCheckpoints({ runRoot, manifest });
     const ledger = benchmarkLedgerCheckpoint(
       manifest.ledger,
       inspectBenchmarkLedger(path.join(runRoot, "runs.jsonl")),
@@ -172,6 +174,7 @@ export function loadResumeState(input) {
       recoveredLedgerSuffix: ledger.recovered,
       pendingRecord,
       measuredReady,
+      observationCheckpoints,
       releaseRunLock
     };
   } catch (error) {

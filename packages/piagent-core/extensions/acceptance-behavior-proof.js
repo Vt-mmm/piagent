@@ -16,6 +16,41 @@ function sha256(value) {
   return crypto.createHash("sha256").update(String(value ?? "")).digest("hex");
 }
 
+export { sha256 as acceptanceTextHash };
+
+// A multiline criterion preserves distinct intake clauses. No legacy matcher
+// proves their conjunction; an independent assessment must cover the full hash.
+export function compoundAcceptanceCriterion(text) {
+  return /[\r\n]/.test(String(text ?? "").trim());
+}
+
+export function acceptanceCriterionBindingValid(task, receipt, criterion, index) {
+  const texts = task?.acceptanceCriteria;
+  return Array.isArray(texts) && texts.length === receipt.criteria.length
+    && typeof texts[index] === "string" && sha256(texts[index]) === criterion.hash
+    && receipt.criteria.filter((item) => item.id === criterion.id).length === 1;
+}
+
+export function resetUnprovenCriterion(criterion) {
+  const changed = criterion.status !== "pending" || criterion.evidence.length > 0 || criterion.priority !== "critical";
+  criterion.status = "pending";
+  criterion.evidence = [];
+  criterion.priority = "critical";
+  return changed;
+}
+
+export function acceptanceEvidenceKey(evidence) {
+  return JSON.stringify({
+    kind: evidence.kind,
+    summary: evidence.summary,
+    paths: evidence.paths ?? [],
+    command: evidence.command,
+    exitCode: evidence.exitCode,
+    workingTreeDigest: evidence.workingTreeDigest
+  });
+}
+
+
 function escapeRegex(value) {
   return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -364,13 +399,20 @@ function exactBoundValue(expression, strings) {
 function propertyExpression(objectExpression, property, strings) {
   const value = String(objectExpression ?? "").trim();
   if (!(value.startsWith("{") && value.endsWith("}"))) return undefined;
-  for (const member of splitTopLevel(value.slice(1, -1))) {
+  const members = splitTopLevel(value.slice(1, -1));
+  if (members.at(-1) === "") members.pop();
+  const fields = new Map();
+  for (const member of members) {
     const colon = member.indexOf(":");
-    if (colon < 0) continue;
-    const key = member.slice(0, colon).trim();
-    if (key === property || boundStringValue(key, strings) === property) return member.slice(colon + 1).trim();
+    if (colon < 0) return undefined;
+    const rawKey = member.slice(0, colon).trim();
+    const key = boundStringValue(rawKey, strings) ?? (/^[a-z_$][a-z0-9_$]*$/i.test(rawKey) ? rawKey : undefined);
+    // Bound strings retain escape spelling; do not mistake escaped aliases
+    // for distinct runtime property names without a verified decoder.
+    if (key === undefined || key.includes("\\") || key === "__proto__" || fields.has(key)) return undefined;
+    fields.set(key, member.slice(colon + 1).trim());
   }
-  return undefined;
+  return fields.get(property);
 }
 
 function callResultExpression(call, expression) {

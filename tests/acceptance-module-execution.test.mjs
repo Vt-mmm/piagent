@@ -8,6 +8,7 @@ import test from "node:test";
 import { runIndependentContract, compileIndependentContract } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
 import { captureExecutionSnapshot, runSnapshotBoundContract } from "../packages/piagent-core/extensions/acceptance-execution-snapshot.js";
 import { executionSourceText, validateModulePaths } from "../packages/piagent-core/extensions/acceptance-executor/module-graph.mjs";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 import { data } from "../evals/harness-next/development-corpus.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID, dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -96,6 +97,36 @@ test("pending microtasks and dynamic imports abstain even when a synchronous ret
     assert.equal(result.verdict, "unknown", JSON.stringify(result));
     assert.equal(result.counterexamples.length, 0);
   }
+});
+
+test("Node profile imports expose only the exact aliases and retain preloaded facade identity", integration, async () => {
+  const source = `import {Buffer as nodeBuffer} from 'node:buffer';import {Buffer as bareBuffer} from 'buffer';
+    import {TextDecoder as nodeDecoder,types} from 'node:util';import {TextDecoder as bareDecoder} from 'util';
+    import {StringDecoder as nodeStringDecoder} from 'node:string_decoder';import {StringDecoder as bareStringDecoder} from 'string_decoder';
+    import {setTimeout as nodeTimer} from 'node:timers';import {setTimeout as bareTimer} from 'timers';
+    export async function run(){const original=globalThis.Buffer;globalThis.Buffer=null;const dynamic=await import('buffer');
+      return [nodeBuffer===bareBuffer,nodeBuffer===original,nodeBuffer===dynamic.Buffer,nodeDecoder===bareDecoder,
+        nodeStringDecoder===bareStringDecoder,nodeTimer===bareTimer,types.isUint8Array(nodeBuffer.from('x')),
+        !('__piagentNodeTypes' in globalThis),!('StringDecoder' in globalThis)];}`;
+  const item = { id: "aliases", invocation: { kind: "call" }, args: [], awaitResult: true,
+    expected: returns([true, true, true, true, true, true, true, true, true]) };
+  const plan = { schemaVersion: 2, profile: expectedNodeProfile(), source, exportName: "run", checks: [{ id: "imports", cases: [item] }] };
+  const result = await runIndependentContract({ planText: JSON.stringify(plan), imageId, dockerSocket, timeoutMs: 30000 });
+  assert.equal(result.verdict, "pass", JSON.stringify(result));
+  assert.equal(result.execution.cleanupConfirmed, true);
+  const shadowed = { ...plan, source: "import {Buffer} from 'buffer';export const run=()=>Buffer;",
+    moduleGraph: { entry: "entry.mjs", dependencies: [{ path: "buffer", source: "export const Buffer=1" }] } };
+  assert.throws(() => compileIndependentContract(JSON.stringify(shadowed)));
+});
+
+test("a caught denied Node import remains sticky unsupported rather than a passing target throw", integration, async () => {
+  const plan = { schemaVersion: 2, profile: expectedNodeProfile(),
+    source: "export async function run(){try{await import('node:fs')}catch{}return 5}", exportName: "run",
+    checks: [{ id: "denied", cases: [{ id: "denied", invocation: { kind: "call" }, args: [], awaitResult: true, expected: returns(5) }] }] };
+  const result = await runIndependentContract({ planText: JSON.stringify(plan), imageId, dockerSocket, timeoutMs: 30000 });
+  assert.equal(result.verdict, "unknown", JSON.stringify(result));
+  assert.equal(result.execution.observation.cases[0].reason, "module-import-unsupported");
+  assert.equal(result.counterexamples.length, 0);
 });
 
 test("observation-time microtasks cannot escape the synchronous contract boundary", integration, async () => {

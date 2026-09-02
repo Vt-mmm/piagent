@@ -1,12 +1,10 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { completionPreparationCurrent } from "../verification/completion-preparation.ts";
+import { completionPreparationCurrent, completionPreparationDeferred } from "../verification/completion-preparation.ts";
 import type { CompletionPreparation } from "../verification/completion-preparation.ts";
+import { createCompositeCompletionFinalizer } from "../verification/composite-completion-finalizer.ts";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  acceptanceCriticalRecoveryProjection,
-  applyAcceptanceRecoveryProvenance
-} from "../../extensions/acceptance-receipt.js";
+import { acceptanceCriticalRecoveryProjection, applyAcceptanceRecoveryProvenance } from "../../extensions/acceptance-receipt.js";
 import { hasDurableContextEvidence } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
 import { applyAssistedReadOnlyFinalHandoff, runtimeLifecycleMode, workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
@@ -15,13 +13,8 @@ import { workingTreeSnapshot } from "../../extensions/task-state.js";
 import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 import { taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
 import { latestObservedVerification, verificationEvidenceProvesStableTree } from "../../extensions/verification-intelligence.js";
-import {
-  assistantMessageHasToolCall,
-  assistantMessageText,
-  prependAssistantNotice,
-  looksLikeCompletionClaim,
-  looksLikeIncompleteHandoff
-} from "../session/message-signals.ts";
+import { assistantMessageHasToolCall, assistantMessageText, prependAssistantNotice, looksLikeCompletionClaim,
+  looksLikeIncompleteHandoff } from "../session/message-signals.ts";
 import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
 import type { RecoveryDecision } from "../recovery/recovery-policy.ts";
 import { independentVerificationRecovery } from "../recovery/independent-verification-recovery.ts";
@@ -34,12 +27,8 @@ import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts
 import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
 type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[] };
-type CriticalRecoveryProjection = {
-  criterionText: string;
-  targets: string[];
-  missingDimensions: string[];
-  proofHints: string[]; diagnosticHints?: string[];
-};
+type CriticalRecoveryProjection = { criterionText: string; targets: string[]; missingDimensions: string[];
+  proofHints: string[]; diagnosticHints?: string[] };
 function exactPathCoverage(expectedPaths: string[], reviewedPaths: string[] | undefined): boolean {
   const expected = [...new Set(expectedPaths)].sort();
   const reviewed = [...new Set(reviewedPaths ?? [])].sort();
@@ -51,7 +40,6 @@ function compactRecoveryField(value: unknown, maximum: number): string {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length > maximum ? `${text.slice(0, Math.max(0, maximum - 1)).trimEnd()}…` : text;
 }
-
 function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProjection[], includeProofHints = true): string[] {
   if (projections.length === 0) return [];
   const lines = ["Critical proof targets (derived only from the current task contract and working tree):"];
@@ -67,10 +55,12 @@ function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProject
   if (hints.length > 0) lines.push(includeProofHints ? "Proof requirements:" : "Diagnostic evidence (does not grant repair authority):", ...hints.map((hint) => `- ${hint}`));
   return lines;
 }
-
 type CompletionHookDependencies = {
   state: RuntimeSessionState;
-  prepareIndependentAcceptance?: (ctx: ExtensionContext, task: TaskContract) => Promise<CompletionPreparation | boolean | void>;
+  prepareIndependentAcceptance?: (ctx: ExtensionContext, task: TaskContract, response?: { origin: "assistant"; bytes: string }) => Promise<CompletionPreparation | boolean | void>;
+  deferIndependentCompletion?: (ctx: ExtensionContext, task: TaskContract, response: { origin: "assistant"; bytes: string }, finalizer: {
+    preflight: () => object | false; publication: (capability: object) => object | false; finalize: (capability: object) => boolean }) => boolean;
+  projectIndependentLifecycle?: (ctx: ExtensionContext, task: TaskContract, candidate: TaskContract) => TaskContract | false;
   maxManifestFiles: number; semanticReviewAllowed: (task: TaskContract) => boolean;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
   flushObservedTaskContext: (
@@ -102,7 +92,6 @@ type CompletionHookDependencies = {
   recoveryDecision: (ctx: ExtensionContext, task: TaskContract, gate: CompletionGate, currentDigest: string) => RecoveryDecision;
   syncTrajectory?: (ctx: ExtensionContext, task: TaskContract, options: TrajectorySyncOptions) => TrajectorySyncResult;
 };
-
 export function registerCompletionHook(pi: ExtensionAPI, dependencies: CompletionHookDependencies): void {
   const {
     state,
@@ -121,7 +110,6 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     semanticReviewAllowed,
     syncTrajectory
   } = dependencies;
-
   function persistHandoff(
     ctx: ExtensionContext,
     task: TaskContract,
@@ -197,7 +185,19 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
       || readOnlyEvidenceObserved;
     if (!completionClaim && (incompleteHandoff || !potentiallyFinalEvidence)) return;
 
-    if (!completionPreparationCurrent(await dependencies.prepareIndependentAcceptance?.(ctx, task))) return { message: prependAssistantNotice(event.message,
+    const preparation = await dependencies.prepareIndependentAcceptance?.(ctx, task, { origin: "assistant", bytes: text });
+    // Preserve content-observed bytes until native persistence/settlement exists.
+    if (completionPreparationDeferred(preparation)) {
+      const finalizer = createCompositeCompletionFinalizer({ ctx, pi, state, task, responseText: text, activeTask,
+        completionProjection, evaluateGate, semanticReviewAllowed, syncTrajectory,
+        projectCompositeLifecycle: (candidate) => dependencies.projectIndependentLifecycle?.(ctx, task, candidate) ?? false,
+        withRecoveryProvenance: (candidate, gate, digests) => withRecoveryProvenance(ctx, candidate, gate, digests, null),
+        writeTask, activateBaseTools, appendTrace, appendSessionTrace, telemetry,
+        persistHandoff: (completed, gate, digests) => persistHandoff(ctx, completed, gate, digests, null) });
+      dependencies.deferIndependentCompletion?.(ctx, task, { origin: "assistant", bytes: text }, finalizer);
+      return;
+    }
+    if (!completionPreparationCurrent(preparation)) return { message: prependAssistantNotice(event.message,
       "[Piagent completion gate: NOT APPROVED]\nIndependent verification stopped with the session; no completion or follow-up was scheduled.\n\n") };
     const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
     const currentDigest = workingTreeEvidenceDigest(currentDigests);

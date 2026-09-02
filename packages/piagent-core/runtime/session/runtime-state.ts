@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+export { createHostWireSession, observeHostWireInput, HOST_WIRE_PHASE_EDGES } from "../trajectory/trajectory-runtime.ts";
+export type { HostWireSession, HostWireSessionOptions, HostWireOperation } from "../trajectory/trajectory-runtime.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { toolResultFingerprint } from "../../extensions/context-engine.js";

@@ -22,6 +22,18 @@ function item(role, toolCalls = []) {
 }
 
 describe("Piagent WebUI transcript presentation", () => {
+  it("does not let an equal request id override a conflicting operation for a custom receipt", () => {
+    const user = { messageRef: "receipt.user", parentMessageRef: null, role: "user", toolCalls: [],
+      messageRequestId: "request.same", agentOperationId: "operation.persisted", content: { text: "Recover this receipt." } };
+    const receipt = { ...user, messageRef: "receipt.final", parentMessageRef: user.messageRef, role: "custom",
+      content: { text: "[Piagent delivery receipt]\nCompletion approved: yes." } };
+    const correct = { messageRequestId: "request.same", operationRef: "operation.persisted", startedAt: null };
+    const conflicting = { ...correct, operationRef: "operation.other" };
+    assert.equal(persistedLiveConversationHasFinal([user, receipt], user.content.text, correct), true);
+    assert.equal(persistedLiveUserExists([user, receipt], user.content.text, conflicting), false);
+    assert.equal(persistedLiveConversationHasFinal([user, receipt], user.content.text, conflicting), false);
+    assert.equal(persistedLiveConversationMatches([user, receipt], user.content.text, receipt.content.text, conflicting), false);
+  });
   it("does not restart the durable transcript read for each live delta", () => {
     const base = { user: "Implement it.", assistant: "", attachments: [], activities: [], operationRef: "operation_live",
       complete: false, error: null, lastEventAt: "2026-08-26T08:53:11.000Z" };

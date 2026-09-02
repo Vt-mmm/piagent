@@ -2,25 +2,33 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://piagent.dev/schemas/benchmark-independent-verification-plan.schema.json",
   "title": "Operator-reviewed benchmark independent verification catalog (not authority)",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "kind", "suiteDigest", "verifierDigest", "scenarios"],
-  "properties": {
-    "schemaVersion": { "const": 1 },
-    "kind": { "const": "benchmark-independent-verification-plan-v1" },
-    "suiteDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "verifierDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "scenarios": {
-      "type": "array", "minItems": 1, "maxItems": 100,
-      "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["scenarioId", "plans"],
-        "properties": {
-          "scenarioId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$" },
-          "plans": { "type": "array", "minItems": 1, "maxItems": 32,
-            "items": { "$ref": "approved-host-contracts.schema.json#/$defs/plan" } }
-        }
+  "oneOf": [
+    {"$ref": "#/$defs/catalogV1"},
+    {"$ref": "#/$defs/catalogV2"}
+  ],
+  "$defs": {
+    "catalogV1": {"allOf": [{"$ref": "#/$defs/catalogBase"}, {"properties": {
+      "schemaVersion": {"const": 1}, "kind": {"const": "benchmark-independent-verification-plan-v1"},
+      "scenarios": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/scenarioV1"}}
+    }}]},
+    "catalogV2": {"allOf": [{"$ref": "#/$defs/catalogBase"}, {"properties": {
+      "schemaVersion": {"const": 2}, "kind": {"const": "benchmark-independent-verification-plan-v2"},
+      "scenarios": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/scenarioV2"}}
+    }}]},
+    "catalogBase": {"type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "suiteDigest", "verifierDigest", "scenarios"],
+      "properties": {
+        "schemaVersion": {"type": "integer"}, "kind": {"type": "string"},
+        "suiteDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "verifierDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "scenarios": {"type": "array"}
       }
-    }
+    },
+    "scenarioV1": {"allOf": [{"$ref": "#/$defs/scenarioBase"}, {"properties": {"plans": {"type": "array", "minItems": 1, "maxItems": 32,
+      "items": {"$ref": "approved-host-contracts.schema.json#/$defs/plan"}}}}]},
+    "scenarioV2": {"allOf": [{"$ref": "#/$defs/scenarioBase"}, {"properties": {"plans": {"type": "array", "minItems": 1, "maxItems": 32,
+      "items": {"$ref": "approved-host-contracts.schema.json#/$defs/planV2"}}}}]},
+    "scenarioBase": {"type": "object", "additionalProperties": false, "required": ["scenarioId", "plans"],
+      "properties": {"scenarioId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"}, "plans": {"type": "array"}}}
   }
 }

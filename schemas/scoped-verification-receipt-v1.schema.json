@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/scoped-verification-receipt-v1.schema.json",
+  "title": "Piagent scoped verification signed envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt", "signature"],
+  "properties": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "kind", "protocol", "verificationId", "action", "attemptId", "broker", "manifestSha256", "capabilityDigest", "planDigest", "requestDigest", "sourceDigest", "imageId", "verifierDigest", "worker", "status", "verdict", "cleanup", "evidence", "startedAtMs", "deadlineAtMs", "settledAtMs", "completionAllowed"],
+      "properties": {
+        "version": { "const": 1 },
+        "kind": { "const": "scoped-verification-receipt-v1" },
+        "protocol": { "const": "scoped-isolated-contract-v1" },
+        "verificationId": { "$ref": "#/$defs/id" },
+        "action": { "type": "integer", "minimum": 1 },
+        "attemptId": { "$ref": "#/$defs/uuidV4" },
+        "broker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["identitySha256", "sourceSha256"],
+          "properties": {
+            "identitySha256": { "$ref": "#/$defs/sha256" },
+            "sourceSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "manifestSha256": { "$ref": "#/$defs/sha256" },
+        "capabilityDigest": { "$ref": "#/$defs/sha256" },
+        "planDigest": { "$ref": "#/$defs/sha256" },
+        "requestDigest": { "$ref": "#/$defs/sha256" },
+        "sourceDigest": { "$ref": "#/$defs/sha256" },
+        "imageId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "verifierDigest": { "$ref": "#/$defs/sha256" },
+        "worker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId", "version"],
+          "properties": {
+            "runId": { "$ref": "#/$defs/uuidV4" },
+            "version": { "type": ["string", "null"], "enum": ["quickjs-contract-worker-v8", null] }
+          }
+        },
+        "status": { "enum": ["completed", "timeout", "cancelled", "error"] },
+        "verdict": { "enum": ["observation-recorded", "observation-unavailable"] },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["confirmed"],
+          "properties": { "confirmed": { "type": "boolean" } }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["executionSha256", "observationSha256", "reason"],
+          "properties": {
+            "executionSha256": { "$ref": "#/$defs/sha256" },
+            "observationSha256": { "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+            "reason": { "type": ["string", "null"], "pattern": "^[a-z0-9-]{1,80}$" }
+          }
+        },
+        "startedAtMs": { "type": "integer", "minimum": 0 },
+        "deadlineAtMs": { "type": "integer", "minimum": 0 },
+        "settledAtMs": { "type": "integer", "minimum": 0 },
+        "completionAllowed": { "const": false }
+      }
+    },
+    "signature": { "type": "string", "minLength": 88, "maxLength": 88, "pattern": "^[A-Za-z0-9+/]{86}==$" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9_.:-]+$" },
+    "uuidV4": { "type": "string", "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" }
+  }
+}

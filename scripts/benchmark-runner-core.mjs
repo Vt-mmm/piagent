@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { benchmarkVerificationBinding, prepareBenchmarkVerification } from "./benchmark-independent-verification.mjs";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
-import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
+import { benchmarkEnvironment, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
 import { prepareProductionProviderFreeEvidence, productionProviderFreeConfigurationDigest, productionProviderFreeEvidenceError, productionProviderFreeEvidenceRequired } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
@@ -26,7 +26,8 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { benchmarkBootstrapCandidateIndex, benchmarkBootstrapMetadata } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { createBenchmarkExecutionGuard } from "../packages/piagent-core/benchmark/benchmark-execution-guard.js";
-import { benchmarkCommandIdentity } from "../packages/piagent-core/benchmark/benchmark-runtime-identity.js";
+import { readBenchmarkWireDefinitionPlan, validateBenchmarkWireManifest } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
+export { projectBenchmarkWireState } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { openProductionBenchmarkCampaign } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { completedBenchmarkRecord, expectedBenchmarkRecord } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
@@ -38,12 +39,8 @@ import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, emptyBenchmarkLedg
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
 import { createBenchmarkProcessController } from "../packages/piagent-core/benchmark/benchmark-process.js";
 import {
-  clearRecoveredBenchmarkAttempts,
-  persistUnacceptedBenchmarkAttempt,
-  promoteMeasuredBenchmarkRecord,
-  recoverOrphanedBenchmarkAttempts,
-  recoverPendingBenchmarkRecord,
-  stageMeasuredBenchmarkRecord
+  clearRecoveredBenchmarkAttempts, persistUnacceptedBenchmarkAttempt, promoteMeasuredBenchmarkRecord,
+  recoverOrphanedBenchmarkAttempts, recoverPendingBenchmarkRecord, stageMeasuredBenchmarkRecord
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { finalizeBenchmarkRun } from "./benchmark-runner-finalization.mjs";
 import {
@@ -56,20 +53,18 @@ import {
   defaultOutputRoot,
   ensureEmptyOutput,
   executionOrder,
-  fail,
-  formatDuration,
-  frozenRuntimeCommandsForFinalization,
-  invokedAsEntrypoint,
-  isLegacyInvocation,
-  loadResumeState,
-  pairedChunk,
-  privateDirectory,
+  fail, formatDuration, invokedAsEntrypoint, isLegacyInvocation,
+  loadResumeState, pairedChunk, privateDirectory,
   readJsonFile,
   samePairedBlock,
   sameStringList
 } from "./benchmark-runner-support.mjs";
 import { runBenchmarkSession } from "./benchmark-session.mjs";
+import { createRegisteredBenchmarkScopedSessionFactory, registeredBenchmarkScopedSessionRequired
+} from "./benchmark-scoped-session-factory.mjs";
 import { assertBenchmarkHostReadinessStartReady, assertExistingBenchmarkHostReadiness, benchmarkHostReadinessPolicyDigest, collectReadyBenchmarkHostReadiness } from "./benchmark-runner-host-readiness.mjs";
+import { applyRegisteredMeasurementOptions, benchmarkMeasurementConfiguration, benchmarkRuntimeCommands,
+  registeredMeasurementBinding as measurementBinding } from "./benchmark-runner-configuration.mjs";
 export { parseBenchmarkArgs };
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -99,6 +94,11 @@ async function main() {
     fail("Benchmark core must execute from the immutable candidate snapshot", 1);
   }
   const options = parseBenchmarkArgs(argv);
+  if (options.registeredMeasurement && !bootstrapMetadata?.registeredMeasurement) {
+    fail("Registered measurement must start through scripts/benchmark-runner.mjs with a trusted frozen registration", 1);
+  }
+  const registeredMeasurement = bootstrapMetadata?.registeredMeasurement ?? null;
+  applyRegisteredMeasurementOptions(options, registeredMeasurement);
   if (bootstrapMetadata?.replay?.snapshot) options.replayFailures = bootstrapMetadata.replay.snapshot;
   if (options.resume && options.replayFailures) fail("--resume cannot be combined with --replay-failures", 1);
   if (options.resume && options.output) fail("--resume uses the original report directory; do not pass --output", 1);
@@ -161,8 +161,9 @@ async function main() {
   if (productionSpendControlErrors.length > 0) {
     fail(`Production spend-control contract is invalid (${productionSpendControlErrors.join(", ")})`, 1);
   }
+  const registeredMeasurementRun = Boolean(registeredMeasurement);
   const productionAllStageBoundaries = productionSpendControl
-    ? options.measurementOnly ? [0, productionExpectedSessions]
+    ? options.measurementOnly || registeredMeasurementRun ? [0, productionExpectedSessions]
       : productionSpendControl.stages.map((stage) => stage.cumulativeSessions)
     : [];
   const productionStageBoundaries = productionAllStageBoundaries.slice(1);
@@ -214,16 +215,28 @@ async function main() {
   let codexCommand = process.env.PIAGENT_BENCHMARK_CODEX_COMMAND || "codex";
   const suiteIdentity = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true });
   const suiteDigest = suiteIdentity.contentDigest;
-  const verificationPlan = prepareBenchmarkVerification({ options, resumeState, installedRoot: packageRoot, suiteDigest,
+  if (registeredMeasurementRun && suiteDigest !== registeredMeasurement.payload.baseSuiteDigest) {
+    fail("Registered measurement base suite digest does not match the frozen production-v2 suite", 1);
+  }
+  const verificationPlan = prepareBenchmarkVerification({ options, resumeState, registeredMeasurement,
+    installedRoot: packageRoot, suiteDigest,
     scenarios: declaredScenarios, suiteRoot, resolveSuiteEntry: resolveBenchmarkSuiteEntry });
   const rootSeed = options.seed ?? crypto.randomBytes(32).toString("hex");
   const rootSeedDigest = crypto.createHash("sha256").update(rootSeed).digest("hex");
+  if (registeredMeasurementRun && rootSeedDigest !== registeredMeasurement.payload.unchangedSeedDigest) {
+    fail("Registered measurement root seed digest does not match the unchanged production seed", 1);
+  }
+  const registeredMeasurementBinding = measurementBinding(registeredMeasurement);
   const candidateGuard = createBenchmarkCandidateGuard(packageRoot, resumeState?.manifest.candidateProvenance, {
     immutableSnapshot: Boolean(bootstrapMetadata),
     observedProvenance: bootstrapMetadata?.candidateProvenance,
     snapshotIndex: bootstrapCandidateIndex
   });
   candidateGuard.freeze();
+  const providerWirePlan = readBenchmarkWireDefinitionPlan({ file: process.env.PIAGENT_WIRE_MANIFEST_PATH, sha256: process.env.PIAGENT_WIRE_MANIFEST_SHA256 });
+  if (providerWirePlan) validateBenchmarkWireManifest(providerWirePlan.manifest, { template: true, candidateDigest: candidateGuard.provenance.contentDigest,
+    model: options.model, thinking: options.thinking, requestedTier: options.serviceTier });
+  if (resumeState && (resumeState.manifest.providerWirePlanDigest ?? null) !== (providerWirePlan?.planDigest ?? null)) fail("Cannot resume benchmark: provider-wire definition plan changed", 1);
   const fullOrder = options.replayRuns
     ? options.replayRuns.map((run) => ({
         scenario: suite.scenarios.find((scenario) => scenario.id === run.scenarioId),
@@ -244,7 +257,7 @@ async function main() {
   const productionHostReadinessPolicyDigest = productionHostReadinessRequired
     ? benchmarkHostReadinessPolicyDigest(productionHostReadinessPolicy)
     : null;
-  const productionReleaseClaimRun = productionSpendControlled
+  const productionReleaseClaimRun = productionSpendControlled && !registeredMeasurementRun
     && suite.schemaVersion === 2
     && suite.releaseGate?.requireEfficiencyClaim === true
     && suite.releaseGate?.requireFullSuiteForClaim === true;
@@ -254,6 +267,9 @@ async function main() {
   let deferredProductionStageApproval;
   if (resumeState) {
     const manifest = resumeState.manifest;
+    if (JSON.stringify(manifest.registeredMeasurement ?? null) !== JSON.stringify(registeredMeasurementBinding)) {
+      fail("Cannot resume benchmark: registered measurement identity changed or is missing", 1);
+    }
     if (manifest.suiteDigest !== suiteDigest) fail("Cannot resume benchmark: suite files changed since the original run", 1);
     if (productionSpendControlled && !productionGuardBindingMatches(manifest, productionSpendControl)) fail("Cannot resume production benchmark: frozen production guard binding is missing or changed", 1);
     if (manifest.rootSeed !== rootSeed) fail("Cannot resume benchmark: root seed mismatch", 1);
@@ -426,7 +442,8 @@ async function main() {
     return;
   }
   if (productionSpendControlled) {
-    if (!options.measurementOnly && options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
+    if (!options.measurementOnly && !registeredMeasurementRun
+      && options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
       fail("Production spend control requires --stop-after-failed-pair before any provider session", 1);
     }
     const completedRuns = resumeState?.completedRuns.length ?? 0;
@@ -458,55 +475,14 @@ async function main() {
     }
   }
   const runId = resumeState?.manifest.runId ?? createRunId(suite.id);
-  const runtimeCommands = productionFinalizationOnly
-    ? frozenRuntimeCommandsForFinalization(resumeState.manifest, options.surfaces)
-    : {
-        pi: benchmarkCommandIdentity(piCommand, { cwd: bootstrapMetadata?.originalCwd ?? process.cwd() }),
-        codex: options.surfaces.includes("codex-cli")
-          ? benchmarkCommandIdentity(codexCommand, { cwd: bootstrapMetadata?.originalCwd ?? process.cwd() })
-          : null,
-        node: benchmarkCommandIdentity(process.execPath),
-        git: benchmarkCommandIdentity("git"),
-        bash: benchmarkCommandIdentity("bash")
-      };
-  const environmentPolicy = benchmarkEnvironmentPolicy();
-  const configurationPiAgentHome = productionFinalizationOnly
-    ? resumeState.manifest.piAgentHome?.identity
-    : bootstrapMetadata.piAgentHome.identity;
-  const configurationCodexCredential = productionFinalizationOnly
-    ? resumeState.manifest.codexCredentialIdentity ?? null
-    : bootstrapMetadata.codexCredential?.identity ?? null;
-  const configuration = {
-    schemaVersion: 1,
-    source: bootstrapMetadata.sourceIdentity,
-    candidateDigest: candidateGuard.provenance.contentDigest,
-    suiteDigest,
-    runtimeDependencyDigest: bootstrapMetadata.runtimeDependencies?.digest ?? null,
-    webUiAssetDigest: bootstrapMetadata.webUiAssets?.digest ?? null,
-    runtimeCommands,
-    environmentPolicy,
-    ...(verificationPlan ? { independentVerification: verificationPlan.identity } : {}),
-    ...(productionHostReadinessRequired ? { hostReadinessPolicyDigest: productionHostReadinessPolicyDigest } : {}),
-    piAgentHome: configurationPiAgentHome,
-    codexCredential: configurationCodexCredential,
-    rootSeedDigest,
-    surfaces: options.surfaces,
-    model: options.model ?? null,
-    thinking: options.thinking ?? null,
-    serviceTier: options.serviceTier ?? null,
-    codexMode: options.codexMode,
-    piagentTreatment: options.piagentTreatment,
-    allowPiAuthWriteback: options.allowPiAuthWriteback,
-    piCredentialVaultId: bootstrapMetadata.piAgentHome.vaultId,
-    timeoutSeconds: options.timeoutSeconds,
-    infrastructureRetries: options.infrastructureRetries,
-    retryDelaySeconds: options.retryDelaySeconds,
-    transportCircuitBreaker: BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
-    stopAfterFailedPair: options.stopAfterFailedPair,
-    ...(options.measurementOnly ? { measurementOnly: true } : {}),
-    order: fullOrder.map((item) => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat }))
-  };
-  const configurationDigest = crypto.createHash("sha256").update(JSON.stringify(configuration)).digest("hex");
+  const runtimeCommands = benchmarkRuntimeCommands({ productionFinalizationOnly,
+    resumeManifest: resumeState?.manifest, surfaces: options.surfaces, piCommand, codexCommand,
+    cwd: bootstrapMetadata?.originalCwd ?? process.cwd() });
+  const { configuration, configurationDigest, environmentPolicy } = benchmarkMeasurementConfiguration({
+    bootstrapMetadata, candidateDigest: candidateGuard.provenance.contentDigest, suiteDigest, runtimeCommands,
+    verificationIdentity: verificationPlan?.identity, providerWirePlan, productionHostReadinessRequired,
+    productionHostReadinessPolicyDigest, productionFinalizationOnly, resumeManifest: resumeState?.manifest,
+    rootSeedDigest, options, fullOrder });
   const providerFreeConfigurationDigest = providerFreeEvidenceRequired ? productionProviderFreeConfigurationDigest(configuration) : null;
   const source = bootstrapMetadata?.sourceIdentity; if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
   if (resumeState && providerFreeEvidenceRequired && resumeState.manifest.providerFreeConfigurationDigest !== providerFreeConfigurationDigest) fail("Cannot resume benchmark: provider-free configuration changed since the original run", 1);
@@ -557,6 +533,7 @@ async function main() {
     codexCredential: productionFinalizationOnly ? null : bootstrapMetadata?.codexCredential,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies,
     webUiAssets: bootstrapMetadata?.webUiAssets,
+    registeredAssets: bootstrapMetadata?.registeredMeasurement,
     commands: runtimeCommands,
     verifyCommandAssets: !productionFinalizationOnly
   });
@@ -605,6 +582,16 @@ async function main() {
   const runRoot = resumeState ? privateDirectory(output) : ensureEmptyOutput(output);
   releaseRunLock ??= acquireBenchmarkRunLock(runRoot, runId);
   privateDirectory(path.join(runRoot, "workspaces"));
+  const registeredScopedSessionFactory = registeredMeasurementRun
+    ? createRegisteredBenchmarkScopedSessionFactory({ installedRoot: packageRoot, registeredMeasurement,
+      custodyRoot: runRoot, nodeCommand: runtimeCommands.node.resolvedPath,
+      codexRuntimePath: runtimeCommands.codex?.resolvedPath ?? null, qualification: {
+        version: 4, candidateRoot: bootstrapMetadata.snapshotRoot,
+        assetsRoot: bootstrapMetadata.webUiAssets.root,
+        sdkRoot: runtimeCommands.pi.packageClosure.root,
+        candidateIndexPath: bootstrapMetadata.candidateIndex.path,
+        candidateIndexSha256: bootstrapMetadata.candidateIndex.digest } })
+    : null;
   const removeSignalHandlers = installSignalForwarding();
   const startedAt = resumeState?.manifest.startedAt ?? new Date().toISOString();
   const runs = resumeState ? [...resumeState.completedRuns] : [];
@@ -625,6 +612,7 @@ async function main() {
     },
     suiteDigest,
     suiteIdentity,
+    ...(registeredMeasurementBinding ? { registeredMeasurement: registeredMeasurementBinding } : {}),
     candidateProvenance: candidateGuard.provenance,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
     webUiAssets: webUiAssetIdentity,
@@ -635,6 +623,7 @@ async function main() {
     configurationDigest,
     environmentPolicy,
     ...(verificationPlan ? { verificationPlan: { file: options.verificationPlan, identity: verificationPlan.identity } } : {}),
+    ...(providerWirePlan ? { providerWirePlanDigest: providerWirePlan.planDigest } : {}),
     piAgentHome: {
       copied: bootstrapMetadata.piAgentHome.copied,
       globalInstructions: bootstrapMetadata.piAgentHome.globalInstructions,
@@ -766,10 +755,14 @@ async function main() {
             runRoot,
             options,
             verificationPlan,
+            ...(item.surface === "piagent" && providerWirePlan ? { providerWirePlan, candidateDigest: candidateGuard.provenance.contentDigest } : {}),
             piCommand,
             codexCommand,
             codexDisabledFeatures: runtime.codexDisabledFeatures,
             codexRuntime: attemptCodexRuntime,
+            scopedBrokerSessionFactory: registeredScopedSessionFactory
+              && registeredBenchmarkScopedSessionRequired(registeredScopedSessionFactory, item.scenario.id)
+              ? registeredScopedSessionFactory : undefined,
             piRuntimeHome,
             systemCommands: {
               node: runtimeCommands.node.resolvedPath,

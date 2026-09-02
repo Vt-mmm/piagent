@@ -448,10 +448,11 @@ describe("runtime session modules", () => {
       ["concurrent-lease-lifecycle.md", "calls `operation(renew)` with a bare `renew(now)` callback"],
       ["durable-session-control-plane.md", "The stored receipt contains exactly `idempotencyKey`"]
     ];
-    for (const [file, omittedClause] of authoritativeCases) {
+    for (const [file, retainedClause] of authoritativeCases) {
       const operatorRequest = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8");
       const summary = automaticTaskSummary(operatorRequest), acceptanceCriteria = automaticAcceptanceCriteria(operatorRequest);
-      assert.doesNotMatch([summary, ...acceptanceCriteria].join("\n"), new RegExp(omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.doesNotMatch(summary, new RegExp(retainedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.ok(acceptanceCriteria.join(" ").includes(retainedClause));
       const durableTask = {
         taskId: file.replace(/\.md$/, ""), taskRunId: `${file}-run`, sessionId: "session-authoritative", riskLane: "normal",
         summary, operatorRequest, operatorRequestDigest: operatorRequestDigest(operatorRequest), acceptanceCriteria,
@@ -461,10 +462,10 @@ describe("runtime session modules", () => {
       const semantic = buildSemanticCompactionInstructions(durableTask);
       assert.ok(semantic.length <= SEMANTIC_COMPACTION_MAX_CHARS, `${file}: ${semantic.length}`);
       assert.match(semantic, /Authoritative operator request \(redacted, lossless\): operator-request-v1:/);
-      assert.match(semantic, new RegExp(omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(semantic, new RegExp(retainedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       const ledger = buildAdaptiveContextLedger([{ role: "user", content: operatorRequest }], durableTask);
       assert.ok(ledger.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS, `${file}: ${ledger.length}`);
-      assert.match(ledger, new RegExp(omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(ledger, new RegExp(retainedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
 
     const criticalMiddle = "CRITICAL_MIDDLE_CLAUSE must survive every compaction and resume boundary.";
@@ -1694,9 +1695,9 @@ describe("runtime session modules", () => {
     }
     const migrationPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts/resumable-migration-runner.md"), "utf8");
     const migrationCriteria = automaticAcceptanceCriteria(migrationPrompt);
-    for (const label of ["M1", "M2", "M3", "M4"]) assert.equal(migrationCriteria.some((criterion) => criterion.startsWith(`[${label}] `)), true, label);
+    for (const label of ["M1", "M2", "M3", "M4"]) assert.ok(migrationCriteria.join(" ").includes(`[${label}] `), label);
     assert.equal(
-      migrationCriteria.some((criterion) => /Do not require array, object, or function identity.*same loaded module instance\.$/.test(criterion)),
+      /Do not require array, object, or function identity.*same loaded module instance\./.test(migrationCriteria.join(" ")),
       true
     );
     assert.match(migrationCriteria.join("\n"), /does not rerun earlier completed steps/);
@@ -1705,22 +1706,28 @@ describe("runtime session modules", () => {
     assert.doesNotMatch(automaticTaskSummary(rolloutPrompt), /rolloutSummary/);
   });
 
-  it("keeps deterministic atomic coverage across long labeled capability contracts", () => {
+  it("retains all labeled clauses when long capability contracts require grouping", () => {
     const capability = (file) => automaticAcceptanceCriteria(fs.readFileSync(
       path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8"
     ));
     const lease = capability("concurrent-lease-lifecycle.md");
-    for (const label of ["L1", "L2", "L3", "L4"]) assert.equal(lease.some((criterion) => criterion.startsWith(`[${label}] `)), true, label);
-    assert.equal(lease.includes("[L1] Invalid input throws `TypeError`."), true);
-    assert.equal(lease.includes("[L2] It succeeds when the key is absent, when the prior lease is expired at the inclusive boundary (`now >= expiresAt`), or when the same owner reacquires it."), true);
-    assert.equal(lease.includes("[L4] Its cleanup must not delete a lease that changed owner after expiry."), true);
+    for (const label of ["L1", "L2", "L3", "L4"]) assert.ok(lease.join(" ").replace(/\s+/g, " ").includes(`[${label}] `), label);
+    assert.ok(lease.join(" ").replace(/\s+/g, " ").includes("Invalid input throws `TypeError`."));
+    assert.ok(lease.join(" ").replace(/\s+/g, " ").includes("It succeeds when the key is absent, when the prior lease is expired at the inclusive boundary (`now >= expiresAt`), or when the same owner reacquires it."));
+    assert.ok(lease.join(" ").replace(/\s+/g, " ").includes("Its cleanup must not delete a lease that changed owner after expiry."));
 
     const control = capability("durable-session-control-plane.md");
-    for (const label of ["D1", "D2", "D3", "D4", "D5", "D6"]) assert.equal(control.some((criterion) => criterion.startsWith(`[${label}] `)), true, label);
-    assert.equal(control.includes("[D3] Check a prior idempotency receipt before revision matching: an identical replay succeeds even with a stale expected revision, returns the identical state object, and marks only the returned receipt `replayed: true`."), true);
-    assert.equal(control.includes("[D4] Canonicalization must reject non-finite or non-JSON values."), true);
-    assert.equal(control.includes("[D5] Do not mutate caller state/input, and do not share the separately returned receipt object with the stored receipt."), true);
-    assert.equal(control.length, 12);
+    for (const label of ["D1", "D2", "D3", "D4", "D5", "D6"]) assert.ok(control.join(" ").replace(/\s+/g, " ").includes(`[${label}] `), label);
+    assert.ok(control.join(" ").replace(/\s+/g, " ").includes("Check a prior idempotency receipt before revision matching: an identical replay succeeds even with a stale expected revision, returns the identical state object, and marks only the returned receipt `replayed: true`."));
+    assert.ok(control.join(" ").replace(/\s+/g, " ").includes("Canonicalization must reject non-finite or non-JSON values."));
+    assert.ok(control.join(" ").replace(/\s+/g, " ").includes("Do not mutate caller state/input, and do not share the separately returned receipt object with the stored receipt."));
+    for (const [file, criteria] of [["concurrent-lease-lifecycle.md", lease], ["durable-session-control-plane.md", control]]) {
+      assert.ok(criteria.length <= 12 && criteria.every((criterion) => criterion.length <= 600));
+      const original = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8");
+      for (const bullet of original.split(/\r?\n/).filter((line) => /^- /.test(line))) {
+        assert.ok(criteria.join(" ").replace(/\s+/g, " ").includes(bullet.slice(2).replace(/\s+/g, " ").trim()), bullet);
+      }
+    }
   });
 
   it("joins wrapped prose obligations before deriving acceptance criteria", () => {
@@ -1857,7 +1864,7 @@ describe("runtime session modules", () => {
     assert.equal(rollout.receipt.criteria.some((criterion) => criterion.obligation === "tenant-boundary"), false);
   });
 
-  it("caps automatic acceptance criteria with deterministic whole-prompt coverage", () => {
+  it("groups every obligation in order instead of sampling at the acceptance cap", () => {
     const earlyAndMiddle = Array.from({ length: 20 }, (_entry, index) => (
       `- [C${String(index + 1).padStart(2, "0")}] The implementation must preserve obligation ${index + 1}.`
     ));
@@ -1873,12 +1880,11 @@ describe("runtime session modules", () => {
     const second = automaticAcceptanceCriteria(prompt);
 
     assert.deepEqual(second, first);
-    assert.equal(first.length, 12);
-    assert.equal(first[0].startsWith("[C01] "), true);
-    assert.equal(first.some((criterion) => criterion.startsWith("[C20] ")), false, "the cap is not a first-criteria prefix");
-    assert.equal(first.includes("Missing plans or meters fail closed."), true);
-    const selectedNumbers = first.slice(0, -1).map((criterion) => Number(criterion.match(/^\[C(\d+)\]/)?.[1]));
-    assert.deepEqual([...selectedNumbers].sort((left, right) => left - right), selectedNumbers);
+    assert.ok(first.length <= 12 && first.every((criterion) => criterion.length <= 600));
+    const retained = first.slice(0, -1).join(" ").replace(/\s+/g, " ");
+    assert.equal(retained, prompt.replace(/^- /gm, "").replace(/\s+/g, " ").trim());
+    const selectedNumbers = [...retained.matchAll(/\[C(\d+)\]/g)].map((match) => Number(match[1]));
+    assert.deepEqual(selectedNumbers, Array.from({ length: 20 }, (_entry, index) => index + 1));
   });
 
   it("recognizes an unbulleted missing plan or meter fail-closed obligation", () => {
@@ -1917,10 +1923,11 @@ describe("runtime session modules", () => {
       lineFeed
     ].join("\n\n"));
 
-    assert.equal(criteria.length, 12);
-    assert.equal(criteria.includes("A missing active plan is invalid input: throw TypeError"), true);
-    assert.equal(criteria.includes("never skip it."), true);
-    assert.equal(criteria.includes(lineFeed), true);
+    assert.ok(criteria.length <= 12 && criteria.every((criterion) => criterion.length <= 600));
+    const retained = criteria.slice(0, -1).join(" ").replace(/\s+/g, " ");
+    assert.ok(retained.includes(missing));
+    assert.ok(retained.includes(lineFeed));
+    for (const field of filler) assert.ok(retained.includes(field.slice(2)), field);
   });
 
   it("does not spend the acceptance cap on path-only scope bullets", () => {

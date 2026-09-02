@@ -32,6 +32,7 @@ import { ProjectRegistry } from "./project-registry.ts";
 import { pickNativeProjectFolders } from "./native-project-picker.ts";
 import { ProviderAuthBroker } from "./provider-auth-broker.ts";
 import { McpAuthBroker } from "./mcp-auth-broker.ts";
+import type { ScopedBrokerRouter } from "./session-runtime-factory.ts";
 
 function unavailable(reasonCode: string) {
   return { status: "unavailable" as const, version: null, reasonCode };
@@ -81,6 +82,7 @@ export async function startPiagentGateway(options: {
   expectedPiVersion: string;
   agentDir?: string;
   staticRoot?: string;
+  scopedBrokerRouter?: ScopedBrokerRouter;
 }): Promise<{ descriptor: GatewayDescriptor; wait(): Promise<void>; close(): Promise<void> }> {
   const state = gatewayProfileState(options.agentDir);
   process.env.PI_CODING_AGENT_DIR = state.agentDir;
@@ -146,6 +148,7 @@ export async function startPiagentGateway(options: {
     runtimes = new SessionRuntimeSupervisor({
       gatewayInstanceRef, key, leases, listSessions: () => host.SessionManager.listAll(),
       host, agentDir: state.agentDir, packageRoot: options.packageRoot, modelRuntime: inspectionModels, events,
+      scopedBrokerRouter: options.scopedBrokerRouter,
       resolveProject: (projectRef) => projects.resolve(projectRef)
     });
     const readCatalog = () => buildSessionCatalog({

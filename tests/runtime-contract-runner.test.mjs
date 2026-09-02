@@ -6,11 +6,13 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { openAcceptanceEvidenceStore } from "../packages/piagent-core/extensions/acceptance-evidence-store.js";
+import { FACT_EVIDENCE_SCOPE_VERSION, openAcceptanceEvidenceStore, ROOT_AGGREGATE_FACT_ID } from "../packages/piagent-core/extensions/acceptance-evidence-store.js";
+import { compositeCodePlanDigest } from "../packages/piagent-core/extensions/acceptance-composite-contract.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 import { captureWorkspaceVerificationSnapshot } from "../packages/piagent-core/extensions/workspace-verification-snapshot.js";
 import { RuntimeSessionState } from "../packages/piagent-core/runtime/session/runtime-state.ts";
 import { registerToolResultHook } from "../packages/piagent-core/runtime/hooks/tool-result-hook.ts";
-import { createRuntimeContractRunner } from "../packages/piagent-core/runtime/verification/runtime-contract-runner.ts";
+import { createCompositeCodeChildCollector, createRuntimeContractRunner } from "../packages/piagent-core/runtime/verification/runtime-contract-runner.ts";
 import { reuseCurrentTreeExactVerifier } from "../packages/piagent-core/runtime/verification/exact-verifier-reuse.ts";
 import { data, callback, returns, callbackPlan, stepReturn, callEvent, settleEvent } from "./helpers/async-contract-cases.mjs";
 
@@ -115,6 +117,67 @@ function fixture(context) {
   const runner = (overrides = {}) => createRuntimeContractRunner({ state, context: ctx, getTask: () => task, approved, ...overrides });
   return { projectRoot, state, ctx, task, approved, store, handlers, begin, verify, digest, runner };
 }
+
+test("a composite code child uses an exact fact scope and cannot impersonate the root aggregate", async context => {
+  const f = fixture(context), childScope = { version: FACT_EVIDENCE_SCOPE_VERSION,
+    taskRunId: request.scope.taskRunId, criterionId: request.scope.criterionId, factId: "code" };
+  const childRequest = { ...request, scope: childScope };
+  assert.equal((await f.runner().run(childRequest)).reason, "current-project-verifier-missing");
+  assert.equal(f.store.latest(childScope), null); assert.equal(f.store.latest(request.scope), null);
+  await assert.rejects(() => f.runner().run({ ...childRequest, scope: { ...childScope,
+    factId: ROOT_AGGREGATE_FACT_ID } }), /root aggregate/);
+});
+
+test("an actual isolated v2 code receipt becomes only its exact composite fact observation", integration, async context => {
+  const f = fixture(context); assert.equal(await f.verify(), 0);
+  const profile = expectedNodeProfile(), definition = { sourcePath: "sum.mjs", modulePaths: [], exportName: "sum", profile,
+    checks: [{ id: "sum", cases: [{ id: "sum-2-3", args: [{ type: "number", value: 2 }, { type: "number", value: 3 }],
+      invocation: { kind: "call" }, expected: { outcome: "return", value: { type: "number", value: 5 } } }] }] };
+  const plan = { digest: compositeCodePlanDigest(definition), backendProfileDigest: profile.digest, caseCount: 1, ...definition };
+  const fact = { id: "code-reused", parameters: { codePlanDigest: plan.digest, backendProfileDigest: plan.backendProfileDigest } };
+  const approved = { store: f.store, imageId, dockerSocket, timeoutMs: 10000,
+    verifierDigest: f.approved.verifierDigest, authorizeSourceRead: () => true };
+  const childScope = { version: FACT_EVIDENCE_SCOPE_VERSION, taskRunId: f.task.taskRunId,
+    criterionId: request.scope.criterionId, factId: fact.id };
+  const direct = createRuntimeContractRunner({ state: f.state, context: f.ctx, getTask: () => f.task,
+    approved: { ...approved, sourcePath: plan.sourcePath, modulePaths: plan.modulePaths,
+      exportName: plan.exportName, checks: plan.checks, profile: plan.profile } });
+  const result = await direct.run({ scope: childScope, criterionHash: request.criterionHash, maxAttempts: 3 });
+  const receipt = await direct.assess(result, { policy: "allow" });
+  assert.deepEqual({ verdict: receipt.verdict, completionAllowed: receipt.completionAllowed, assurance: receipt.assurance,
+    taskRunId: receipt.taskRunId, criterionId: receipt.criterionId, criterionHash: receipt.criterionHash,
+    factId: receipt.factId, profileDigest: receipt.profileDigest, planDigest: receipt.planDigest,
+    resultPlanDigest: result.evidence?.planDigest, checks: receipt.checks,
+    sourcePaths: receipt.sourcePaths ?? [receipt.sourcePath] }, {
+    verdict: "pass", completionAllowed: true, assurance: "bounded-contract-tested", taskRunId: f.task.taskRunId,
+    criterionId: request.scope.criterionId, criterionHash: request.criterionHash, factId: fact.id,
+    profileDigest: plan.backendProfileDigest, planDigest: result.evidence?.planDigest,
+    resultPlanDigest: result.evidence?.planDigest, checks: [{ id: "sum", status: "pass", caseCount: 1 }],
+    sourcePaths: [plan.sourcePath] });
+  const child = createCompositeCodeChildCollector({ state: f.state, context: f.ctx, getTask: () => f.task,
+    approved,
+    plan, fact, criterionId: request.scope.criterionId, criterionHash: request.criterionHash, maxAttempts: 3 });
+  const observed = await child.collect(f.task, new AbortController().signal);
+  assert.equal(observed.status, "pass", JSON.stringify(observed)); assert.equal(observed.counterexampleRef, null);
+  assert.equal(f.store.latest(childScope).phase, "settled");
+  assert.equal(f.store.latest(request.scope), null,
+    "the admitted child cannot occupy the root criterion scope");
+  fs.writeFileSync(path.join(f.projectRoot, "sum.mjs"), "export const sum = (a, b) => a - b;\n");
+  assert.equal(await f.verify(), 0, "the deliberately shallow project verifier still passes the mutant");
+  const mutantFact = { ...fact, id: "code-mutant" }, mutantScope = { ...childScope, factId: mutantFact.id };
+  const mutantRunner = createRuntimeContractRunner({ state: f.state, context: f.ctx, getTask: () => f.task,
+    approved: { ...approved, sourcePath: plan.sourcePath, modulePaths: plan.modulePaths,
+      exportName: plan.exportName, checks: plan.checks, profile: plan.profile } });
+  const mutantResult = await mutantRunner.run({ scope: mutantScope, criterionHash: request.criterionHash, maxAttempts: 3 });
+  const mutantReceipt = await mutantRunner.assess(mutantResult, { policy: "allow" });
+  assert.equal(mutantReceipt.verdict, "fail", JSON.stringify(mutantReceipt)); assert.equal(mutantReceipt.factId, mutantFact.id);
+  const mutant = createCompositeCodeChildCollector({ state: f.state,
+    context: f.ctx, getTask: () => f.task, approved, plan, fact: mutantFact,
+    criterionId: request.scope.criterionId, criterionHash: request.criterionHash, maxAttempts: 3 });
+  const mutantObserved = await mutant.collect(f.task, new AbortController().signal);
+  assert.equal(mutantObserved.status, "fail", JSON.stringify(mutantObserved));
+  assert.match(mutantObserved.counterexampleRef, /^[a-f0-9]{64}$/);
+});
 
 test("only actual matched tool hooks, not task JSON, supply current project-verifier evidence", async (context) => {
   const value = fixture(context), { task, digest, verify, state, ctx } = value;

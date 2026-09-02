@@ -52,6 +52,13 @@ export const PIAGENT_BENCHMARK_TREATMENTS = Object.freeze({
     PIAGENT_HELPERS_MODE: "recommend",
     PIAGENT_EXECUTION_BACKEND: "host"
   }),
+  "configured-independent-v2": Object.freeze({
+    PIAGENT_SOLVER_MODE: "recommend",
+    PIAGENT_PHASE_TOOLS: "on",
+    PIAGENT_AUTO_RECOVERY: "on",
+    PIAGENT_HELPERS_MODE: "recommend",
+    PIAGENT_EXECUTION_BACKEND: "host"
+  }),
   "feature-off": Object.freeze({
     PIAGENT_SOLVER_MODE: "off",
     PIAGENT_PHASE_TOOLS: "off",

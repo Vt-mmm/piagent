@@ -4,223 +4,901 @@
   "title": "Host-approved independent contract payload (not a receipt)",
   "description": "Payload inside a private authenticated approval envelope. JSON schema conformance alone grants no authority. Runtime also checks signature, permissions, canonical project, installed verifier, unique IDs, total case count, dependent Date state, and size limits.",
   "oneOf": [
-    { "type": "object", "additionalProperties": false,
-      "required": ["version", "projectId", "operatorRequestDigest", "verifierDigest", "backend", "contracts"],
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","projectId","operatorRequestDigest","verifierDigest","backend","contracts"],
       "properties": {
-        "version": { "const": "approved-host-contracts-v1" },
-        "projectId": { "$ref": "#/$defs/hash" },
-        "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
-        "verifierDigest": { "$ref": "#/$defs/hash" },
-        "backend": { "$ref": "#/$defs/backend" }, "contracts": { "$ref": "#/$defs/contracts" }
+        "version": {"const": "approved-host-contracts-v1"},
+        "projectId": {"$ref": "#/$defs/hash"},
+        "operatorRequestDigest": {"type": "string","pattern": "^operator-request-v1:[a-f0-9]{64}$"},
+        "verifierDigest": {"$ref": "#/$defs/hash"},
+        "backend": {"$ref": "#/$defs/backend"},
+        "contracts": {"$ref": "#/$defs/contracts"}
       }
     },
-    { "type": "object", "additionalProperties": false, "required": ["version", "projectId", "verifierDigest", "plans"],
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","projectId","verifierDigest","plans"],
       "properties": {
-        "version": { "const": "approved-host-contract-set-v1" }, "projectId": { "$ref": "#/$defs/hash" },
-        "verifierDigest": { "$ref": "#/$defs/hash" },
-        "plans": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/plan" } }
+        "version": {"const": "approved-host-contract-set-v1"},
+        "projectId": {"$ref": "#/$defs/hash"},
+        "verifierDigest": {"$ref": "#/$defs/hash"},
+        "plans": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "#/$defs/plan"}}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","projectId","operatorRequestDigest","verifierDigest","backend","contracts"],
+      "properties": {
+        "version": {"const": "approved-host-contracts-v2"},
+        "projectId": {"$ref": "#/$defs/hash"},
+        "operatorRequestDigest": {"type": "string","pattern": "^operator-request-v1:[a-f0-9]{64}$"},
+        "verifierDigest": {"$ref": "#/$defs/hash"},
+        "backend": {"$ref": "#/$defs/backendV2"},
+        "contracts": {"$ref": "#/$defs/contractsV2"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","projectId","verifierDigest","plans"],
+      "properties": {
+        "version": {"const": "approved-host-contract-set-v2"},
+        "projectId": {"$ref": "#/$defs/hash"},
+        "verifierDigest": {"$ref": "#/$defs/hash"},
+        "plans": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "#/$defs/planV2"}}
       }
     }
   ],
   "$defs": {
-    "plan": { "type": "object", "additionalProperties": false,
-      "required": ["schemaVersion", "operatorRequestDigest", "backend", "contracts"],
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion","operatorRequestDigest","backend","contracts"],
       "properties": {
-        "schemaVersion": { "const": 1 },
-        "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
-        "backend": { "$ref": "#/$defs/backend" }, "contracts": { "$ref": "#/$defs/contracts" }
+        "schemaVersion": {"const": 1},
+        "operatorRequestDigest": {"type": "string","pattern": "^operator-request-v1:[a-f0-9]{64}$"},
+        "backend": {"$ref": "#/$defs/backend"},
+        "contracts": {"$ref": "#/$defs/contracts"}
       }
     },
-    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$" },
-    "numeric": { "oneOf": [{ "type": "number" }, { "enum": ["NaN", "Infinity", "-Infinity", "-0"] }] },
+    "hash": {"type": "string","pattern": "^[a-f0-9]{64}$"},
+    "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$"},
+    "numeric": {"oneOf": [{"type": "number"},{"enum": ["NaN","Infinity","-Infinity","-0"]}]},
     "primitive": {
       "oneOf": [
-        { "type": "object", "additionalProperties": false, "required": ["type"], "properties": { "type": { "enum": ["undefined", "null"] } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "number" }, "value": { "$ref": "#/$defs/numeric" } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "boolean" }, "value": { "type": "boolean" } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "string" }, "value": { "type": "string", "maxLength": 4096 } } }
+        {"type": "object","additionalProperties": false,"required": ["type"],"properties": {"type": {"enum": ["undefined","null"]}}},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "number"},"value": {"$ref": "#/$defs/numeric"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "boolean"},"value": {"type": "boolean"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "string"},"value": {"type": "string","maxLength": 4096}}
+        }
       ]
     },
-    "inputValue": { "oneOf": [
-      { "$ref": "#/$defs/primitive" },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "callback" }, "value": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" } } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
-        "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/inputValue" } }
-      } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
-        "type": { "const": "record" }, "value": { "type": "array", "maxItems": 64, "items": {
-          "type": "object", "additionalProperties": false, "required": ["key", "value"],
-          "properties": { "key": { "type": "string", "maxLength": 4096 }, "value": { "$ref": "#/$defs/inputValue" } }
-        } }
-      } }
-    ] },
-    "dataValue": { "oneOf": [
-      { "$ref": "#/$defs/primitive" },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
-        "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/dataValue" } }
-      } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
-        "type": { "const": "record" }, "value": { "type": "array", "maxItems": 64, "items": {
-          "type": "object", "additionalProperties": false, "required": ["key", "value"],
-          "properties": { "key": { "type": "string", "maxLength": 4096 }, "value": { "$ref": "#/$defs/dataValue" } }
-        } }
-      } }
-    ] },
+    "inputValue": {
+      "oneOf": [
+        {"$ref": "#/$defs/primitive"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "callback"},"value": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "date"},"value": {"$ref": "#/$defs/numeric"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "array"},"value": {"type": "array","maxItems": 64,"items": {"$ref": "#/$defs/inputValue"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {
+            "type": {"const": "record"},
+            "value": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key","value"],
+                "properties": {"key": {"type": "string","maxLength": 4096},"value": {"$ref": "#/$defs/inputValue"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "dataValue": {
+      "oneOf": [
+        {"$ref": "#/$defs/primitive"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "date"},"value": {"$ref": "#/$defs/numeric"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "array"},"value": {"type": "array","maxItems": 64,"items": {"$ref": "#/$defs/dataValue"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {
+            "type": {"const": "record"},
+            "value": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key","value"],
+                "properties": {"key": {"type": "string","maxLength": 4096},"value": {"$ref": "#/$defs/dataValue"}}
+              }
+            }
+          }
+        }
+      ]
+    },
     "callbackInput": {
-      "type": "object", "additionalProperties": false, "required": ["id", "mode", "repeatLast", "steps"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","mode","repeatLast","steps"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
-        "mode": { "enum": ["sync", "promise"] }, "repeatLast": { "type": "boolean" },
-        "settleAfterJobs": { "type": "integer", "minimum": 1, "maximum": 32 },
-        "steps": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "oneOf": [
-          { "type": "object", "additionalProperties": false, "required": ["outcome", "value"],
-            "properties": { "outcome": { "const": "return" }, "value": { "$ref": "#/$defs/dataValue" } } },
-          { "type": "object", "additionalProperties": false, "required": ["outcome", "error"],
-            "properties": { "outcome": { "const": "throw" }, "error": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" } } }
-        ] } }
+        "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+        "mode": {"enum": ["sync","promise"]},
+        "repeatLast": {"type": "boolean"},
+        "settleAfterJobs": {"type": "integer","minimum": 1,"maximum": 32},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["outcome","value"],
+                "properties": {"outcome": {"const": "return"},"value": {"$ref": "#/$defs/dataValue"}}
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["outcome","error"],
+                "properties": {"outcome": {"const": "throw"},"error": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}}
+              }
+            ]
+          }
+        }
       },
-      "allOf": [{ "if": { "required": ["settleAfterJobs"] }, "then": { "properties": { "mode": { "const": "promise" } } } }]
+      "allOf": [{"if": {"required": ["settleAfterJobs"]},"then": {"properties": {"mode": {"const": "promise"}}}}]
     },
     "errorInput": {
-      "type": "object", "additionalProperties": false, "required": ["id", "errorClass", "message"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","errorClass","message"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
-        "errorClass": { "enum": ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error"] },
-        "message": { "type": "string", "maxLength": 4096 },
-        "properties": { "allOf": [{ "$ref": "#/$defs/dataValue" }, { "properties": { "type": { "const": "record" } } }] }
+        "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+        "errorClass": {"enum": ["TypeError","RangeError","SyntaxError","ReferenceError","EvalError","URIError","Error"]},
+        "message": {"type": "string","maxLength": 4096},
+        "properties": {"allOf": [{"$ref": "#/$defs/dataValue"},{"properties": {"type": {"const": "record"}}}]}
       }
     },
-    "callbackTrace": { "type": "array", "maxItems": 128, "items": {
-      "type": "object", "additionalProperties": false, "required": ["callback", "call", "event"],
-      "properties": { "callback": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
-        "call": { "type": "integer", "minimum": 0, "maximum": 63 }, "event": { "enum": ["call", "settle"] },
-        "outcome": { "enum": ["return", "throw"] },
-        "args": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/inputValue" } } },
-      "oneOf": [
-        { "properties": { "event": { "const": "call" } }, "required": ["args"], "not": { "required": ["outcome"] } },
-        { "properties": { "event": { "const": "settle" } }, "required": ["outcome"], "not": { "required": ["args"] } }
-      ]
-    } },
+    "callbackTrace": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["callback","call","event"],
+        "properties": {
+          "callback": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+          "call": {"type": "integer","minimum": 0,"maximum": 63},
+          "event": {"enum": ["call","settle"]},
+          "outcome": {"enum": ["return","throw"]},
+          "args": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/inputValue"}}
+        },
+        "oneOf": [
+          {"properties": {"event": {"const": "call"}},"required": ["args"],"not": {"required": ["outcome"]}},
+          {"properties": {"event": {"const": "settle"}},"required": ["outcome"],"not": {"required": ["args"]}}
+        ]
+      }
+    },
     "errorObservation": {
-      "type": "object", "additionalProperties": false, "required": ["identity", "properties"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity","properties"],
       "properties": {
-        "identity": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" }] },
-        "properties": { "allOf": [{ "$ref": "#/$defs/inputValue" }, { "properties": { "type": { "const": "record" } } }] }
+        "identity": {"oneOf": [{"type": "null"},{"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}]},
+        "properties": {"allOf": [{"$ref": "#/$defs/inputValue"},{"properties": {"type": {"const": "record"}}}]}
       }
     },
     "referenceSelector": {
-      "type": "object", "additionalProperties": false, "required": ["root", "path"],
-      "properties": { "root": { "enum": ["argument", "return", "error"] }, "index": { "type": "integer", "minimum": 0, "maximum": 15 },
-        "path": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 128 } } },
-      "oneOf": [
-        { "properties": { "root": { "const": "argument" } }, "required": ["index"] },
-        { "properties": { "root": { "enum": ["return", "error"] } }, "not": { "required": ["index"] } }
-      ]
-    },
-    "referencePairs": { "type": "array", "minItems": 1, "maxItems": 16, "items": {
-      "type": "object", "additionalProperties": false, "required": ["id", "left", "right"],
-      "properties": { "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
-        "left": { "$ref": "#/$defs/referenceSelector" }, "right": { "$ref": "#/$defs/referenceSelector" } }
-    } },
-    "referenceIdentity": { "type": "array", "minItems": 1, "maxItems": 16, "items": {
-      "type": "object", "additionalProperties": false, "required": ["id", "same"],
-      "properties": { "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" }, "same": { "type": "boolean" } }
-    } },
-    "outputValue": { "oneOf": [
-      { "$ref": "#/$defs/primitive" },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
-        "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/outputValue" } }
-      } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
-        "type": { "const": "record" }, "value": { "type": "array", "maxItems": 64, "items": {
-          "type": "object", "additionalProperties": false, "required": ["key", "value"],
-          "properties": { "key": { "type": "string", "maxLength": 4096 }, "value": { "$ref": "#/$defs/outputValue" } }
-        } }
-      } }
-    ] },
-    "argument": { "oneOf": [
-      { "$ref": "#/$defs/inputValue" },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value"],
-        "properties": { "type": { "const": "result" }, "value": { "$ref": "#/$defs/id" } } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "value", "key"],
-        "properties": { "type": { "const": "error-property" }, "value": { "$ref": "#/$defs/id" }, "key": { "type": "string", "maxLength": 128 } } }
-    ] },
-    "expected": {
-      "type": "object", "additionalProperties": false, "required": ["outcome"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root","path"],
       "properties": {
-        "outcome": { "enum": ["return", "throw"] }, "value": { "$ref": "#/$defs/outputValue" },
-        "errorClass": { "enum": ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"] },
-        "clockReads": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "callbackTrace": { "$ref": "#/$defs/callbackTrace" },
-        "returnIdentity": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "integer", "minimum": 0, "maximum": 15 } },
-        "errorObservation": { "$ref": "#/$defs/errorObservation" },
-        "referenceIdentity": { "$ref": "#/$defs/referenceIdentity" },
-        "argsAfter": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/inputValue" } },
-        "dateArgsAfter": { "type": "array", "maxItems": 16, "items": {
-          "type": "object", "additionalProperties": false, "required": ["index", "value"],
-          "properties": { "index": { "type": "integer", "minimum": 0, "maximum": 15 }, "value": { "$ref": "#/$defs/numeric" } }
-        } }
+        "root": {"enum": ["argument","return","error"]},
+        "index": {"type": "integer","minimum": 0,"maximum": 15},
+        "path": {"type": "array","maxItems": 8,"items": {"type": "string","maxLength": 128}}
       },
       "oneOf": [
-        { "properties": { "outcome": { "const": "return" } }, "required": ["value"], "not": { "anyOf": [{ "required": ["errorClass"] }, { "required": ["errorObservation"] }] } },
-        { "properties": { "outcome": { "const": "throw" } }, "required": ["errorClass"], "not": { "anyOf": [{ "required": ["value"] }, { "required": ["returnIdentity"] }] } }
+        {"properties": {"root": {"const": "argument"}},"required": ["index"]},
+        {"properties": {"root": {"enum": ["return","error"]}},"not": {"required": ["index"]}}
+      ]
+    },
+    "referencePairs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","left","right"],
+        "properties": {
+          "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+          "left": {"$ref": "#/$defs/referenceSelector"},
+          "right": {"$ref": "#/$defs/referenceSelector"}
+        }
+      }
+    },
+    "referenceIdentity": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","same"],
+        "properties": {"id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},"same": {"type": "boolean"}}
+      }
+    },
+    "outputValue": {
+      "oneOf": [
+        {"$ref": "#/$defs/primitive"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "array"},"value": {"type": "array","maxItems": 64,"items": {"$ref": "#/$defs/outputValue"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {
+            "type": {"const": "record"},
+            "value": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key","value"],
+                "properties": {"key": {"type": "string","maxLength": 4096},"value": {"$ref": "#/$defs/outputValue"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "argument": {
+      "oneOf": [
+        {"$ref": "#/$defs/inputValue"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "result"},"value": {"$ref": "#/$defs/id"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value","key"],
+          "properties": {"type": {"const": "error-property"},"value": {"$ref": "#/$defs/id"},"key": {"type": "string","maxLength": 128}}
+        }
+      ]
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome"],
+      "properties": {
+        "outcome": {"enum": ["return","throw"]},
+        "value": {"$ref": "#/$defs/outputValue"},
+        "errorClass": {"enum": ["TypeError","RangeError","SyntaxError","ReferenceError","EvalError","URIError","Error","non-error"]},
+        "clockReads": {"type": "integer","minimum": 0,"maximum": 9007199254740991},
+        "callbackTrace": {"$ref": "#/$defs/callbackTrace"},
+        "returnIdentity": {"type": "array","maxItems": 16,"uniqueItems": true,"items": {"type": "integer","minimum": 0,"maximum": 15}},
+        "errorObservation": {"$ref": "#/$defs/errorObservation"},
+        "referenceIdentity": {"$ref": "#/$defs/referenceIdentity"},
+        "argsAfter": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/inputValue"}},
+        "dateArgsAfter": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["index","value"],
+            "properties": {"index": {"type": "integer","minimum": 0,"maximum": 15},"value": {"$ref": "#/$defs/numeric"}}
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {"outcome": {"const": "return"}},
+          "required": ["value"],
+          "not": {"anyOf": [{"required": ["errorClass"]},{"required": ["errorObservation"]}]}
+        },
+        {
+          "properties": {"outcome": {"const": "throw"}},
+          "required": ["errorClass"],
+          "not": {"anyOf": [{"required": ["value"]},{"required": ["returnIdentity"]}]}
+        }
       ]
     },
     "case": {
-      "type": "object", "additionalProperties": false, "required": ["id", "args", "expected"],
-      "properties": { "id": { "$ref": "#/$defs/id" }, "args": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/argument" } },
-        "sequence": { "$ref": "#/$defs/id" }, "reset": { "const": true }, "observeArgs": { "type": "boolean" },
-        "awaitResult": { "const": true }, "observeIdentity": { "const": true }, "observeError": { "const": true },
-        "callbacks": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/callbackInput" } },
-        "errors": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/errorInput" } },
-        "referencePairs": { "$ref": "#/$defs/referencePairs" },
-        "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" },
-        "clock": { "type": "integer", "minimum": -8640000000000000, "maximum": 8640000000000000 }, "expected": { "$ref": "#/$defs/expected" } },
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","args","expected"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "args": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/argument"}},
+        "sequence": {"$ref": "#/$defs/id"},
+        "reset": {"const": true},
+        "observeArgs": {"type": "boolean"},
+        "awaitResult": {"const": true},
+        "observeIdentity": {"const": true},
+        "observeError": {"const": true},
+        "callbacks": {"type": "array","minItems": 1,"maxItems": 8,"items": {"$ref": "#/$defs/callbackInput"}},
+        "errors": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "#/$defs/errorInput"}},
+        "referencePairs": {"$ref": "#/$defs/referencePairs"},
+        "exportName": {"type": "string","pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},
+        "clock": {"type": "integer","minimum": -8640000000000000,"maximum": 8640000000000000},
+        "expected": {"$ref": "#/$defs/expected"}
+      },
       "allOf": [
-        { "if": { "required": ["referencePairs"] }, "then": { "properties": { "expected": { "required": ["referenceIdentity"] } } } },
-        { "if": { "required": ["callbacks"] }, "then": { "properties": { "expected": { "required": ["callbackTrace"] } } } },
-        { "if": { "required": ["observeIdentity"], "properties": { "expected": { "properties": { "outcome": { "const": "return" } } } } },
-          "then": { "properties": { "expected": { "required": ["returnIdentity"] } } } },
-        { "if": { "required": ["observeError"], "properties": { "expected": { "properties": { "outcome": { "const": "throw" } } } } },
-          "then": { "properties": { "expected": { "required": ["errorObservation"] } } } }
+        {"if": {"required": ["referencePairs"]},"then": {"properties": {"expected": {"required": ["referenceIdentity"]}}}},
+        {"if": {"required": ["callbacks"]},"then": {"properties": {"expected": {"required": ["callbackTrace"]}}}},
+        {
+          "if": {"required": ["observeIdentity"],"properties": {"expected": {"properties": {"outcome": {"const": "return"}}}}},
+          "then": {"properties": {"expected": {"required": ["returnIdentity"]}}}
+        },
+        {
+          "if": {"required": ["observeError"],"properties": {"expected": {"properties": {"outcome": {"const": "throw"}}}}},
+          "then": {"properties": {"expected": {"required": ["errorObservation"]}}}
+        }
       ]
     },
     "backend": {
-      "type": "object", "additionalProperties": false, "required": ["imageId", "dockerSocket", "timeoutMs"],
-      "properties": { "imageId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "dockerSocket": { "type": "string", "pattern": "^/[^\u0000]*$" }, "timeoutMs": { "type": "integer", "minimum": 25, "maximum": 30000 } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageId","dockerSocket","timeoutMs"],
+      "properties": {
+        "imageId": {"type": "string","pattern": "^sha256:[a-f0-9]{64}$"},
+        "dockerSocket": {"type": "string","pattern": "^/[^\u0000]*$"},
+        "timeoutMs": {"type": "integer","minimum": 25,"maximum": 30000}
+      }
     },
     "selection": {
-      "type": "object", "additionalProperties": false,
-      "required": ["version", "familyId", "familyVersion", "familyDigest", "parametersDigest", "domain", "criterionText"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","familyId","familyVersion","familyDigest","parametersDigest","domain","criterionText"],
       "properties": {
-        "version": { "const": "contract-family-selection-v1" },
-        "familyId": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
-        "familyVersion": { "type": "integer", "minimum": 1, "maximum": 1000000 },
-        "familyDigest": { "$ref": "#/$defs/hash" }, "parametersDigest": { "$ref": "#/$defs/hash" },
-        "domain": { "enum": ["pure-function", "temporal-input", "configuration-precedence", "stateful-recovery"] },
-        "criterionText": { "type": "string", "minLength": 1, "maxLength": 4000 }
+        "version": {"const": "contract-family-selection-v1"},
+        "familyId": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+        "familyVersion": {"type": "integer","minimum": 1,"maximum": 1000000},
+        "familyDigest": {"$ref": "#/$defs/hash"},
+        "parametersDigest": {"$ref": "#/$defs/hash"},
+        "domain": {"enum": ["pure-function","temporal-input","configuration-precedence","stateful-recovery"]},
+        "criterionText": {"type": "string","minLength": 1,"maxLength": 4000}
       }
     },
-    "contracts": { "type": "array", "minItems": 1, "maxItems": 12, "items": {
-      "type": "object", "additionalProperties": false, "required": ["criterionId", "criterionHash", "sourcePath", "exportName", "maxAttempts", "checks"],
-      "properties": {
-        "criterionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9:._-]{0,79}$" }, "criterionHash": { "$ref": "#/$defs/hash" },
-        "selection": { "$ref": "#/$defs/selection" },
-        "sourcePath": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000]+$" },
-        "modulePaths": { "type": "array", "maxItems": 31, "uniqueItems": true, "items": {
-          "type": "string", "minLength": 1, "maxLength": 1024,
-          "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000-\u001f\u007f:%?#]+$"
-        } },
-        "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 8 },
-        "checks": { "type": "array", "minItems": 1, "maxItems": 256, "items": {
-          "type": "object", "additionalProperties": false, "required": ["id", "cases"],
-          "properties": { "id": { "$ref": "#/$defs/id" }, "cases": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/case" } } }
-        } }
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterionId","criterionHash","sourcePath","exportName","maxAttempts","checks"],
+        "properties": {
+          "criterionId": {"type": "string","pattern": "^[a-z0-9][a-z0-9:._-]{0,79}$"},
+          "criterionHash": {"$ref": "#/$defs/hash"},
+          "selection": {"$ref": "#/$defs/selection"},
+          "sourcePath": {"type": "string","minLength": 1,"pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000]+$"},
+          "modulePaths": {
+            "type": "array",
+            "maxItems": 31,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000-\u001f:%?#]+$"
+            }
+          },
+          "exportName": {"type": "string","pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},
+          "maxAttempts": {"type": "integer","minimum": 1,"maximum": 8},
+          "checks": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id","cases"],
+              "properties": {"id": {"$ref": "#/$defs/id"},"cases": {"type": "array","minItems": 1,"maxItems": 256,"items": {"$ref": "#/$defs/case"}}}
+            }
+          }
+        }
       }
-    } }
+    },
+    "typedBytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type","value"],
+      "properties": {
+        "type": {"enum": ["uint8array","buffer","arraybuffer","dataview"]},
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["backingBase64","byteOffset","byteLength"],
+          "properties": {
+            "backingBase64": {"type": "string","pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$","maxLength": 5464},
+            "byteOffset": {"type": "integer","minimum": 0,"maximum": 4096},
+            "byteLength": {"type": "integer","minimum": 0,"maximum": 4096}
+          }
+        }
+      }
+    },
+    "inputValueV2": {
+      "oneOf": [
+        {"$ref": "#/$defs/primitive"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "callback"},"value": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "date"},"value": {"$ref": "#/$defs/numeric"}}
+        },
+        {"$ref": "#/$defs/typedBytes"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "array"},"value": {"type": "array","maxItems": 64,"items": {"$ref": "#/$defs/inputValueV2"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {
+            "type": {"const": "record"},
+            "value": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key","value"],
+                "properties": {"key": {"type": "string","maxLength": 4096},"value": {"$ref": "#/$defs/inputValueV2"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "dataValueV2": {
+      "oneOf": [
+        {"$ref": "#/$defs/primitive"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "date"},"value": {"$ref": "#/$defs/numeric"}}
+        },
+        {"$ref": "#/$defs/typedBytes"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "array"},"value": {"type": "array","maxItems": 64,"items": {"$ref": "#/$defs/dataValueV2"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {
+            "type": {"const": "record"},
+            "value": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key","value"],
+                "properties": {"key": {"type": "string","maxLength": 4096},"value": {"$ref": "#/$defs/dataValueV2"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "outputValueV2": {
+      "oneOf": [
+        {"$ref": "#/$defs/primitive"},
+        {"$ref": "#/$defs/typedBytes"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "array"},"value": {"type": "array","maxItems": 64,"items": {"$ref": "#/$defs/outputValueV2"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {
+            "type": {"const": "record"},
+            "value": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key","value"],
+                "properties": {"key": {"type": "string","maxLength": 4096},"value": {"$ref": "#/$defs/outputValueV2"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "callbackInputV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","mode","repeatLast","steps"],
+      "properties": {
+        "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+        "mode": {"enum": ["sync","promise"]},
+        "repeatLast": {"type": "boolean"},
+        "settleAfterJobs": {"type": "integer","minimum": 1,"maximum": 32},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["outcome","value"],
+                "properties": {"outcome": {"const": "return"},"value": {"$ref": "#/$defs/dataValueV2"}}
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["outcome","error"],
+                "properties": {"outcome": {"const": "throw"},"error": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}}
+              }
+            ]
+          }
+        }
+      },
+      "allOf": [{"if": {"required": ["settleAfterJobs"]},"then": {"properties": {"mode": {"const": "promise"}}}}]
+    },
+    "errorInputV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","errorClass","message"],
+      "properties": {
+        "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+        "errorClass": {"enum": ["TypeError","RangeError","SyntaxError","ReferenceError","EvalError","URIError","Error"]},
+        "message": {"type": "string","maxLength": 4096},
+        "properties": {"allOf": [{"$ref": "#/$defs/dataValueV2"},{"properties": {"type": {"const": "record"}}}]}
+      }
+    },
+    "errorObservationV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity","properties"],
+      "properties": {
+        "identity": {"oneOf": [{"type": "null"},{"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}]},
+        "properties": {"allOf": [{"$ref": "#/$defs/inputValueV2"},{"properties": {"type": {"const": "record"}}}]}
+      }
+    },
+    "referenceSelectorV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root","path"],
+      "properties": {
+        "root": {"enum": ["argument","return","error"]},
+        "index": {"type": "integer","minimum": 0,"maximum": 15},
+        "path": {"type": "array","maxItems": 8,"items": {"type": "string","maxLength": 128}},
+        "projection": {"const": "backing-store"}
+      },
+      "oneOf": [
+        {"properties": {"root": {"const": "argument"}},"required": ["index"]},
+        {"properties": {"root": {"enum": ["return","error"]}},"not": {"required": ["index"]}}
+      ]
+    },
+    "referencePairsV2": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","left","right"],
+        "properties": {
+          "id": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},
+          "left": {"$ref": "#/$defs/referenceSelectorV2"},
+          "right": {"$ref": "#/$defs/referenceSelectorV2"}
+        }
+      }
+    },
+    "argumentV2": {
+      "oneOf": [
+        {"$ref": "#/$defs/inputValueV2"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value"],
+          "properties": {"type": {"const": "result"},"value": {"$ref": "#/$defs/id"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type","value","key"],
+          "properties": {"type": {"const": "error-property"},"value": {"$ref": "#/$defs/id"},"key": {"type": "string","maxLength": 128}}
+        }
+      ]
+    },
+    "invocation": {
+      "oneOf": [
+        {"type": "object","additionalProperties": false,"required": ["kind"],"properties": {"kind": {"const": "call"}}},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind","receiverId"],
+          "properties": {"kind": {"const": "construct"},"receiverId": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind","receiverId","method"],
+          "properties": {"kind": {"const": "method"},"receiverId": {"type": "string","pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$"},"method": {"enum": ["set","get"]}}
+        }
+      ]
+    },
+    "expectedV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome"],
+      "properties": {
+        "outcome": {"enum": ["return","throw","constructed"]},
+        "value": {"$ref": "#/$defs/outputValueV2"},
+        "errorClass": {"enum": ["TypeError","RangeError","SyntaxError","ReferenceError","EvalError","URIError","Error","non-error"]},
+        "clockReads": {"type": "integer","minimum": 0,"maximum": 9007199254740991},
+        "callbackTrace": {"$ref": "#/$defs/callbackTrace"},
+        "returnIdentity": {"type": "array","maxItems": 16,"uniqueItems": true,"items": {"type": "integer","minimum": 0,"maximum": 15}},
+        "errorObservation": {"$ref": "#/$defs/errorObservationV2"},
+        "referenceIdentity": {"$ref": "#/$defs/referenceIdentity"},
+        "argsAfter": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/inputValueV2"}},
+        "dateArgsAfter": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["index","value"],
+            "properties": {"index": {"type": "integer","minimum": 0,"maximum": 15},"value": {"$ref": "#/$defs/numeric"}}
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {"outcome": {"const": "return"}},
+          "required": ["value"],
+          "not": {"anyOf": [{"required": ["errorClass"]},{"required": ["errorObservation"]}]}
+        },
+        {
+          "properties": {"outcome": {"const": "throw"}},
+          "required": ["errorClass"],
+          "not": {"anyOf": [{"required": ["value"]},{"required": ["returnIdentity"]}]}
+        },
+        {
+          "properties": {"outcome": {"const": "constructed"}},
+          "not": {"anyOf": [{"required": ["value"]},{"required": ["errorClass"]},{"required": ["returnIdentity"]},{"required": ["errorObservation"]}]}
+        }
+      ]
+    },
+    "caseV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","args","invocation","expected"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "args": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/argumentV2"}},
+        "sequence": {"$ref": "#/$defs/id"},
+        "reset": {"const": true},
+        "observeArgs": {"type": "boolean"},
+        "awaitResult": {"const": true},
+        "observeIdentity": {"const": true},
+        "observeError": {"const": true},
+        "callbacks": {"type": "array","minItems": 1,"maxItems": 8,"items": {"$ref": "#/$defs/callbackInputV2"}},
+        "errors": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "#/$defs/errorInputV2"}},
+        "referencePairs": {"$ref": "#/$defs/referencePairsV2"},
+        "exportName": {"type": "string","pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},
+        "clock": {"type": "integer","minimum": -8640000000000000,"maximum": 8640000000000000},
+        "expected": {"$ref": "#/$defs/expectedV2"},
+        "invocation": {"$ref": "#/$defs/invocation"}
+      },
+      "allOf": [
+        {"if": {"required": ["referencePairs"]},"then": {"properties": {"expected": {"required": ["referenceIdentity"]}}}},
+        {"if": {"required": ["callbacks"]},"then": {"properties": {"expected": {"required": ["callbackTrace"]}}}},
+        {
+          "if": {"required": ["observeIdentity"],"properties": {"expected": {"properties": {"outcome": {"const": "return"}}}}},
+          "then": {"properties": {"expected": {"required": ["returnIdentity"]}}}
+        },
+        {
+          "if": {"required": ["observeError"],"properties": {"expected": {"properties": {"outcome": {"const": "throw"}}}}},
+          "then": {"properties": {"expected": {"required": ["errorObservation"]}}}
+        }
+      ]
+    },
+    "profileV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","digest","workerVersion"],
+      "properties": {"id": {"const": "node-workload-api-v1"},"digest": {"$ref": "#/$defs/hash"},"workerVersion": {"const": "quickjs-node-profile-worker-v1"}}
+    },
+    "backendV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageId","dockerSocket","timeoutMs","profile"],
+      "properties": {
+        "imageId": {"type": "string","pattern": "^sha256:[a-f0-9]{64}$"},
+        "dockerSocket": {"type": "string","pattern": "^/[^\u0000]*$"},
+        "timeoutMs": {"type": "integer","minimum": 25,"maximum": 30000},
+        "profile": {"$ref": "#/$defs/profileV2"}
+      }
+    },
+    "codeContractV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route","criterionId","criterionHash","sourcePath","exportName","maxAttempts","checks"],
+      "properties": {
+        "criterionId": {"type": "string","pattern": "^[a-z0-9][a-z0-9:._-]{0,79}$"},
+        "criterionHash": {"$ref": "#/$defs/hash"},
+        "selection": {"$ref": "#/$defs/selection"},
+        "sourcePath": {"type": "string","minLength": 1,"pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000]+$"},
+        "modulePaths": {
+          "type": "array",
+          "maxItems": 31,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000-\u001f:%?#]+$"
+          }
+        },
+        "exportName": {"type": "string","pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},
+        "maxAttempts": {"type": "integer","minimum": 1,"maximum": 8},
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id","cases"],
+            "properties": {"id": {"$ref": "#/$defs/id"},"cases": {"type": "array","minItems": 1,"maxItems": 256,"items": {"$ref": "#/$defs/caseV2"}}}
+          }
+        },
+        "route": {"const": "code"}
+      }
+    },
+    "compositePlanContextV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","contractText","declarationsText","identity","materialBindings"],
+      "properties": {
+        "version": {"const": "composite-plan-context-v1"},
+        "contractText": {"type": "string","minLength": 1,"maxLength": 1048576},
+        "declarationsText": {"type": "string","minLength": 1,"maxLength": 1048576},
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["suiteDigest","configDigest","armDigest"],
+          "properties": {
+            "suiteDigest": {"$ref": "#/$defs/hash"},
+            "configDigest": {"$ref": "#/$defs/hash"},
+            "armDigest": {"$ref": "#/$defs/hash"}
+          }
+        },
+        "materialBindings": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id","mode","relativePath","sha256"],
+            "properties": {
+              "id": {"type": "string","pattern": "^[a-z][a-z0-9._-]{0,63}$"},
+              "mode": {"enum": ["frozen","current","protected"]},
+              "relativePath": {"type": "string","minLength": 1,"maxLength": 1024,
+                "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000-\u001f:%?#]+$"},
+              "sha256": {"oneOf": [{"$ref": "#/$defs/hash"},{"type": "null"}]}
+            },
+            "allOf": [
+              {"if": {"properties": {"mode": {"const": "frozen"}}},"then": {"properties": {"sha256": {"$ref": "#/$defs/hash"}}}},
+              {"if": {"properties": {"mode": {"enum": ["current","protected"]}}},"then": {"properties": {"sha256": {"type": "null"}}}}
+            ]
+          }
+        }
+      }
+    },
+    "compositeContractV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route","criterionId","criterionHash","maxAttempts","planContext"],
+      "properties": {
+        "route": {"const": "composite"},
+        "criterionId": {"type": "string","pattern": "^[a-z][a-z0-9._-]{0,63}$"},
+        "criterionHash": {"$ref": "#/$defs/hash"},
+        "maxAttempts": {"type": "integer","minimum": 1,"maximum": 8},
+        "planContext": {"$ref": "#/$defs/compositePlanContextV1"}
+      }
+    },
+    "contractsV2": {"type": "array","minItems": 1,"maxItems": 12,"items": {"oneOf": [
+      {"$ref": "#/$defs/codeContractV2"},
+      {"$ref": "#/$defs/compositeContractV2"}
+    ]}},
+    "planV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion","operatorRequestDigest","backend","contracts"],
+      "properties": {
+        "schemaVersion": {"const": 3},
+        "operatorRequestDigest": {"type": "string","pattern": "^operator-request-v1:[a-f0-9]{64}$"},
+        "backend": {"$ref": "#/$defs/backendV2"},
+        "contracts": {"$ref": "#/$defs/contractsV2"}
+      }
+    }
   }
 }

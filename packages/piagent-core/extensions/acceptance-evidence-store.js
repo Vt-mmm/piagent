@@ -4,8 +4,11 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export const EVIDENCE_STORE_VERSION = "authenticated-contract-events-v1";
+export const FACT_EVIDENCE_SCOPE_VERSION = "authenticated-contract-fact-scope-v2";
+export const ROOT_AGGREGATE_FACT_ID = "root-aggregate";
 const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
+const FACT_ID = /^[a-z][a-z0-9._-]{0,63}$/;
 const BINDINGS = ["criterionHash", "snapshotDigest", "verifierDigest", "projectVerificationDigest", "planDigest", "backendDigest"];
 const MAX_EVIDENCE_BYTES = 2 * 1024 * 1024;
 const hostStores = new WeakSet();
@@ -28,6 +31,14 @@ function exactRecord(value, fields) {
 }
 
 function identity(scope) {
+  const version = scope && typeof scope === "object" ? Object.getOwnPropertyDescriptor(scope, "version")?.value : undefined;
+  if (version === FACT_EVIDENCE_SCOPE_VERSION) {
+    exactRecord(scope, ["version", "taskRunId", "criterionId", "factId"]);
+    if (typeof scope.taskRunId !== "string" || !ID.test(scope.taskRunId)
+      || typeof scope.criterionId !== "string" || !ID.test(scope.criterionId)
+      || typeof scope.factId !== "string" || !FACT_ID.test(scope.factId)) throw new TypeError("Invalid fact evidence scope");
+    return { version, taskRunId: scope.taskRunId, criterionId: scope.criterionId, factId: scope.factId };
+  }
   exactRecord(scope, ["taskRunId", "criterionId"]);
   if (typeof scope.taskRunId !== "string" || !ID.test(scope.taskRunId)
     || typeof scope.criterionId !== "string" || !ID.test(scope.criterionId)) throw new TypeError("Invalid evidence scope");

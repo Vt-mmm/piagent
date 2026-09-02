@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { CASE_THREAD_CPU_MICROS, createExecutionBudget } from "../packages/piagent-core/extensions/acceptance-executor/budget.mjs";
 import { executionDiagnostics } from "../packages/piagent-core/extensions/acceptance-execution-diagnostics.js";
+import { runIndependentContract } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 
 function fixture(deadline = 5000) {
   const state = { now: 0, user: 0, system: 0, threadUser: 0, threadSystem: 0 };
@@ -11,6 +13,21 @@ function fixture(deadline = 5000) {
   budget.beginCase();
   return { state, budget };
 }
+
+test("trusted pre-case bootstrap CPU stays outside the fixed candidate allowance while request wall remains active", () => {
+  const state = { now: 1000, user: 900000, system: 0, threadUser: 800000, threadSystem: 0 };
+  const budget = createExecutionBudget(5000, { now: () => state.now,
+    cpu: () => ({ user: state.user, system: state.system }),
+    threadCpu: () => ({ user: state.threadUser, system: state.threadSystem }) });
+  state.now = 2000; state.user += 900000; state.threadUser += 800000;
+  assert.equal(budget.poll(), null);
+  assert.equal(budget.diagnostics(), null);
+  budget.beginCase();
+  state.now = 2200; state.user += CASE_THREAD_CPU_MICROS; state.threadUser += CASE_THREAD_CPU_MICROS;
+  assert.equal(budget.poll(), "guest-cpu-budget");
+  budget.beginCase(); state.now = 5000;
+  assert.equal(budget.poll(), "guest-wall-deadline");
+});
 
 test("scheduler waiting is not charged as case CPU while the request wall deadline remains fixed", () => {
   const { state, budget } = fixture();
@@ -120,5 +137,24 @@ test("real isolated resource probes distinguish idle waiting, CPU exhaustion, an
       assert.equal(row.observation.outcome, "return", JSON.stringify(row));
       assert.deepEqual(row.observation.value, { type: "number", value: row.name === "correct-sum" ? 5 : -1 });
     }
+  }
+});
+
+test("Node decoder and live-timer caps are sticky resource errors even when candidate code catches them", {
+  skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 90000
+}, async () => {
+  const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID, dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
+  for (const [reason, source] of [
+    ["node-decoder-limit", "export function run(){try{for(let i=0;i<17;i++)new TextDecoder()}catch{}return true}"],
+    ["node-timer-limit", "export function run(){try{for(let i=0;i<17;i++)setTimeout(()=>{},1)}catch{}return true}"]
+  ]) {
+    const planText = JSON.stringify({ schemaVersion: 2, profile: expectedNodeProfile(), source, exportName: "run", checks: [{ id: "resource", cases: [{
+      id: reason, invocation: { kind: "call" }, args: [], expected: { outcome: "return", value: { type: "boolean", value: true } }
+    }] }] });
+    const result = await runIndependentContract({ planText, imageId, dockerSocket, timeoutMs: 30000 });
+    assert.equal(result.verdict, "error", JSON.stringify(result));
+    assert.equal(result.execution.observation.cases[0].reason, reason);
+    assert.equal(result.execution.cleanupConfirmed, true);
+    assert.equal(result.counterexamples.length, 0);
   }
 });

@@ -3,7 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { isolatedContainerArguments, isolatedContainerConfigurationMatches, runIsolatedContract } from "../packages/piagent-core/extensions/acceptance-isolated-executor.js";
-import { WORKER_VERSION, parseRequest, parseResponse } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
+import { NODE_WORKER_VERSION, WORKER_VERSION, parseRequest, parseResponse } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
+import { NODE_PROFILE_RUNTIME_IDENTITY, expectedNodeProfile, nodeProfileDigest } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
 import { cancelOnContainerStart, createCancellationBarrier, dockerJson } from "./helpers/isolated-executor-barriers.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
@@ -12,6 +13,9 @@ const integration = { skip: !imageId || !dockerSocket, timeout: 60000 };
 const value = (type, payload) => payload === undefined ? { type } : { type, value: payload };
 const number = (payload) => value("number", payload);
 const sourceRequest = (source, cases = [{ id: "one", args: [] }], exportName = "run") => JSON.stringify({ schemaVersion: 1, source, exportName, cases });
+const nodeSourceRequest = (source, cases = [{ id: "one", args: [], invocation: { kind: "call" } }], exportName = "run") => JSON.stringify({
+  schemaVersion: 2, profile: expectedNodeProfile(), source, exportName, cases
+});
 const run = (source, cases, options = {}) => runIsolatedContract({ requestText: sourceRequest(source, cases), imageId, dockerSocket, ...options });
 
 test("isolated request protocol excludes answers, ambient paths, coercions, and unbounded inputs", () => {
@@ -72,6 +76,71 @@ test("worker responses require exact request, complete ordered cases, and typed 
   ]) assert.throws(() => parseResponse(JSON.stringify(mutation), request, digest));
 });
 
+test("Node protocol v2 binds the pinned profile, typed backing stores, and receiver history before execution", () => {
+  const typed = { type: "uint8array", value: { backingBase64: "WEFCWQ==", byteOffset: 1, byteLength: 2 } };
+  const good = JSON.parse(nodeSourceRequest("export const run=x=>x", [{ id: "one", args: [typed], invocation: { kind: "call" } }]));
+  assert.equal(parseRequest(JSON.stringify(good)).profile.digest, expectedNodeProfile().digest);
+  for (const mutate of [
+    value => { value.profile.digest = "0".repeat(64); }, value => { delete value.cases[0].invocation; },
+    value => { value.cases[0].args[0].value.backingBase64 = "WEE"; }, value => { value.cases[0].args[0].value.backingBase64 = "WEE==="; },
+    value => { value.cases[0].args[0].value.byteOffset = 4; }, value => { value.cases[0].args[0].value.extra = true; },
+    value => { value.cases[0].args[0].type = "arraybuffer"; }, value => { value.cases[0].invocation = { kind: "method", receiverId: "cache", method: "get" }; }
+  ]) { const value = structuredClone(good); mutate(value); assert.throws(() => parseRequest(JSON.stringify(value))); }
+  const history = JSON.parse(nodeSourceRequest("export class C{set(){}get(){}}", [
+    { id: "new", sequence: "s", args: [], invocation: { kind: "construct", receiverId: "cache" } },
+    { id: "get", sequence: "s", args: [], invocation: { kind: "method", receiverId: "cache", method: "get" } }
+  ], "C"));
+  assert.equal(parseRequest(JSON.stringify(history)).cases.length, 2);
+  history.cases[1].reset = true;
+  assert.throws(() => parseRequest(JSON.stringify(history)));
+  const legacy = JSON.parse(sourceRequest("export const run=x=>x", [{ id: "one", args: [typed] }]));
+  assert.throws(() => parseRequest(JSON.stringify(legacy)));
+});
+
+test("Node profile digest changes with every pinned runtime and dependency identity", () => {
+  const original = nodeProfileDigest();
+  assert.equal(expectedNodeProfile().digest, original);
+  for (const [field, changed] of [
+    ["baseImageId", `sha256:${"0".repeat(64)}`], ["nodeBinarySha256", "0".repeat(64)],
+    ["versionsSha256", "0".repeat(64)], ["buildConfigSha256", "0".repeat(64)],
+    ["dependencyClosureSha256", "0".repeat(64)], ["dependencyFiles", NODE_PROFILE_RUNTIME_IDENTITY.dependencyFiles + 1]
+  ]) assert.notEqual(nodeProfileDigest({ ...NODE_PROFILE_RUNTIME_IDENTITY, [field]: changed }), original, field);
+});
+
+test("Node response v2 requires exact traces, counters, profile binding, order, and final quiescence", () => {
+  const text = nodeSourceRequest("export const run=()=>true"), request = parseRequest(text), requestDigest = createHash("sha256").update(text).digest("hex");
+  const counters = { calls: 0, rawBytes: 0, textBytes: 0, decodersCreated: 0, timersScheduled: 0, denials: 0 };
+  const good = { schemaVersion: 2, workerVersion: NODE_WORKER_VERSION, profileDigest: request.profile.digest, requestDigest, status: "completed",
+    cases: [{ id: "one", outcome: "return", value: value("boolean", true), dateArgsAfter: [], clockReads: 0,
+      invocationTrace: { kind: "call", exportName: "run", outcome: "return" }, services: counters }],
+    services: counters, quiescence: { pendingTimers: 0, liveDecoders: 0, receivers: 0 } };
+  assert.deepEqual(parseResponse(JSON.stringify(good), request, requestDigest), good);
+  for (const mutate of [value => { value.profileDigest = "0".repeat(64); }, value => { delete value.cases[0].invocationTrace; },
+    value => { value.cases[0].invocationTrace.exportName = "other"; }, value => { value.services = { ...value.services, calls: 1 }; },
+    value => { value.quiescence.liveDecoders = 1; }, value => { value.workerVersion = WORKER_VERSION; }, value => { value.cases = []; }]) {
+    const invalid = structuredClone(good); mutate(invalid); assert.throws(() => parseResponse(JSON.stringify(invalid), request, requestDigest));
+  }
+});
+
+test("Node response v2 applies one 64 KiB typed-output budget across every case", () => {
+  const typed = { type: "uint8array", value: { backingBase64: Buffer.alloc(4096).toString("base64"), byteOffset: 0, byteLength: 4096 } };
+  const counters = { calls: 0, rawBytes: 0, textBytes: 0, decodersCreated: 0, timersScheduled: 0, denials: 0 };
+  const fixture = count => {
+    const cases = Array.from({ length: count }, (_, index) => ({ id: `typed-${index}`, args: [], invocation: { kind: "call" } }));
+    const text = nodeSourceRequest("export const run=()=>new Uint8Array(4096)", cases), request = parseRequest(text);
+    const requestDigest = createHash("sha256").update(text).digest("hex");
+    const response = { schemaVersion: 2, workerVersion: NODE_WORKER_VERSION, profileDigest: request.profile.digest, requestDigest, status: "completed",
+      cases: cases.map(item => ({ id: item.id, outcome: "return", value: typed, dateArgsAfter: [], clockReads: 0,
+        invocationTrace: { kind: "call", exportName: "run", outcome: "return" }, services: counters })),
+      services: counters, quiescence: { pendingTimers: 0, liveDecoders: 0, receivers: 0 } };
+    return { text: JSON.stringify(response), request, requestDigest };
+  };
+  const atLimit = fixture(16);
+  assert.equal(parseResponse(atLimit.text, atLimit.request, atLimit.requestDigest).cases.length, 16);
+  const over = fixture(17);
+  assert.throws(() => parseResponse(over.text, over.request, over.requestDigest), /Aggregate typed output budget exceeded/);
+});
+
 test("unavailable backend never falls back to host evaluation", async () => {
   const result = await runIsolatedContract({ requestText: sourceRequest("process.exit(42)"),
     imageId: `sha256:${"a".repeat(64)}`, dockerSocket: "/nonexistent/piagent-contract-test.sock" });
@@ -82,6 +151,27 @@ test("unavailable backend never falls back to host evaluation", async () => {
     await assert.rejects(runIsolatedContract({ requestText: sourceRequest("export const run=()=>true"), imageId: `sha256:${"a".repeat(64)}`,
       dockerSocket: "/nonexistent/piagent-contract-test.sock", executionRunId }), /Invalid isolated/);
   }
+});
+
+test("a cancelled Node-profile request never creates a worker and retains profile binding", integration, async () => {
+  const profile = expectedNodeProfile(), requestText = nodeSourceRequest("export const run=()=>true");
+  const result = await runIsolatedContract({ requestText, profile, imageId, dockerSocket, signal: AbortSignal.abort() });
+  assert.equal(result.status, "cancelled");
+  assert.equal(result.reason, "cancelled-before-create");
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.profileDigest, profile.digest);
+  assert.equal(Object.hasOwn(result, "observation"), false);
+});
+
+test("real Node worker stops the request when aggregate returned typed data exceeds 64 KiB", integration, async () => {
+  const cases = Array.from({ length: 17 }, (_, index) => ({ id: `typed-${index}`, sequence: "one-session", args: [], invocation: { kind: "call" } }));
+  const requestText = nodeSourceRequest("export const run=()=>new Uint8Array(4096)", cases);
+  const result = await runIsolatedContract({ requestText, profile: expectedNodeProfile(), imageId, dockerSocket, timeoutMs: 30000 });
+  assert.equal(result.status, "error", JSON.stringify(result));
+  assert.equal(result.cleanupConfirmed, true);
+  assert.deepEqual(result.observation.cases.slice(0, 16).map(item => item.outcome), Array(16).fill("return"));
+  assert.equal(result.observation.cases[16].outcome, "error");
+  assert.equal(result.observation.cases[16].reason, "guest-observation-failed");
 });
 
 test("versioned timeout causes cannot hide error cases or masquerade as a completed worker", () => {

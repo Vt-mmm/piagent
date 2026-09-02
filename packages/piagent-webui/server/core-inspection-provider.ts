@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
 import { ReadModelNotFound, type SourceView, type StreamEvent, type WebUiReadModelProvider } from "./read-model-provider.ts";
 import { projectTranscript } from "./transcript-projection.ts";
+import { readTerminalDeliveryReceipt, terminalDeliverySessionEntries } from "./terminal-delivery-receipt.ts";
 
 const CORE_ROOT = "../../piagent-core";
 const SOURCE_AUTHORITY_ALIGNED = Symbol("piagent-source-authority-aligned");
@@ -70,6 +71,7 @@ export type CoreInspectionInput = {
   activityEvents?: () => unknown[];
   currentActivity?: () => unknown[];
   sessionEntries?: () => unknown[];
+  sessionFile?: () => string | undefined;
   protectedPaths?: () => string[];
   // Extra directories the operator granted through the profile. The document
   // workspace lists them beside the project; without them it shows the project
@@ -285,6 +287,8 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
         indexRevision: snapshot.revision.indexRevision, approvalRevision: snapshot.revision.approvalRevision,
         sessionOptionRevision: snapshot.revision.sessionOptionRevision, queueRevision: snapshot.revision.queueRevision },
       eventCursor: snapshot.revision.eventCursor, entries: this.#input.sessionEntries?.() ?? [], beforeCursor, limit,
+      terminalDeliveryReceipt: readTerminalDeliveryReceipt(this.#input.cwd, activeTask),
+      terminalDeliveryEntries: terminalDeliverySessionEntries(this.#input.sessionFile?.(), this.#input.sessionId),
       generatedAt: snapshot.generatedAt, taskOutcome: typeof activeTask?.trace?.outcome === "string" ? activeTask.trace.outcome : null });
   }
   async queue(): Promise<unknown> {
