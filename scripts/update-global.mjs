@@ -402,6 +402,12 @@ function main() {
   const manifest = readJson(path.join(platformRoot, "package.json"));
   if (!manifest?.version) fail(`cannot read the helper package at ${platformRoot}`);
   const currentHelper = manifest.version;
+  if (!options.check && !options.dryRun && !runningFromGlobalInstall()) {
+    fail(`this command updates the npm-global helper, but it is running from ${platformRoot}.\n`
+      + "From a checkout, update with git and install from it:\n"
+      + `  git -C ${platformRoot} pull\n`
+      + `  bash ${path.join(platformRoot, "scripts/install-global.sh")} --local`);
+  }
   const currentHost = installedHostVersion();
 
   const targetHelper = options.version ?? npmView(HELPER_PACKAGE, "version");
@@ -437,13 +443,6 @@ function main() {
   if (!helperNeedsChange && !hostNeedsChange && !options.package && !options.project) {
     console.log("\nNothing to do.");
     return;
-  }
-
-  if (!options.dryRun && !runningFromGlobalInstall()) {
-    fail(`this command updates the npm-global helper, but it is running from ${platformRoot}.\n`
-      + "From a checkout, update with git and install from it:\n"
-      + `  git -C ${platformRoot} pull\n`
-      + `  bash ${path.join(platformRoot, "scripts/install-global.sh")} --local`);
   }
 
   let activePlatformRoot = platformRoot;
