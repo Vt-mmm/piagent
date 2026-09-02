@@ -43,16 +43,20 @@ function inspectForbiddenValue(value, candidates, hits) {
   }
 }
 
-export function resolveCodexJourneyScopedBrokers(scopedBroker, turns) {
-  if (!scopedBroker) return turns.map(() => undefined);
-  let brokers;
-  if (Array.isArray(scopedBroker)) brokers = [...scopedBroker];
+function materializeCodexJourneyScopedBrokers(scopedBroker, turns, brokers = []) {
+  if (Array.isArray(scopedBroker)) brokers.push(...scopedBroker);
   else if (typeof scopedBroker === "function") {
-    brokers = turns.map((turn, index) => scopedBroker(Object.freeze({ turnIndex: index + 1, turnId: turn.id })));
+    for (const [index, turn] of turns.entries()) {
+      brokers.push(scopedBroker(Object.freeze({ turnIndex: index + 1, turnId: turn.id })));
+    }
   } else {
+    brokers.push(scopedBroker);
     if (turns.length !== 1) fail("A multi-turn Codex journey requires one sealed scoped broker config per process");
-    brokers = [scopedBroker];
   }
+  return brokers;
+}
+
+function normalizeCodexJourneyScopedBrokers(brokers, turns) {
   if (brokers.length !== turns.length) fail("Codex journey scoped broker config count does not match its turns");
   const paths = new Set(), owned = [];
   for (const broker of brokers) {
@@ -72,6 +76,35 @@ export function resolveCodexJourneyScopedBrokers(scopedBroker, turns) {
     owned.push(value);
   }
   return Object.freeze(owned);
+}
+
+export function resolveCodexJourneyScopedBrokers(scopedBroker, turns) {
+  // Preserve the absence sentinel across callers that prepare journey custody
+  // before dispatch. An array of undefined entries is truthy and a second
+  // preparation pass would misread each entry as a malformed broker config.
+  if (scopedBroker == null) return null;
+  return normalizeCodexJourneyScopedBrokers(
+    materializeCodexJourneyScopedBrokers(scopedBroker, turns), turns);
+}
+
+async function disposeUnresolvedScopedBrokers(brokers) {
+  const failures = [];
+  for (const broker of new Set(brokers)) {
+    const dispose = typeof broker?.dispose === "function" ? () => broker.dispose()
+      : scopedBrokerDisposal.get(broker);
+    if (!dispose) continue;
+    try { await dispose(); }
+    catch (error) { failures.push(error); }
+  }
+  if (failures.length) throw new AggregateError(failures, "Codex unresolved scoped broker disposal failed");
+}
+
+async function failAfterUnresolvedDisposal(error, brokers) {
+  try { await disposeUnresolvedScopedBrokers(brokers); }
+  catch (cleanupError) {
+    throw new AggregateError([error, cleanupError], "Codex journey preflight and scoped broker disposal failed");
+  }
+  throw error;
 }
 
 export function controlledCodexEnvironment(codexRuntime, extra) {
@@ -105,15 +138,27 @@ export async function runCodexUserJourney({
   scopedBroker,
   environment,
   timeoutMs,
-  forbiddenOutputSubstrings
+  forbiddenOutputSubstrings,
+  onBeforeFirstProviderDispatch = () => {}
 }) {
   const scopedBrokerFactory = isCodexScopedBrokerTurnFactory(scopedBroker) ? scopedBroker : null;
-  requireScopedCodexHome(scopedBroker, codexRuntime, environment);
-  const scopedBrokers = scopedBrokerFactory ? null : resolveCodexJourneyScopedBrokers(scopedBroker, turns);
+  const existingScopedBrokers = scopedBrokerFactory || scopedBroker == null
+    ? [] : Array.isArray(scopedBroker) ? [...scopedBroker]
+      : typeof scopedBroker === "function" ? [] : [scopedBroker];
+  try { requireScopedCodexHome(scopedBroker, codexRuntime, environment); }
+  catch (error) { await failAfterUnresolvedDisposal(error, existingScopedBrokers); }
+  let scopedBrokers = null;
+  if (!scopedBrokerFactory && scopedBroker != null) {
+    const materialized = [];
+    try {
+      scopedBrokers = normalizeCodexJourneyScopedBrokers(
+        materializeCodexJourneyScopedBrokers(scopedBroker, turns, materialized), turns);
+    } catch (error) { await failAfterUnresolvedDisposal(error, materialized); }
+  }
   const started = Date.now(), deadline = started + timeoutMs;
   const outputs = [], errors = [], usages = [], diagnostics = [], turnReceipts = [];
   const forbiddenHits = new Set();
-  let threadId = null, code = 0, signal = null, timedOut = false;
+  let threadId = null, code = 0, signal = null, timedOut = false, providerDispatchAdmitted = false;
   const usedBrokerPaths = new Set(), pendingDisposals = new Set(scopedBrokers ?? []);
   const releaseScopedBroker = async broker => {
     if (!broker || !pendingDisposals.delete(broker)) return;
@@ -148,18 +193,24 @@ export async function runCodexUserJourney({
       let turnScopedBroker = scopedBrokers?.[index];
       if (scopedBrokerFactory) {
         let opened;
+        const materialized = [];
         try {
           opened = await scopedBrokerFactory.openTurn(Object.freeze({ turnIndex: index + 1,
             turnId: turn.id, inputText: turn.message, threadId, workspace }));
-          [turnScopedBroker] = resolveCodexJourneyScopedBrokers(opened, [turn]);
+          [turnScopedBroker] = normalizeCodexJourneyScopedBrokers(
+            materializeCodexJourneyScopedBrokers(opened, [turn], materialized), [turn]);
           pendingDisposals.add(turnScopedBroker);
           if (usedBrokerPaths.has(turnScopedBroker.brokerConfigPath)) {
             fail("Codex journey cannot reuse scoped broker custody across processes");
           }
           usedBrokerPaths.add(turnScopedBroker.brokerConfigPath);
         } catch (error) {
-          if (turnScopedBroker) await releaseScopedBroker(turnScopedBroker);
-          else if (typeof opened?.dispose === "function") await opened.dispose();
+          if (!turnScopedBroker) await failAfterUnresolvedDisposal(error, materialized);
+          try { await releaseScopedBroker(turnScopedBroker); }
+          catch (cleanupError) {
+            throw new AggregateError([error, cleanupError],
+              "Codex journey turn preflight and scoped broker disposal failed");
+          }
           throw error;
         }
         remainingMs = deadline - Date.now();
@@ -172,6 +223,12 @@ export async function runCodexUserJourney({
         const args = threadId
           ? codexExecResumeArgs({ threadId, options, disabledFeatures, scopedBroker: turnScopedBroker })
           : codexExecArgs({ workspace, options, disabledFeatures, persistent: true, scopedBroker: turnScopedBroker });
+        if (!providerDispatchAdmitted) {
+          // Broker opening and argv validation are provider-free. Cross the
+          // paid-attempt boundary only after both have succeeded.
+          onBeforeFirstProviderDispatch();
+          providerDispatchAdmitted = true;
+        }
         const result = await runCommand(codexCommand, args, {
           cwd: workspace,
           input: turn.message,

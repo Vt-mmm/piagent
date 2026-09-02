@@ -36,7 +36,7 @@ import { resolvedJourneyTurns } from "./benchmark-independent-verification.mjs";
 import { benchmarkVerificationFailure } from "../packages/piagent-core/benchmark/benchmark-independent-verification-observation.js";
 import { BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION, BENCHMARK_SCOPED_SESSION_FACTORY_VERSION,
   BENCHMARK_SCOPED_SESSION_REQUEST_VERSION, controlledCodexEnvironment, isCodexScopedBrokerTurnFactory,
-  requireScopedCodexHome, resolveCodexJourneyScopedBrokers,
+  requireScopedCodexHome,
   runCodexUserJourney } from "./benchmark-codex-journey.mjs";
 export { runCodexUserJourney } from "./benchmark-codex-journey.mjs";
 
@@ -511,9 +511,11 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     directory: surface === "piagent" ? path.join(privateDirectory(path.join(fs.realpathSync.native(runRoot), "independent-verification")), key) : undefined,
     approved: options.approveVerification });
   const graderPath = resolveSuiteEntry(suiteRoot, scenario.grader, "grader");
+  // The journey owns normalization and cleanup. Passing the session custody
+  // through unchanged avoids a second preparation pass and lets malformed
+  // later-turn custody release every already-materialized turn before admission.
   const codexJourneyScopedBrokers = journeyTurns && surface === "codex-cli"
-    ? isCodexScopedBrokerTurnFactory(effectiveCodexScopedBroker) ? effectiveCodexScopedBroker
-      : resolveCodexJourneyScopedBrokers(effectiveCodexScopedBroker, journeyTurns) : null;
+    ? effectiveCodexScopedBroker : null;
   let sessionId = crypto.randomUUID();
   const attemptId = crypto.randomUUID();
   const piArgs = ["--print", "--mode", "json", "--session-dir", sessions, "--session-id", sessionId, "--name", `BENCH ${scenario.id} ${surface} r${repeat}`, "--approve", "--no-skills", "--no-prompt-templates", "--no-extensions", "--no-context-files"];
@@ -550,6 +552,13 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   };
   const inflightPath = path.join(workspaceRoot, "inflight.json");
   const attemptIdentity = { attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt };
+  let providerDispatchAdmitted = false;
+  const admitProviderDispatch = () => {
+    if (providerDispatchAdmitted) return;
+    writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, ...attemptIdentity, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
+    onProviderAttemptStart(attemptIdentity);
+    providerDispatchAdmitted = true;
+  };
   if (providerWirePlan && (surface !== "piagent" || !journeyTurns)) fail("Provider-wire manifest requires the qualified Piagent WebUI route");
   if (providerWirePlan) validateBenchmarkWireManifest(providerWirePlan.manifest, { template: true,
     model: options.model, thinking: options.thinking, requestedTier: options.serviceTier });
@@ -559,9 +568,11 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     : surface === "piagent"
       ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, ...independent?.environment, ...wireInvocation?.environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
       : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path });
-  if (surface === "codex-cli") requireScopedCodexHome(effectiveCodexScopedBroker, codexRuntime, processEnvironment);
-  writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, ...attemptIdentity, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
-  onProviderAttemptStart(attemptIdentity);
+  if (surface === "codex-cli" && !journeyTurns) {
+    requireScopedCodexHome(effectiveCodexScopedBroker, codexRuntime, processEnvironment);
+  }
+  const deferredCodexJourneyAdmission = Boolean(journeyTurns && surface === "codex-cli");
+  if (!deferredCodexJourneyAdmission) admitProviderDispatch();
   let agent;
   let usageOverride;
   let journeyReceipt = null;
@@ -594,8 +605,10 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
         scopedBroker: codexJourneyScopedBrokers,
         environment: processEnvironment,
         timeoutMs: options.timeoutSeconds * 1_000,
-        forbiddenOutputSubstrings
+        forbiddenOutputSubstrings,
+        onBeforeFirstProviderDispatch: admitProviderDispatch
       });
+      if (!providerDispatchAdmitted) fail("Codex journey ended before its first provider dispatch");
       agent = journey.agent;
       usageOverride = journey.usage;
       codexDiagnostics = journey.diagnostics;

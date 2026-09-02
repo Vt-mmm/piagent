@@ -944,6 +944,39 @@ test("BROKER Codex journey uses distinct sealed broker custody across resume", a
   assert.equal(providerCalls, 0);
 });
 
+test("BROKER Codex static journey disposes earlier custody when later config preflight rejects", async () => {
+  const home = "/private/codex-home";
+  let providerCalls = 0, providerAdmissions = 0, firstDisposals = 0;
+  const scopedBrokers = [{ codexLaunch: { nodeCommand: "/runtime/node",
+    brokerScript: "/package/benchmark-scoped-tool-broker.mjs",
+    brokerConfigPath: "/private/run/turn-one/broker-config.json" },
+  async dispose() { firstDisposals++; } }, { codexLaunch: { nodeCommand: "/runtime/node",
+    brokerScript: "/package/benchmark-scoped-tool-broker.mjs", brokerConfigPath: "relative.json" } }];
+  await assert.rejects(runCodexUserJourney({ runCommand: async () => { providerCalls++; },
+    codexCommand: "/runtime/codex", workspace: "/workspace",
+    turns: [{ id: "one", message: "One" }, { id: "two", message: "Two" }],
+    options: { model: "openai-codex/gpt-5.6-luna", thinking: "medium", codexMode: "controlled" },
+    disabledFeatures: [], scopedBroker: scopedBrokers, codexRuntime: { mode: "controlled", home },
+    environment: { HOME: home, CODEX_HOME: home }, timeoutMs: 10_000, forbiddenOutputSubstrings: [],
+    onBeforeFirstProviderDispatch: () => { providerAdmissions++; } }), /canonical absolute/);
+  assert.equal(providerCalls, 0); assert.equal(providerAdmissions, 0); assert.equal(firstDisposals, 1);
+});
+
+test("BROKER Codex journey disposes custody when provider admission callback rejects", async () => {
+  const home = "/private/codex-home", scopedBroker = { codexLaunch: { nodeCommand: "/runtime/node",
+    brokerScript: "/package/benchmark-scoped-tool-broker.mjs",
+    brokerConfigPath: "/private/run/admission/broker-config.json" }, async dispose() { disposals++; } };
+  let providerCalls = 0, disposals = 0;
+  await assert.rejects(runCodexUserJourney({ runCommand: async () => { providerCalls++; },
+    codexCommand: "/runtime/codex", workspace: "/workspace", turns: [{ id: "one", message: "One" }],
+    options: { model: "openai-codex/gpt-5.6-luna", thinking: "medium", codexMode: "controlled" },
+    disabledFeatures: [], scopedBroker, codexRuntime: { mode: "controlled", home },
+    environment: { HOME: home, CODEX_HOME: home }, timeoutMs: 10_000, forbiddenOutputSubstrings: [],
+    onBeforeFirstProviderDispatch: () => { throw new Error("provider-admission-denied"); } }),
+  /provider-admission-denied/);
+  assert.equal(providerCalls, 0); assert.equal(disposals, 1);
+});
+
 test("BROKER Codex journey reconciles custody only after exact JSONL usage is complete", async () => {
   const launch = { nodeCommand: "/runtime/node", brokerScript: "/package/benchmark-scoped-tool-broker.mjs",
     brokerConfigPath: "/private/run/turn-one/broker-config.json" };
@@ -975,7 +1008,7 @@ test("BROKER Codex journey reconciles custody only after exact JSONL usage is co
     { version: "fixture-settlement-v1", authority: "none", reconciled: true });
 });
 
-test("BROKER Codex journey opens factory custody just in time and fails before provider on open error", async () => {
+test("BROKER Codex journey opens factory custody just in time and rejects malformed launch before provider admission", async () => {
   const home = "/private/codex-home", opens = [], calls = [], disposals = [];
   const factory = { version: "codex-scoped-broker-turn-factory-v1", authority: "none",
     openTurn(coordinate) {
@@ -1003,14 +1036,18 @@ test("BROKER Codex journey opens factory custody just in time and fails before p
   assert.deepEqual(opens.map(item => [item.turnIndex, item.turnId, item.threadId]),
     [[1, "one", null], [2, "two", "factory-native-thread"]]);
 
-  let providerCalls = 0;
+  let providerCalls = 0, providerAdmissions = 0, invalidDisposals = 0;
   await assert.rejects(runCodexUserJourney({ runCommand: async () => { providerCalls++; },
     codexCommand: "/runtime/codex", workspace: "/workspace", turns: [{ id: "one", message: "One" }],
     options: { model: "openai-codex/gpt-5.6-luna", thinking: "medium", codexMode: "controlled" },
-    disabledFeatures: [], scopedBroker: { ...factory, openTurn() { throw new Error("factory-denied"); } },
+    disabledFeatures: [], scopedBroker: { ...factory, openTurn() {
+      return [{ codexLaunch: { nodeCommand: "/runtime/node", brokerScript: "/package/benchmark-scoped-tool-broker.mjs",
+        brokerConfigPath: "relative.json" }, async dispose() { invalidDisposals++; } }];
+    } },
     codexRuntime: { mode: "controlled", home }, environment: { HOME: home, CODEX_HOME: home },
-    timeoutMs: 10_000, forbiddenOutputSubstrings: [] }), /factory-denied/);
-  assert.equal(providerCalls, 0);
+    timeoutMs: 10_000, forbiddenOutputSubstrings: [],
+    onBeforeFirstProviderDispatch: () => { providerAdmissions++; } }), /canonical absolute/);
+  assert.equal(providerCalls, 0); assert.equal(providerAdmissions, 0); assert.equal(invalidDisposals, 1);
 });
 
 test("BROKER Codex journey disposes just-in-time custody on command error, usage error and post-open timeout", async () => {

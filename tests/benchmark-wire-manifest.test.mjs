@@ -13,6 +13,12 @@ const wire = await import(process.env.PIAGENT_TEST_WIRE_MODULE_PATH
   ? pathToFileURL(process.env.PIAGENT_TEST_WIRE_MODULE_PATH).href
   : "../packages/piagent-core/benchmark/benchmark-provider-wire.js");
 const hash = value => crypto.createHash("sha256").update(value).digest("hex");
+const codexTurn = (threadId, inputTokens, outputTokens) => [
+  { type: "thread.started", thread_id: threadId },
+  { type: "item.completed", item: { id: `message-${inputTokens}`, type: "agent_message", text: "done" } },
+  { type: "turn.completed", usage: { input_tokens: inputTokens, cached_input_tokens: 2,
+    cache_write_input_tokens: 0, output_tokens: outputTokens, reasoning_output_tokens: 1 } }
+].map(JSON.stringify).join("\n") + "\n";
 const GRAPH = { intake: ["scout", "plan", "execute", "review", "handoff", "terminal"],
   scout: ["plan", "review", "handoff", "terminal"], plan: ["execute", "review", "handoff", "terminal"],
   execute: ["verify", "repair", "handoff", "terminal"], verify: ["repair", "review", "handoff", "terminal"],
@@ -213,6 +219,72 @@ function sessionFixture(t, onDispatch = () => {}) {
     piagentWebUiJourney: fake.piagentWebUiJourney };
   return { ...f, runRoot, options, plan };
 }
+
+function codexJourneySessionFixture(t, onCodexDispatch = () => {}) {
+  const f = fixture(t), runRoot = path.join(f.root, "codex-run"), codexHome = path.join(f.root, "codex-home"),
+    suiteRoot = path.join(f.root, "codex-suite");
+  for (const directory of [runRoot, codexHome, suiteRoot]) fs.mkdirSync(directory, { mode: 0o700 });
+  fs.mkdirSync(path.join(suiteRoot, "fixture"));
+  fs.writeFileSync(path.join(suiteRoot, "fixture/package.json"), '{"name":"codex-journey-fake"}\n');
+  fs.writeFileSync(path.join(suiteRoot, "first.md"), "First turn.\n");
+  fs.writeFileSync(path.join(suiteRoot, "second.md"), "Second turn.\n");
+  fs.writeFileSync(path.join(suiteRoot, "grade.mjs"), "// Fake evaluator seam, never executed.\n");
+  const offline = fakeProvider(), threadId = "019abcde-1234-7000-8000-0123456789ab";
+  let providerCalls = 0;
+  const runCommand = async (command, args, options) => {
+    if (command !== "offline-fake-codex") return offline.runCommand(command, args, options);
+    providerCalls++;
+    onCodexDispatch({ providerCalls, args, options });
+    const stdout = codexTurn(threadId, 10 + providerCalls, 2 + providerCalls);
+    options.onStdoutChunk(stdout, { observedAtSeconds: 0.01 });
+    return { code: 0, stdout, stderr: "", signal: null, timedOut: false, durationSeconds: 0.01,
+      forbiddenHits: [] };
+  };
+  const scenario = { id: "codex-journey-fake", kind: "safety-refusal", lifecycle: "cold-start",
+    fixture: "fixture", prompt: "first.md", grader: "grade.mjs", allowedChanges: [],
+    userJourney: { turns: [{ id: "first", prompt: "first.md" }, { id: "second", prompt: "second.md" }],
+      expectedTerminalSettlement: "completed" } };
+  return { ...f, runRoot, providerCalls: () => providerCalls, inflightPath: path.join(runRoot, "workspaces",
+    "01-codex-journey-fake-codex-cli", "inflight.json"), options: {
+    packageRoot: path.resolve(import.meta.dirname, ".."), runCommand,
+    resolveSuiteEntry: (root, file) => path.join(root, file), interrupted: () => false,
+    persistCompletedRecord: () => {}, suite: { id: "codex-journey-synthetic", profile: "node-typescript" },
+    suiteRoot, scenario, surface: "codex-cli", repeat: 1, orderIndex: 1, runId: "codex-journey-offline",
+    runRoot, options: { timeoutSeconds: 30, model: "openai-codex/gpt-5.6-luna", thinking: "medium",
+      codexMode: "controlled", piagentTreatment: "release-defaults" },
+    piCommand: "offline-fake-pi", codexCommand: "offline-fake-codex", codexDisabledFeatures: [],
+    codexRuntime: { mode: "controlled", home: codexHome },
+    systemCommands: { node: "offline-fake-node", git: "offline-fake-git", bash: "offline-fake-bash" },
+    suiteDigest: hash("codex-journey-suite"), configurationDigest: hash("codex-journey-configuration"),
+    rootSeed: "codex-journey-seed"
+  } };
+}
+
+test("multi-turn Codex session admits once immediately before dispatch and journals return after every turn", async t => {
+  const events = [];
+  let f;
+  f = codexJourneySessionFixture(t, ({ providerCalls, args }) => {
+    events.push(`provider-${providerCalls}:${JSON.parse(fs.readFileSync(f.inflightPath)).stage}`);
+    if (providerCalls === 2) assert.deepEqual(args.slice(0, 3), ["exec", "resume", "--json"]);
+  });
+  const result = await runBenchmarkSession({ ...f.options,
+    onProviderAttemptStart: () => events.push(`start:${JSON.parse(fs.readFileSync(f.inflightPath)).stage}`),
+    onProviderAttemptReturned: () => events.push(`return:${JSON.parse(fs.readFileSync(f.inflightPath)).stage}`) });
+  assert.deepEqual(events, ["start:provider-may-start", "provider-1:provider-may-start",
+    "provider-2:provider-may-start", "return:provider-returned"]);
+  assert.equal(f.providerCalls(), 2);
+  assert.equal(result.record.journeyReceipt.completed, true);
+  assert.equal(result.record.usage.turns, 2);
+  assert.equal(result.record.usage.usageCompleteness, "exact");
+});
+
+test("multi-turn Codex session retains pre-dispatch journal when admission callback fails", async t => {
+  const f = codexJourneySessionFixture(t);
+  await assert.rejects(runBenchmarkSession({ ...f.options,
+    onProviderAttemptStart: () => { throw new Error("campaign-journal-denied"); } }), /campaign-journal-denied/);
+  assert.equal(f.providerCalls(), 0);
+  assert.equal(JSON.parse(fs.readFileSync(f.inflightPath)).stage, "provider-may-start");
+});
 
 test("single-session bridge freezes custody before started callback and retains signed fake receipts", async t => {
   let starts = 0, returns = 0, calls = 0;

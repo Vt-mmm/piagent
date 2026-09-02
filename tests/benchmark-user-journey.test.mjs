@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { runCodexUserJourney } from "../scripts/benchmark-session.mjs";
+import { resolveCodexJourneyScopedBrokers } from "../scripts/benchmark-codex-journey.mjs";
 
 function codexTurn(threadId, inputTokens, outputTokens) {
   return [
@@ -19,6 +20,7 @@ function codexTurn(threadId, inputTokens, outputTokens) {
 
 test("Codex production journey preserves one thread and sums every turn exactly", async () => {
   const calls = [];
+  let providerAdmissions = 0;
   const threadId = "019abcde-1234-7000-8000-0123456789ab";
   const outputs = [codexTurn(threadId, 10, 3), codexTurn(threadId, 12, 4), codexTurn(threadId, 14, 5)];
   const result = await runCodexUserJourney({
@@ -40,7 +42,11 @@ test("Codex production journey preserves one thread and sums every turn exactly"
     disabledFeatures: ["multi_agent"],
     environment: { NO_COLOR: "1" },
     timeoutMs: 10_000,
-    forbiddenOutputSubstrings: []
+    forbiddenOutputSubstrings: [],
+    onBeforeFirstProviderDispatch: () => {
+      providerAdmissions++;
+      assert.equal(calls.length, 0, "admission must immediately precede the first provider command");
+    }
   });
 
   assert.equal(result.agent.code, 0);
@@ -52,12 +58,56 @@ test("Codex production journey preserves one thread and sums every turn exactly"
   assert.equal(result.usage.cacheRead, 6);
   assert.equal(result.usage.output, 12);
   assert.equal(result.usage.fresh, 42);
+  assert.equal(providerAdmissions, 1);
   assert.deepEqual(calls.map((call) => call.input), ["Scout", "Implement", "Verify"]);
   assert.equal(calls[0].args.includes("--ephemeral"), false);
   for (const call of calls.slice(1)) {
     assert.deepEqual(call.args.slice(0, 3), ["exec", "resume", "--json"]);
     assert.ok(call.args.includes(threadId));
   }
+});
+
+test("pre-resolved null and undefined absence remains unscoped across Codex resume", async () => {
+  const turns = [{ id: "one", message: "One" }, { id: "two", message: "Two" }];
+  const prepared = resolveCodexJourneyScopedBrokers(null, turns);
+  assert.equal(prepared, null);
+  assert.equal(resolveCodexJourneyScopedBrokers(undefined, turns), null);
+  assert.throws(() => resolveCodexJourneyScopedBrokers(false, [turns[0]]), /exact plain object/);
+  const calls = [];
+  let providerAdmissions = 0;
+  const threadId = "019abcde-1234-7000-8000-0123456789ab";
+  const outputs = [codexTurn(threadId, 10, 3), codexTurn(threadId, 12, 4)];
+  const result = await runCodexUserJourney({
+    runCommand: async (_command, args, options) => {
+      const index = calls.length;
+      calls.push({ args, input: options.input });
+      const stdout = outputs[index];
+      options.onStdoutChunk(stdout, { observedAtSeconds: 0.1 });
+      return { code: 0, signal: null, timedOut: false, stdout, stderr: "", durationSeconds: 0.2,
+        forbiddenHits: [] };
+    },
+    codexCommand: "/usr/local/bin/codex",
+    workspace: "/tmp/production-fixture",
+    turns,
+    options: { model: "openai-codex/gpt-5.6-luna", thinking: "medium", codexMode: "controlled" },
+    disabledFeatures: [],
+    scopedBroker: prepared,
+    environment: {},
+    timeoutMs: 10_000,
+    forbiddenOutputSubstrings: [],
+    onBeforeFirstProviderDispatch: () => {
+      providerAdmissions++;
+      assert.equal(calls.length, 0);
+    }
+  });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls.map(call => call.input), ["One", "Two"]);
+  assert.deepEqual(calls[1].args.slice(0, 3), ["exec", "resume", "--json"]);
+  assert.ok(calls[1].args.includes(threadId));
+  assert.equal(providerAdmissions, 1);
+  assert.equal(result.journeyReceipt.completed, true);
+  assert.equal(result.journeyReceipt.threadId, threadId);
+  assert.equal(result.usage.usageCompleteness, "exact");
 });
 
 test("Codex journey fails closed when a resumed turn changes thread identity", async () => {
