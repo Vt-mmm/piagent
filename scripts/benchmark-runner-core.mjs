@@ -6,24 +6,15 @@ import { fileURLToPath } from "node:url";
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { benchmarkVerificationBinding, prepareBenchmarkVerification } from "./benchmark-independent-verification.mjs";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
-import { benchmarkEnvironment, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
+import { assertCodexRuntimeCredential, benchmarkEnvironment, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
 import { prepareProductionProviderFreeEvidence, productionProviderFreeConfigurationDigest, productionProviderFreeEvidenceError, productionProviderFreeEvidenceRequired } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
 import { applyBenchmarkExecutionDefaults, benchmarkInfrastructureFailureDisposition, benchmarkRunnerErrorRecord, recoveredBenchmarkAttemptDisposition } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
-import {
-  BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
-  appendPrivateJsonl,
-  createBenchmarkTransportCircuit,
-  createBenchmarkCandidateGuard,
-  loadReplayFailurePlan,
-  retainWorkspaceForensics,
-  safeInfrastructureDiagnostic,
-  validBenchmarkTransportCircuit,
-  writeBenchmarkAbort,
-  writeBenchmarkRunManifest,
-  writePrivateAtomic
-} from "../packages/piagent-core/benchmark/benchmark-forensics.js";
+import { BENCHMARK_TRANSPORT_CIRCUIT_POLICY, appendPrivateJsonl, createBenchmarkTransportCircuit,
+  createBenchmarkCandidateGuard, loadReplayFailurePlan, retainWorkspaceForensics, safeInfrastructureDiagnostic,
+  validBenchmarkTransportCircuit, writeBenchmarkAbort, writeBenchmarkRunManifest,
+  writePrivateAtomic } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { benchmarkBootstrapCandidateIndex, benchmarkBootstrapMetadata } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { createBenchmarkExecutionGuard } from "../packages/piagent-core/benchmark/benchmark-execution-guard.js";
 import { readBenchmarkWireDefinitionPlan, validateBenchmarkWireManifest } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
@@ -64,7 +55,10 @@ import { createRegisteredBenchmarkScopedSessionFactory, registeredBenchmarkScope
 } from "./benchmark-scoped-session-factory.mjs";
 import { assertBenchmarkHostReadinessStartReady, assertExistingBenchmarkHostReadiness, benchmarkHostReadinessPolicyDigest, collectReadyBenchmarkHostReadiness } from "./benchmark-runner-host-readiness.mjs";
 import { applyRegisteredMeasurementOptions, benchmarkMeasurementConfiguration, benchmarkRuntimeCommands,
-  registeredMeasurementBinding as measurementBinding } from "./benchmark-runner-configuration.mjs";
+  registeredMeasurementBinding as measurementBinding
+} from "./benchmark-runner-configuration.mjs";
+import { bindRegisteredRuntimeVerifiers, createBenchmarkProviderBoundaryGuard,
+  forceTokenUnavailableForPostSessionAssetError } from "./benchmark-runner-provider-boundary.mjs";
 export { parseBenchmarkArgs };
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -477,7 +471,10 @@ async function main() {
   const runId = resumeState?.manifest.runId ?? createRunId(suite.id);
   const runtimeCommands = benchmarkRuntimeCommands({ productionFinalizationOnly,
     resumeManifest: resumeState?.manifest, surfaces: options.surfaces, piCommand, codexCommand,
+    dockerCommand: registeredMeasurementRun ? verificationPlan?.dockerCommand?.path : undefined,
     cwd: bootstrapMetadata?.originalCwd ?? process.cwd() });
+  const registeredRuntimeVerifiers = bindRegisteredRuntimeVerifiers({ registeredMeasurement,
+    registeredMeasurementRun, bootstrapMetadata, runtimeCommands, verificationPlan });
   const { configuration, configurationDigest, environmentPolicy } = benchmarkMeasurementConfiguration({
     bootstrapMetadata, candidateDigest: candidateGuard.provenance.contentDigest, suiteDigest, runtimeCommands,
     verificationIdentity: verificationPlan?.identity, providerWirePlan, productionHostReadinessRequired,
@@ -556,8 +553,10 @@ async function main() {
     const preflightAssetError = executionGuard.check("before-preflight", [piRuntimeHome]);
     if (preflightAssetError) throw preflightAssetError;
     codexRuntime = createCodexRuntime(options);
+    assertCodexRuntimeCredential(codexRuntime, { required: registeredMeasurementRun });
     try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path, PIAGENT_FAST_MODE: options.serviceTier === "fast" ? "1" : "0" }), codexCommand, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexMode: options.codexMode, codexRuntime, serviceTier: options.serviceTier })); }
     catch (error) { preservePiRuntime ||= error.code === "BENCHMARK_PI_CREDENTIAL_RECONCILIATION_FAILED"; throw error; }
+    assertCodexRuntimeCredential(codexRuntime, { required: registeredMeasurementRun });
     const postPreflightAssetError = executionGuard.check("after-preflight", [piRuntimeHome]);
     if (postPreflightAssetError) throw postPreflightAssetError;
     resetBenchmarkPiRuntimeEphemeralState(piRuntimeHome);
@@ -573,7 +572,7 @@ async function main() {
   }
   assertHostReadinessStartReady();
   if (options.preflightOnly) {
-    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, providerFreeConfigurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence, independentVerification: verificationPlan?.identity });
+    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, providerFreeConfigurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence, independentVerification: verificationPlan?.identity, registeredRuntimeVerifiers });
     process.stdout.write(options.json ? `${JSON.stringify(receipt, null, 2)}\n` : `${plan}${codexPlan}\nPREFLIGHT READY: no model session started.\n${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
@@ -613,6 +612,7 @@ async function main() {
     suiteDigest,
     suiteIdentity,
     ...(registeredMeasurementBinding ? { registeredMeasurement: registeredMeasurementBinding } : {}),
+    ...(registeredRuntimeVerifiers ? { registeredRuntimeVerifiers } : {}),
     candidateProvenance: candidateGuard.provenance,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
     webUiAssets: webUiAssetIdentity,
@@ -741,6 +741,10 @@ async function main() {
         let attemptCodexRuntime = codexRuntime;
         try {
           if (item.surface === "codex-cli") attemptCodexRuntime = createCodexRuntime(options);
+          const assertProviderBoundary = createBenchmarkProviderBoundaryGuard({ executionGuard,
+            registeredMeasurement, registeredMeasurementRun, registeredRuntimeVerifiers, bootstrapMetadata,
+            runtimeCommands, codexRuntime: attemptCodexRuntime, piRuntimeHome, scenarioId: item.scenario.id,
+            surface: item.surface, repeat: item.repeat, infrastructureAttempt });
           sessionEvidence = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => runBenchmarkSession({
             packageRoot,
             runCommand,
@@ -771,6 +775,8 @@ async function main() {
             },
             suiteDigest,
             configurationDigest,
+            assertProviderDispatchReady: () => assertProviderBoundary("provider-dispatch"),
+            onAfterProviderDispatch: () => assertProviderBoundary("provider-return"),
             onProviderAttemptStart: (attempt) => productionCampaign?.providerStarted(attempt),
             onProviderAttemptReturned: (attempt) => productionCampaign?.providerReturned(attempt),
             persistCompletedRecord: (candidate) => stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding, record: candidate, infrastructureFailures, index: fullIndex - 1, expected: item, runId, suite, configurationDigest, runs }),
@@ -802,7 +808,7 @@ async function main() {
             fatalExecutionReceipt = postSessionReceipt;
             if (sessionEvidence) retainWorkspaceForensics({ runRoot, workspaceRoot: sessionEvidence.workspaceRoot, key: sessionEvidence.key, record });
             if (record) {
-              persistUnacceptedBenchmarkAttempt({ runRoot, manifest, record, reason: "execution-asset-mismatch-after-provider-attempt", forceTokenUnavailable: true });
+              persistUnacceptedBenchmarkAttempt({ runRoot, manifest, record, reason: "execution-asset-mismatch-after-provider-attempt", forceTokenUnavailable: forceTokenUnavailableForPostSessionAssetError({ sessionEvidence, record }) });
               fs.rmSync(path.join(runRoot, "pending-record.json"), { force: true });
               fs.rmSync(path.join(runRoot, "measured-record-ready.json"), { force: true });
               appendPrivateJsonl(infrastructureLedgerPath, { ...record, accepted: false, contaminated: true, executionAsset: assetError.executionAsset ?? { reason: assetError.message } });

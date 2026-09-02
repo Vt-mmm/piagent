@@ -22,7 +22,25 @@ import { openScopedMediationEvidence, scopedBrokerArmDigest, scopedBrokerProfile
   scopedMediationFactObservation } from "../packages/piagent-core/runtime/verification/composite-scoped-mediation.ts";
 import { CODEX_SCOPED_BROKER_DISABLED_FEATURES, CODEX_SCOPED_BROKER_TOOLS, codexExecArgs,
   codexScopedBrokerOverrides } from "../packages/piagent-core/benchmark/benchmark-codex.js";
-import { runCodexUserJourney } from "../scripts/benchmark-session.mjs";
+import { runCodexUserJourney as runGuardedCodexUserJourney } from "../scripts/benchmark-session.mjs";
+
+function testPredispatchCustody(value) {
+  if (value == null) return value;
+  if (Array.isArray(value)) return value.map(testPredispatchCustody);
+  if (typeof value === "function") return coordinate => testPredispatchCustody(value(coordinate));
+  if (typeof value?.openTurn === "function") return { ...value, async openTurn(coordinate) {
+    return testPredispatchCustody(await value.openTurn(coordinate));
+  } };
+  if (value.codexLaunch) return { ...value,
+    assertPredispatch: value.assertPredispatch ?? (() => true) };
+  return { codexLaunch: value, assertPredispatch: () => true };
+}
+
+const runCodexUserJourney = options => runGuardedCodexUserJourney({
+  onBeforeProviderDispatch: () => {}, onAfterProviderDispatch: () => {},
+  onBeforeFirstProviderDispatch: () => {}, ...options,
+  scopedBroker: testPredispatchCustody(options.scopedBroker)
+});
 
 // Native transport qualification uses a loopback fixture, never an account/provider.
 const codexPath = process.env.PIAGENT_G0_CODEX || "/Applications/ChatGPT.app/Contents/Resources/codex";

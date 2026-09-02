@@ -361,6 +361,14 @@ export async function runPiagentWebUiJourney(options) {
   const deadline = started + timeoutMs;
   const turns = options.turns ?? [];
   if (!Array.isArray(turns) || turns.length === 0) fail("webui-journey-turns-missing");
+  if (typeof options.onBeforeProviderDispatch !== "function"
+    || typeof options.onBeforeFirstProviderDispatch !== "function") {
+    fail("webui-provider-dispatch-guard-missing");
+  }
+  if (options.scopedBrokerRouter
+    && typeof options.scopedBrokerRouter.takeFatalProviderBoundaryError !== "function") {
+    fail("webui-scoped-router-fatal-channel-missing");
+  }
   const manifest = JSON.parse(fs.readFileSync(path.join(options.packageRoot, "package.json"), "utf8"));
   const expectedPiVersion = manifest.peerDependencies?.["@earendil-works/pi-coding-agent"];
   if (typeof expectedPiVersion !== "string") fail("webui-pi-version-missing");
@@ -377,6 +385,8 @@ export async function runPiagentWebUiJourney(options) {
   const project = new modules.ProjectRegistry(state.root, key).register(options.workspace);
   let gateway = null;
   let client = null;
+  let providerBoundaryFailure = null;
+  let providerBoundaryFailurePhase = null;
   const receipt = {
     schemaVersion: 1,
     channel: "webui-gateway",
@@ -389,6 +399,7 @@ export async function runPiagentWebUiJourney(options) {
   };
   const scopedEnvironment = { ...(options.environment ?? {}), PI_CODING_AGENT_DIR: options.agentDir };
   const priorEnvironment = new Map(Object.keys(scopedEnvironment).map((key) => [key, process.env[key]]));
+  let providerDispatchAdmitted = false;
   for (const [key, value] of Object.entries(scopedEnvironment)) {
     if (typeof value === "string") process.env[key] = value;
   }
@@ -453,6 +464,14 @@ export async function runPiagentWebUiJourney(options) {
           }
         };
       }
+      try {
+        await options.onBeforeProviderDispatch(Object.freeze({ turnIndex: index + 1, turnId: turn.id }));
+      } catch (error) { providerBoundaryFailure = error; providerBoundaryFailurePhase = "pre-dispatch"; throw error; }
+      if (!providerDispatchAdmitted) {
+        try { await options.onBeforeFirstProviderDispatch(); }
+        catch (error) { providerBoundaryFailure = error; providerBoundaryFailurePhase = "pre-dispatch"; throw error; }
+        providerDispatchAdmitted = true;
+      }
       const submittedAt = new Date().toISOString();
       let commandReceipt = null;
       let operationRef = null;
@@ -511,6 +530,19 @@ export async function runPiagentWebUiJourney(options) {
         && event.payload?.sessionRef === receipt.sessionRef
         && event.payload?.messageRequestId === messageRequestId
         && event.payload?.operationRef === operationRef, deadline, `turn-${index + 1}-settlement`);
+      if (options.scopedBrokerRouter) {
+        let boundaryError;
+        try { boundaryError = options.scopedBrokerRouter.takeFatalProviderBoundaryError(); }
+        catch (error) { providerBoundaryFailure = error; providerBoundaryFailurePhase = "pre-dispatch"; throw error; }
+        if (boundaryError !== null) {
+          if (!(boundaryError instanceof Error)) {
+            boundaryError = new Error("webui-scoped-router-fatal-channel-invalid");
+          }
+          providerBoundaryFailure = boundaryError;
+          providerBoundaryFailurePhase = "pre-dispatch";
+          throw boundaryError;
+        }
+      }
       const expectedSettlement = turn.expectedSettlement
         ?? (index === turns.length - 1 ? options.expectedTerminalSettlement : "completed")
         ?? "completed";
@@ -566,8 +598,16 @@ export async function runPiagentWebUiJourney(options) {
     return { code: 0, signal: null, timedOut: false, stdout, stderr: "", durationSeconds: (Date.now() - started) / 1000,
       journeyReceipt: receipt, forbiddenHits: [], requiredHits: [] };
   } catch (error) {
-    const timedOut = String(error?.message ?? "").includes("webui-journey-timeout");
     const stdout = receipt.turns.map((turn) => turn.assistantText).filter((value) => typeof value === "string" && value).join("\n\n");
+    if (error === providerBoundaryFailure) {
+      if (receipt.turns.length === 0) throw error;
+      const fatalProviderBoundaryError = error instanceof Error ? error : new Error(String(error));
+      return { code: 1, signal: null, timedOut: false, stdout, stderr: fatalProviderBoundaryError.message,
+        durationSeconds: (Date.now() - started) / 1000, journeyReceipt: receipt,
+        fatalProviderBoundaryError, fatalProviderBoundaryPhase: providerBoundaryFailurePhase,
+        forbiddenHits: [], requiredHits: [] };
+    }
+    const timedOut = String(error?.message ?? "").includes("webui-journey-timeout");
     return { code: 1, signal: null, timedOut, stdout, stderr: error instanceof Error ? error.message : String(error),
       durationSeconds: (Date.now() - started) / 1000, journeyReceipt: receipt,
       ...(error?.code === "BENCHMARK_WEBUI_CANDIDATE_OUTCOME" ? { candidateOutcome: error.candidateOutcome } : {}),

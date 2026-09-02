@@ -470,9 +470,11 @@ function piAuthInvocation(argv, cwd, replay) {
     if (!/^[a-f0-9]{32}$/.test(String(manifest.piCredentialVaultId ?? ""))) fail("Cannot resume benchmark: private Pi credential vault identity is missing or unsupported");
     return { authorized: manifest.allowPiAuthWriteback === true, model: manifest.model ?? null, vaultId: manifest.piCredentialVaultId };
   }
+  const registered = registeredManifestRequest(argv, cwd);
   return {
     authorized: argv.includes("--allow-pi-auth-writeback"),
-    model: optionValue(argv, "--model") ?? replay?.manifest?.model ?? replay?.report?.environment?.requestedModel ?? null,
+    model: (registered ? "openai-codex/gpt-5.6-luna" : optionValue(argv, "--model"))
+      ?? replay?.manifest?.model ?? replay?.report?.environment?.requestedModel ?? null,
     vaultId: crypto.randomBytes(16).toString("hex")
   };
 }
@@ -537,21 +539,22 @@ function snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay, { 
 function snapshotCodexCredential(temporaryRoot) {
   const source = path.join(path.resolve(process.env.CODEX_HOME || path.join(os.homedir(), ".codex")), "auth.json");
   if (!fs.existsSync(source)) return null;
-  if (!fs.statSync(source).isFile()) fail(`Codex credential is not a regular file: ${source}`);
+  const stable = stableHostFile(source, "Codex credential", 2 * 1024 * 1024);
   const targetRoot = path.join(temporaryRoot, "codex-credential");
   fs.mkdirSync(targetRoot, { recursive: true, mode: 0o700 });
   const target = path.join(targetRoot, "auth.json");
-  fs.copyFileSync(source, target);
-  fs.chmodSync(target, 0o400);
+  fs.writeFileSync(target, stable.bytes, { flag: "wx", mode: 0o400 });
   fs.chmodSync(targetRoot, 0o500);
   return {
     path: target,
     privateIdentity: benchmarkTreeIdentity(targetRoot, { rejectSymlinks: true }),
-    identity: { schemaVersion: 1, credentialPresent: true, contentBinding: "private-runtime-only" }
+    identity: { schemaVersion: 1, credentialPresent: true, contentBinding: "private-runtime-only",
+      environmentCredentialPolicy: "excluded-from-frozen-controlled-runtime" }
   };
 }
 
 function requestsCodexSurface(argv, cwd, replay) {
+  if (registeredManifestRequest(argv, cwd)) return true;
   const explicit = optionValue(argv, "--surfaces");
   if (explicit) return explicit.split(",").map((value) => value.trim()).includes("codex-cli");
   const resume = optionValue(argv, "--resume");
@@ -563,11 +566,11 @@ function requestsCodexSurface(argv, cwd, replay) {
 }
 
 function isolatedSnapshotParent() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-snapshot-"));
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-snapshot-")));
 }
 
 function isolatedPiRuntimeParent() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-pi-runtime-"));
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-pi-runtime-")));
 }
 
 function gitSourceIdentity(root) {
@@ -682,6 +685,9 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
     if (registeredMeasurement && suite.origin !== registeredMeasurement.payload.baseSuiteId) {
       fail("Registered measurement base suite does not match its frozen benchmark suite");
     }
+    if (registeredMeasurement && !providerFreeFinalization && !codexCredential) {
+      fail("Registered measurement requires one frozen Codex auth.json credential");
+    }
     const webUiAssets = suiteNeedsWebUiAssets(frozenSuiteManifest)
       ? snapshotWebUiAssets(candidateRoot, root, temporaryRoot, candidate.provenance)
       : null;
@@ -739,6 +745,10 @@ export function benchmarkBootstrapEnvironment(metadata, base = process.env) {
   delete environment.PI_CODING_AGENT_DIR;
   delete environment[registeredApprovalFileVariable];
   delete environment[registeredApprovalKeyVariable];
+  if (metadata.registeredMeasurement) {
+    delete environment.OPENAI_API_KEY;
+    delete environment.CODEX_ACCESS_TOKEN;
+  }
   return {
     ...environment,
     ...(metadata.codexCredential ? { PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT: metadata.codexCredential.path } : {}),
@@ -784,6 +794,8 @@ export function benchmarkBootstrapMetadata(env = process.env) {
       typeof value.codexCredential?.path !== "string"
       || typeof value.codexCredential?.privateIdentity?.contentDigest !== "string"
     ))
+    || (value.registeredMeasurement !== undefined && value.registeredMeasurement !== null
+      && value.providerFreeFinalization === false && value.codexCredential === null)
     || (value.registeredMeasurement !== undefined && value.registeredMeasurement !== null && (
       value.registeredMeasurement?.schemaVersion !== 1
       || typeof value.registeredMeasurement?.manifestOrigin !== "string"

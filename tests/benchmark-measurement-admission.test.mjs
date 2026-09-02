@@ -10,13 +10,17 @@ import { executionOrder, pairedChunk } from "../scripts/benchmark-runner-support
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
 import { createProductionStageControl, productionStageResumeDisposition } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { assertRegisteredBenchmarkPublicAssets, loadRegisteredBenchmarkMeasurement,
-  REGISTERED_BENCHMARK_PROMPT_ROLES, registeredBenchmarkMeasurementPayloadDigest,
+  REGISTERED_BENCHMARK_PROMPT_ROLES, REGISTERED_BENCHMARK_VERIFIER_IDS,
+  registeredBenchmarkMeasurementPayloadDigest,
   registeredBenchmarkMeasurementValidationErrors, registeredBenchmarkPublicAssetInventory,
   registeredBenchmarkPublicAssetPaths
 } from "../packages/piagent-core/benchmark/benchmark-suite-identity.js";
-import { benchmarkBootstrapEnvironment, cleanupBenchmarkExecutionSnapshot, registeredApprovalFileVariable,
-  registeredApprovalKeyVariable, snapshotRegisteredBenchmarkMeasurement
+import { benchmarkBootstrapEnvironment, cleanupBenchmarkExecutionSnapshot,
+  createBenchmarkExecutionSnapshot, registeredApprovalFileVariable, registeredApprovalKeyVariable,
+  snapshotRegisteredBenchmarkMeasurement
 } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
+import { assertRegisteredRuntimeVerifierBindings
+} from "../scripts/benchmark-runner-configuration.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const core = path.join(root, "scripts/benchmark-runner-core.mjs");
@@ -40,7 +44,8 @@ function registrationFixture(t) {
       surfaces: ["piagent", "codex-cli"], sessionCount: 108 }, resources: {
       model: "openai-codex/gpt-5.6-luna", thinking: "medium", requestedServiceTier: "fast",
       concurrency: 1, timeoutSeconds: 900, infrastructureRetries: 0,
-      verifiers: [{ id: "node-worker-image", sha256: digest("f") }]
+      verifiers: REGISTERED_BENCHMARK_VERIFIER_IDS.map((id, index) => ({ id,
+        sha256: digest((index % 10).toString(16)) }))
     }, claims: { efficiencyProtocol: "net35-family-pooled-v1", wireProtocol: "phase-valid-configuration-v1",
       configuredTreatment: true, releaseDefaultsClaim: false } };
   const keys = crypto.generateKeyPairSync("ed25519"), authorityKeyId = crypto.createHash("sha256")
@@ -199,6 +204,25 @@ test("registered measurement rejects widened, drifted, arbitrary and self-author
     scenarioIds: f.scenarioIds }).join("; "), /suiteId must equal production-v2-da2/);
   const shortMatrix = structuredClone(f.envelope); shortMatrix.payload.matrix.scenarioCount = 26;
   assert.match(registeredBenchmarkMeasurementValidationErrors(shortMatrix).join("; "), /complete108/);
+  for (const verifiers of [f.payload.resources.verifiers.slice(1),
+    [...f.payload.resources.verifiers].reverse(),
+    [...f.payload.resources.verifiers, { id: "unexpected-runtime", sha256: "f".repeat(64) }]]) {
+    const changed = structuredClone(f.envelope); changed.payload.resources.verifiers = verifiers;
+    assert.match(registeredBenchmarkMeasurementValidationErrors(changed).join("; "),
+      /exact registered runtime and custody identity set/);
+  }
+});
+
+test("registered runtime bindings reject every selected runtime substitution before admission", t => {
+  const f = registrationFixture(t), approved = f.payload.resources.verifiers,
+    observed = new Map(approved.filter(item => !["controlled-codex-feature-policy", "custody-runner-wrapper",
+      "scoped-route-proof"].includes(item.id)).map(item => [item.id, item.sha256]));
+  assert.equal(assertRegisteredRuntimeVerifierBindings(approved, observed).length, 14);
+  for (const id of observed.keys()) {
+    const changed = new Map(observed); changed.set(id, "f".repeat(64));
+    assert.throws(() => assertRegisteredRuntimeVerifierBindings(approved, changed),
+      new RegExp(`runtime verifier mismatch: ${id}`));
+  }
 });
 
 test("registered measurement cannot bypass its trusted immutable bootstrap", t => {
@@ -259,4 +283,58 @@ test("trusted bootstrap freezes the exact registered asset tree without forwardi
   const child = benchmarkBootstrapEnvironment({ registeredMeasurement: snapshot, codexCredential: null });
   assert.equal(child[registeredApprovalFileVariable], undefined);
   assert.equal(child[registeredApprovalKeyVariable], undefined);
+});
+
+test("registered bootstrap freezes Codex auth and selects the signed Pi provider before preflight", t => {
+  const f = registeredAssetFixture(t), codexHome = path.join(f.directory, "operator-codex"),
+    piHome = path.join(f.directory, "operator-pi"), codexAuth = path.join(codexHome, "auth.json");
+  fs.mkdirSync(codexHome, { mode: 0o700 });
+  fs.mkdirSync(piHome, { mode: 0o700 });
+  fs.writeFileSync(codexAuth, "frozen-codex-credential\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(piHome, "auth.json"), `${JSON.stringify({
+    anthropic: { type: "oauth", accountId: "other-account", access: "other", refresh: "other" },
+    "openai-codex": { type: "oauth", accountId: "benchmark-account", access: "current", refresh: "refresh" }
+  })}\n`, { mode: 0o600 });
+  const previous = Object.fromEntries(["CODEX_HOME", "PI_CODING_AGENT_DIR", "OPENAI_API_KEY",
+    "CODEX_ACCESS_TOKEN", registeredApprovalFileVariable,
+    registeredApprovalKeyVariable].map(name => [name, process.env[name]]));
+  Object.assign(process.env, { CODEX_HOME: codexHome, PI_CODING_AGENT_DIR: piHome,
+    OPENAI_API_KEY: "must-not-reach-registered-child", CODEX_ACCESS_TOKEN: "must-not-reach-registered-child",
+    [registeredApprovalFileVariable]: f.approvalFile,
+    [registeredApprovalKeyVariable]: f.publicKeyFile });
+  let snapshot;
+  t.after(() => {
+    if (snapshot) cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent,
+      snapshot.metadata.piAgentHome);
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  });
+  snapshot = createBenchmarkExecutionSnapshot({ liveRoot: root,
+    argv: ["--registered-measurement", f.manifestFile, "--allow-pi-auth-writeback", "--preflight-only",
+      "--model", "anthropic/forbidden-override", "--surfaces", "piagent,raw-pi"],
+    cwd: root });
+  assert.equal(snapshot.metadata.piAgentHome.requestedProvider, "openai-codex");
+  assert.equal(snapshot.metadata.piAgentHome.writebackAuthorized, true);
+  assert.equal(snapshot.metadata.codexCredential.identity.credentialPresent, true);
+  const frozenBytes = fs.readFileSync(snapshot.metadata.codexCredential.path);
+  fs.writeFileSync(codexAuth, "changed-live-codex-credential\n", { mode: 0o600 });
+  assert.deepEqual(fs.readFileSync(snapshot.metadata.codexCredential.path), frozenBytes);
+  const child = benchmarkBootstrapEnvironment(snapshot.metadata);
+  assert.equal(child.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT, snapshot.metadata.codexCredential.path);
+  assert.equal(child.OPENAI_API_KEY, undefined);
+  assert.equal(child.CODEX_ACCESS_TOKEN, undefined);
+  const symlinkHome = path.join(f.directory, "symlink-codex");
+  fs.mkdirSync(symlinkHome, { mode: 0o700 });
+  fs.symlinkSync(codexAuth, path.join(symlinkHome, "auth.json"));
+  process.env.CODEX_HOME = symlinkHome;
+  assert.throws(() => createBenchmarkExecutionSnapshot({ liveRoot: root,
+    argv: ["--registered-measurement", f.manifestFile, "--preflight-only"], cwd: root }),
+  /Codex credential.*(?:canonical|host-owned)/);
+  const emptyCodexHome = path.join(f.directory, "empty-codex");
+  fs.mkdirSync(emptyCodexHome, { mode: 0o700 });
+  process.env.CODEX_HOME = emptyCodexHome;
+  assert.throws(() => createBenchmarkExecutionSnapshot({ liveRoot: root,
+    argv: ["--registered-measurement", f.manifestFile, "--preflight-only"], cwd: root }),
+  /requires one frozen Codex auth\.json credential/);
 });

@@ -6,7 +6,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { buildOpenAiCodexWireFingerprint } from "../packages/piagent-core/runtime/model/provider-wire-fingerprint.ts";
-import { runBenchmarkSession } from "../scripts/benchmark-session.mjs";
+import { assertCodexRuntimeCredential, createCodexRuntime
+} from "../packages/piagent-core/benchmark/benchmark-runtime.js";
+import { runBenchmarkSession, runOfflineBenchmarkSession } from "../scripts/benchmark-session.mjs";
 import { BENCHMARK_SCOPED_SESSION_FACTORY_VERSION } from "../scripts/benchmark-codex-journey.mjs";
 import { fakeProvider } from "./fixtures/benchmark-candidate-ablation-fake.mjs";
 const wire = await import(process.env.PIAGENT_TEST_WIRE_MODULE_PATH
@@ -216,6 +218,8 @@ function sessionFixture(t, onDispatch = () => {}) {
     providerWirePlan: plan, candidateDigest: f.value.candidateDigest, piCommand: "offline-fake-pi", piRuntimeHome: { path: home },
     systemCommands: { node: "offline-fake-node", git: "offline-fake-git", bash: "offline-fake-bash" },
     suiteDigest: hash("synthetic-suite"), configurationDigest: f.value.configurationDigest, rootSeed: "synthetic-seed",
+    assertProviderDispatchReady: () => {},
+    onAfterProviderDispatch: () => {},
     piagentWebUiJourney: fake.piagentWebUiJourney };
   return { ...f, runRoot, options, plan };
 }
@@ -256,8 +260,27 @@ function codexJourneySessionFixture(t, onCodexDispatch = () => {}) {
     codexRuntime: { mode: "controlled", home: codexHome },
     systemCommands: { node: "offline-fake-node", git: "offline-fake-git", bash: "offline-fake-bash" },
     suiteDigest: hash("codex-journey-suite"), configurationDigest: hash("codex-journey-configuration"),
+    assertProviderDispatchReady: () => {},
+    onAfterProviderDispatch: () => {},
     rootSeed: "codex-journey-seed"
   } };
+}
+
+function frozenCodexRuntime(t, root) {
+  const source = path.join(root, "frozen-codex-auth.json");
+  fs.writeFileSync(source, "synthetic frozen Codex credential\n", { mode: 0o600 });
+  const previous = process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT;
+  let runtime;
+  try {
+    process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT = source;
+    runtime = createCodexRuntime({ surfaces: ["codex-cli"], codexMode: "controlled",
+      registeredMeasurement: "/synthetic/registered-measurement.json" });
+  } finally {
+    if (previous === undefined) delete process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT;
+    else process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT = previous;
+  }
+  t.after(() => { if (runtime && fs.existsSync(runtime.home)) runtime.cleanup(); });
+  return runtime;
 }
 
 test("multi-turn Codex session admits once immediately before dispatch and journals return after every turn", async t => {
@@ -268,14 +291,147 @@ test("multi-turn Codex session admits once immediately before dispatch and journ
     if (providerCalls === 2) assert.deepEqual(args.slice(0, 3), ["exec", "resume", "--json"]);
   });
   const result = await runBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: ({ turnIndex }) => events.push(`guard-${turnIndex}`),
+    onAfterProviderDispatch: ({ turnIndex }) => events.push(`post-${turnIndex}`),
     onProviderAttemptStart: () => events.push(`start:${JSON.parse(fs.readFileSync(f.inflightPath)).stage}`),
     onProviderAttemptReturned: () => events.push(`return:${JSON.parse(fs.readFileSync(f.inflightPath)).stage}`) });
-  assert.deepEqual(events, ["start:provider-may-start", "provider-1:provider-may-start",
-    "provider-2:provider-may-start", "return:provider-returned"]);
+  assert.deepEqual(events, ["guard-1", "start:provider-may-start", "provider-1:provider-may-start",
+    "post-1", "guard-2", "provider-2:provider-may-start", "post-2", "return:provider-returned"]);
   assert.equal(f.providerCalls(), 2);
   assert.equal(result.record.journeyReceipt.completed, true);
   assert.equal(result.record.usage.turns, 2);
   assert.equal(result.record.usage.usageCompleteness, "exact");
+});
+
+test("per-turn Codex dispatch guard failure blocks the provider before campaign admission", async t => {
+  let starts = 0;
+  const f = codexJourneySessionFixture(t);
+  await assert.rejects(runBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: () => { throw new Error("provider-dispatch-integrity-denied"); },
+    onProviderAttemptStart: () => starts++ }), /provider-dispatch-integrity-denied/);
+  assert.equal(f.providerCalls(), 0);
+  assert.equal(starts, 0);
+  assert.equal(fs.existsSync(f.inflightPath), false);
+});
+
+test("direct Codex credential mutation is fatal before output or usage admission", async t => {
+  let runtime, marker = null, postChecks = 0, starts = 0, returns = 0, persisted = 0;
+  const f = codexJourneySessionFixture(t, () => {
+    fs.appendFileSync(path.join(runtime.home, "auth.json"), "credential drift during command\n");
+  });
+  runtime = frozenCodexRuntime(t, f.root);
+  f.options.codexRuntime = runtime;
+  delete f.options.scenario.userJourney;
+  await assert.rejects(runBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: () => assertCodexRuntimeCredential(runtime, { required: true }),
+    onAfterProviderDispatch: context => {
+      postChecks++;
+      assert.deepEqual(context, { turnIndex: 1, turnId: null });
+      assert.equal(Object.isFrozen(context), true);
+      assert.equal(fs.existsSync(runtime.home), true, "attempt HOME must still exist for the postcheck");
+      try { assertCodexRuntimeCredential(runtime, { required: true }); }
+      catch (error) { marker = error; throw error; }
+    },
+    onProviderAttemptStart: () => starts++,
+    onProviderAttemptReturned: () => returns++,
+    persistCompletedRecord: () => persisted++ }), error => error === marker);
+  assert.equal(f.providerCalls(), 1);
+  assert.deepEqual([postChecks, starts, returns, persisted], [1, 1, 0, 0]);
+  assert.match(marker.message, /credential copy changed/);
+  assert.equal(JSON.parse(fs.readFileSync(f.inflightPath)).stage, "provider-may-start");
+  const attemptHome = runtime.home;
+  runtime.cleanup();
+  assert.equal(fs.existsSync(attemptHome), false, "cleanup is attempted only after the postcheck rejects");
+});
+
+test("second-turn Codex guard denial retains exact first-turn usage without another dispatch", async t => {
+  const marker = Object.assign(new Error("second-turn-runtime-drift"), {
+    code: "BENCHMARK_EXECUTION_ASSET_MISMATCH"
+  });
+  let starts = 0, returns = 0, returnedUsage = null, returnedUsageStatus = null;
+  const f = codexJourneySessionFixture(t);
+  const result = await runBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: async ({ turnIndex }) => {
+      await Promise.resolve();
+      if (turnIndex === 2) throw marker;
+    },
+    onProviderAttemptStart: () => starts++,
+    onProviderAttemptReturned: value => {
+      returns++; returnedUsage = value.usage; returnedUsageStatus = value.usageStatus;
+    } });
+  assert.equal(f.providerCalls(), 1);
+  assert.equal(starts, 1);
+  assert.equal(returns, 1);
+  assert.equal(result.fatalProviderBoundaryError, marker);
+  assert.equal(result.fatalProviderBoundaryPhase, "pre-dispatch");
+  assert.equal(result.record.providerBoundaryPhase, "pre-dispatch");
+  assert.equal(result.record.abortSuite, true);
+  assert.equal(result.record.failure, "provider-dispatch-integrity-denied-before-next-turn");
+  assert.equal(result.record.usageStatus, "measured-but-unaccepted");
+  assert.equal(result.record.usage.sessions, 1);
+  assert.equal(result.record.usage.turns, 1);
+  assert.equal(result.record.usage.usageCompleteness, "exact");
+  assert.deepEqual(returnedUsage, result.record.usage);
+  assert.equal(returnedUsageStatus, "measured-but-unaccepted");
+  assert.equal(result.record.journeyReceipt.completed, false);
+  assert.equal(result.record.journeyReceipt.turns.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(f.inflightPath)).stage, "provider-returned");
+});
+
+test("second-turn Codex credential mutation retains only prior exact usage and disposes current custody", async t => {
+  let runtime, marker = null, starts = 0, returns = 0, persisted = 0;
+  let returnedUsage = null, returnedUsageStatus = null;
+  const postChecks = [], disposals = [], settlements = [];
+  const f = codexJourneySessionFixture(t, ({ providerCalls }) => {
+    if (providerCalls === 2) {
+      fs.appendFileSync(path.join(runtime.home, "auth.json"), "credential drift during resumed command\n");
+    }
+  });
+  runtime = frozenCodexRuntime(t, f.root);
+  f.options.codexRuntime = runtime;
+  f.options.codexScopedBroker = [1, 2].map(turn => ({
+    codexLaunch: { nodeCommand: "/runtime/node", brokerScript: "/runtime/scoped-broker.mjs",
+      brokerConfigPath: path.join(f.root, `turn-${turn}`, "broker-config.json") },
+    assertPredispatch() { return true; },
+    reconcileCodexSettlement() { settlements.push(turn); return { turn, reconciled: true }; },
+    async dispose() { disposals.push(turn); }
+  }));
+  const result = await runBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: () => assertCodexRuntimeCredential(runtime, { required: true }),
+    onAfterProviderDispatch: context => {
+      postChecks.push({ ...context, frozen: Object.isFrozen(context), homeExists: fs.existsSync(runtime.home) });
+      try { assertCodexRuntimeCredential(runtime, { required: true }); }
+      catch (error) { marker = error; throw error; }
+    },
+    onProviderAttemptStart: () => starts++,
+    onProviderAttemptReturned: value => {
+      returns++; returnedUsage = value.usage; returnedUsageStatus = value.usageStatus;
+    },
+    persistCompletedRecord: () => persisted++ });
+  assert.equal(f.providerCalls(), 2);
+  assert.deepEqual([starts, returns, persisted], [1, 1, 0]);
+  assert.deepEqual(postChecks, [
+    { turnIndex: 1, turnId: "first", frozen: true, homeExists: true },
+    { turnIndex: 2, turnId: "second", frozen: true, homeExists: true }
+  ]);
+  assert.deepEqual(disposals, [1, 2]);
+  assert.deepEqual(settlements, [1], "the rejected current turn must not reach settlement");
+  assert.equal(result.fatalProviderBoundaryError, marker);
+  assert.equal(result.fatalProviderBoundaryPhase, "post-dispatch");
+  assert.equal(result.record.providerBoundaryPhase, "post-dispatch");
+  assert.match(marker.message, /credential copy changed/);
+  assert.equal(result.record.abortSuite, true);
+  assert.equal(result.record.failure, "provider-dispatch-integrity-denied-after-provider-return");
+  assert.equal(result.record.usageStatus, "measured-lower-bound");
+  assert.equal(result.record.usage.turns, 1);
+  assert.equal(result.record.usage.usageCompleteness, "exact");
+  assert.deepEqual(returnedUsage, result.record.usage);
+  assert.equal(returnedUsageStatus, "measured-lower-bound");
+  assert.equal(result.record.journeyReceipt.completed, false);
+  assert.equal(result.record.journeyReceipt.turns.length, 1);
+  assert.equal(result.record.agent.stdoutHash,
+    hash(codexTurn("019abcde-1234-7000-8000-0123456789ab", 11, 3)));
+  assert.equal(JSON.parse(fs.readFileSync(f.inflightPath)).stage, "provider-returned");
 });
 
 test("multi-turn Codex session retains pre-dispatch journal when admission callback fails", async t => {
@@ -296,7 +452,7 @@ test("single-session bridge freezes custody before started callback and retains 
     const signature = crypto.sign(null, Buffer.from(material), crypto.createPrivateKey(fs.readFileSync(env.PIAGENT_WIRE_SIGNING_KEY_PATH))).toString("base64");
     fs.appendFileSync(env.PIAGENT_WIRE_RECEIPTS_PATH, JSON.stringify({ material, signature }) + "\n");
   });
-  const result = await runBenchmarkSession({ ...f.options,
+  const result = await runOfflineBenchmarkSession({ ...f.options,
     onProviderAttemptStart: () => { starts++; assert.equal(fs.readdirSync(f.runRoot).filter(name => name.startsWith("provider-wire-")).length, 1); },
     onProviderAttemptReturned: value => { returns++; assert.equal(value.usage.fresh, 10); } });
   assert.deepEqual([starts, returns, calls], [1, 1, 1]);
@@ -313,16 +469,160 @@ test("unconfigured single-session path keeps wire environment and receipt fields
     assert.deepEqual(Object.keys(options.env).filter(name => name.startsWith("PIAGENT_WIRE_")), []);
   });
   delete f.options.providerWirePlan; delete f.options.candidateDigest;
-  const result = await runBenchmarkSession(f.options);
+  const result = await runOfflineBenchmarkSession(f.options);
   assert.equal(calls, 1); assert.equal(Object.hasOwn(result.record, "providerWirePhaseEvidence"), false);
   assert.equal(fs.readdirSync(f.runRoot).filter(name => name.startsWith("provider-wire-")).length, 0);
+});
+
+test("direct dispatch guard failure blocks the provider before campaign admission", async t => {
+  let starts = 0, calls = 0;
+  const f = sessionFixture(t, () => calls++);
+  delete f.options.scenario.userJourney;
+  delete f.options.providerWirePlan;
+  delete f.options.candidateDigest;
+  const inflightPath = path.join(f.runRoot, "workspaces/01-wire-fake-piagent/inflight.json");
+  await assert.rejects(runOfflineBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: () => { throw new Error("direct-provider-dispatch-integrity-denied"); },
+    onProviderAttemptStart: () => starts++ }), /direct-provider-dispatch-integrity-denied/);
+  assert.equal(calls, 0);
+  assert.equal(starts, 0);
+  assert.equal(fs.existsSync(inflightPath), false);
+});
+
+test("Pi WebUI async guard denial preserves the integrity error before command or admission", async t => {
+  let starts = 0, calls = 0;
+  const marker = Object.assign(new Error("pi-webui-runtime-drift"), {
+    code: "BENCHMARK_EXECUTION_ASSET_MISMATCH",
+    executionAsset: { stage: "provider-dispatch", asset: "candidate" }
+  });
+  const f = sessionFixture(t, () => calls++);
+  await assert.rejects(runOfflineBenchmarkSession({ ...f.options,
+    assertProviderDispatchReady: async () => { await Promise.resolve(); throw marker; },
+    onProviderAttemptStart: () => starts++ }), error => error === marker);
+  assert.equal(calls, 0);
+  assert.equal(starts, 0);
+  assert.equal(fs.existsSync(path.join(f.runRoot,
+    "workspaces/01-wire-fake-piagent/inflight.json")), false);
+});
+
+test("second-turn Pi WebUI guard denial retains exact first-turn usage without another dispatch", async t => {
+  const marker = Object.assign(new Error("pi-webui-second-turn-runtime-drift"), {
+    code: "BENCHMARK_EXECUTION_ASSET_MISMATCH",
+    executionAsset: { stage: "provider-dispatch", asset: "candidate" }
+  });
+  let starts = 0, returns = 0, calls = 0, persisted = 0;
+  let returnedUsage = null, returnedUsageStatus = null;
+  const guardContexts = [];
+  const f = sessionFixture(t, () => calls++), baseJourney = f.options.piagentWebUiJourney;
+  f.options.scenario.userJourney.turns.push({ id: "second", prompt: "prompt.md" });
+  const piagentWebUiJourney = async input => {
+    const first = await baseJourney({ ...input, turns: [input.turns[0]] });
+    try {
+      await input.onBeforeProviderDispatch(Object.freeze({ turnIndex: 2, turnId: input.turns[1].id }));
+    } catch (error) {
+      return { ...first, code: 1, stderr: error instanceof Error ? error.message : String(error),
+        journeyReceipt: { ...first.journeyReceipt, completed: false,
+          turns: [{ index: 1, assistantText: first.stdout }] },
+        fatalProviderBoundaryError: error instanceof Error ? error : new Error(String(error)),
+        fatalProviderBoundaryPhase: "pre-dispatch" };
+    }
+    throw new Error("second Pi WebUI dispatch unexpectedly admitted");
+  };
+  const result = await runOfflineBenchmarkSession({ ...f.options, piagentWebUiJourney,
+    assertProviderDispatchReady: async context => {
+      guardContexts.push({ turnIndex: context.turnIndex, turnId: context.turnId,
+        frozen: Object.isFrozen(context) });
+      await Promise.resolve();
+      if (context.turnIndex === 2) throw marker;
+    },
+    onProviderAttemptStart: () => starts++,
+    onProviderAttemptReturned: value => {
+      returns++; returnedUsage = value.usage; returnedUsageStatus = value.usageStatus;
+    },
+    persistCompletedRecord: () => persisted++ });
+  assert.deepEqual([calls, starts, returns, persisted], [1, 1, 1, 0]);
+  assert.deepEqual(guardContexts, [
+    { turnIndex: 1, turnId: "first", frozen: true },
+    { turnIndex: 2, turnId: "second", frozen: true }
+  ]);
+  assert.equal(result.fatalProviderBoundaryError, marker);
+  assert.equal(result.fatalProviderBoundaryPhase, "pre-dispatch");
+  assert.equal(result.record.providerBoundaryPhase, "pre-dispatch");
+  assert.equal(result.record.abortSuite, true);
+  assert.equal(result.record.failure, "provider-dispatch-integrity-denied-before-next-turn");
+  assert.equal(result.record.usageStatus, "measured-but-unaccepted");
+  assert.equal(result.record.usage.sessions, 1);
+  assert.equal(result.record.usage.messages, 1);
+  assert.equal(result.record.usage.fresh, 10);
+  assert.equal(result.record.usage.usageCompleteness, "exact");
+  assert.deepEqual(returnedUsage, result.record.usage);
+  assert.equal(returnedUsageStatus, "measured-but-unaccepted");
+  assert.equal(result.record.journeyReceipt.completed, false);
+  assert.equal(result.record.journeyReceipt.turns.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(result.inflightPath)).stage, "provider-returned");
+});
+
+test("second-turn Pi router custody fatal retains exact usage and cannot become accepted persistence", async t => {
+  const marker = Object.assign(new Error("pi-webui-second-turn-custody-drift"), {
+    code: "BENCHMARK_EXECUTION_ASSET_MISMATCH",
+    brokerCode: "session-custody-arm-drift",
+    executionAsset: { stage: "provider-dispatch", asset: "selected-pi-arm",
+      reason: "arm-identity-mismatch" }
+  });
+  let starts = 0, returns = 0, calls = 0, persisted = 0;
+  let returnedUsage = null, returnedUsageStatus = null;
+  const guardContexts = [];
+  const f = sessionFixture(t, () => calls++), baseJourney = f.options.piagentWebUiJourney;
+  f.options.scenario.userJourney.turns.push({ id: "second", prompt: "prompt.md" });
+  const piagentWebUiJourney = async input => {
+    const first = await baseJourney({ ...input, turns: [input.turns[0]] });
+    return { ...first, code: 1, stderr: marker.message,
+      journeyReceipt: { ...first.journeyReceipt, completed: false,
+        turns: [{ index: 1, assistantText: first.stdout }] },
+      fatalProviderBoundaryError: marker, fatalProviderBoundaryPhase: "pre-dispatch" };
+  };
+  const result = await runOfflineBenchmarkSession({ ...f.options, piagentWebUiJourney,
+    assertProviderDispatchReady: async context => {
+      guardContexts.push({ turnIndex: context.turnIndex, turnId: context.turnId,
+        frozen: Object.isFrozen(context) });
+      await Promise.resolve();
+    },
+    onProviderAttemptStart: () => starts++,
+    onProviderAttemptReturned: value => {
+      returns++; returnedUsage = value.usage; returnedUsageStatus = value.usageStatus;
+    },
+    persistCompletedRecord: () => persisted++ });
+  assert.deepEqual([calls, starts, returns, persisted], [1, 1, 1, 0]);
+  assert.deepEqual(guardContexts, [{ turnIndex: 1, turnId: "first", frozen: true }]);
+  assert.equal(result.fatalProviderBoundaryError, marker);
+  assert.equal(result.fatalProviderBoundaryPhase, "pre-dispatch");
+  assert.equal(result.record.providerBoundaryPhase, "pre-dispatch");
+  assert.equal(result.record.abortSuite, true);
+  assert.equal(result.record.failure, "provider-dispatch-integrity-denied-before-next-turn");
+  assert.equal(result.record.usageStatus, "measured-but-unaccepted");
+  assert.equal(result.record.usage.sessions, 1);
+  assert.equal(result.record.usage.messages, 1);
+  assert.equal(result.record.usage.fresh, 10);
+  assert.equal(result.record.usage.usageCompleteness, "exact");
+  assert.deepEqual(returnedUsage, result.record.usage);
+  assert.equal(returnedUsageStatus, "measured-but-unaccepted");
+  assert.equal(result.record.journeyReceipt.completed, false);
+  assert.equal(result.record.journeyReceipt.turns.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(result.inflightPath)).stage, "provider-returned");
+});
+
+test("benchmark session rejects a missing dispatch guard before any provider work", async t => {
+  const f = codexJourneySessionFixture(t);
+  delete f.options.assertProviderDispatchReady;
+  await assert.rejects(runBenchmarkSession(f.options), /requires an explicit integrity guard/);
+  assert.equal(f.providerCalls(), 0);
 });
 
 test("single-session source drift blocks before dispatch or inflight admission", async t => {
   let starts = 0, calls = 0;
   const f = sessionFixture(t, () => calls++);
   fs.appendFileSync(f.pin, "// drift\n");
-  await assert.rejects(runBenchmarkSession({ ...f.options, onProviderAttemptStart: () => starts++ }), rejection);
+  await assert.rejects(runOfflineBenchmarkSession({ ...f.options, onProviderAttemptStart: () => starts++ }), rejection);
   assert.equal(starts, 0); assert.equal(calls, 0);
   assert.equal(fs.existsSync(path.join(f.runRoot, "workspaces/01-wire-fake-piagent/inflight.json")), false);
 });
@@ -338,7 +638,7 @@ test("registered session-custody denial blocks before provider admission", async
       assert.equal(request.turns.length, 1);
       throw new Error("registered-session-custody-denied");
     } };
-  await assert.rejects(runBenchmarkSession({ ...f.options, scopedBrokerSessionFactory,
+  await assert.rejects(runOfflineBenchmarkSession({ ...f.options, scopedBrokerSessionFactory,
     onProviderAttemptStart: () => starts++ }), /registered-session-custody-denied/);
   assert.deepEqual([opens, starts, calls], [1, 0, 0]);
   assert.equal(fs.existsSync(path.join(f.runRoot,
@@ -374,7 +674,7 @@ test("registered amendments bind identical exact turns to both arm session facto
           turns: structuredClone(request.turns) });
         throw new Error(`registered-exact-input-observed-${surface}`);
       } };
-    await assert.rejects(runBenchmarkSession({ ...f.options, surface, verificationPlan,
+    await assert.rejects(runOfflineBenchmarkSession({ ...f.options, surface, verificationPlan,
       scopedBrokerSessionFactory, onProviderAttemptStart: () => starts++ }),
     new RegExp(`registered-exact-input-observed-${surface}`));
     assert.deepEqual([starts, calls], [0, 0]);
@@ -388,7 +688,7 @@ test("registered amendments bind identical exact turns to both arm session facto
 test("post-return wire custody failure retains exact spend in existing inflight journal", async t => {
   let starts = 0, returnedUsage = null, persisted = false;
   const f = sessionFixture(t, ({ options }) => fs.appendFileSync(options.env.PIAGENT_WIRE_MANIFEST_PATH, " "));
-  await assert.rejects(runBenchmarkSession({ ...f.options, onProviderAttemptStart: () => starts++,
+  await assert.rejects(runOfflineBenchmarkSession({ ...f.options, onProviderAttemptStart: () => starts++,
     onProviderAttemptReturned: value => { returnedUsage = value.usage; }, persistCompletedRecord: () => { persisted = true; } }), rejection);
   const inflight = JSON.parse(fs.readFileSync(path.join(f.runRoot, "workspaces/01-wire-fake-piagent/inflight.json")));
   assert.equal(starts, 1); assert.equal(returnedUsage.fresh, 10); assert.equal(persisted, false);
@@ -398,6 +698,6 @@ test("post-return wire custody failure retains exact spend in existing inflight 
 test("wire configured CLI fallback is blocked instead of silently claiming WebUI qualification", async t => {
   let starts = 0, calls = 0;
   const f = sessionFixture(t, () => calls++); delete f.options.scenario.userJourney;
-  await assert.rejects(runBenchmarkSession({ ...f.options, onProviderAttemptStart: () => starts++ }), /qualified Piagent WebUI route/);
+  await assert.rejects(runOfflineBenchmarkSession({ ...f.options, onProviderAttemptStart: () => starts++ }), /qualified Piagent WebUI route/);
   assert.equal(starts, 0); assert.equal(calls, 0);
 });

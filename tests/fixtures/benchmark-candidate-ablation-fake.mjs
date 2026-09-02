@@ -9,9 +9,12 @@ export function fakeProvider({ onDispatch = () => {}, input = 8, duplicateSessio
   const result = (stdout = "") => ({ code: 0, stdout, stderr: "", signal: null, timedOut: false, durationSeconds: 0.01 });
   const provider = {
     kind: "offline-test-double",
-    async piagentWebUiJourney({ agentDir, workspace, environment }) {
+    async piagentWebUiJourney({ agentDir, workspace, environment, turns,
+      onBeforeProviderDispatch = () => {}, onBeforeFirstProviderDispatch = () => {} }) {
       const sessionDir = path.join(agentDir, "sessions");
       fs.mkdirSync(sessionDir);
+      await onBeforeProviderDispatch(Object.freeze({ turnIndex: 1, turnId: turns?.[0]?.id ?? null }));
+      await onBeforeFirstProviderDispatch();
       const response = await provider.runCommand("offline-fake-pi", ["--session-dir", sessionDir, "--session-id", crypto.randomUUID()], { cwd: workspace, env: environment });
       return { ...response, journeyReceipt: { channel: "offline-fake-webui", completed: true, turns: [] } };
     },

@@ -21,7 +21,8 @@ function fail(message) {
   throw error;
 }
 
-const scopedBrokerSettlement = new WeakMap(), scopedBrokerDisposal = new WeakMap();
+const scopedBrokerSettlement = new WeakMap(), scopedBrokerDisposal = new WeakMap(),
+  scopedBrokerPredispatch = new WeakMap();
 export const CODEX_SCOPED_BROKER_TURN_FACTORY_VERSION = "codex-scoped-broker-turn-factory-v1";
 export const BENCHMARK_SCOPED_SESSION_FACTORY_VERSION = "benchmark-scoped-session-factory-v1";
 export const BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION = "benchmark-scoped-session-custody-v1";
@@ -71,8 +72,11 @@ function normalizeCodexJourneyScopedBrokers(brokers, turns) {
       : scopedBrokerSettlement.get(broker);
     const dispose = typeof broker?.dispose === "function" ? () => broker.dispose()
       : scopedBrokerDisposal.get(broker);
+    const predispatch = typeof broker?.assertPredispatch === "function" ? () => broker.assertPredispatch()
+      : scopedBrokerPredispatch.get(broker);
     if (settle) scopedBrokerSettlement.set(value, settle);
     if (dispose) scopedBrokerDisposal.set(value, dispose);
+    if (predispatch) scopedBrokerPredispatch.set(value, predispatch);
     owned.push(value);
   }
   return Object.freeze(owned);
@@ -139,8 +143,15 @@ export async function runCodexUserJourney({
   environment,
   timeoutMs,
   forbiddenOutputSubstrings,
-  onBeforeFirstProviderDispatch = () => {}
+  onBeforeProviderDispatch,
+  onAfterProviderDispatch,
+  onBeforeFirstProviderDispatch
 }) {
+  if (typeof onBeforeProviderDispatch !== "function"
+    || typeof onAfterProviderDispatch !== "function"
+    || typeof onBeforeFirstProviderDispatch !== "function") {
+    fail("Codex journey requires explicit pre/post provider dispatch guards and admission callback");
+  }
   const scopedBrokerFactory = isCodexScopedBrokerTurnFactory(scopedBroker) ? scopedBroker : null;
   const existingScopedBrokers = scopedBrokerFactory || scopedBroker == null
     ? [] : Array.isArray(scopedBroker) ? [...scopedBroker]
@@ -158,7 +169,8 @@ export async function runCodexUserJourney({
   const started = Date.now(), deadline = started + timeoutMs;
   const outputs = [], errors = [], usages = [], diagnostics = [], turnReceipts = [];
   const forbiddenHits = new Set();
-  let threadId = null, code = 0, signal = null, timedOut = false, providerDispatchAdmitted = false;
+  let threadId = null, code = 0, signal = null, timedOut = false, providerDispatchAdmitted = false,
+    fatalProviderBoundaryError = null, fatalProviderBoundaryPhase = null;
   const usedBrokerPaths = new Set(), pendingDisposals = new Set(scopedBrokers ?? []);
   const releaseScopedBroker = async broker => {
     if (!broker || !pendingDisposals.delete(broker)) return;
@@ -183,11 +195,11 @@ export async function runCodexUserJourney({
         errors.push(`journey-timeout-before-turn-${index + 1}`);
         break;
       }
-      const collector = createCodexExecJsonlCollector({
+      const turnForbiddenHits = new Set(), collector = createCodexExecJsonlCollector({
         model: options.model,
         thinkingLevel: options.thinking,
         requestedServiceTier: options.serviceTier,
-        onEvent: event => inspectForbiddenValue(event, forbiddenOutputSubstrings, forbiddenHits)
+        onEvent: event => inspectForbiddenValue(event, forbiddenOutputSubstrings, turnForbiddenHits)
       });
       const timing = createDeferredBenchmarkTimingCollector({ surface: "codex-cli" });
       let turnScopedBroker = scopedBrokers?.[index];
@@ -223,25 +235,68 @@ export async function runCodexUserJourney({
         const args = threadId
           ? codexExecResumeArgs({ threadId, options, disabledFeatures, scopedBroker: turnScopedBroker })
           : codexExecArgs({ workspace, options, disabledFeatures, persistent: true, scopedBroker: turnScopedBroker });
+        try {
+          await onBeforeProviderDispatch(Object.freeze({ turnIndex: index + 1, turnId: turn.id }));
+          if (turnScopedBroker) {
+            const assertPredispatch = scopedBrokerPredispatch.get(turnScopedBroker);
+            if (typeof assertPredispatch !== "function") {
+              fail("Codex scoped broker custody is missing its predispatch assertion");
+            }
+            await assertPredispatch();
+          }
+        } catch (error) {
+          if (usages.length === 0) throw error;
+          fatalProviderBoundaryError = error instanceof Error ? error : new Error(String(error));
+          fatalProviderBoundaryPhase = "pre-dispatch";
+          diagnostics.push({ type: "provider-dispatch-integrity",
+            message: fatalProviderBoundaryError.message });
+          errors.push(fatalProviderBoundaryError.message);
+          code = 1;
+          break;
+        }
         if (!providerDispatchAdmitted) {
           // Broker opening and argv validation are provider-free. Cross the
           // paid-attempt boundary only after both have succeeded.
-          onBeforeFirstProviderDispatch();
+          await onBeforeFirstProviderDispatch();
           providerDispatchAdmitted = true;
         }
-        const result = await runCommand(codexCommand, args, {
-          cwd: workspace,
-          input: turn.message,
-          timeoutMs: remainingMs,
-          forbiddenSubstrings: forbiddenOutputSubstrings,
-          onStdoutChunk: (chunk, observation) => {
-            timing.write(chunk, observation?.observedAtSeconds);
-            collector.write(chunk);
-          },
-          env: environment
-        });
+        const boundaryContext = Object.freeze({ turnIndex: index + 1, turnId: turn.id });
+        const stagedChunks = [];
+        let result, commandError = null;
+        try {
+          result = await runCommand(codexCommand, args, {
+            cwd: workspace,
+            input: turn.message,
+            timeoutMs: remainingMs,
+            forbiddenSubstrings: forbiddenOutputSubstrings,
+            onStdoutChunk: (chunk, observation) => {
+              stagedChunks.push(Object.freeze({ chunk: String(chunk),
+                observedAtSeconds: observation?.observedAtSeconds }));
+            },
+            env: environment
+          });
+        } catch (error) { commandError = error; }
+        let postDispatchError = null;
+        try { await onAfterProviderDispatch(boundaryContext); }
+        catch (error) { postDispatchError = error instanceof Error ? error : new Error(String(error)); }
+        if (postDispatchError) {
+          if (usages.length === 0) throw postDispatchError;
+          fatalProviderBoundaryError = postDispatchError;
+          fatalProviderBoundaryPhase = "post-dispatch";
+          diagnostics.push({ type: "provider-dispatch-integrity",
+            message: fatalProviderBoundaryError.message });
+          errors.push(fatalProviderBoundaryError.message);
+          code = 1;
+          break;
+        }
+        if (commandError) throw commandError;
+        for (const staged of stagedChunks) {
+          timing.write(staged.chunk, staged.observedAtSeconds);
+          collector.write(staged.chunk);
+        }
         outputs.push(result.stdout ?? "");
         errors.push(result.stderr ?? "");
+        for (const value of turnForbiddenHits) forbiddenHits.add(value);
         for (const value of result.forbiddenHits ?? []) forbiddenHits.add(value);
         let turnUsage = null;
         let settlement = null;
@@ -335,6 +390,8 @@ export async function runCodexUserJourney({
       threadId,
       turns: turnReceipts,
       completed: code === 0 && turnReceipts.length === turns.length
-    }
+    },
+    fatalProviderBoundaryError,
+    fatalProviderBoundaryPhase
   };
 }

@@ -19,7 +19,8 @@ import { BENCHMARK_SCOPED_SESSION_FACTORY_VERSION, BENCHMARK_SCOPED_SESSION_REQU
 } from "../scripts/benchmark-codex-journey.mjs";
 import { resolveBenchmarkScopedSessionControls } from "../scripts/benchmark-session.mjs";
 import { scopedFrozenQualificationIdentity } from "../scripts/benchmark-scoped-frozen-qualification.mjs";
-import { scopedCommonRuntimeClosureIdentity, scopedProjectVerificationPlanBinding,
+import { scopedCommonRuntimeClosureIdentity, scopedContextPolicySha256,
+  scopedProjectVerificationPlanBinding, scopedToolDefinitionsSha256,
   SCOPED_PROJECT_VERIFIER_POLICY
 } from "../scripts/benchmark-scoped-verification-supervisor.mjs";
 
@@ -112,7 +113,14 @@ function setup(t, surface, { projectVerification = false, projectVerificationOut
       assetsRoot: fs.realpathSync(assetsRoot), sdkRoot: fs.realpathSync(sdkRoot), candidateIndexPath: indexPath,
       candidateIndexSha256: sha(indexBytes) }, actual = scopedFrozenQualificationIdentity(qualification,
       scopedCommonRuntimeClosureIdentity().sha256),
-    modelIdentity = { provider: "openai-codex", model: "gpt-5.6-luna", thinking: "medium", serviceTier: null };
+    modelIdentity = { provider: "openai-codex", model: "gpt-5.6-luna", thinking: "medium", serviceTier: null },
+    contextPolicySha256 = scopedContextPolicySha256({ version: 2, systemPrompt: "Use only scoped tools.",
+      allowedUserMessages: [operatorRequest], removableUserMessages: [] }),
+    expectedArmBinding = { turnIndex: 1, sha256: scopedBrokerArmDigest({
+      armId: surface === "piagent" ? "B" : "A", sourceSha256: actual.sourceSha256,
+      assetTreeSha256: actual.assetTreeSha256, brokerClosureSha256: actual.brokerClosureSha256,
+      toolDefinitionsSha256: scopedToolDefinitionsSha256(), contextPolicySha256,
+      sdkTreeSha256: actual.sdkTreeSha256 }) };
   const verifierPolicy = projectVerification ? projectPolicy(workspace) : null, verifierTimeoutMs = 10000,
     verifierPlanDigest = projectVerification ? scopedProjectVerificationPlanBinding({ projectRoot: workspace,
       nodeCommand, policy: verifierPolicy, timeoutMs: verifierTimeoutMs }).planDigest : null;
@@ -128,12 +136,13 @@ function setup(t, surface, { projectVerification = false, projectVerificationOut
         verificationId: "project-current", timeoutMs: verifierTimeoutMs, policy: verifierPolicy,
         expectedPlanDigest: verifierPlanDigest } : null };
   };
-  const create = () => createBenchmarkScopedSessionCustody({ custodyRoot, nodeCommand, brokerScript,
+  const create = (overrides = {}) => createBenchmarkScopedSessionCustody({ custodyRoot, nodeCommand, brokerScript,
     runtimePath: surface === "codex-cli" ? nodeCommand : null, qualification, catalog,
     runId: "run-one", armId: surface === "piagent" ? "B" : "A", suiteId: "suite-one",
+    expectedArmBinding,
     scenarioId: "scenario-one", surface, repeat: 1, infrastructureAttempt: 1,
     configurationSha256: "1".repeat(64), planPath, publicContractPath, workspace, modelIdentity,
-    turns: [{ id: "request", message }], resolveResources });
+    turns: [{ id: "request", message }], resolveResources, ...overrides });
   return { temporary, workspace, custodyRoot, planPath, protectedPath, message, operatorRequest, catalog,
     qualification, actual, modelIdentity, verifierPlanDigest, create };
 }
@@ -189,7 +198,8 @@ function boundaryCodexController() {
 
 function boundaryPiController() {
   const router = { version: "scoped-pi-operation-router-v1", authority: "none", toolNames: [],
-    extensionFactory() {}, beginOperation() {}, settlementEvidence() {}, assertOwnership() {},
+    extensionFactory() {}, beginOperation() {}, settlementEvidence() {}, assertProviderDispatchReady() { return true; },
+    takeFatalProviderBoundaryError() { return null; }, assertOwnership() {},
     async dispose() {}, status() {} };
   return { version: BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION, authority: "none", surface: "piagent",
     piScopedBrokerRouter: router, codexScopedBroker: null };
@@ -213,6 +223,25 @@ test("session custody opens one just-in-time Codex turn with exact catalog and w
   assert.equal(custody.measurementBinding.runtimeSha256, sha(fs.readFileSync(nodeCommand)));
   await assert.rejects(controller.codexScopedBroker.openTurn({ turnIndex: 1, turnId: "request",
     inputText: f.message, threadId: null, workspace: f.workspace }), /session-custody-(codex-turn|turn-order)/);
+  await custody.dispose();
+});
+
+test("session custody rejects a selected signed arm mismatch before creating turn custody", async t => {
+  const f = setup(t, "codex-cli"), controller = f.create({
+    expectedArmBinding: { turnIndex: 1, sha256: "f".repeat(64) }
+  });
+  await assert.rejects(controller.codexScopedBroker.openTurn({ turnIndex: 1, turnId: "request",
+    inputText: f.message, threadId: null, workspace: f.workspace }), /session-custody-arm-drift/);
+  assert.deepEqual(fs.readdirSync(f.custodyRoot), []);
+});
+
+test("Codex turn custody rechecks static files and selected arm immediately before dispatch", async t => {
+  const f = setup(t, "codex-cli"), controller = f.create(), custody = await controller.codexScopedBroker.openTurn({
+    turnIndex: 1, turnId: "request", inputText: f.message, threadId: null, workspace: f.workspace
+  });
+  assert.equal(custody.assertPredispatch(), true);
+  fs.appendFileSync(custody.brokerConfigPath, " ");
+  assert.throws(() => custody.assertPredispatch(), /custody-static-drift/);
   await custody.dispose();
 });
 

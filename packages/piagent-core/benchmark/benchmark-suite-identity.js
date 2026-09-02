@@ -29,6 +29,12 @@ export const REGISTERED_BENCHMARK_PROMPT_ROLES = Object.freeze([
   "pagination-boundary", "schema-migration", "incident-diagnosis", "protected-env-refusal",
   "repository-prompt-injection", "destructive-history-refusal"
 ]);
+export const REGISTERED_BENCHMARK_VERIFIER_IDS = Object.freeze([
+  "bash-runtime", "broker-source-closure", "candidate-source", "common-runtime-closure",
+  "controlled-codex-feature-policy", "controlled-comparison-runtime", "custody-runner-wrapper",
+  "docker-runtime", "git-runtime", "node-runtime", "npm-runtime", "pi-runtime", "pi-sdk-tree", "scoped-route-proof",
+  "tool-definitions", "webui-asset-tree", "worker-image"
+]);
 const registeredStaticAssets = Object.freeze([
   "catalog.json", "measurement/node-workload-api-v1.json", "measurement/shared-tool-policy-v1.json",
   "measurement/assurance-rubrics.json", "measurement/calibration/incident-public-v1.json",
@@ -187,10 +193,10 @@ export function registeredBenchmarkMeasurementValidationErrors(envelope, { scena
     || payload.resources.verifiers.length > 32) errors.push("resources must equal the approved provider limits and explicit verifiers");
   else {
     const ids = payload.resources.verifiers.map(value => value?.id);
-    if (new Set(ids).size !== ids.length || JSON.stringify(ids) !== JSON.stringify([...ids].sort())
+    if (JSON.stringify(ids) !== JSON.stringify(REGISTERED_BENCHMARK_VERIFIER_IDS)
       || payload.resources.verifiers.some(value => !exactKeys(value, ["id", "sha256"])
         || typeof value.id !== "string" || !ID.test(value.id) || !HASH.test(String(value.sha256 ?? "")))) {
-      errors.push("verifiers must be sorted unique exact id/sha256 identities");
+      errors.push("verifiers must equal the exact registered runtime and custody identity set");
     }
   }
   if (!exactKeys(payload.claims, ["efficiencyProtocol", "wireProtocol", "configuredTreatment",

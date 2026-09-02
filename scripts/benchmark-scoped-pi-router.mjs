@@ -23,6 +23,8 @@ function loadedBroker(value, expected) {
   requireThat(value && typeof value === "object" && value.broker && typeof value.broker.invokeAsync === "function"
     && typeof value.broker.status === "function" && typeof value.broker.close === "function"
     && typeof value.settlementEvidence === "function"
+    && (value.assertProviderDispatchReady === undefined
+      || typeof value.assertProviderDispatchReady === "function")
     && (value.dispose === undefined || typeof value.dispose === "function")
     && value.identity && value.nonce === value.identity.nonce
     && value.identity.sessionId === expected.sessionId && value.identity.operationId === expected.operationRef
@@ -35,7 +37,7 @@ function loadedBroker(value, expected) {
 export function createScopedBrokerPiOperationRouter({ open } = {}) {
   requireThat(typeof open === "function", "pi-router-open-required");
   let registered = false, shuttingDown = false, pending = null, active = null, completed = null;
-  let consumed = true, tools = null;
+  let consumed = true, tools = null, boundaryFailure = null;
   const assertSurface = pi => {
     const names = pi.getActiveTools?.().map(tool => typeof tool === "string" ? tool : tool?.name)
       ?? pi.getActiveToolNames?.();
@@ -91,7 +93,10 @@ export function createScopedBrokerPiOperationRouter({ open } = {}) {
       let loaded;
       try { loaded = loadedBroker(await open(reservation, ctx), reservation); }
       catch (error) {
-        completed = Object.freeze({ reservation, loaded: null, reason: "open-failed" });
+        const fatalProviderBoundaryError = error instanceof Error ? error : new Error(String(error));
+        boundaryFailure = Object.freeze({ reservation, error: fatalProviderBoundaryError });
+        completed = Object.freeze({ reservation, loaded: null, reason: "open-failed",
+          fatalProviderBoundaryError });
         consumed = false; shuttingDown = true; throw error;
       }
       active = Object.freeze({ reservation, loaded }); bind();
@@ -126,8 +131,34 @@ export function createScopedBrokerPiOperationRouter({ open } = {}) {
     settlementEvidence() {
       requireThat(completed?.loaded && !consumed && completed.reason === "operation-settled",
         "pi-router-settlement-unavailable");
+      requireThat(boundaryFailure?.reservation !== completed.reservation,
+        "pi-router-settlement-boundary-failed");
       const evidence = completed.loaded.settlementEvidence(); consumed = true;
       return evidence;
+    },
+    assertProviderDispatchReady() {
+      if (boundaryFailure) throw boundaryFailure.error;
+      requireThat(!shuttingDown && active && !active.loaded.broker.status().ended,
+        "pi-router-provider-boundary-unavailable");
+      try {
+        const asserted = active.loaded.assertProviderDispatchReady?.();
+        requireThat(asserted === undefined || asserted === true, "pi-router-provider-boundary-async");
+      }
+      catch (error) {
+        const fatalProviderBoundaryError = error instanceof Error ? error : new Error(String(error));
+        boundaryFailure = Object.freeze({ reservation: active.reservation,
+          error: fatalProviderBoundaryError });
+        shuttingDown = true;
+        throw error;
+      }
+      return true;
+    },
+    takeFatalProviderBoundaryError() {
+      if (!completed || !boundaryFailure || consumed || completed.reason !== "operation-settled"
+        || completed.reservation !== boundaryFailure.reservation) return null;
+      const error = boundaryFailure.error; boundaryFailure = null;
+      consumed = true;
+      return error;
     },
     assertOwnership(resourceLoader) {
       const loaded = resourceLoader?.getExtensions?.(), matches = [];

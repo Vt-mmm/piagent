@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { isolatedContainerArguments, isolatedContainerConfigurationMatches, runIsolatedContract } from "../packages/piagent-core/extensions/acceptance-isolated-executor.js";
 import { NODE_WORKER_VERSION, WORKER_VERSION, parseRequest, parseResponse } from "../packages/piagent-core/extensions/acceptance-executor/protocol.mjs";
@@ -151,6 +155,48 @@ test("unavailable backend never falls back to host evaluation", async () => {
     await assert.rejects(runIsolatedContract({ requestText: sourceRequest("export const run=()=>true"), imageId: `sha256:${"a".repeat(64)}`,
       dockerSocket: "/nonexistent/piagent-contract-test.sock", executionRunId }), /Invalid isolated/);
   }
+});
+
+test("a pinned Docker command rejects path, digest, and shape substitution before backend access", async t => {
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-docker-pin-test-"))),
+    commandPath = path.join(directory, "docker"), linkPath = path.join(directory, "docker-link");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(commandPath, "#!/bin/sh\nexit 1\n", { mode: 0o500 });
+  fs.symlinkSync(commandPath, linkPath);
+  const sha256 = createHash("sha256").update(fs.readFileSync(commandPath)).digest("hex"),
+    base = { requestText: sourceRequest("export const run=()=>true"), imageId: `sha256:${"a".repeat(64)}`,
+      dockerSocket: "/nonexistent/piagent-contract-pinned.sock" };
+  const unavailable = await runIsolatedContract({ ...base, dockerCommand: { path: commandPath, sha256 } });
+  assert.equal(unavailable.reason, "local-backend-unavailable");
+  for (const dockerCommand of [
+    { path: commandPath, sha256: "0".repeat(64) },
+    { path: linkPath, sha256 },
+    { sha256, path: commandPath },
+    { path: commandPath, sha256, extra: true }
+  ]) await assert.rejects(runIsolatedContract({ ...base, dockerCommand }), /Docker command/);
+});
+
+test("a pinned Docker command executes one private verified copy after its source changes", async t => {
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-docker-copy-test-"))),
+    commandPath = path.join(directory, "docker"), socketPath = path.join(directory, "docker.sock"),
+    trustedCounter = path.join(directory, "trusted.log"), maliciousCounter = path.join(directory, "malicious.log");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const maliciousSource = `#!${process.execPath}\nrequire("node:fs").appendFileSync(${JSON.stringify(maliciousCounter)}, "malicious\\n");\n`,
+    trustedSource = `#!${process.execPath}\nconst fs=require("node:fs");\nfs.appendFileSync(${JSON.stringify(trustedCounter)}, "trusted\\n");\nif(process.argv.includes("create")){fs.writeFileSync(${JSON.stringify(commandPath)}, ${JSON.stringify(maliciousSource)});fs.chmodSync(${JSON.stringify(commandPath)},0o500);process.stdout.write("${"a".repeat(64)}\\n");}\nelse if(process.argv.includes("inspect"))process.stdout.write("[]\\n");\n`;
+  fs.writeFileSync(commandPath, trustedSource, { mode: 0o500 });
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, resolve);
+  });
+  t.after(() => server.close());
+  const sha256 = createHash("sha256").update(Buffer.from(trustedSource)).digest("hex"),
+    result = await runIsolatedContract({ requestText: sourceRequest("export const run=()=>true"),
+      imageId: `sha256:${"a".repeat(64)}`, dockerSocket: socketPath,
+      dockerCommand: { path: commandPath, sha256 } });
+  assert.equal(result.status, "error");
+  assert.deepEqual(fs.readFileSync(trustedCounter, "utf8").trim().split("\n"), ["trusted", "trusted"]);
+  assert.equal(fs.existsSync(maliciousCounter), false);
 });
 
 test("a cancelled Node-profile request never creates a worker and retains profile binding", integration, async () => {

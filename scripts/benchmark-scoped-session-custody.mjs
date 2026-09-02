@@ -5,6 +5,8 @@ import path from "node:path";
 
 import { benchmarkTreeStatIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { activeSessionTask } from "../packages/piagent-core/extensions/task-state.js";
+import { scopedBrokerArmDigest
+} from "../packages/piagent-core/runtime/verification/composite-scoped-mediation.ts";
 import { benchmarkVerificationOperatorRequest } from "./benchmark-independent-verification.mjs";
 import { benchmarkPublicInputCatalogDigest, validateBenchmarkPublicInputCatalog
 } from "./benchmark-public-input-catalog.mjs";
@@ -388,11 +390,16 @@ export async function createBenchmarkScopedBrokerTurnCustody(input) {
     identity, measurementBinding: binding, configSha256: identity.configSha256,
     brokerConfigPath: at("config.json"), nodeCommand, brokerScript,
     codexLaunch: Object.freeze({ nodeCommand, brokerScript, brokerConfigPath: at("config.json") }),
+    assertPredispatch() { requireThat(!piOpened && !disposePromise, "custody-predispatch-state");
+      assertStatic(); return true; },
     async openPi() { requireThat(!piOpened && !disposePromise && !fs.existsSync(config.journalPath), "custody-single-use");
       try { assertStatic(); piOpened = true;
         const loaded = loadScopedBrokerFromConfig({ configPath: at("config.json"),
           createBroker: createScopedMaterialBroker });
-        return Object.freeze({ ...loaded, dispose });
+        return Object.freeze({ ...loaded, dispose, assertProviderDispatchReady() {
+          requireThat(piOpened && !disposePromise, "custody-predispatch-state");
+          assertStatic(); return true;
+        } });
       } catch (error) { await dispose(); throw error; } },
     codexSettlementEvidence() { requireThat(!piOpened, "custody-surface-conflict"); assertStatic();
       return codexEvidence(); },
@@ -469,7 +476,7 @@ function resources(value, expectedRequests, workspace) {
  * start a provider, grade output, or admit a benchmark record. */
 export function createBenchmarkScopedSessionCustody(input) {
   const names = ["custodyRoot", "nodeCommand", "brokerScript", "runtimePath", "qualification", "catalog",
-    "runId", "armId", "suiteId", "scenarioId", "surface", "repeat", "infrastructureAttempt",
+    "runId", "armId", "expectedArmBinding", "suiteId", "scenarioId", "surface", "repeat", "infrastructureAttempt",
     "configurationSha256", "planPath", "publicContractPath", "workspace", "modelIdentity", "turns",
     "resolveResources"];
   exact(input, names, "session-custody-input");
@@ -489,6 +496,10 @@ export function createBenchmarkScopedSessionCustody(input) {
   const turns = exactTurns(input.turns, scenario), planBytes = stableSessionFile(input.planPath, 2 * 1024 * 1024,
     "session-custody-plan"), contractBytes = stableSessionFile(input.publicContractPath, 2 * 1024 * 1024,
     "session-custody-public-contract");
+  exact(input.expectedArmBinding, ["turnIndex", "sha256"], "session-custody-arm-binding");
+  requireThat(Number.isSafeInteger(input.expectedArmBinding.turnIndex)
+    && input.expectedArmBinding.turnIndex >= 1 && input.expectedArmBinding.turnIndex <= turns.length
+    && HASH.test(input.expectedArmBinding.sha256), "session-custody-arm-binding");
   requireThat(outside(workspace, input.planPath) && outside(workspace, input.publicContractPath),
     "session-custody-authority-location");
   const planSha256 = sha(planBytes), publicContractSha256 = sha(contractBytes),
@@ -513,6 +524,7 @@ export function createBenchmarkScopedSessionCustody(input) {
         .map(item => item.operatorRequest), workspace),
       verificationHost = prepareVerificationHost(resolved.verificationHost, workspace, input.nodeCommand),
       verifications = verificationHost ? Object.freeze([verificationHost.manifest]) : resolved.verifications,
+      contextPolicySha256 = scopedContextPolicySha256(resolved.contextPolicy),
       measurementBinding = { version: "benchmark-turn-binding-v1", authority: "none", runId: input.runId,
         armId: input.armId, suiteId: input.suiteId, scenarioId: input.scenarioId, surface: input.surface,
         repeat: input.repeat, infrastructureAttempt: input.infrastructureAttempt, turnIndex: turn.index,
@@ -521,18 +533,38 @@ export function createBenchmarkScopedSessionCustody(input) {
         operatorRequestDigest: turn.catalog.operatorRequestDigest, profile: resolved.profile,
         materialManifestSha256: scopedBrokerMaterialManifestSha256(resolved.profile, resolved.materials),
         verificationManifestSha256: scopedBrokerVerificationManifestSha256(verifications),
-        contextPolicySha256: scopedContextPolicySha256(resolved.contextPolicy), nodeSha256, runtimeSha256,
-        modelSha256 }, custody = await createBenchmarkScopedBrokerTurnCustody({ custodyRoot: input.custodyRoot,
+        contextPolicySha256, nodeSha256, runtimeSha256,
+        modelSha256 };
+    if (turn.index === input.expectedArmBinding.turnIndex) {
+      const actualArmDigest = scopedBrokerArmDigest({ armId: input.armId,
+        sourceSha256: frozen.sourceSha256, assetTreeSha256: frozen.assetTreeSha256,
+        brokerClosureSha256: frozen.brokerClosureSha256,
+        toolDefinitionsSha256: scopedToolDefinitionsSha256(), contextPolicySha256,
+        sdkTreeSha256: frozen.sdkTreeSha256 });
+      requireThat(actualArmDigest === input.expectedArmBinding.sha256, "session-custody-arm-drift");
+    }
+    const custody = await createBenchmarkScopedBrokerTurnCustody({ custodyRoot: input.custodyRoot,
         nodeCommand: input.nodeCommand, brokerScript: input.brokerScript, runtimePath: input.runtimePath,
         qualification: input.qualification, measurementBinding, contextPolicy: resolved.contextPolicy,
         modelIdentity: input.modelIdentity, taskIdentity, materialRoot: resolved.materialRoot,
         materials: resolved.materials, verifications, verificationBridge: resolved.verificationBridge,
         verificationHost });
+    if (turn.index === input.expectedArmBinding.turnIndex
+      && scopedBrokerArmDigest(custody.identity) !== input.expectedArmBinding.sha256) {
+      await custody.dispose();
+      fail("session-custody-arm-drift");
+    }
     requireThat(benchmarkTreeStatIdentity(workspace,
       { rejectSymlinks: true, rejectEscapingSymlinks: true }).contentDigest === workspaceSha256,
       "session-custody-workspace-drift");
     nextTurn++;
-    return custody;
+    if (turn.index !== input.expectedArmBinding.turnIndex) return custody;
+    return Object.freeze({ ...custody, assertPredispatch() {
+      custody.assertPredispatch();
+      requireThat(scopedBrokerArmDigest(custody.identity) === input.expectedArmBinding.sha256,
+        "session-custody-arm-drift");
+      return true;
+    } });
   }
   const piScopedBrokerRouter = input.surface === "piagent" ? createScopedBrokerPiOperationRouter({
     async open(reservation, ctx) {

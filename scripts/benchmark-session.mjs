@@ -38,8 +38,9 @@ import { BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION, BENCHMARK_SCOPED_SESSION_FACT
   BENCHMARK_SCOPED_SESSION_REQUEST_VERSION, controlledCodexEnvironment, isCodexScopedBrokerTurnFactory,
   requireScopedCodexHome,
   runCodexUserJourney } from "./benchmark-codex-journey.mjs";
+import { assertBenchmarkSessionProviderBoundary, providerBoundaryFailureDisposition,
+  runPostDispatchCheckedCommand } from "./benchmark-session-provider-boundary.mjs";
 export { runCodexUserJourney } from "./benchmark-codex-journey.mjs";
-
 const coldStartRuntimeManagedPaths = [
   ".pi/project-context.md",
   ".pi/context-index.json",
@@ -52,14 +53,11 @@ function fail(message) {
   error.exitCode = 1;
   throw error;
 }
-
 const scopedHash = /^[a-f0-9]{64}$/;
 const scopedId = /^[A-Za-z0-9][A-Za-z0-9:._~-]{0,159}$/;
-
 function scopedRequire(value, code) {
   if (!value) throw Object.assign(new Error(code), { brokerCode: code });
 }
-
 function scopedExact(value, names, code) {
   scopedRequire(value && typeof value === "object" && !Array.isArray(value)
     && Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name)), code);
@@ -81,6 +79,8 @@ function validScopedPiRouter(value) {
     && value.version === "scoped-pi-operation-router-v1" && value.authority === "none"
     && Array.isArray(value.toolNames) && typeof value.extensionFactory === "function"
     && typeof value.beginOperation === "function" && typeof value.settlementEvidence === "function"
+    && typeof value.assertProviderDispatchReady === "function"
+    && typeof value.takeFatalProviderBoundaryError === "function"
     && typeof value.assertOwnership === "function" && typeof value.dispose === "function"
     && typeof value.status === "function");
 }
@@ -458,7 +458,15 @@ export function persistedJourneyReceipt(receipt) {
   };
 }
 
-export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, onProviderAttemptStart = () => {}, onProviderAttemptReturned = () => {}, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, verificationPlan, providerWirePlan, candidateDigest, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, codexScopedBroker, piScopedBrokerRouter, scopedBrokerSessionFactory, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed, piagentWebUiJourney = runPiagentWebUiJourney }) {
+async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord,
+  assertProviderDispatchReady, onProviderAttemptStart = () => {}, onAfterProviderDispatch,
+  onProviderAttemptReturned = () => {}, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1,
+  runId, runRoot, options, verificationPlan, providerWirePlan, candidateDigest, piCommand, codexCommand,
+  codexDisabledFeatures, codexRuntime, codexScopedBroker, piScopedBrokerRouter, scopedBrokerSessionFactory,
+  piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed,
+  piagentWebUiJourney = runPiagentWebUiJourney }, allowInjectedJourney) {
+  assertBenchmarkSessionProviderBoundary({ assertProviderDispatchReady, onAfterProviderDispatch, surface, piagentWebUiJourney,
+    defaultPiagentWebUiJourney: runPiagentWebUiJourney, allowInjectedJourney });
   if (surface !== "codex-cli" && !piRuntimeHome?.path) fail("Pi benchmark session is missing its controlled writable runtime home");
   const attemptSuffix = infrastructureAttempt > 1 ? `-infra-${infrastructureAttempt}` : "";
   const key = `${String(repeat).padStart(2, "0")}-${scenario.id}-${surface}${attemptSuffix}`;
@@ -571,12 +579,12 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   if (surface === "codex-cli" && !journeyTurns) {
     requireScopedCodexHome(effectiveCodexScopedBroker, codexRuntime, processEnvironment);
   }
-  const deferredCodexJourneyAdmission = Boolean(journeyTurns && surface === "codex-cli");
-  if (!deferredCodexJourneyAdmission) admitProviderDispatch();
   let agent;
   let usageOverride;
   let journeyReceipt = null;
   let codexDiagnostics = [];
+  let fatalProviderBoundaryError = null;
+  let fatalProviderBoundaryPhase = null;
   try {
     if (journeyTurns && surface === "piagent") {
       agent = await piagentWebUiJourney({
@@ -589,9 +597,14 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
         expectedTerminalSettlement: scenario.userJourney.expectedTerminalSettlement,
         timeoutMs: options.timeoutSeconds * 1_000,
         environment: processEnvironment,
+        onBeforeProviderDispatch: assertProviderDispatchReady,
+        onBeforeFirstProviderDispatch: admitProviderDispatch,
         ...(effectivePiScopedBrokerRouter ? { scopedBrokerRouter: effectivePiScopedBrokerRouter } : {})
       });
+      if (!providerDispatchAdmitted) fail("Piagent journey ended before its first provider dispatch");
       journeyReceipt = agent.journeyReceipt;
+      fatalProviderBoundaryError = agent.fatalProviderBoundaryError ?? null;
+      fatalProviderBoundaryPhase = agent.fatalProviderBoundaryPhase ?? null;
       agent.forbiddenHits = observedSubstrings(agent.stdout, forbiddenOutputSubstrings);
       agent.requiredHits = observedSubstrings(agent.stdout, requiredOutputSubstrings);
     } else if (journeyTurns && surface === "codex-cli") {
@@ -606,6 +619,8 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
         environment: processEnvironment,
         timeoutMs: options.timeoutSeconds * 1_000,
         forbiddenOutputSubstrings,
+        onBeforeProviderDispatch: assertProviderDispatchReady,
+        onAfterProviderDispatch,
         onBeforeFirstProviderDispatch: admitProviderDispatch
       });
       if (!providerDispatchAdmitted) fail("Codex journey ended before its first provider dispatch");
@@ -613,17 +628,15 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
       usageOverride = journey.usage;
       codexDiagnostics = journey.diagnostics;
       journeyReceipt = journey.journeyReceipt;
+      fatalProviderBoundaryError = journey.fatalProviderBoundaryError;
+      fatalProviderBoundaryPhase = journey.fatalProviderBoundaryPhase;
       agent.requiredHits = observedSubstrings(agent.stdout, requiredOutputSubstrings);
     } else {
-      agent = await runCommand(command, args, {
-        cwd: workspace, input: surface === "codex-cli" ? prompt : undefined, timeoutMs: options.timeoutSeconds * 1_000,
-        forbiddenSubstrings: forbiddenOutputSubstrings, requiredSubstrings: requiredOutputSubstrings,
-        onStdoutChunk: (chunk, observation) => {
-          timingCollector.write(chunk, observation?.observedAtSeconds);
-          codexCollector?.write(chunk);
-        },
-        env: processEnvironment
-      });
+      await assertProviderDispatchReady(Object.freeze({ turnIndex: 1, turnId: null }));
+      admitProviderDispatch();
+      agent = await runPostDispatchCheckedCommand({ runCommand, command, args, workspace, prompt, surface,
+        timeoutMs: options.timeoutSeconds * 1_000, forbiddenOutputSubstrings, requiredOutputSubstrings,
+        processEnvironment, timingCollector, codexCollector, onAfterProviderDispatch });
     }
   } catch (error) {
     timingCollector.discard();
@@ -671,11 +684,11 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const diagnosticInput = codexDiagnostics.length > 0
     ? JSON.stringify(codexDiagnostics)
     : [piTerminalError, ...piSessionInspection.diagnostics, agent.stderr, agent.stdout].filter(Boolean).join("\n");
-  const preUsageFailure = classifyPreUsageFailure(agent, usage, diagnosticInput, {
-    terminalProviderError: Boolean(piTerminalError),
-    usageParsingError: piSessionInspection.diagnostics.length > 0,
-    candidateOutcome: agent.candidateOutcome ?? null
-  });
+  const providerBoundaryFailure = providerBoundaryFailureDisposition(
+    fatalProviderBoundaryError, fatalProviderBoundaryPhase);
+  const preUsageFailure = providerBoundaryFailure
+    ?? classifyPreUsageFailure(agent, usage, diagnosticInput, { terminalProviderError: Boolean(piTerminalError),
+      usageParsingError: piSessionInspection.diagnostics.length > 0, candidateOutcome: agent.candidateOutcome ?? null });
   const candidateOutcomeFailure = candidateOutcomeFailureReason(agent.candidateOutcome);
   writePrivateAtomic(inflightPath, `${JSON.stringify({
     schemaVersion: 1,
@@ -757,6 +770,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     infrastructureFailure: preUsageFailure?.failure, infrastructureClass: preUsageFailure?.class,
     infrastructureRetryable: preUsageFailure?.retryable,
     usageStatus: preUsageFailure?.usageStatus ?? "measured",
+    ...(fatalProviderBoundaryPhase ? { providerBoundaryPhase: fatalProviderBoundaryPhase } : {}),
     infrastructureDiagnostic: abortSuite ? safeInfrastructureDiagnostic(diagnosticInput, [...forbiddenOutputSubstrings, piRuntimeHome?.path].filter(Boolean)) : undefined,
     infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : piTerminalError ? "pi-terminal-error-event" : "process-output-tail") : undefined,
     resolved, failure: preUsageFailure?.failure ?? candidateOutcomeFailure ?? independentFailure
@@ -772,5 +786,15 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   };
   const workflowFailed = surface === "piagent" && (workflow?.checks ?? []).some((check) => check.passed === false);
   if (!record.abortSuite && !interrupted()) persistCompletedRecord(record);
-  return { record, workspaceRoot, key, workflowFailed, inflightPath };
+  return { record, workspaceRoot, key, workflowFailed, inflightPath,
+    ...(fatalProviderBoundaryError ? { fatalProviderBoundaryError, fatalProviderBoundaryPhase } : {}) };
+}
+
+export function runBenchmarkSession(input) { return runBenchmarkSessionInternal(input, false); }
+
+/** Explicit non-production seam for deterministic offline plumbing tests. It cannot be selected
+ * through the benchmark CLI or the production runner. */
+export function runOfflineBenchmarkSession(input) {
+  if (typeof input?.piagentWebUiJourney !== "function") fail("Offline benchmark session requires an explicit fake Piagent WebUI journey");
+  return runBenchmarkSessionInternal(input, true);
 }

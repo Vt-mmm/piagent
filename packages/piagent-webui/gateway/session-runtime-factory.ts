@@ -18,7 +18,9 @@ export type RuntimeFactory = (info: PiSessionInfo, runtimeInstanceRef: string,
   sessionManager?: any, initialOptions?: InitialSessionOptions) => Promise<RuntimeHandle>;
 export type ScopedBrokerRouter = { toolNames: readonly string[]; extensionFactory: (pi: any) => void;
   beginOperation(identity: WireOperation & { sessionId: string }): (reason: string) => void;
-  settlementEvidence(): unknown; assertOwnership(resourceLoader: any): unknown; dispose(): Promise<void> };
+  settlementEvidence(): unknown; assertProviderDispatchReady(): true;
+  takeFatalProviderBoundaryError(): Error | null;
+  assertOwnership(resourceLoader: any): unknown; dispose(): Promise<void> };
 const MAX_WIRE_JOURNAL_BYTES = 64 * 1024 * 1024;
 
 function privateWireFile(file: string, cwd: string, maximum: number, sync = false) {
@@ -104,8 +106,20 @@ export function createProductionRuntimeFactory(options: {
     const createRuntime = async ({ cwd, agentDir, sessionManager, sessionStartEvent }: any) => {
       const requested = pendingInitialOptions;
       pendingInitialOptions = undefined;
+      let modelRuntime = options.modelRuntime;
+      if (options.scopedBrokerRouter) {
+        const streamSimple = modelRuntime?.streamSimple;
+        if (typeof streamSimple !== "function") throw new Error("session-scoped-provider-boundary-unavailable");
+        const guarded = Object.create(modelRuntime);
+        Object.defineProperty(guarded, "streamSimple", { enumerable: true,
+          value(...args: unknown[]) {
+            options.scopedBrokerRouter!.assertProviderDispatchReady();
+            return Reflect.apply(streamSimple, modelRuntime, args);
+          } });
+        modelRuntime = guarded;
+      }
       const services = await options.host.createAgentSessionServices({
-        cwd, agentDir, modelRuntime: options.modelRuntime,
+        cwd, agentDir, modelRuntime,
         resourceLoaderOptions: {
           additionalExtensionPaths: [guard],
           extensionsOverride: preferAuthoritativePiagentGuard(guard),
@@ -126,6 +140,14 @@ export function createProductionRuntimeFactory(options: {
         ...(options.scopedBrokerRouter ? { noTools: "all", tools: [...options.scopedBrokerRouter.toolNames] } : {}) });
       if (options.scopedBrokerRouter && JSON.stringify(created.session.getActiveToolNames?.())
         !== JSON.stringify(options.scopedBrokerRouter.toolNames)) throw new Error("session-scoped-tool-surface-mismatch");
+      if (options.scopedBrokerRouter) {
+        const agent = created.session?.agent, sdkPayload = agent?.onPayload;
+        if (typeof sdkPayload !== "function") throw new Error("session-scoped-provider-boundary-unavailable");
+        agent.onPayload = async (raw: unknown, model: { provider: string; id: string }) => {
+          await options.scopedBrokerRouter!.assertProviderDispatchReady();
+          return await sdkPayload(raw, model);
+        };
+      }
       if (wireConfig) {
         const session = created.session, agent = session.agent, sdkPayload = agent?.onPayload;
         if (typeof sdkPayload !== "function") throw new Error("provider-wire-final-callback-unavailable");

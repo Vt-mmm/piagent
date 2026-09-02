@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isAbsolute, normalize } from "node:path";
 import { compileIndependentContract } from "./acceptance-independent-contract.js";
 import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_VERSION, runSnapshotBoundContract, snapshotPlanSource } from "./acceptance-execution-snapshot.js";
 import { validateModulePaths } from "./acceptance-executor/module-graph.mjs";
@@ -30,14 +31,23 @@ const unavailable = (reason, attemptId) => Object.freeze({ version: DURABLE_EXEC
  * before the store's recordStoppedAttempt capability can be used.
  */
 export function createDurableContractRunner({ store, projectRoot, sourcePath, modulePaths, authorizeSourceRead,
-  exportName, checks, profile, imageId, dockerSocket, verifierDigest, getProjectVerificationDigest, timeoutMs = 10000 } = {}) {
+  exportName, checks, profile, imageId, dockerSocket, dockerCommand, verifierDigest,
+  getProjectVerificationDigest, timeoutMs = 10000 } = {}) {
   if (!store || typeof store.reserve !== "function" || typeof store.settle !== "function"
     || typeof verifierDigest !== "string" || !HASH.test(verifierDigest) || typeof getProjectVerificationDigest !== "function"
     || typeof imageId !== "string" || !/^sha256:[a-f0-9]{64}$/.test(imageId)
     || typeof dockerSocket !== "string" || !dockerSocket.startsWith("/") || dockerSocket.includes("\0")
+    || dockerCommand !== undefined && (!dockerCommand || typeof dockerCommand !== "object"
+      || Array.isArray(dockerCommand)
+      || JSON.stringify(Object.keys(dockerCommand)) !== JSON.stringify(["path", "sha256"])
+      || typeof dockerCommand.path !== "string" || !isAbsolute(dockerCommand.path)
+      || normalize(dockerCommand.path) !== dockerCommand.path || dockerCommand.path.includes("\0")
+      || !HASH.test(String(dockerCommand.sha256 ?? "")))
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 25 || timeoutMs > 30000) throw new TypeError("Invalid approved durable verifier configuration");
   // Compile before retaining the plan to detach it from later caller mutations.
   const nodeProfile = profile !== undefined;
+  const approvedDockerCommand = dockerCommand === undefined ? undefined
+    : Object.freeze({ path: dockerCommand.path, sha256: dockerCommand.sha256 });
   const template = compileIndependentContract(JSON.stringify({ schemaVersion: nodeProfile ? 2 : 1,
     ...(nodeProfile ? { profile } : {}), source: "export const placeholder = 0;", exportName, checks }));
   const plan = source => ({ schemaVersion: nodeProfile ? 2 : 1,
@@ -49,7 +59,8 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, mo
     ...(nodeProfile ? { profile: template.plan.profile } : {}) });
   const completed = new WeakMap();
   const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, template.version,
-    EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, timeoutMs, template.plan.profile ?? null]));
+    EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, approvedDockerCommand ?? null,
+    timeoutMs, template.plan.profile ?? null]));
 
   async function run({ scope, criterionHash, maxAttempts, retry = false, signal } = {}) {
     if (typeof criterionHash !== "string" || !HASH.test(criterionHash)) throw new TypeError("Invalid current criterion hash");
@@ -100,6 +111,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, mo
     try {
       observed = await runSnapshotBoundContract({ ...snapshotRequest, exportName, checks: approvedChecks,
         ...(nodeProfile ? { profile: template.plan.profile } : {}), imageId, dockerSocket,
+        ...(approvedDockerCommand === undefined ? {} : { dockerCommand: approvedDockerCommand }),
         timeoutMs, signal, executionRunId: reserved.event.attemptId });
     } catch {
       observed = { verdict: "error", reason: "independent-execution-threw" };

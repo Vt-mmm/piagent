@@ -60,6 +60,11 @@ test("registered measurement rejects ad hoc suite, matrix, resource and legacy v
   }
   assert.doesNotThrow(() => parseBenchmarkArgs(["--registered-measurement", manifest,
     "--max-sessions", "12", "--keep-workspaces", "--dry-run", "--yes"]));
+  for (const argv of [["--registered-measurement", manifest, "--allow-pi-auth-writeback"],
+    ["--allow-pi-auth-writeback", "--registered-measurement", manifest]]) {
+    assert.equal(parseBenchmarkArgs(argv).allowPiAuthWriteback, true);
+  }
+  assert.equal(parseBenchmarkArgs(["--registered-measurement", manifest, "--yes"]).allowPiAuthWriteback, false);
 });
 
 test("measurement-only rejects early quality stops and filtered/runtime-limited runs in either argument order", () => {

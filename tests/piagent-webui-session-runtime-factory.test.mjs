@@ -57,7 +57,8 @@ test("production runtime factory rejects an unavailable initial model before ses
 
 test("production runtime factory wires one host-only scoped router with exact tools and native session identity", async () => {
   const tools = ["scoped_read", "scoped_write_document", "scoped_verify"], observed = {
-    services: null, creation: null, ownership: 0, begins: [], finishes: [], disposed: 0
+    services: null, creation: null, ownership: 0, boundaries: 0, providerStreams: 0,
+    begins: [], finishes: [], disposed: 0
   };
   const router = {
     toolNames: tools,
@@ -66,8 +67,11 @@ test("production runtime factory wires one host-only scoped router with exact to
     beginOperation(identity) { observed.begins.push(identity);
       return reason => observed.finishes.push(reason); },
     settlementEvidence() { return { version: "fixture" }; },
+    assertProviderDispatchReady() { observed.boundaries++; return true; },
+    takeFatalProviderBoundaryError() { return null; },
     async dispose() { observed.disposed++; }
   };
+  const modelRuntime = { streamSimple() { observed.providerStreams++; return "stream"; } };
   const host = {
     async createAgentSessionServices(options) {
       observed.services = options;
@@ -76,7 +80,8 @@ test("production runtime factory wires one host-only scoped router with exact to
     },
     async createAgentSessionFromServices(options) {
       observed.creation = options;
-      return { session: { getActiveToolNames: () => tools, async bindExtensions() {} } };
+      return { session: { agent: { async onPayload(value) { return value; } },
+        getActiveToolNames: () => tools, async bindExtensions() {} } };
     },
     async createAgentSessionRuntime(createRuntime, options) {
       const created = await createRuntime(options);
@@ -85,11 +90,15 @@ test("production runtime factory wires one host-only scoped router with exact to
   };
   const manager = { getSessionId: () => "native-session" };
   const runtime = await createProductionRuntimeFactory({ host, agentDir: "/private/pi-home", packageRoot,
-    scopedBrokerRouter: router })(info, "runtime_ref", manager);
+    modelRuntime, scopedBrokerRouter: router })(info, "runtime_ref", manager);
+  assert.equal(observed.services.modelRuntime.streamSimple(), "stream");
+  assert.deepEqual(await runtime.session.agent.onPayload({ model: "fixture" }, { provider: "fixture", id: "model" }),
+    { model: "fixture" });
   const finish = runtime.beginWireOperation({ operationRef: "operation-one",
     messageRequestId: "message-one", inputText: "first turn" });
   finish("operation-settled"); await runtime.dispose();
-  assert.equal(observed.ownership, 1);
+  assert.equal(observed.ownership, 1); assert.equal(observed.boundaries, 2);
+  assert.equal(observed.providerStreams, 1);
   assert.equal(observed.services.resourceLoaderOptions.noExtensions, true);
   assert.equal(observed.services.resourceLoaderOptions.noSkills, true);
   assert.deepEqual(observed.services.resourceLoaderOptions.extensionFactories, [router.extensionFactory]);

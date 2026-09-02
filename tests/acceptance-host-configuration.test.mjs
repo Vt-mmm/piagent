@@ -104,6 +104,31 @@ test("host plans 3/4 and approvals v2 bind the exact Node profile while legacy 1
   assert.throws(() => validateHostContractPlan({ schemaVersion: 4, plans: [first, { ...second, schemaVersion: 1 }] }));
 });
 
+test("Node host plans bind an exact optional Docker command while legacy plans reject it", t => {
+  const f = fixture(t), plan = nodePlan(f.options), dockerCommand = {
+    path: "/Applications/Docker.app/Contents/Resources/bin/docker", sha256: "f".repeat(64)
+  };
+  plan.backend = { imageId: plan.backend.imageId, dockerSocket: plan.backend.dockerSocket,
+    dockerCommand, timeoutMs: plan.backend.timeoutMs, profile: plan.backend.profile };
+  assert.equal(validateHostContractPlan(plan), plan);
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  ajv.addSchema(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json"))));
+  const validate = ajv.compile(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/host-contract-plan.schema.json"))));
+  assert.equal(validate(plan), true, JSON.stringify(validate.errors));
+  for (const mutate of [
+    value => { value.backend.dockerCommand = { sha256: dockerCommand.sha256, path: dockerCommand.path }; },
+    value => { value.backend.dockerCommand.path = "docker"; },
+    value => { value.backend.dockerCommand.path += "/../docker"; },
+    value => { value.backend.dockerCommand.sha256 = "F".repeat(64); },
+    value => { value.backend.dockerCommand.extra = true; }
+  ]) {
+    const invalid = structuredClone(plan); mutate(invalid); assert.throws(() => validateHostContractPlan(invalid));
+  }
+  const legacy = structuredClone(f.options); legacy.backend.dockerCommand = dockerCommand;
+  assert.throws(() => validateHostContractPlan({ schemaVersion: 1, operatorRequestDigest: legacy.operatorRequestDigest,
+    backend: legacy.backend, contracts: legacy.contracts }));
+});
+
 test("benchmark catalogs version host plan sets symmetrically for legacy and Node profile execution", t => {
   const f = fixture(t), legacy = requestSet(f.options).plans[0], node = nodePlan(f.options);
   const base = { suiteDigest: "d".repeat(64), verifierDigest: "e".repeat(64) };

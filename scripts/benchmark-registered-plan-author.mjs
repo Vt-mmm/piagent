@@ -14,7 +14,7 @@ import { registeredBackendRecipe } from "./benchmark-registered-plan-recipes-bac
 import { registeredDataRecipe } from "./benchmark-registered-plan-recipes-data.mjs";
 import { registeredPlatformRecipe } from "./benchmark-registered-plan-recipes-platform.mjs";
 
-export const REGISTERED_PLAN_AUTHOR_VERSION = "benchmark-registered-plan-author-v1";
+export const REGISTERED_PLAN_AUTHOR_VERSION = "benchmark-registered-plan-author-v2";
 const HASH = /^[a-f0-9]{64}$/;
 const INSTALLED_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_SUITE_ROOT = path.join(INSTALLED_ROOT, "benchmarks", "production-v2");
@@ -250,9 +250,33 @@ function codeContracts(receipt, authored) {
     ...(authored.modulePaths?.length ? { modulePaths: authored.modulePaths } : {}) }));
 }
 
+function validateRegisteredPlan(plan) {
+  if (!plan.contracts.some(contract => contract.route === "composite")) {
+    validateHostContractPlan(plan);
+    return;
+  }
+  for (const surface of ["piagent", "codex-cli"]) {
+    const projected = structuredClone(plan);
+    for (const contract of projected.contracts) if (contract.route === "composite") {
+      const identity = contract.planContext.identity;
+      contract.planContext.identity = { suiteDigest: identity.suiteDigest,
+        configDigest: identity.configDigest, armDigest: identity.armDigests[surface] };
+    }
+    validateHostContractPlan(projected);
+  }
+}
+
 export function buildRegisteredPlanDrafts({ assetRoot, suiteRoot = DEFAULT_SUITE_ROOT,
-  suiteDigest, configDigest, armDigest } = {}) {
-  if (![suiteDigest, configDigest, armDigest].every(value => HASH.test(value))) {
+  suiteDigest, configDigest, armDigests, dockerCommand } = {}) {
+  if (![suiteDigest, configDigest].every(value => HASH.test(value))
+    || !armDigests || typeof armDigests !== "object" || Array.isArray(armDigests)
+    || JSON.stringify(Object.keys(armDigests)) !== JSON.stringify(["piagent", "codex-cli"])
+    || ![armDigests.piagent, armDigests["codex-cli"]].every(value => HASH.test(value))
+    || !dockerCommand || typeof dockerCommand !== "object" || Array.isArray(dockerCommand)
+    || JSON.stringify(Object.keys(dockerCommand)) !== JSON.stringify(["path", "sha256"])
+    || typeof dockerCommand.path !== "string" || !path.isAbsolute(dockerCommand.path)
+    || path.normalize(dockerCommand.path) !== dockerCommand.path || dockerCommand.path.includes("\0")
+    || !HASH.test(String(dockerCommand.sha256 ?? ""))) {
     throw new TypeError("Registered plan identities must be SHA-256 digests");
   }
   const canonicalAssetRoot = fs.realpathSync.native(assetRoot), canonicalSuiteRoot = fs.realpathSync.native(suiteRoot);
@@ -276,15 +300,17 @@ export function buildRegisteredPlanDrafts({ assetRoot, suiteRoot = DEFAULT_SUITE
   const plans = suite.scenarios.map((scenario, index) => {
     const selected = selectedInput({ scenario, catalogEntry: catalog.scenarios[index], assetRoot: canonicalAssetRoot,
       suiteRoot: canonicalSuiteRoot }), receipt = benchmarkVerificationReceiptForTurn(selected, { profile, policy: basePolicy }),
-      identities = { suiteDigest, configDigest, armDigest }, policy = policyByScenario.get(scenario.id),
+      identities = { suiteDigest, configDigest, armDigests: { piagent: armDigests.piagent,
+        "codex-cli": armDigests["codex-cli"] } }, policy = policyByScenario.get(scenario.id),
       contracts = noncode.has(scenario.id)
         ? compositeContracts({ receipt, policy, rubric: rubricByScenario.get(scenario.id), identities,
           projectVerifierDigest: sharedPolicy.projectVerifier.expectedPlanDigest })
         : codeContracts(receipt, codeRecipe(scenario.id, families)),
       plan = { schemaVersion: 3, operatorRequestDigest: benchmarkVerificationRequestDigest(selected),
-        backend: { imageId: WORKER_IMAGE, dockerSocket: "/var/run/docker.sock", timeoutMs: 10000,
+        backend: { imageId: WORKER_IMAGE, dockerSocket: "/var/run/docker.sock",
+          dockerCommand: { path: dockerCommand.path, sha256: dockerCommand.sha256 }, timeoutMs: 10000,
           profile: expectedNodeProfile() }, contracts };
-    validateHostContractPlan(plan);
+    validateRegisteredPlan(plan);
     return Object.freeze({ scenarioId: scenario.id, route: noncode.has(scenario.id) ? "composite" : "code",
       criterionCount: receipt.criteria.length,
       caseCount: contracts[0].route === "code"
@@ -294,14 +320,17 @@ export function buildRegisteredPlanDrafts({ assetRoot, suiteRoot = DEFAULT_SUITE
   if (plans.filter(item => item.route === "code").length !== 23
     || plans.filter(item => item.route === "composite").length !== 4) throw new Error("Registered plan route count mismatch");
   return Object.freeze({ version: REGISTERED_PLAN_AUTHOR_VERSION, authority: "none",
-    identities: Object.freeze({ suiteDigest, configDigest, armDigest }), plans: Object.freeze(plans) });
+    identities: Object.freeze({ suiteDigest, configDigest, armDigests: Object.freeze({
+      piagent: armDigests.piagent, "codex-cli": armDigests["codex-cli"] }) }),
+    plans: Object.freeze(plans) });
 }
 
 function parseArguments(argv) {
   const values = {};
   for (let index = 0; index < argv.length; index += 2) {
     const name = argv[index], value = argv[index + 1];
-    if (!["--asset-root", "--suite-root", "--suite-digest", "--config-digest", "--arm-digest", "--scenario", "--format"].includes(name)
+    if (!["--asset-root", "--suite-root", "--suite-digest", "--config-digest", "--piagent-arm-digest",
+      "--codex-arm-digest", "--docker-command", "--docker-sha256", "--scenario", "--format"].includes(name)
       || value === undefined || Object.hasOwn(values, name)) throw new TypeError("Invalid registered plan author arguments");
     values[name] = value;
   }
@@ -311,7 +340,9 @@ function parseArguments(argv) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = parseArguments(process.argv.slice(2)), result = buildRegisteredPlanDrafts({
     assetRoot: args["--asset-root"], suiteRoot: args["--suite-root"] ?? DEFAULT_SUITE_ROOT,
-    suiteDigest: args["--suite-digest"], configDigest: args["--config-digest"], armDigest: args["--arm-digest"]
+    suiteDigest: args["--suite-digest"], configDigest: args["--config-digest"], armDigests: {
+      piagent: args["--piagent-arm-digest"], "codex-cli": args["--codex-arm-digest"] },
+    dockerCommand: { path: args["--docker-command"], sha256: args["--docker-sha256"] }
   });
   if (args["--format"] === "summary") {
     process.stdout.write(JSON.stringify({ version: result.version, authority: result.authority,

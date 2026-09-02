@@ -3,10 +3,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { validateHostContractPlan } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { scopedBrokerArmDigest
+} from "../packages/piagent-core/runtime/verification/composite-scoped-mediation.ts";
 import { BENCHMARK_SCOPED_SESSION_FACTORY_VERSION, BENCHMARK_SCOPED_SESSION_REQUEST_VERSION
 } from "./benchmark-codex-journey.mjs";
+import { benchmarkVerificationOperatorRequest } from "./benchmark-independent-verification.mjs";
+import { validateBenchmarkPublicInputCatalog } from "./benchmark-public-input-catalog.mjs";
 import { createBenchmarkScopedSessionCustody } from "./benchmark-scoped-session-custody.mjs";
-import { scopedToolDefinitionsSha256 } from "./benchmark-scoped-frozen-qualification.mjs";
+import { scopedCommonRuntimeClosureIdentity, scopedContextPolicySha256,
+  scopedFrozenQualificationIdentity, scopedToolDefinitionsSha256
+} from "./benchmark-scoped-frozen-qualification.mjs";
 import { scopedProjectVerificationPlanBinding } from "./benchmark-scoped-project-verifier.mjs";
 
 export const REGISTERED_SCOPED_TOOL_POLICY_VERSION = "benchmark-shared-tool-policy-v1";
@@ -102,6 +108,26 @@ function validateProjectVerifier(value) {
   return value;
 }
 
+function validateRegisteredHostPlan(plan) {
+  for (const surface of ["piagent", "codex-cli"]) {
+    const projected = structuredClone(plan);
+    for (const contract of projected.contracts ?? []) if (contract.route === "composite") {
+      const identity = contract.planContext?.identity;
+      requireThat(identity && typeof identity === "object" && !Array.isArray(identity)
+        && JSON.stringify(Object.keys(identity)) === JSON.stringify(["suiteDigest", "configDigest", "armDigests"])
+        && identity.armDigests && typeof identity.armDigests === "object"
+        && !Array.isArray(identity.armDigests)
+        && JSON.stringify(Object.keys(identity.armDigests)) === JSON.stringify(["piagent", "codex-cli"])
+        && [identity.suiteDigest, identity.configDigest, identity.armDigests.piagent,
+          identity.armDigests["codex-cli"]].every(value => HASH.test(value)),
+      "session-factory-plan-binding");
+      contract.planContext.identity = { suiteDigest: identity.suiteDigest,
+        configDigest: identity.configDigest, armDigest: identity.armDigests[surface] };
+    }
+    try { validateHostContractPlan(projected); } catch { fail("session-factory-plan"); }
+  }
+}
+
 function validatePolicy(value, suiteId) {
   exact(value, ["schemaVersion", "kind", "authority", "suiteId", "surfaceParity", "modelProvider",
     "context", "armIds", "profiles", "projectVerifier"], "session-factory-policy");
@@ -137,8 +163,8 @@ function validatePolicy(value, suiteId) {
   return Object.freeze({ value: Object.freeze(value), profiles, verifier });
 }
 
-function validatePlan(plan, policy, measurement, sharedPolicy) {
-  try { validateHostContractPlan(plan); } catch { fail("session-factory-plan"); }
+function validatePlan(plan, policy, measurement, sharedPolicy, armDigests) {
+  validateRegisteredHostPlan(plan);
   requireThat(plan.schemaVersion === 3 && Array.isArray(plan.contracts) && plan.contracts.length > 0
     && plan.contracts.every(contract => contract.route === "composite"), "session-factory-plan");
   const expectedBindings = policy.materials.map(item => ({ id: item.id, mode: item.mode,
@@ -148,6 +174,7 @@ function validatePlan(plan, policy, measurement, sharedPolicy) {
     const context = contract.planContext, publicContract = JSON.parse(context.contractText);
     requireThat(context.identity.suiteDigest === measurement.payload.baseSuiteDigest
       && context.identity.configDigest === measurement.payload.sharedEnvironmentDigest
+      && JSON.stringify(context.identity.armDigests) === JSON.stringify(armDigests)
       && JSON.stringify(context.materialBindings) === JSON.stringify(expectedBindings),
     "session-factory-plan-binding");
     const policies = publicContract.facts.filter(fact => fact.kind === "tool-policy-complete"),
@@ -160,6 +187,44 @@ function validatePlan(plan, policy, measurement, sharedPolicy) {
       && (verifiers.length === 0 || verifiers[0].parameters.commandSetDigest
         === sharedPolicy.verifier.expectedPlanDigest), "session-factory-plan-policy");
   }
+}
+
+function selectedArmBinding(request, catalog, sharedPolicy, frozen) {
+  const scenario = catalog.scenarios.find(item => item.scenarioId === request.scenarioId);
+  requireThat(scenario && Array.isArray(request.turns) && request.turns.length === scenario.turnCount,
+    "session-factory-turns");
+  const operatorRequests = request.turns.map((turn, index) => {
+    const expected = scenario.turns[index];
+    exact(turn, ["id", "message", "workflow", "reconnectBefore", "receiptUncertain"],
+      "session-factory-turns");
+    requireThat(expected && turn.id === expected.turnId && typeof turn.message === "string"
+      && turn.message.length > 0 && turn.message.isWellFormed()
+      && sha(turn.message) === expected.promptSha256
+      && Buffer.byteLength(turn.message) === expected.promptBytes
+      && turn.workflow === expected.workflow
+      && turn.reconnectBefore === expected.reconnectBefore
+      && turn.receiptUncertain === expected.receiptUncertain, "session-factory-turns");
+    const operatorRequest = benchmarkVerificationOperatorRequest({ message: turn.message,
+      workflow: turn.workflow });
+    requireThat(`operator-request-v1:${sha(operatorRequest)}` === expected.operatorRequestDigest,
+      "session-factory-turns");
+    return operatorRequest;
+  });
+  const selectedIndex = scenario.variantRole === "interaction"
+    ? scenario.turns.findIndex(turn => turn.turnId === "implement") : 0;
+  requireThat(selectedIndex >= 0, "session-factory-selected-turn");
+  const contextPolicySha256 = scopedContextPolicySha256({ version: 2,
+    systemPrompt: sharedPolicy.value.context.systemPrompt,
+    allowedUserMessages: operatorRequests.slice(0, selectedIndex + 1), removableUserMessages: [] });
+  const common = { sourceSha256: frozen.sourceSha256, assetTreeSha256: frozen.assetTreeSha256,
+    brokerClosureSha256: frozen.brokerClosureSha256,
+    toolDefinitionsSha256: scopedToolDefinitionsSha256(), contextPolicySha256,
+    sdkTreeSha256: frozen.sdkTreeSha256 };
+  const armDigests = Object.freeze({
+    piagent: scopedBrokerArmDigest({ armId: sharedPolicy.value.armIds.piagent, ...common }),
+    "codex-cli": scopedBrokerArmDigest({ armId: sharedPolicy.value.armIds["codex-cli"], ...common })
+  });
+  return Object.freeze({ turnIndex: selectedIndex + 1, armDigests });
 }
 
 function materialSnapshot(workspace, policy) {
@@ -205,7 +270,11 @@ export function createRegisteredBenchmarkScopedSessionFactory(input) {
   const policyAsset = registeredAsset(registered, "measurement/shared-tool-policy-v1.json"),
     catalogAsset = registeredAsset(registered, "catalog.json");
   let policyValue, catalog;
-  try { policyValue = JSON.parse(policyAsset.bytes); catalog = JSON.parse(catalogAsset.bytes); }
+  try {
+    policyValue = JSON.parse(policyAsset.bytes);
+    catalog = validateBenchmarkPublicInputCatalog(JSON.parse(catalogAsset.bytes),
+      { suiteId: measurement.payload.suiteId });
+  }
   catch { fail("session-factory-public-json"); }
   const policy = validatePolicy(policyValue, measurement.payload.suiteId);
   const nodeCommand = fs.realpathSync.native(input.nodeCommand), brokerScript = fs.realpathSync.native(
@@ -229,7 +298,10 @@ export function createRegisteredBenchmarkScopedSessionFactory(input) {
       const planAsset = registeredAsset(state.measurement, `plans/${request.scenarioId}.json`);
       let plan;
       try { plan = JSON.parse(planAsset.bytes); } catch { fail("session-factory-plan"); }
-      validatePlan(plan, selected, state.measurement, state.policy);
+      const commonRuntime = scopedCommonRuntimeClosureIdentity(), currentQualification =
+        scopedFrozenQualificationIdentity(state.qualification, commonRuntime.sha256),
+        armBinding = selectedArmBinding(request, state.catalog, state.policy, currentQualification);
+      validatePlan(plan, selected, state.measurement, state.policy, armBinding.armDigests);
       const verification = selected.verificationId === null ? null
         : scopedProjectVerificationPlanBinding({ projectRoot: request.workspace, nodeCommand: state.nodeCommand,
           policy: state.policy.verifier.policy, timeoutMs: state.policy.verifier.timeoutMs });
@@ -240,6 +312,8 @@ export function createRegisteredBenchmarkScopedSessionFactory(input) {
         runtimePath: request.surface === "codex-cli" ? state.codexRuntimePath : null,
         qualification: state.qualification, catalog: state.catalog, runId: request.runId,
         armId: state.policy.value.armIds[request.surface], suiteId: request.suiteId,
+        expectedArmBinding: { turnIndex: armBinding.turnIndex,
+          sha256: armBinding.armDigests[request.surface] },
         scenarioId: request.scenarioId, surface: request.surface, repeat: request.repeat,
         infrastructureAttempt: request.infrastructureAttempt,
         configurationSha256: request.configurationSha256, planPath: planAsset.file,

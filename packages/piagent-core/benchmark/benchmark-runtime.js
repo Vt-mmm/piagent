@@ -21,6 +21,10 @@ export const controlledCodexFeatures = [
   "workspace_dependencies"
 ];
 
+const codexEnvironmentCredentialKeys = Object.freeze(["OPENAI_API_KEY", "CODEX_ACCESS_TOKEN"]);
+const codexRuntimeCredentialStates = new WeakMap();
+const codexCredentialFields = Object.freeze(["dev", "ino", "mode", "nlink", "size", "mtimeNs", "ctimeNs"]);
+
 export const PIAGENT_BENCHMARK_TREATMENTS = Object.freeze({
   "release-defaults": Object.freeze({}),
   "local-safe": Object.freeze({
@@ -144,6 +148,73 @@ function operatorCodexHome() {
   return path.resolve(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"));
 }
 
+function stableCodexCredential(file, label) {
+  if (typeof file !== "string" || !path.isAbsolute(file) || path.normalize(file) !== file
+    || file.includes("\0")) fail(`${label} path must be canonical and absolute`, 1);
+  let resolved, before;
+  try { resolved = fs.realpathSync.native(file); before = fs.lstatSync(resolved, { bigint: true }); }
+  catch (error) { throw error; }
+  if (resolved !== file || !before.isFile() || before.isSymbolicLink() || before.nlink !== 1n
+    || before.size < 1n || before.size > 2n * 1024n * 1024n
+    || typeof process.getuid === "function" && before.uid !== BigInt(process.getuid())
+    || (before.mode & 0o077n) !== 0n) fail(`${label} is not one private host-owned regular file`, 1);
+  const descriptor = fs.openSync(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = fs.fstatSync(descriptor, { bigint: true }), bytes = fs.readFileSync(descriptor),
+      after = fs.fstatSync(descriptor, { bigint: true }), current = fs.lstatSync(resolved, { bigint: true });
+    if (bytes.length !== Number(before.size) || codexCredentialFields.some(name =>
+      before[name] !== opened[name] || before[name] !== after[name] || before[name] !== current[name])) {
+      fail(`${label} changed while read`, 1);
+    }
+    return { bytes, identity: Object.freeze({
+      ...Object.fromEntries(codexCredentialFields.map(name => [name, before[name]])),
+      sha256: crypto.createHash("sha256").update(bytes).digest("hex")
+    }) };
+  } finally { fs.closeSync(descriptor); }
+}
+
+function writeCodexCredential(file, bytes) {
+  const descriptor = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL
+    | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
+  try { fs.writeFileSync(descriptor, bytes); fs.fsyncSync(descriptor); }
+  finally { fs.closeSync(descriptor); }
+  fs.chmodSync(file, 0o600);
+  return stableCodexCredential(file, "Controlled Codex credential copy").identity;
+}
+
+export function assertCodexRuntimeCredential(runtime, { required = false } = {}) {
+  if (runtime?.mode !== "controlled") {
+    if (required) fail("Registered measurement requires a controlled frozen Codex credential", 1);
+    return;
+  }
+  const state = codexRuntimeCredentialStates.get(runtime);
+  if (!state?.credential) {
+    if (required) fail("Registered measurement requires a frozen Codex auth.json copy", 1);
+    return;
+  }
+  let observed;
+  try { observed = stableCodexCredential(state.credential.path, "Controlled Codex credential copy").identity; }
+  catch (error) { fail(`Controlled Codex credential copy is unavailable: ${error.message}`, 1); }
+  if (codexCredentialFields.some(name => observed[name] !== state.credential.identity[name])
+    || observed.sha256 !== state.credential.identity.sha256) {
+    fail("Controlled Codex credential copy changed after it was frozen", 1);
+  }
+}
+
+export function codexRuntimeCredentialPolicy(runtime) {
+  if (runtime?.mode !== "controlled") return null;
+  const state = codexRuntimeCredentialStates.get(runtime);
+  if (!state?.credential) return Object.freeze({ source: "environment-or-none",
+    environmentCredentials: "inherited", copyIntegrity: "not-applicable",
+    perDispatchIntegrity: "not-applicable" });
+  return Object.freeze({
+    source: state.excludeEnvironmentCredentials ? "frozen-auth-json-snapshot" : "operator-auth-json",
+    environmentCredentials: state.excludeEnvironmentCredentials ? "excluded" : "inherited",
+    copyIntegrity: "stable-fd-o-excl-fsync",
+    perDispatchIntegrity: "exact-private-stat-and-content-match"
+  });
+}
+
 export function createCodexRuntime(options) {
   if (!options.surfaces.includes("codex-cli")) {
     return { mode: null, home: null, credentialBridge: null, cleanup() {} };
@@ -152,28 +223,38 @@ export function createCodexRuntime(options) {
     return { mode: "native", home: null, credentialBridge: "operator-home", cleanup() {} };
   }
 
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-codex-home-"));
+  const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-codex-home-")));
   try { fs.chmodSync(home, 0o700); } catch { /* Non-POSIX filesystem. */ }
   let credentialBridge = "environment-only";
-  const sourceAuth = process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT || path.join(operatorCodexHome(), "auth.json");
+  const frozenSource = process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT;
+  const requireFrozenCredential = Boolean(options.registeredMeasurement);
+  if (requireFrozenCredential && !frozenSource) {
+    fs.rmSync(home, { recursive: true, force: true });
+    fail("Registered measurement requires the frozen Codex auth.json snapshot", 1);
+  }
+  const sourceAuth = frozenSource || path.join(operatorCodexHome(), "auth.json");
+  let credential = null;
   try {
-    const resolvedAuth = fs.realpathSync(sourceAuth);
-    if (!fs.statSync(resolvedAuth).isFile()) fail(`Codex credential path is not a file: ${sourceAuth}`, 1);
-    fs.copyFileSync(resolvedAuth, path.join(home, "auth.json"));
-    fs.chmodSync(path.join(home, "auth.json"), 0o600);
-    credentialBridge = process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT ? "frozen-auth-json-copy" : "auth-json-copy";
+    const source = stableCodexCredential(sourceAuth, "Codex credential source"),
+      target = path.join(home, "auth.json"), identity = writeCodexCredential(target, source.bytes);
+    credential = Object.freeze({ path: target, identity });
+    credentialBridge = frozenSource ? "frozen-auth-json-copy" : "auth-json-copy";
   } catch (error) {
-    if (error?.code !== "ENOENT") {
+    if (error?.code !== "ENOENT" || requireFrozenCredential) {
       fs.rmSync(home, { recursive: true, force: true });
       throw error;
     }
   }
-  return {
+  const runtime = {
     mode: "controlled",
     home,
     credentialBridge,
     cleanup() { fs.rmSync(home, { recursive: true, force: true }); }
   };
+  codexRuntimeCredentialStates.set(runtime, Object.freeze({ credential,
+    excludeEnvironmentCredentials: Boolean(frozenSource) }));
+  assertCodexRuntimeCredential(runtime, { required: requireFrozenCredential });
+  return runtime;
 }
 
 export function codexProcessEnvironment(runtime, extra = {}) {
@@ -183,6 +264,9 @@ export function codexProcessEnvironment(runtime, extra = {}) {
     if (key.startsWith("CODEX_") && key !== "CODEX_ACCESS_TOKEN") delete env[key];
   }
   for (const key of ["OPENAI_BASE_URL", "OPENAI_API_BASE"]) delete env[key];
+  if (codexRuntimeCredentialStates.get(runtime)?.excludeEnvironmentCredentials) {
+    for (const key of codexEnvironmentCredentialKeys) delete env[key];
+  }
   env.CODEX_HOME = runtime.home;
   return env;
 }

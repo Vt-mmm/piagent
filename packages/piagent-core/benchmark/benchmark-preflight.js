@@ -1,4 +1,5 @@
 import {
+  codexRuntimeCredentialPolicy,
   codexProcessEnvironment,
   controlledCodexFeatures
 } from "./benchmark-runtime.js";
@@ -31,7 +32,7 @@ export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, p
     try { result = await runCommand(codexCommand, ["login", "status"], { cwd: packageRoot, timeoutMs: 15_000, env: codexEnv }); }
     catch (error) { fail(`Codex authentication preflight failed: ${error.message}`); }
     if (result.code === 0) codexAuth = "login-status";
-    else if (process.env.OPENAI_API_KEY || process.env.CODEX_ACCESS_TOKEN) codexAuth = "environment-credential";
+    else if (codexEnv.OPENAI_API_KEY || codexEnv.CODEX_ACCESS_TOKEN) codexAuth = "environment-credential";
     else fail("Codex CLI is not authenticated; run codex login before this benchmark");
     if (codexMode === "controlled") {
       const features = await runCommand(codexCommand, ["features", "list"], { cwd: packageRoot, timeoutMs: 15_000, env: codexEnv });
@@ -44,7 +45,9 @@ export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, p
       }
     }
   }
-  return { gitVersion, piVersion, codexVersion, codexAuth, codexDisabledFeatures, codexFastModeFeature };
+  return { gitVersion, piVersion, codexVersion, codexAuth,
+    codexCredentialPolicy: codexRuntimeCredentialPolicy(codexRuntime),
+    codexDisabledFeatures, codexFastModeFeature };
 }
 
 function publicCommandIdentity(value) {
@@ -66,7 +69,7 @@ export function benchmarkPreflightReceipt({
   runtimeDependencies, webUiAssets, runtimeCommands, environmentPolicy, configurationDigest,
   providerFreeConfigurationDigest = null, rootSeedDigest, options, runtime,
   hostReadinessPolicyDigest = null, hostReadiness = null,
-  providerFreeEvidence = null, independentVerification
+  providerFreeEvidence = null, independentVerification, registeredRuntimeVerifiers = null
 }) {
   return {
     schemaVersion: 1,
@@ -102,11 +105,13 @@ export function benchmarkPreflightReceipt({
     },
     ...(hostReadiness ? { hostReadiness } : {}),
     ...(providerFreeEvidence ? { providerFreeEvidence } : {}),
+    ...(registeredRuntimeVerifiers ? { registeredRuntimeVerifiers } : {}),
     runtime: {
       gitVersion: runtime.gitVersion,
       piVersion: runtime.piVersion,
       codexVersion: runtime.codexVersion ?? null,
       codexAuth: runtime.codexAuth ?? null,
+      codexCredentialPolicy: runtime.codexCredentialPolicy ?? null,
       codexDisabledFeatures: runtime.codexDisabledFeatures,
       codexFastModeFeature: runtime.codexFastModeFeature ?? null,
       commands: Object.fromEntries(Object.entries(runtimeCommands).map(([name, value]) => [name, publicCommandIdentity(value)]))

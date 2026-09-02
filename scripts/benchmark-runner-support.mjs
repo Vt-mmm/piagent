@@ -56,7 +56,8 @@ export function frozenRuntimeCommandsForFinalization(manifest, surfaces) {
     && identity.kind === "regular"
     && typeof identity.resolvedPath === "string"
     && /^[a-f0-9]{64}$/.test(String(identity.contentDigest ?? ""));
-  const required = ["pi", "node", "git", "bash", ...(surfaces.includes("codex-cli") ? ["codex"] : [])];
+  const required = ["pi", "node", "git", "bash", ...(surfaces.includes("codex-cli") ? ["codex"] : []),
+    ...(manifest?.registeredMeasurement ? ["docker"] : [])];
   if (!commands || typeof commands !== "object" || required.some((label) => !validIdentity(commands[label]))) {
     fail("Cannot finalize production benchmark provider-free: frozen runtime command identities are missing or invalid", 1);
   }

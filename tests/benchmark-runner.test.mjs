@@ -20,6 +20,7 @@ import {
   inspectBenchmarkLedger
 } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import {
+  persistUnacceptedBenchmarkAttempt,
   promoteMeasuredBenchmarkRecord,
   stageMeasuredBenchmarkRecord
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
@@ -36,7 +37,9 @@ import {
   productionStageResumeWindow
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
-import { runBenchmarkSession } from "../scripts/benchmark-session.mjs";
+import { runOfflineBenchmarkSession } from "../scripts/benchmark-session.mjs";
+import { providerBoundaryFailureDisposition } from "../scripts/benchmark-session-provider-boundary.mjs";
+import { forceTokenUnavailableForPostSessionAssetError } from "../scripts/benchmark-runner-provider-boundary.mjs";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 
@@ -54,6 +57,43 @@ after(() => {
   if (inheritedPiHome === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = inheritedPiHome;
   fs.rmSync(defaultOperatorPiHome, { recursive: true, force: true });
+});
+
+test("provider-boundary accounting requires an exact trusted phase", () => {
+  const marker = new Error("boundary");
+  assert.equal(providerBoundaryFailureDisposition(null, null), null);
+  assert.throws(() => providerBoundaryFailureDisposition(marker, null), /missing its exact dispatch phase/);
+  assert.throws(() => providerBoundaryFailureDisposition(null, "pre-dispatch"), /missing its exact dispatch phase/);
+  assert.throws(() => providerBoundaryFailureDisposition(marker, "unknown"), /missing its exact dispatch phase/);
+});
+
+test("runner preserves prior exact usage only for matching pre-dispatch evidence", t => {
+  const parent = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-boundary-ledger-")));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const exactUsage = { input: 11, output: 3, cacheRead: 2, cacheWrite: 0, reasoning: 1,
+    fresh: 14, total: 16, sessions: 1, usageCompleteness: "exact" };
+  const base = { attemptId: "attempt-1", orderIndex: 0, scenarioId: "boundary", repeat: 1,
+    infrastructureAttempt: 1, usage: exactUsage, infrastructureClass: "execution-integrity" };
+  const cases = [
+    { surface: "piagent", phase: "pre-dispatch", usageStatus: "measured-but-unaccepted", expectedForce: false },
+    { surface: "codex-cli", phase: "post-dispatch", usageStatus: "measured-lower-bound", expectedForce: true }
+  ];
+  for (const value of cases) {
+    const runRoot = path.join(parent, value.surface); fs.mkdirSync(runRoot);
+    const marker = new Error(`${value.surface}-boundary`);
+    const record = { ...base, surface: value.surface, providerBoundaryPhase: value.phase,
+      usageStatus: value.usageStatus };
+    const sessionEvidence = { fatalProviderBoundaryError: marker, fatalProviderBoundaryPhase: value.phase };
+    const forceTokenUnavailable = forceTokenUnavailableForPostSessionAssetError({ sessionEvidence, record });
+    assert.equal(forceTokenUnavailable, value.expectedForce);
+    const manifest = { runId: `run-${value.surface}` };
+    persistUnacceptedBenchmarkAttempt({ runRoot, manifest, record,
+      reason: "execution-asset-mismatch-after-provider-attempt", forceTokenUnavailable });
+    assert.equal(manifest.recoveredProviderAttempts.length, 1);
+    assert.deepEqual(manifest.recoveredProviderAttempts[0].usage, exactUsage);
+    assert.equal(manifest.tokenClaimsUnavailableReason,
+      value.expectedForce ? "execution-asset-mismatch-after-provider-attempt" : undefined);
+  }
 });
 
 function terminalArtifact(output) {
@@ -168,7 +208,7 @@ function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, reso
 }
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-runner-"));
+  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-runner-")));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const operatorCodexHome = path.join(dir, "operator-codex-home");
   fs.mkdirSync(operatorCodexHome, { mode: 0o700 });
@@ -3115,9 +3155,12 @@ test("structured WebUI refusal mismatch stays measured through grading, ledger a
     observedSettlement: "blocked",
     turnIndex: 1
   };
-  const piagentWebUiJourney = async ({ agentDir, workspace, environment }) => {
+  const piagentWebUiJourney = async ({ agentDir, workspace, environment, turns,
+    onBeforeProviderDispatch = () => {}, onBeforeFirstProviderDispatch = () => {} }) => {
     const sessionId = "structured-webui-session";
     const sessionDir = path.join(agentDir, "sessions");
+    await onBeforeProviderDispatch(Object.freeze({ turnIndex: 1, turnId: turns?.[0]?.id ?? null }));
+    await onBeforeFirstProviderDispatch();
     const executed = await execute(value.fakePi, ["--session-dir", sessionDir, "--session-id", sessionId], {
       cwd: workspace,
       timeoutMs: 30_000,
@@ -3160,7 +3203,7 @@ test("structured WebUI refusal mismatch stays measured through grading, ledger a
     };
   };
 
-  const session = await runBenchmarkSession({
+  const session = await runOfflineBenchmarkSession({
     packageRoot: root,
     runCommand: execute,
     resolveSuiteEntry: resolveBenchmarkSuiteEntry,
@@ -3198,6 +3241,7 @@ test("structured WebUI refusal mismatch stays measured through grading, ledger a
     suiteDigest,
     configurationDigest,
     rootSeed: "structured-settlement-seed",
+    assertProviderDispatchReady: () => {},
     piagentWebUiJourney
   });
 

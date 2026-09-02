@@ -7,6 +7,8 @@ import path from "node:path";
 import test from "node:test";
 
 import { materializeBenchmarkCandidate } from "../packages/piagent-core/benchmark/benchmark-candidate.js";
+import { scopedBrokerArmDigest
+} from "../packages/piagent-core/runtime/verification/composite-scoped-mediation.ts";
 import { BENCHMARK_SCOPED_SESSION_REQUEST_VERSION } from "../scripts/benchmark-codex-journey.mjs";
 import { createRegisteredBenchmarkScopedSessionFactory,
   registeredBenchmarkScopedSessionRequired
@@ -131,6 +133,8 @@ test("registered production session factory binds exact public composite plans p
       custodyRoot: fs.realpathSync(custodyRoot), nodeCommand, codexRuntimePath, qualification });
   assert.deepEqual(Object.keys(factory), ["version", "authority", "openSession"]);
   assert.equal(factory.authority, "none");
+  assert.deepEqual(Object.keys(identity.armDigests), ["piagent", "codex-cli"]);
+  assert.notEqual(identity.armDigests.piagent, identity.armDigests["codex-cli"]);
   assert.deepEqual(compositeScenarios.map(id => registeredBenchmarkScopedSessionRequired(factory, id)),
     [true, true, true, true]);
   assert.equal(registeredBenchmarkScopedSessionRequired(factory, "expiry-boundary"), false);
@@ -155,10 +159,36 @@ test("registered production session factory binds exact public composite plans p
       model: "openai-codex/gpt-5.6-luna", thinking: "medium", serviceTier: "fast", turns });
   assert.equal(controller.surface, "codex-cli");
   assert.equal(controller.piScopedBrokerRouter, null);
-  const custody = await controller.codexScopedBroker.openTurn({ turnIndex: 1, turnId: turns[0].id,
+  const firstCustody = await controller.codexScopedBroker.openTurn({ turnIndex: 1, turnId: turns[0].id,
     inputText: turns[0].message, threadId: null, workspace });
-  assert.equal(custody.authority, "none");
-  assert.equal(custody.measurementBinding.configurationSha256, identity.configDigest);
-  assert.equal(custody.measurementBinding.profile, "document");
-  await custody.dispose();
+  assert.equal(firstCustody.authority, "none");
+  assert.equal(firstCustody.measurementBinding.configurationSha256, identity.configDigest);
+  assert.equal(firstCustody.measurementBinding.profile, "document");
+  await firstCustody.dispose();
+  const selectedCustody = await controller.codexScopedBroker.openTurn({ turnIndex: 2, turnId: turns[1].id,
+    inputText: turns[1].message, threadId: "qualification-thread", workspace });
+  assert.equal(scopedBrokerArmDigest(selectedCustody.identity), identity.armDigests["codex-cli"]);
+  await selectedCustody.dispose();
+
+  const mutatedAssetRoot = path.join(temporary, "mutated-assets");
+  fs.cpSync(assetRoot, mutatedAssetRoot, { recursive: true, errorOnExist: true });
+  writableTree(mutatedAssetRoot);
+  const changedPlanPath = path.join(mutatedAssetRoot, "plans", "incident-diagnosis.json"),
+    changedPlan = JSON.parse(fs.readFileSync(changedPlanPath, "utf8"));
+  for (const contract of changedPlan.contracts) {
+    if (contract.route === "composite") contract.planContext.identity.armDigests.piagent = "f".repeat(64);
+  }
+  fs.writeFileSync(changedPlanPath, `${JSON.stringify(changedPlan)}\n`);
+  const changedMeasurement = Object.freeze({ ...registeredMeasurement, assetRoot: fs.realpathSync(mutatedAssetRoot),
+    inventory: assetInventory(mutatedAssetRoot) }), changedFactory = createRegisteredBenchmarkScopedSessionFactory({
+      installedRoot: root, registeredMeasurement: changedMeasurement,
+      custodyRoot: fs.realpathSync(custodyRoot), nodeCommand, codexRuntimePath, qualification }),
+    custodyEntriesBefore = fs.readdirSync(custodyRoot);
+  await assert.rejects(changedFactory.openSession({ version: BENCHMARK_SCOPED_SESSION_REQUEST_VERSION,
+    authority: "none", runId: "qualification-mutated-arm", suiteId: "production-v2-da2",
+    scenarioId: "incident-diagnosis", surface: "piagent", repeat: 1, infrastructureAttempt: 1,
+    configurationSha256: identity.configDigest, workspace, model: "openai-codex/gpt-5.6-luna",
+    thinking: "medium", serviceTier: "fast", turns: exactTurns(assetRoot, catalog, "incident-diagnosis") }),
+  /session-factory-plan-binding/);
+  assert.deepEqual(fs.readdirSync(custodyRoot), custodyEntriesBefore);
 });

@@ -141,19 +141,29 @@ async function candidateModules(root, names) {
 }
 /** Creates the explicit G0 launcher. Nothing changes in the default gateway path. */
 export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, brokerConfigPath,
-  createBroker = createScopedMaterialBroker, modelRuntime, loopbackTransport, record, contextPolicy } = {}) {
+  createBroker = createScopedMaterialBroker, modelRuntime, loopbackTransport, record, contextPolicy,
+  scopedBrokerRouter = null } = {}) {
   const identity = validateArmIdentity(rawIdentity);
   if (scopedContextPolicySha256(contextPolicy) !== identity.contextPolicySha256) armFail("arm-context-policy-mismatch");
   if (typeof record !== "function") armFail("arm-record-required");
   if (typeof brokerConfigPath !== "string" || !path.isAbsolute(brokerConfigPath)
     || path.normalize(brokerConfigPath) !== brokerConfigPath) armFail("arm-broker-config-path");
+  if (scopedBrokerRouter && (!Array.isArray(scopedBrokerRouter.toolNames)
+    || typeof scopedBrokerRouter.extensionFactory !== "function"
+    || typeof scopedBrokerRouter.beginOperation !== "function"
+    || typeof scopedBrokerRouter.settlementEvidence !== "function"
+    || typeof scopedBrokerRouter.assertProviderDispatchReady !== "function"
+    || typeof scopedBrokerRouter.takeFatalProviderBoundaryError !== "function"
+    || typeof scopedBrokerRouter.assertOwnership !== "function"
+    || typeof scopedBrokerRouter.dispose !== "function")) armFail("arm-scoped-router-invalid");
   let launched = false;
   return async function qualifiedArmGateway(options) {
     if (launched) armFail("arm-launcher-single-use"); launched = true;
     if (fs.realpathSync(options.packageRoot) !== identity.candidateRoot
       || fs.realpathSync(options.staticRoot) !== identity.assetsRoot
       || fs.realpathSync(options.agentDir) !== identity.runtimeHome
-      || options.expectedPiVersion !== identity.sdkVersion) armFail("arm-launch-identity-mismatch");
+      || options.expectedPiVersion !== identity.sdkVersion
+      || (options.scopedBrokerRouter ?? null) !== scopedBrokerRouter) armFail("arm-launch-identity-mismatch");
     const actual = scopedQualificationIdentity({ candidateRoot: identity.candidateRoot,
       assetsRoot: identity.assetsRoot, sdkRoot: identity.sdkRoot });
     if (actual.sourceSha256 !== identity.candidateDigest || actual.assetTreeSha256 !== identity.assetTreeSha256
@@ -161,7 +171,8 @@ export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, broke
       || actual.brokerClosureSha256 !== identity.brokerClosureSha256) armFail("arm-broker-identity-mismatch");
     const capturedRuntime = await createQualifiedLoopbackModelRuntime({ modelRuntime, transport: loopbackTransport,
       record, identity, contextPolicy });
-    const loaded = loadScopedBrokerPiExtension({ configPath: brokerConfigPath, createBroker });
+    const loaded = scopedBrokerRouter ? null
+      : loadScopedBrokerPiExtension({ configPath: brokerConfigPath, createBroker });
     let loopback, runtimes;
     try {
     const shared = { armId: identity.armId, sourceSha256: identity.candidateDigest,
@@ -170,8 +181,11 @@ export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, broke
       manifestAuthoritySha256: identity.manifestAuthoritySha256, journalSignerSha256: identity.journalSignerSha256,
       journalPathSha256: identity.journalPathSha256, contextPolicySha256: identity.contextPolicySha256,
       sdkTreeSha256: identity.sdkTreeSha256 };
-    if (loaded.configSha256 !== identity.configSha256
-      || Object.entries(shared).some(([key, value]) => loaded.identity[key] !== value)) armFail("arm-broker-identity-mismatch");
+    if (loaded ? loaded.configSha256 !== identity.configSha256
+      || Object.entries(shared).some(([key, value]) => loaded.identity[key] !== value)
+      : createHash("sha256").update(fs.readFileSync(brokerConfigPath)).digest("hex") !== identity.configSha256) {
+      armFail("arm-broker-identity-mismatch");
+    }
     const names = ["packages/piagent-webui/gateway/pi-host.ts", "packages/piagent-webui/gateway/session-runtime-factory.ts",
       "packages/piagent-webui/server/loopback-server.ts", "packages/piagent-webui/gateway/profile-state.ts",
       "packages/piagent-webui/gateway/session-metadata-store.ts", "packages/piagent-webui/gateway/project-registry.ts",
@@ -183,6 +197,10 @@ export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, broke
     const [piHost, factoryModule, loopbackModule, profileModule, metadataModule, projectModule, leaseModule,
       eventsModule, supervisorModule, catalogModule, commandStoreModule, commandModule, runtimeCommandModule,
       protocolModule, inspectionModule, liveModule] = await candidateModules(identity.candidateRoot, names);
+    const selectedFactoryModule = scopedBrokerRouter
+      ? await import("../packages/piagent-webui/gateway/session-runtime-factory.ts") : factoryModule;
+    const selectedSupervisorModule = scopedBrokerRouter
+      ? await import("../packages/piagent-webui/gateway/session-runtime-supervisor.ts") : supervisorModule;
     if (fs.realpathSync(piHost.installedPiHostRoot()) !== identity.sdkRoot) armFail("arm-sdk-root-mismatch");
     const host = await piHost.loadPinnedPiHost(identity.sdkVersion), runtimeScope = new AsyncLocalStorage();
     let claimedSession = false; const observers = [];
@@ -192,11 +210,28 @@ export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, broke
           "packages/piagent-core/extensions/piagent-guard.ts"), "arm-guard-outside-candidate");
         const supplied = input.resourceLoaderOptions?.additionalExtensionPaths ?? [];
         if (supplied.length !== 1 || fs.realpathSync(supplied[0]) !== guard) armFail("arm-extension-route-mismatch");
-        try { const services = await host.createAgentSessionServices({ ...input, agentDir: identity.runtimeHome, modelRuntime: capturedRuntime,
+        const extensionFactory = scopedBrokerRouter?.extensionFactory ?? loaded.extensionFactory;
+        const suppliedFactories = input.resourceLoaderOptions?.extensionFactories;
+        if (scopedBrokerRouter && suppliedFactories !== undefined
+          && (suppliedFactories.length !== 1 || suppliedFactories[0] !== extensionFactory)) {
+          armFail("arm-extension-route-mismatch");
+        }
+        const suppliedModelRuntime = scopedBrokerRouter ? input.modelRuntime : capturedRuntime;
+        if (scopedBrokerRouter) {
+          const descriptor = Object.getOwnPropertyDescriptor(suppliedModelRuntime ?? {}, "streamSimple");
+          if (Object.getPrototypeOf(suppliedModelRuntime ?? {}) !== capturedRuntime
+            || typeof descriptor?.value !== "function" || descriptor.enumerable !== true
+            || descriptor.writable !== false || descriptor.configurable !== false) {
+            armFail("arm-provider-boundary-route-mismatch");
+          }
+        }
+        try { const services = await host.createAgentSessionServices({ ...input, agentDir: identity.runtimeHome,
+          modelRuntime: suppliedModelRuntime,
           resourceLoaderOptions: { ...input.resourceLoaderOptions, noExtensions: true, noSkills: true,
             noPromptTemplates: true, noThemes: true, noContextFiles: true,
-            additionalExtensionPaths: [guard], extensionFactories: [loaded.extensionFactory] } });
-          const ownership = assertScopedBrokerPiOwnership(services.resourceLoader, loaded.extensionFactory);
+            additionalExtensionPaths: [guard], extensionFactories: [extensionFactory] } });
+          const ownership = scopedBrokerRouter ? scopedBrokerRouter.assertOwnership(services.resourceLoader)
+            : assertScopedBrokerPiOwnership(services.resourceLoader, extensionFactory);
           await record({ version: 2, kind: "qualified-tool-ownership", ...ownership }); return services; }
         catch (error) { await record({ version: 1, kind: "qualified-arm-error", stage: "services", message: String(error?.message ?? error) }); throw error; }
       },
@@ -217,20 +252,25 @@ export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, broke
           sessionId: created.session.sessionManager.getSessionId(), tools: created.session.getActiveToolNames() });
         return created;
       } };
-    const baseFactory = factoryModule.createProductionRuntimeFactory({ host: facade,
-      agentDir: identity.runtimeHome, packageRoot: identity.candidateRoot, modelRuntime: capturedRuntime });
+    const baseFactory = selectedFactoryModule.createProductionRuntimeFactory({ host: facade,
+      agentDir: identity.runtimeHome, packageRoot: identity.candidateRoot, modelRuntime: capturedRuntime,
+      ...(scopedBrokerRouter ? { scopedBrokerRouter } : {}) });
     const runtimeFactory = async (info, runtimeInstanceRef, manager, initial) => {
-      try { return await runtimeScope.run({ runtimeInstanceRef }, () => baseFactory(info, runtimeInstanceRef, manager, initial)); }
+      try {
+        return await runtimeScope.run({ runtimeInstanceRef },
+          () => baseFactory(info, runtimeInstanceRef, manager, initial));
+      }
       catch (error) { await record({ version: 1, kind: "qualified-arm-error", stage: "runtime", message: String(error?.message ?? error) }); throw error; }
     };
     const state = profileModule.gatewayProfileState(identity.runtimeHome), key = profileModule.readOrCreateCatalogKey(state);
     const metadata = new metadataModule.SessionMetadataStore(state.root, key), projects = new projectModule.ProjectRegistry(state.root, key);
     const gatewayInstanceRef = `g0_${process.pid}_${identity.armId}_${Date.now()}`;
     const events = new eventsModule.GatewayEventStore();
-    runtimes = new supervisorModule.SessionRuntimeSupervisor({ gatewayInstanceRef, key,
+    runtimes = new selectedSupervisorModule.SessionRuntimeSupervisor({ gatewayInstanceRef, key,
       leases: new leaseModule.SessionLeaseStore(state.root, key), listSessions: () => host.SessionManager.listAll(),
       runtimeFactory, host, events, resolveProject: ref => projects.resolve(ref),
-      compositeSettlementEvidence: loaded.settlementEvidence });
+      compositeSettlementEvidence: scopedBrokerRouter
+        ? () => scopedBrokerRouter.settlementEvidence() : loaded.settlementEvidence });
     const readCatalog = () => catalogModule.buildSessionCatalog({ gatewayInstanceRef, key,
       listSessions: () => runtimes.listSessions(), readMetadata: () => metadata.read(),
       readOwnership: ref => runtimes.ownership(ref), readSessionOptions: () => ({ modelLabel: null, thinkingLevel: "unknown" }) });
@@ -264,11 +304,15 @@ export function createQualifiedArmGatewayLauncher({ identity: rawIdentity, broke
         await loopback.close().catch(() => undefined); await runtimes.close().catch(() => undefined);
         await record({ version: 1, kind: "qualified-observer-status", armId: identity.armId,
           transport: loopbackTransport.status(), statuses: observers.map(observer => observer.status()) });
-        if (!loaded.broker.status().ended) { if (!loaded.broker.status().cancelled) loaded.broker.cancel(); loaded.broker.close(); }
+        if (loaded && !loaded.broker.status().ended) {
+          if (!loaded.broker.status().cancelled) loaded.broker.cancel(); loaded.broker.close();
+        }
       } });
     } catch (error) {
       await loopback?.close().catch(() => undefined); await runtimes?.close().catch(() => undefined);
-      try { if (!loaded.broker.status().ended) { if (!loaded.broker.status().cancelled) loaded.broker.cancel(); loaded.broker.close(); } }
+      try { if (loaded && !loaded.broker.status().ended) {
+        if (!loaded.broker.status().cancelled) loaded.broker.cancel(); loaded.broker.close();
+      } }
       catch {}
       throw error;
     }

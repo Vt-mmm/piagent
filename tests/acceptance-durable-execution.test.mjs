@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { createSecretKey, randomBytes } from "node:crypto";
+import { createHash, createSecretKey, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -132,6 +132,25 @@ test("unavailable backend errors are durably settled without implicit retries", 
   assert.equal(store.latest(scope).attempt, 1);
   assert.equal((await runner.run({ ...request, retry: true })).reused, false);
   assert.equal(store.latest(scope).attempt, 2);
+});
+
+test("durable execution detaches and binds its exact Docker command before any attempt", async context => {
+  const { options, projectRoot, store } = fixture(context), commandPath = path.join(path.dirname(projectRoot), "docker-test");
+  fs.writeFileSync(commandPath, "#!/bin/sh\nexit 1\n", { mode: 0o500 });
+  const dockerCommand = { path: commandPath,
+    sha256: createHash("sha256").update(fs.readFileSync(commandPath)).digest("hex") };
+  const runner = createDurableContractRunner({ ...options,
+    dockerSocket: "/piagent-test-backend-does-not-exist.sock", dockerCommand });
+  dockerCommand.path = "/changed/after/approval";
+  dockerCommand.sha256 = "0".repeat(64);
+  const result = await runner.run(request);
+  assert.equal(result.evidence.observed.result.execution.reason, "local-backend-unavailable");
+  assert.equal(store.latest(scope).phase, "settled");
+  for (const invalid of [
+    { path: `${commandPath}/../docker-test`, sha256: "0".repeat(64) },
+    { sha256: "0".repeat(64), path: commandPath },
+    { path: commandPath, sha256: "0".repeat(64), extra: true }
+  ]) assert.throws(() => createDurableContractRunner({ ...options, dockerCommand: invalid }));
 });
 
 test("authenticated module execution invalidates dependency-only drift and detaches the approved allowlist", integration, async (context) => {

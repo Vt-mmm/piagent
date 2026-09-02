@@ -149,10 +149,21 @@ function validatePlanList(plans, schemaVersion) {
 
 function validateContractBody(payload, schemaVersion = 1) {
   const nodeProfile = schemaVersion === 3;
+  const hasDockerCommand = Object.hasOwn(payload.backend ?? {}, "dockerCommand");
+  const backendFields = nodeProfile
+    ? ["imageId", "dockerSocket", ...(hasDockerCommand ? ["dockerCommand"] : []), "timeoutMs", "profile"]
+    : ["imageId", "dockerSocket", "timeoutMs"];
   if (!/^operator-request-v1:[a-f0-9]{64}$/.test(payload.operatorRequestDigest)
-    || !exact(payload.backend, nodeProfile ? ["imageId", "dockerSocket", "timeoutMs", "profile"] : ["imageId", "dockerSocket", "timeoutMs"])
+    || !exact(payload.backend, backendFields)
     || !/^sha256:[a-f0-9]{64}$/.test(payload.backend.imageId) || typeof payload.backend.dockerSocket !== "string"
     || !path.isAbsolute(payload.backend.dockerSocket) || payload.backend.dockerSocket.includes("\0")
+    || hasDockerCommand && (!nodeProfile
+      || JSON.stringify(Object.keys(payload.backend.dockerCommand ?? {})) !== JSON.stringify(["path", "sha256"])
+      || typeof payload.backend.dockerCommand.path !== "string"
+      || !path.isAbsolute(payload.backend.dockerCommand.path)
+      || path.normalize(payload.backend.dockerCommand.path) !== payload.backend.dockerCommand.path
+      || payload.backend.dockerCommand.path.includes("\0")
+      || !HASH.test(String(payload.backend.dockerCommand.sha256 ?? "")))
     || !Number.isSafeInteger(payload.backend.timeoutMs) || payload.backend.timeoutMs < 25 || payload.backend.timeoutMs > 30000
     || nodeProfile && JSON.stringify(payload.backend.profile) !== JSON.stringify(expectedNodeProfile())
     || !Array.isArray(payload.contracts) || payload.contracts.length < 1 || payload.contracts.length > 12) throw new TypeError("Invalid host contract approval");

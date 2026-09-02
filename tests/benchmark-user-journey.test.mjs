@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runCodexUserJourney } from "../scripts/benchmark-session.mjs";
+import { runCodexUserJourney as runGuardedCodexUserJourney } from "../scripts/benchmark-session.mjs";
 import { resolveCodexJourneyScopedBrokers } from "../scripts/benchmark-codex-journey.mjs";
+
+const runCodexUserJourney = options => runGuardedCodexUserJourney({
+  onBeforeProviderDispatch: () => {}, onAfterProviderDispatch: () => {},
+  onBeforeFirstProviderDispatch: () => {}, ...options
+});
 
 function codexTurn(threadId, inputTokens, outputTokens) {
   return [
@@ -17,6 +22,17 @@ function codexTurn(threadId, inputTokens, outputTokens) {
     } }
   ].map((event) => JSON.stringify(event)).join("\n") + "\n";
 }
+
+test("Codex journey rejects missing boundary callbacks before provider dispatch", async () => {
+  let calls = 0;
+  await assert.rejects(runGuardedCodexUserJourney({
+    runCommand: async () => { calls++; }, codexCommand: "/runtime/codex", workspace: "/workspace",
+    turns: [{ id: "one", message: "One" }], options: { model: "openai-codex/gpt-5.6-luna",
+      thinking: "medium", codexMode: "controlled" }, disabledFeatures: [], environment: {},
+    timeoutMs: 10_000, forbiddenOutputSubstrings: []
+  }), /requires explicit pre\/post provider dispatch guards and admission callback/);
+  assert.equal(calls, 0);
+});
 
 test("Codex production journey preserves one thread and sums every turn exactly", async () => {
   const calls = [];

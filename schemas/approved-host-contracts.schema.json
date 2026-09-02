@@ -786,6 +786,15 @@
       "required": ["id","digest","workerVersion"],
       "properties": {"id": {"const": "node-workload-api-v1"},"digest": {"$ref": "#/$defs/hash"},"workerVersion": {"const": "quickjs-node-profile-worker-v1"}}
     },
+    "dockerCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path","sha256"],
+      "properties": {
+        "path": {"type": "string","pattern": "^/[^\\u0000]*$"},
+        "sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
     "backendV2": {
       "type": "object",
       "additionalProperties": false,
@@ -793,6 +802,7 @@
       "properties": {
         "imageId": {"type": "string","pattern": "^sha256:[a-f0-9]{64}$"},
         "dockerSocket": {"type": "string","pattern": "^/[^\u0000]*$"},
+        "dockerCommand": {"$ref": "#/$defs/dockerCommand"},
         "timeoutMs": {"type": "integer","minimum": 25,"maximum": 30000},
         "profile": {"$ref": "#/$defs/profileV2"}
       }

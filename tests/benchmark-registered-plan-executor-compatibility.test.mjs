@@ -14,9 +14,14 @@ const SCENARIO = process.env.PIAGENT_REGISTERED_PLAN_SCENARIO;
 const SUITE_DIGEST = "83b03a0ec872d1d6196fb8c4447e628459c11303748109c24da8dbccbbece8cb";
 const ZERO = "0".repeat(64);
 const SUITE_ROOT = path.resolve(import.meta.dirname, "../benchmarks/production-v2");
+const planFile = ASSET_ROOT ? fs.readdirSync(path.join(ASSET_ROOT, "plans")).sort()
+  .find(name => name.endsWith(".json")) : null;
+const dockerCommand = planFile
+  ? JSON.parse(fs.readFileSync(path.join(ASSET_ROOT, "plans", planFile), "utf8")).backend?.dockerCommand
+  : null;
 const drafts = ASSET_ROOT ? buildRegisteredPlanDrafts({ assetRoot: fs.realpathSync.native(ASSET_ROOT),
   suiteRoot: fs.realpathSync.native(SUITE_ROOT), suiteDigest: SUITE_DIGEST,
-  configDigest: ZERO, armDigest: ZERO }) : null;
+  configDigest: ZERO, armDigests: { piagent: ZERO, "codex-cli": ZERO }, dockerCommand }) : null;
 const NULL = Object.freeze({ type: "null" });
 const PROBE_SOURCE = `
 export class ReceiverProbe { set(...args){ return null; } get(...args){ return null; } }
@@ -95,7 +100,8 @@ function outputProbeCases(contract) {
 
 async function assess(item, source, checks, exportName = "inputProbe") {
   return runIndependentContract({ imageId: item.plan.backend.imageId,
-    dockerSocket: item.plan.backend.dockerSocket, timeoutMs: item.plan.backend.timeoutMs,
+    dockerSocket: item.plan.backend.dockerSocket, dockerCommand: item.plan.backend.dockerCommand,
+    timeoutMs: item.plan.backend.timeoutMs,
     profile: item.plan.backend.profile, planText: JSON.stringify({ schemaVersion: 2,
       profile: item.plan.backend.profile, source, exportName, checks }) });
 }

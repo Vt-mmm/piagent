@@ -23,6 +23,7 @@ export type DurableContractConfiguration = {
   profile?: Readonly<{ id: string; digest: string; workerVersion: string }>;
   imageId: string;
   dockerSocket: string;
+  dockerCommand?: Readonly<{ path: string; sha256: string }>;
   verifierDigest: string;
   getProjectVerificationDigest: (input: ProjectVerificationRequest) => string | null | Promise<string | null>;
   timeoutMs?: number;

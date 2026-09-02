@@ -196,7 +196,6 @@ export function parseBenchmarkArgs(argv) {
         index += 1;
         break;
       case "--allow-pi-auth-writeback":
-        registeredIncompatible.add("--allow-pi-auth-writeback");
         options.allowPiAuthWriteback = true;
         break;
       case "--verification-plan":

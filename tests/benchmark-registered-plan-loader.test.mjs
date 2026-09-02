@@ -106,6 +106,7 @@ test("registered loader rejects one changed approved plan before provisioning au
   const canonical = fs.realpathSync.native(assetRoot), registeredMeasurement = measurement(canonical),
     changed = path.join(canonical, "plans", "expiry-boundary.json"), { suite, suiteRoot } = loadBenchmarkSuite("production-v2", root);
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  fs.chmodSync(changed, fs.statSync(changed).mode | 0o200);
   fs.appendFileSync(changed, " ");
   assert.throws(() => loadRegisteredBenchmarkVerificationPlan({ registeredMeasurement,
     installedRoot: root, suiteDigest, scenarios: suite.scenarios, suiteRoot,

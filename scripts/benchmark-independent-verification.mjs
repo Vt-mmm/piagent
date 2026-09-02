@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { benchmarkCommandIdentity } from "../packages/piagent-core/benchmark/benchmark-runtime-identity.js";
 import { installedContractVerifierDigest, openHostContractConfiguration, validateHostContractPlan, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 import { buildAcceptanceReceipt } from "../packages/piagent-core/extensions/acceptance-receipt.js";
 import { effectiveProtectedPaths } from "../packages/piagent-core/extensions/context-index-policy.js";
@@ -30,6 +31,25 @@ const exact = (value, fields) => value && typeof value === "object" && !Array.is
 const freeze = (value) => { if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
 const inside = (root, file) => { const relative = path.relative(fs.realpathSync.native(root), file);
   return !relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative)); };
+
+function registeredPlanForSurface(plan, surface) {
+  if (!["piagent", "codex-cli"].includes(surface)) throw new TypeError("Invalid registered verification surface");
+  const selected = structuredClone(plan);
+  for (const contract of selected.contracts) {
+    if (contract.route !== "composite") continue;
+    const identity = contract.planContext.identity;
+    if (!exact(identity, ["suiteDigest", "configDigest", "armDigests"])
+      || !exact(identity.armDigests, ["piagent", "codex-cli"])
+      || ![identity.suiteDigest, identity.configDigest, identity.armDigests.piagent,
+        identity.armDigests["codex-cli"]].every(value => HASH.test(value))) {
+      throw new TypeError("Invalid registered surface-indexed composite identity");
+    }
+    contract.planContext.identity = { suiteDigest: identity.suiteDigest,
+      configDigest: identity.configDigest, armDigest: identity.armDigests[surface] };
+  }
+  validateHostContractPlan(selected);
+  return freeze(selected);
+}
 
 export function resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry) {
   if (!scenario.userJourney) return null;
@@ -305,13 +325,38 @@ export function loadRegisteredBenchmarkVerificationPlan({
   }
   const profile = installedJson(installedRoot, "adapters/node-typescript/profile.json", "Node profile");
   const policy = installedJson(installedRoot, "packages/piagent-core/policies/base-policy.json", "base policy");
+  const approvedDockerSha256 = registeredMeasurement.payload.resources.verifiers
+    .find(item => item.id === "docker-runtime")?.sha256;
+  if (!HASH.test(String(approvedDockerSha256 ?? ""))) {
+    throw new Error("Registered Docker runtime identity is missing");
+  }
   const planAssets = [], entries = [];
+  let dockerCommand = null;
   for (const scenario of scenarios) {
     const relativePath = `plans/${scenario.id}.json`, bytes = readRegisteredAsset(registeredMeasurement, relativePath);
     let plan;
     try { plan = JSON.parse(bytes); }
     catch { throw new Error(`Registered verification plan is not JSON: ${scenario.id}`); }
-    validateHostContractPlan(plan);
+    registeredPlanForSurface(plan, "piagent");
+    registeredPlanForSurface(plan, "codex-cli");
+    const selectedDocker = plan.backend?.dockerCommand;
+    if (JSON.stringify(Object.keys(selectedDocker ?? {})) !== JSON.stringify(["path", "sha256"])
+      || typeof selectedDocker.path !== "string" || !path.isAbsolute(selectedDocker.path)
+      || path.normalize(selectedDocker.path) !== selectedDocker.path || selectedDocker.path.includes("\0")
+      || selectedDocker.sha256 !== approvedDockerSha256) {
+      throw new Error(`Registered Docker command binding is invalid: ${scenario.id}`);
+    }
+    let observedDocker;
+    try { observedDocker = benchmarkCommandIdentity(selectedDocker.path, { fullPackageClosure: false }); }
+    catch { throw new Error(`Registered Docker command is unavailable: ${scenario.id}`); }
+    if (observedDocker.resolvedPath !== selectedDocker.path
+      || observedDocker.contentDigest !== selectedDocker.sha256 || observedDocker.executable !== true) {
+      throw new Error(`Registered Docker command changed: ${scenario.id}`);
+    }
+    if (dockerCommand && JSON.stringify(dockerCommand) !== JSON.stringify(selectedDocker)) {
+      throw new Error("Registered plans disagree on the Docker command identity");
+    }
+    dockerCommand = freeze({ path: selectedDocker.path, sha256: selectedDocker.sha256 });
     const input = inputs.get(scenario.id), receipt = benchmarkVerificationReceiptForTurn(input.selected, { profile, policy });
     if (plan.schemaVersion !== 3 || plan.operatorRequestDigest !== benchmarkVerificationRequestDigest(input.selected)
       || plan.backend.imageId !== nodeProfile.workerImage.id
@@ -326,6 +371,13 @@ export function loadRegisteredBenchmarkVerificationPlan({
         throw new Error(`Registered verification criterion does not match runtime intake: ${scenario.id}`);
       }
       if (contract.route === "composite") {
+        const identity = contract.planContext.identity;
+        if (!exact(identity, ["suiteDigest", "configDigest", "armDigests"])
+          || !exact(identity.armDigests, ["piagent", "codex-cli"])
+          || ![identity.suiteDigest, identity.configDigest, identity.armDigests.piagent,
+            identity.armDigests["codex-cli"]].every(value => HASH.test(value))) {
+          throw new Error(`Registered composite arm identities are incomplete: ${scenario.id}`);
+        }
         const publicContract = JSON.parse(contract.planContext.contractText);
         if (publicContract.criterionIndex !== index || publicContract.criterionId !== criterion.criterionId
           || publicContract.criterionHash !== criterion.criterionHash
@@ -363,7 +415,9 @@ export function loadRegisteredBenchmarkVerificationPlan({
         && boundAssets.every(asset => hash(readRegisteredAsset(registeredMeasurement, asset.path)) === asset.sha256);
     } catch { return false; }
   };
-  return Object.freeze({ identity, isCurrent, registeredSuiteId: registeredMeasurement.payload.suiteId,
+  if (!dockerCommand) throw new Error("Registered Docker command binding is unavailable");
+  return Object.freeze({ identity, isCurrent, dockerCommand,
+    registeredSuiteId: registeredMeasurement.payload.suiteId,
     measurementConfigurationDigest: registeredMeasurement.payload.sharedEnvironmentDigest,
     registeredInput(scenarioId) {
       if (!isCurrent()) throw new Error("Registered measurement input or verifier changed");
@@ -376,11 +430,12 @@ export function loadRegisteredBenchmarkVerificationPlan({
       const entry = entries.find(item => item.scenarioId === scenarioId);
       if (!entry) return Object.freeze({ environment: Object.freeze({}), observe: () => freeze({ schemaVersion: 1,
         planDigest: contentDigest, status: "not-configured", attempts: 0, workersObserved: 0, requests: [] }) });
+      const plans = entry.plans.map(plan => registeredPlanForSurface(plan, surface));
       const { configPath } = writeHostContractApproval({
-        directory, projectRoot, installedRoot, plans: entry.plans, approved: true
+        directory, projectRoot, installedRoot, plans, approved: true
       });
       return Object.freeze({ environment: Object.freeze({ PIAGENT_INDEPENDENT_VERIFICATION_CONFIG: configPath }),
-        observe(tasks) { return observeRequests({ configPath, projectRoot, installedRoot, plans: entry.plans,
+        observe(tasks) { return observeRequests({ configPath, projectRoot, installedRoot, plans,
           planDigest: contentDigest, tasks, isCurrent }); } });
     }
   });
@@ -492,7 +547,8 @@ function observeRequests({ configPath, projectRoot, installedRoot, plans, planDi
       const codeContract = plan.contracts.find(contract => contract.route !== "composite");
       const compilerVersion = codeContract ? templateFor(codeContract).version : null;
       const backendDigest = compilerVersion ? hash(JSON.stringify([DURABLE_EXECUTION_VERSION, compilerVersion,
-        EXECUTION_SNAPSHOT_VERSION, plan.backend.imageId, plan.backend.dockerSocket, plan.backend.timeoutMs, profile ?? null])) : null;
+        EXECUTION_SNAPSHOT_VERSION, plan.backend.imageId, plan.backend.dockerSocket,
+        plan.backend.dockerCommand, plan.backend.timeoutMs, profile ?? null])) : null;
       const publicationStore = plan.contracts.some(contract => contract.route === "composite")
         ? config.withCompositeRecovery(({ key, directory, projectRoot: approvedRoot }) =>
           openCompositeTaskPublicationStore({ key, directory, projectRoot: approvedRoot })) : null;

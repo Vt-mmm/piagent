@@ -11,11 +11,20 @@ const ASSET_ROOT = process.env.PIAGENT_REGISTERED_ASSET_ROOT;
 const SUITE_DIGEST = "83b03a0ec872d1d6196fb8c4447e628459c11303748109c24da8dbccbbece8cb";
 const ZERO = "0".repeat(64);
 const sha = value => createHash("sha256").update(value).digest("hex");
+function registeredDockerCommand() {
+  if (ASSET_ROOT) {
+    const file = fs.readdirSync(path.join(ASSET_ROOT, "plans")).sort().find(name => name.endsWith(".json"));
+    const binding = file ? JSON.parse(fs.readFileSync(path.join(ASSET_ROOT, "plans", file), "utf8"))
+      .backend?.dockerCommand : null;
+    if (binding) return binding;
+  }
+  return { path: "/usr/bin/false", sha256: ZERO };
+}
 
-function build(configDigest = ZERO, armDigest = ZERO) {
+function build(configDigest = ZERO, armDigests = { piagent: ZERO, "codex-cli": ZERO }) {
   return buildRegisteredPlanDrafts({ assetRoot: fs.realpathSync.native(ASSET_ROOT),
     suiteRoot: fs.realpathSync.native(path.resolve(import.meta.dirname, "../benchmarks/production-v2")),
-    suiteDigest: SUITE_DIGEST, configDigest, armDigest });
+    suiteDigest: SUITE_DIGEST, configDigest, armDigests, dockerCommand: registeredDockerCommand() });
 }
 
 function materializedIdentities() {
@@ -35,6 +44,26 @@ function materializedIdentities() {
   return { byScenario, configDigest: [...configDigests][0] };
 }
 
+test("registered-plan author rejects scalar, incomplete, reordered and extra arm identities", () => {
+  const base = { suiteDigest: SUITE_DIGEST, configDigest: ZERO,
+    dockerCommand: { path: "/usr/bin/false", sha256: ZERO } };
+  for (const value of [
+    { ...base, armDigest: ZERO },
+    { ...base, armDigests: { piagent: ZERO } },
+    { ...base, armDigests: { "codex-cli": ZERO, piagent: ZERO } },
+    { ...base, armDigests: { piagent: ZERO, "codex-cli": ZERO, extra: ZERO } }
+  ]) assert.throws(() => buildRegisteredPlanDrafts(value), /identities must be SHA-256 digests/);
+  const armDigests = { piagent: ZERO, "codex-cli": ZERO };
+  for (const dockerCommand of [
+    undefined,
+    { sha256: ZERO, path: "/usr/bin/false" },
+    { path: "docker", sha256: ZERO },
+    { path: "/usr/bin/false", sha256: "F".repeat(64) },
+    { path: "/usr/bin/false", sha256: ZERO, extra: true }
+  ]) assert.throws(() => buildRegisteredPlanDrafts({ ...base, armDigests, dockerCommand }),
+    /identities must be SHA-256 digests/);
+});
+
 test("public registered-plan author deterministically builds exact 23 code and 4 composite routes", {
   skip: !ASSET_ROOT
 }, () => {
@@ -45,7 +74,16 @@ test("public registered-plan author deterministically builds exact 23 code and 4
   assert.equal(first.plans.filter(item => item.route === "composite").length, 4);
   assert.equal(sha(JSON.stringify(first)), sha(JSON.stringify(second)));
   for (const item of first.plans) {
-    validateHostContractPlan(item.plan);
+    if (item.route === "code") validateHostContractPlan(item.plan);
+    else for (const surface of ["piagent", "codex-cli"]) {
+      const projected = structuredClone(item.plan);
+      for (const contract of projected.contracts) contract.planContext.identity = {
+        suiteDigest: contract.planContext.identity.suiteDigest,
+        configDigest: contract.planContext.identity.configDigest,
+        armDigest: contract.planContext.identity.armDigests[surface]
+      };
+      validateHostContractPlan(projected);
+    }
     assert.equal(item.plan.schemaVersion, 3);
     assert.equal(item.plan.contracts.length, item.criterionCount);
     assert.ok(Buffer.byteLength(JSON.stringify(item.plan)) < 2 * 1024 * 1024);
@@ -58,7 +96,8 @@ test("public registered-plan author deterministically builds exact 23 code and 4
       assert.equal(item.caseCount, 0);
       for (const contract of item.plan.contracts) {
         assert.equal(contract.planContext.identity.configDigest, ZERO);
-        assert.equal(contract.planContext.identity.armDigest, ZERO);
+        assert.deepEqual(contract.planContext.identity.armDigests,
+          { piagent: ZERO, "codex-cli": ZERO });
         const publicContract = JSON.parse(contract.planContext.contractText);
         assert.equal(publicContract.coverage.length, 1);
         assert.equal(publicContract.coverage[0].startByte, 0);
@@ -98,7 +137,8 @@ test("materialized plan drafts exactly match the public author output", {
   assert.deepEqual(files, template.plans.map(item => `${item.scenarioId}.json`).sort());
   for (const expected of template.plans) {
     const identity = identities.byScenario.get(expected.scenarioId), result = build(identities.configDigest,
-      identity?.armDigest ?? ZERO), item = result.plans.find(value => value.scenarioId === expected.scenarioId);
+      identity?.armDigests ?? { piagent: ZERO, "codex-cli": ZERO }),
+      item = result.plans.find(value => value.scenarioId === expected.scenarioId);
     const bytes = fs.readFileSync(path.join(ASSET_ROOT, "plans", `${item.scenarioId}.json`));
     assert.equal(bytes.toString("utf8"), JSON.stringify(item.plan) + "\n");
     assert.ok(bytes.length > 0 && bytes.length < 2 * 1024 * 1024);
@@ -113,6 +153,9 @@ test("final materialized composite identities are nonzero when explicitly requir
   assert.equal(identities.byScenario.size, 4);
   for (const [scenarioId, identity] of identities.byScenario) {
     assert.equal(identity.suiteDigest, SUITE_DIGEST, scenarioId);
-    assert.notEqual(identity.armDigest, ZERO, scenarioId);
+    assert.deepEqual(Object.keys(identity.armDigests), ["piagent", "codex-cli"], scenarioId);
+    assert.notEqual(identity.armDigests.piagent, ZERO, scenarioId);
+    assert.notEqual(identity.armDigests["codex-cli"], ZERO, scenarioId);
+    assert.notEqual(identity.armDigests.piagent, identity.armDigests["codex-cli"], scenarioId);
   }
 });

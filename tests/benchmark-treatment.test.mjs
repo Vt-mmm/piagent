@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { codexExecArgs, codexExecResumeArgs, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import {
+  assertCodexRuntimeCredential,
   benchmarkEnvironment,
+  codexProcessEnvironment,
+  codexRuntimeCredentialPolicy,
+  createCodexRuntime,
   piagentProcessEnvironment,
   piagentTreatment
 } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
@@ -88,4 +95,52 @@ test("keeps the intelligence causal arms identical except for the criterion engi
   assert.equal(arm.PIAGENT_INTELLIGENCE_ENGINE, "on");
   assert.equal(baseline.PIAGENT_PHASE_TOOLS, "shadow");
   assert.equal(arm.PIAGENT_PHASE_TOOLS, "shadow");
+});
+
+test("registered controlled Codex excludes environment credentials and rechecks the exact private copy", t => {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "registered-codex-auth-test-"))),
+    source = path.join(root, "auth.json");
+  fs.writeFileSync(source, "private test credential\n", { mode: 0o600 });
+  const names = ["PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT", "OPENAI_API_KEY", "CODEX_ACCESS_TOKEN"],
+    prior = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  Object.assign(process.env, { PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT: source,
+    OPENAI_API_KEY: "must-not-reach-codex", CODEX_ACCESS_TOKEN: "must-not-reach-codex" });
+  let runtime;
+  t.after(() => {
+    runtime?.cleanup();
+    fs.rmSync(root, { recursive: true, force: true });
+    for (const [name, value] of Object.entries(prior)) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  });
+  runtime = createCodexRuntime({ surfaces: ["codex-cli"], codexMode: "controlled",
+    registeredMeasurement: "/frozen/registered-suite.json" });
+  assert.equal(runtime.credentialBridge, "frozen-auth-json-copy");
+  assert.deepEqual(codexRuntimeCredentialPolicy(runtime), {
+    source: "frozen-auth-json-snapshot", environmentCredentials: "excluded",
+    copyIntegrity: "stable-fd-o-excl-fsync",
+    perDispatchIntegrity: "exact-private-stat-and-content-match"
+  });
+  const environment = codexProcessEnvironment(runtime, { OPENAI_API_KEY: "override",
+    CODEX_ACCESS_TOKEN: "override" });
+  assert.equal(environment.OPENAI_API_KEY, undefined);
+  assert.equal(environment.CODEX_ACCESS_TOKEN, undefined);
+  assert.doesNotThrow(() => assertCodexRuntimeCredential(runtime, { required: true }));
+  const copy = path.join(runtime.home, "auth.json");
+  fs.appendFileSync(copy, "drift");
+  assert.throws(() => assertCodexRuntimeCredential(runtime, { required: true }),
+    /credential copy changed/);
+});
+
+test("registered controlled Codex rejects an env-only credential when the frozen snapshot is absent", t => {
+  const names = ["PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT", "OPENAI_API_KEY", "CODEX_ACCESS_TOKEN"],
+    prior = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  delete process.env.PIAGENT_BENCHMARK_CODEX_AUTH_SNAPSHOT;
+  process.env.OPENAI_API_KEY = "env-only-must-be-rejected";
+  process.env.CODEX_ACCESS_TOKEN = "env-only-must-be-rejected";
+  t.after(() => { for (const [name, value] of Object.entries(prior)) {
+    if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  } });
+  assert.throws(() => createCodexRuntime({ surfaces: ["codex-cli"], codexMode: "controlled",
+    registeredMeasurement: "/frozen/registered-suite.json" }), /requires the frozen Codex auth.json snapshot/);
 });

@@ -103,3 +103,24 @@ test("Pi operation router rejects reuse, identity mismatch, widening and aborted
     { sessionManager: { getSessionId: () => "session-native" } }), /pi-router-broker-identity/);
   assert.equal(wrong.status().shuttingDown, true);
 });
+
+test("Pi operation router exposes an exact one-shot fatal channel for custody open denial", async () => {
+  const marker = Object.assign(new Error("session-custody-arm-drift"), {
+    brokerCode: "session-custody-arm-drift"
+  });
+  const router = createScopedBrokerPiOperationRouter({ open: async () => {
+    await Promise.resolve();
+    throw marker;
+  } });
+  const runtime = piFixture(router), finish = router.beginOperation(operation("denied"));
+  await assert.rejects(runtime.handlers.get("before_agent_start")({},
+    { sessionManager: { getSessionId: () => "session-native" } }), error => error === marker);
+  assert.throws(() => router.assertProviderDispatchReady(), error => error === marker,
+    "the actual SDK payload boundary must fail with the same custody error");
+  assert.equal(router.takeFatalProviderBoundaryError(), null,
+    "the fatal is not released until the matching operation settles");
+  finish("operation-settled");
+  assert.equal(router.takeFatalProviderBoundaryError(), marker);
+  assert.equal(router.takeFatalProviderBoundaryError(), null, "the trusted fatal channel is one-shot");
+  assert.throws(() => router.settlementEvidence(), /pi-router-settlement-unavailable/);
+});

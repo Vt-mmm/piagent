@@ -10,7 +10,7 @@ import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benc
 import { writePrivateAtomic } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { exactBenchmarkMeasuredUsage } from "../packages/piagent-core/benchmark/benchmark-usage.js";
 import { resolveBenchmarkSuiteEntry } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
-import { runBenchmarkSession } from "./benchmark-session.mjs";
+import { runOfflineBenchmarkSession } from "./benchmark-session.mjs";
 
 // Offline diagnostic plumbing only. No default process/provider implementation,
 // credential access, approval mechanism, retries, or release claims live here.
@@ -209,7 +209,7 @@ export async function runOfflineCandidateAblation({ plan: inputPlan, runRoot: in
         configurationDigest: arm.configurationDigest, fixtureEvaluatorIdentity: plan.suiteIdentity, transitions: [],
         preparationId, sessionRoot, runtimeHome, reservedFresh: plan.budget.reserveFreshPerSession };
       advance("planned");
-      const session = await runBenchmarkSession({
+      const session = await runOfflineBenchmarkSession({
         packageRoot: arm.packageRoot, runCommand: fakeProvider.runCommand, piagentWebUiJourney: fakeProvider.piagentWebUiJourney,
         resolveSuiteEntry: resolveBenchmarkSuiteEntry, interrupted: stopRequested,
         suite: plan.suite, suiteRoot: plan.suiteRoot, scenario, surface: "piagent", repeat: 1,
@@ -217,6 +217,7 @@ export async function runOfflineCandidateAblation({ plan: inputPlan, runRoot: in
         options: { ...plan.execution, piagentTreatment: "release-defaults" }, piCommand: "offline-fake-pi",
         piRuntimeHome: { path: runtimeHome }, systemCommands: { node: "offline-fake-node", git: "offline-fake-git", bash: "offline-fake-bash" },
         suiteDigest: coordinate.suiteDigest, configurationDigest: coordinate.configurationDigest, rootSeed: plan.rootSeed,
+        assertProviderDispatchReady: () => { assertOwner(); assertInputs(plan); },
         onProviderAttemptStart: attempt => {
           assertOwner(); assertInputs(plan);
           if (stopRequested()) fail("stopped before provider dispatch");
