@@ -40,6 +40,8 @@ function inventory(assetRoot) {
 function measurement(assetRoot) {
   const catalog = JSON.parse(fs.readFileSync(path.join(assetRoot, "catalog.json"), "utf8")),
     nodeProfile = JSON.parse(fs.readFileSync(path.join(assetRoot, "measurement", "node-workload-api-v1.json"), "utf8")),
+    firstPlan = JSON.parse(fs.readFileSync(path.join(assetRoot, "plans",
+      `${catalog.scenarios[0].scenarioId}.json`), "utf8")),
     promptRolesChanged = fs.readdirSync(path.join(assetRoot, "measurement", "prompts"))
       .filter(name => name.endsWith(".md")).map(name => path.basename(name, ".md")).sort(),
     configDigests = new Set();
@@ -53,7 +55,9 @@ function measurement(assetRoot) {
     suiteId: "production-v2-da2", baseSuiteDigest: suiteDigest,
     sharedEnvironmentDigest: [...configDigests][0], nodeProfileDigest: nodeProfile.profile.digest,
     catalogDigest: sha(JSON.stringify(catalog)), promptRolesChanged: Object.freeze(promptRolesChanged),
-    scenarioIds: Object.freeze(catalog.scenarios.map(item => item.scenarioId))
+    scenarioIds: Object.freeze(catalog.scenarios.map(item => item.scenarioId)),
+    resources: Object.freeze({ verifiers: Object.freeze([Object.freeze({ id: "docker-runtime",
+      sha256: firstPlan.backend.dockerCommand.sha256 })]) })
   }) });
 }
 
