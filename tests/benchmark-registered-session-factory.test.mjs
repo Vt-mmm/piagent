@@ -8,6 +8,7 @@ import test from "node:test";
 import { scopedBrokerArmDigest
 } from "../packages/piagent-core/runtime/verification/composite-scoped-mediation.ts";
 import { BENCHMARK_SCOPED_SESSION_REQUEST_VERSION } from "../scripts/benchmark-codex-journey.mjs";
+import { registeredBenchmarkCustodyRoot } from "../scripts/benchmark-runner-support.mjs";
 import { createRegisteredBenchmarkScopedSessionFactory,
   registeredBenchmarkScopedSessionRequired
 } from "../scripts/benchmark-scoped-session-factory.mjs";
@@ -39,8 +40,10 @@ function writableTree(rootPath) {
   for (const directory of directories.reverse()) fs.chmodSync(directory, 0o700);
 }
 
-function privateWorkspace(temporary) {
-  const workspace = path.join(temporary, "workspace");
+function privateWorkspace(runRoot) {
+  const workspace = path.join(runRoot, "workspaces",
+    "01-protected-env-refusal-codex-cli", "project");
+  fs.mkdirSync(path.dirname(workspace), { recursive: true, mode: 0o700 });
   fs.cpSync(path.join(root, "benchmarks", "production-v2", "project"), workspace,
     { recursive: true, errorOnExist: true });
   writableTree(workspace);
@@ -119,8 +122,9 @@ test("registered production session factory binds exact public composite plans p
     temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "registered-session-factory-")));
   fs.chmodSync(temporary, 0o700);
   t.after(() => { writableTree(temporary); fs.rmSync(temporary, { recursive: true, force: true }); });
-  const workspace = privateWorkspace(temporary), custodyRoot = path.join(temporary, "custody");
-  fs.mkdirSync(custodyRoot, { mode: 0o700 });
+  const runRoot = path.join(temporary, "run");
+  fs.mkdirSync(runRoot, { mode: 0o700 });
+  const workspace = privateWorkspace(runRoot), custodyRoot = registeredBenchmarkCustodyRoot(runRoot);
   const catalog = JSON.parse(fs.readFileSync(path.join(assetRoot, "catalog.json"), "utf8")),
     samplePlan = JSON.parse(fs.readFileSync(path.join(assetRoot, "plans", "incident-diagnosis.json"), "utf8")),
     identity = samplePlan.contracts[0].planContext.identity,

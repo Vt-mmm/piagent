@@ -46,7 +46,7 @@ import {
   executionOrder,
   fail, formatDuration, invokedAsEntrypoint, isLegacyInvocation,
   loadResumeState, pairedChunk, privateDirectory,
-  readJsonFile,
+  readJsonFile, registeredBenchmarkCustodyRoot,
   samePairedBlock,
   sameStringList
 } from "./benchmark-runner-support.mjs";
@@ -583,7 +583,7 @@ async function main() {
   privateDirectory(path.join(runRoot, "workspaces"));
   const registeredScopedSessionFactory = registeredMeasurementRun
     ? createRegisteredBenchmarkScopedSessionFactory({ installedRoot: packageRoot, registeredMeasurement,
-      custodyRoot: runRoot, nodeCommand: runtimeCommands.node.resolvedPath,
+      custodyRoot: registeredBenchmarkCustodyRoot(runRoot), nodeCommand: runtimeCommands.node.resolvedPath,
       codexRuntimePath: runtimeCommands.codex?.resolvedPath ?? null, qualification: {
         version: 4, candidateRoot: bootstrapMetadata.snapshotRoot,
         assetsRoot: bootstrapMetadata.webUiAssets.root,

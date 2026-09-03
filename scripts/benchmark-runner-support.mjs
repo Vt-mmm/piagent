@@ -77,6 +77,15 @@ export function privateDirectory(target) {
   return target;
 }
 
+export function registeredBenchmarkCustodyRoot(runRoot) {
+  const root = fs.realpathSync(runRoot);
+  const custodyRoot = fs.realpathSync(privateDirectory(path.join(root, "scoped-custody")));
+  if (custodyRoot !== path.join(root, "scoped-custody")) {
+    fail("Registered benchmark custody root must be a canonical direct child of the run root", 1);
+  }
+  return custodyRoot;
+}
+
 export function defaultOutputRoot(bootstrapMetadata) {
   if (bootstrapMetadata?.defaultOutputRoot) return bootstrapMetadata.defaultOutputRoot;
   const agentRoot = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");

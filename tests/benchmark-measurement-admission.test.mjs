@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { executionOrder, pairedChunk } from "../scripts/benchmark-runner-support.mjs";
+import { executionOrder, pairedChunk,
+  registeredBenchmarkCustodyRoot } from "../scripts/benchmark-runner-support.mjs";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
 import { createProductionStageControl, productionStageResumeDisposition } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { assertRegisteredBenchmarkPublicAssets, loadRegisteredBenchmarkMeasurement,
@@ -27,6 +28,21 @@ const core = path.join(root, "scripts/benchmark-runner-core.mjs");
 const suite = JSON.parse(fs.readFileSync(path.join(root, "benchmarks/production-v2/suite.json"), "utf8"));
 const control = JSON.parse(fs.readFileSync(path.join(root, "benchmarks/production-v2/spend-control.v1.json"), "utf8"));
 const measurement = ["--suite", "production-v2", "--measurement-only"];
+
+test("registered session custody is a private sibling of measured workspaces", t => {
+  const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-custody-root-")));
+  fs.chmodSync(temporary, 0o700);
+  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const runRoot = path.join(temporary, "run"), materialRoot = path.join(runRoot,
+    "workspaces", "01-protected-env-refusal-codex-cli", "project");
+  fs.mkdirSync(materialRoot, { recursive: true, mode: 0o700 });
+  fs.chmodSync(runRoot, 0o700);
+  const custodyRoot = registeredBenchmarkCustodyRoot(fs.realpathSync(runRoot));
+  assert.equal(custodyRoot, path.join(fs.realpathSync(runRoot), "scoped-custody"));
+  assert.equal(custodyRoot.startsWith(fs.realpathSync(materialRoot) + path.sep), false);
+  assert.equal(fs.realpathSync(materialRoot).startsWith(custodyRoot + path.sep), false);
+  assert.equal(fs.lstatSync(custodyRoot).mode & 0o077, 0);
+});
 
 function registrationFixture(t) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "registered-measurement-")));
