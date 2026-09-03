@@ -897,16 +897,19 @@ test("BROKER Codex launch overrides expose one required MCP and exact three tool
     /exact plain object/);
 });
 
-test("BROKER public metadata contract v1 is frozen and symmetric with the runtime allowlist", () => {
+test("BROKER public metadata contract v2 is frozen and symmetric with the runtime allowlist", () => {
   const schema = JSON.parse(fs.readFileSync(path.join(process.cwd(), "schemas", "public-contracts",
-    "codex-mcp-metadata-v1.schema.json"), "utf8"));
+    "codex-mcp-metadata-v2.schema.json"), "utf8"));
   const document = fs.readFileSync(path.join(process.cwd(), "docs",
-    "benchmark-codex-mcp-metadata-contract-v1.md"), "utf8");
-  assert.equal(schema.$id, "https://piagent.local/schemas/public-contracts/codex-mcp-metadata-v1.schema.json");
+    "benchmark-codex-mcp-metadata-contract-v2.md"), "utf8");
+  assert.equal(schema.$id, "https://piagent.local/schemas/public-contracts/codex-mcp-metadata-v2.schema.json");
   assert.equal(schema.oneOf[0].additionalProperties, false); assert.equal(schema.oneOf[1].additionalProperties, false);
   assert.deepEqual(Object.keys(schema.oneOf[1].properties), SCOPED_MCP_METADATA_CONTRACT.callFields);
   assert.deepEqual(Object.keys(schema.$defs.turnMetadata.properties), SCOPED_MCP_METADATA_CONTRACT.turnFields);
-  assert.match(document, /Contract ID: `piagent-codex-mcp-metadata-v1`/);
+  assert.ok(schema.$defs.turnMetadata.required.includes("workspaces"));
+  assert.equal(schema.$defs.workspaces.minProperties, 1); assert.equal(schema.$defs.workspaces.maxProperties, 16);
+  assert.equal(schema.$defs.workspaceState.additionalProperties, false);
+  assert.match(document, /Contract ID: `piagent-codex-mcp-metadata-v2`/);
   assert.match(document, /mcp-invalid-metadata/); assert.match(document, /Candidate and comparison arms/);
   assert.equal(SCOPED_MCP_METADATA_CONTRACT.authority, "none");
 });
@@ -2500,6 +2503,7 @@ const nativeCodexTurnMetadata = Object.freeze({
   thread_id: "01a05acb-06e2-7c92-8f08-77358d771975",
   turn_started_at_unix_ms: 1788229650265,
   turn_id: "01a05acb-0758-7772-97cb-2b83d691d176",
+  workspaces: { "/workspace": { has_changes: false } },
   node_repl_disabled: false,
   thread_source: "user",
   sandbox: "seatbelt",
@@ -2514,7 +2518,8 @@ const nativeCodexCallMetadata = () => ({
   itemId: "fc_01a05acb-0762-76b3-90ad-f2d79b4afc29",
   progressToken: 1,
   threadId: "01a05acb-06e2-7c92-8f08-77358d771975",
-  "x-codex-turn-metadata": { ...nativeCodexTurnMetadata }
+  "x-codex-turn-metadata": { ...nativeCodexTurnMetadata,
+    workspaces: structuredClone(nativeCodexTurnMetadata.workspaces) }
 });
 let mcpEvidenceSequence = 0;
 function retainMcp(t, fixture, broker, output, result) {
@@ -2821,14 +2826,14 @@ test("BROKER metadata accepts exact native progress list frame with full signed 
   assert.notEqual(incoming[2].sha256, sha(mcpFrame({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })));
 });
 
-test("BROKER metadata contract v1 accepts the pinned Codex call bundle and strips all metadata authority", mcpTestOptions, async t => {
+test("BROKER metadata contract v2 accepts the pinned clean-workspace Codex bundle and strips all metadata authority", mcpTestOptions, async t => {
   assert.deepEqual(SCOPED_MCP_METADATA_CONTRACT, {
-    version: 1, id: "piagent-codex-mcp-metadata-v1", maxBytes: 65536,
+    version: 2, id: "piagent-codex-mcp-metadata-v2", maxBytes: 65536,
     commonFields: ["progressToken"],
     callFields: ["progressToken", "callId", "threadId", "itemId", "x-codex-turn-metadata", "codex/sandbox-state-meta"],
-    turnFields: ["session_id", "thread_id", "turn_started_at_unix_ms", "turn_id", "node_repl_disabled",
-      "thread_source", "sandbox", "sandbox_mode", "auto_review_enabled", "node_repl_auto_review_required",
-      "model", "reasoning_effort"],
+    turnFields: ["session_id", "thread_id", "turn_started_at_unix_ms", "turn_id", "workspaces",
+      "node_repl_disabled", "thread_source", "sandbox", "sandbox_mode", "auto_review_enabled",
+      "node_repl_auto_review_required", "model", "reasoning_effort"],
     sandboxStateField: "codex/sandbox-state-meta", authority: "none"
   });
   const call = mcpCall(2, "scoped_read", readArgs); call.params._meta = nativeCodexCallMetadata();
@@ -2842,7 +2847,7 @@ test("BROKER metadata contract v1 accepts the pinned Codex call bundle and strip
   const observations = rows.filter(row => row.type === "transport-observation");
   assert.equal(observations.length, 1);
   assert.deepEqual(observations[0].observation, {
-    version: "codex-mcp-turn-observation-v1", contractId: "piagent-codex-mcp-metadata-v1",
+    version: "codex-mcp-turn-observation-v1", contractId: "piagent-codex-mcp-metadata-v2",
     authority: "none", metadataSha256: sha(JSON.stringify(call.params._meta)),
     callId: "call_e2_read", threadId: "01a05acb-06e2-7c92-8f08-77358d771975",
     itemId: "fc_01a05acb-0762-76b3-90ad-f2d79b4afc29",
@@ -2853,7 +2858,19 @@ test("BROKER metadata contract v1 accepts the pinned Codex call bundle and strip
   });
 });
 
-test("BROKER metadata contract v1 accepts only the pinned bounded sandbox-state shape", mcpTestOptions, async t => {
+test("BROKER metadata contract v2 accepts the pinned dirty-workspace observation", mcpTestOptions, async t => {
+  const metadata = nativeCodexCallMetadata();
+  metadata["x-codex-turn-metadata"].workspaces["/workspace"].has_changes = true;
+  const call = mcpCall(2, "scoped_read", readArgs); call.params._meta = metadata;
+  const value = await mcpExchange(t, [mcpInitialize, mcpReady, call]);
+  assert.equal(value.result.complete, true); assert.equal(value.broker.status().actions, 1);
+  const observation = verifyMcpChain(value).find(row => row.type === "transport-observation")?.observation;
+  assert.equal(observation.contractId, "piagent-codex-mcp-metadata-v2");
+  assert.equal(observation.metadataSha256, sha(JSON.stringify(metadata)));
+  assert.ok(!JSON.stringify(observation).includes("/workspace"));
+});
+
+test("BROKER metadata contract v2 accepts only the pinned bounded sandbox-state shape", mcpTestOptions, async t => {
   const metadata = nativeCodexCallMetadata();
   metadata["codex/sandbox-state-meta"] = {
     permissionProfile: { type: "managed", file_system: { type: "restricted", entries: [
@@ -2888,9 +2905,27 @@ test("BROKER metadata ignores bounded tokens without forwarding them to kernel a
 test("BROKER metadata rejects invalid shapes and token bounds before effects", mcpTestOptions, async t => {
   const extra = nativeCodexCallMetadata(); extra.unexpected = true;
   const wrongCall = nativeCodexCallMetadata(); wrongCall.callId = 7;
-  const wrongTurn = nativeCodexCallMetadata(); wrongTurn["x-codex-turn-metadata"].sandbox_mode = false;
+  const wrongTurn = nativeCodexCallMetadata(); wrongTurn["x-codex-turn-metadata"].sandbox_mode = "read-only";
   const extraTurn = nativeCodexCallMetadata(); extraTurn["x-codex-turn-metadata"].authority = "forged";
   const wrongThread = nativeCodexCallMetadata(); wrongThread.threadId = "different-thread";
+  const missingWorkspaces = nativeCodexCallMetadata(); delete missingWorkspaces["x-codex-turn-metadata"].workspaces;
+  const nullWorkspaces = nativeCodexCallMetadata(); nullWorkspaces["x-codex-turn-metadata"].workspaces = null;
+  const arrayWorkspaces = nativeCodexCallMetadata(); arrayWorkspaces["x-codex-turn-metadata"].workspaces = [];
+  const emptyWorkspaces = nativeCodexCallMetadata(); emptyWorkspaces["x-codex-turn-metadata"].workspaces = {};
+  const relativeWorkspace = nativeCodexCallMetadata(); relativeWorkspace["x-codex-turn-metadata"].workspaces = {
+    workspace: { has_changes: false } };
+  const nonCanonicalWorkspace = nativeCodexCallMetadata();
+  nonCanonicalWorkspace["x-codex-turn-metadata"].workspaces = { "/workspace/../escape": { has_changes: false } };
+  const oversizedWorkspace = nativeCodexCallMetadata();
+  oversizedWorkspace["x-codex-turn-metadata"].workspaces = { [`/${"x".repeat(2048)}`]: { has_changes: false } };
+  const wrongWorkspaceState = nativeCodexCallMetadata();
+  wrongWorkspaceState["x-codex-turn-metadata"].workspaces = { "/workspace": { has_changes: "false" } };
+  const extraWorkspaceState = nativeCodexCallMetadata();
+  extraWorkspaceState["x-codex-turn-metadata"].workspaces = {
+    "/workspace": { has_changes: false, authority: "forged" } };
+  const tooManyWorkspaces = nativeCodexCallMetadata();
+  tooManyWorkspaces["x-codex-turn-metadata"].workspaces = Object.fromEntries(
+    Array.from({ length: 17 }, (_, index) => [`/workspace/${index}`, { has_changes: false }]));
   const wrongSandbox = nativeCodexCallMetadata(); wrongSandbox["codex/sandbox-state-meta"] = {
     permissionProfile: { type: "disabled", extra: true }, codexLinuxSandboxExe: null,
     sandboxCwd: "file:///workspace", useLegacyLandlock: false
@@ -2898,7 +2933,9 @@ test("BROKER metadata rejects invalid shapes and token bounds before effects", m
   const invalid = [null, [], "token", { progressToken: null }, { progressToken: true }, { progressToken: 0.5 },
     { progressToken: Number.MAX_SAFE_INTEGER + 1 }, { progressToken: "x".repeat(161) },
     { progressToken: "文".repeat(54) }, { progressToken: {} }, { other: 0 }, { progressToken: 0, nonce: "nonce-1" }];
-  invalid.push(extra, wrongCall, wrongTurn, extraTurn, wrongThread, wrongSandbox,
+  invalid.push(extra, wrongCall, wrongTurn, extraTurn, wrongThread, missingWorkspaces, nullWorkspaces,
+    arrayWorkspaces, emptyWorkspaces, relativeWorkspace, nonCanonicalWorkspace, oversizedWorkspace,
+    wrongWorkspaceState, extraWorkspaceState, tooManyWorkspaces, wrongSandbox,
     { callId: "partial", progressToken: 1 });
   for (const metadata of invalid) {
     const call = mcpCall(2, "scoped_write_document", { materialId: "document", expectedSha256: sha("old\n"), utf8: "must not write" });

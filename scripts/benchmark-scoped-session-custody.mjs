@@ -18,7 +18,7 @@ import { loadScopedBrokerFromConfig, scopedCommonRuntimeClosureIdentity, scopedC
   scopedJournalPathSha256, scopedToolDefinitionsSha256, scopedVerificationReceiptKeyDigest,
   createScopedProjectVerificationSupervisor, listenScopedVerificationBridge,
   scopedProjectVerificationPlanBinding, SCOPED_PROJECT_VERIFICATION_PROTOCOL,
-  SCOPED_CODEX_TURN_OBSERVATION_VERSION
+  SCOPED_CODEX_TURN_OBSERVATION_VERSION, SCOPED_MCP_METADATA_CONTRACT
 } from "./benchmark-scoped-verification-supervisor.mjs";
 import { BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION, CODEX_SCOPED_BROKER_TURN_FACTORY_VERSION
 } from "./benchmark-codex-journey.mjs";
@@ -171,7 +171,7 @@ function safeCodexTurnObservations(bodies) {
     const item = row.observation;
     exact(item, names, "custody-codex-observation");
     requireThat(item.version === SCOPED_CODEX_TURN_OBSERVATION_VERSION
-      && item.contractId === "piagent-codex-mcp-metadata-v1" && item.authority === "none"
+      && item.contractId === SCOPED_MCP_METADATA_CONTRACT.id && item.authority === "none"
       && HASH.test(item.metadataSha256) && [item.callId, item.threadId, item.itemId, item.sessionId,
         item.turnId, item.model].every(value => typeof value === "string" && ID.test(value))
       && Number.isSafeInteger(item.turnStartedAtUnixMs) && item.turnStartedAtUnixMs >= 0

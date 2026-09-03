@@ -109,6 +109,7 @@ test("turn custody launch triple yields a complete provider-free Codex MCP settl
       callId: "call-custody", threadId: "codex-native-thread", itemId: "item-custody",
       "x-codex-turn-metadata": { session_id: "codex-native-thread", thread_id: "codex-native-thread",
         turn_started_at_unix_ms: 1788229650265, turn_id: "codex-native-turn",
+        workspaces: { [f.materialRoot]: { has_changes: false } },
         node_repl_disabled: false, thread_source: "user", sandbox: "seatbelt",
         sandbox_mode: "workspace-write", auto_review_enabled: false,
         node_repl_auto_review_required: false, model: "gpt-5.6-luna", reasoning_effort: "medium" }

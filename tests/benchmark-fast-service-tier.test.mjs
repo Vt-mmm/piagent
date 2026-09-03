@@ -239,6 +239,8 @@ test("pins Fast mode on the exact Codex model and thinking without relying on us
   assert.ok(resumeArgs.includes("service_tier=\"fast\""));
   assert.ok(resumeArgs.includes("--strict-config"));
   assert.ok(resumeArgs.includes("model_reasoning_effort=\"medium\""));
+  assert.equal(resumeArgs.filter(value => value === 'sandbox_mode="workspace-write"').length, 1);
+  assert.equal(resumeArgs.includes("-s"), false);
   assert.deepEqual(resumeArgs.slice(resumeArgs.indexOf("--enable"), resumeArgs.indexOf("--enable") + 2), ["--enable", "fast_mode"]);
 });
 
@@ -435,6 +437,13 @@ test("rejects a missing strict-config binding or incomplete initial invocation r
   assert.equal(evidence.settingsBound, false);
   assert.equal(evidence.invocationBound, false);
   assert.ok(evidence.diagnostics.includes("codex-invocation-receipt-mismatch"));
+
+  const conflictingSandbox = codexReceipt({ home, workspace, threadId, mutateArgs: args => {
+    args.splice(args.length - 1, 0, "-c", 'sandbox_mode="read-only"');
+    return args;
+  } });
+  assert.equal(conflictingSandbox.valid, false);
+  assert.ok(conflictingSandbox.diagnostics.includes("codex-initial-sandbox-mode-mismatch"));
 });
 
 test("rejects missing or identity-mutated resume evidence instead of under-counting provider starts", (t) => {
@@ -473,6 +482,27 @@ test("rejects missing or identity-mutated resume evidence instead of under-count
   assert.equal(mutated.settingsBound, false);
   assert.equal(mutated.invocationBound, false);
   assert.ok(mutated.diagnostics.includes("codex-invocation-receipt-mismatch"));
+
+  const unboundResume = codexReceipt({ home, workspace, threadId, resumed: true, mutateArgs: args => {
+    const valueIndex = args.indexOf('sandbox_mode="workspace-write"');
+    assert.ok(valueIndex > 0 && args[valueIndex - 1] === "-c");
+    args.splice(valueIndex - 1, 2);
+    return args;
+  } });
+  assert.equal(unboundResume.valid, false);
+  assert.ok(unboundResume.diagnostics.includes("codex-resume-sandbox-mode-mismatch"));
+  const unbound = inspectCodexRolloutServiceTierEvidence({ ...input,
+    invocationReceipts: [initial, unboundResume] });
+  assert.equal(unbound.settingsBound, false);
+  assert.equal(unbound.invocationBound, false);
+  assert.ok(unbound.diagnostics.includes("codex-invocation-receipt-mismatch"));
+
+  const duplicateResume = codexReceipt({ home, workspace, threadId, resumed: true, mutateArgs: args => {
+    args.splice(args.length - 2, 0, "-s", "workspace-write");
+    return args;
+  } });
+  assert.equal(duplicateResume.valid, false);
+  assert.ok(duplicateResume.diagnostics.includes("codex-resume-sandbox-mode-mismatch"));
 });
 
 test("rejects rollout tier, model, thinking, or workspace drift", (t) => {

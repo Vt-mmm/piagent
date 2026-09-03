@@ -55,6 +55,17 @@ function mcpMetaExact(value, allowed, required = []) {
 const mcpMetaId = value => typeof value === "string" && MCP_META_ID.test(value) && brokerWellFormed(value);
 const mcpMetaText = (value, maxBytes = 2048) => typeof value === "string" && value.length > 0
   && Buffer.byteLength(value) <= maxBytes && brokerWellFormed(value);
+function validateMcpWorkspaces(value) {
+  brokerRequire(plain(value), "mcp-invalid-metadata");
+  const entries = Object.entries(value);
+  brokerRequire(entries.length > 0 && entries.length <= 16, "mcp-invalid-metadata");
+  for (const [workspace, state] of entries) {
+    brokerRequire(mcpMetaText(workspace) && path.isAbsolute(workspace) && path.normalize(workspace) === workspace,
+      "mcp-invalid-metadata");
+    mcpMetaExact(state, ["has_changes"], ["has_changes"]);
+    brokerRequire(typeof state.has_changes === "boolean", "mcp-invalid-metadata");
+  }
+}
 function validateMcpTurnMetadata(value) {
   mcpMetaExact(value, MCP_TURN_FIELDS, MCP_TURN_REQUIRED_FIELDS);
   for (const key of ["session_id", "thread_id", "turn_id", "model"]) {
@@ -65,6 +76,7 @@ function validateMcpTurnMetadata(value) {
     && value.sandbox_mode === "workspace-write"
     && typeof value.node_repl_disabled === "boolean" && typeof value.auto_review_enabled === "boolean"
     && typeof value.node_repl_auto_review_required === "boolean", "mcp-invalid-metadata");
+  validateMcpWorkspaces(value.workspaces);
   if (Object.hasOwn(value, "reasoning_effort")) brokerRequire(typeof value.reasoning_effort === "string"
     && ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(value.reasoning_effort),
   "mcp-invalid-metadata");

@@ -120,6 +120,8 @@ export function codexExecResumeArgs({ threadId, options, disabledFeatures = [], 
     "exec",
     "resume",
     "--json",
+    "-c",
+    'sandbox_mode="workspace-write"',
     ...controlledArgs(options, disabledFeatures, scopedBroker),
     threadId,
     "-"

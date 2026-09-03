@@ -42,8 +42,13 @@ test("keeps one Codex thread for production user journeys", () => {
   assert.deepEqual(initial.slice(0, 4), ["exec", "--json", "--color", "never"]);
   assert.ok(initial.includes("--ignore-user-config"));
   assert.ok(initial.includes("--ignore-rules"));
-  assert.deepEqual(codexExecResumeArgs({ threadId: "019abcde-1234-7000-8000-0123456789ab", options,
-    disabledFeatures: ["multi_agent"] }).slice(0, 3), ["exec", "resume", "--json"]);
+  const resume = codexExecResumeArgs({ threadId: "019abcde-1234-7000-8000-0123456789ab", options,
+    disabledFeatures: ["multi_agent"] });
+  assert.deepEqual(resume.slice(0, 3), ["exec", "resume", "--json"]);
+  const resumeConfigs = resume.flatMap((value, index) => value === "-c" ? [resume[index + 1]] : []);
+  assert.equal(resumeConfigs.filter(value => value === 'sandbox_mode="workspace-write"').length, 1);
+  assert.equal(resumeConfigs.filter(value => value.startsWith("sandbox_mode=")).length, 1);
+  assert.equal(resume.includes("-s"), false);
   assert.throws(() => codexExecResumeArgs({ threadId: "bad thread id", options }), /valid thread id/);
 });
 

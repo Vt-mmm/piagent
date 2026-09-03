@@ -136,6 +136,9 @@ export function buildCodexInvocationReceipt({
   const configs = valuesAfter(argv, "-c");
   const expectedReasoningConfig = `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`;
   const expectedTierConfig = `service_tier=${JSON.stringify(requestedTier)}`;
+  const expectedSandboxConfig = 'sandbox_mode="workspace-write"';
+  const sandboxConfigs = configs.filter((value) => value.startsWith("sandbox_mode="));
+  const sandboxModes = valuesAfter(argv, "-s");
   if (configs.filter((value) => value === expectedReasoningConfig).length !== 1
     || configs.filter((value) => value.startsWith("model_reasoning_effort=")).length !== 1) {
     diagnostics.push("codex-invocation-reasoning-mismatch");
@@ -161,13 +164,20 @@ export function buildCodexInvocationReceipt({
   if (result?.code !== 0 || result?.timedOut === true) diagnostics.push("codex-invocation-did-not-complete");
   if (!exactUsage(usage)) diagnostics.push("codex-invocation-usage-not-exact");
 
+  let workspaceWriteSandboxBound = false;
   if (!resumed) {
     const workspaces = valuesAfter(argv, "-C");
     if (!expectedWorkspace || workspaces.length !== 1 || path.resolve(workspaces[0]) !== expectedWorkspace) {
       diagnostics.push("codex-initial-workspace-argv-mismatch");
     }
+    workspaceWriteSandboxBound = sandboxModes.length === 1 && sandboxModes[0] === "workspace-write"
+      && sandboxConfigs.length === 0;
+    if (!workspaceWriteSandboxBound) diagnostics.push("codex-initial-sandbox-mode-mismatch");
     if (argv.includes("--ephemeral")) diagnostics.push("codex-initial-rollout-not-persistent");
   } else {
+    workspaceWriteSandboxBound = configs.filter((value) => value === expectedSandboxConfig).length === 1
+      && sandboxConfigs.length === 1 && sandboxModes.length === 0;
+    if (!workspaceWriteSandboxBound) diagnostics.push("codex-resume-sandbox-mode-mismatch");
     const expectedThreadId = usage?.providerSessionId;
     if (!expectedThreadId || argv.length < 2 || argv.at(-2) !== expectedThreadId) {
       diagnostics.push("codex-resume-thread-argv-mismatch");
@@ -205,6 +215,7 @@ export function buildCodexInvocationReceipt({
       strictConfig: countOf(argv, "--strict-config") === 1,
       model: modelId || null,
       reasoningEffort: reasoningEffort || null,
+      sandboxMode: workspaceWriteSandboxBound ? "workspace-write" : null,
       workspaceDigest: expectedWorkspace ? pathDigest(expectedWorkspace) : null,
       threadId: stdoutThreadId
     },

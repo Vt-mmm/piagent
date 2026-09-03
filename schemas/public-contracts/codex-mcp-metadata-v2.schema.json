@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.local/schemas/public-contracts/codex-mcp-metadata-v2.schema.json",
+  "title": "PiAgent Codex MCP Metadata Contract v2",
+  "description": "Untrusted, zero-authority params._meta accepted by the scoped benchmark broker.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "progressToken": {"$ref": "#/$defs/progressToken"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["callId", "threadId", "itemId", "x-codex-turn-metadata"],
+      "properties": {
+        "progressToken": {"$ref": "#/$defs/progressToken"},
+        "callId": {"$ref": "#/$defs/id160"},
+        "threadId": {"$ref": "#/$defs/id160"},
+        "itemId": {"$ref": "#/$defs/id160"},
+        "x-codex-turn-metadata": {"$ref": "#/$defs/turnMetadata"},
+        "codex/sandbox-state-meta": {"$ref": "#/$defs/sandboxState"}
+      }
+    }
+  ],
+  "$defs": {
+    "id160": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "progressToken": {
+      "oneOf": [
+        {"type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991},
+        {"type": "string", "maxLength": 160}
+      ]
+    },
+    "turnMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "thread_id",
+        "turn_started_at_unix_ms",
+        "turn_id",
+        "workspaces",
+        "node_repl_disabled",
+        "thread_source",
+        "sandbox",
+        "sandbox_mode",
+        "auto_review_enabled",
+        "node_repl_auto_review_required",
+        "model"
+      ],
+      "properties": {
+        "session_id": {"$ref": "#/$defs/id160"},
+        "thread_id": {"$ref": "#/$defs/id160"},
+        "turn_started_at_unix_ms": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+        "turn_id": {"$ref": "#/$defs/id160"},
+        "workspaces": {"$ref": "#/$defs/workspaces"},
+        "node_repl_disabled": {"type": "boolean"},
+        "thread_source": {"const": "user"},
+        "sandbox": {"type": "string", "minLength": 1, "maxLength": 80},
+        "sandbox_mode": {"const": "workspace-write"},
+        "auto_review_enabled": {"type": "boolean"},
+        "node_repl_auto_review_required": {"type": "boolean"},
+        "model": {"$ref": "#/$defs/id160"},
+        "reasoning_effort": {
+          "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+        }
+      }
+    },
+    "workspaces": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048,
+        "pattern": "^/"
+      },
+      "additionalProperties": {"$ref": "#/$defs/workspaceState"}
+    },
+    "workspaceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["has_changes"],
+      "properties": {
+        "has_changes": {"type": "boolean"}
+      }
+    },
+    "sandboxState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permissionProfile", "codexLinuxSandboxExe", "sandboxCwd", "useLegacyLandlock"],
+      "properties": {
+        "permissionProfile": {"$ref": "#/$defs/permissionProfile"},
+        "codexLinuxSandboxExe": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "^/"}
+          ]
+        },
+        "sandboxCwd": {"type": "string", "minLength": 6, "maxLength": 2048, "pattern": "^file:"},
+        "useLegacyLandlock": {"type": "boolean"}
+      }
+    },
+    "permissionProfile": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {"type": {"const": "disabled"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network"],
+          "properties": {
+            "type": {"const": "external"},
+            "network": {"enum": ["restricted", "enabled"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "file_system", "network"],
+          "properties": {
+            "type": {"const": "managed"},
+            "file_system": {"$ref": "#/$defs/fileSystemPermissions"},
+            "network": {"enum": ["restricted", "enabled"]}
+          }
+        }
+      ]
+    },
+    "fileSystemPermissions": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {"type": {"const": "unrestricted"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entries"],
+          "properties": {
+            "type": {"const": "restricted"},
+            "entries": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {"$ref": "#/$defs/fileSystemEntry"}
+            },
+            "glob_scan_max_depth": {"type": "integer", "minimum": 1, "maximum": 64}
+          }
+        }
+      ]
+    },
+    "fileSystemEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "access"],
+      "properties": {
+        "path": {"$ref": "#/$defs/fileSystemPath"},
+        "access": {"enum": ["read", "write", "deny"]},
+        "missing_path_behavior": {"const": "skip"}
+      }
+    },
+    "fileSystemPath": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "path"],
+          "properties": {
+            "type": {"const": "path"},
+            "path": {"type": "string", "minLength": 1, "maxLength": 2048}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "pattern"],
+          "properties": {
+            "type": {"const": "glob_pattern"},
+            "pattern": {"type": "string", "minLength": 1, "maxLength": 2048}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {"const": "special"},
+            "value": {"$ref": "#/$defs/specialPath"}
+          }
+        }
+      ]
+    },
+    "specialPath": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {"enum": ["root", "minimal", "tmpdir", "slash_tmp"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {"const": "project_roots"},
+            "subpath": {"type": "string", "minLength": 1, "maxLength": 1024}
+          }
+        }
+      ]
+    }
+  }
+}

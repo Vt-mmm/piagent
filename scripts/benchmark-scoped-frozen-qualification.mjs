@@ -661,13 +661,13 @@ export const SCOPED_MCP_LIMITS = Object.freeze({ frameBytes: BROKER_TRANSPORT_BY
   inputBytes: BROKER_TRANSPORT_BYTES, outputBytes: BROKER_TRANSPORT_BYTES,
   frames: 256, timeoutMs: 61 * 60 * 1000 });
 const MCP_TURN_FIELDS = Object.freeze(["session_id", "thread_id", "turn_started_at_unix_ms", "turn_id",
-  "node_repl_disabled", "thread_source", "sandbox", "sandbox_mode", "auto_review_enabled",
+  "workspaces", "node_repl_disabled", "thread_source", "sandbox", "sandbox_mode", "auto_review_enabled",
   "node_repl_auto_review_required", "model", "reasoning_effort"]);
 const MCP_TURN_REQUIRED_FIELDS = Object.freeze(MCP_TURN_FIELDS.filter(key => key !== "reasoning_effort"));
 const MCP_CALL_META_FIELDS = Object.freeze(["progressToken", "callId", "threadId", "itemId",
   "x-codex-turn-metadata", "codex/sandbox-state-meta"]);
 export const SCOPED_MCP_METADATA_CONTRACT = deepFreeze({
-  version: 1, id: "piagent-codex-mcp-metadata-v1", maxBytes: 64 * 1024,
+  version: 2, id: "piagent-codex-mcp-metadata-v2", maxBytes: 64 * 1024,
   commonFields: ["progressToken"], callFields: [...MCP_CALL_META_FIELDS],
   turnFields: [...MCP_TURN_FIELDS], sandboxStateField: "codex/sandbox-state-meta",
   authority: "none"
