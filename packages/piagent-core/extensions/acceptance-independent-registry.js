@@ -24,10 +24,13 @@ function issueCompositeAssessment(provider, entry, workingTreeDigest, assessment
 export function registerIndependentAcceptanceProvider(cwd, task, read) {
   const callbacks = typeof read === "function" ? { read } : read;
   if (!callbacks || typeof callbacks.read !== "function"
-    || callbacks.settleWebUi !== undefined && typeof callbacks.settleWebUi !== "function") {
+    || callbacks.settleWebUi !== undefined && typeof callbacks.settleWebUi !== "function"
+    || callbacks.webUiSettlementApplicability !== undefined && typeof callbacks.webUiSettlementApplicability !== "function"
+    || Boolean(callbacks.settleWebUi) !== Boolean(callbacks.webUiSettlementApplicability)) {
     throw new TypeError("invalid independent acceptance provider");
   }
-  const identity = key(cwd, task), provider = { read: callbacks.read, settleWebUi: callbacks.settleWebUi };
+  const identity = key(cwd, task), provider = { read: callbacks.read, settleWebUi: callbacks.settleWebUi,
+    webUiSettlementApplicability: callbacks.webUiSettlementApplicability };
   providers.set(identity, provider);
   while (providers.size > 100) providers.delete(providers.keys().next().value);
   return () => { if (providers.get(identity) === provider) providers.delete(identity); };
@@ -71,10 +74,18 @@ export async function settleIndependentWebUiOperation(cwd, task, input) {
   try {
     const provider = providers.get(key(cwd, task));
     if (!provider?.settleWebUi) return { status: "not-applicable" };
+    const applicability = provider.webUiSettlementApplicability(task);
+    if (applicability === "not-applicable") return { status: "not-applicable" };
+    if (applicability !== "composite") return { status: "blocked", reason: "composite settlement applicability is invalid",
+      taskStatus: "pending" };
     const value = await provider.settleWebUi(task, input);
-    return value?.status === "settled" ? value : { status: "blocked", reason: value?.reason ?? "composite settlement unavailable" };
+    if (value?.status === "settled" && ["completed", "refused"].includes(value.taskStatus)) {
+      return { status: "settled", taskStatus: value.taskStatus };
+    }
+    return { status: "blocked", reason: typeof value?.reason === "string" && value.reason
+      ? value.reason : "composite settlement unavailable", taskStatus: "pending" };
   } catch {
-    return { status: "blocked", reason: "composite settlement unavailable" };
+    return { status: "blocked", reason: "composite settlement unavailable", taskStatus: "pending" };
   }
 }
 

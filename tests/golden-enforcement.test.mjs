@@ -26,6 +26,7 @@ import { validateTrajectoryState, validateTrajectoryTransition } from "../packag
 import { validateHelperRequest, validateRolePolicy } from "../packages/piagent-core/runtime/orchestration/role-policy.ts";
 import { validateAuthorityManifest, validateTaskAuthoritySnapshot } from "../packages/piagent-core/runtime/policy/authority-manifest.ts";
 import { benchmarkAssuranceEvidenceValidationErrors } from "../packages/piagent-core/benchmark/benchmark-assurance.js";
+import { validateBenchmarkAttemptOutcomeV3 } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import { validateTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-contract.ts";
 import { validateMutationProvenanceRecord } from "../packages/piagent-core/runtime/inspection/mutation-provenance-contract.ts";
 import { validateVerifierFileSnapshot } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-contract.ts";
@@ -100,6 +101,7 @@ const runtimeValidators = {
   "authority-manifest": validateAuthorityManifest,
   "task-authority-snapshot": validateTaskAuthoritySnapshotFixture,
   "benchmark-assurance-evidence": validateBenchmarkAssuranceEvidence,
+  "benchmark-attempt-outcome": validateBenchmarkAttemptOutcomeV3,
   "task-baseline-manifest": validateTaskBaselineManifest,
   "mutation-provenance-record": validateMutationProvenanceRecord,
   "verifier-file-snapshot": validateVerifierFileSnapshot,

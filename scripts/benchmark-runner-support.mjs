@@ -38,6 +38,7 @@ export function applyBenchmarkResumeOptions(options, resumeState) {
   options.thinking = manifest.thinking ?? undefined;
   options.serviceTier = manifest.serviceTier ?? undefined;
   options.codexMode = manifest.codexMode ?? "controlled";
+  options.codexBaseline = manifest.codexBaseline ?? "controlled-custom";
   options.piagentTreatment = manifest.piagentTreatment ?? "release-defaults";
   options.allowPiAuthWriteback = manifest.allowPiAuthWriteback === true;
   options.seed = manifest.rootSeed;
@@ -63,6 +64,10 @@ export function frozenRuntimeCommandsForFinalization(manifest, surfaces) {
   }
   if (!surfaces.includes("codex-cli") && commands.codex !== null) {
     fail("Cannot finalize production benchmark provider-free: frozen Codex command identity does not match the surface list", 1);
+  }
+  if (surfaces.includes("codex-cli") && manifest?.codexBaseline === "stock"
+    && commands.codex?.installationClosure?.kind !== "stock-codex-installation-v1") {
+    fail("Cannot finalize production benchmark provider-free: frozen stock Codex installation closure is missing", 1);
   }
   return commands;
 }
@@ -219,6 +224,7 @@ export function benchmarkExecutionPlan({
     `  platform:  v${packageVersion}`,
     `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
     ...(options.measurementOnly === true ? ["  mode:      measurement-only · full 108-session observation · no release claim"] : []),
+    `  claim:     ${suite.assurance?.claimTier ?? "unavailable"} · family-disjoint=${suite.assurance?.familyDisjointSplit === true} · generalization ${suite.assurance?.familyDisjointSplit === true ? "bounded" : "unavailable"}`,
     `  digest:    ${suiteDigest.slice(0, 16)}`,
     `  surfaces:  ${options.surfaces.join(", ")}`,
     `  compare:   ${benchmarkSurfaceLabel(comparison.candidateSurface)} vs ${benchmarkSurfaceLabel(comparison.baselineSurface)}`,
@@ -242,7 +248,7 @@ export function benchmarkExecutionPlan({
     "  grading:   hidden verifier + scope + output safety + Pi task evidence"
   ].join("\n");
   const codexPlan = options.surfaces.includes("codex-cli")
-    ? `\n  codex:     ${options.codexMode} mode · model ${codexModelName(options.model)} · effort ${codexThinkingEffort(options.thinking)} · tier ${options.serviceTier ?? "default"}${options.codexMode === "controlled" ? " · isolated home" : ""}`
+    ? `\n  codex:     ${options.codexBaseline} baseline · ${options.codexMode} config · model ${codexModelName(options.model)} · effort ${codexThinkingEffort(options.thinking)} · tier ${options.serviceTier ?? "default"}${options.codexMode === "controlled" ? " · isolated home" : ""}`
     : "";
   const nativeWarning = options.surfaces.includes("codex-cli") && options.codexMode === "native"
     ? "\nNative Codex mode loads the operator's global AGENTS.md, configuration, rules, hooks, MCP servers, and plugins."

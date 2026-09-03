@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"thread-success"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"command-1","type":"command_execution","command":"node --test","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"command-1","type":"command_execution","command":"node --test","aggregated_output":"ok","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"change-1","type":"file_change","status":"completed","changes":[{"path":"src/value.js","kind":"update"}]}}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"Implemented and verified."}}
+{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":20,"cache_write_input_tokens":5,"output_tokens":30,"reasoning_output_tokens":10}}

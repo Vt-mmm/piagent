@@ -6,6 +6,7 @@ import {
   aggregateSessionUsage, createCodexExecJsonlCollector, evaluateWorkflowEvidence
 } from "../packages/piagent-core/benchmark/benchmark-core.js";
 import { codexExecArgs } from "../packages/piagent-core/benchmark/benchmark-codex.js";
+import { classifyCodexAttemptOutcome } from "../packages/piagent-core/benchmark/benchmark-codex-outcome.js";
 import {
   benchmarkEnvironment,
   benchmarkGitEnvironment,
@@ -29,6 +30,9 @@ import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchm
 import { buildBenchmarkProviderWireEvidence, freezeBenchmarkWireInvocation, readBenchmarkWireReceipts, validateBenchmarkWireManifest } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { buildCodexInvocationReceipt, inspectCodexRolloutServiceTierEvidence } from "../packages/piagent-core/benchmark/benchmark-codex-rollout.js";
 import { createDeferredBenchmarkTimingCollector } from "../packages/piagent-core/benchmark/benchmark-timing-diagnostics.js";
+import { benchmarkReportOutcomeFields } from "../packages/piagent-core/benchmark/benchmark-evaluator-v3.js";
+import { createBenchmarkSafetyEvidenceObserver,
+  inspectBenchmarkSafetyJsonlFiles } from "../packages/piagent-core/benchmark/benchmark-safety-evidence.js";
 import { walkJsonl } from "./pi-usage-history.mjs";
 import { inspectBenchmarkSessionDirectory } from "./benchmark-session-usage.mjs";
 import { runPiagentWebUiJourney } from "./benchmark-webui-journey.mjs";
@@ -40,14 +44,17 @@ import { BENCHMARK_SCOPED_SESSION_CUSTODY_VERSION, BENCHMARK_SCOPED_SESSION_FACT
   runCodexUserJourney } from "./benchmark-codex-journey.mjs";
 import { assertBenchmarkSessionProviderBoundary, providerBoundaryFailureDisposition,
   runPostDispatchCheckedCommand } from "./benchmark-session-provider-boundary.mjs";
+import { candidateOutcomeFailureReason, persistedJourneyReceipt } from "./benchmark-journey-outcome.mjs";
+import { buildProductionV3SessionGraderInput,
+  finalizeProductionV3SessionOutcome } from "./benchmark-session-evaluator.mjs";
 export { runCodexUserJourney } from "./benchmark-codex-journey.mjs";
+export { candidateOutcomeFailureReason, persistedJourneyReceipt } from "./benchmark-journey-outcome.mjs";
 const coldStartRuntimeManagedPaths = [
   ".pi/project-context.md",
   ".pi/context-index.json",
   ".pi/piagent-state/project-onboarding.json",
   ".pi/piagent-state/context-engine.json"
 ];
-
 function fail(message) {
   const error = new Error(message);
   error.exitCode = 1;
@@ -62,7 +69,6 @@ function scopedExact(value, names, code) {
   scopedRequire(value && typeof value === "object" && !Array.isArray(value)
     && Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name)), code);
 }
-
 function frozenScopedTurns(turns) {
   scopedRequire(Array.isArray(turns) && turns.length > 0, "session-boundary-turns");
   return Object.freeze(turns.map(turn => {
@@ -73,7 +79,6 @@ function frozenScopedTurns(turns) {
       reconnectBefore: turn.reconnectBefore === true, receiptUncertain: turn.receiptUncertain === true });
   }));
 }
-
 function validScopedPiRouter(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value)
     && value.version === "scoped-pi-operation-router-v1" && value.authority === "none"
@@ -84,7 +89,6 @@ function validScopedPiRouter(value) {
     && typeof value.assertOwnership === "function" && typeof value.dispose === "function"
     && typeof value.status === "function");
 }
-
 /** Resolves the only scoped controls a registered journey may receive. A
  * factory denial happens before the caller records or starts provider work. */
 export async function resolveBenchmarkScopedSessionControls({ factory, directCodexScopedBroker,
@@ -358,11 +362,15 @@ function parseGraderResult(stdout) {
   try { value = JSON.parse(lines.at(-1) ?? ""); } catch { fail("Benchmark grader did not return a JSON object"); }
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.passed !== "boolean" || !Array.isArray(value.checks)) fail("Benchmark grader result must contain passed and checks");
   for (const check of value.checks) if (!check || typeof check.id !== "string" || typeof check.passed !== "boolean") fail("Benchmark grader returned an invalid check");
-  return {
+  const parsed = {
     passed: value.passed,
     score: Number.isFinite(value.score) ? Math.max(0, Math.min(10, value.score)) : value.passed ? 10 : 0,
     checks: value.checks.map((check) => ({ id: check.id, passed: check.passed, detail: typeof check.detail === "string" ? check.detail.slice(0, 500) : undefined }))
   };
+  for (const field of ["semanticStatus", "gradeStatus", "failureClass"]) {
+    if (typeof value[field] === "string") parsed[field] = value[field];
+  }
+  return parsed;
 }
 
 async function gradeWorkspace(runCommand, nodeCommand, grader, workspace, scenario, timeoutSeconds, oracleSerialized) {
@@ -384,78 +392,6 @@ async function gradeWorkspace(runCommand, nodeCommand, grader, workspace, scenar
 function observedSubstrings(value, candidates) {
   const text = String(value ?? "");
   return candidates.filter((candidate) => text.includes(candidate));
-}
-
-function safeCandidateOutcome(value) {
-  const expectedSettlements = ["completed", "blocked", "aborted", "error", "unknown", "refused"];
-  const observedSettlements = ["completed", "blocked", "aborted", "error", "unknown"];
-  if (value?.schemaVersion !== 1 || value.kind !== "terminal-settlement-mismatch"
-    || !expectedSettlements.includes(value.expectedSettlement) || !observedSettlements.includes(value.observedSettlement)
-    || value.expectedSettlement === value.observedSettlement
-    || !Number.isSafeInteger(value.turnIndex) || value.turnIndex < 1) return null;
-  return { schemaVersion: 1, kind: value.kind, expectedSettlement: value.expectedSettlement,
-    observedSettlement: value.observedSettlement, turnIndex: value.turnIndex };
-}
-
-export function candidateOutcomeFailureReason(value) {
-  const outcome = safeCandidateOutcome(value);
-  return outcome
-    ? `webui-terminal-settlement-${outcome.observedSettlement}-expected-${outcome.expectedSettlement}-turn-${outcome.turnIndex}`
-    : null;
-}
-
-export function persistedJourneyReceipt(receipt) {
-  if (!receipt || typeof receipt !== "object") return null;
-  const digest = (value) => typeof value === "string" && value
-    ? crypto.createHash("sha256").update(value).digest("hex")
-    : null;
-  return {
-    schemaVersion: 1,
-    channel: receipt.channel ?? "unknown",
-    completed: receipt.completed === true,
-    reconnects: Number.isSafeInteger(receipt.reconnects) ? receipt.reconnects : 0,
-    sessionDigest: digest(receipt.sessionRef ?? receipt.threadId),
-    turns: Array.isArray(receipt.turns) ? receipt.turns.map((turn) => ({
-      index: turn.index,
-      id: turn.id ?? null,
-      promptHash: turn.promptHash ?? null,
-      messageRequestDigest: digest(turn.messageRequestId),
-      operationDigest: digest(turn.operationRef),
-      resumed: turn.resumed === true,
-      receiptPhase: turn.receiptPhase ?? null,
-      receiptResult: turn.receiptResult ?? null,
-      receiptUncertain: turn.receiptUncertain === true,
-      expectedSettlement: ["completed", "refused"].includes(turn.expectedSettlement) ? turn.expectedSettlement : null,
-      ...(safeCandidateOutcome(turn.outcome) ? { outcome: safeCandidateOutcome(turn.outcome) } : {}),
-      ...(turn.recovery && typeof turn.recovery === "object" ? { recovery: {
-        responseObserved: turn.recovery.responseObserved === true,
-        responseDiscarded: turn.recovery.responseDiscarded === true,
-        connectionDropped: turn.recovery.connectionDropped === true,
-        replayCursor: Number.isSafeInteger(turn.recovery.replayCursor) ? turn.recovery.replayCursor : null,
-        recoveredFromKind: ["runtime.changed", "operation.settled"].includes(turn.recovery.recoveredFromKind)
-          ? turn.recovery.recoveredFromKind : null,
-        recoveredAtSequence: Number.isSafeInteger(turn.recovery.recoveredAtSequence)
-          ? turn.recovery.recoveredAtSequence : null,
-        correlatedByMessageRequestId: turn.recovery.correlatedByMessageRequestId === true,
-        sendAttempts: turn.recovery.sendAttempts === 1 ? 1 : null,
-        durableUserCopies: turn.recovery.durableUserCopies === 1 ? 1 : null
-      } } : {}),
-      settlement: turn.settlement ?? null,
-      exitCode: Number.isInteger(turn.exitCode) ? turn.exitCode : null,
-      timedOut: turn.timedOut === true,
-      durationSeconds: Number.isFinite(turn.durationSeconds) ? turn.durationSeconds : null,
-      usageExact: turn.usageExact === true,
-      durableUserIndex: Number.isInteger(turn.durableUserIndex) ? turn.durableUserIndex : null,
-      durableAssistantIndex: Number.isInteger(turn.durableAssistantIndex) ? turn.durableAssistantIndex : null,
-      firstSequence: Number.isSafeInteger(turn.firstSequence) ? turn.firstSequence : null,
-      lastSequence: Number.isSafeInteger(turn.lastSequence) ? turn.lastSequence : null,
-      kinds: Array.isArray(turn.kinds) ? turn.kinds : [],
-      fileLabels: Array.isArray(turn.fileLabels) ? turn.fileLabels : [],
-      toolCalls: Number.isSafeInteger(turn.toolCalls) ? turn.toolCalls : null,
-      failedToolCalls: Number.isSafeInteger(turn.failedToolCalls) ? turn.failedToolCalls : null,
-      ...(turn.timingDiagnostics ? { timingDiagnostics: turn.timingDiagnostics } : {})
-    })) : []
-  };
 }
 
 async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord,
@@ -498,9 +434,6 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
     }
   }
   await initializeGit(runCommand, systemCommands.git, workspace, scenario.setupFiles);
-  // Registered measurements dispatch the exact signed public input catalog to
-  // both arms. Integrity-only registration is insufficient: the 14 approved
-  // amendments must replace the corresponding primary turn bytes in practice.
   const registeredInput = verificationPlan?.registeredInput?.(scenario.id) ?? null;
   const prompt = registeredInput?.prompt
     ?? fs.readFileSync(resolveSuiteEntry(suiteRoot, scenario.prompt, "prompt"), "utf8").trim();
@@ -544,11 +477,16 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
     persistent: options.serviceTier === "fast"
   }) : piArgs;
   const codexForbiddenHits = new Set();
+  const safetyObserver = createBenchmarkSafetyEvidenceObserver(scenario.id);
   const codexCollector = surface === "codex-cli" ? createCodexExecJsonlCollector({
     model: options.model,
     thinkingLevel: options.thinking,
     requestedServiceTier: options.serviceTier,
-    onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, codexForbiddenHits)
+    eventContract: options.codexBaseline === "stock" ? "production-v3" : undefined,
+    onEvent: (event) => {
+      inspectForbiddenValue(event, forbiddenOutputSubstrings, codexForbiddenHits);
+      safetyObserver.observe(event);
+    }
   }) : undefined;
   const timingCollector = createDeferredBenchmarkTimingCollector({ surface });
   const environment = {
@@ -583,6 +521,7 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
   let usageOverride;
   let journeyReceipt = null;
   let codexDiagnostics = [];
+  let codexContractFailure = null;
   let fatalProviderBoundaryError = null;
   let fatalProviderBoundaryPhase = null;
   try {
@@ -645,6 +584,8 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
   const timingDiagnostics = timingCollector.finish(agent.durationSeconds);
   const sessionRoot = journeyTurns && surface === "piagent" ? path.join(piRuntimeHome.path, "sessions") : sessions;
   const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessionRoot);
+  const safetyEvidence = surface === "codex-cli" ? safetyObserver.summary()
+    : inspectBenchmarkSafetyJsonlFiles(sessionFiles, scenario.id);
   const piSessionInspection = surface === "codex-cli"
     ? { summaries: [], diagnostics: [] }
     : inspectBenchmarkSessionDirectory(sessionRoot);
@@ -658,17 +599,20 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
   if (usageOverride) usage = usageOverride;
   else if (surface === "codex-cli") {
     try {
-      const parsedUsage = codexCollector.finish();
-      usage = {
-        ...parsedUsage,
-        codexInvocationReceipts: [buildCodexInvocationReceipt({
-          command, args, runtime: codexRuntime, environment: processEnvironment, workspace, requestedModel: options.model,
-          requestedThinking: options.thinking, requestedServiceTier: options.serviceTier, resumed: false, result: agent, usage: parsedUsage
-        })]
-      };
+      usage = codexCollector.finish({ processExitCode: agent.code });
+    } catch (error) {
+      if (error?.code === "BENCHMARK_CODEX_EVENT_CONTRACT_INVALID") {
+        codexContractFailure = error;
+        usage = error.usage ?? { ...aggregateSessionUsage([]), codexEventSummary: error.codexEventSummary,
+          codexEventOutcome: error.codexEventOutcome };
+      } else if (agent.code === 0 && !agent.timedOut) throw error;
+      else usage = aggregateSessionUsage([]);
     }
-    catch (error) { if (agent.code === 0 && !agent.timedOut) throw error; usage = aggregateSessionUsage([]); }
+    usage = { ...usage, codexInvocationReceipts: [buildCodexInvocationReceipt({
+      command, args, runtime: codexRuntime, environment: processEnvironment, workspace, requestedModel: options.model,
+      requestedThinking: options.thinking, requestedServiceTier: options.serviceTier, resumed: false, result: agent, usage })] };
     codexDiagnostics = codexCollector.diagnostics();
+    if (codexContractFailure) codexDiagnostics.push({ type: "codex-event-contract", message: codexContractFailure.codexEventOutcome?.reasonCodes?.join(",") ?? "invalid" });
   } else usage = aggregateSessionUsage(piSummaries);
   if (surface === "codex-cli" && options.serviceTier !== undefined) {
     usage = {
@@ -681,8 +625,8 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
     };
   }
   const piTerminalError = surface === "codex-cli" ? undefined : terminalPiSessionError(sessionFiles, sessionId);
-  const diagnosticInput = codexDiagnostics.length > 0
-    ? JSON.stringify(codexDiagnostics)
+  const diagnosticInput = surface === "codex-cli"
+    ? [JSON.stringify(codexDiagnostics), agent.stderr].filter(Boolean).join("\n")
     : [piTerminalError, ...piSessionInspection.diagnostics, agent.stderr, agent.stdout].filter(Boolean).join("\n");
   const providerBoundaryFailure = providerBoundaryFailureDisposition(
     fatalProviderBoundaryError, fatalProviderBoundaryPhase);
@@ -746,16 +690,25 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
   }
   const beforeGrade = workingTreeSnapshot(workspace);
   const outsideScope = changedFiles.filter((file) => !matchesAnyPath(file, scenario.allowedChanges));
+  const graderInput = suite.id === "production-v3" && !preUsageFailure && !interrupted()
+    ? buildProductionV3SessionGraderInput({ suiteId: suite.id, oracleSerialized: variant.oracleSerialized,
+      scenario, surface, sessionId, agent, usage, journeyReceipt, changedFiles, outsideScope, missingRequired,
+      forbiddenHits, safetyEvidence })
+    : null;
+  const graderInputSerialized = graderInput ? `${JSON.stringify(graderInput)}\n` : variant.oracleSerialized;
   const grade = preUsageFailure
     ? { passed: false, score: 0, checks: [], error: preUsageFailure.failure }
     : interrupted()
     ? { passed: false, score: 0, checks: [], error: "interrupted-after-provider-start" }
-    : await gradeWorkspace(runCommand, systemCommands.node, graderPath, workspace, scenario, options.timeoutSeconds, variant.oracleSerialized);
+    : await gradeWorkspace(runCommand, systemCommands.node, graderPath, workspace, scenario, options.timeoutSeconds, graderInputSerialized);
   const graderIntegrity = { passed: JSON.stringify(beforeGrade) === JSON.stringify(workingTreeSnapshot(workspace)) };
   const scope = { passed: outsideScope.length === 0, changedFiles, outsideScope, allChangedFiles, runtimeManagedChanges };
+  const codexOutcomeFailure = surface === "codex-cli" ? classifyCodexAttemptOutcome({ eventOutcome: usage.codexEventOutcome, scenarioKind: scenario.kind, changedFiles }) : null;
   const outputSafety = { passed: forbiddenHits.length === 0, forbiddenHits: forbiddenHits.map((value) => crypto.createHash("sha256").update(value).digest("hex")) };
   const outputEvidence = { passed: missingRequired.length === 0, requiredCount: requiredOutputSubstrings.length, observedCount: requiredOutputSubstrings.length - missingRequired.length, missingHashes: missingRequired.map((value) => crypto.createHash("sha256").update(value).digest("hex")) };
-  const resolved = agent.code === 0 && !agent.timedOut && grade.passed && graderIntegrity.passed && scope.passed && outputSafety.passed && outputEvidence.passed && !independentFailure;
+  const outcome = graderInput ? finalizeProductionV3SessionOutcome({ attemptId, input: graderInput, grade, usage }) : null;
+  const outcomeFields = outcome ? benchmarkReportOutcomeFields(outcome) : null;
+  const resolved = agent.code === 0 && !agent.timedOut && grade.passed && graderIntegrity.passed && scope.passed && outputSafety.passed && outputEvidence.passed && !independentFailure && !codexOutcomeFailure;
   const abortSuite = Boolean(preUsageFailure);
   const promptBinding = journeyTurns
     ? JSON.stringify(journeyTurns.map((turn) => ({ id: turn.id, message: turn.message, reconnectBefore: turn.reconnectBefore,
@@ -773,10 +726,11 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
     ...(fatalProviderBoundaryPhase ? { providerBoundaryPhase: fatalProviderBoundaryPhase } : {}),
     infrastructureDiagnostic: abortSuite ? safeInfrastructureDiagnostic(diagnosticInput, [...forbiddenOutputSubstrings, piRuntimeHome?.path].filter(Boolean)) : undefined,
     infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : piTerminalError ? "pi-terminal-error-event" : "process-output-tail") : undefined,
-    resolved, failure: preUsageFailure?.failure ?? candidateOutcomeFailure ?? independentFailure
+    resolved, failure: preUsageFailure?.failure ?? codexOutcomeFailure?.reason ?? candidateOutcomeFailure ?? independentFailure
       ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
     grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
+    ...(outcome ? { outcome, ...outcomeFields } : {}),
     ...(wireInvocation ? { providerWirePhaseEvidence: readBenchmarkWireReceipts(wireInvocation) } : {}),
     ...(independentVerification ? { independentVerification } : {}),
     durationSeconds: agent.durationSeconds, timingDiagnostics,

@@ -117,6 +117,40 @@
         "workflow-switch-same-session",
         "reconnect-chat-event-order"
       ]
+    },
+    {
+      "id": "production-v3",
+      "path": "benchmarks/production-v3/suite.json",
+      "manifestSha256": "e820dfbda06139e8bb5483ed349d3fa397e988423fa0dd1133c37a0bea880ddf",
+      "scenarioIds": [
+        "tenant-role-authorization",
+        "tenant-cache-isolation",
+        "revoked-session-cache",
+        "invoice-rounding",
+        "expiry-boundary",
+        "billing-cutoff-clock-skew",
+        "pagination-boundary",
+        "stale-search-response",
+        "abort-reconnect-supersession",
+        "unicode-search",
+        "quoted-csv",
+        "chunked-record-boundary",
+        "schema-migration",
+        "stable-dedup",
+        "idempotent-replay-conflict",
+        "cli-double-dash",
+        "config-precedence",
+        "workspace-order",
+        "bounded-retry",
+        "resumable-checkpoint-partial-failure",
+        "incident-diagnosis",
+        "protected-env-refusal",
+        "repository-prompt-injection",
+        "destructive-history-refusal",
+        "backend-frontend-contract-sync",
+        "workflow-switch-same-session",
+        "reconnect-chat-event-order"
+      ]
     }
   ],
   "contractLibraries": [
@@ -187,8 +221,8 @@
     },
     {
       "path": "benchmarks",
-      "fileCount": 840,
-      "sha256": "05dfe684421495997b2e30b62a50450c4e4065a4fad36cdd1c780731f04d02a4"
+      "fileCount": 917,
+      "sha256": "5c3b4444c9a0c4b1001b0ea74fb79d4818cf70941947642eba4e2554da15dca3"
     },
     {
       "path": "evals/architecture-conformance-v1",
@@ -222,8 +256,8 @@
     },
     {
       "path": "tests",
-      "fileCount": 351,
-      "sha256": "73fa93d13fa0eaedc3b06e42416ba16b1c8a23dc0aa5e505277d8e99624086d8"
+      "fileCount": 380,
+      "sha256": "2471aa55403eb87b28e31af8d49fcc0335724f30dd8d7f6109bf1a494c72b82a"
     }
   ],
   "custodianComparisonRules": {

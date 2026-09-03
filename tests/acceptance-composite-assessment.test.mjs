@@ -494,7 +494,7 @@ test("GATE P1-ASSESS 11/16 the no-config legacy assessment remains explicit v1",
   assert.equal(liveRuntime.deferCompletion(liveCtx, liveTask, { origin: "assistant", bytes: responseText }, finalizer), true);
   const settlement = await settleIndependentWebUiOperation(liveProject, liveTask, { operationRef, messageRequestId,
     manager, evidence: async () => brokerEvidence });
-  assert.deepEqual(settlement, { status: "blocked", reason: "terminal task publication failed" });
+  assert.deepEqual(settlement, { status: "blocked", reason: "terminal task publication failed", taskStatus: "pending" });
   assert.equal(liveTask.trace.outcome, "pending");
   const aggregateRows = fs.readFileSync(path.join(liveAuthority, journalFile), "utf8").trim().split("\n").map(JSON.parse);
   assert.equal(aggregateRows.at(-1).payload.kind, "aggregate-settled");

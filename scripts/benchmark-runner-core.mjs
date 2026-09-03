@@ -133,7 +133,7 @@ async function main() {
   if (bootstrapMetadata && bootstrapMetadata.suite.builtInId !== builtInId) {
     fail("Frozen benchmark suite origin no longer matches its canonical built-in identity", 1);
   }
-  const canonicalProductionSuite = builtInId === "production-v1" || builtInId === "production-v2";
+  const canonicalProductionSuite = ["production-v1", "production-v2", "production-v3"].includes(builtInId);
   const productionSpendControlPath = path.join(suiteRoot, "spend-control.v1.json");
   const productionSpendControl = canonicalProductionSuite || fs.existsSync(productionSpendControlPath)
     ? readJsonFile(productionSpendControlPath, "production spend-control contract")
@@ -157,7 +157,8 @@ async function main() {
   }
   const registeredMeasurementRun = Boolean(registeredMeasurement);
   const productionAllStageBoundaries = productionSpendControl
-    ? options.measurementOnly || registeredMeasurementRun ? [0, productionExpectedSessions]
+    ? registeredMeasurementRun || (options.measurementOnly && builtInId === "production-v2")
+      ? [0, productionExpectedSessions]
       : productionSpendControl.stages.map((stage) => stage.cumulativeSessions)
     : [];
   const productionStageBoundaries = productionAllStageBoundaries.slice(1);
@@ -181,9 +182,9 @@ async function main() {
     && !options.replayRuns
     && suite.scenarios.length === declaredScenarioCount;
   // Buy one full observation window; graders, integrity and release thresholds stay unchanged.
-  if (options.measurementOnly && (builtInId !== "production-v2" || !productionFullMatrixRequested
+  if (options.measurementOnly && (!["production-v2", "production-v3"].includes(builtInId) || !productionFullMatrixRequested
     || productionExpectedSessions !== 108 || options.codexMode !== "controlled" || options.piagentTreatment !== "release-defaults")) {
-    fail("--measurement-only requires the complete production-v2 controlled release-defaults matrix, without selection, replay, a runtime limit or outcome early-stop", 1);
+    fail("--measurement-only requires a complete production-v2 or production-v3 controlled release-defaults matrix, without selection or replay", 1);
   }
   if (productionFullMatrixRequested) {
     const spendExecution = productionSpendControl.execution;
@@ -470,7 +471,7 @@ async function main() {
   }
   const runId = resumeState?.manifest.runId ?? createRunId(suite.id);
   const runtimeCommands = benchmarkRuntimeCommands({ productionFinalizationOnly,
-    resumeManifest: resumeState?.manifest, surfaces: options.surfaces, piCommand, codexCommand,
+    resumeManifest: resumeState?.manifest, surfaces: options.surfaces, piCommand, codexCommand, codexBaseline: options.codexBaseline,
     dockerCommand: registeredMeasurementRun ? verificationPlan?.dockerCommand?.path : undefined,
     cwd: bootstrapMetadata?.originalCwd ?? process.cwd() });
   const registeredRuntimeVerifiers = bindRegisteredRuntimeVerifiers({ registeredMeasurement,
@@ -554,7 +555,7 @@ async function main() {
     if (preflightAssetError) throw preflightAssetError;
     codexRuntime = createCodexRuntime(options);
     assertCodexRuntimeCredential(codexRuntime, { required: registeredMeasurementRun });
-    try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path, PIAGENT_FAST_MODE: options.serviceTier === "fast" ? "1" : "0" }), codexCommand, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexMode: options.codexMode, codexRuntime, serviceTier: options.serviceTier })); }
+    try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path, PIAGENT_FAST_MODE: options.serviceTier === "fast" ? "1" : "0" }), codexCommand, codexCommandIdentity: runtimeCommands.codex, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexBaseline: options.codexBaseline, codexMode: options.codexMode, codexRuntime, model: options.model, serviceTier: options.serviceTier })); }
     catch (error) { preservePiRuntime ||= error.code === "BENCHMARK_PI_CREDENTIAL_RECONCILIATION_FAILED"; throw error; }
     assertCodexRuntimeCredential(codexRuntime, { required: registeredMeasurementRun });
     const postPreflightAssetError = executionGuard.check("after-preflight", [piRuntimeHome]);
@@ -643,6 +644,7 @@ async function main() {
     thinking: options.thinking ?? null,
     serviceTier: options.serviceTier ?? null,
     codexMode: options.codexMode,
+    codexBaseline: options.codexBaseline,
     piagentTreatment: options.piagentTreatment,
     allowPiAuthWriteback: options.allowPiAuthWriteback,
     timeoutSeconds: options.timeoutSeconds,
@@ -940,7 +942,6 @@ async function main() {
     if (!preservePiRuntime) cleanupBenchmarkPiRuntimeHome(bootstrapMetadata?.piAgentHome, piRuntimeHome);
   }
 }
-
 if (invokedAsEntrypoint(import.meta.url, process.argv[1])) {
   main().catch((error) => {
     console.error(`FAIL: ${error.message}`);

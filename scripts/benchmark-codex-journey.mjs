@@ -199,6 +199,7 @@ export async function runCodexUserJourney({
         model: options.model,
         thinkingLevel: options.thinking,
         requestedServiceTier: options.serviceTier,
+        eventContract: options.codexBaseline === "stock" ? "production-v3" : undefined,
         onEvent: event => inspectForbiddenValue(event, forbiddenOutputSubstrings, turnForbiddenHits)
       });
       const timing = createDeferredBenchmarkTimingCollector({ surface: "codex-cli" });
@@ -301,7 +302,7 @@ export async function runCodexUserJourney({
         let turnUsage = null;
         let settlement = null;
         try {
-          const parsedUsage = collector.finish();
+          const parsedUsage = collector.finish({ processExitCode: result.code });
           turnUsage = {
             ...parsedUsage,
             codexInvocationReceipt: buildCodexInvocationReceipt({
@@ -348,6 +349,7 @@ export async function runCodexUserJourney({
           timedOut = result.timedOut === true;
           break;
         }
+        if (turnUsage.codexEventOutcome?.failureClass) break;
       } finally { await releaseScopedBroker(turnScopedBroker); }
     }
     await releaseRemainingBrokers();

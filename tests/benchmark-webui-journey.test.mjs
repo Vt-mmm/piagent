@@ -19,7 +19,7 @@ import {
   GatewayJourneyClient,
   launchCapability,
   recoverOperationFromEvents,
-  terminalSettlementOutcome
+  terminalLifecycleOutcome
 } from "../scripts/benchmark-webui-journey.mjs";
 import { candidateOutcomeFailureReason, persistedJourneyReceipt } from "../scripts/benchmark-session.mjs";
 
@@ -132,26 +132,34 @@ test("correlation cannot hide a whitespace-damaged multiline workflow prompt", (
   }), null);
 });
 
-test("terminal settlement mismatch is a bounded candidate outcome, not a parsed transport string", () => {
-  const outcome = terminalSettlementOutcome("completed", "blocked", 2);
-  assert.deepEqual(outcome, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
-    expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 });
+test("terminal lifecycle mismatch keeps operation and task state independent", () => {
+  const outcome = terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "blocked",
+    expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 2 });
+  assert.deepEqual(outcome, { schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+    expectedOperationStatus: "completed", observedOperationStatus: "blocked",
+    expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 2 });
   assert.equal(candidateOutcomeFailureReason(outcome),
-    "webui-terminal-settlement-blocked-expected-completed-turn-2");
-  assert.equal(terminalSettlementOutcome("completed", "completed", 2), null);
-  assert.equal(terminalSettlementOutcome("refused", "completed", 1), null);
-  const incompleteRefusal = terminalSettlementOutcome("refused", "blocked", 1);
-  assert.deepEqual(incompleteRefusal, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
-    expectedSettlement: "refused", observedSettlement: "blocked", turnIndex: 1 });
+    "webui-terminal-lifecycle-operation-blocked-expected-completed-task-pending-expected-completed-turn-2");
+  assert.equal(terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "completed",
+    expectedTaskStatus: "pending", observedTaskStatus: "pending", turnIndex: 2 }), null);
+  assert.equal(terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "completed",
+    expectedTaskStatus: "refused", observedTaskStatus: "refused", turnIndex: 1 }), null);
+  const incompleteRefusal = terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "blocked",
+    expectedTaskStatus: "refused", observedTaskStatus: "pending", turnIndex: 1 });
+  assert.deepEqual(incompleteRefusal, { schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+    expectedOperationStatus: "completed", observedOperationStatus: "blocked",
+    expectedTaskStatus: "refused", observedTaskStatus: "pending", turnIndex: 1 });
   assert.equal(candidateOutcomeFailureReason(incompleteRefusal),
-    "webui-terminal-settlement-blocked-expected-refused-turn-1");
-  const refusedFailure = terminalSettlementOutcome("refused", "error", 1);
-  assert.deepEqual(refusedFailure, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
-    expectedSettlement: "refused", observedSettlement: "error", turnIndex: 1 });
+    "webui-terminal-lifecycle-operation-blocked-expected-completed-task-pending-expected-refused-turn-1");
+  const refusedFailure = terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "error",
+    expectedTaskStatus: "refused", observedTaskStatus: "failed", turnIndex: 1 });
+  assert.deepEqual(refusedFailure, { schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+    expectedOperationStatus: "completed", observedOperationStatus: "error",
+    expectedTaskStatus: "refused", observedTaskStatus: "failed", turnIndex: 1 });
   assert.equal(candidateOutcomeFailureReason(refusedFailure),
-    "webui-terminal-settlement-error-expected-refused-turn-1");
-  assert.throws(() => terminalSettlementOutcome("completed", "not-a-settlement", 2), /outcome-invalid/);
-  assert.throws(() => terminalSettlementOutcome("not-a-settlement", "not-a-settlement", 2), /outcome-invalid/);
+    "webui-terminal-lifecycle-operation-error-expected-completed-task-failed-expected-refused-turn-1");
+  assert.throws(() => terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "invalid",
+    expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 2 }), /outcome-invalid/);
 });
 
 test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence", () => {
@@ -159,8 +167,10 @@ test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence
     channel: "webui-gateway", completed: true, sessionRef: "private-session", reconnects: 2,
     turns: [{ index: 2, messageRequestId: "private-message", operationRef: "private-operation", receiptUncertain: true,
       expectedSettlement: "refused",
-      outcome: { schemaVersion: 1, kind: "terminal-settlement-mismatch", expectedSettlement: "completed",
-        observedSettlement: "blocked", turnIndex: 2, rawReason: "must-also-not-persist" },
+      expectedOperationStatus: "completed", expectedTaskStatus: "refused", operationStatus: "blocked", taskStatus: "pending",
+      outcome: { schemaVersion: 2, kind: "terminal-lifecycle-mismatch", expectedOperationStatus: "completed",
+        observedOperationStatus: "blocked", expectedTaskStatus: "refused", observedTaskStatus: "pending",
+        turnIndex: 2, rawReason: "must-also-not-persist" },
       recovery: { responseObserved: true, responseDiscarded: true, connectionDropped: true, replayCursor: 7,
         recoveredFromKind: "runtime.changed", recoveredAtSequence: 8, correlatedByMessageRequestId: true,
         sendAttempts: 1, durableUserCopies: 1, rawResponse: "must-not-persist" } }]
@@ -170,9 +180,12 @@ test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence
     recoveredFromKind: "runtime.changed", recoveredAtSequence: 8, correlatedByMessageRequestId: true,
     sendAttempts: 1, durableUserCopies: 1
   });
-  assert.deepEqual(persisted.turns[0].outcome, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
-    expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 });
+  assert.deepEqual(persisted.turns[0].outcome, { schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+    expectedOperationStatus: "completed", observedOperationStatus: "blocked",
+    expectedTaskStatus: "refused", observedTaskStatus: "pending", turnIndex: 2 });
   assert.equal(persisted.turns[0].expectedSettlement, "refused");
+  assert.equal(persisted.turns[0].operationStatus, "blocked");
+  assert.equal(persisted.turns[0].taskStatus, "pending");
   assert.equal(JSON.stringify(persisted).includes("must-not-persist"), false);
   assert.equal(JSON.stringify(persisted).includes("must-also-not-persist"), false);
   assert.equal(JSON.stringify(persisted).includes("private-message"), false);

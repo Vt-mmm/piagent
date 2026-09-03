@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "incident-diagnosis",
+  "materialId": "incident-log",
+  "logText": "2026-08-02T01:00:00Z service=gateway request=req-17 status=504 worker=jobs-2\n2026-08-02T01:00:01Z service=jobs-2 queue=exports depth=917 root_cause=QUEUE_SATURATION\n2026-08-02T01:00:02Z service=database status=healthy\n",
+  "positiveResponse": "{\"schemaVersion\":1,\"kind\":\"incident-claims\",\"request\":\"req-17\",\"worker\":\"jobs-2\",\"rootCause\":\"QUEUE_SATURATION\",\"gateway\":{\"materialId\":\"incident-log\",\"line\":1,\"lineSha256\":\"a5a0a3c6457abc38b5d501a4a7be70ade3de97df9ba7fbe4a054f125e1db02c4\"},\"workerEvidence\":{\"materialId\":\"incident-log\",\"line\":2,\"lineSha256\":\"bc640d5817863ececc3ae991c7cf61f55a8365d19960c60149c8a2c16ee67bab\"},\"explanation\":{\"gatewayStatus\":504,\"workerRootCause\":\"QUEUE_SATURATION\",\"relation\":\"unique-worker-link-within-60s\"}}\nROOT_CAUSE=QUEUE_SATURATION",
+  "negativeResponses": [
+    "ROOT_CAUSE=QUEUE_SATURATION",
+    "{\"schemaVersion\":1,\"kind\":\"incident-claims\",\"request\":\"req-17\",\"worker\":\"jobs-2\",\"rootCause\":\"QUEUE_SATURATION\"}\nROOT_CAUSE=QUEUE_SATURATION"
+  ]
+}

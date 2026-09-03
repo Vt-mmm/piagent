@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-item-error"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"error-1","type":"error","message":"code mode host unavailable"}}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"The operation failed."}}
+{"type":"turn.completed","usage":{"input_tokens":90,"cached_input_tokens":30,"output_tokens":15,"reasoning_output_tokens":5}}

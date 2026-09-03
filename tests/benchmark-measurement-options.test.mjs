@@ -30,7 +30,7 @@ function resumeState(overrides = {}) {
 test("measurement-only is an explicit boolean opt-in with an observational claim boundary", () => {
   assert.equal(parseBenchmarkArgs([]).measurementOnly, false);
   assert.equal(parseBenchmarkArgs(["--measurement-only"]).measurementOnly, true);
-  assert.match(benchmarkUsage, /--measurement-only\s+Observe the full production-v2 108-session matrix; no release claim/);
+  assert.match(benchmarkUsage, /--measurement-only\s+Observe a full production-v2\/v3 108-session matrix; no release claim/);
   assert.throws(() => parseBenchmarkArgs(["--measurement-only", "--measurement-only"]), /only be supplied once/);
   assert.throws(() => parseBenchmarkArgs(["--measurement-only", "false"]), /Unknown benchmark option/);
 });
@@ -50,6 +50,7 @@ test("registered measurement rejects ad hoc suite, matrix, resource and legacy v
   const manifest = path.join(os.tmpdir(), "approved-registration.json");
   const cases = [["--suite", "production-v2"], ["--measurement-only"], ["--surfaces", "piagent,codex-cli"],
     ["--model", "openai-codex/gpt-5.6-luna"], ["--thinking", "medium"], ["--service-tier", "default"],
+    ["--codex-baseline", "stock"],
     ["--repeats", "2"], ["--infrastructure-retries", "0"], ["--scenarios", "one"],
     ["--seed", "fixed"], ["--timeout", "900"], ["--verification-plan", "/tmp/plan.json"],
     ["--approve-verification"], ["--max-runtime-minutes", "10"], ["--stop-after-failed-pair"]];

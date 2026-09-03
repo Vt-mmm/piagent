@@ -11,9 +11,10 @@ function nonEmptyString(value) {
 }
 
 export function productionV2EarlyDetectionValidationErrors(control, { suiteId, suite } = {}) {
-  if (suiteId !== "production-v2") return [];
+  if (!["production-v2", "production-v3"].includes(suiteId)) return [];
+  const label = suiteId;
   if (!suite || suite.id !== suiteId || suite.schemaVersion !== 2 || !Array.isArray(suite.scenarios)) {
-    return ["missing-production-v2-suite-for-early-detection-validation"];
+    return [`missing-${label}-suite-for-early-detection-validation`];
   }
   const errors = [];
   const early = control.earlyDetection;
@@ -36,35 +37,35 @@ export function productionV2EarlyDetectionValidationErrors(control, { suiteId, s
   const smokePairs = stagePairCount(early?.smokeDiversityStageId);
   const familyPairs = stagePairCount(early?.fullFamilyCoverageStageId);
   const categoryPairs = stagePairCount(early?.fullCategoryCoverageStageId);
-  if (!Number.isSafeInteger(smokePairs) || smokePairs <= 0) errors.push("invalid-production-v2-smoke-diversity-stage");
-  if (!Number.isSafeInteger(familyPairs) || familyPairs <= 0) errors.push("invalid-production-v2-family-coverage-stage");
-  if (!Number.isSafeInteger(categoryPairs) || categoryPairs <= 0) errors.push("invalid-production-v2-category-coverage-stage");
+  if (!Number.isSafeInteger(smokePairs) || smokePairs <= 0) errors.push(`invalid-${label}-smoke-diversity-stage`);
+  if (!Number.isSafeInteger(familyPairs) || familyPairs <= 0) errors.push(`invalid-${label}-family-coverage-stage`);
+  if (!Number.isSafeInteger(categoryPairs) || categoryPairs <= 0) errors.push(`invalid-${label}-category-coverage-stage`);
   if (Number.isSafeInteger(smokePairs)) {
     const observed = ordered.slice(0, smokePairs);
     if (JSON.stringify(observed.map((scenario) => scenario.id))
-      !== JSON.stringify(early?.expectedFirstRepeatScenarioIds)) errors.push("production-v2-smoke-order-mismatch");
+      !== JSON.stringify(early?.expectedFirstRepeatScenarioIds)) errors.push(`${label}-smoke-order-mismatch`);
     if (!sameStrings(exactSet(observed.map((scenario) => scenario.lifecycle)), early?.requiredLifecycleCoverage)) {
-      errors.push("production-v2-smoke-lifecycle-coverage-mismatch");
+      errors.push(`${label}-smoke-lifecycle-coverage-mismatch`);
     }
     if (!sameStrings(exactSet(observed.map((scenario) => scenario.difficulty)), early?.requiredDifficultyCoverage)) {
-      errors.push("production-v2-smoke-difficulty-coverage-mismatch");
+      errors.push(`${label}-smoke-difficulty-coverage-mismatch`);
     }
     if (!sameStrings(exactSet(observed.map((scenario) => scenario.variantRole)), early?.requiredVariantRoleCoverage)) {
-      errors.push("production-v2-smoke-variant-role-coverage-mismatch");
+      errors.push(`${label}-smoke-variant-role-coverage-mismatch`);
     }
   }
   if (Number.isSafeInteger(familyPairs)) {
     const observed = ordered.slice(0, familyPairs);
     if (JSON.stringify(observed.map((scenario) => scenario.id))
-      !== JSON.stringify(early?.firstFullFamilyCoverageScenarioIds)) errors.push("production-v2-family-order-mismatch");
+      !== JSON.stringify(early?.firstFullFamilyCoverageScenarioIds)) errors.push(`${label}-family-order-mismatch`);
     if (new Set(observed.map((scenario) => scenario.familyId)).size !== suite.matrixContract?.familyCount) {
-      errors.push("production-v2-family-coverage-mismatch");
+      errors.push(`${label}-family-coverage-mismatch`);
     }
   }
   if (Number.isSafeInteger(categoryPairs)) {
     const observed = ordered.slice(0, categoryPairs);
     if (!sameStrings(exactSet(observed.map((scenario) => scenario.category)), early?.requiredCategoryCoverage)) {
-      errors.push("production-v2-category-coverage-mismatch");
+      errors.push(`${label}-category-coverage-mismatch`);
     }
   }
   return errors;

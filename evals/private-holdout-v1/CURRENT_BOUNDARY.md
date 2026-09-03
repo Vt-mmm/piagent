@@ -7,10 +7,11 @@ and mutation checks, blinded review and independent attestation requirements
 in that runbook remain mandatory. Its step 1 must now bind the v2 exposure file.
 
 The earlier file omitted the public `deep-logic-v1` and `production-v2` suites.
-V2 includes all six current public suites (66 scenarios), all 13 contract-family
-versions and nine public development trees, including test programs and
-author-written calibration examples. The predecessor digest preserves prior
-exposure. These counts are inventory counts, not executed or passing sessions.
+V2 now includes all seven current public suites (93 scenarios), including
+`production-v3`, all 13 contract-family versions and nine public development
+trees, including test programs and author-written calibration examples. The
+predecessor digest preserves prior exposure. These counts are inventory counts,
+not executed or passing sessions.
 
 Before custody review, check the complete public source tree, including its
 development tests. The runtime npm package intentionally omits those tests and

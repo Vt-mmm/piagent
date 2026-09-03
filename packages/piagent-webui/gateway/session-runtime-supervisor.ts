@@ -285,13 +285,12 @@ export class SessionRuntimeSupervisor {
     if (result.state === "quarantine") await this.#quarantineRuntime(sessionRef, operationRef, active, stream, result.reasonCode);
     else if (this.#active.get(sessionRef) === active) { active.stream = null; active.watchdog = null; active.settling = false; }
   }
-  async #quarantineRuntime(sessionRef: string, operationRef: string, active: ActiveRuntime,
-    stream: GatewaySessionStream, reasonCode: string): Promise<void> {
+  async #quarantineRuntime(sessionRef: string, operationRef: string, active: ActiveRuntime, stream: GatewaySessionStream, reasonCode: string): Promise<void> {
     if (this.#active.get(sessionRef) !== active) return;
     active.cancelWire?.(reasonCode); active.cancelWire = null;
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.watchdog = null;
     const messageRequestId = active.messageRequestId;
-    if (active.operationRef === operationRef) { active.operationRef = null; active.messageRequestId = null; stream.complete(null); }
+    if (active.operationRef === operationRef) { active.operationRef = null; active.messageRequestId = null; stream.complete(null, activeSessionTask(active.info.cwd, active.info.id)?.trace?.outcome ?? null); }
     active.stream = null; active.completion = null; active.settling = false; active.approvalWaiting = false;
     this.#active.delete(sessionRef); bestEffortUnsubscribe(active.unsubscribeApproval); bestEffortUnsubscribe(active.unbindApproval);
     try { this.#leases.requireRecovery(sessionRef, active.lease.ownerEpoch!, this.#gatewayInstanceRef,
@@ -455,7 +454,7 @@ export class SessionRuntimeSupervisor {
     const settlement = await settleIndependentWebUiOperation(active.info.cwd, task, { operationRef, messageRequestId,
       manager: active.sessionManager ?? active.runtime.session?.sessionManager,
       evidence: this.#compositeSettlementEvidence ?? (() => { throw new Error("composite-settlement-evidence-unavailable"); }) });
-    if (settlement.status === "blocked") stream.markError("composite-settlement-blocked");
+    if (settlement.status === "blocked") stream.markBlocked("composite-settlement-blocked");
     try {
       if (this.#readProjection) {
         const read = await boundedResult(this.#readProjection(sessionRef), this.#operationDeadlinePolicy.projectionTimeoutMs);
@@ -469,7 +468,8 @@ export class SessionRuntimeSupervisor {
     active.operationRef = null; active.messageRequestId = null; const settledLiveState = this.ownership(sessionRef).liveState;
     if (projection) active.lastSessionRevision = projection.sessionRevision;
     const taskOutcome = activeSessionTask(active.info.cwd, active.info.id)?.trace?.outcome ?? null;
-    stream.complete(projection?.sessionRevision ?? null, taskOutcome);
+    stream.complete(projection?.sessionRevision ?? null, taskOutcome,
+      settlement.status === "not-applicable" ? null : settlement.taskStatus);
     if (projection) this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
       liveState: restartRequired ? "uncertain" : settledLiveState, operationRef: null,
       ...(messageRequestId ? { messageRequestId } : {}), reasonCode: restartRequired ? "runtime-restart-required" : null });

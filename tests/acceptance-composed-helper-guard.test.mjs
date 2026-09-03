@@ -143,9 +143,9 @@ for (const { correct, label, source, tests } of [
     const projectEnv = { ...process.env, PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH}`, npm_config_offline: "true", npm_config_audit: "false", npm_config_fund: "false" };
     delete projectEnv.NODE_TEST_CONTEXT;
     const output = execFileSync("npm", ["test"], { cwd, env: projectEnv, encoding: "utf8", timeout: 30_000 });
-    assert.match(output, /# tests 2\b/);
-    assert.match(output, /# fail 0\b/);
-    assert.match(output, /# skipped 0\b/);
+    assert.match(output, /(?:#|ℹ) tests 2\b/);
+    assert.match(output, /(?:#|ℹ) fail 0\b/);
+    assert.match(output, /(?:#|ℹ) skipped 0\b/);
     await finish(verifyId, "bash", verifier, output);
     const review = { command: "git diff --no-ext-diff HEAD -- src/expiry.js test/expiry.test.js && git status --short" };
     await finish(await authorize("bash", review), "bash", review, execFileSync("sh", ["-c", review.command], { cwd, encoding: "utf8" }));

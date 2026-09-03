@@ -92,6 +92,7 @@ function controlledArgs(options, disabledFeatures, scopedBroker) {
     for (const feature of new Set([...disabledFeatures, ...requiredDisabled])) args.push("--disable", feature);
   }
   if (scopedBroker) {
+    if (options.codexBaseline === "stock") throw Object.assign(new Error("Stock Codex baseline cannot use the custom scoped broker"), { exitCode: 1 });
     if (options.codexMode !== "controlled") throw Object.assign(new Error("Codex scoped broker requires controlled mode"), { exitCode: 1 });
     args.push(...codexScopedBrokerOverrides(scopedBroker));
   }

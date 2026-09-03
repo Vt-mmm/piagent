@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-error-before"}
+{"type":"turn.started"}
+{"type":"error","message":"provider stream reported an error"}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"Could not complete the task."}}
+{"type":"turn.completed","usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":9,"reasoning_output_tokens":2}}

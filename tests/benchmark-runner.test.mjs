@@ -587,7 +587,8 @@ const requireControlledIsolation = () => {
 };
 if (args.includes("--version")) { console.log("codex-cli 1.0.0-test"); process.exit(0); }
 if (args[0] === "login" && args[1] === "status") { requireControlledIsolation(); console.log("Logged in using test"); process.exit(0); }
-if (args[0] === "features" && args[1] === "list") { requireControlledIsolation(); console.log("apps stable true\\nplugins stable true\\nbrowser_use stable true\\nhooks stable true"); process.exit(0); }
+if (args[0] === "features" && args[1] === "list") { requireControlledIsolation(); console.log("apps stable true\\nplugins stable true\\nbrowser_use stable true\\nhooks stable true\\ncode_mode_host stable true"); process.exit(0); }
+if (args[0] === "exec" && args[1] === "--help") { console.log("--json -s --sandbox workspace-write --ignore-user-config --ignore-rules"); process.exit(0); }
 if (args[0] !== "exec") process.exit(7);
 requireControlledIsolation();
 const delayMs = Number(process.env.BENCHMARK_FAKE_CODEX_DELAY_MS ?? 0);
@@ -624,6 +625,9 @@ if (process.env.BENCHMARK_FAKE_CODEX_LARGE_OUTPUT === "1") events.splice(events.
 for (const event of events) console.log(JSON.stringify(event));
 `);
   fs.chmodSync(fakeCodex, 0o755);
+  const fakeCodexHost = path.join(dir, "codex-code-mode-host");
+  fs.writeFileSync(fakeCodexHost, "#!/bin/sh\\nexit 0\\n", { mode: 0o700 });
+  fs.chmodSync(fakeCodexHost, 0o700);
   return { dir, suite: path.join(suiteRoot, "suite.json"), fakePi, fakeCodex, operatorCodexHome, output: path.join(dir, "output") };
 }
 
@@ -846,12 +850,12 @@ test("deep specialist suite refuses model, effort, surface, and Codex-mode drift
   }
 });
 
-test("custom suites also default to Piagent versus controlled Codex CLI", (t) => {
+test("custom suites also default to Piagent versus stock Codex with controlled configuration", (t) => {
   const value = fixture(t);
   const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /surfaces:\s+piagent, codex-cli/);
-  assert.match(result.stdout, /codex:\s+controlled mode · model gpt-5\.6-luna · effort medium/);
+  assert.match(result.stdout, /codex:\s+stock baseline · controlled config · model gpt-5\.6-luna · effort medium/);
 });
 
 test("modern wrapper refuses inherited Node code-loading overrides before freezing claims", () => {
@@ -994,7 +998,7 @@ test("private assurance manifest fails closed on surviving mutations or digest m
 test("Codex CLI dry-run uses parity defaults and accepts an explicit override", () => {
   const defaults = spawnSync(process.execPath, [runner, "--surfaces", "piagent,codex-cli", "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(defaults.status, 0, defaults.stderr);
-  assert.match(defaults.stdout, /codex:\s+controlled mode · model gpt-5\.6-luna · effort medium/);
+  assert.match(defaults.stdout, /codex:\s+stock baseline · controlled config · model gpt-5\.6-luna · effort medium/);
 
   const valid = spawnSync(process.execPath, [
     runner,
@@ -1010,7 +1014,7 @@ test("Codex CLI dry-run uses parity defaults and accepts an explicit override", 
   assert.match(valid.stdout, /compare:\s+Piagent vs Codex CLI/);
   assert.match(valid.stdout, /sessions:\s+16/);
   assert.match(valid.stdout, /treatment:\s+candidate/);
-  assert.match(valid.stdout, /codex:\s+controlled mode · model gpt-test · effort xhigh/);
+  assert.match(valid.stdout, /codex:\s+stock baseline · controlled config · model gpt-test · effort xhigh/);
 });
 
 test("provider-free preflight freezes the candidate and checks auth and tools without a model session", (t) => {
@@ -1652,7 +1656,7 @@ test("dry-run can replay failed pairs from a previous report", (t) => {
   assert.match(result.stdout, /replay:\s+previous-run · 2 sessions/);
   assert.match(result.stdout, /variants:\s+static/);
   assert.match(result.stdout, /treatment:\s+candidate/);
-  assert.match(result.stdout, /codex:\s+controlled mode · model fake-model · effort high/);
+  assert.match(result.stdout, /codex:\s+stock baseline · controlled config · model fake-model · effort high/);
 });
 
 test("authenticated replay reuses the frozen source of a custom suite and stays diagnostic", (t) => {

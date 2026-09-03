@@ -1,0 +1,4 @@
+{"type":"error","message":"error before identity"}
+{"type":"thread.started","thread_id":"thread-late"}
+{"type":"turn.started"}
+{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":0,"output_tokens":2,"reasoning_output_tokens":0}}

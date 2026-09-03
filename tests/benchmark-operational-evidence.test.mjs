@@ -161,14 +161,16 @@ test("keeps exact token evidence independent from cost and never retries a paid 
   assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, { ...usage, total: 99 }, "process ended").usageStatus, "unknown-after-provider-start");
 });
 
-test("accepts only an exact positive-usage structured settlement mismatch as a candidate outcome", () => {
+test("accepts only an exact positive-usage structured lifecycle mismatch as a candidate outcome", () => {
   const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
     fresh: 75, usageCompleteness: "exact", cost: null };
-  const candidateOutcome = { schemaVersion: 1, kind: "terminal-settlement-mismatch",
-    expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 };
+  const candidateOutcome = { schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+    expectedOperationStatus: "completed", observedOperationStatus: "blocked",
+    expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 2 };
   assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "webui blocked", { candidateOutcome }), undefined);
   assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "webui refusal incomplete", {
-    candidateOutcome: { ...candidateOutcome, expectedSettlement: "refused", turnIndex: 1 }
+    candidateOutcome: { ...candidateOutcome, observedOperationStatus: "completed",
+      expectedTaskStatus: "refused", observedTaskStatus: "completed", turnIndex: 1 }
   }), undefined);
   assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false },
     { ...usage, usageCompleteness: "unverified" }, "webui blocked", { candidateOutcome }), {

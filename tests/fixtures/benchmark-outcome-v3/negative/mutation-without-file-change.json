@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 3,
+  "contractId": "benchmark-attempt-outcome-v3",
+  "attemptId": "negative-zero-change",
+  "scenarioKind": "source-change",
+  "transportStatus": "completed",
+  "operationStatus": "completed",
+  "taskStatus": "completed",
+  "semanticStatus": "pass",
+  "gradeStatus": "pass",
+  "runValidity": "valid",
+  "usageStatus": "exact",
+  "failureClass": "none",
+  "countsTowardQuality": true,
+  "countsTowardUsage": true,
+  "evidence": {
+    "providerStarted": true,
+    "processExitCode": 0,
+    "threadIdPresent": true,
+    "usageReported": true,
+    "terminalAgentMessage": true,
+    "requiredOutputEvidencePresent": true,
+    "errorEvents": 0,
+    "turnFailedEvents": 0,
+    "itemErrorEvents": 0,
+    "failedCommandEvents": 0,
+    "fileChangeCount": 0,
+    "mutationExpected": true,
+    "refusal": null
+  },
+  "usage": {
+    "providerInput": 1200,
+    "cacheRead": 800,
+    "cacheWrite": 0,
+    "output": 200,
+    "reasoning": 50,
+    "fresh": 600,
+    "totalTraffic": 1400,
+    "billedCost": null,
+    "billedCostStatus": "unavailable"
+  }
+}

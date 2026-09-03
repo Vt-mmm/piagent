@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-error-after"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"Done."}}
+{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":0,"output_tokens":2,"reasoning_output_tokens":0}}
+{"type":"error","message":"late error"}

@@ -4,6 +4,7 @@ import { PIAGENT_BENCHMARK_TREATMENTS } from "./benchmark-runtime.js";
 
 export const benchmarkSurfaces = new Set(["raw-pi", "piagent", "codex-cli"]);
 const codexModes = new Set(["controlled", "native"]);
+const codexBaselines = new Set(["stock", "controlled-custom"]);
 const thinkingLevels = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 export const benchmarkUsage = `Usage:
@@ -16,7 +17,7 @@ With no options it uses the built-in core-v1 suite, GPT-5.6 Luna at medium
 thinking on both surfaces, and the suite's repeat count.
 
 Options:
-  --suite <id|path>            core-v1, capability-v1, e2-framework-v1, deep-logic-v1, production-v1, production-v2, or suite.json path.
+  --suite <id|path>            core-v1, capability-v1, e2-framework-v1, deep-logic-v1, production-v1, production-v2, production-v3, or suite.json path.
   --deep                       Alias for --suite deep-logic-v1 (7 large scenarios, locked to Luna/medium).
   --capability                 Alias for --suite capability-v1.
   --production                 Alias for --suite production-v1.
@@ -26,6 +27,7 @@ Options:
   --service-tier <tier>        default|fast. Fast is pinned on both Piagent and Codex CLI.
   --fast                       Alias for --service-tier fast.
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
+  --codex-baseline <mode>      stock product CLI (default) or controlled-custom diagnostic fork.
   --piagent-treatment <id>     release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, configured-independent-v2, or feature-off.
   --allow-pi-auth-writeback    Allow same-account OAuth refresh CAS writeback under Pi's auth lock.
   --verification-plan <file>  Private operator-reviewed independent verification catalog.
@@ -43,7 +45,7 @@ Options:
   --max-sessions <n>           Stop cleanly after n new sessions and resume later.
   --max-runtime-minutes <n>    Stop cleanly after the current session once the budget is used.
   --stop-after-failed-pair      Terminal-stop after a Piagent outcome falls below the suite floor.
-  --measurement-only           Observe the full production-v2 108-session matrix; no release claim.
+  --measurement-only           Observe a full production-v2/v3 108-session matrix; no release claim.
   --registered-measurement <absolute-manifest>
                               Run only an approved production-v2-da2 complete108 registration.
   --yes                        Skip the cost/run-count confirmation.
@@ -98,6 +100,7 @@ export function parseBenchmarkArgs(argv) {
     thinking: undefined,
     serviceTier: undefined,
     codexMode: "controlled",
+    codexBaseline: "stock",
     piagentTreatment: "release-defaults",
     allowPiAuthWriteback: false,
     verificationPlan: undefined,
@@ -185,6 +188,12 @@ export function parseBenchmarkArgs(argv) {
         registeredIncompatible.add("--codex-mode");
         options.codexMode = requireValue(argv, index, arg);
         if (!codexModes.has(options.codexMode)) fail("--codex-mode must be controlled or native");
+        index += 1;
+        break;
+      case "--codex-baseline":
+        registeredIncompatible.add("--codex-baseline");
+        options.codexBaseline = requireValue(argv, index, arg);
+        if (!codexBaselines.has(options.codexBaseline)) fail("--codex-baseline must be stock or controlled-custom");
         index += 1;
         break;
       case "--piagent-treatment":

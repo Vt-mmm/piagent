@@ -533,6 +533,7 @@ export interface OperationCompletedPayload {
   messageRef: string;
   sessionRevision: string;
   settlement: "completed";
+  taskStatus: "pending" | "completed" | "refused" | "failed" | "unknown";
   reasonCode: null;
 }
 export interface OperationIncompletePayload {
@@ -542,5 +543,6 @@ export interface OperationIncompletePayload {
   messageRef: string | null;
   sessionRevision: string | null;
   settlement: "blocked" | "aborted" | "error" | "unknown";
+  taskStatus: "pending" | "completed" | "refused" | "failed" | "unknown";
   reasonCode: string;
 }

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { hasVisibleText } from "../shared/text-visibility.ts";
 import type { TerminalDeliveryReceipt } from "../server/terminal-delivery-receipt.ts";
-import { GatewayEventStore } from "./gateway-events.ts";
+import { GatewayEventStore, type GatewayTaskStatus } from "./gateway-events.ts";
 import { SessionOperationLifecycle, type SessionOperationObservation,
   type SessionOperationPhase, type SessionOperationRetryPolicyOptions } from "./session-operation-lifecycle.ts";
 
@@ -17,6 +17,14 @@ const COMPLETION_GATE = /^\[Piagent completion gate: (CONTINUING|NOT APPROVED)\]
 
 export type GatewayOperationSettlement = "completed" | "blocked" | "aborted" | "error" | "unknown";
 type Settlement = { outcome: GatewayOperationSettlement; reasonCode: string | null };
+
+function projectedTaskStatus(taskOutcome: string | null, override: GatewayTaskStatus | null): GatewayTaskStatus {
+  if (override) return override;
+  if (taskOutcome === "pending") return "pending";
+  if (taskOutcome === "completed") return "completed";
+  if (["blocked", "partial", "failed"].includes(String(taskOutcome))) return "failed";
+  return "unknown";
+}
 
 function clean(value: unknown): string {
   return String(value ?? "").replace(/\u001b(?:\[[0-?]*[ -/]*[@-~]|[@-_])/g, "")
@@ -158,6 +166,9 @@ export class GatewaySessionStream {
   get retryAbortRequired(): boolean { return this.#lifecycle.retryAbortRequired; }
 
   markAborted(reasonCode = "operation-aborted"): void { this.#forcedSettlement = { outcome: "aborted", reasonCode }; }
+  markBlocked(reasonCode = "operation-blocked"): void {
+    if (!this.#forcedSettlement) this.#forcedSettlement = { outcome: "blocked", reasonCode };
+  }
   markError(reasonCode = "operation-failed"): void {
     if (!this.#forcedSettlement) this.#forcedSettlement = { outcome: "error", reasonCode };
   }
@@ -283,7 +294,8 @@ export class GatewaySessionStream {
     }
   }
 
-  complete(sessionRevision: string | null, taskOutcome: string | null = null): void {
+  complete(sessionRevision: string | null, taskOutcome: string | null = null,
+    taskStatusOverride: GatewayTaskStatus | null = null): void {
     if (!this.#lifecycle.markTerminal()) return;
     const receipt = this.#receiptOnly && !this.#forcedSettlement && !this.#runtimeRestartRequired
       && sessionRevision !== null && taskOutcome !== null && taskOutcome !== "pending"
@@ -302,13 +314,9 @@ export class GatewaySessionStream {
       ? { outcome: "unknown" as const, reasonCode: "runtime-restart-required" }
       : this.#settlement);
     const messageRef = this.#lastMessageRef ?? this.#messageRef;
+    const taskStatus = projectedTaskStatus(taskOutcome, taskStatusOverride);
     if (settlement.outcome === "completed" && !messageRef) {
       settlement = { outcome: "unknown", reasonCode: "assistant-message-unavailable" };
-    } else if (settlement.outcome === "completed" && taskOutcome === "pending") {
-      // Provider completion is not governed-task completion. The durable task
-      // contract is authoritative, so withhold both success settlement and the
-      // durable assistant-success event until that contract becomes terminal.
-      settlement = { outcome: "unknown", reasonCode: "task-completion-pending" };
     } else if (settlement.outcome === "completed" && sessionRevision === null) {
       // Streaming text is not durable success until the canonical session
       // projection confirms it. Still terminate the UI, but do not show draft.
@@ -320,6 +328,7 @@ export class GatewaySessionStream {
     }
     this.#events.publish("operation.settled", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
       messageRef, sessionRevision, settlement: settlement.outcome,
+      taskStatus,
       reasonCode: settlement.outcome === "completed" ? null : settlement.reasonCode ?? "operation-settlement-unknown" });
   }
 }

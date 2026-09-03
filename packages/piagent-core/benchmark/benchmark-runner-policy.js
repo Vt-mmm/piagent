@@ -13,7 +13,7 @@ export function applyBenchmarkExecutionDefaults(options, suite) {
   if (!contract) return;
   for (const [field, expected] of [
     ["surfaces", contract.surfaces], ["model", contract.model], ["thinking", contract.thinking],
-    ["codexMode", contract.codexMode], ["serviceTier", contract.serviceTier]
+    ["codexMode", contract.codexMode], ["codexBaseline", contract.codexBaseline], ["serviceTier", contract.serviceTier]
   ]) {
     if (expected === undefined) continue;
     const actual = options[field];

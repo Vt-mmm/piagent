@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thread-turn-failed"}
+{"type":"turn.started"}
+{"type":"turn.failed","error":{"message":"tool orchestration failed"}}
+{"type":"turn.completed","usage":{"input_tokens":80,"cached_input_tokens":20,"cache_write_input_tokens":5,"output_tokens":12,"reasoning_output_tokens":4}}

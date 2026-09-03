@@ -3991,7 +3991,7 @@ describe("piagent guard integration", () => {
       const projectEnv = { ...process.env, PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH}`, npm_config_offline: "true", npm_config_audit: "false", npm_config_fund: "false" };
       delete projectEnv.NODE_TEST_CONTEXT; // The nested project must execute its tests, not inherit the parent runner's worker marker.
       const output = execFileSync("npm", ["test"], { cwd, encoding: "utf8", env: projectEnv });
-      assert.match(output, /# fail 0/);
+      assert.match(output, /(?:#|ℹ) fail 0/);
       await finish(verifyId, "bash", verifier, output);
       const review = { command: "git diff --no-ext-diff HEAD -- src/deadline.js test/deadline.test.js && git status --short" };
       const reviewId = await authorize("bash", review);

@@ -52,8 +52,8 @@ test("current exposure includes all public suites, development trees and contrac
   assert.equal(hash(fs.readFileSync(path.join(root, boundary, "public-exposure.v1.json"))), "80bed5d7ffd39dd9ebbc3207d5e6f09e9e56b9b254fd55814e6225677cb727f5");
   assert.equal(previous.visibleSuites.some(({ id }) => id === "production-v2"), false, "retain the actual historical omission");
   const current = buildPublicExposure(root), inventory = verifyPublicExposure(root);
-  assert.deepEqual(current.visibleSuites.map(({ id }) => id), ["capability-v1", "core-v1", "deep-logic-v1", "e2-framework-v1", "production-v1", "production-v2"]);
-  assert.equal(inventory.scenarioCount, 66);
+  assert.deepEqual(current.visibleSuites.map(({ id }) => id), ["capability-v1", "core-v1", "deep-logic-v1", "e2-framework-v1", "production-v1", "production-v2", "production-v3"]);
+  assert.equal(inventory.scenarioCount, 93);
   assert.equal(inventory.contractFamilyVersionCount, 13);
   assert.deepEqual(current.visibleTrees.map(({ path: file }) => file), trees);
   assert.deepEqual(current.contractLibraries[0].families.filter(({ id }) => id === "defined-config-precedence").map(({ version }) => version), [1, 2]);

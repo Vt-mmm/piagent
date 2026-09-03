@@ -14,11 +14,14 @@ export type GatewayProtocolEvent = {
   payload: Record<string, unknown>;
 };
 
+export type GatewayTaskStatus = "pending" | "completed" | "refused" | "failed" | "unknown";
+
 export type GatewayTerminalSettlement = {
   sessionRef: string;
   operationRef: string;
   messageRequestId?: string;
   settlement: "blocked" | "aborted" | "error" | "unknown";
+  taskStatus: GatewayTaskStatus;
   reasonCode: string;
   settledAt: string;
   sequence: number;
@@ -31,7 +34,12 @@ const SETTLEMENT_RETENTION_COUNT = 100;
 const SETTLEMENT_RETENTION_MS = 60 * 60_000;
 const MAX_SETTLEMENT_DECISION_COUNT = 10_000;
 type GatewaySettlementDecision = { settledAt: string; settlement: "completed" | GatewayTerminalSettlement["settlement"];
-  reasonCode: string | null };
+  taskStatus: GatewayTaskStatus; reasonCode: string | null };
+
+function settlementTaskStatus(value: unknown): GatewayTaskStatus {
+  return ["pending", "completed", "refused", "failed", "unknown"].includes(String(value))
+    ? value as GatewayTaskStatus : "unknown";
+}
 
 function settlementReason(settlement: GatewayTerminalSettlement["settlement"], value: unknown): string {
   if (typeof value === "string" && REASON_CODE_PATTERN.test(value) && !redactSensitiveText(value).redacted) return value;
@@ -85,7 +93,8 @@ export class GatewayEventStore {
     if (indexed) return indexed;
     const retained = this.#settlements.find((item) => item.sessionRef === sessionRef && item.operationRef === operationRef);
     if (!retained) return undefined;
-    const restored = { settledAt: retained.settledAt, settlement: retained.settlement, reasonCode: retained.reasonCode };
+    const restored = { settledAt: retained.settledAt, settlement: retained.settlement,
+      taskStatus: retained.taskStatus, reasonCode: retained.reasonCode };
     this.#settlementDecisions.set(key, restored);
     return restored;
   }
@@ -101,6 +110,7 @@ export class GatewayEventStore {
     if (this.#settlementDecision(sessionRef, operationRef)) return;
     this.#settlementDecisions.set(key, { settledAt: event.generatedAt,
       settlement: settlement as GatewaySettlementDecision["settlement"],
+      taskStatus: settlementTaskStatus(event.payload.taskStatus),
       reasonCode: settlement === "completed" ? null : String(event.payload.reasonCode) });
     const messageRequestId = typeof event.payload.messageRequestId === "string" && OPAQUE_REF_PATTERN.test(event.payload.messageRequestId)
       ? event.payload.messageRequestId : undefined;
@@ -108,7 +118,8 @@ export class GatewayEventStore {
       settledAt: event.generatedAt, sequence: event.sequence };
     if (settlement !== "completed") {
       const outcome = settlement as GatewayTerminalSettlement["settlement"];
-      this.#settlements.push({ ...retained, settlement: outcome, reasonCode: settlementReason(outcome, event.payload.reasonCode) });
+      this.#settlements.push({ ...retained, settlement: outcome, taskStatus: settlementTaskStatus(event.payload.taskStatus),
+        reasonCode: settlementReason(outcome, event.payload.reasonCode) });
     }
     this.#pruneSettlements(now);
   }
@@ -116,6 +127,7 @@ export class GatewayEventStore {
   publish(kind: GatewayEventKind, payload: Record<string, unknown>, now = new Date()): GatewayProtocolEvent {
     if (!Number.isFinite(now.getTime())) throw new Error("gateway-event-time-invalid");
     if (kind === "operation.settled") {
+      payload = { ...payload, taskStatus: settlementTaskStatus(payload.taskStatus) };
       if (payload.settlement === "completed") payload = { ...payload, reasonCode: null };
       else {
         const settlement = ["blocked", "aborted", "error", "unknown"].includes(String(payload.settlement))
@@ -127,7 +139,8 @@ export class GatewayEventStore {
       if (typeof sessionRef === "string" && OPAQUE_REF_PATTERN.test(sessionRef)
         && typeof operationRef === "string" && OPAQUE_REF_PATTERN.test(operationRef)) {
         const canonical = this.#settlementDecision(sessionRef, operationRef);
-        if (canonical) payload = { ...payload, settlement: canonical.settlement, reasonCode: canonical.reasonCode };
+        if (canonical) payload = { ...payload, settlement: canonical.settlement,
+          taskStatus: canonical.taskStatus, reasonCode: canonical.reasonCode };
       }
     }
     this.#sequence += 1;

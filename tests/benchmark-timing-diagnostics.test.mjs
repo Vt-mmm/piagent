@@ -819,5 +819,5 @@ test("session wiring clears deferred stdout on command rejection and before late
   const sessionTraversal = wiring.indexOf("walkJsonl(sessionRoot)");
   assert.ok(sessionTraversal > 0);
   assert.ok(finish < sessionTraversal);
-  assert.ok(finish < wiring.indexOf("codexCollector.finish()"));
+  assert.ok(finish < wiring.indexOf("codexCollector.finish({ processExitCode: agent.code })"));
 });

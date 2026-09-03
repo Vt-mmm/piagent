@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"thread-command-error"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"command-1","type":"command_execution","command":"node --test","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"command-1","type":"command_execution","command":"node --test","aggregated_output":"failed","exit_code":1,"status":"failed"}}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"Tests failed."}}
+{"type":"turn.completed","usage":{"input_tokens":60,"cached_input_tokens":10,"output_tokens":8,"reasoning_output_tokens":2}}

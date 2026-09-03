@@ -134,20 +134,21 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     taskPending.complete("revision_task_pending", "pending");
 
     const settlements = observed.filter((event) => event.kind === "operation.settled");
-    assert.deepEqual(settlements.map((event) => event.payload.settlement), ["completed", "blocked", "aborted", "error", "unknown", "unknown"]);
+    assert.deepEqual(settlements.map((event) => event.payload.settlement), ["completed", "blocked", "aborted", "error", "unknown", "completed"]);
+    assert.equal(settlements.find((event) => event.payload.operationRef === "operation_settlement_task-pending")?.payload.taskStatus,
+      "pending");
     assert.equal(settlements.filter((event) => event.payload.operationRef === "operation_settlement_completed").length, 1);
     assert.deepEqual(observed.filter((event) => event.kind === "message.completed")
-      .map((event) => event.payload.operationRef), ["operation_settlement_completed"]);
+      .map((event) => event.payload.operationRef), ["operation_settlement_completed", "operation_settlement_task-pending"]);
     assert.equal(settlements.find((event) => event.payload.settlement === "blocked")?.payload.reasonCode,
       "completion-gate-not-approved");
     assert.equal(settlements.find((event) => event.payload.settlement === "aborted")?.payload.reasonCode, "operation-aborted");
     assert.equal(settlements.find((event) => event.payload.settlement === "error")?.payload.reasonCode, "operation-failed");
     assert.equal(settlements.find((event) => event.payload.settlement === "unknown")?.payload.reasonCode,
       "operation-settlement-unknown");
-    assert.equal(settlements.find((event) => event.payload.operationRef === "operation_settlement_task-pending")?.payload.reasonCode,
-      "task-completion-pending");
+    assert.equal(settlements.find((event) => event.payload.operationRef === "operation_settlement_task-pending")?.payload.reasonCode, null);
     assert.equal(observed.some((event) => event.kind === "message.completed"
-      && event.payload.operationRef === "operation_settlement_task-pending"), false);
+      && event.payload.operationRef === "operation_settlement_task-pending"), true);
     for (const event of observed) {
       const validation = validateFixture(registry, "gateway-protocol-v1", event);
       assert.equal(validation.valid, true, validation.errors);
@@ -164,10 +165,11 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     stream.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: answer } });
     stream.observe({ type: "message_end", message: { role: "assistant", stopReason: "stop",
       content: [{ type: "text", text: answer }] } });
-    stream.complete("revision_visible_refusal");
+    stream.complete("revision_visible_refusal", "completed", "refused");
 
     assert.deepEqual(observed.map((event) => event.kind), ["message.delta", "message.completed", "operation.settled"]);
     assert.equal(observed.at(-1).payload.settlement, "completed");
+    assert.equal(observed.at(-1).payload.taskStatus, "refused");
     assert.equal(observed.at(-1).payload.reasonCode, null);
   });
 
@@ -436,8 +438,16 @@ watchdog.start((reason) => process.stdout.write(reason));`;
         } };
     };
 
-    let ordinaryEvidenceCalls = 0;
+    const taskTemplate = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals/fixtures/task-contract.valid.json"), "utf8"));
+    let ordinaryEvidenceCalls = 0, ordinarySettlementCalls = 0;
     const ordinary = { ...info(root, "ordinary-settlement.jsonl"), cwd, id: "ordinary-settlement-session" };
+    const ordinaryTask = writeTaskContract(cwd, { ...taskTemplate, taskId: "ordinary-settlement-task",
+      taskRunId: "ordinary-settlement-task-run", sessionId: ordinary.id, sessionName: "Ordinary settlement",
+      trace: { outcome: "pending", recordedAt: new Date().toISOString() } });
+    bindSessionTask(cwd, ordinary.id, ordinaryTask.sessionName, ordinaryTask);
+    t.after(registerIndependentAcceptanceProvider(cwd, ordinaryTask, { read: () => ({ entries: [] }),
+      webUiSettlementApplicability: () => "not-applicable",
+      async settleWebUi() { ordinarySettlementCalls += 1; throw new Error("ordinary-settlement-must-not-run"); } }));
     const ordinaryEvents = new GatewayEventStore(), ordinaryObserved = [];
     ordinaryEvents.subscribe(event => ordinaryObserved.push(event));
     const ordinarySupervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_ordinary_settlement", key,
@@ -450,18 +460,20 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     await waitFor(() => ordinaryObserved.some(event => event.kind === "operation.settled"
       && event.payload.operationRef === ordinaryStarted.operationRef));
     assert.equal(ordinaryEvidenceCalls, 0);
+    assert.equal(ordinarySettlementCalls, 0);
     assert.equal(ordinaryObserved.find(event => event.kind === "operation.settled")?.payload.settlement, "completed");
+    assert.equal(ordinaryObserved.find(event => event.kind === "operation.settled")?.payload.taskStatus, "pending");
     assert.equal(ordinaryObserved.filter(event => event.kind === "message.completed").length, 1);
     await ordinarySupervisor.close();
 
     const composite = { ...info(root, "composite-settlement.jsonl"), cwd, id: "composite-settlement-session" };
-    const taskTemplate = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals/fixtures/task-contract.valid.json"), "utf8"));
     const task = writeTaskContract(cwd, { ...taskTemplate, taskId: "composite-settlement-task",
       taskRunId: "composite-settlement-task-run", sessionId: composite.id, sessionName: "Composite settlement",
       trace: { outcome: "pending", recordedAt: new Date().toISOString() } });
     bindSessionTask(cwd, composite.id, task.sessionName, task);
     let compositeEvidenceCalls = 0, settlementCalls = 0;
     const unregister = registerIndependentAcceptanceProvider(cwd, task, { read: () => ({ entries: [] }),
+      webUiSettlementApplicability: () => "composite",
       async settleWebUi(_task, input) { settlementCalls += 1; await input.evidence();
         return { status: "blocked", reason: "fixture composite settlement blocked" }; } });
     t.after(unregister);
@@ -480,7 +492,8 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(settlementCalls, 1); assert.equal(compositeEvidenceCalls, 1);
     const terminal = compositeObserved.find(event => event.kind === "operation.settled"
       && event.payload.operationRef === compositeStarted.operationRef);
-    assert.equal(terminal?.payload.settlement, "error");
+    assert.equal(terminal?.payload.settlement, "blocked");
+    assert.equal(terminal?.payload.taskStatus, "pending");
     assert.equal(terminal?.payload.reasonCode, "composite-settlement-blocked");
     assert.equal(compositeObserved.some(event => event.kind === "message.completed"
       && event.payload.operationRef === compositeStarted.operationRef), false);

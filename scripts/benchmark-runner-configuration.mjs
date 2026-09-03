@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { BENCHMARK_TRANSPORT_CIRCUIT_POLICY } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { benchmarkEnvironmentPolicy } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
-import { benchmarkCommandIdentity } from "../packages/piagent-core/benchmark/benchmark-runtime-identity.js";
+import { benchmarkCommandIdentity, benchmarkStockCodexIdentity } from "../packages/piagent-core/benchmark/benchmark-runtime-identity.js";
 import { REGISTERED_BENCHMARK_VERIFIER_IDS
 } from "../packages/piagent-core/benchmark/benchmark-suite-identity.js";
 import { scopedBrokerSourceClosureSha256, scopedCommonRuntimeClosureIdentity,
@@ -92,7 +92,7 @@ export function applyRegisteredMeasurementOptions(options, registeredMeasurement
   Object.assign(options, { registeredMeasurement: registeredMeasurement.manifestOrigin,
     suite: payload.baseSuiteId, surfaces: [...payload.matrix.surfaces], model: payload.resources.model,
     thinking: payload.resources.thinking, serviceTier: payload.resources.requestedServiceTier,
-    codexMode: "controlled", piagentTreatment: payload.treatment, repeats: payload.matrix.repeats,
+    codexMode: "controlled", codexBaseline: "controlled-custom", piagentTreatment: payload.treatment, repeats: payload.matrix.repeats,
     infrastructureRetries: payload.resources.infrastructureRetries, timeoutSeconds: payload.resources.timeoutSeconds,
     stopAfterFailedPair: false, measurementOnly: false });
   return true;
@@ -112,10 +112,11 @@ export function registeredMeasurementBinding(registeredMeasurement) {
 }
 
 export function benchmarkRuntimeCommands({ productionFinalizationOnly, resumeManifest, surfaces,
-  piCommand, codexCommand, dockerCommand, cwd, nodeCommand = process.execPath }) {
+  piCommand, codexCommand, codexBaseline, dockerCommand, cwd, nodeCommand = process.execPath }) {
   if (productionFinalizationOnly) return frozenRuntimeCommandsForFinalization(resumeManifest, surfaces);
   return { pi: benchmarkCommandIdentity(piCommand, { cwd }),
-    codex: surfaces.includes("codex-cli") ? benchmarkCommandIdentity(codexCommand, { cwd }) : null,
+    codex: surfaces.includes("codex-cli") ? (codexBaseline === "stock"
+      ? benchmarkStockCodexIdentity(codexCommand, { cwd }) : benchmarkCommandIdentity(codexCommand, { cwd })) : null,
     ...(dockerCommand ? { docker: benchmarkCommandIdentity(dockerCommand,
       { cwd, fullPackageClosure: false }) } : {}),
     node: benchmarkCommandIdentity(nodeCommand), git: benchmarkCommandIdentity("git"),
@@ -140,7 +141,7 @@ export function benchmarkMeasurementConfiguration({ bootstrapMetadata, candidate
       : bootstrapMetadata.codexCredential?.identity ?? null,
     rootSeedDigest, surfaces: options.surfaces, model: options.model ?? null,
     thinking: options.thinking ?? null, serviceTier: options.serviceTier ?? null,
-    codexMode: options.codexMode, piagentTreatment: options.piagentTreatment,
+    codexMode: options.codexMode, codexBaseline: options.codexBaseline, piagentTreatment: options.piagentTreatment,
     allowPiAuthWriteback: options.allowPiAuthWriteback,
     piCredentialVaultId: bootstrapMetadata.piAgentHome.vaultId, timeoutSeconds: options.timeoutSeconds,
     infrastructureRetries: options.infrastructureRetries, retryDelaySeconds: options.retryDelaySeconds,

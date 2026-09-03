@@ -295,6 +295,7 @@ export function finalizeBenchmarkRun(context) {
       piVersion: runtime.piVersion,
       codexVersion: runtime.codexVersion ?? null,
       codexMode: options.surfaces.includes("codex-cli") ? options.codexMode : null,
+      codexBaseline: options.surfaces.includes("codex-cli") ? options.codexBaseline : null,
       codexAuth: runtime.codexAuth ?? null,
       codexIsolation: options.surfaces.includes("codex-cli")
         ? options.codexMode === "controlled" ? "per-session-temporary-home" : "operator-home"
@@ -338,7 +339,7 @@ export function finalizeBenchmarkRun(context) {
     ...comparison
   });
   report.ledger = ledgerBinding;
-  applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, surfaces: options.surfaces, measurementOnly: report.environment.measurementOnly });
+  applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, codexBaseline: options.codexBaseline, surfaces: options.surfaces, measurementOnly: report.environment.measurementOnly });
   const reportLedger = inspectBenchmarkLedger(ledgerPath);
   assertBenchmarkLedgerBinding(ledgerBinding, reportLedger.binding, "benchmark report ledger");
   validateBenchmarkLedgerPrefix(reportLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest, manifest.verificationPlan?.identity));

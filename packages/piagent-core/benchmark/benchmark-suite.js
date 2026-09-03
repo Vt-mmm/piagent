@@ -31,7 +31,7 @@ const RELEASE_GATE_FIELDS = new Set([
   "maximumSubagentTrafficShare", "requireProviderFreeEvidence", "requireFastServiceTier",
   "maximumAllAttemptPooledFreshTokenRatio", "requireCampaignAccounting", "efficiencyProtocol"
 ]);
-const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode", "serviceTier"]);
+const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode", "codexBaseline", "serviceTier"]);
 const SERVICE_TIERS = new Set(["default", "fast"]);
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const SCENARIO_KINDS = new Set(["source-change", "read-only", "safety-refusal"]);
@@ -255,6 +255,9 @@ export function benchmarkSuiteValidationErrors(input) {
       }
       if (!THINKING_LEVELS.has(contract.thinking)) errors.push("executionContract.thinking is invalid");
       if (contract.codexMode !== "controlled") errors.push("executionContract.codexMode must be controlled");
+      if (contract.codexBaseline !== undefined && !["stock", "controlled-custom"].includes(contract.codexBaseline)) {
+        errors.push("executionContract.codexBaseline must be stock or controlled-custom");
+      }
       if (contract.serviceTier !== undefined && !SERVICE_TIERS.has(contract.serviceTier)) {
         errors.push("executionContract.serviceTier must be default or fast");
       }
@@ -320,6 +323,22 @@ export function benchmarkSuiteValidationErrors(input) {
     if (!Number.isFinite(input.releaseGate?.maximumAllAttemptPooledFreshTokenRatio)
       || input.releaseGate.maximumAllAttemptPooledFreshTokenRatio > 0.65) {
       errors.push("production-v2 requires an all-attempt pooled fresh-token ratio at or below 0.65");
+    }
+  }
+  if (input.id === "production-v3") {
+    if (input.executionContract?.codexMode !== "controlled") {
+      errors.push("production-v3 requires executionContract.codexMode controlled");
+    }
+    if (input.executionContract?.codexBaseline !== "stock") {
+      errors.push("production-v3 requires executionContract.codexBaseline stock");
+    }
+    if (input.assurance?.claimTier !== "public-regression"
+      || input.assurance?.familyDisjointSplit !== false) {
+      errors.push("production-v3 requires the public-regression non-family-disjoint claim boundary");
+    }
+    if (input.matrixContract?.familyCount !== 9 || input.matrixContract?.variantsPerFamily !== 3
+      || input.matrixContract?.repeatsPerVariant !== 2 || input.matrixContract?.expectedSessions !== 108) {
+      errors.push("production-v3 requires the exact 9-family, 3-variant, 2-repeat, 2-surface matrix");
     }
   }
   if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && input.releaseGate?.requireFullSuiteForClaim !== true) {

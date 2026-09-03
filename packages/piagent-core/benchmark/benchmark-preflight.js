@@ -3,6 +3,8 @@ import {
   codexProcessEnvironment,
   controlledCodexFeatures
 } from "./benchmark-runtime.js";
+import { codexModelName } from "./benchmark-codex.js";
+import { verifyBenchmarkCommandIdentity } from "./benchmark-runtime-identity.js";
 
 function fail(message) {
   const error = new Error(message);
@@ -18,13 +20,22 @@ async function checkedVersion(runCommand, packageRoot, command, args, label, env
   return result.stdout.trim();
 }
 
-export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment, codexCommand, gitCommand, surfaces, codexMode, codexRuntime, serviceTier }) {
+export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment, codexCommand,
+  codexCommandIdentity, gitCommand, surfaces, codexBaseline = "stock", codexMode, codexRuntime, model, serviceTier }) {
+  if (surfaces.includes("codex-cli") && codexBaseline === "stock") {
+    if (codexCommandIdentity?.installationClosure?.kind !== "stock-codex-installation-v1") {
+      fail("Stock Codex installation closure is missing or unsupported");
+    }
+    try { verifyBenchmarkCommandIdentity(codexCommandIdentity, "stock Codex", { fullPackageClosure: true }); }
+    catch (error) { fail(`Stock Codex installation closure failed preflight: ${error.message}`); }
+  }
   const gitVersion = await checkedVersion(runCommand, packageRoot, gitCommand, ["--version"], "git");
   const piVersion = await checkedVersion(runCommand, packageRoot, piCommand, ["--version"], "pi", piEnvironment);
   let codexVersion;
   let codexAuth;
   let codexDisabledFeatures = [];
   let codexFastModeFeature = null;
+  let codexCapability = null;
   if (surfaces.includes("codex-cli")) {
     const codexEnv = codexProcessEnvironment(codexRuntime);
     codexVersion = await checkedVersion(runCommand, packageRoot, codexCommand, ["--version"], "codex", codexEnv);
@@ -43,9 +54,32 @@ export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, p
       if (serviceTier === "fast" && !codexFastModeFeature) {
         fail("Codex CLI does not expose the fast_mode feature required by this benchmark; update Codex CLI");
       }
+      if (codexBaseline === "stock" && !available.has("code_mode_host")) {
+        fail("Stock Codex CLI does not expose its required code_mode_host capability");
+      }
+    }
+    const execHelp = await checkedVersion(runCommand, packageRoot, codexCommand, ["exec", "--help"], "codex exec capability", codexEnv);
+    codexCapability = {
+      schemaVersion: 1,
+      providerFree: true,
+      model: codexModelName(model),
+      jsonl: /--json\b/.test(execHelp),
+      workspaceWrite: /workspace-write/.test(execHelp) && /--sandbox\b/.test(execHelp),
+      ignoreUserConfig: /--ignore-user-config\b/.test(execHelp),
+      ignoreRules: /--ignore-rules\b/.test(execHelp),
+      codeModeHost: codexBaseline === "stock"
+        ? codexCommandIdentity.installationClosure.files.some(file => file.role === "code-mode-host")
+        : null
+    };
+    if (!codexCapability.jsonl || !codexCapability.workspaceWrite
+      || !codexCapability.ignoreUserConfig || !codexCapability.ignoreRules || codexCapability.codeModeHost === false) {
+      fail("Codex CLI lacks a provider-free capability required by the benchmark execution contract");
     }
   }
   return { gitVersion, piVersion, codexVersion, codexAuth,
+    codexBaseline: surfaces.includes("codex-cli") ? codexBaseline : null,
+    codexInstallationDigest: codexCommandIdentity?.installationClosure?.contentDigest ?? null,
+    codexCapability,
     codexCredentialPolicy: codexRuntimeCredentialPolicy(codexRuntime),
     codexDisabledFeatures, codexFastModeFeature };
 }
@@ -60,7 +94,12 @@ function publicCommandIdentity(value) {
       name: value.packageClosure.name,
       version: value.packageClosure.version,
       contentDigest: value.packageClosure.tree?.contentDigest ?? null
-    } : null
+    } : null,
+    ...(value.installationClosure ? { installation: {
+      kind: value.installationClosure.kind,
+      fileCount: value.installationClosure.files.length,
+      contentDigest: value.installationClosure.contentDigest
+    } } : {})
   };
 }
 
@@ -94,6 +133,7 @@ export function benchmarkPreflightReceipt({
       thinking: options.thinking ?? null,
       serviceTier: options.serviceTier ?? null,
       codexMode: options.codexMode,
+      codexBaseline: options.codexBaseline ?? null,
       piagentTreatment: options.piagentTreatment,
       repeats: options.repeats,
       timeoutSeconds: options.timeoutSeconds,
@@ -111,6 +151,9 @@ export function benchmarkPreflightReceipt({
       piVersion: runtime.piVersion,
       codexVersion: runtime.codexVersion ?? null,
       codexAuth: runtime.codexAuth ?? null,
+      codexBaseline: runtime.codexBaseline ?? null,
+      codexInstallationDigest: runtime.codexInstallationDigest ?? null,
+      codexCapability: runtime.codexCapability ?? null,
       codexCredentialPolicy: runtime.codexCredentialPolicy ?? null,
       codexDisabledFeatures: runtime.codexDisabledFeatures,
       codexFastModeFeature: runtime.codexFastModeFeature ?? null,

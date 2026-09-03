@@ -78,6 +78,10 @@ test("all 108 poor outcomes and every attempt remain measured, sealed and explic
   const { campaign, runRoot } = campaignFixture(t);
   const runs = failedRecords();
   assert.equal(runs.length, 108);
+  Object.assign(runs[0], {
+    failureClass: "agent_task_failure", countsTowardQuality: true,
+    countsTowardUsage: true, runValidity: "valid"
+  });
   // One exact failed infrastructure attempt precedes its accepted completion.
   const first = runs[0];
   first.infrastructureAttempt = first.infrastructureAttempts = 2;
@@ -123,7 +127,11 @@ test("all 108 poor outcomes and every attempt remain measured, sealed and explic
   assert.equal(report.comparison.claimEligibility.generalizationClaimAllowed, false);
   assert.match(renderBenchmarkText(report), /108 sessions/);
   assert.match(renderBenchmarkText(report), /Comparison purpose: measurement-only/);
+  assert.match(renderBenchmarkText(report), /Failure classes: agent_task_failure=1/);
+  assert.match(renderBenchmarkText(report), /Outcome accounting: quality 1\/1 \| usage 1\/1 \| validity valid=1/);
   assert.match(renderBenchmarkHtml(report), /measurement-only-execution-no-release-claim/);
+  assert.match(renderBenchmarkHtml(report), /<th>Failure class<\/th>/);
+  assert.match(renderBenchmarkHtml(report), /<td>agent_task_failure<\/td><td>yes<\/td><td>yes<\/td><td>valid<\/td>/);
   const manifest = { schemaVersion: 1, measurementOnly: true, campaignEvidence: sealed };
   const outcome = finalizeProductionCampaignClaimOutcome({ productionCampaign: campaign, manifest, report, runRoot });
   assert.equal(outcome.status, "no-claim");

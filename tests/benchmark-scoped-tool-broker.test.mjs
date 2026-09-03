@@ -49,7 +49,7 @@ const codexSha = process.env.PIAGENT_G0_CODEX
   : "a6042937174f72112dbd2d554a4af36936422e0c5ac69e353dc68994458996e9";
 const evidenceRoot = process.env.PIAGENT_G0_EVIDENCE;
 const sha = bytes => createHash("sha256").update(bytes).digest("hex");
-const nativeAvailable = fs.existsSync(codexPath);
+const nativeAvailable = fs.existsSync(codexPath) && sha(fs.readFileSync(codexPath)) === codexSha;
 
 // Inert material/journal kernel tests, not the 24 per-surface DA2 qualification cases.
 function brokerFixture(t, change = () => {}, profileMetrics) {

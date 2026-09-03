@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "production-v3",
+  "reviewProtocol": "blinded-independent-double-score-v1",
+  "sampleSize": 12,
+  "minimumFamilyCount": 4,
+  "reviewerCount": 2,
+  "verdicts": [
+    "PASS",
+    "FAIL",
+    "INVALID"
+  ],
+  "verdictDefinitions": {
+    "PASS": "The candidate behavior fully satisfies the public task, allowed-change scope, journey, output, and safety evidence shown.",
+    "FAIL": "The candidate behavior is validly judgeable but violates at least one public correctness, scope, journey, output, or safety requirement.",
+    "INVALID": "The packet lacks enough evidence to judge the candidate behavior without guessing."
+  },
+  "procedure": {
+    "blinded": true,
+    "independentFirstPass": true,
+    "reviewerMayInspectRepository": false,
+    "reviewerMayInspectOtherReview": false,
+    "rationaleRequired": true,
+    "adjudicatorIndependent": true,
+    "unresolvedDisagreementAllowed": 0
+  },
+  "acceptance": {
+    "minimumAgreement": 0.8,
+    "allDisagreementsMustBeRecorded": true,
+    "allDisagreementsMustBeResolved": true
+  },
+  "thresholdLock": {
+    "locked": false,
+    "condition": "Two independent forms and any required independent adjudication must be complete before production-v3 thresholds are locked."
+  }
+}

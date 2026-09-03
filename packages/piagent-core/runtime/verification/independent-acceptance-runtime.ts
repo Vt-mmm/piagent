@@ -17,14 +17,12 @@ import { createCompositeCodeChildCollector, createRuntimeContractRunner } from "
 import { capturePersistedAssistantResponse, commitCompositeWebUiDelivery, persistedAssistantResponseObservation, webUiDeliveryObservation } from "./composite-session-persistence.ts";
 import { openScopedMediationEvidence, scopedMediationFactObservation } from "./composite-scoped-mediation.ts";
 import { compositeTaskPublicationDigest, openCompositeTaskPublicationStore, recoverCompositeTaskPublication } from "./composite-task-publication.ts";
-import { assertCompositeCriterion, compositePhaseHeadDigest, compositeTaskContractDigest, projectCompositeLifecycle } from "./composite-runtime-binding.ts";
+import { assertCompositeCriterion, compositePhaseHeadDigest, compositeSettlementTaskStatus, compositeTaskContractDigest, projectCompositeLifecycle } from "./composite-runtime-binding.ts";
 import type { RuntimeSessionState } from "../session/runtime-state.ts";
 import type { CompletionPreparation } from "./completion-preparation.ts";
-type ResponseObservation = { origin: "assistant"; bytes: string };
-type DeferredCompletionFinalizer = { preflight: () => object | false; publication: (capability: object) => object | false; finalize: (capability: object) => boolean };
+type ResponseObservation = { origin: "assistant"; bytes: string }; type DeferredCompletionFinalizer = { preflight: () => object | false; publication: (capability: object) => object | false; finalize: (capability: object) => boolean };
 type Options = { state: RuntimeSessionState; installedRoot: string; configPath?: string;
-  activeTask: (ctx: ExtensionContext) => TaskContract | undefined; authorizeSourceRead: (ctx: ExtensionContext, sourcePath: string) => boolean;
-  writeTask?: (cwd: string, task: TaskContract) => TaskContract };
+  activeTask: (ctx: ExtensionContext) => TaskContract | undefined; authorizeSourceRead: (ctx: ExtensionContext, sourcePath: string) => boolean; writeTask?: (cwd: string, task: TaskContract) => TaskContract };
 type CompositeItem = { contract: any; plan: any; declarations: any; producer: any; authority: any;
   receipts: Map<string, any>; codeChildren: Map<string, ReturnType<typeof createCompositeCodeChildCollector>>; preparation?: object;
   aggregatePreparation?: any; aggregate?: object; publication?: object };
@@ -254,6 +252,7 @@ export class IndependentAcceptanceRuntime {
             entries.push({ ...item.contract, assessment: issue(item.contract, assessment) }); }
           return { entries, projectVerificationDigest };
         },
+        webUiSettlementApplicability: () => owned.hasComposite ? "composite" : "not-applicable",
         settleWebUi: (_projected: TaskContract, input: any) => this.#settleWebUi(ctx, task, owned, input)
       });
       owned.dispose = () => { unregister(); for (const item of owned.composites) {
@@ -491,7 +490,8 @@ export class IndependentAcceptanceRuntime {
       for (const { item } of captures) item.authority.runtime.completeTask({ aggregate: item.aggregate,
         publication: item.publication });
       publicationStore.complete(publicationRecord);
-      owned.compositeReason = undefined; return { status: "settled" };
+      const taskStatus = compositeSettlementTaskStatus(owned.composites.flatMap(item => item.contract.facts.map((fact: any) => fact.kind)));
+      owned.compositeReason = undefined; return { status: "settled", taskStatus };
     } catch {
       return blocked("composite settlement unavailable");
     }

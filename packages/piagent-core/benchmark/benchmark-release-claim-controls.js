@@ -2,7 +2,7 @@ import { evaluateAllAttemptPooledFreshEfficiency } from "./benchmark-all-attempt
 import { productionCampaignAttemptCoverage, productionCampaignExpectedAttempts } from "./benchmark-campaign.js";
 import { summarizeBenchmarkServiceTierEvidence } from "./benchmark-service-tier.js";
 
-const CANONICAL_PRODUCTION_SUITE_IDS = new Set(["production-v1", "production-v2"]);
+const CANONICAL_PRODUCTION_SUITE_IDS = new Set(["production-v1", "production-v2", "production-v3"]);
 
 export function canonicalProductionSuiteId(suiteId) {
   return CANONICAL_PRODUCTION_SUITE_IDS.has(suiteId);
@@ -44,7 +44,7 @@ export function summarizeBenchmarkReleaseClaimControls({
     ? suite.schemaVersion === 2 && Number.isFinite(maximumFreshTokenRatioUpper95)
       && maximumFreshTokenRatioUpper95 <= 0.8 && requiresFullSuite && requiresProviderWireSurface
       && requiresCausalContextReceipt
-      && (!canonicalProductionSuiteId(suite.id) || suite.id !== "production-v2" || requiresCampaignAccounting)
+      && (!canonicalProductionSuiteId(suite.id) || suite.id === "production-v1" || requiresCampaignAccounting)
       && (!Number.isFinite(maximumAllAttemptPooledFreshTokenRatio)
         || maximumAllAttemptPooledFreshTokenRatio <= 0.65)
       && ["successful-pair-family-ratio", "failure-aware-family-ratio", "fixed-workload-family-ratio"].includes(primaryEfficiencyEstimand)

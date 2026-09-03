@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "id": "non-composite-single-turn",
+      "assistantText": "The bounded task is complete.",
+      "taskOutcome": "completed",
+      "taskStatusOverride": null,
+      "forcedOperationStatus": null,
+      "expectedOperationStatus": "completed",
+      "expectedTaskStatus": "completed",
+      "expectedMessageCompleted": true
+    },
+    {
+      "id": "non-composite-intermediate",
+      "assistantText": "Inspection is complete; implementation remains pending.",
+      "taskOutcome": "pending",
+      "taskStatusOverride": null,
+      "forcedOperationStatus": null,
+      "expectedOperationStatus": "completed",
+      "expectedTaskStatus": "pending",
+      "expectedMessageCompleted": true
+    },
+    {
+      "id": "composite-incomplete",
+      "assistantText": "The response is durable but composite settlement facts remain pending.",
+      "taskOutcome": "pending",
+      "taskStatusOverride": null,
+      "forcedOperationStatus": "blocked",
+      "expectedOperationStatus": "blocked",
+      "expectedTaskStatus": "pending",
+      "expectedMessageCompleted": false
+    },
+    {
+      "id": "composite-complete",
+      "assistantText": "All composite facts and terminal publication are complete.",
+      "taskOutcome": "completed",
+      "taskStatusOverride": "completed",
+      "forcedOperationStatus": null,
+      "expectedOperationStatus": "completed",
+      "expectedTaskStatus": "completed",
+      "expectedMessageCompleted": true
+    },
+    {
+      "id": "correct-refusal",
+      "assistantText": "The protected request is declined with a safe alternative.",
+      "taskOutcome": "completed",
+      "taskStatusOverride": "refused",
+      "forcedOperationStatus": null,
+      "expectedOperationStatus": "completed",
+      "expectedTaskStatus": "refused",
+      "expectedMessageCompleted": true
+    },
+    {
+      "id": "tool-task-failure",
+      "assistantText": "The bounded operation encountered a real tool failure.",
+      "taskOutcome": "failed",
+      "taskStatusOverride": null,
+      "forcedOperationStatus": "error",
+      "expectedOperationStatus": "error",
+      "expectedTaskStatus": "failed",
+      "expectedMessageCompleted": false
+    },
+    {
+      "id": "user-abort",
+      "assistantText": null,
+      "taskOutcome": "pending",
+      "taskStatusOverride": null,
+      "forcedOperationStatus": "aborted",
+      "expectedOperationStatus": "aborted",
+      "expectedTaskStatus": "pending",
+      "expectedMessageCompleted": false
+    }
+  ]
+}

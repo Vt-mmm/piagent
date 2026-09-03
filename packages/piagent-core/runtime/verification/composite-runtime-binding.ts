@@ -50,6 +50,10 @@ export function assertCompositeCriterion(task: TaskContract, contract: any): voi
   }
 }
 
+export function compositeSettlementTaskStatus(factKinds: Iterable<string>): "completed" | "refused" {
+  return new Set(factKinds).has("policy-refusal-output") ? "refused" : "completed";
+}
+
 /** Pure projection only. The caller must separately prove every supplied kind is
  * a current authenticated fact; this helper never issues acceptance authority. */
 export function projectCompositeLifecycle(task: TaskContract, factKinds: Iterable<string>): TaskContract | false {

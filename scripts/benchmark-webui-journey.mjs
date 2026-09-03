@@ -15,6 +15,7 @@ const PROTOCOL = "piagent-gateway-protocol-v1";
 const OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const TERMINAL_SETTLEMENTS = new Set(["completed", "blocked", "aborted", "error", "unknown"]);
 const EXPECTED_SETTLEMENTS = new Set([...TERMINAL_SETTLEMENTS, "refused"]);
+const TASK_STATUSES = new Set(["pending", "completed", "refused", "failed", "unknown"]);
 const MISMATCH_TRANSCRIPT_TIMEOUT_MS = 1_000;
 
 function opaque(prefix) {
@@ -44,24 +45,26 @@ async function candidateJourneyModules(packageRoot) {
     readOrCreateCatalogKey: profile.readOrCreateCatalogKey, ProjectRegistry: project.ProjectRegistry };
 }
 
-function terminalSettlementOutcome(expectedSettlement, observedSettlement, turnIndex) {
-  if (!EXPECTED_SETTLEMENTS.has(expectedSettlement) || !TERMINAL_SETTLEMENTS.has(observedSettlement)
-    || !Number.isSafeInteger(turnIndex) || turnIndex < 1) {
-    fail("webui-terminal-settlement-outcome-invalid");
-  }
-  if (expectedSettlement === observedSettlement
-    || expectedSettlement === "refused" && observedSettlement === "completed") return null;
+function terminalLifecycleOutcome(input) {
+  const { expectedOperationStatus, observedOperationStatus, expectedTaskStatus, observedTaskStatus, turnIndex } = input ?? {};
+  if (!TERMINAL_SETTLEMENTS.has(expectedOperationStatus) || !TERMINAL_SETTLEMENTS.has(observedOperationStatus)
+    || !TASK_STATUSES.has(expectedTaskStatus) || !TASK_STATUSES.has(observedTaskStatus)
+    || !Number.isSafeInteger(turnIndex) || turnIndex < 1) fail("webui-terminal-lifecycle-outcome-invalid");
+  if (expectedOperationStatus === observedOperationStatus && expectedTaskStatus === observedTaskStatus) return null;
   return {
-    schemaVersion: 1,
-    kind: "terminal-settlement-mismatch",
-    expectedSettlement,
-    observedSettlement,
+    schemaVersion: 2,
+    kind: "terminal-lifecycle-mismatch",
+    expectedOperationStatus,
+    observedOperationStatus,
+    expectedTaskStatus,
+    observedTaskStatus,
     turnIndex
   };
 }
 
 function terminalSettlementError(outcome) {
-  const error = new Error(`webui-turn-${outcome.turnIndex}-${outcome.observedSettlement}-expected-${outcome.expectedSettlement}`);
+  const error = new Error(`webui-turn-${outcome.turnIndex}-operation-${outcome.observedOperationStatus}`
+    + `-expected-${outcome.expectedOperationStatus}-task-${outcome.observedTaskStatus}-expected-${outcome.expectedTaskStatus}`);
   error.code = "BENCHMARK_WEBUI_CANDIDATE_OUTCOME";
   error.candidateOutcome = outcome;
   return error;
@@ -546,7 +549,14 @@ export async function runPiagentWebUiJourney(options) {
       const expectedSettlement = turn.expectedSettlement
         ?? (index === turns.length - 1 ? options.expectedTerminalSettlement : "completed")
         ?? "completed";
-      const candidateOutcome = terminalSettlementOutcome(expectedSettlement, settlement.payload?.settlement, index + 1);
+      if (!EXPECTED_SETTLEMENTS.has(expectedSettlement)) fail("webui-expected-settlement-invalid");
+      const expectedOperationStatus = expectedSettlement === "refused" ? "completed" : expectedSettlement;
+      const expectedTaskStatus = expectedSettlement === "refused" ? "refused"
+        : expectedSettlement === "completed" ? index === turns.length - 1 ? "completed" : "pending"
+          : settlement.payload?.taskStatus;
+      const candidateOutcome = terminalLifecycleOutcome({ expectedOperationStatus,
+        observedOperationStatus: settlement.payload?.settlement, expectedTaskStatus,
+        observedTaskStatus: settlement.payload?.taskStatus, turnIndex: index + 1 });
       if (candidateOutcome) {
         const durable = await readDurableTurnIfPresent(browser, receipt.sessionRef, turn.message, operationRef,
           messageRequestId, deadline);
@@ -561,6 +571,10 @@ export async function runPiagentWebUiJourney(options) {
           ...(recovery ? { recovery } : {}),
           ...(abortReceipt ? { abortResult: abortReceipt.resultCode } : {}),
           expectedSettlement,
+          expectedOperationStatus,
+          expectedTaskStatus,
+          operationStatus: settlement.payload.settlement,
+          taskStatus: settlement.payload.taskStatus,
           settlement: settlement.payload.settlement,
           outcome: candidateOutcome,
           assistantText: durable?.assistantText ?? "",
@@ -586,6 +600,10 @@ export async function runPiagentWebUiJourney(options) {
         ...(recovery ? { recovery } : {}),
         ...(abortReceipt ? { abortResult: abortReceipt.resultCode } : {}),
         expectedSettlement,
+        expectedOperationStatus,
+        expectedTaskStatus,
+        operationStatus: settlement.payload.settlement,
+        taskStatus: settlement.payload.taskStatus,
         settlement: settlement.payload.settlement,
         durableUserIndex: durable.userIndex,
         durableAssistantIndex: durable.assistantIndex,
@@ -630,5 +648,5 @@ export {
   eventSummary,
   launchCapability,
   recoverOperationFromEvents,
-  terminalSettlementOutcome
+  terminalLifecycleOutcome
 };

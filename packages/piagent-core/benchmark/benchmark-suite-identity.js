@@ -8,7 +8,8 @@ export const BUILT_IN_BENCHMARK_SUITE_IDS = Object.freeze([
   "e2-framework-v1",
   "deep-logic-v1",
   "production-v1",
-  "production-v2"
+  "production-v2",
+  "production-v3"
 ]);
 
 const reservedSuiteIds = new Set(BUILT_IN_BENCHMARK_SUITE_IDS);

@@ -61,6 +61,45 @@ function stableExecutable(file, label) {
   }
 }
 
+function installationExecutable(root, relativePath, role) {
+  const selected = path.join(root, relativePath);
+  let resolved;
+  let observed;
+  try {
+    const selectedStat = fs.lstatSync(selected);
+    if (selectedStat.isSymbolicLink()) fail(`Stock Codex required installation file cannot be a symlink: ${relativePath}`);
+    resolved = fs.realpathSync(selected);
+    if (path.dirname(resolved) !== root) fail(`Stock Codex required installation file escapes its root: ${relativePath}`);
+    observed = stableExecutable(resolved, relativePath);
+  } catch (error) {
+    fail(`Cannot inspect stock Codex required installation file ${relativePath}: ${error.message}`);
+  }
+  const executable = (observed.stat.mode & 0o111n) !== 0n;
+  if (!executable) fail(`Stock Codex required installation file is not executable: ${relativePath}`);
+  return {
+    role,
+    relativePath,
+    resolvedPath: resolved,
+    size: observed.bytes.length,
+    executable,
+    contentDigest: crypto.createHash("sha256").update(observed.bytes).digest("hex")
+  };
+}
+
+function stockCodexInstallationClosure(resolvedPath) {
+  const root = path.dirname(resolvedPath);
+  const files = [
+    installationExecutable(root, path.basename(resolvedPath), "codex-cli"),
+    installationExecutable(root, "codex-code-mode-host", "code-mode-host")
+  ];
+  const binding = { kind: "stock-codex-installation-v1", root, files };
+  return {
+    schemaVersion: 1,
+    ...binding,
+    contentDigest: crypto.createHash("sha256").update(JSON.stringify(binding)).digest("hex")
+  };
+}
+
 export function benchmarkCommandIdentity(requested, { cwd = process.cwd(), env = process.env, fullPackageClosure = true } = {}) {
   const selectedPath = executableCandidate(requested, cwd, env);
   let resolvedPath;
@@ -92,6 +131,11 @@ export function benchmarkCommandIdentity(requested, { cwd = process.cwd(), env =
   };
 }
 
+export function benchmarkStockCodexIdentity(requested, options = {}) {
+  const identity = benchmarkCommandIdentity(requested, options);
+  return { ...identity, installationClosure: stockCodexInstallationClosure(identity.resolvedPath) };
+}
+
 export function assertBenchmarkCommandIdentity(expected, observed, label, { fullPackageClosure = true } = {}) {
   const valid = (value) => value?.schemaVersion === 1
     && value.kind === "regular"
@@ -113,10 +157,15 @@ export function assertBenchmarkCommandIdentity(expected, observed, label, { full
     assertBenchmarkTreeStatIdentity(expected.packageClosure.stat, observed.packageClosure?.stat, `${label} command package closure`);
     if (fullPackageClosure) assertBenchmarkTreeIdentity(expected.packageClosure.tree, observed.packageClosure?.tree, `${label} command package closure`);
   }
+  if (JSON.stringify(expected.installationClosure ?? null) !== JSON.stringify(observed.installationClosure ?? null)) {
+    fail(`${label} command installation closure changed`);
+  }
   return observed;
 }
 
 export function verifyBenchmarkCommandIdentity(identity, label, options = {}) {
-  const observed = benchmarkCommandIdentity(identity.resolvedPath, { fullPackageClosure: options.fullPackageClosure === true });
+  const observed = identity?.installationClosure?.kind === "stock-codex-installation-v1"
+    ? benchmarkStockCodexIdentity(identity.resolvedPath, { fullPackageClosure: options.fullPackageClosure === true })
+    : benchmarkCommandIdentity(identity.resolvedPath, { fullPackageClosure: options.fullPackageClosure === true });
   return assertBenchmarkCommandIdentity(identity, observed, label, options);
 }

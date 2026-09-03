@@ -87,6 +87,7 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput,
           retryable: false
         };
   }
+  const codexOutcome = usage?.codexEventOutcome;
   const providerUnavailable = /\b(?:server(?:s)? (?:are )?(?:currently )?overloaded|temporarily unavailable|service unavailable|try again later)\b/.test(diagnostic);
   const providerFetchFailed = /(?:\bfetch failed\b|\bnetwork(?: request)? (?:error|failed)\b|\bsocket hang up\b|\bconnection (?:reset|closed|terminated)\b|\beconnreset\b|\betimedout\b|\bund_err_[a-z_]+\b)/.test(diagnostic);
   if ((terminalProviderError || agent.code !== 0) && measuredCoreUsage && providerFetchFailed) {
@@ -155,19 +156,38 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput,
           retryable: false
         };
   }
-  const validCandidateOutcome = candidateOutcome?.schemaVersion === 1
+  if (codexOutcome?.runValidity === "valid" && codexOutcome.failureClass && measuredUsage) return undefined;
+  const validLifecycleOutcome = candidateOutcome?.schemaVersion === 2
+    && candidateOutcome.kind === "terminal-lifecycle-mismatch"
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.expectedOperationStatus)
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedOperationStatus)
+    && ["pending", "completed", "refused", "failed", "unknown"].includes(candidateOutcome.expectedTaskStatus)
+    && ["pending", "completed", "refused", "failed", "unknown"].includes(candidateOutcome.observedTaskStatus)
+    && (candidateOutcome.expectedOperationStatus !== candidateOutcome.observedOperationStatus
+      || candidateOutcome.expectedTaskStatus !== candidateOutcome.observedTaskStatus)
+    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
+  const validLegacyOutcome = candidateOutcome?.schemaVersion === 1
     && candidateOutcome.kind === "terminal-settlement-mismatch"
     && ["completed", "blocked", "aborted", "error", "unknown", "refused"].includes(candidateOutcome.expectedSettlement)
     && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedSettlement)
     && candidateOutcome.expectedSettlement !== candidateOutcome.observedSettlement
     && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
+  const validCandidateOutcome = validLifecycleOutcome || validLegacyOutcome;
   if (agent.code !== 0 && validCandidateOutcome && measuredUsage && usage.fresh > 0) return undefined;
-  if (agent.code === 0) return undefined;
   if (/\b(?:provider|safety|policy|refus(?:al|ed|e)|disallowed|not allowed|cannot assist|can't assist|cyber safety)\b/.test(diagnostic)) {
     return measuredCoreUsage
       ? { failure: "provider-policy-refusal-after-measured-usage", class: "provider-policy", usageStatus: measuredStatus, retryable: false }
       : { failure: "provider-policy-refusal-with-usage-unavailable", class: "provider-policy", usageStatus: "unknown-after-provider-start", retryable: false };
   }
+  if (codexOutcome?.runValidity === "invalid_harness") {
+    return {
+      failure: `codex-event-contract-invalid:${(codexOutcome.reasonCodes ?? []).join(",") || "unspecified"}`,
+      class: "harness-contract",
+      usageStatus: measuredUsage ? "measured-but-unaccepted" : "unknown-after-provider-start",
+      retryable: false
+    };
+  }
+  if (agent.code === 0) return undefined;
   if (measuredCoreUsage) return { failure: `agent-exit-${agent.code}-after-measured-usage`, class: "agent-process", usageStatus: measuredStatus, retryable: false };
   return { failure: `agent-exit-${agent.code}-with-usage-unavailable`, class: "unknown-cost", usageStatus: "unknown-after-provider-start", retryable: true };
 }

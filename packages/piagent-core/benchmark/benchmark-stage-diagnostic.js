@@ -133,7 +133,7 @@ export function productionSpendControlValidationErrors(control, {
       || providerFree.requireProductionConfigurationBinding !== true
       || providerFree.requireRunnerAndLaneConfigurationDigests !== true) errors.push("invalid-production-provider-free-evidence-guard");
     const campaign = guards.campaignAccounting;
-    if (suiteId === "production-v2" && (campaign?.requiredBeforeFirstPaidSession !== true
+    if (["production-v2", "production-v3"].includes(suiteId) && (campaign?.requiredBeforeFirstPaidSession !== true
       || campaign.requireSingleOutputResumeLineage !== true
       || campaign.includeEveryProviderStartedAttempt !== true
       || campaign.unknownUsageFailsClosed !== true)) errors.push("invalid-production-campaign-accounting-guard");

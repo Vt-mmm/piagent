@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thread-no-message"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"change-1","type":"file_change","status":"completed","changes":[{"path":"src/value.js","kind":"update"}]}}
+{"type":"turn.completed","usage":{"input_tokens":30,"cached_input_tokens":5,"output_tokens":4,"reasoning_output_tokens":1}}

@@ -37,6 +37,25 @@ function workflowGapSummary(runs) {
   return topToolSummary(gaps);
 }
 
+function outcomeContractSummary(runs) {
+  const outcomeRuns = (runs ?? []).filter((run) => ["failureClass", "countsTowardQuality",
+    "countsTowardUsage", "runValidity"].every((field) => Object.hasOwn(run, field)));
+  if (outcomeRuns.length === 0) return null;
+  const counts = (field) => Object.entries(outcomeRuns.reduce((result, run) => {
+    const value = String(run[field]);
+    result[value] = (result[value] ?? 0) + 1;
+    return result;
+  }, {})).sort(([left], [right]) => left.localeCompare(right))
+    .map(([value, count]) => `${value}=${count}`).join(", ");
+  return {
+    runs: outcomeRuns.length,
+    quality: outcomeRuns.filter((run) => run.countsTowardQuality === true).length,
+    usage: outcomeRuns.filter((run) => run.countsTowardUsage === true).length,
+    failureClasses: counts("failureClass"),
+    validity: counts("runValidity")
+  };
+}
+
 function pairedOutcomeSummary(value, candidateLabel, baselineLabel) {
   if (!value) return "n/a";
   return `both ${value.bothPass} | ${candidateLabel}-only ${value.candidateOnlyPass} | ${baselineLabel}-only ${value.baselineOnlyPass} | neither ${value.bothFail}`;
@@ -121,6 +140,7 @@ export function renderBenchmarkText(report) {
   const serviceTier = report.comparison.serviceTierEvidence;
   const campaignEvidence = report.environment.campaignEvidence;
   const priorCampaignHistory = campaignEvidence?.priorCampaignHistory;
+  const outcomeSummary = outcomeContractSummary(report.runs);
   const suiteFailureReasons = (report.comparison.suiteGate?.failureReasons ?? [])
     .map((failure) => `${failure.id}: ${failure.message}`)
     .join("; ");
@@ -139,6 +159,10 @@ export function renderBenchmarkText(report) {
       : []),
     `Suite digest: ${report.environment.suiteDigest ?? "unknown"} | Source: ${report.environment.source?.kind ?? "unknown"}${report.environment.source?.dirty === true ? " (dirty)" : ""}`,
     `Infrastructure: ${report.infrastructure?.attempts ?? report.runCount} attempts | ${report.infrastructure?.retries ?? 0} retries across ${report.infrastructure?.retriedRuns ?? 0} measured runs`,
+    ...(outcomeSummary ? [
+      `Failure classes: ${outcomeSummary.failureClasses}`,
+      `Outcome accounting: quality ${outcomeSummary.quality}/${outcomeSummary.runs} | usage ${outcomeSummary.usage}/${outcomeSummary.runs} | validity ${outcomeSummary.validity}`
+    ] : []),
     "",
     "Surface     Resolved   Task grade    Scope     Quality  Safety  Reliability  Workflow  Efficiency  Overall",
     scoreLine(baselineLabel, baseline),
@@ -272,7 +296,7 @@ export function renderBenchmarkHtml(report) {
   const surfaceEntries = [[baselineSurface, report.surfaces[baselineKey]], [candidateSurface, report.surfaces[candidateKey]]];
   const baselineLabel = surfaceLabel(baselineSurface);
   const candidateLabel = surfaceLabel(candidateSurface);
-  const rows = report.runs.map((run) => `<tr><td>${htmlEscape(run.scenarioId)}</td><td>${htmlEscape(run.category ?? "unspecified")}</td><td>${htmlEscape(run.difficulty ?? "unspecified")}</td><td>${htmlEscape(run.profile ?? "unspecified")}</td><td>${htmlEscape(run.lifecycle ?? "unspecified")}</td><td>${htmlEscape(run.surface)}</td><td>${run.repeat}</td><td>${run.infrastructureRetries ?? 0}</td><td>${run.resolved ? "PASS" : "FAIL"}</td><td>${run.grade?.passed ? "PASS" : "FAIL"}</td><td>${run.scope?.passed ? "PASS" : "FAIL"}</td><td>${display(run.workflow?.score)}</td><td>${htmlEscape((run.workflow?.checks ?? []).filter((check) => !check.passed).map((check) => check.id).join(", ") || "none")}</td><td>${htmlEscape(run.usage?.model ?? "unknown")}</td><td>${htmlEscape(run.usage?.thinkingLevel ?? "unknown")}</td><td>${htmlEscape(run.usage?.usageSource ?? "unknown")}</td><td>${display(run.usage?.input, 0)}</td><td>${display(run.usage?.output, 0)}</td><td>${display(run.usage?.cacheRead, 0)}</td><td>${display(run.usage?.cacheWrite, 0)}</td><td>${display(run.usage?.reasoning, 0)}</td><td>${display(run.usage?.fresh, 0)}</td><td>${display(run.usage?.total, 0)}</td><td>${display(run.usage?.toolCalls, 0)}</td><td>${htmlEscape(topToolSummary(run.usage?.toolNames, 5))}</td><td>${display(run.usage?.cost, 6)}</td><td>${display(run.durationSeconds, 1)}</td><td>${htmlEscape(run.failure ?? "")}</td></tr>`).join("");
+  const rows = report.runs.map((run) => `<tr><td>${htmlEscape(run.scenarioId)}</td><td>${htmlEscape(run.category ?? "unspecified")}</td><td>${htmlEscape(run.difficulty ?? "unspecified")}</td><td>${htmlEscape(run.profile ?? "unspecified")}</td><td>${htmlEscape(run.lifecycle ?? "unspecified")}</td><td>${htmlEscape(run.surface)}</td><td>${run.repeat}</td><td>${run.infrastructureRetries ?? 0}</td><td>${run.resolved ? "PASS" : "FAIL"}</td><td>${run.grade?.passed ? "PASS" : "FAIL"}</td><td>${run.scope?.passed ? "PASS" : "FAIL"}</td><td>${htmlEscape(run.failureClass ?? "n/a")}</td><td>${run.countsTowardQuality === true ? "yes" : run.countsTowardQuality === false ? "no" : "n/a"}</td><td>${run.countsTowardUsage === true ? "yes" : run.countsTowardUsage === false ? "no" : "n/a"}</td><td>${htmlEscape(run.runValidity ?? "n/a")}</td><td>${display(run.workflow?.score)}</td><td>${htmlEscape((run.workflow?.checks ?? []).filter((check) => !check.passed).map((check) => check.id).join(", ") || "none")}</td><td>${htmlEscape(run.usage?.model ?? "unknown")}</td><td>${htmlEscape(run.usage?.thinkingLevel ?? "unknown")}</td><td>${htmlEscape(run.usage?.usageSource ?? "unknown")}</td><td>${display(run.usage?.input, 0)}</td><td>${display(run.usage?.output, 0)}</td><td>${display(run.usage?.cacheRead, 0)}</td><td>${display(run.usage?.cacheWrite, 0)}</td><td>${display(run.usage?.reasoning, 0)}</td><td>${display(run.usage?.fresh, 0)}</td><td>${display(run.usage?.total, 0)}</td><td>${display(run.usage?.toolCalls, 0)}</td><td>${htmlEscape(topToolSummary(run.usage?.toolNames, 5))}</td><td>${display(run.usage?.cost, 6)}</td><td>${display(run.durationSeconds, 1)}</td><td>${htmlEscape(run.failure ?? "")}</td></tr>`).join("");
   const scoreRows = surfaceEntries.map(([id, surface]) => `<tr><th>${htmlEscape(surfaceLabel(id))}</th><td>${surface.resolved}/${surface.runs}</td><td>${surface.qualityCorrect}/${surface.qualityRuns}</td><td>${surface.scopePassed}/${surface.runs}</td><td>${display(surface.scores.quality)}</td><td>${display(surface.scores.safety)}</td><td>${display(surface.scores.reliability)}</td><td>${display(surface.scores.workflow)}</td><td>${display(surface.scores.efficiency)}</td><td>${display(surface.scores.overall)}</td></tr>`).join("");
   const usageRows = surfaceEntries.map(([id, surface]) => { const usage = surface.usage.allMeasuredRuns; return `<tr><th>${htmlEscape(surfaceLabel(id))}</th><td>${display(usage.medianInputTokens, 0)}</td><td>${display(usage.medianOutputTokens, 0)}</td><td>${display(usage.medianCacheReadTokens, 0)}</td><td>${display(usage.medianCacheWriteTokens, 0)}</td><td>${display(usage.medianReasoningTokens, 0)}</td><td>${display(usage.medianFreshTokens, 0)}</td><td>${display(usage.medianTotalTokens, 0)}</td><td>${display(usage.medianToolCalls, 0)}</td><td>${display(usage.medianCost, 6)}</td><td>${display(usage.medianDurationSeconds, 1)}</td><td>${htmlEscape(topToolSummary(surface.usage.toolNames))}</td></tr>`; }).join("");
   const categoryRows = Object.entries(report.surfaces[candidateKey].bands?.categories ?? {}).map(([name, band]) => `<tr><th>${htmlEscape(name)}</th><td>${band.resolved}/${band.runs}</td><td>${display(band.score)}</td><td>${display(band.correctness)}</td></tr>`).join("");
@@ -315,6 +339,6 @@ ${suiteFailureReasons ? `<p><strong>Suite gate failures:</strong> ${htmlEscape(s
 ${categoryRows ? `<h2>${htmlEscape(candidateLabel)} category bands</h2><div class="table-wrap"><table><thead><tr><th>Category</th><th>Resolved</th><th>Score</th><th>Correctness</th></tr></thead><tbody>${categoryRows}</tbody></table></div>` : ""}
 ${tokenBandRows ? `<h2>Paired fresh-token ratio by category</h2><div class="table-wrap"><table><thead><tr><th>Category</th><th>Pairs</th><th>Families</th><th>Ratio</th><th>Median delta</th><th>${htmlEscape(candidateLabel)}/${htmlEscape(baselineLabel)}/ties</th></tr></thead><tbody>${tokenBandRows}</tbody></table></div>` : ""}
 <h2>Median usage across all measured runs</h2><div class="table-wrap"><table><thead><tr><th>Surface</th><th>Fresh input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Reasoning ⊂ output</th><th>Fresh</th><th>Total</th><th>Tools</th><th>Provider-reported cost</th><th>Seconds</th><th>Top tools</th></tr></thead><tbody>${usageRows}</tbody></table></div>
-<h2>Runs</h2><div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Category</th><th>Difficulty</th><th>Profile</th><th>Lifecycle</th><th>Surface</th><th>Repeat</th><th>Infra retries</th><th>Resolved</th><th>Grader</th><th>Scope</th><th>Workflow</th><th>Workflow gaps</th><th>Model</th><th>Thinking</th><th>Usage source</th><th>Fresh input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Reasoning ⊂ output</th><th>Fresh</th><th>Total</th><th>Tools</th><th>Top tools</th><th>Provider-reported cost</th><th>Seconds</th><th>Failure</th></tr></thead><tbody>${rows}</tbody></table></div>
+<h2>Runs</h2><div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Category</th><th>Difficulty</th><th>Profile</th><th>Lifecycle</th><th>Surface</th><th>Repeat</th><th>Infra retries</th><th>Resolved</th><th>Grader</th><th>Scope</th><th>Failure class</th><th>Counts toward quality</th><th>Counts toward usage</th><th>Run validity</th><th>Workflow</th><th>Workflow gaps</th><th>Model</th><th>Thinking</th><th>Usage source</th><th>Fresh input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Reasoning ⊂ output</th><th>Fresh</th><th>Total</th><th>Tools</th><th>Top tools</th><th>Provider-reported cost</th><th>Seconds</th><th>Failure</th></tr></thead><tbody>${rows}</tbody></table></div>
 <p class="note">${htmlEscape(report.verdict.note)}</p></body></html>\n`;
 }

@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "production-v3",
+  "purpose": "Bound provider spend for the 108-session Luna-medium Fast-vs-Fast production user-journey comparison before a claim is allowed.",
+  "rootSeed": "production-v3-seven-axis-v1-640",
+  "execution": {
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "serviceTier": "fast",
+    "repeats": 2,
+    "infrastructureRetries": 0,
+    "stopAfterFailedPair": true
+  },
+  "stages": [
+    { "id": "S0", "cumulativeSessions": 0, "newSessions": 0, "mode": "preflight-only", "claimEligible": false },
+    { "id": "S12", "cumulativeSessions": 12, "newSessions": 12, "mode": "execute-and-pause", "claimEligible": false },
+    { "id": "S18", "cumulativeSessions": 18, "newSessions": 6, "mode": "resume-and-pause", "claimEligible": false },
+    { "id": "S54", "cumulativeSessions": 54, "newSessions": 36, "mode": "resume-and-pause", "claimEligible": false },
+    { "id": "S108", "cumulativeSessions": 108, "newSessions": 54, "mode": "resume-and-finalize", "claimEligible": true }
+  ],
+  "earlyDetection": {
+    "smokeDiversityStageId": "S12",
+    "fullFamilyCoverageStageId": "S18",
+    "fullCategoryCoverageStageId": "S54",
+    "expectedFirstRepeatScenarioIds": [
+      "cli-double-dash",
+      "chunked-record-boundary",
+      "protected-env-refusal",
+      "resumable-checkpoint-partial-failure",
+      "tenant-cache-isolation",
+      "billing-cutoff-clock-skew"
+    ],
+    "firstFullFamilyCoverageScenarioIds": [
+      "cli-double-dash",
+      "chunked-record-boundary",
+      "protected-env-refusal",
+      "resumable-checkpoint-partial-failure",
+      "tenant-cache-isolation",
+      "billing-cutoff-clock-skew",
+      "backend-frontend-contract-sync",
+      "stale-search-response",
+      "schema-migration"
+    ],
+    "requiredCategoryCoverage": ["backend", "frontend", "data", "platform", "reliability", "security", "fullstack"],
+    "requiredLifecycleCoverage": ["steady-state", "cold-start"],
+    "requiredDifficultyCoverage": ["small", "medium", "large"],
+    "requiredVariantRoleCoverage": ["boundary", "interaction", "adversarial-recovery"]
+  },
+  "productionGuards": {
+    "subagents": {
+      "required": true,
+      "maximumSessionsPerAttempt": 1,
+      "maximumTrafficShare": 0.05,
+      "requireExactAllAttemptEvidence": true,
+      "requireExplainedSessionCount": true
+    },
+    "partialFreshSpend": {
+      "requiredFromCumulativeSessions": 12,
+      "maximumPooledFreshRatio": 1.1,
+      "maximumObservedFamilyFreshRatio": 1.25,
+      "includeExactFailedAttempts": true
+    },
+    "providerFreeEvidence": {
+      "requiredBeforeFirstPaidSession": true,
+      "requiredLaneIds": ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+      "requireCleanCommitAndTreeBinding": true,
+      "requireProductionConfigurationBinding": true,
+      "requireRunnerAndLaneConfigurationDigests": true
+    },
+    "campaignAccounting": {
+      "requiredBeforeFirstPaidSession": true,
+      "requireSingleOutputResumeLineage": true,
+      "includeEveryProviderStartedAttempt": true,
+      "unknownUsageFailsClosed": true
+    }
+  },
+  "enforcement": {
+    "runnerConsumesThisArtifact": true,
+    "runnerBindsFrozenSeedAndExecution": true,
+    "runnerWritesAtomicPrivateStageDiagnostic": true,
+    "runnerBlocksProductionResumeWhenStageDiagnosticFails": true,
+    "durableStageStateSurvivesMissingPauseMarker": true,
+    "completeLedgerFinalizesWithoutProviderPreflight": true,
+    "stageDiagnosticArtifact": "stage-diagnostic.json",
+    "automaticTerminalOrAbortRules": [
+      "dirty-release-source-before-auth-tool-or-provider-preflight",
+      "piagent-unresolved-or-outcome-score-at-or-below-floor-via-stop-after-failed-pair",
+      "infrastructure-error-or-unknown-provider-attempt-usage-via-runner-abort",
+      "candidate-provenance-drift-via-execution-guard"
+    ],
+    "stageAdvanceRules": [
+      "clean-release-source",
+      "no-baseline-pass-piagent-fail",
+      "no-observed-paired-grade-regression",
+      "all-observed-piagent-outcomes-remain-above-the-release-floor",
+      "no-model-thinking-or-provider-wire-parity-drift",
+      "fast-execution-configuration-parity-from-piagent-outbound-telemetry-and-codex-identity-bound-effective-thread-settings-with-no-default-fallback",
+      "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
+      "source-bound-provider-free-architecture-runtime-long-horizon-and-webui-parity-receipts",
+      "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
+      "partial-stage-pooled-fresh-ratio-at-most-1.10-and-every-observed-family-at-most-1.25",
+      "no-accepted-usage-completeness-failure",
+      "no-infrastructure-retry",
+      "no-unknown-provider-attempt-usage"
+    ],
+    "nonBlockingDiagnostics": [
+      "normalized-api-equivalent-text-token-cost",
+      "duration",
+      "host-load"
+    ],
+    "operatorRule": "S12 is a six-pair smoke gate. S18 adds complete nine-family coverage. S54 is the halfway stability gate. Only S108 can decide both the 0.60 upper-95 family-level guard and the 0.65 pooled all-attempt net fresh-token gate."
+  },
+  "claimBoundary": "Only the complete production-v3 S108 ledger may establish a public-regression product comparison against the stock Codex CLI baseline. The suite is not family-disjoint and cannot establish universal, private-generalization, causal, member-production, billed-cost, or actual provider-processing-tier claims. The net-35 ratio includes accepted plus exact failed/retry fresh tokens; provider response tier and subscription credits remain separate."
+}

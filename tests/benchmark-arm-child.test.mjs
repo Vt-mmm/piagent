@@ -472,7 +472,9 @@ if (process.env.PIAGENT_OBSERVER_CHILD_MODE === "probe") {
       return tailResult;
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
-  test("TAIL-01 actual immutable A gateway loads a private global tail without dispatch", { timeout: 45000 }, t => {
+  test("TAIL-01 actual immutable A gateway loads a private global tail without dispatch", {
+    skip: !candidateRoot || !hostRoot, timeout: 45000
+  }, t => {
     const result = actualTailChild();
     t.diagnostic(`TAIL_GATEWAY ${JSON.stringify(result)}`);
     assert.equal(result.tail.registeredAtAllStarts, true);
@@ -485,7 +487,9 @@ if (process.env.PIAGENT_OBSERVER_CHILD_MODE === "probe") {
     t.diagnostic(`TAIL_METRICS ${JSON.stringify({ case: "TAIL-01", sdkSessions: 1, directCallbacks: 0,
       streams: 0, modelTurns: 0, countedBy: "one settled deferred create; no operation.started or tail callback" })}`);
   });
-  test("TAIL-08 the supported global tail does not expose final callback or host error authority", { timeout: 45000 }, t => {
+  test("TAIL-08 the supported global tail does not expose final callback or host error authority", {
+    skip: !candidateRoot || !hostRoot, timeout: 45000
+  }, t => {
     const result = actualTailChild();
     assert.equal(result.unsupportedOptionReads, 0); assert.equal(result.finalCallbackInstalled, false);
     assert.deepEqual(result.publicGatewayKeys, ["close", "descriptor", "wait"]);

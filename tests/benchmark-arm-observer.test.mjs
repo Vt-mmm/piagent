@@ -328,7 +328,9 @@ async function tailFixture(t, factories = []) {
   return { root, cwd, agentDir, host, loader, ordered, create, errors, metrics };
 }
 
-test("TAIL-02 actual resource loader keeps the immutable A guard before a pinned global tail", { timeout: 30000 }, async t => {
+test("TAIL-02 actual resource loader keeps the immutable A guard before a pinned global tail", {
+  skip: !actualAvailable, timeout: 30000
+}, async t => {
   const f = await tailFixture(t), guard = path.join(candidateRoot, "packages/piagent-core/extensions/piagent-guard.ts");
   const { preferAuthoritativePiagentGuard } = await import(pathToFileURL(path.join(candidateRoot,
     "packages/piagent-webui/gateway/extension-authority.ts")));
@@ -347,7 +349,9 @@ test("TAIL-02 actual resource loader keeps the immutable A guard before a pinned
   t.diagnostic(`TAIL_ORDER ${JSON.stringify({ case: "TAIL-02", ordered: order, digest: sha(order), baselineOrder })}`);
 });
 
-test("TAIL-03 actual SDK tail sees the preceding replacement and agrees with direct callback return", { timeout: 30000 }, async t => {
+test("TAIL-03 actual SDK tail sees the preceding replacement and agrees with direct callback return", {
+  skip: !actualAvailable, timeout: 30000
+}, async t => {
   const observed = [], replacement = { instructions: "after", tools: [] };
   const f = await tailFixture(t, [pi => pi.on("before_provider_request", () => replacement),
     pi => pi.on("before_provider_request", event => { observed.push(sha(event.payload)); })]);
@@ -357,7 +361,9 @@ test("TAIL-03 actual SDK tail sees the preceding replacement and agrees with dir
   assert.notEqual(sha(raw), observed[0]); assert.deepEqual(f.errors, []);
 });
 
-test("TAIL-04 preceding swallowed error is invisible to an otherwise identical last observer", { timeout: 30000 }, async t => {
+test("TAIL-04 preceding swallowed error is invisible to an otherwise identical last observer", {
+  skip: !actualAvailable, timeout: 30000
+}, async t => {
   let shouldThrow = false; const observed = [];
   const f = await tailFixture(t, [pi => pi.on("before_provider_request", () => {
     if (shouldThrow) throw new Error("tail-earlier-hook-failure");
@@ -374,7 +380,9 @@ test("TAIL-04 preceding swallowed error is invisible to an otherwise identical l
   t.diagnostic("TAIL_LIMITATION preceding hook error is host-only; tail payload equality cannot certify error-free admission");
 });
 
-test("TAIL-05 a throwing tail sink does not reject the actual SDK final callback", { timeout: 30000 }, async t => {
+test("TAIL-05 a throwing tail sink does not reject the actual SDK final callback", {
+  skip: !actualAvailable, timeout: 30000
+}, async t => {
   let failSink = false; const durable = [];
   const f = await tailFixture(t, [pi => pi.on("before_provider_request", event => {
     if (failSink) throw new Error("tail-sink-failure");
@@ -387,7 +395,9 @@ test("TAIL-05 a throwing tail sink does not reject the actual SDK final callback
   t.diagnostic("TAIL_LIMITATION sink failure leaves SDK return intact; missing durable observation must remain unavailable");
 });
 
-test("TAIL-06 retained replacement mutation invalidates the tail pre-await hash", { timeout: 30000 }, async t => {
+test("TAIL-06 retained replacement mutation invalidates the tail pre-await hash", {
+  skip: !actualAvailable, timeout: 30000
+}, async t => {
   const replacement = { value: "before-await" }, entered = Promise.withResolvers(), release = Promise.withResolvers();
   let recordedHash;
   const f = await tailFixture(t, [pi => pi.on("before_provider_request", () => replacement),
@@ -401,7 +411,9 @@ test("TAIL-06 retained replacement mutation invalidates the tail pre-await hash"
   t.diagnostic(`TAIL_LIMITATION ${JSON.stringify({ case: "TAIL-06", recordedHash, finalHash: sha(result), finalBytesEqual: false })}`);
 });
 
-test("TAIL-07 an appended real extension invalidates the frozen tail position", { timeout: 30000 }, async t => {
+test("TAIL-07 an appended real extension invalidates the frozen tail position", {
+  skip: !actualAvailable, timeout: 30000
+}, async t => {
   const f = await tailFixture(t), tail = path.join(f.root, "tail.js"), foreign = path.join(f.root, "foreign.js");
   fs.writeFileSync(tail, 'export default function(pi) { pi.on("before_provider_request", () => undefined); }\n');
   fs.writeFileSync(foreign, 'export default function(pi) { pi.on("before_provider_request", p => ({...p.payload, later:true})); }\n');

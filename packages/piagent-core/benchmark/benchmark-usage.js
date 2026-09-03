@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
+import { createCodexEventState, consumeCodexLifecycleEvent, finishCodexLifecycle } from "./benchmark-codex-events.js";
 
-const CODEX_NON_TOOL_ITEMS = new Set(["agent_message", "reasoning", "plan", "user_message"]);
+const CODEX_NON_TOOL_ITEMS = new Set(["agent_message", "reasoning", "plan", "user_message", "error"]);
 const TOKEN_FIELDS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "fresh", "total"]);
 const EXECUTION_COUNTER_FIELDS = Object.freeze([
   "providerStartedAttempts", "toolCalls", "toolResults", "toolFailures", "blockedToolCalls",
@@ -350,6 +351,8 @@ export function aggregateCodexTurnUsage(turnUsages) {
   }
   const pricingExact = turnUsages.every((usage) => usage.pricingBuckets?.completeness === "exact");
   const serviceTierEvidence = turnUsages.map((usage) => usage.serviceTierEvidence).filter(Boolean);
+  const codexEventOutcomes = turnUsages.map((usage) => usage.codexEventOutcome).filter(Boolean);
+  const codexEventFailure = codexEventOutcomes.find(outcome => outcome.failureClass);
   const aggregateTierValues = (field) => [...new Set(serviceTierEvidence.flatMap((evidence) => (
     Array.isArray(evidence?.[field]) ? evidence[field] : []
   )))].sort();
@@ -394,6 +397,19 @@ export function aggregateCodexTurnUsage(turnUsages) {
       peakPercent: null
     },
     providerSessionId: first.providerSessionId,
+    codexEventOutcome: codexEventOutcomes.length === turnUsages.length ? {
+      schemaVersion: 1,
+      source: "codex-resumed-thread-authoritative-state-machine",
+      terminalStatus: codexEventFailure ? "failed" : "completed",
+      runValidity: codexEventOutcomes.every(outcome => outcome.runValidity === "valid") ? "valid" : "invalid_harness",
+      failureClass: codexEventFailure?.failureClass ?? null,
+      reasonCodes: codexEventFailure?.reasonCodes ?? [],
+      terminalAgentMessage: codexEventOutcomes.every(outcome => outcome.terminalAgentMessage === true),
+      countsTowardQuality: codexEventOutcomes.every(outcome => outcome.countsTowardQuality === true),
+      countsTowardUsage: true,
+      usageStatus: "exact"
+    } : null,
+    codexEventSummaries: turnUsages.map((usage) => usage.codexEventSummary).filter(Boolean),
     codexInvocationReceipts: turnUsages.map((usage) => usage.codexInvocationReceipt).filter(Boolean)
   };
 }
@@ -402,6 +418,7 @@ function consumeCodexEvent(state, event, lineNumber) {
   if (!plainObject(event) || typeof event.type !== "string") {
     throw new Error(`Codex JSONL line ${lineNumber} is not an event object`);
   }
+  consumeCodexLifecycleEvent(state.eventState, event);
   state.onEvent?.(event);
   const threadSettings = event.type === "thread_settings_applied" && plainObject(event.thread_settings)
     ? event.thread_settings
@@ -462,13 +479,33 @@ function consumeCodexEvent(state, event, lineNumber) {
   }
 }
 
-function finishCodexUsage(state) {
-  if (!state.threadId) throw new Error("Codex JSONL is missing thread.started");
+function codexContractError(message, lifecycle, usage) {
+  const error = new Error(message);
+  error.code = "BENCHMARK_CODEX_EVENT_CONTRACT_INVALID";
+  error.failureClass = lifecycle.outcome.failureClass;
+  error.codexEventSummary = lifecycle.summary;
+  error.codexEventOutcome = lifecycle.outcome;
+  if (usage) error.usage = usage;
+  return error;
+}
+
+function finishCodexUsage(state, processExitCode) {
   const uniqueThreadIds = [...new Set(state.threadIds)];
-  if (state.threadIds.length !== 1 || uniqueThreadIds.length !== 1 || uniqueThreadIds[0] !== state.threadId) {
-    throw new Error("Codex JSONL thread.started identity is missing, duplicated, or conflicting");
+  let tokenTotals;
+  let tokenError;
+  try { tokenTotals = aggregateCodexProviderTurnTokens(state.completedUsages); }
+  catch (error) { tokenError = error; }
+  const lifecycle = finishCodexLifecycle(state.eventState, { exactUsage: !tokenError, processExitCode });
+  if (!state.threadId || state.threadIds.length !== 1 || uniqueThreadIds.length !== 1 || uniqueThreadIds[0] !== state.threadId) {
+    const message = "Codex JSONL thread.started identity is missing, duplicated, or conflicting";
+    if (state.eventContract === "production-v3") throw codexContractError(message, lifecycle);
+    throw new Error(message);
   }
-  const { providerInput, input, output, cacheRead, cacheWrite, reasoning, total, fresh } = aggregateCodexProviderTurnTokens(state.completedUsages);
+  if (tokenError) {
+    if (state.eventContract === "production-v3") throw codexContractError(tokenError.message, lifecycle);
+    throw tokenError;
+  }
+  const { providerInput, input, output, cacheRead, cacheWrite, reasoning, total, fresh } = tokenTotals;
   const sortedTools = Object.fromEntries(Object.entries(state.toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])));
   state.execution.completeness.tools = "exact";
   state.execution.completeness.subagents = "exact";
@@ -476,7 +513,7 @@ function finishCodexUsage(state) {
     ? state.requestedServiceTier
     : null;
   const observedServiceTiers = [...new Set(state.serviceTiers)].sort();
-  return {
+  const usage = {
     input,
     providerInput,
     output,
@@ -537,6 +574,10 @@ function finishCodexUsage(state) {
       startedEvents: state.startedTurns,
       completedEvents: state.completedTurns
     },
+    ...(state.eventContract === "production-v3" ? {
+      codexEventSummary: lifecycle.summary,
+      codexEventOutcome: lifecycle.outcome
+    } : {}),
     jsonlEvidence: {
       schemaVersion: 1,
       source: "codex-exec-jsonl-stdout-bytes",
@@ -544,6 +585,10 @@ function finishCodexUsage(state) {
       sha256: state.jsonlHash.digest("hex")
     }
   };
+  if (state.eventContract === "production-v3" && lifecycle.outcome.runValidity !== "valid") {
+    throw codexContractError(`Codex JSONL event contract is invalid: ${lifecycle.outcome.reasonCodes.join(", ")}`, lifecycle, usage);
+  }
+  return usage;
 }
 
 export function createCodexExecJsonlCollector(options = {}) {
@@ -565,6 +610,9 @@ export function createCodexExecJsonlCollector(options = {}) {
     execution: emptyExecutionAggregate("codex-exec-jsonl"),
     diagnostics: [],
     serviceTiers: [],
+    eventContract: options.eventContract,
+    processExitCode: options.processExitCode,
+    eventState: createCodexEventState(),
     jsonlBytes: 0,
     jsonlHash: createHash("sha256")
   };
@@ -600,14 +648,21 @@ export function createCodexExecJsonlCollector(options = {}) {
         buffer = "";
       }
     },
-    finish() {
+    finish(finalOptions = {}) {
       if (!failure) buffer += decoder.end();
       if (!failure && buffer) {
         try { consumeLine(buffer); } catch (error) { failure = error; }
         buffer = "";
       }
-      if (failure) throw failure;
-      return finishCodexUsage(state);
+      if (failure) {
+        if (state.eventContract === "production-v3") {
+          const lifecycle = finishCodexLifecycle(state.eventState, { exactUsage: false,
+            processExitCode: finalOptions.processExitCode ?? state.processExitCode });
+          throw codexContractError(failure.message, lifecycle);
+        }
+        throw failure;
+      }
+      return finishCodexUsage(state, finalOptions.processExitCode ?? state.processExitCode);
     },
     diagnostics() {
       return state.diagnostics.map((item) => ({ ...item }));

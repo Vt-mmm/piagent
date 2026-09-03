@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 3,
+  "contractId": "benchmark-attempt-outcome-v3",
+  "attemptId": "negative-valid-unknown-usage",
+  "scenarioKind": "read-only",
+  "transportStatus": "failed",
+  "operationStatus": "unknown",
+  "taskStatus": "unknown",
+  "semanticStatus": "unavailable",
+  "gradeStatus": "not_applicable",
+  "runValidity": "valid",
+  "usageStatus": "unknown_post_provider",
+  "failureClass": "unknown_terminal",
+  "countsTowardQuality": false,
+  "countsTowardUsage": true,
+  "evidence": {
+    "providerStarted": true,
+    "processExitCode": 0,
+    "threadIdPresent": true,
+    "usageReported": false,
+    "terminalAgentMessage": false,
+    "requiredOutputEvidencePresent": false,
+    "errorEvents": 1,
+    "turnFailedEvents": 0,
+    "itemErrorEvents": 0,
+    "failedCommandEvents": 0,
+    "fileChangeCount": 0,
+    "mutationExpected": false,
+    "refusal": null
+  },
+  "usage": null
+}

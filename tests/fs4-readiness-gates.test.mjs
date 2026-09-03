@@ -95,8 +95,8 @@ test("current FS4 evaluator emits a redacted exact-artifact report and selects o
   assert.equal(report.handoff.externalE3ExecutionWorkItem, "CF-FS7-01");
   assert.equal(report.matrix.artifacts.length, 15);
   assert.equal(report.currentPublicExposure.path, "evals/private-holdout-v1/public-exposure.v2.json");
-  assert.equal(report.currentPublicExposure.suiteCount, 6);
-  assert.equal(report.currentPublicExposure.scenarioCount, 66);
+  assert.equal(report.currentPublicExposure.suiteCount, 7);
+  assert.equal(report.currentPublicExposure.scenarioCount, 93);
   assert.equal(report.currentPublicExposure.contractFamilyVersionCount, 13);
   assert.ok(report.tests.find(({ id }) => id === "e3").files.includes("tests/public-evaluation-exposure.test.mjs"));
   assert.equal(report.tests.every((group) => group.passed), true);

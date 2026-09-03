@@ -417,7 +417,7 @@
     "operationCompletedPayload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "settlement", "reasonCode"],
+      "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "settlement", "taskStatus", "reasonCode"],
       "properties": {
         "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
@@ -425,13 +425,14 @@
         "messageRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "sessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
         "settlement": { "const": "completed" },
+        "taskStatus": { "enum": ["pending", "completed", "refused", "failed", "unknown"] },
         "reasonCode": { "type": "null" }
       }
     },
     "operationIncompletePayload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "settlement", "reasonCode"],
+      "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "settlement", "taskStatus", "reasonCode"],
       "properties": {
         "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
@@ -444,6 +445,7 @@
           ]
         },
         "settlement": { "enum": ["blocked", "aborted", "error", "unknown"] },
+        "taskStatus": { "enum": ["pending", "completed", "refused", "failed", "unknown"] },
         "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
       }
     },
