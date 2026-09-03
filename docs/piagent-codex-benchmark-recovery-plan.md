@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 1.7
+> **Phiên bản:** 1.8
 >
-> **Trạng thái tổng:** IN_PROGRESS — P5 đã qua mọi automated gate trước checkpoint; đang tạo clean-tree checkpoint để chạy preflight cuối
+> **Trạng thái tổng:** IN_PROGRESS — P5 PASS; bắt đầu P6 paid out-of-suite canary, chưa gọi provider
 >
-> **Cập nhật gần nhất:** 2026-09-03T22:02:00Z (2026-09-04T05:02:00+07:00)
+> **Cập nhật gần nhất:** 2026-09-03T22:37:58Z (2026-09-04T05:37:58+07:00)
 >
 > **Chế độ thực thi:** một agent, local, tuần tự; không subagent, không cloud task
 >
@@ -15,7 +15,7 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** P5-T09/P5-T06 — local checkpoint, clean-tree preflight và evidence closeout; chưa mở provider
+> **Phase kế tiếp:** P6-T01/P6-T02 — đóng canary prompts/oracles và hard budget trước provider call đầu tiên
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
 
@@ -381,8 +381,8 @@ P2 và P3 giải quyết hai arm khác nhau nhưng vẫn triển khai tuần t�
 | P2 | Codex baseline correction | DONE | 0 | PASS — stock closure/capability + authoritative JSONL fixtures and full runner pass |
 | P3 | Pi lifecycle correction | DONE | 0 | PASS — seven-row operation/task matrix, refusal and reconnect regressions pass |
 | P4 | Evaluator và production-v3 | DONE_WITH_OPERATOR_WAIVER | 0 | Automated calibration pass; human review waived, `reviewed=false` retained |
-| P5 | Provider-free qualification | IN_PROGRESS — CHECKPOINT_PENDING | 0 | Mọi automated gate pass; clean-tree preflight còn chờ local checkpoint |
-| P6 | Paid canary ngoài S108 | NOT_STARTED | 8 sessions dự kiến | 8/8 valid, cả hai arm có coding capability |
+| P5 | Provider-free qualification | DONE | 0 | PASS — clean checkpoint + exact-108 dry-run + full provider-free preflight ready |
+| P6 | Paid canary ngoài S108 | IN_PROGRESS — DESIGN | 0/8 sessions | 8/8 valid, cả hai arm có coding capability |
 | P7 | Freeze candidate/config | NOT_STARTED | 0 | Commit/tree/runtime/suite/config digests đóng |
 | P8 | Exact S108 | NOT_STARTED | 108 sessions | 108 accepted, exact usage, no invalid measurement |
 | P9 | Analysis/report | NOT_STARTED | 0 | PASS_VALID hoặc FAIL_VALID có evidence |
@@ -766,11 +766,11 @@ Mỗi scenario phải đạt:
 - [x] **P5-T03** Chạy typecheck.
 - [x] **P5-T04** Chạy architecture, docs, neutrality và release identity checks liên quan.
 - [x] **P5-T05** Chạy full repository verify.
-- [ ] **P5-T06** Chạy production-v3 dry-run và preflight-only.
+- [x] **P5-T06** Chạy production-v3 dry-run và preflight-only.
 - [x] **P5-T07** Chạy identity negative tests bằng cách giả thiếu binary/sibling/config.
 - [x] **P5-T08** Chạy deterministic synthetic journey matrix nhiều lần để bắt race.
-- [ ] **P5-T09** Kiểm tra Git diff, secret scan và tree sạch trước canary.
-- [ ] **P5-T10** Ghi command, exit code, duration và output hash vào evidence packet mới.
+- [x] **P5-T09** Kiểm tra Git diff, secret scan và tree sạch trước canary.
+- [x] **P5-T10** Ghi command, exit code, duration và output hash vào evidence packet mới.
 
 ### Verification commands dự kiến
 
@@ -796,13 +796,13 @@ Provider-free qualification dùng evidence root `/Users/vtamm/.pi/agent/benchmar
 | P5-T03 | DONE | typecheck pass | `05-typecheck.log` — `20a72f68…` | Không emit |
 | P5-T04 | DONE | architecture 597 files, docs, neutrality, release identity pass | `06-architecture.log` — `97874b7f…`; `07-docs.log` — `ad5c5733…`; `08-neutrality.log` — `a9991f09…`; `09-release-identity.log` — `0eb26d84…` | Broad public-wording gate cũng pass tại `11-public-wording-after-fix.log` — `445a9ef7…` |
 | P5-T05 | DONE | `npm run verify -- --offline` pass end-to-end | `17-full-verify-final.log` — `e9cbeef5…` | Root causes được giữ lại: Node 24 reporter marker và public-exposure inventory thiếu production-v3; final exposure digest `b42c5d7c…`, 7 suite/93 scenarios |
-| P5-T06 | PARTIAL | dry-run đúng 27 × 2 × 2 = 108; preflight fail-closed trước auth khi thiếu spend flag rồi khi tree dirty | `18-production-v3-dry-run.log` — `2f7824b7…`; `19-production-v3-preflight.log` — `f812c62f…`; `20-production-v3-measurement-preflight.log` — `8117a455…` | Clean-tree preflight sẽ chạy lại sau checkpoint; không model/provider session nào được mở |
+| P5-T06 | DONE | dry-run đúng 27 × 2 × 2 = 108; clean measurement preflight ready, 4/4 provider-free lanes pass, long-horizon 90/90, WebUI stability 9 suites | `18-production-v3-dry-run.log` — `2f7824b7…`; final `27-production-v3-clean-preflight.log` — `0cc24fdd…` | Receipt ghi `providerSessionsStarted=0`; hai refusal trước đó vẫn giữ tại logs 19/20 |
 | P5-T07 | DONE | missing executable, stock sibling/closure và invalid config `4/4` pass | `21-identity-negatives.log` — `ff4c3b6b…` | Mọi negative path dừng trước provider hoặc giữ nguyên ledger |
 | P5-T08 | DONE | 5 vòng × 36 journey/lifecycle tests = `180/180`, zero fail/skip | `22-deterministic-journey-repeat-5x.log` — `fc35e94b…` | Không quan sát race/reconnect duplication |
-| P5-T09 | PARTIAL | `git diff --check` pass; secret scan 168 changed/untracked paths, 446,310 added bytes, zero finding | `23-secret-scan-precheckpoint.log` — `9a2fcca6…` | Tree chỉ sạch sau local checkpoint commit; không push |
-| P5-T10 | IN_PROGRESS | Mọi log có output hash; phase packet/manifest closeout chờ final preflight | phase `verification.json` và `artifact-hashes.sha256` sẽ được tạo sau clean checkpoint | Không che hai preflight refusal hoặc initial full-verify failures |
+| P5-T09 | DONE | `git diff --check` pass; final secret scan 168 paths/449,856 added bytes/zero finding; clean checkpoint verified | `25-secret-scan-final.log` — `db9987a2…`; `26-clean-checkpoint.log` — `2d7ca4d6…` | Local commit `082bf9d2415e…`, tree `2e9285aec9db…`; không push |
+| P5-T10 | DONE | Mọi log có output hash; phase verification machine record hoàn chỉnh | `05-provider-free-qualification/verification.json`; `artifact-hashes.sha256` | Initial failures/refusals và root-cause resolutions đều được giữ lại |
 
-P5 vẫn `IN_PROGRESS`: production guard yêu cầu source tree sạch trước auth/tool preflight. Local checkpoint là bước tiếp theo đã được operator cho phép; preflight cuối phải ghi `providerSessionsStarted=0` trên exact checkpoint trước khi P5 đóng.
+**P5 exit gate:** PASS tại `2026-09-03T22:37:58Z`. Preflight bind commit `082bf9d2415e924ce676dbae664f811d5c020343`, tree `2e9285aec9dba36ec1693421f59ed7435e66d7e6`, candidate digest `d673320a…`, suite digest `a0b4003b…` và provider-free evidence digest `8e8b2c3d…`. Bốn lane architecture/runtime/long-horizon/WebUI đều pass với `providerUsed=false`, `providerCalls=0`, `modelTokens=0`; runtime receipt xác nhận stock baseline, JSONL, workspace-write, ignore-user-config/rules và code-mode-host. Provider sessions P5/cumulative = `0`. P4 human-review waiver vẫn là limitation, không được nâng thành review evidence hoặc public-regression claim eligibility.
 
 ### Exit gate
 
@@ -1333,7 +1333,7 @@ Nếu source thay đổi sau P7:
 
 Task tiếp theo:
 
-**P5-T09/P5-T06** — tạo local checkpoint commit không push, xác nhận tree sạch rồi chạy production-v3 measurement preflight cuối. Sau receipt `providerSessionsStarted=0`, đóng packet P5 và mới xem xét P6.
+**P6-T01/P6-T02** — đóng băng 4 canary ngoài production-v3, oracle và budget/stop policy trước provider call đầu tiên. Không mở S108 trong P6.
 
 P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=false` và `thresholdsLocked=false` tiếp tục là limitation, không phải pass evidence.
 
@@ -1351,3 +1351,4 @@ P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=f
 | 1.5 | 2026-09-04 | Hoàn tất phần tự động P4: production-v3 digest `a0b4003…`, exact 108 matrix, separated evaluator/report contract, 135/135 five-type calibration và all mutants caught; tạo blinded packet 12 item/9 family. P4 BLOCKED ở T09 vì chưa có hai human reviews; thresholds chưa khóa; provider sessions = 0; P5 chưa bắt đầu |
 | 1.6 | 2026-09-04 | Operator explicit waive P4-T09 do không đủ thời gian reviewer A/B; không giả lập review, giữ `reviewed=false` và human threshold unlocked; P4 `DONE_WITH_OPERATOR_WAIVER`, bắt đầu P5 provider-free; provider sessions = 0 |
 | 1.7 | 2026-09-04 | P5 automated qualification trước checkpoint: focused 63/63, subsystem 723 pass/51 environment skip, full offline verify pass, exact-108 dry-run, identity negatives 4/4, deterministic journey 180/180, secret scan pass; preflight fail-closed trên dirty tree nên P5 chờ local clean checkpoint; provider sessions = 0 |
+| 1.8 | 2026-09-04 | Hoàn tất P5 trên clean checkpoint `082bf9d…`: full provider-free preflight ready, long-horizon 90/90, WebUI parity 9 suites, 4/4 lane pass, exact-108 dry-run và `providerSessionsStarted=0`; bắt đầu P6 canary design; P4 waiver limitation giữ nguyên |
