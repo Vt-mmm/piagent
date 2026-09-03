@@ -667,7 +667,7 @@ const MCP_TURN_REQUIRED_FIELDS = Object.freeze(MCP_TURN_FIELDS.filter(key => key
 const MCP_CALL_META_FIELDS = Object.freeze(["progressToken", "callId", "threadId", "itemId",
   "x-codex-turn-metadata", "codex/sandbox-state-meta"]);
 export const SCOPED_MCP_METADATA_CONTRACT = deepFreeze({
-  version: 2, id: "piagent-codex-mcp-metadata-v2", maxBytes: 64 * 1024,
+  version: 3, id: "piagent-codex-mcp-metadata-v3", maxBytes: 64 * 1024,
   commonFields: ["progressToken"], callFields: [...MCP_CALL_META_FIELDS],
   turnFields: [...MCP_TURN_FIELDS], sandboxStateField: "codex/sandbox-state-meta",
   authority: "none"

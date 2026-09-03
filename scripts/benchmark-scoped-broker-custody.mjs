@@ -26,6 +26,7 @@ function brokerFields(value, names) {
 const MCP_VERSION = "2025-06-18";
 const MCP_PROCESS_SHUTDOWN = "piagent-mcp-process-shutdown";
 const MCP_META_ID = /^[A-Za-z0-9_.:-]{1,160}$/;
+const MCP_GIT_COMMIT = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const MCP_TURN_FIELDS = SCOPED_MCP_METADATA_CONTRACT.turnFields;
 const MCP_TURN_REQUIRED_FIELDS = Object.freeze(MCP_TURN_FIELDS.filter(key => key !== "reasoning_effort"));
 const MCP_CALL_META_FIELDS = SCOPED_MCP_METADATA_CONTRACT.callFields;
@@ -62,8 +63,11 @@ function validateMcpWorkspaces(value) {
   for (const [workspace, state] of entries) {
     brokerRequire(mcpMetaText(workspace) && path.isAbsolute(workspace) && path.normalize(workspace) === workspace,
       "mcp-invalid-metadata");
-    mcpMetaExact(state, ["has_changes"], ["has_changes"]);
-    brokerRequire(typeof state.has_changes === "boolean", "mcp-invalid-metadata");
+    mcpMetaExact(state, ["latest_git_commit_hash", "has_changes"], ["has_changes"]);
+    brokerRequire(typeof state.has_changes === "boolean"
+      && (!Object.hasOwn(state, "latest_git_commit_hash")
+        || typeof state.latest_git_commit_hash === "string"
+        && MCP_GIT_COMMIT.test(state.latest_git_commit_hash)), "mcp-invalid-metadata");
   }
 }
 function validateMcpTurnMetadata(value) {
