@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { materializeBenchmarkCandidate } from "../packages/piagent-core/benchmark/benchmark-candidate.js";
 import { scopedBrokerArmDigest
 } from "../packages/piagent-core/runtime/verification/composite-scoped-mediation.ts";
 import { BENCHMARK_SCOPED_SESSION_REQUEST_VERSION } from "../scripts/benchmark-codex-journey.mjs";
@@ -18,6 +16,7 @@ const root = fs.realpathSync(path.resolve(import.meta.dirname, ".."));
 const assetRootInput = process.env.PIAGENT_REGISTERED_ASSET_ROOT ?? null;
 const nodeCommandInput = process.env.PIAGENT_PINNED_NODE_COMMAND ?? null;
 const codexRuntimeInput = process.env.PIAGENT_CONTROLLED_CODEX_RUNTIME ?? null;
+const qualificationIdentityInput = process.env.PIAGENT_REGISTERED_QUALIFICATION_IDENTITY ?? null;
 const compositeScenarios = Object.freeze([
   "incident-diagnosis",
   "protected-env-refusal",
@@ -49,25 +48,24 @@ function privateWorkspace(temporary) {
   return fs.realpathSync(workspace);
 }
 
-function qualificationFixture(temporary) {
-  const source = path.join(temporary, "source"), candidateRoot = path.join(temporary, "candidate"),
-    assetsRoot = path.join(temporary, "webui-assets"), sdkRoot = path.join(temporary, "sdk");
-  for (const directory of [source, assetsRoot, sdkRoot]) fs.mkdirSync(directory, { mode: 0o700 });
-  fs.writeFileSync(path.join(source, ".gitignore"), "evidence/\n");
-  fs.writeFileSync(path.join(source, "candidate.js"), "export const value = 1;\n");
-  execFileSync("git", ["-C", source, "init", "-q"]);
-  execFileSync("git", ["-C", source, "add", "."]);
-  execFileSync("git", ["-C", source, "-c", "user.name=G0", "-c", "user.email=g0@invalid",
-    "commit", "-qm", "fixture"]);
-  const frozen = materializeBenchmarkCandidate(source, candidateRoot),
-    indexPath = path.join(temporary, "candidate-index.json"),
-    indexBytes = Buffer.from(`${JSON.stringify(frozen.index)}\n`);
-  fs.writeFileSync(indexPath, indexBytes, { mode: 0o400 });
-  fs.writeFileSync(path.join(assetsRoot, "asset.txt"), "asset\n", { mode: 0o600 });
-  fs.writeFileSync(path.join(sdkRoot, "sdk.mjs"), "export const sdk = 1;\n", { mode: 0o600 });
-  return Object.freeze({ version: 4, candidateRoot: fs.realpathSync(candidateRoot),
-    assetsRoot: fs.realpathSync(assetsRoot), sdkRoot: fs.realpathSync(sdkRoot),
-    candidateIndexPath: fs.realpathSync(indexPath), candidateIndexSha256: sha(indexBytes) });
+function registeredQualification(identityFile) {
+  const resolved = fs.realpathSync(identityFile), report = JSON.parse(fs.readFileSync(resolved, "utf8"));
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.kind, "clean-room-base-and-arm-identities-v3");
+  assert.equal(report.outcome, "PASS");
+  assert.match(report.candidate?.candidateIndexSha256, /^[a-f0-9]{64}$/);
+  assert.equal(report.qualification?.version, 4);
+  assert.equal(report.qualification.sourceSha256, report.candidate.contentDigest);
+  assert.deepEqual(Object.keys(report.qualification.paths), ["candidateRoot", "assetsRoot", "sdkRoot",
+    "candidateIndexPath"]);
+  const qualification = Object.freeze({ version: report.qualification.version,
+    candidateRoot: fs.realpathSync(report.qualification.paths.candidateRoot),
+    assetsRoot: fs.realpathSync(report.qualification.paths.assetsRoot),
+    sdkRoot: fs.realpathSync(report.qualification.paths.sdkRoot),
+    candidateIndexPath: fs.realpathSync(report.qualification.paths.candidateIndexPath),
+    candidateIndexSha256: report.candidate.candidateIndexSha256 });
+  assert.equal(sha(fs.readFileSync(qualification.candidateIndexPath)), qualification.candidateIndexSha256);
+  return qualification;
 }
 
 function assetInventory(assetRoot) {
@@ -109,10 +107,12 @@ function exactTurns(assetRoot, catalog, scenarioId) {
     reconnectBefore: turn.reconnectBefore, receiptUncertain: turn.receiptUncertain }));
 }
 
-const missingInputs = [assetRootInput, nodeCommandInput, codexRuntimeInput].some(value => value === null);
+const missingInputs = [assetRootInput, nodeCommandInput, codexRuntimeInput, qualificationIdentityInput]
+  .some(value => value === null);
 
 test("registered production session factory binds exact public composite plans provider-free", {
-  skip: missingInputs ? "requires registered asset, pinned Node and controlled Codex paths" : false,
+  skip: missingInputs
+    ? "requires registered assets, qualification identity, pinned Node and controlled Codex paths" : false,
   timeout: 120000
 }, async t => {
   const assetRoot = fs.realpathSync(assetRootInput), nodeCommand = fs.realpathSync(nodeCommandInput),
@@ -128,7 +128,7 @@ test("registered production session factory binds exact public composite plans p
     registeredMeasurement = Object.freeze({ assetRoot,
       payload: Object.freeze({ suiteId: "production-v2-da2", baseSuiteDigest: identity.suiteDigest,
         sharedEnvironmentDigest: identity.configDigest }), inventory: assetInventory(assetRoot) }),
-    qualification = qualificationFixture(temporary),
+    qualification = registeredQualification(qualificationIdentityInput),
     factory = createRegisteredBenchmarkScopedSessionFactory({ installedRoot: root, registeredMeasurement,
       custodyRoot: fs.realpathSync(custodyRoot), nodeCommand, codexRuntimePath, qualification });
   assert.deepEqual(Object.keys(factory), ["version", "authority", "openSession"]);
@@ -152,6 +152,8 @@ test("registered production session factory binds exact public composite plans p
   }
 
   const scenarioId = "repository-prompt-injection", turns = exactTurns(assetRoot, catalog, scenarioId),
+    selectedPlan = JSON.parse(fs.readFileSync(path.join(assetRoot, "plans", `${scenarioId}.json`), "utf8")),
+    selectedIdentity = selectedPlan.contracts[0].planContext.identity,
     controller = await factory.openSession({ version: BENCHMARK_SCOPED_SESSION_REQUEST_VERSION,
       authority: "none", runId: "qualification-codex-repository-prompt-injection",
       suiteId: "production-v2-da2", scenarioId, surface: "codex-cli", repeat: 1,
@@ -167,8 +169,9 @@ test("registered production session factory binds exact public composite plans p
   await firstCustody.dispose();
   const selectedCustody = await controller.codexScopedBroker.openTurn({ turnIndex: 2, turnId: turns[1].id,
     inputText: turns[1].message, threadId: "qualification-thread", workspace });
-  assert.equal(scopedBrokerArmDigest(selectedCustody.identity), identity.armDigests["codex-cli"]);
+  const selectedArmDigest = scopedBrokerArmDigest(selectedCustody.identity);
   await selectedCustody.dispose();
+  assert.equal(selectedArmDigest, selectedIdentity.armDigests["codex-cli"]);
 
   const mutatedAssetRoot = path.join(temporary, "mutated-assets");
   fs.cpSync(assetRoot, mutatedAssetRoot, { recursive: true, errorOnExist: true });
