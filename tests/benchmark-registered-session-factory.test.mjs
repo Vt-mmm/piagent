@@ -111,8 +111,7 @@ const missingInputs = [assetRootInput, nodeCommandInput, codexRuntimeInput, qual
   .some(value => value === null);
 
 test("registered production session factory binds exact public composite plans provider-free", {
-  skip: missingInputs
-    ? "requires registered assets, qualification identity, pinned Node and controlled Codex paths" : false,
+  skip: missingInputs ? "requires registered asset, pinned Node and controlled Codex paths" : false,
   timeout: 120000
 }, async t => {
   const assetRoot = fs.realpathSync(assetRootInput), nodeCommand = fs.realpathSync(nodeCommandInput),
