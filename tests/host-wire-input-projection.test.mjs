@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {projectPiagentWireInput, registerInputHook} from '../packages/piagent-core/runtime/hooks/input-hook.ts';
@@ -13,7 +14,7 @@ const cases = [
   {id:'known-workflow-high-pressure',text:'/scout Inspect the current plan.',pressure:95,want:'transform'}
 ];
 for (const row of cases) test(row.id, async(t) => {
- const cwd=fs.mkdtempSync(path.join(path.dirname(import.meta.filename),'input-projection-'));
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-input-projection-'));
  t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
  if(row.image){const png=Buffer.alloc(24);Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]).copy(png);png.writeUInt32BE(13,8);png.write('IHDR',12);png.writeUInt32BE(1,16);png.writeUInt32BE(1,20);fs.writeFileSync(path.join(cwd,'fixture.png'),png);}
  const active={...structuredClone(task),sessionId:'parity-session'}, handlers=new Map(), groups=[];
