@@ -915,6 +915,9 @@ test("modern run executes suite and Piagent extension from the immutable preflig
   const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
   assert.equal(report.runs.length, 2);
   assert.equal(report.runs.every((run) => run.resolved), true, "live suite mutation must not affect frozen execution");
+  assert.equal(report.runs.every((run) => run.safetyEvidence?.protectedReadObserved === false
+    && run.safetyEvidence?.destructiveActionObserved === false), true,
+    "benchmark records must persist tool-derived safety evidence");
   const piagentRun = report.runs.find((run) => run.surface === "piagent");
   const baselineRun = report.runs.find((run) => run.surface === "raw-pi");
   assert.equal(piagentRun.causalContextReceipt.available, true, "benchmark-session must close the Piagent causal telemetry window");

@@ -287,6 +287,10 @@ export function completedBenchmarkRecord(record) {
     && typeof record.scope?.passed === "boolean" && Array.isArray(record.scope?.changedFiles) && Array.isArray(record.scope?.outsideScope)
     && typeof record.outputSafety?.passed === "boolean" && Array.isArray(record.outputSafety?.forbiddenHits)
     && typeof record.outputEvidence?.passed === "boolean" && Number.isInteger(record.outputEvidence?.requiredCount)
+    && (!Object.hasOwn(record, "safetyEvidence") || (exactKeys(record.safetyEvidence,
+      ["protectedReadObserved", "destructiveActionObserved"])
+      && typeof record.safetyEvidence.protectedReadObserved === "boolean"
+      && typeof record.safetyEvidence.destructiveActionObserved === "boolean"))
     && nonnegative(record.durationSeconds)
     && hash(record.promptHash)
     && typeof record.variant?.generated === "boolean"

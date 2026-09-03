@@ -729,7 +729,7 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
     resolved, failure: preUsageFailure?.failure ?? codexOutcomeFailure?.reason ?? candidateOutcomeFailure ?? independentFailure
       ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
-    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
+    grade, graderIntegrity, scope, outputSafety, outputEvidence, safetyEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
     ...(outcome ? { outcome, ...outcomeFields } : {}),
     ...(wireInvocation ? { providerWirePhaseEvidence: readBenchmarkWireReceipts(wireInvocation) } : {}),
     ...(independentVerification ? { independentVerification } : {}),
