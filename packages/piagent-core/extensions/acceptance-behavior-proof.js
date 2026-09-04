@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { acceptanceContractConjuncts } from "./acceptance-contract-conjunction.js";
+import { acceptanceResultContractEvidence } from "./acceptance-result-contract-evidence.js";
 import { criterionGraphValidationErrors } from "./criterion-graph.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
 import { normalizePathCandidate } from "./policy-core.js";
@@ -230,39 +232,55 @@ function exportedNames(sourceEntries) {
   return names;
 }
 
-function resolvedSpecifierMatchesSource(testPath, specifier, sourceFiles) {
-  if (!specifier.startsWith(".")) return false;
+function resolvedSpecifierSources(testPath, specifier, sourceFiles) {
+  if (!specifier.startsWith(".")) return [];
   const resolved = normalizePathCandidate(path.posix.normalize(path.posix.join(path.posix.dirname(testPath), specifier)));
   const candidates = new Set([resolved, resolved.replace(/\.[a-z0-9]+$/i, "")]);
-  for (const source of sourceFiles.map((file) => normalizePathCandidate(file))) {
+  return sourceFiles.map((file) => normalizePathCandidate(file)).filter((source) => {
     const stem = source.replace(/\.[a-z0-9]+$/i, "");
-    if (candidates.has(source) || candidates.has(stem) || stem === `${resolved.replace(/\/$/, "")}/index`) return true;
-  }
-  return false;
+    return candidates.has(source) || candidates.has(stem) || stem === `${resolved.replace(/\/$/, "")}/index`;
+  });
 }
 
 /* linked = proven; unknown = alias/barrel/indirect may be valid; unlinked = only unrelated imports. */
 function testSourceLinkage(corpus) {
-  const sourceExports = exportedNames(corpus.sourceEntries);
+  const sourceExports = new Map(corpus.sourceEntries.map((entry) => [
+    normalizePathCandidate(entry.path), exportedNames([entry])
+  ]));
   const linkedEntries = [];
   let unresolvedProjectImport = false;
   for (const entry of corpus.testEntries) {
     const records = moduleRecords(entry);
     const callables = new Set();
+    const callableBindings = [];
     let linked = false;
     for (const record of records) {
-      const bindings = importedBindings(record);
-      if (resolvedSpecifierMatchesSource(entry.path, record.specifier, corpus.sourceFiles)) {
+      const importBindings = importedBindings(record);
+      const sourcePaths = resolvedSpecifierSources(entry.path, record.specifier, corpus.sourceFiles);
+      if (sourcePaths.length > 0) {
         linked = true;
-        for (const binding of bindings) {
-          if (binding.exported === "*") sourceExports.forEach((name) => callables.add(`${binding.local}.${name}`));
-          else callables.add(binding.local);
+        for (const binding of importBindings) {
+          if (binding.exported === "*") sourcePaths.forEach((sourcePath) => {
+            for (const name of sourceExports.get(sourcePath) ?? []) {
+              const testName = `${binding.local}.${name}`;
+              callables.add(testName);
+              callableBindings.push({ sourceName: name, sourcePath, testName });
+            }
+          });
+          else {
+            callables.add(binding.local);
+            for (const sourcePath of sourcePaths) {
+              if (sourceExports.get(sourcePath)?.has(binding.exported)) {
+                callableBindings.push({ sourceName: binding.exported, sourcePath, testName: binding.local });
+              }
+            }
+          }
         }
         continue;
       }
       if (record.specifier.startsWith(".") || /^[#@~]/.test(record.specifier)) unresolvedProjectImport = true;
     }
-    if (linked) linkedEntries.push({ entry, callables: [...callables] });
+    if (linked) linkedEntries.push({ entry, callables: [...callables], bindings: callableBindings });
   }
   if (linkedEntries.length > 0) return { status: "linked", entries: linkedEntries };
   return { status: unresolvedProjectImport ? "unknown" : "unlinked", entries: [] };
@@ -356,6 +374,7 @@ function callableSlices(code, strings, callables) {
           .map((item) => boundStringValue(item[0], strings)).filter((item) => typeof item === "string")
       ));
       if (boundAssertions.length > 0) calls.push({
+        callable,
         slice, values, strings, resultNames, argumentNames, assertionValues, prelude: code.slice(0, match.index),
         assertions: boundAssertions.map((item) => item.code),
         descriptions: enclosingTestDescriptions(code, strings, match.index)
@@ -686,11 +705,11 @@ function assertionProvesDefinedField(call, field) {
 
 function linkedTestEvidence(linkage) {
   const profiles = [];
-  for (const { entry, callables } of linkage.entries) {
+  for (const { entry, callables, bindings } of linkage.entries) {
     if (!/\b(?:assert(?:\.[a-z][a-z0-9_]*)?\s*\(|expect\s*\()/i.test(entry.evidenceText)) continue;
     const bound = bindJavaScriptStrings(entry.text);
     const calls = callableSlices(bound.code, bound.strings, callables);
-    if (calls.length > 0) profiles.push({ path: entry.path, code: bound.code, calls, callables });
+    if (calls.length > 0) profiles.push({ path: entry.path, code: bound.code, calls, callables, bindings });
   }
   return profiles;
 }
@@ -848,14 +867,14 @@ export function verifierCommandsCoverTests(task, testPaths, cwd) {
   }));
 }
 
-function criterionBehaviorMatches(task, criterion, profiles, corpus) {
-  const rawCriterion = boundCriterionText(task, criterion);
+function criterionConjunctMatches(task, rawCriterion, profiles, corpus) {
   if (!rawCriterion || profiles.length === 0) return false;
   const text = normalizedText(rawCriterion);
   const calls = profiles.flatMap((profile) => profile.calls);
   const code = calls.flatMap((call) => call.assertions).join("\n");
   const requirements = [];
-  if (rawCriterion.split(";").filter((clause) => clause.trim()).length > 1) return false;
+  const resultEvidence = acceptanceResultContractEvidence(rawCriterion, profiles, corpus.sourceEntries);
+  if (resultEvidence !== undefined) requirements.push(resultEvidence);
   if (/\bfocused\s+tests?\b/.test(text)) requirements.push(calls.length > 0);
   if (/--[a-z0-9_-]+=[a-z0-9_<[{]/i.test(text) || /\bname\s*=\s*value\b/.test(text)) {
     requirements.push(calls.some((call) => call.values.some((value) => {
@@ -920,6 +939,13 @@ function criterionBehaviorMatches(task, criterion, profiles, corpus) {
   const descriptionTerms = semanticTerms(calls.flatMap((call) => call.descriptions ?? []).join("\n"));
   const descriptionOverlap = [...criterionTerms].filter((term) => descriptionTerms.has(term));
   return direct || descriptionOverlap.length >= 2;
+}
+
+function criterionBehaviorMatches(task, criterion, profiles, corpus) {
+  const rawCriterion = boundCriterionText(task, criterion);
+  const conjuncts = acceptanceContractConjuncts(rawCriterion);
+  return conjuncts.length > 0
+    && conjuncts.every((conjunct) => criterionConjunctMatches(task, conjunct, profiles, corpus));
 }
 
 function behavioralFocusRequired(input) {

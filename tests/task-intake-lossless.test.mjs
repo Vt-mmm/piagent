@@ -92,7 +92,7 @@ test("duplicate atomic or complete grouped criteria refuse intake before receipt
 
 test("short nonempty obligations are retained without changing existing atomic separators", () => {
   const criteria = automaticAcceptanceCriteria("- [C] Fix x; add y; return z.");
-  assert.deepEqual(criteria, ["[C] Fix x", "[C] add y", "[C] return z.", verifierCriterion]);
+  assert.deepEqual(criteria, ["[C] Fix x;", "[C] add y;", "[C] return z.", verifierCriterion]);
 });
 
 test("unbroken overlong tokens refuse intake rather than changing token identity", () => {

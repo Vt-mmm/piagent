@@ -1,5 +1,6 @@
 import path from "node:path";
 import { callableBodies } from "./acceptance-callable-scanner.js";
+import { acceptanceIntegerConstraintTargets as integerConstraintTargets } from "./acceptance-contract-conjunction.js";
 import { acceptanceBoundaryProofGuidance, isoTimestampProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements, rejectionClassProofGuidance } from "./acceptance-boundary-guidance.js";
 import { executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract, hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
@@ -13,7 +14,6 @@ import { malformedTaggedEventEvidence } from "./acceptance-tagged-event-evidence
 import { boundRejectionTestEvidence, callableAssertionMode } from "./acceptance-test-binding-evidence.js";
 import { temporalContractEvidence, temporalInputRequirements } from "./acceptance-temporal-contract.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
-const INTEGER_TARGET_STOPWORDS = new Set(["and", "basis", "cents", "input", "inputs", "items", "money", "number", "numbers", "or", "points", "typeerror", "value", "values"]);
 function normalizedText(value) {
   return String(value ?? "")
     .normalize("NFD")
@@ -164,18 +164,6 @@ function integerGuardHelpers(sourceText) {
     if (new RegExp(`number\\.is(?:safe)?integer\\s*\\(\\s*${escaped}\\b`, "i").test(match[3])) helpers.push(match[1].toLowerCase());
   }
   return uniqueStrings(helpers).slice(0, 12);
-}
-
-function integerConstraintTargets(text, sourceText = "") {
-  const value = normalizedText(text);
-  const source = normalizedText(sourceText);
-  const candidates = [];
-  for (const match of value.matchAll(/\b(?:an?\s+)?(?:non-negative\s+|positive\s+)?integer\s+([a-z_$][a-z0-9_$]*)\b/g)) candidates.push(match[1]);
-  for (const match of value.matchAll(/`([a-z_$][a-z0-9_$]*)`[^.\n]{0,120}\b(?:is|must be|must remain)\s+(?:an?\s+)?(?:non-negative\s+|positive\s+)?(?:safe\s+)?integer\b/g)) candidates.push(match[1]);
-  return uniqueStrings(candidates)
-    .map((item) => item.toLowerCase())
-    .filter((item) => !INTEGER_TARGET_STOPWORDS.has(item))
-    .filter((item) => !source || new RegExp(`\\b${escapeRegex(item)}\\b`).test(source));
 }
 
 function onlyUndefinedContract(text) {

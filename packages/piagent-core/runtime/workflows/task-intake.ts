@@ -1,4 +1,5 @@
 import { classifyContextTask } from "../../extensions/context-engine.js";
+import { acceptanceContractConjuncts } from "../../extensions/acceptance-contract-conjunction.js";
 import { matchesProtectedPath, normalizePathCandidate } from "../../extensions/policy-core.js";
 import type { ReviewLens } from "../../extensions/guard-types.js";
 import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
@@ -194,40 +195,6 @@ export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {
   return classifyContextTask(prompt).lane === "tiny" ? "tiny" : "normal";
 }
 
-const ATOMIC_CLAUSE_LEAD = /^(?:accept|add|build|change|correct|create|do not|emit|ensure|fail|fix|handle|implement|invalid|missing|modify|must|never|parse|preserve|reject|repair|return|support|throw|treat|update|verify|without)\b/i;
-
-function topLevelImperativeClauses(value: string, preserveSeparator = false): string[] {
-  const clauses: string[] = [];
-  let current = "", quote = "", round = 0, square = 0, curly = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    const character = value[index], previous = value[index - 1] ?? "", next = value[index + 1] ?? "";
-    if (quote) {
-      current += character;
-      if (character === quote && previous !== "\\") quote = "";
-      continue;
-    }
-    const apostropheInsideWord = character === "'" && /[\p{L}\p{N}]/u.test(previous) && /[\p{L}\p{N}]/u.test(next);
-    if ((character === "`" || character === '"' || character === "'") && !apostropheInsideWord) {
-      quote = character; current += character;
-      continue;
-    }
-    if (character === "(") round += 1;
-    else if (character === ")") round = Math.max(0, round - 1);
-    else if (character === "[") square += 1;
-    else if (character === "]") square = Math.max(0, square - 1);
-    else if (character === "{") curly += 1;
-    else if (character === "}") curly = Math.max(0, curly - 1);
-    if (character === ";" && round === 0 && square === 0 && curly === 0 && ATOMIC_CLAUSE_LEAD.test(value.slice(index + 1).trimStart())) {
-      if (current.trim()) clauses.push(`${current.trim()}${preserveSeparator ? ";" : ""}`);
-      current = "";
-      continue;
-    }
-    current += character;
-  }
-  if (current.trim()) clauses.push(current.trim());
-  return clauses;
-}
-
 function splitAcceptanceCriterion(value: string, grouped = false): string[] {
   const normalized = value.replace(/^\s*(?:[-*+] |\d+[.)]\s+)/, "").replace(/\s+/g, " ").trim();
   if (!normalized) return [];
@@ -236,7 +203,7 @@ function splitAcceptanceCriterion(value: string, grouped = false): string[] {
   const prefix = label ? `${label} ` : "";
   const available = AUTO_ACCEPTANCE_CRITERION_CHARS - prefix.length;
   const fragments: string[] = [];
-  const units = topLevelImperativeClauses(body, grouped)
+  const units = acceptanceContractConjuncts(body, { preserveSeparators: true })
     .flatMap((clause) => clause.split(/(?<=[.!?])\s+(?=(?:[`"'([{]|[\p{Lu}\p{N}]|(?:do|must|never|verify)\b))/u))
     .filter((item) => item.trim());
   for (const unit of units) {

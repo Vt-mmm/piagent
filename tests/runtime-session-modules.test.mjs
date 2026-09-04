@@ -1792,10 +1792,10 @@ describe("runtime session modules", () => {
       "- [C2] Preserve literals `a;b` and \"c;d\"; reject malformed input."
     ].join("\n"));
     const atomic = [
-      "[C1] Support mode A",
-      "[C1] reject invalid mode B",
+      "[C1] Support mode A;",
+      "[C1] reject invalid mode B;",
       "[C1] preserve caller state unchanged.",
-      "[C2] Preserve literals `a;b` and \"c;d\"",
+      "[C2] Preserve literals `a;b` and \"c;d\";",
       "[C2] reject malformed input."
     ];
     for (const expected of atomic) assert.equal(criteria.includes(expected), true, expected);
