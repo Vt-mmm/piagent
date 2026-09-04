@@ -467,9 +467,9 @@ export class SessionRuntimeSupervisor {
     // The pre-clear projection is stale; derive post-settlement liveness from exact ownership.
     active.operationRef = null; active.messageRequestId = null; const settledLiveState = this.ownership(sessionRef).liveState;
     if (projection) active.lastSessionRevision = projection.sessionRevision;
-    const taskOutcome = activeSessionTask(active.info.cwd, active.info.id)?.trace?.outcome ?? null;
+    const terminalTask = activeSessionTask(active.info.cwd, active.info.id), taskOutcome = terminalTask?.trace?.outcome ?? null, nativeTaskStatus = terminalTask?.trace?.outcome === "blocked" && terminalTask.trace.terminalDisposition === "refused" ? "refused" : null;
     stream.complete(projection?.sessionRevision ?? null, taskOutcome,
-      settlement.status === "not-applicable" ? null : settlement.taskStatus);
+      settlement.status === "not-applicable" ? nativeTaskStatus : settlement.taskStatus);
     if (projection) this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
       liveState: restartRequired ? "uncertain" : settledLiveState, operationRef: null,
       ...(messageRequestId ? { messageRequestId } : {}), reasonCode: restartRequired ? "runtime-restart-required" : null });

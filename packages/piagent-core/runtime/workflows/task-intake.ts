@@ -32,6 +32,7 @@ const AUTO_READ_ONLY_INTENT = /\b(?:analy[sz]e|audit|check|diagnos(?:e|is)|expla
 // temporary "inspect first, edit later" instruction.
 const AUTO_NO_MUTATION_CANDIDATES = [
   /\b(?:do not|don't|must not|never)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)(?:\s+(?:or|and)\s+create)?\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
+  /\b(?:do not|don't|must not|never)\s+create\s+(?:or|and)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
   /\b(?:do not|don't|must not|never)\s+make\s+(?:any\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
   /\b(?:make\s+)?no\s+(?:(?:code|source|project|file|workspace|repo(?:sitory)?)\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
   /\bno\s+(?:project|source)\s+files?\s+(?:are\s+)?(?:changed|edited|modified|mutated)\b/i,
@@ -44,6 +45,8 @@ const AUTO_BOUNDARY_TAIL_PREFIX = "^(?:\\s|[,.;:!?()\\[\\]{}—–-])*(?:but\\s+
 const AUTO_LOCAL_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:outside|beyond|under|within|inside|in|on|for(?!\\s+now\\b)|except(?:\\s+for)?|other\\s+than|apart\\s+from|to\\b|only\\s+(?:(?:edit|change|modify|mutate|touch|write)\\b|(?:in|under|within|outside)\\b|(?:[a-z0-9_.@*?-]+\\/))|ngo(?:a|à)i\\b|tr(?:u|ừ)\\b)`, "i");
 const AUTO_TEMPORARY_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:(?:not\\s+)?yet\\b|right\\s+now\\b|for\\s+now\\b|at\\s+(?:(?:this|the\\s+current)\\s+(?:step|stage|phase|time)|the\\s+moment)\\b|during\\s+(?:(?:this|the\\s+current)\\s+)?(?:step|stage|phase|planning)\\b|while\\b|unless\\b|until\\b|before\\b|hi(?:e|ệ)n\\s+t(?:a|ạ)i\\b|b(?:a|â)y\\s+gi(?:o|ờ)\\b)`, "i");
 const AUTO_GLOBAL_NO_ACCESS_BOUNDARY = /\b(?:do not|don't|must not|never)\s+(?:read|execute|write|delete|restore|hash|echo|compare)(?:\s*,\s*(?:read|execute|write|delete|restore|hash|echo|compare)){1,6}(?:\s*,?\s*or\s+(?:read|execute|write|delete|restore|hash|echo|compare))?\s+(?:any\s+|the\s+|this\s+)?(?:project|workspace|repository|repo|audit|environment)(?:\s+or\s+(?:project|workspace|repository|repo|audit|environment))?\s+(?:content|data|files?|records?|history)\b/i;
+const AUTO_PROTECTED_ACCESS_DENIAL = /\b(?:do not|don't|must not|never)\s+(?:inspect|read|open|access|copy|print|echo|reveal|expose|export|disclose)\s+(?:(?:the|a|an|any|all|this|that|complete|raw)\s+){0,3}(?:protected(?:[- ](?:credentials?|files?|data|material|secrets?|tokens?))?|credentials?|secrets?|tokens?|passwords?|api[- ]?keys?|auth(?:entication)?(?:\s+(?:data|material|values?|tokens?))?)\b/i;
+const AUTO_REFUSAL_INTENT = /\b(?:refuse|decline|reject)\b/i;
 const AUTO_GLOBAL_READ_ONLY_PATTERNS = [
   /^\s*\/?read-only\s*(?:$|[.!?:;—–-])/im,
   /^\s*\/?read-only\s+(?:task|run|session)\s*(?:$|[.!?:;—–-]|\b(?:to|for)\b)/im,
@@ -111,6 +114,12 @@ function hasGlobalNoAccessBoundary(text: string): boolean {
   return AUTO_GLOBAL_NO_ACCESS_BOUNDARY.test(text);
 }
 
+export function hasProtectedRefusalBoundary(text: string): boolean {
+  return AUTO_REFUSAL_INTENT.test(text)
+    && AUTO_PROTECTED_ACCESS_DENIAL.test(text)
+    && noMutationBoundarySignals(text).taskWide;
+}
+
 const PLAUSIBLE_SCOPE_ROOT = /^(?:\.github|app|apps|bin|config|docs|examples|lib|logs|packages|pages|public|scripts|spec|src|test|tests|vendor|__tests__)(?:\/|$)/i;
 const PLAUSIBLE_SCOPE_FILE = /(?:^|\/)(?:\.[^/]+|[^/]+\.(?:bash|c|cc|cjs|cpp|css|csv|env|go|graphql|gql|h|hpp|html|java|js|json|jsx|kt|kts|md|mdx|mjs|php|proto|py|rb|rs|scss|sh|sql|svg|swift|toml|ts|tsx|txt|xml|yaml|yml))$/i;
 
@@ -168,12 +177,13 @@ export function automaticReadOnlyTaskIntakeEligible(prompt: string, readProtecte
   if (isNonAuthorizingChangeClarification(text)) return false;
   const signal = classifyContextTask(text);
   if (["usage", "permission", "context", "discuss", "plan", "release", "onboard"].includes(signal.workflow)) return false;
-  const readOnlyBoundary = noMutationBoundarySignals(text).taskWide || hasGlobalReadOnlyBoundary(text);
+  const protectedRefusalBoundary = hasProtectedRefusalBoundary(text);
+  const readOnlyBoundary = noMutationBoundarySignals(text).taskWide || hasGlobalReadOnlyBoundary(text) || protectedRefusalBoundary;
   if (!AUTO_READ_ONLY_INTENT.test(folded) && !readOnlyBoundary) return false;
   if (hasChangeIntent(folded) && !readOnlyBoundary) return false;
   if (/\bpiagent_task_start\b/i.test(text)) return false;
   const protectedTarget = signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-  return !protectedTarget || hasGlobalNoAccessBoundary(text);
+  return !protectedTarget || hasGlobalNoAccessBoundary(text) || protectedRefusalBoundary;
 }
 
 export function automaticTaskIntakeMode(prompt: string, readProtectedPaths: string[]): "source-change" | "read-only" | undefined {

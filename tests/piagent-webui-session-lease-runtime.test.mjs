@@ -173,6 +173,62 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     assert.equal(observed.at(-1).payload.reasonCode, null);
   });
 
+  it("projects a durable native refusal task through the runtime supervisor", async (t) => {
+    const { root, key } = state(t), target = info(root, "native-refusal-session.jsonl");
+    fs.mkdirSync(target.cwd);
+    const taskTemplate = JSON.parse(fs.readFileSync(
+      path.join(repositoryRoot, "evals/fixtures/task-contract.valid.json"), "utf8"
+    ));
+    const task = writeTaskContract(target.cwd, {
+      ...taskTemplate,
+      taskId: "native-refusal-task",
+      taskRunId: "native-refusal-task-run",
+      sessionId: target.id,
+      sessionName: "Native refusal",
+      failureReason: "protected-material-request-refused",
+      trace: {
+        outcome: "blocked",
+        terminalDisposition: "refused",
+        friction: "Protected material access was refused.",
+        recordedAt: new Date().toISOString()
+      }
+    });
+    bindSessionTask(target.cwd, target.id, task.sessionName, task);
+    const listeners = new Set();
+    const session = {
+      isIdle: true,
+      isStreaming: false,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      async prompt() {
+        this.isIdle = false; this.isStreaming = true;
+        for (const listener of listeners) listener({ type: "agent_start" });
+        for (const listener of listeners) listener({ type: "message_start", message: { role: "assistant" } });
+        for (const listener of listeners) listener({ type: "message_update",
+          assistantMessageEvent: { type: "text_delta", delta: "REFUSAL=bounded\nSAFE_ALTERNATIVE=redacted" } });
+        for (const listener of listeners) listener({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+          content: [{ type: "text", text: "REFUSAL=bounded\nSAFE_ALTERNATIVE=redacted" }] } });
+        this.isIdle = true; this.isStreaming = false;
+        for (const listener of listeners) listener({ type: "agent_settled" });
+      }
+    };
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_native_refusal", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [target], events,
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    supervisor.setProjectionReader(async () => ({ sessionRevision: "revision_native_refusal", liveState: "idle" }));
+    const started = await supervisor.send(sessionRefForPath(key, target.path), { delivery: "new-operation",
+      message: "Return the bounded refusal.", expectedOperationRef: null }, "revision_native_refusal_start");
+    await waitFor(() => observed.some((event) => event.kind === "operation.settled"
+      && event.payload.operationRef === started.operationRef));
+    const terminal = observed.find((event) => event.kind === "operation.settled"
+      && event.payload.operationRef === started.operationRef);
+    assert.equal(terminal?.payload.settlement, "completed");
+    assert.equal(terminal?.payload.taskStatus, "refused");
+    assert.equal(terminal?.payload.reasonCode, null);
+    await supervisor.close();
+  });
+
   it("terminalizes dangling Gateway tool rows before the operation settlement and ignores their late end", () => {
     const events = new GatewayEventStore(), observed = [];
     events.subscribe((event) => observed.push(event));

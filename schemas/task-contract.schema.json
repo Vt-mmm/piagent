@@ -848,6 +848,11 @@
             "failed"
           ]
         },
+        "terminalDisposition": {
+          "enum": [
+            "refused"
+          ]
+        },
         "friction": {
           "type": "string"
         },
@@ -859,6 +864,22 @@
           "format": "date-time"
         }
       },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "terminalDisposition"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "const": "blocked"
+              }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "failedAt": {

@@ -3,8 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
 import { appendTaskJournalEvent, readTaskJournal } from "./task-journal.js";
-import {
-  acceptanceReceiptProvenanceSummary,
+import { acceptanceReceiptProvenanceSummary,
   acceptanceReceiptSummary,
   acceptanceReceiptValidationErrors,
   normalizeAcceptanceReceipt
@@ -12,6 +11,7 @@ import {
 import { LEGACY_UNTRUSTED_DIGEST_ALGORITHM } from "./task-digest-migration.js";
 import { criterionGraphValidationErrors, normalizeCriterionGraph } from "./criterion-graph.js";
 import { normalizeTaskAuthoritySnapshot, taskAuthorityContractValidationErrors } from "./task-authority-contract.js";
+import { normalizeTerminalDisposition, validTerminalDisposition } from "./task-terminal-disposition.js";
 import {
   commitLegacySchemaTaskDigestState,
   migrateUnversionedTaskDigestState,
@@ -22,15 +22,13 @@ export { taskDigestMigrationArchiveStatus } from "./task-digest-state.js";
 import { acceptanceReceiptWithoutWorkingTreeProof, normalizedTaskDigestFields, taskDigestContractValidationErrors } from "./task-digest-contract.js";
 import { unicodeCodePointLength } from "./verification-intelligence.js";
 import { isWorkspaceRevisionDigest } from "./workspace-revision.js";
-import {
-  WORKING_TREE_DIGEST_ALGORITHM,
+import { WORKING_TREE_DIGEST_ALGORITHM,
   isCurrentWorkingTreeDigest,
   isUnavailableWorkingTreeDigest,
   unavailableWorkingTreeHash,
   versionWorkingTreeHash
 } from "./working-tree-digest.js";
-import {
-  directChildGitEvidenceRoots,
+import { directChildGitEvidenceRoots,
   gitEvidenceRootDetails,
   gitEvidenceRoots,
   gitOutput,
@@ -64,7 +62,7 @@ const WORK_PLAN_FIELDS = new Set(["id", "title", "role", "mode", "status", "depe
 const ORCHESTRATION_FIELDS = new Set(["mode", "subagents", "reason", "fieldGuidePath", "modelRoles"]);
 const MODEL_ROLE_FIELDS = new Set(["planner", "worker", "reviewer", "watchdog"]);
 const VERIFY_EVIDENCE_FIELDS = new Set(["command", "exitCode", "summary", "recordedAt", "observed", "observedAt", "isError", "matchedProfileCommand", "preWorkingTreeDigest", "workingTreeDigest", "preWorkspaceRevisionDigest", "workspaceRevisionDigest"]);
-const TRACE_FIELDS = new Set(["outcome", "friction", "notes", "recordedAt"]);
+const TRACE_FIELDS = new Set(["outcome", "terminalDisposition", "friction", "notes", "recordedAt"]);
 export function safeTaskId(value) {
   const normalized = String(value ?? "")
     .trim()
@@ -335,8 +333,9 @@ export function taskContractValidationErrors(input) {
   }
   if (!isRecord(input.trace) || unsupportedObjectField(input.trace, TRACE_FIELDS) || !TASK_OUTCOMES.includes(input.trace.outcome)) {
     errors.push("trace.outcome is invalid");
-  } else if (input.trace.recordedAt !== undefined && !validTimestamp(input.trace.recordedAt)) {
-    errors.push("trace.recordedAt must be a valid timestamp");
+  } else {
+    if (!validTerminalDisposition(input.trace)) errors.push("trace.terminalDisposition is invalid");
+    if (input.trace.recordedAt !== undefined && !validTimestamp(input.trace.recordedAt)) errors.push("trace.recordedAt must be a valid timestamp");
   }
   if (input.orchestration !== undefined) {
     const orchestration = input.orchestration;
@@ -468,6 +467,7 @@ export function normalizeTaskContract(input, options = {}) {
     verifyEvidence: legacyDigestContract ? [] : verifyEvidence,
     trace: {
       outcome: legacyDigestContract && trace.outcome === "pending" ? "blocked" : TASK_OUTCOMES.includes(trace.outcome) ? trace.outcome : "pending",
+      terminalDisposition: normalizeTerminalDisposition(trace),
       friction: legacyDigestContract && trace.outcome === "pending" ? "Legacy working-tree evidence is not replayable; start a new attempt." : typeof trace.friction === "string" ? trace.friction : undefined,
       notes: typeof trace.notes === "string" ? trace.notes : undefined,
       recordedAt: legacyDigestContract && trace.outcome === "pending" ? updatedAt : trace.recordedAt === undefined ? undefined : normalizedTimestamp(trace.recordedAt, updatedAt)

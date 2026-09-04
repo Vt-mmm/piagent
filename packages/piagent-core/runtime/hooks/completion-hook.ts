@@ -13,22 +13,21 @@ import { workingTreeSnapshot } from "../../extensions/task-state.js";
 import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 import { taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
 import { latestObservedVerification, verificationEvidenceProvesStableTree } from "../../extensions/verification-intelligence.js";
-import { assistantMessageHasToolCall, assistantMessageText, prependAssistantNotice, looksLikeCompletionClaim,
-  looksLikeIncompleteHandoff } from "../session/message-signals.ts";
+import { assistantMessageHasToolCall, assistantMessageText, prependAssistantNotice, looksLikeCompletionClaim, looksLikeIncompleteHandoff } from "../session/message-signals.ts";
 import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
 import type { RecoveryDecision } from "../recovery/recovery-policy.ts";
 import { independentVerificationRecovery } from "../recovery/independent-verification-recovery.ts";
 import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { evaluateExactFinalOutputContract } from "../quality/exact-output-contract.ts";
 import { performanceReviewGuidance, taskPerformanceAssurance } from "../quality/performance-assurance.ts";
+import { protectedRefusalHandoffMatches, settleNativeProtectedRefusal } from "./protected-refusal-completion.ts";
 import { planRecoveryContinuation, reserveSemanticReviewContinuation, terminalRecoveryForContinuationDenial } from "../recovery/continuation-budget.ts";
 import { semanticRepairProvenance } from "../recovery/semantic-repair-handshake.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
 type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[] };
-type CriticalRecoveryProjection = { criterionText: string; targets: string[]; missingDimensions: string[];
-  proofHints: string[]; diagnosticHints?: string[] };
+type CriticalRecoveryProjection = { criterionText: string; targets: string[]; missingDimensions: string[]; proofHints: string[]; diagnosticHints?: string[] };
 function exactPathCoverage(expectedPaths: string[], reviewedPaths: string[] | undefined): boolean {
   const expected = [...new Set(expectedPaths)].sort();
   const reviewed = [...new Set(reviewedPaths ?? [])].sort();
@@ -61,6 +60,7 @@ type CompletionHookDependencies = {
   deferIndependentCompletion?: (ctx: ExtensionContext, task: TaskContract, response: { origin: "assistant"; bytes: string }, finalizer: {
     preflight: () => object | false; publication: (capability: object) => object | false; finalize: (capability: object) => boolean }) => boolean;
   projectIndependentLifecycle?: (ctx: ExtensionContext, task: TaskContract, candidate: TaskContract) => TaskContract | false;
+  nativeRefusalFallbackAllowed?: (ctx: ExtensionContext, task: TaskContract) => boolean;
   maxManifestFiles: number; semanticReviewAllowed: (task: TaskContract) => boolean;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
   flushObservedTaskContext: (
@@ -175,7 +175,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     if (!task) return;
     observeTrajectorySync(ctx, syncTrajectory?.(ctx, task, { sourceHook: "completion" }), telemetry);
     const text = assistantMessageText(event.message);
-    const completionClaim = looksLikeCompletionClaim(text);
+    const protectedRefusalHandoff = protectedRefusalHandoffMatches(task.operatorRequest, text), completionClaim = looksLikeCompletionClaim(text) || protectedRefusalHandoff;
     const incompleteHandoff = looksLikeIncompleteHandoff(text);
     if (task.trace.outcome !== "pending") return;
     const readOnlyEvidenceObserved = (task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && hasDurableContextEvidence(task);
@@ -199,8 +199,8 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     }
     if (!completionPreparationCurrent(preparation)) return { message: prependAssistantNotice(event.message,
       "[Piagent completion gate: NOT APPROVED]\nIndependent verification stopped with the session; no completion or follow-up was scheduled.\n\n") };
-    const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
-    const currentDigest = workingTreeEvidenceDigest(currentDigests);
+    const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>, currentDigest = workingTreeEvidenceDigest(currentDigests);
+    if (settleNativeProtectedRefusal({ pi, ctx, task, response: text, currentDigests, enabled: protectedRefusalHandoff && dependencies.nativeRefusalFallbackAllowed?.(ctx, task) === true, dependencies, persistHandoff })) return;
     const currentPassingVerifierObserved = verificationEvidenceProvesStableTree(latestExactVerifier, currentDigest, currentWorkspaceRevisionDigest(ctx.cwd));
     const handoffAttempt = completionClaim || (
       !incompleteHandoff

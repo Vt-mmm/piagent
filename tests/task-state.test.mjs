@@ -274,6 +274,17 @@ test("validates and preserves conditional mutation policy while read-only remain
   assert.equal(normalizeTaskContract(contract({ changeMode: "read-only", mutationPolicy: "allowed" })), undefined);
 });
 
+test("terminal refusal disposition is valid only on a blocked task", () => {
+  const refused = contract({ trace: { outcome: "blocked", terminalDisposition: "refused" } });
+  assert.deepEqual(taskContractValidationErrors(refused), []);
+  assert.equal(normalizeTaskContract(refused).trace.terminalDisposition, "refused");
+  for (const trace of [
+    { outcome: "pending", terminalDisposition: "refused" },
+    { outcome: "completed", terminalDisposition: "refused" },
+    { outcome: "blocked", terminalDisposition: "completed" }
+  ]) assert.match(taskContractValidationErrors(contract({ trace })).join("; "), /terminalDisposition is invalid/);
+});
+
 test("Task Contract validation rejects scope beyond the criterion graph binding cap", () => {
   const oversized = contract({ scope: Array.from({ length: 2001 }, (_, index) => `src/file-${index}.js`) });
   assert.match(taskContractValidationErrors(oversized).join("; "), /scope must contain at most 2000 entries/);

@@ -422,6 +422,7 @@ export type TaskContract = {
   }>;
   trace: {
     outcome: "pending" | "completed" | "blocked" | "partial" | "failed";
+    terminalDisposition?: "refused";
     friction?: string;
     notes?: string;
     recordedAt?: string;

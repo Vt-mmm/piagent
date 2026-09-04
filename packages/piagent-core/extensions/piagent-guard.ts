@@ -3775,11 +3775,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const routingObjective = routingObjectiveFromEnvironment(process.env.PIAGENT_ROUTING_OBJECTIVE);
   const autoContextEnabled = environmentFeatureEnabled("PIAGENT_AUTO_CONTEXT");
   const autoRecoveryEnabled = environmentFeatureEnabled("PIAGENT_AUTO_RECOVERY");
-  const runtimeState = new RuntimeSessionState({
-    maxObservedContext: contextBudgetConfig(policy).maxManifestFiles
-  });
+  const independentVerificationConfigPath = process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG,
+    runtimeState = new RuntimeSessionState({ maxObservedContext: contextBudgetConfig(policy).maxManifestFiles });
   const independentAcceptance = new IndependentAcceptanceRuntime({ state: runtimeState, installedRoot: PLATFORM_ROOT,
-    configPath: process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG,
+    configPath: independentVerificationConfigPath,
     writeTask,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     authorizeSourceRead: (ctx, sourcePath) => {
@@ -4220,6 +4219,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     prepareIndependentAcceptance: (ctx, task, response) => independentAcceptance.prepare(ctx, task, response),
     deferIndependentCompletion: (ctx, task, response, finalizer) => independentAcceptance.deferCompletion(ctx, task, response, finalizer),
     projectIndependentLifecycle: (ctx, task, candidate) => independentAcceptance.projectLifecycle(ctx, task, candidate),
+    nativeRefusalFallbackAllowed: () => !independentVerificationConfigPath,
     maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     flushObservedTaskContext,
