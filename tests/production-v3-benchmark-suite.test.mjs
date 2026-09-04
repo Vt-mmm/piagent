@@ -9,6 +9,7 @@ import {
   loadBenchmarkSuite,
   validateBenchmarkSuiteFiles
 } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
+import { productionSpendControlValidationErrors } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { expectedBenchmarkRecord } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { executionOrder } from "../scripts/benchmark-runner-support.mjs";
@@ -92,6 +93,7 @@ function completedRecord(outcome, overrides = {}) {
 test("production-v3 is a distinct stock-Codex public regression with an exact 108-session matrix", () => {
   const loaded = loadBenchmarkSuite("production-v3", root);
   const { suite, suiteRoot } = loaded;
+  const spendControl = JSON.parse(fs.readFileSync(path.join(suiteRoot, "spend-control.v1.json"), "utf8"));
 
   assert.equal(loaded.builtInId, "production-v3");
   assert.equal(suite.id, "production-v3");
@@ -125,6 +127,21 @@ test("production-v3 is a distinct stock-Codex public regression with an exact 10
   assert.equal(new Set(order.map(({ scenario, repeat, surface }) =>
     `${scenario.id}\0${repeat}\0${surface}`)).size, 108);
 
+  assert.equal(spendControl.execution.campaignStopPolicy, "measurement-invalidating-only");
+  assert.equal(spendControl.execution.stopAfterFailedPair, false,
+    "valid agent quality failures must remain in the exact-108 measurement instead of terminal-stopping it");
+  assert.deepEqual(spendControl.stages.map((stage) => stage.cumulativeSessions), [0, 12, 18, 54, 108]);
+  const validationContext = { suiteId: suite.id, expectedSessions: 108, suite, requireHostReadiness: false };
+  assert.deepEqual(productionSpendControlValidationErrors(spendControl, validationContext), []);
+  const qualityStopping = structuredClone(spendControl);
+  qualityStopping.execution.stopAfterFailedPair = true;
+  assert.ok(productionSpendControlValidationErrors(qualityStopping, validationContext)
+    .includes("measurement-invalidating-only-policy-requires-quality-stop-disabled"));
+  const missingPolicy = structuredClone(spendControl);
+  delete missingPolicy.execution.campaignStopPolicy;
+  assert.ok(productionSpendControlValidationErrors(missingPolicy, validationContext)
+    .includes("production-v3-requires-measurement-invalidating-only-policy"));
+
   const v2Root = loadBenchmarkSuite("production-v2", root).suiteRoot;
   assert.notEqual(benchmarkTreeIdentity(suiteRoot).contentDigest,
     benchmarkTreeIdentity(v2Root).contentDigest, "production-v3 must have a distinct content identity");
@@ -145,6 +162,13 @@ test("production-v3 dry-run exposes the claim boundary and staged measurement pl
   assert.equal(staged.status, 0, `${staged.stdout}\n${staged.stderr}`);
   assert.match(staged.stdout, /chunk:\s+up to 12\/108 remaining sessions/);
   assert.match(staged.stdout, /measurement-only · full 108-session observation · no release claim/);
+
+  const completeMeasurement = spawnSync(process.execPath, [runner, "--suite", "production-v3",
+    "--max-sessions", "12", "--dry-run"], { cwd: root, encoding: "utf8" });
+  assert.equal(completeMeasurement.status, 0, `${completeMeasurement.stdout}\n${completeMeasurement.stderr}`);
+  assert.match(completeMeasurement.stdout,
+    /complete measurement · retain valid agent failures · adjudicate the release claim at S108/);
+  assert.doesNotMatch(completeMeasurement.stdout, /no release claim/);
 });
 
 test("production-v3 evaluator keeps transport, task, semantic and grade inputs independent", async () => {

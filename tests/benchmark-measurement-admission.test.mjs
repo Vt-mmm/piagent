@@ -171,6 +171,17 @@ test("default release admission still requires the original S12 and outcome-stop
   }
 });
 
+test("production-v3 release admission requires S12 but not an outcome-conditioned quality stop", () => {
+  const admitted = invoke(["--suite", "production-v3", "--max-sessions", "12", "--yes"]);
+  assert.equal(admitted.status, 1);
+  assert.match(admitted.stderr, /must start through scripts\/benchmark-runner\.mjs/);
+  assert.doesNotMatch(admitted.stderr, /stop-after-failed-pair|quality stopping/);
+
+  const oversized = invoke(["--suite", "production-v3", "--max-sessions", "108", "--yes"]);
+  assert.equal(oversized.status, 1);
+  assert.match(oversized.stderr, /requires --max-sessions 12/);
+});
+
 test("the full observation window keeps 108 distinct paired cells and passes former stage boundaries", () => {
   const order = executionOrder(suite, control.execution.repeats, control.execution.surfaces, control.rootSeed);
   assert.equal(order.length, 108);

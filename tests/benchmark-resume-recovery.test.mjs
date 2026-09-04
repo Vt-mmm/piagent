@@ -246,6 +246,58 @@ test("observation custody resume loader preserves legacy no-config and blocks un
   assert.equal(JSON.parse(fs.readFileSync(path.join(f.runRoot, "run-manifest.json"))).observationCheckpoints[0].sequence, 1);
 });
 
+test("production-v3 resume corruption writes INVALID_MEASUREMENT even with missing or wrong stop policy", t => {
+  for (const [label, campaignStopPolicy] of [["missing", undefined], ["wrong", "paired-outcome-floor"]]) {
+    const runRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), `piagent-invalid-resume-${label}-`)));
+    t.after(() => fs.rmSync(runRoot, { recursive: true, force: true }));
+    writeBenchmarkRunManifest(runRoot, {
+      schemaVersion: 1,
+      runId: `production-v3-invalid-resume-${label}`,
+      suite: { id: "production-v3" },
+      measurementOnly: false,
+      ...(campaignStopPolicy === undefined ? {} : { campaignStopPolicy }),
+      ledger: emptyBenchmarkLedgerBinding(),
+      order: Array.from({ length: 108 }, (_, index) => ({ scenarioId: `scenario-${index}`, surface: "piagent", repeat: 1 }))
+    });
+    fs.writeFileSync(path.join(runRoot, "runs.jsonl"), "{invalid-json}\n", { mode: 0o600 });
+    assert.throws(() => loadResumeState(runRoot), /Cannot parse benchmark ledger/);
+    const aborted = JSON.parse(fs.readFileSync(path.join(runRoot, "aborted.json"), "utf8"));
+    assert.equal(aborted.measurementValidity.status, "INVALID_MEASUREMENT");
+    assert.equal(aborted.verdict.status, "INVALID_MEASUREMENT");
+    assert.deepEqual(aborted.verdict.measurementValidity,
+      { passed: false, failures: ["fatal:BENCHMARK_LEDGER_INVALID"] });
+    assert.equal(fs.existsSync(path.join(runRoot, ".benchmark-run.lock")), false);
+  }
+});
+
+test("a finalized production-v3 report or campaign is terminal and resume cannot add an INVALID verdict", t => {
+  for (const [label, writeReport, status] of [
+    ["published-pass", true, "claim-passed"],
+    ["claim-passed", false, "claim-passed"],
+    ["published-fail", true, "no-claim"]
+  ]) {
+    const runRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), `piagent-finalized-resume-${label}-`)));
+    t.after(() => fs.rmSync(runRoot, { recursive: true, force: true }));
+    writeBenchmarkRunManifest(runRoot, {
+      schemaVersion: 1,
+      runId: `production-v3-finalized-${label}`,
+      suite: { id: "production-v3" },
+      measurementOnly: false,
+      campaignStopPolicy: "paired-outcome-floor",
+      campaignEvidence: { status },
+      ledger: emptyBenchmarkLedgerBinding(),
+      order: Array.from({ length: 108 }, (_, index) => ({ scenarioId: `scenario-${index}`, surface: "piagent", repeat: 1 }))
+    });
+    const reportBytes = `${JSON.stringify({ verdict: { status: status === "claim-passed" ? "PASS_VALID" : "FAIL_VALID" } })}\n`;
+    if (writeReport) fs.writeFileSync(path.join(runRoot, "report.json"), reportBytes, { mode: 0o600 });
+    fs.writeFileSync(path.join(runRoot, "runs.jsonl"), "{invalid-json}\n", { mode: 0o600 });
+    assert.throws(() => loadResumeState(runRoot), /already has a finalized report or campaign outcome/);
+    assert.equal(fs.existsSync(path.join(runRoot, "aborted.json")), false);
+    assert.equal(fs.existsSync(path.join(runRoot, ".benchmark-run.lock")), false);
+    if (writeReport) assert.equal(fs.readFileSync(path.join(runRoot, "report.json"), "utf8"), reportBytes);
+  }
+});
+
 test("observation custody clean retired history resumes through actual parent loader without new generation", t => {
   const f = observationFixture(t), custody = f.open(); f.append(custody, generationEvent()); f.append(custody, observationRetire());
   const journalBytes = fs.readFileSync(f.journalPath); f.release(); const resumed = loadResumeState(f.runRoot);

@@ -10,7 +10,8 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import {
   finalizeProductionCampaignClaimOutcome,
-  finalizeProductionCampaignTerminalNoClaim
+  finalizeProductionCampaignTerminalNoClaim,
+  rollbackProductionCampaignPublication
 } from "../scripts/benchmark-runner-finalization.mjs";
 
 const digest = (value) => value.repeat(64);
@@ -153,6 +154,46 @@ test("only a claim-passed campaign releases the same paid lineage for a new outp
   const next = openProductionBenchmarkCampaign(nextOutput(value, "run-next"));
   assert.notEqual(next.binding.campaignId, first.binding.campaignId);
   next.close();
+});
+
+test("publication rollback removes favorable reports and durably invalidates sealed or passing claims", (t) => {
+  const passingValue = fixture(t, "production-v3-publication-rollback");
+  const passing = openProductionBenchmarkCampaign(passingValue);
+  passing.providerStarted(attempt("passing"));
+  passing.providerReturned({ ...attempt("passing"), usage: usage(10), usageStatus: "measured" });
+  passing.sealForClaim([acceptedRun(attempt("passing"))]);
+  passing.finalizeClaim({ allowed: true, reason: "release-token-claim-allowed" });
+  for (const name of ["report.html", "summary.txt", "report.json"]) {
+    fs.writeFileSync(path.join(passingValue.runRoot, name), "stale favorable result\n", { mode: 0o600 });
+  }
+  const manifest = { schemaVersion: 1, runId: passingValue.runId };
+  const evidence = rollbackProductionCampaignPublication({
+    productionCampaign: passing,
+    manifest,
+    runRoot: passingValue.runRoot,
+    error: Object.assign(new Error("publication failed"), { code: "BENCHMARK_PUBLICATION_FAILED" })
+  });
+  assert.equal(evidence.status, "no-claim");
+  assert.equal(evidence.claimOutcome.allowed, false);
+  assert.equal(evidence.claimOutcome.reason, "publication-failed:BENCHMARK_PUBLICATION_FAILED");
+  for (const name of ["report.html", "summary.txt", "report.json"]) {
+    assert.equal(fs.existsSync(path.join(passingValue.runRoot, name)), false);
+  }
+  const persisted = JSON.parse(fs.readFileSync(path.join(passingValue.runRoot, "run-manifest.json"), "utf8"));
+  assert.equal(persisted.campaignEvidence.status, "no-claim");
+  passing.close();
+
+  const sealedValue = nextOutput(passingValue, "sealed-run", {
+    suiteId: "production-v3-sealed-publication-rollback",
+    configurationDigest: digest("d")
+  });
+  const sealed = openProductionBenchmarkCampaign(sealedValue);
+  sealed.providerStarted(attempt("sealed"));
+  sealed.providerReturned({ ...attempt("sealed"), usage: usage(10), usageStatus: "measured" });
+  sealed.sealForClaim([acceptedRun(attempt("sealed"))]);
+  assert.equal(sealed.invalidateClaimPublication({ reason: "publication-failed:UNCLASSIFIED" }).status, "no-claim");
+  assert.equal(sealed.snapshot().claimOutcome.allowed, false);
+  sealed.close();
 });
 
 test("a completed no-claim run cannot be cherry-picked into a fresh same-lineage output", (t) => {

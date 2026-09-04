@@ -9,7 +9,8 @@ import {
 import { codexModelName } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import { publicProductionBenchmarkCampaignEvidence } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import { benchmarkTrustChecklist } from "../packages/piagent-core/benchmark/benchmark-matrix.js";
-import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
+import { adjudicateProductionV3Report, applyBenchmarkClaimRestrictions,
+  productionV3FatalMeasurementEvidence } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { cleanupBenchmarkPiRuntimeHome } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkSuiteCoverage } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
@@ -45,11 +46,23 @@ export function benchmarkReportExecutionMode({ options = {}, manifest = {} } = {
   return { measurementOnly, executionMode: measurementOnly ? "measurement-only" : "release-gated" };
 }
 
-export function finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot }) {
+export function finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot,
+  verifiedLedgerRecords }) {
   if (!productionCampaign) return null;
   const measurementOnly = manifest.measurementOnly === true || report.environment?.measurementOnly === true || report.measurementOnly === true;
+  const productionV3Release = !measurementOnly && report.suite?.id === "production-v3";
   if (measurementOnly) applyBenchmarkClaimRestrictions(report, { measurementOnly: true, surfaces: [] });
-  const allowed = report.comparison?.tokenClaimAllowed === true;
+  else if (productionV3Release) adjudicateProductionV3Report(report, {
+    expectedOrder: manifest.order,
+    expectedLedger: manifest.ledger,
+    verifiedLedgerRecords
+  });
+  if (productionV3Release && report.verdict?.status !== "PASS_VALID") {
+    report.comparison.tokenClaimAllowed = false;
+    report.comparison.tokenClaimUnavailableReason = `production-v3-verdict:${report.verdict?.status ?? "unavailable"}`;
+  }
+  const allowed = report.comparison?.tokenClaimAllowed === true
+    && (!productionV3Release || report.verdict?.status === "PASS_VALID");
   const verdict = /^[a-z0-9._-]{1,120}$/i.test(String(report.verdict?.status ?? ""))
     ? report.verdict.status
     : "unavailable";
@@ -71,6 +84,17 @@ export function finalizeProductionCampaignTerminalNoClaim({ productionCampaign, 
     reason: `terminal-stop:${terminalStop.reason}`,
     runs
   });
+  writeBenchmarkRunManifest(runRoot, manifest);
+  return manifest.campaignEvidence;
+}
+
+export function rollbackProductionCampaignPublication({ productionCampaign, manifest, runRoot, error }) {
+  for (const name of ["report.html", "summary.txt", "report.json"]) {
+    try { fs.rmSync(path.join(runRoot, name), { force: true }); } catch { /* Best effort; campaign authority still fails closed. */ }
+  }
+  if (!productionCampaign) return null;
+  const code = /^[A-Z0-9_:-]{1,120}$/.test(String(error?.code ?? "")) ? error.code : "UNCLASSIFIED";
+  manifest.campaignEvidence = productionCampaign.invalidateClaimPublication({ reason: `publication-failed:${code}` });
   writeBenchmarkRunManifest(runRoot, manifest);
   return manifest.campaignEvidence;
 }
@@ -142,15 +166,21 @@ export function finalizeBenchmarkRun(context) {
   }
   if (fatalRunError) {
     const provenanceStamp = finalizationReceipt?.stamp ?? fatalExecutionReceipt?.stamp ?? executionGuard.stamp("fatal", piRuntimeHome ? [piRuntimeHome] : []);
+    const invalidMeasurement = fatalRunError.code === "BENCHMARK_INVALID_MEASUREMENT"
+      || (productionSpendControlled && suite.id === "production-v3" && options.measurementOnly !== true);
+    const invalidMeasurementEvidence = invalidMeasurement ? productionV3FatalMeasurementEvidence(fatalRunError) : {};
     if (!preservePiRuntime) cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome);
     detachPiRuntimeHome();
     recoverOrphanedBenchmarkAttempts({ runRoot, manifest, fullOrder, completedKeys: new Set(runs.map(benchmarkRunKey)) });
     cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
     const provenanceFailure = writeBenchmarkAbort(runRoot, { runId, completedRuns: runs.filter(completedBenchmarkRecord).length, expectedRuns: fullOrder.length }, fatalRunError, {
       ledger: ledgerBinding,
-      provenanceStamp
+      provenanceStamp,
+      ...invalidMeasurementEvidence
     });
-    process.stderr.write(provenanceFailure
+    process.stderr.write(invalidMeasurement
+      ? `Benchmark stopped after a measurement-invalidating outcome. Partial ledger: ${ledgerPath}\n`
+      : provenanceFailure
       ? `Benchmark aborted because candidate provenance changed. Partial ledger: ${ledgerPath}\n`
       : `Benchmark aborted after an infrastructure error. Partial ledger: ${ledgerPath}\n`);
     process.exitCode = 1;
@@ -347,29 +377,41 @@ export function finalizeBenchmarkRun(context) {
   const prepublishReceipt = executionGuard.receipt("prepublish");
   const prepublishError = prepublishReceipt.error;
   if (prepublishError) {
-    writeBenchmarkAbort(runRoot, { runId, completedRuns: completedRuns.length, expectedRuns: fullOrder.length }, prepublishError, { ledger: ledgerBinding, provenanceStamp: prepublishReceipt.stamp });
+    const invalidMeasurementEvidence = productionSpendControlled && suite.id === "production-v3"
+      && options.measurementOnly !== true ? productionV3FatalMeasurementEvidence(prepublishError) : {};
+    writeBenchmarkAbort(runRoot, { runId, completedRuns: completedRuns.length, expectedRuns: fullOrder.length }, prepublishError, {
+      ledger: ledgerBinding,
+      provenanceStamp: prepublishReceipt.stamp,
+      ...invalidMeasurementEvidence
+    });
     throw prepublishError;
   }
-  finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot });
-  report.trustChecklist = benchmarkTrustChecklist(report);
-  const text = renderBenchmarkText(report);
-  writePrivate(path.join(runRoot, "report.html"), renderBenchmarkHtml(report));
-  writePrivate(path.join(runRoot, "summary.txt"), text);
-  for (const marker of ["paused.json", "stage-diagnostic.json", "interrupted.json", "aborted.json", "stopped.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
-  writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
-  process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : text);
-  process.stdout.write(`Reports: ${runRoot}\n`);
-  const productionTokenClaimFailed = canonicalProductionSuite
-    && suite.releaseGate?.requireEfficiencyClaim === true
-    && report.comparison.tokenClaimAllowed !== true;
-  if (
-    report.comparison.qualityGate === false
-    || report.comparison.safetyGate === false
-    || report.comparison.reliabilityGate === false
-    || report.comparison.qualityNonInferior === false
-    || report.comparison.workflowGate === false
-    || report.comparison.categoryGate === false
-    || report.comparison.suiteGate?.passed === false
-    || productionTokenClaimFailed
-  ) process.exitCode = 1;
+  let text;
+  try {
+    finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot,
+      verifiedLedgerRecords: reportLedger.records });
+    report.trustChecklist = benchmarkTrustChecklist(report);
+    text = renderBenchmarkText(report);
+    const productionTokenClaimFailed = canonicalProductionSuite
+      && suite.releaseGate?.requireEfficiencyClaim === true
+      && report.comparison.tokenClaimAllowed !== true;
+    const productionV3VerdictFailed = suite.id === "production-v3"
+      && report.environment.measurementOnly !== true && report.verdict?.status !== "PASS_VALID";
+    if (report.comparison.qualityGate === false || report.comparison.safetyGate === false
+      || report.comparison.reliabilityGate === false || report.comparison.qualityNonInferior === false
+      || report.comparison.workflowGate === false || report.comparison.categoryGate === false
+      || report.comparison.suiteGate?.passed === false || productionTokenClaimFailed
+      || productionV3VerdictFailed) process.exitCode = 1;
+    writePrivate(path.join(runRoot, "report.html"), renderBenchmarkHtml(report));
+    writePrivate(path.join(runRoot, "summary.txt"), text);
+    for (const marker of ["paused.json", "stage-diagnostic.json", "interrupted.json", "aborted.json", "stopped.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
+    writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
+  } catch (error) {
+    rollbackProductionCampaignPublication({ productionCampaign, manifest, runRoot, error });
+    throw error;
+  }
+  try {
+    process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : text);
+    process.stdout.write(`Reports: ${runRoot}\n`);
+  } catch { /* Canonical report and campaign outcome are already durable. */ }
 }

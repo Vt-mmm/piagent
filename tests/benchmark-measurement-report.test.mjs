@@ -4,9 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { summarizeBenchmark, renderBenchmarkText, renderBenchmarkHtml } from "../packages/piagent-core/benchmark/benchmark-core.js";
-import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
+import { adjudicateProductionV3Report, applyBenchmarkClaimRestrictions,
+  productionV3FatalMeasurementEvidence } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { openProductionBenchmarkCampaign, publicProductionBenchmarkCampaignEvidence } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import { benchmarkReportExecutionMode, finalizeProductionCampaignClaimOutcome } from "../scripts/benchmark-runner-finalization.mjs";
+import { writeProductionRunAbortIfNeeded } from "../scripts/benchmark-runner-completion.mjs";
 
 // Controlled records and a temporary native campaign ledger; no provider,
 // grader, retained campaign, or agent runtime is executed by these tests.
@@ -17,12 +19,12 @@ const usage = (fresh) => ({
   fresh, total: fresh, usageCompleteness: "exact", model: "test/measurement-model", thinkingLevel: "medium"
 });
 
-function campaignFixture(t) {
+function campaignFixture(t, suiteId = "production-v2") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-measurement-report-"));
   const runRoot = path.join(root, "run");
   fs.mkdirSync(runRoot);
   const campaign = openProductionBenchmarkCampaign({
-    registryBase: path.join(root, "registry"), runRoot, runId: "measurement-test", suiteId: "production-v2",
+    registryBase: path.join(root, "registry"), runRoot, runId: "measurement-test", suiteId,
     configurationDigest: "a".repeat(64), candidateDigest: "b".repeat(64), suiteDigest: "c".repeat(64)
   });
   t.after(() => { campaign.close(); fs.rmSync(root, { recursive: true, force: true }); });
@@ -151,4 +153,147 @@ test("manifest-only measurement cannot finalize a favorable release claim", (t) 
   assert.equal(result.claimOutcome.allowed, false);
   assert.equal(report.comparison.tokenClaimAllowed, false);
   assert.equal(report.environment.measurementOnly, true);
+});
+
+test("a complete release-gated production-v3 quality failure finalizes as FAIL_VALID", (t) => {
+  const { campaign, runRoot } = campaignFixture(t, "production-v3");
+  const attempt = failedRecords()[0];
+  campaign.providerStarted(attempt);
+  campaign.providerReturned(attempt);
+  campaign.sealForClaim([attempt]);
+  const report = {
+    runId: "measurement-test",
+    suite: { id: "production-v3" },
+    runCount: 108,
+    environment: { measurementOnly: false, executionMode: "release-gated" },
+    comparison: {
+      tokenClaimAllowed: false,
+      productionGate: { passed: false, failures: ["quality"] },
+      canonicalProductionIdentityGate: true,
+      releaseClaimConfigurationGate: true,
+      codexBaselineGate: true,
+      cleanReleaseSourceGate: true,
+      fullSuiteGate: true,
+      providerWireSurfaceGate: true,
+      fastServiceTierGate: true,
+      causalContextEvidenceGate: true,
+      acceptedUsageCompletenessGate: true,
+      allAttemptUsageCompletenessGate: true,
+      infrastructureFailureLedgerGate: true,
+      infrastructureRetryGate: true,
+      unknownInfrastructureUsageGate: true,
+      campaignAccountingGate: true,
+      productionProviderFreeEvidenceGate: true,
+      adaptiveContextRuntimeGate: true,
+      comparisonProtocolGate: { passed: true }
+    },
+    verdict: { status: "quality-gate-failed" },
+    runs: Array.from({ length: 108 }, (_, index) => ({
+      scenarioId: `scenario-${Math.floor(index / 4) + 1}`,
+      surface: index % 2 === 0 ? "piagent" : "codex-cli",
+      repeat: index % 4 < 2 ? 1 : 2,
+      orderIndex: index + 1,
+      runId: "measurement-test",
+      attemptId: `attempt-${index + 1}`,
+      sessionId: `session-${index + 1}`,
+      runValidity: "valid",
+      failureClass: "agent_task_failure",
+      graderIntegrity: { passed: true },
+      infrastructureRetries: 0,
+      infrastructureFailures: [],
+      usage: { sessions: 1, input: 1, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0,
+        fresh: 1, total: 1, usageCompleteness: "exact" },
+      outcome: { runValidity: "valid", usageStatus: "exact", failureClass: "agent_task_failure" }
+    }))
+  };
+  const ledger = { schemaVersion: 1, algorithm: "sha256-chain-jsonl-v1", digest: "d".repeat(64), records: 108, bytes: 108 };
+  const order = report.runs.map(({ scenarioId, surface, repeat }) => ({ scenarioId, surface, repeat }));
+  const bindings = { expectedOrder: order, expectedLedger: ledger, verifiedLedgerRecords: report.runs };
+  report.ledger = ledger;
+  const passing = structuredClone(report);
+  passing.comparison.tokenClaimAllowed = true;
+  passing.comparison.productionGate = { passed: true, failures: [] };
+  adjudicateProductionV3Report(passing, bindings);
+  assert.equal(passing.verdict.status, "PASS_VALID");
+
+  const invalid = structuredClone(report);
+  invalid.runs[0].runValidity = "invalid_harness";
+  adjudicateProductionV3Report(invalid, bindings);
+  assert.equal(invalid.verdict.status, "INVALID_MEASUREMENT");
+  assert.ok(invalid.verdict.measurementValidity.failures.some((failure) =>
+    failure.startsWith("invalid-run-validity:")));
+
+  const duplicateCell = structuredClone(report);
+  Object.assign(duplicateCell.runs[1], {
+    scenarioId: duplicateCell.runs[0].scenarioId,
+    surface: duplicateCell.runs[0].surface,
+    repeat: duplicateCell.runs[0].repeat
+  });
+  adjudicateProductionV3Report(duplicateCell, bindings);
+  assert.equal(duplicateCell.verdict.status, "INVALID_MEASUREMENT");
+  assert.ok(duplicateCell.verdict.measurementValidity.failures.some((failure) =>
+    failure.startsWith("duplicate-matrix-cell:")));
+
+  finalizeProductionCampaignClaimOutcome({ productionCampaign: campaign,
+    manifest: { suite: { id: "production-v3" }, measurementOnly: false, order, ledger }, report, runRoot,
+    verifiedLedgerRecords: report.runs });
+  assert.equal(report.verdict.status, "FAIL_VALID");
+  assert.equal(report.verdict.detailStatus, "quality-gate-failed");
+  assert.deepEqual(report.verdict.measurementValidity, { passed: true, failures: [] });
+
+  const invalidFixture = campaignFixture(t, "production-v3");
+  invalidFixture.campaign.providerStarted(attempt);
+  invalidFixture.campaign.providerReturned(attempt);
+  invalidFixture.campaign.sealForClaim([attempt]);
+  const invalidClaim = structuredClone(report);
+  invalidClaim.comparison.tokenClaimAllowed = true;
+  invalidClaim.comparison.productionGate = { passed: true, failures: [] };
+  const driftedOrder = structuredClone(order);
+  driftedOrder[0].scenarioId = "wrong-frozen-scenario";
+  const invalidOutcome = finalizeProductionCampaignClaimOutcome({
+    productionCampaign: invalidFixture.campaign,
+    manifest: { suite: { id: "production-v3" }, measurementOnly: false, order: driftedOrder, ledger },
+    report: invalidClaim,
+    runRoot: invalidFixture.runRoot,
+    verifiedLedgerRecords: invalidClaim.runs
+  });
+  assert.equal(invalidClaim.verdict.status, "INVALID_MEASUREMENT");
+  assert.equal(invalidClaim.comparison.tokenClaimAllowed, false);
+  assert.equal(invalidOutcome.claimOutcome.allowed, false);
+});
+
+test("production-v3 fatal paths emit the same top-level INVALID_MEASUREMENT contract", () => {
+  const ledgerFailure = Object.assign(new Error("ledger drift"), { code: "BENCHMARK_LEDGER_INVALID" });
+  const ledgerEvidence = productionV3FatalMeasurementEvidence(ledgerFailure);
+  assert.equal(ledgerEvidence.measurementValidity.status, "INVALID_MEASUREMENT");
+  assert.equal(ledgerEvidence.verdict.status, "INVALID_MEASUREMENT");
+  assert.deepEqual(ledgerEvidence.verdict.measurementValidity,
+    { passed: false, failures: ["fatal:BENCHMARK_LEDGER_INVALID"] });
+
+  const wireFailure = Object.assign(new Error("wire drift"), {
+    code: "BENCHMARK_INVALID_MEASUREMENT",
+    measurementInvalidatingIssues: ["provider-wire-not-request-bound"]
+  });
+  assert.deepEqual(productionV3FatalMeasurementEvidence(wireFailure).verdict.measurementValidity,
+    { passed: false, failures: ["provider-wire-not-request-bound"] });
+});
+
+test("a fresh production-v3 finalization exception writes the INVALID_MEASUREMENT fallback", t => {
+  const runRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-v3-abort-fallback-")));
+  t.after(() => fs.rmSync(runRoot, { recursive: true, force: true }));
+  const error = Object.assign(new Error("final ledger changed"), { code: "BENCHMARK_LEDGER_INVALID" });
+  writeProductionRunAbortIfNeeded({
+    fullOrder: Array.from({ length: 108 }, (_, index) => ({ scenarioId: `scenario-${index}` })),
+    ledgerBinding: { schemaVersion: 1, algorithm: "sha256-chain-jsonl-v1", digest: "e".repeat(64), records: 0, bytes: 0 },
+    manifest: { runId: "fresh-production-v3" },
+    options: { measurementOnly: false },
+    productionSpendControlled: true,
+    runRoot,
+    runs: [],
+    suite: { id: "production-v3" }
+  }, error);
+  const aborted = JSON.parse(fs.readFileSync(path.join(runRoot, "aborted.json"), "utf8"));
+  assert.equal(aborted.verdict.status, "INVALID_MEASUREMENT");
+  assert.deepEqual(aborted.verdict.measurementValidity,
+    { passed: false, failures: ["fatal:BENCHMARK_LEDGER_INVALID"] });
 });

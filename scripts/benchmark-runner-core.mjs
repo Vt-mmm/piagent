@@ -23,8 +23,11 @@ import { openProductionBenchmarkCampaign } from "../packages/piagent-core/benchm
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { completedBenchmarkRecord, expectedBenchmarkRecord } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
-import { approveProductionStageControl, buildBenchmarkStageDiagnostic, createProductionStageControl, durablePairedOutcomeFloorStop,
-  productionGuardBindingMatches, productionSpendControlValidationErrors, productionStageResumeDisposition } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+import { productionExecutionBindingMatches,
+  productionGuardBindingMatches } from "../packages/piagent-core/benchmark/benchmark-production-completion.js";
+import { approveProductionStageControl, buildBenchmarkStageDiagnostic,
+  createProductionStageControl,
+  productionSpendControlValidationErrors, productionStageResumeDisposition } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { loadBenchmarkAssuranceEvidence, loadBenchmarkSuite, resolveBenchmarkSuiteEntry, validateBenchmarkSuiteFiles } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
 import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, emptyBenchmarkLedgerBinding, inspectBenchmarkLedger, validateBenchmarkLedgerPrefix } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
@@ -34,6 +37,10 @@ import {
   recoverOrphanedBenchmarkAttempts, recoverPendingBenchmarkRecord, stageMeasuredBenchmarkRecord
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { finalizeBenchmarkRun } from "./benchmark-runner-finalization.mjs";
+import { applyProductionCampaignStopPolicy, assertProductionResumeCompletionState,
+  productionMeasurementInvalidatingOutcomeError,
+  productionReleaseMeasurementAbortEvidence, writeProductionResumeAbortIfNeeded,
+  writeProductionRunAbortIfNeeded } from "./benchmark-runner-completion.mjs";
 import {
   applyBenchmarkResumeOptions,
   bindBenchmarkTerminationSignals,
@@ -98,8 +105,7 @@ async function main() {
   if (options.resume && options.output) fail("--resume uses the original report directory; do not pass --output", 1);
   const resumeState = options.resume ? loadResumeState(options.resume) : undefined;
   let releaseRunLock = resumeState?.releaseRunLock;
-  let codexRuntime, productionCampaign;
-  let piRuntimeHome;
+  let codexRuntime, productionCampaign, piRuntimeHome, productionAbortFallback = () => {};
   let preservePiRuntime = false;
   try {
   applyBenchmarkResumeOptions(options, resumeState);
@@ -188,6 +194,7 @@ async function main() {
   }
   if (productionFullMatrixRequested) {
     const spendExecution = productionSpendControl.execution;
+    applyProductionCampaignStopPolicy(options, spendExecution);
     if (options.seed === undefined) options.seed = productionSpendControl.rootSeed;
     if (options.seed !== productionSpendControl.rootSeed) fail("Production spend control requires its frozen root seed", 1);
     if (!sameStringList(options.surfaces, spendExecution.surfaces)) fail("Production spend control requires its frozen surface order", 1);
@@ -267,6 +274,7 @@ async function main() {
     }
     if (manifest.suiteDigest !== suiteDigest) fail("Cannot resume benchmark: suite files changed since the original run", 1);
     if (productionSpendControlled && !productionGuardBindingMatches(manifest, productionSpendControl)) fail("Cannot resume production benchmark: frozen production guard binding is missing or changed", 1);
+    if (productionSpendControlled && !productionExecutionBindingMatches(manifest, productionSpendControl)) fail("Cannot resume production benchmark: frozen execution and campaign stop policy binding is missing or changed", 1);
     if (manifest.rootSeed !== rootSeed) fail("Cannot resume benchmark: root seed mismatch", 1);
     if (manifest.repeats !== options.repeats) fail("Cannot resume benchmark: repeat count mismatch", 1);
     if (!sameStringList(manifest.surfaces, options.surfaces)) fail("Cannot resume benchmark: surface list mismatch", 1);
@@ -300,40 +308,26 @@ async function main() {
         runId: manifest.runId,
         completedRuns: resumeState.completedRuns.length,
         expectedRuns: fullOrder.length
-      }, error, { ledger: resumeState.ledgerBinding, provenanceStamp: candidateGuard.stamp("resume-ledger") });
+      }, error, { ledger: resumeState.ledgerBinding, provenanceStamp: candidateGuard.stamp("resume-ledger"),
+        ...productionReleaseMeasurementAbortEvidence(options, suite, error) });
       throw error;
     }
     const provenanceError = candidateGuard.check("resume");
     if (provenanceError) {
       writeBenchmarkAbort(resumeState.runRoot, { runId: manifest.runId, completedRuns: resumeState.completedRuns.length, expectedRuns: fullOrder.length }, provenanceError, {
         ledger: resumeState.ledgerBinding,
-        provenanceStamp: candidateGuard.stamp("resume")
+        provenanceStamp: candidateGuard.stamp("resume"),
+        ...productionReleaseMeasurementAbortEvidence(options, suite, provenanceError)
       });
       throw provenanceError;
     }
-    const recoveredTerminalStop = durablePairedOutcomeFloorStop({
-      enabled: options.stopAfterFailedPair,
-      suite,
-      runs: resumeState.completedRuns,
-      fullOrder
+    assertProductionResumeCompletionState({
+      candidateGuard,
+      fullOrder,
+      options,
+      resumeState,
+      suite
     });
-    if (recoveredTerminalStop) {
-      for (const marker of ["paused.json", "stage-diagnostic.json", "interrupted.json", "aborted.json"]) {
-        fs.rmSync(path.join(resumeState.runRoot, marker), { force: true });
-      }
-      writePrivateAtomic(path.join(resumeState.runRoot, "stopped.json"), `${JSON.stringify({
-        ...recoveredTerminalStop,
-        runId: manifest.runId,
-        completedRuns: resumeState.completedRuns.length,
-        expectedRuns: fullOrder.length,
-        stoppedAt: new Date().toISOString(),
-        resumeAllowed: false,
-        recoveredFromAcceptedLedger: true,
-        ledger: resumeState.ledgerBinding,
-        provenanceStamp: candidateGuard.stamp("resume-terminal-floor")
-      }, null, 2)}\n`);
-      fail("Cannot resume benchmark: the accepted ledger already contains a terminal paired outcome-floor failure", 1);
-    }
     if (productionSpendControlled) {
       if (productionHostReadinessRequired) {
         if (manifest.hostReadinessPolicyDigest !== productionHostReadinessPolicyDigest
@@ -439,7 +433,9 @@ async function main() {
   if (productionSpendControlled) {
     if (!options.measurementOnly && !registeredMeasurementRun
       && options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
-      fail("Production spend control requires --stop-after-failed-pair before any provider session", 1);
+      fail(productionSpendControl.execution.stopAfterFailedPair
+        ? "Production spend control requires --stop-after-failed-pair before any provider session"
+        : "Production spend control requires paired-outcome quality stopping to remain disabled before any provider session", 1);
     }
     const completedRuns = resumeState?.completedRuns.length ?? 0;
     const authorizedThroughRuns = deferredProductionStageApproval?.authorizedThroughRuns
@@ -652,6 +648,7 @@ async function main() {
     retryDelaySeconds: options.retryDelaySeconds,
     transportCircuitBreaker: createBenchmarkTransportCircuit(),
     stopAfterFailedPair: options.stopAfterFailedPair,
+    ...(options.campaignStopPolicy ? { campaignStopPolicy: options.campaignStopPolicy } : {}),
     ...(options.measurementOnly ? { measurementOnly: true } : {}),
     scenarioIds: options.scenarioIds ?? null,
     ...(productionSpendControlled ? {
@@ -673,6 +670,7 @@ async function main() {
       repeat: item.repeat
     }))
   };
+  productionAbortFallback = (error) => writeProductionRunAbortIfNeeded({ fullOrder, ledgerBinding, manifest, options, productionSpendControlled, runRoot, runs, suite }, error);
   if (productionCampaignRequired) {
     productionCampaign = openProductionBenchmarkCampaign({
       registryBase: path.join(bootstrapMetadata.defaultOutputRoot, ".production-campaigns"), suiteId: suite.id,
@@ -896,6 +894,8 @@ async function main() {
       const remainingAfter = Math.max(0, fullOrder.length - completedAfter);
       const averageAfterMs = (Date.now() - wallStartedAt) / Math.max(1, newRuns);
       process.stdout.write(`           ${record.resolved ? "PASS" : `FAIL (${record.failure})`} · ${record.usage.fresh} fresh tok · ${cost} · run ${formatDuration(Number(record.durationSeconds ?? 0) * 1_000)} · remaining ${remainingAfter} · ETA ${formatDuration(averageAfterMs * remainingAfter)}\n`);
+      fatalRunError = productionMeasurementInvalidatingOutcomeError(options, suite, record);
+      if (fatalRunError) break;
       terminalStop = pairedOutcomeFloorStop({ enabled: options.stopAfterFailedPair, suite, runs, current: item, next: order[index + 1] });
       if (terminalStop) break;
       if (fatalRunError) break;
@@ -935,7 +935,7 @@ async function main() {
     runId, runRoot, runs, runtime, runtimeCommands, source, startedAt, suite,
     suiteDigest, suiteIdentity, terminalStop
   });
-  } finally {
+  } catch (error) { productionAbortFallback(error); writeProductionResumeAbortIfNeeded(resumeState, error); throw error; } finally {
     releaseRunLock?.();
     productionCampaign?.close();
     codexRuntime?.cleanup();

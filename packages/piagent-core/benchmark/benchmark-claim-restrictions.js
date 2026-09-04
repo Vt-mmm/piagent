@@ -1,3 +1,5 @@
+import { exactBenchmarkMeasuredUsage } from "./benchmark-usage.js";
+
 const RESTRICTION_VERDICTS = new Set([
   "token-claim-withheld",
   "diagnostic-native-codex",
@@ -99,6 +101,150 @@ export function productionV3Verdict({ measurementValid, gatesPassed }) {
   }
   if (!measurementValid) return "INVALID_MEASUREMENT";
   return gatesPassed ? "PASS_VALID" : "FAIL_VALID";
+}
+
+const PRODUCTION_V3_MEASUREMENT_GATES = Object.freeze([
+  "canonicalProductionIdentityGate",
+  "releaseClaimConfigurationGate",
+  "codexBaselineGate",
+  "cleanReleaseSourceGate",
+  "fullSuiteGate",
+  "providerWireSurfaceGate",
+  "fastServiceTierGate",
+  "causalContextEvidenceGate",
+  "acceptedUsageCompletenessGate",
+  "allAttemptUsageCompletenessGate",
+  "infrastructureFailureLedgerGate",
+  "infrastructureRetryGate",
+  "unknownInfrastructureUsageGate",
+  "campaignAccountingGate",
+  "productionProviderFreeEvidenceGate",
+  "adaptiveContextRuntimeGate"
+]);
+
+const PRODUCTION_V3_INVALID_MEASUREMENT_FAILURE_CLASSES = new Set([
+  "grader_failure", "harness_contract_failure", "unknown_terminal", "identity_failure"
+]);
+
+function productionV3MatrixAndIdentityFailures(report, runs, {
+  expectedOrder,
+  expectedLedger,
+  verifiedLedgerRecords
+} = {}) {
+  const failures = [];
+  const cells = new Set();
+  const scenarioIds = new Set();
+  const attemptIds = new Set();
+  const sessionIds = new Set();
+  for (const [index, run] of runs.entries()) {
+    const scenarioId = typeof run?.scenarioId === "string" && run.scenarioId.length > 0 ? run.scenarioId : null;
+    const surface = ["piagent", "codex-cli"].includes(run?.surface) ? run.surface : null;
+    const repeat = [1, 2].includes(run?.repeat) ? run.repeat : null;
+    const cell = scenarioId && surface && repeat ? `${scenarioId}\0${surface}\0${repeat}` : null;
+    if (!cell) failures.push(`invalid-matrix-cell:i${index + 1}`);
+    else if (cells.has(cell)) failures.push(`duplicate-matrix-cell:${scenarioId}:${surface}:r${repeat}`);
+    else { cells.add(cell); scenarioIds.add(scenarioId); }
+    if (run?.orderIndex !== index + 1) failures.push(`order-index-mismatch:i${index + 1}`);
+    if (run?.runId !== report?.runId) failures.push(`run-id-mismatch:i${index + 1}`);
+    for (const [field, values] of [["attemptId", attemptIds], ["sessionId", sessionIds]]) {
+      const value = typeof run?.[field] === "string" && run[field].length > 0 ? run[field] : null;
+      if (!value) failures.push(`missing-${field}:i${index + 1}`);
+      else if (values.has(value)) failures.push(`duplicate-${field}:${value}`);
+      else values.add(value);
+    }
+  }
+  if (scenarioIds.size !== 27) failures.push("scenario-count-not-27");
+  for (const scenarioId of scenarioIds) for (const surface of ["piagent", "codex-cli"]) for (const repeat of [1, 2]) {
+    if (!cells.has(`${scenarioId}\0${surface}\0${repeat}`)) failures.push(`missing-matrix-cell:${scenarioId}:${surface}:r${repeat}`);
+  }
+  if (!Array.isArray(expectedOrder) || expectedOrder.length !== 108) failures.push("frozen-order-binding-unavailable");
+  else expectedOrder.forEach((expected, index) => {
+    const run = runs[index];
+    if (run?.scenarioId !== expected?.scenarioId || run?.surface !== expected?.surface || run?.repeat !== expected?.repeat) {
+      failures.push(`frozen-order-mismatch:i${index + 1}`);
+    }
+  });
+  const ledgerShape = (value) => value?.schemaVersion === 1 && value.algorithm === "sha256-chain-jsonl-v1"
+    && /^[a-f0-9]{64}$/.test(String(value.digest ?? "")) && value.records === 108
+    && Number.isSafeInteger(value.bytes) && value.bytes > 0;
+  if (!ledgerShape(expectedLedger) || !ledgerShape(report?.ledger)
+    || JSON.stringify(expectedLedger) !== JSON.stringify(report?.ledger)) failures.push("verified-ledger-binding-mismatch");
+  if (!Array.isArray(verifiedLedgerRecords) || verifiedLedgerRecords.length !== 108
+    || JSON.stringify(verifiedLedgerRecords) !== JSON.stringify(runs)) failures.push("verified-ledger-records-mismatch");
+  return failures;
+}
+
+export function productionV3MeasurementValidity(report, bindings = {}) {
+  const failures = [];
+  if (report?.suite?.id !== "production-v3") failures.push("suite-not-production-v3");
+  if (report?.environment?.executionMode !== "release-gated") failures.push("execution-mode-not-release-gated");
+  if (report?.runCount !== 108) failures.push("run-count-not-108");
+  const runs = Array.isArray(report?.runs) ? report.runs : [];
+  if (runs.length !== 108) failures.push("record-count-not-108");
+  const surfaceCounts = Object.fromEntries(["piagent", "codex-cli"].map((surface) => [surface,
+    runs.filter((run) => run?.surface === surface).length]));
+  if (surfaceCounts.piagent !== 54) failures.push("piagent-session-count-not-54");
+  if (surfaceCounts["codex-cli"] !== 54) failures.push("codex-session-count-not-54");
+  failures.push(...productionV3MatrixAndIdentityFailures(report, runs, bindings));
+
+  for (const [index, run] of runs.entries()) {
+    const id = `${run?.scenarioId ?? "unknown"}:${run?.surface ?? "unknown"}:r${run?.repeat ?? "?"}:i${index + 1}`;
+    if (run?.runValidity !== "valid" || run?.outcome?.runValidity !== "valid") {
+      failures.push(`invalid-run-validity:${id}`);
+    }
+    if (run?.outcome?.usageStatus !== "exact" || !exactBenchmarkMeasuredUsage(run?.usage)) {
+      failures.push(`inexact-accepted-usage:${id}`);
+    }
+    if (run?.graderIntegrity?.passed !== true) failures.push(`grader-integrity-failed:${id}`);
+    if (PRODUCTION_V3_INVALID_MEASUREMENT_FAILURE_CLASSES.has(run?.failureClass)
+      || PRODUCTION_V3_INVALID_MEASUREMENT_FAILURE_CLASSES.has(run?.outcome?.failureClass)) {
+      failures.push(`measurement-invalidating-failure-class:${id}`);
+    }
+    if (run?.infrastructureRetries !== 0 || !Array.isArray(run?.infrastructureFailures)
+      || run.infrastructureFailures.length !== 0) failures.push(`infrastructure-retry-or-ledger-failure:${id}`);
+  }
+
+  const comparison = report?.comparison ?? {};
+  for (const gate of PRODUCTION_V3_MEASUREMENT_GATES) {
+    if (comparison[gate] !== true) failures.push(`measurement-gate-failed:${gate}`);
+  }
+  if (comparison.comparisonProtocolGate?.passed !== true) {
+    failures.push("measurement-gate-failed:comparisonProtocolGate");
+  }
+  return { passed: failures.length === 0, failures };
+}
+
+export function adjudicateProductionV3Report(report, bindings = {}) {
+  const measurementValidity = productionV3MeasurementValidity(report, bindings);
+  const gatesPassed = measurementValidity.passed
+    && report?.comparison?.productionGate?.passed === true
+    && report?.comparison?.tokenClaimAllowed === true;
+  report.verdict ??= {};
+  const detailStatus = report.verdict.detailStatus ?? report.verdict.status ?? "unavailable";
+  report.verdict = {
+    ...report.verdict,
+    status: productionV3Verdict({ measurementValid: measurementValidity.passed, gatesPassed }),
+    detailStatus,
+    measurementValidity
+  };
+  return report;
+}
+
+export function productionV3FatalMeasurementEvidence(error) {
+  const supplied = Array.isArray(error?.measurementInvalidatingIssues)
+    ? error.measurementInvalidatingIssues.filter((issue) => typeof issue === "string" && issue.length > 0)
+    : [];
+  const failures = [...new Set(supplied.length > 0
+    ? supplied
+    : [`fatal:${typeof error?.code === "string" && error.code.length > 0 ? error.code : "unclassified"}`])];
+  return {
+    measurementValidity: { status: "INVALID_MEASUREMENT", issues: failures },
+    verdict: {
+      status: "INVALID_MEASUREMENT",
+      detailStatus: "aborted",
+      measurementValidity: { passed: false, failures }
+    }
+  };
 }
 
 function restrictionCanReplaceVerdict(status, includeObservational) {

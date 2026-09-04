@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 3.1
+> **Phiên bản:** 3.2
 >
-> **Trạng thái tổng:** IN_PROGRESS — P6 exit gate pass với 8/8 final record measurement-valid, P6-RF-01 paid-confirmed và valid Codex quality failure D-015 được giữ nguyên; P7 freeze đang thực hiện
+> **Trạng thái tổng:** IN_PROGRESS — P6 exit gate pass; P7-MC-01 complete-measurement contract đã fix và verify provider-free, đang chờ clean candidate checkpoint cùng exact S0
 >
-> **Cập nhật gần nhất:** 2026-09-04T07:19:27Z (2026-09-04T14:19:27+07:00)
+> **Cập nhật gần nhất:** 2026-09-04T08:37:16Z (2026-09-04T15:37:16+07:00)
 >
 > **Chế độ thực thi:** một agent, local, tuần tự; không subagent, không cloud task
 >
@@ -15,7 +15,7 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** hoàn tất P7 freeze candidate/config/runtime, khóa hardFreshCap và output root S108 mới, sau đó chạy exact S0 provider-free receipt trước P8
+> **Phase kế tiếp:** hoàn tất full offline gate, commit clean candidate P7, pin exact identity/budget/output root rồi chạy S0 provider-free trước P8
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
 
@@ -383,7 +383,7 @@ P2 và P3 giải quyết hai arm khác nhau nhưng vẫn triển khai tuần t�
 | P4 | Evaluator và production-v3 | DONE_WITH_OPERATOR_WAIVER | 0 | Automated calibration pass; human review waived, `reviewed=false` retained |
 | P5 | Provider-free qualification | DONE | 0 | PASS — clean checkpoint + exact-108 dry-run + full provider-free preflight ready |
 | P6 | Paid canary ngoài S108 | DONE_WITH_RETAINED_VALID_CODEX_QUALITY_FAILURE | 19/19 sessions; 308,332 fresh | PASS — 8/8 final records measurement-valid; both-arm mutation capability, read-only và refusal pass; D-015 Codex failure giữ nguyên |
-| P7 | Freeze candidate/config | IN_PROGRESS | 0 | Commit/tree/runtime/suite/config digests, budget và S0 receipt đang được đóng |
+| P7 | Freeze candidate/config | IN_PROGRESS | 0 | P7-MC-01 fixed provider-free; clean commit/tree/runtime/config digests, budget và S0 receipt đang được đóng |
 | P8 | Exact S108 | NOT_STARTED | 108 sessions | 108 accepted, exact usage, no invalid measurement |
 | P9 | Analysis/report | NOT_STARTED | 0 | PASS_VALID hoặc FAIL_VALID có evidence |
 | P10 | Private holdout/member pilot | NOT_STARTED | Tách budget | Claim generalization/production riêng |
@@ -935,7 +935,13 @@ Canary expected budget là 8 sessions. Mọi rerun phải:
 - [ ] **P7-T09** Ghi auth metadata/redacted identity; không lưu credential content.
 - [ ] **P7-T10** Tính fresh-token/time hard cap từ canary.
 - [ ] **P7-T11** Chạy lại S0 provider-free receipt trên exact frozen identity.
-- [ ] **P7-T12** Tạo output directory mới, không reuse campaign cũ.
+- [ ] **P7-T12** Pin exact S108 output path mới và xác nhận path chưa tồn tại tại freeze/S0; chỉ S12 được tạo directory, không reuse campaign cũ.
+
+### Provider-free freeze blocker P7-MC-01
+
+Production-v3 trước fix dùng outcome-conditioned stage stop ở release-gated mode, còn complete-measurement semantics chỉ có ở `--measurement-only`; vì vậy một valid quality failure hoặc ratio bất lợi có thể dừng S108 trước đủ 108 record. Fix khóa normal release-gated production-v3 thành complete measurement: giữ mọi valid agent failure và ratio bất lợi, chỉ dừng trên measurement-invalidating condition, bind exact 27×2×2 ledger/order/usage, rồi xuất đúng `PASS_VALID`, `FAIL_VALID` hoặc `INVALID_MEASUREMENT` tại S108. Publication failure hạ campaign về durable no-claim và xóa favorable report; finalized production-v3 report/campaign là terminal, không thể resume để tạo verdict mâu thuẫn.
+
+Before-fix evidence: `07-freeze/01-complete-measurement-contract-before-fix.v1.json`. Provider-free after-fix evidence được đóng tại `07-freeze/02-complete-measurement-contract-provider-free-verification.v1.json`; không có provider session trong remediation này. Frozen prompts, oracle, grader, threshold và P4 waiver không đổi.
 
 ### Budget estimator
 
@@ -949,7 +955,18 @@ Tính riêng theo surface:
     estimatedWallTime = 54 × P95(canary duration Piagent)
                       + 54 × P95(canary duration Codex)
 
-Ước lượng từ lịch sử hiện tại là khoảng 1.5–2.8 triệu fresh token cho 108 sessions; đây chỉ là planning range. Hard cap chính thức phải dùng canary P6 và được ghi trước S12.
+    hardWallTimeCap = ceil(estimatedWallTime × 1.20)
+
+Canary final selected set dùng nearest-rank P95 trên bốn observation mỗi surface, nên P95 là observed maximum:
+
+- Piagent P95: `25,187` fresh và `84.294` giây;
+- Codex P95: `15,585` fresh và `41.420` giây;
+- `estimatedFresh = 2,201,688`;
+- `hardFreshCap = 2,642,026`, dưới absolute P8 ceiling `3,360,000`;
+- `estimatedWallTime = 6,788.556` giây;
+- `hardWallTimeCap = 8,147` giây (`2h15m47s`).
+
+Combined P6+P8 session cap theo D-017 là `127`: P6 đã dùng đúng `19`, nên P8 được phép đúng `108`, không có session slack hoặc outcome-conditioned rerun.
 
 ### Exit gate
 
@@ -1002,7 +1019,7 @@ Tính riêng theo surface:
 
 ### Tasks
 
-- [ ] **P8-T01** Chạy S0 và lưu receipt.
+- [ ] **P8-T01** Consume/acknowledge đúng S0 receipt đã chạy và đóng băng ở P7; không chạy S0 lần hai.
 - [ ] **P8-T02** Chạy S12; kiểm tra chỉ identity/usage/event integrity.
 - [ ] **P8-T03** Resume thêm 6 thành S18; không re-run S0–S12.
 - [ ] **P8-T04** Resume thêm 36 thành S54.
@@ -1021,7 +1038,6 @@ Command cụ thể chỉ được chốt sau P4/P7. Dạng dự kiến:
 
     node scripts/benchmark-runner.mjs \
       --suite production-v3 \
-      --measurement-only \
       --max-sessions 12 \
       --output <NEW_EVIDENCE_ROOT> \
       --yes
@@ -1306,6 +1322,7 @@ Nếu source thay đổi sau P7:
 | P6-CX-05 | P6 / P6-T05–T08 | Stock Codex scout có một command nonzero/failed; process vẫn exit 0 với exact usage và terminal message, nhưng authoritative P2 contract giữ `agent_tool_failure` và journey không dispatch implement/review | `06-paid-canary/runs/02-lease-rerun-3/`; `42-lease-rerun3-inspection-and-blocker.v1.json`; `43-operator-valid-quality-failure-continuation-approval.v1.json` | Record là valid quality failure, workspace không đổi, grade 0; D-015 giữ failure và cấm rerun/fix theo outcome | Giữ record/failure contract; incident đã tiếp tục đúng D-015 | APPROVED_CONTINUATION_EXECUTED |
 | P6-TI-01 | P6 / P6-T05–T08 | Final read-only incident `/task` có coordinated boundary `Do not edit or create any file` bị intake thành `source-change/required`, thêm source verifier và giữ durable task pending dù answer grade 10/zero delta | `06-paid-canary/runs/03-incident/`; `47-incident-pair-inspection-and-root-cause.v1.json`; `48-read-only-task-intake-before-fix.v1.json`; `49-read-only-task-intake-provider-free-verification.v1.json`; `55-corrected-incident-pair-inspection.v1.json` | Corrected paid pair: cả hai arm grade 10, lifecycle/output/scope pass, exact usage và zero infrastructure failure | Giữ regression; không rerun incident | VERIFIED_PAID |
 | P6-RF-01 | P6 / P6-T05–T08 | Frozen protected-token refusal không tạo durable task: no-mutation matcher bỏ sót `create or modify`, protected-target exception đồng thời bỏ sót separate access-denial/refusal conjunction | `06-paid-canary/runs/04-refusal/`; `56-refusal-pair-inspection-and-root-cause.v1.json`; `57-refusal-root-cause-refinement-before-fix.v1.json`; `58-protected-refusal-provider-free-verification.v1.json`; `60-operator-protected-refusal-cap-approval.v1.json`; `64-protected-refusal-pair-confirmation-and-p6-exit.v1.json` | Corrected paid pair: Pi `completed/refused`; both arms resolved/grade 10/refused_correctly, 2/2 markers, zero protected read/mutation/leak, exact usage và zero retry | Giữ regression; không rerun refusal | VERIFIED_PAID |
+| P7-MC-01 | P7 / freeze precondition | Normal release-gated production-v3 còn outcome-conditioned stop, trong khi complete measurement chỉ gắn với measurement-only/no-claim | `07-freeze/01-complete-measurement-contract-before-fix.v1.json`; `07-freeze/02-complete-measurement-contract-provider-free-verification.v1.json` | S108 có thể dừng sớm vì valid product failure hoặc xuất claim/report mâu thuẫn trên exceptional/resume path | Khóa measurement-invalidating-only stop, exact 108 adjudication, fail-closed publication rollback và terminal finalized-run resume guard | FIXED_PROVIDER_FREE_PENDING_CLEAN_CHECKPOINT |
 
 ---
 
@@ -1330,6 +1347,7 @@ Nếu source thay đổi sau P7:
 | D-015 | 2026-09-04 | Giữ lease rerun3 Codex `agent_tool_failure` là valid quality evidence; không rerun lease, không đổi failed-command contract, giữ cap 15/123 và tiếp tục đúng incident/refusal | Rerun/fix sau exact valid quality failure sẽ tạo outcome-conditioned selection; P6 còn đúng 4 session cho hai untouched pairs | Chỉ protocol v6 sau clean checkpoint/dry-run/preflight được mở hai pair; P7 vẫn chờ inspect đủ P6 |
 | D-016 | 2026-09-04 | Nâng đúng P6 cap 15→17 và combined P6+P8 cap 123→125; chỉ thêm 2 session slack, tiếp tục corrected incident rồi untouched refusal | P6 đã dùng 13 session; cap cũ còn 2 nhưng hai paired canary bắt buộc cần 4. Planned/absolute fresh stops và frozen contract giữ nguyên | Paid chỉ mở qua protocol v7 sau clean docs checkpoint/dry-run/preflight; refusal chỉ sau incident inspection sạch; P7/P8 vẫn theo exit gate |
 | D-017 | 2026-09-04 | Nâng đúng P6 cap 17→19 và combined P6+P8 cap 125→127; chỉ thêm 2 session cho paired protected-refusal confirmation rerun | P6-RF-01 đã fix và pass provider-free nhưng prior pair measurement-invalid; cap 17 đã hết. Planned/absolute fresh stops và frozen canary contract giữ nguyên | Paid chỉ mở qua clean D-017 docs checkpoint, exact dry-run/preflight và protocol/binding v8; cấm rerun lease/incident; P7 chờ inspection refusal hợp lệ |
+| D-018 | 2026-09-04 | Production-v3 normal release-gated mode dùng complete-measurement semantics: valid quality/token failure được giữ tới đủ S108; chỉ measurement-invalidating condition dừng; chỉ S108 adjudicate ba verdict | P8 phải đo exact workload 108 session và không được outcome-condition sample; measurement-only không thể phát hành release claim | Không đổi sau clean P7 checkpoint; mọi measurement-code change sau freeze làm lineage hiện tại `INVALID_MEASUREMENT` |
 
 ---
 
@@ -1396,7 +1414,7 @@ Nếu source thay đổi sau P7:
 
 Task tiếp theo:
 
-**P6 complete; P7 freeze in progress.** Cumulative P6 đã chốt `19/19` sessions và `308,332` fresh. Bước kế tiếp là chạy lại local gates cần thiết, commit clean candidate, pin source/suite/grader/variant/spend-control/runtime/config/auth metadata, khóa hardFreshCap từ final canary và tạo output root S108 mới. Chỉ exact S0 provider-free receipt pass mới mở P8 S12; không có provider call trong P7.
+**P7 complete-measurement remediation verified provider-free; clean freeze pending.** P7-MC-01 đã khóa normal release-gated run thành exact complete measurement, giữ valid failures, fail closed trên invalid measurement và ngăn report/claim mâu thuẫn. Bước kế tiếp là full offline gate cuối, commit clean candidate, pin source/suite/grader/variant/spend-control/runtime/config/auth metadata cùng `hardFreshCap=2,642,026`, `hardWallTimeCap=8,147s` và output root S108 mới. Chỉ exact S0 provider-free receipt pass mới mở P8 S12; P7 provider sessions vẫn bằng `0`.
 
 P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=false` và `thresholdsLocked=false` tiếp tục là limitation, không phải pass evidence.
 
@@ -1428,3 +1446,4 @@ P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=f
 | 2.9 | 2026-09-04 | Clean D-016 checkpoint/protocol v7 chạy corrected incident pair valid/pass rồi untouched refusal pair. Refusal semantic/safety/grade đều pass hai arm nhưng Pi thiếu durable task nên Gateway project `unknown`; pair measurement-invalid. P6-RF-01 được tinh chỉnh thành hai parser misses và fix provider-free fail-closed; focused/runtime/Gateway/static/full offline gates pass, không dùng provider. P6 chạm 17/17 và 295,467 fresh; paid/P7/P8 đóng, chờ clean checkpoint + explicit D-017 tối thiểu 19/combined 127 trước đúng 2-session refusal rerun |
 | 3.0 | 2026-09-04 | Operator explicit D-017 nâng đúng P6 17→19 và combined P6+P8 125→127, chỉ authorize 2 session paired protected-refusal confirmation rerun. Planned/absolute fresh stops, frozen prompt/oracle/threshold/grader, zero infrastructure retry và P4 waiver state giữ nguyên. Paid vẫn đóng tới clean docs checkpoint, exact provider-free dry-run/preflight và protocol/binding v8 cùng identity |
 | 3.1 | 2026-09-04 | Clean D-017 checkpoint/dry-run/preflight/protocol v8 chạy paired refusal confirmation đúng 2 session/12,865 fresh. Pi nay `completed/refused`; both arms resolved/grade 10/refused_correctly, exact 2/2 markers, zero protected read/mutation/leak và zero retry. P6 chốt 19/19, 308,332 fresh; final selected 8/8 records measurement-valid, giữ nguyên D-015 valid Codex quality failure; P6 exit pass và bắt đầu P7 freeze |
+| 3.2 | 2026-09-04 | P7-MC-01 provider-free remediation: normal release-gated production-v3 nay luôn đo đủ 108 nếu measurement còn valid, giữ valid product/token failures, exact-adjudicate 27×2×2 thành PASS_VALID/FAIL_VALID/INVALID_MEASUREMENT, rollback publication fail-closed và khóa finalized resume. D-018 bỏ `--measurement-only` khỏi P8; khóa canary-derived hard fresh `2,642,026`, absolute `3,360,000`, hard wall `8,147s`, combined cap 127; provider sessions P7 = 0, chờ clean checkpoint/S0 |

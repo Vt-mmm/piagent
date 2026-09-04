@@ -6,6 +6,8 @@ import readline from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { productionStageResumeWindow } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+import { productionV3FatalMeasurementEvidence } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
+import { writeBenchmarkAbort } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { assertBenchmarkMeasurementOptions } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { benchmarkLedgerCheckpoint, inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
@@ -48,6 +50,7 @@ export function applyBenchmarkResumeOptions(options, resumeState) {
   options.infrastructureRetries = manifest.infrastructureRetries;
   options.retryDelaySeconds = manifest.retryDelaySeconds;
   options.stopAfterFailedPair = manifest.stopAfterFailedPair === true;
+  options.campaignStopPolicy = manifest.campaignStopPolicy;
   options.output = resumeState.runRoot;
 }
 
@@ -161,12 +164,20 @@ function resolveResumeRunRoot(input) {
 export function loadResumeState(input) {
   const runRoot = resolveResumeRunRoot(input);
   const releaseRunLock = acquireBenchmarkRunLock(runRoot, "resume-pending");
+  let manifest;
+  let productionV3Finalized = false;
   try {
     const manifestPath = path.join(runRoot, "run-manifest.json");
     if (!fs.existsSync(manifestPath)) {
       fail(`Cannot resume ${runRoot}: missing run-manifest.json. This run was created before resume metadata was written, so its root seed cannot be recovered safely. Start a new run with --max-sessions or --max-runtime-minutes to make it resumable.`, 1);
     }
-    const manifest = readJsonFile(manifestPath, "benchmark resume manifest");
+    manifest = readJsonFile(manifestPath, "benchmark resume manifest");
+    productionV3Finalized = manifest?.suite?.id === "production-v3"
+      && (fs.existsSync(path.join(runRoot, "report.json"))
+        || ["claim-passed", "no-claim"].includes(manifest.campaignEvidence?.status));
+    if (productionV3Finalized) {
+      fail(`Cannot resume ${runRoot}: the production-v3 run already has a finalized report or campaign outcome`, 1);
+    }
     if (fs.existsSync(path.join(runRoot, "stopped.json"))) fail(`Cannot resume ${runRoot}: the paired release stop is terminal`, 1);
     if (manifest?.schemaVersion !== 1 || typeof manifest.runId !== "string") {
       fail(`Cannot resume ${runRoot}: run-manifest.json has an unsupported shape`, 1);
@@ -193,6 +204,13 @@ export function loadResumeState(input) {
       releaseRunLock
     };
   } catch (error) {
+    if (!productionV3Finalized && manifest?.suite?.id === "production-v3" && manifest.measurementOnly !== true) {
+      writeBenchmarkAbort(runRoot, {
+        runId: manifest.runId,
+        completedRuns: Number.isSafeInteger(manifest.ledger?.records) ? manifest.ledger.records : 0,
+        expectedRuns: Array.isArray(manifest.order) ? manifest.order.length : 108
+      }, error, { ledger: manifest.ledger ?? null, ...productionV3FatalMeasurementEvidence(error) });
+    }
     releaseRunLock();
     throw error;
   }
@@ -224,6 +242,9 @@ export function benchmarkExecutionPlan({
     `  platform:  v${packageVersion}`,
     `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
     ...(options.measurementOnly === true ? ["  mode:      measurement-only · full 108-session observation · no release claim"] : []),
+    ...(options.measurementOnly !== true && options.campaignStopPolicy === "measurement-invalidating-only"
+      ? ["  mode:      complete measurement · retain valid agent failures · adjudicate the release claim at S108"]
+      : []),
     `  claim:     ${suite.assurance?.claimTier ?? "unavailable"} · family-disjoint=${suite.assurance?.familyDisjointSplit === true} · generalization ${suite.assurance?.familyDisjointSplit === true ? "bounded" : "unavailable"}`,
     `  digest:    ${suiteDigest.slice(0, 16)}`,
     `  surfaces:  ${options.surfaces.join(", ")}`,

@@ -25,6 +25,13 @@ import {
   partialCatastrophicSpendEvidence,
   productionV2EarlyDetectionValidationErrors
 } from "./benchmark-production-stage-validation.js";
+import {
+  MEASUREMENT_INVALIDATING_ONLY_STOP_POLICY,
+  PAIRED_OUTCOME_FLOOR_STOP_POLICY,
+  productionExecutionValidationErrors,
+  productionMeasurementInvalidatingRecordIssues
+} from "./benchmark-production-completion.js";
+export { productionGuardBindingMatches } from "./benchmark-production-completion.js";
 
 const TOKEN_FIELDS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "fresh", "total"]);
 const PRODUCTION_STAGE_CONTROL_POLICY = "production-v1-provider-spend-v1";
@@ -43,11 +50,6 @@ function validStageBoundaries(stageBoundaries) {
       && (index === 0 || value > stageBoundaries[index - 1]));
 }
 
-export function productionGuardBindingMatches(manifest, spendControl) {
-  return JSON.stringify(manifest?.productionGuards ?? null)
-    === JSON.stringify(spendControl?.productionGuards ?? null);
-}
-
 export function productionSpendControlValidationErrors(control, {
   suiteId,
   expectedSessions,
@@ -61,22 +63,7 @@ export function productionSpendControlValidationErrors(control, {
   if (!nonEmptyString(control.rootSeed) || control.rootSeed.length > 200) errors.push("invalid-root-seed");
 
   const execution = control.execution;
-  if (!execution || typeof execution !== "object" || Array.isArray(execution)) errors.push("missing-execution-contract");
-  else {
-    if (!Array.isArray(execution.surfaces)
-      || execution.surfaces.length !== 2
-      || new Set(execution.surfaces).size !== 2
-      || execution.surfaces.some((surface) => !nonEmptyString(surface))) errors.push("invalid-execution-surfaces");
-    if (execution.model !== null && !nonEmptyString(execution.model)) errors.push("invalid-execution-model");
-    if (execution.thinking !== null && !nonEmptyString(execution.thinking)) errors.push("invalid-execution-thinking");
-    if (execution.serviceTier !== undefined
-      && !["default", "fast"].includes(execution.serviceTier)) errors.push("invalid-execution-service-tier");
-    if (suite?.executionContract?.serviceTier !== undefined
-      && execution.serviceTier !== suite.executionContract.serviceTier) errors.push("execution-service-tier-mismatch");
-    if (!Number.isSafeInteger(execution.repeats) || execution.repeats <= 0) errors.push("invalid-execution-repeats");
-    if (execution.infrastructureRetries !== 0) errors.push("infrastructure-retries-must-be-zero");
-    if (execution.stopAfterFailedPair !== true) errors.push("stop-after-failed-pair-must-be-enabled");
-  }
+  errors.push(...productionExecutionValidationErrors(execution, { suiteId, suite }));
 
   if (requireHostReadiness) {
     errors.push(...benchmarkHostReadinessPolicyValidationErrors(control.hostReadiness)
@@ -510,10 +497,21 @@ export function buildBenchmarkStageDiagnostic({
   const outcomeFloorConfigured = Number.isFinite(outcomeFloor);
   const outcomeFailures = outcomeFloorConfigured ? candidateOutcomeFailures(pairRecords, outcomeFloor) : [];
   const outcomeFloorPassed = outcomeFloorConfigured
-    && manifest?.stopAfterFailedPair === true
     && pairRecords.length > 0
     && outcomeFailures.length === 0;
   const qualityPassed = noBaselineOnlyRegressionPassed && observedGradeNonInferiorPassed && outcomeFloorPassed;
+  const completeMeasurementPolicy = manifest?.campaignStopPolicy === MEASUREMENT_INVALIDATING_ONLY_STOP_POLICY;
+  const qualityDecisionRole = completeMeasurementPolicy ? "final-only" : "blocking";
+  const fastServiceTierRequired = suite?.releaseGate?.requireFastServiceTier === true;
+  const measurementContext = { requestedModel, requestedThinking, requestedServiceTier, requireFastServiceTier: fastServiceTierRequired };
+  const measurementValidityFailures = completeMeasurementPolicy
+    ? acceptedRuns.map((run) => ({
+        runId: runKey(run).replaceAll("\0", ":"),
+        issues: productionMeasurementInvalidatingRecordIssues(run, measurementContext)
+      })).filter((item) => item.issues.length > 0)
+    : [];
+  const measurementValidityPassed = !completeMeasurementPolicy || (acceptedRuns.length > 0
+    && measurementValidityFailures.length === 0);
 
   const acceptedUsageFailures = acceptedRuns.map((run) => ({ runId: runKey(run).replaceAll("\0", ":"), issues: exactUsageIssues(run) }))
     .filter((item) => item.issues.length > 0);
@@ -545,7 +543,6 @@ export function buildBenchmarkStageDiagnostic({
     && pairedModelThinkingFailures.length === 0
     && wireGroups.length > 0
     && wireDriftGroups.length === 0;
-  const fastServiceTierRequired = suite?.releaseGate?.requireFastServiceTier === true;
   const serviceTierEvidence = summarizeBenchmarkServiceTierEvidence(acceptedRuns, {
     requestedServiceTier,
     requestedModel,
@@ -690,8 +687,10 @@ export function buildBenchmarkStageDiagnostic({
     && [...pairs.values()].every((pair) => pair.expectedSurfaces.size === 2
       && pair.expectedSurfaces.has(candidateSurface)
       && pair.expectedSurfaces.has(baselineSurface));
-  const executionContractPassed = manifest?.stopAfterFailedPair === true
-    && manifest?.infrastructureRetries === 0;
+  const executionContractPassed = manifest?.infrastructureRetries === 0
+    && (completeMeasurementPolicy
+      ? manifest?.stopAfterFailedPair === false
+      : manifest?.stopAfterFailedPair === true);
   const cleanReleaseSourceRequired = suite?.schemaVersion === 2
     && suite?.releaseGate?.requireEfficiencyClaim === true
     && suite?.releaseGate?.requireFullSuiteForClaim === true;
@@ -725,6 +724,7 @@ export function buildBenchmarkStageDiagnostic({
     diagnosticCheck("recognized-spend-control-pause", recognizedPause, { reason }),
     diagnosticCheck("paired-contract", pairContractPassed, { candidateSurface, baselineSurface }),
     diagnosticCheck("spend-control-execution-contract", executionContractPassed, {
+      campaignStopPolicy: manifest?.campaignStopPolicy ?? PAIRED_OUTCOME_FLOOR_STOP_POLICY,
       stopAfterFailedPair: manifest?.stopAfterFailedPair === true,
       infrastructureRetries: Number.isInteger(manifest?.infrastructureRetries) ? manifest.infrastructureRetries : null
     }),
@@ -740,15 +740,20 @@ export function buildBenchmarkStageDiagnostic({
     }, hostReadinessRequired ? "blocking" : "observational"),
     diagnosticCheck("pause-on-pair-boundary", pairBoundary, { incompleteObservedPairs: incompleteObservedPairs.length }),
     diagnosticCheck("observed-complete-pair", completePairs.length > 0, { observedCompletePairs: completePairs.length }),
-    diagnosticCheck("no-baseline-pass-piagent-fail", noBaselineOnlyRegressionPassed, { regressions: baselineOnlyRegressions.length }),
+    diagnosticCheck("measurement-validity", measurementValidityPassed, {
+      required: completeMeasurementPolicy,
+      failures: measurementValidityFailures
+    }),
+    diagnosticCheck("no-baseline-pass-piagent-fail", noBaselineOnlyRegressionPassed,
+      { regressions: baselineOnlyRegressions.length }, qualityDecisionRole),
     diagnosticCheck("observed-paired-grade-noninferior", observedGradeNonInferiorPassed, {
       incomparablePairs: pairedGradeComparabilityFailures.length,
       regressions: pairedGradeRegressions.length
-    }),
+    }, qualityDecisionRole),
     diagnosticCheck("candidate-outcome-floor", outcomeFloorPassed, {
       minimumOutcomeScoreExclusive: outcomeFloorConfigured ? outcomeFloor : null,
       failures: outcomeFailures.length
-    }),
+    }, qualityDecisionRole),
     diagnosticCheck("accepted-usage-exact", acceptedUsagePassed, { failures: acceptedUsageFailures.length }),
     diagnosticCheck("provider-wire-model-thinking-parity", providerParityPassed, { failures: piParityFailures.length + pairedModelThinkingFailures.length + wireDriftGroups.length }),
     diagnosticCheck("fast-execution-configuration-parity", fastServiceTierPassed, {
@@ -794,7 +799,7 @@ export function buildBenchmarkStageDiagnostic({
       maximumObservedSessionsPerAttempt: subagentBudget.maximumObservedSessionsPerAttempt,
       trafficShare: subagentBudget.trafficShare,
       failures: subagentBudget.failures
-    }),
+    }, completeMeasurementPolicy ? "final-only" : "blocking"),
     diagnosticCheck("partial-stage-catastrophic-fresh-spend", partialSpendPassed, {
       required: partialSpendRequired,
       pooledRatio: partialSpend.pooledRatio,
@@ -806,7 +811,7 @@ export function buildBenchmarkStageDiagnostic({
       familyResolutionIssues: partialSpend.familyResolutionIssues,
       maximumObservedFamilyFreshRatio: partialSpend.maximumObservedFamilyFreshRatio,
       exactUsageIncludingFailedAttempts: partialSpend.exactUsageIncludingFailedAttempts
-    }),
+    }, completeMeasurementPolicy ? "final-only" : "blocking"),
     diagnosticCheck("no-observed-fresh-token-regression", freshEfficiencyPassed, {
       incomparablePairs: freshEfficiency.incomparablePairs.length,
       pairRegressions: freshEfficiency.pairRegressions.length,
@@ -859,6 +864,7 @@ export function buildBenchmarkStageDiagnostic({
     quality: {
       rule: "no-baseline-pass-piagent-fail-and-candidate-outcomes-above-the-release-floor",
       passed: qualityPassed,
+      decisionRole: qualityDecisionRole,
       noBaselineOnlyRegressionPassed,
       observedGradeNonInferiorPassed,
       observedCompletePairs: completePairs.length,
@@ -877,6 +883,14 @@ export function buildBenchmarkStageDiagnostic({
         passed: false,
         failures: [{ failures: ["outcome-floor-not-configured"] }]
       }
+    },
+    measurementValidity: {
+      policy: completeMeasurementPolicy
+        ? MEASUREMENT_INVALIDATING_ONLY_STOP_POLICY
+        : PAIRED_OUTCOME_FLOOR_STOP_POLICY,
+      required: completeMeasurementPolicy,
+      passed: measurementValidityPassed,
+      failures: measurementValidityFailures
     },
     acceptedUsage: {
       rule: "every-accepted-session-has-exact-provider-token-buckets",
@@ -953,7 +967,18 @@ export function buildBenchmarkStageDiagnostic({
     checks,
     blockingReasons,
     stageAdvanceAllowed: blockingReasons.length === 0,
-    decisionContract: {
+    decisionContract: completeMeasurementPolicy ? {
+      blocking: "measurement-validity-identity-configuration-exact-usage-ledger-and-evidence-integrity-only",
+      finalOnly: [
+        "quality-safety-reliability-workflow-and-category-gates",
+        "paired-quality-and-outcome-floor-gates",
+        "production-subagent-budget",
+        "partial-and-final-fresh-token-ratios",
+        "0.60-upper95-family-fresh-token-ratio",
+        "0.65-pooled-all-attempt-net-fresh-token-ratio"
+      ],
+      observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
+    } : {
       blocking: "quality-model-thinking-fast-execution-configuration-parity-task-continuity-exact-usage-subagent-budget-and-partial-stage-catastrophic-fresh-spend",
       finalOnly: [
         "0.60-upper95-family-fresh-token-ratio",
@@ -962,6 +987,8 @@ export function buildBenchmarkStageDiagnostic({
       ],
       observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
     },
-    claimBoundary: "Provider-free partial-run diagnostic only. Intermediate token measurements cannot make a final family-upper95, net-35 all-attempt, or Fast execution configuration parity claim; cost, duration, and host load are observational and non-blocking."
+    claimBoundary: completeMeasurementPolicy
+      ? "Provider-free partial-run diagnostic only. Valid product quality, safety, workflow, subagent-budget, and token-ratio failures are retained for final S108 adjudication; only measurement-invalidating identity, configuration, exact-usage, ledger, grader/harness, or evidence-integrity failures block the next paid stage."
+      : "Provider-free partial-run diagnostic only. Intermediate token measurements cannot make a final family-upper95, net-35 all-attempt, or Fast execution configuration parity claim; cost, duration, and host load are observational and non-blocking."
   };
 }

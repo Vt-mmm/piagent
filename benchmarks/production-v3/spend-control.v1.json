@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suiteId": "production-v3",
-  "purpose": "Bound provider spend for the 108-session Luna-medium Fast-vs-Fast production user-journey comparison before a claim is allowed.",
+  "purpose": "Bound provider spend while completing the exact 108-session Luna-medium Fast-vs-Fast production user-journey comparison, retaining valid product failures, and adjudicating the release claim only at S108.",
   "rootSeed": "production-v3-seven-axis-v1-640",
   "execution": {
     "surfaces": ["piagent", "codex-cli"],
@@ -10,7 +10,8 @@
     "serviceTier": "fast",
     "repeats": 2,
     "infrastructureRetries": 0,
-    "stopAfterFailedPair": true
+    "stopAfterFailedPair": false,
+    "campaignStopPolicy": "measurement-invalidating-only"
   },
   "stages": [
     { "id": "S0", "cumulativeSessions": 0, "newSessions": 0, "mode": "preflight-only", "claimEligible": false },
@@ -85,31 +86,36 @@
     "stageDiagnosticArtifact": "stage-diagnostic.json",
     "automaticTerminalOrAbortRules": [
       "dirty-release-source-before-auth-tool-or-provider-preflight",
-      "piagent-unresolved-or-outcome-score-at-or-below-floor-via-stop-after-failed-pair",
+      "source-runtime-configuration-or-provider-wire-identity-drift",
+      "invalid-harness-grader-schema-or-lifecycle-outcome",
       "infrastructure-error-or-unknown-provider-attempt-usage-via-runner-abort",
+      "corrupt-contradictory-or-incomplete-ledger-or-evidence-chain",
       "candidate-provenance-drift-via-execution-guard"
     ],
     "stageAdvanceRules": [
       "clean-release-source",
-      "no-baseline-pass-piagent-fail",
-      "no-observed-paired-grade-regression",
-      "all-observed-piagent-outcomes-remain-above-the-release-floor",
+      "all-accepted-production-v3-outcomes-remain-measurement-valid",
       "no-model-thinking-or-provider-wire-parity-drift",
       "fast-execution-configuration-parity-from-piagent-outbound-telemetry-and-codex-identity-bound-effective-thread-settings-with-no-default-fallback",
       "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
       "source-bound-provider-free-architecture-runtime-long-horizon-and-webui-parity-receipts",
-      "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
-      "partial-stage-pooled-fresh-ratio-at-most-1.10-and-every-observed-family-at-most-1.25",
       "no-accepted-usage-completeness-failure",
       "no-infrastructure-retry",
-      "no-unknown-provider-attempt-usage"
+      "no-unknown-provider-attempt-usage",
+      "complete-durable-campaign-and-ledger-accounting"
+    ],
+    "finalAdjudicationRules": [
+      "quality-safety-reliability-workflow-category-and-paired-outcome-gates",
+      "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
+      "partial-stage-pooled-and-family-fresh-ratios-are-recorded-but-do-not-stop-a-valid-measurement",
+      "final-upper95-family-and-all-attempt-pooled-fresh-token-gates"
     ],
     "nonBlockingDiagnostics": [
       "normalized-api-equivalent-text-token-cost",
       "duration",
       "host-load"
     ],
-    "operatorRule": "S12 is a six-pair smoke gate. S18 adds complete nine-family coverage. S54 is the halfway stability gate. Only S108 can decide both the 0.60 upper-95 family-level guard and the 0.65 pooled all-attempt net fresh-token gate."
+    "operatorRule": "S12, S18 and S54 are measurement-validity checkpoints only. Valid agent failures and unfavorable token ratios are retained and cannot stop the campaign. Only S108 adjudicates quality and claim gates, including the 0.60 upper-95 family-level guard and the 0.65 pooled all-attempt net fresh-token gate."
   },
   "claimBoundary": "Only the complete production-v3 S108 ledger may establish a public-regression product comparison against the stock Codex CLI baseline. The suite is not family-disjoint and cannot establish universal, private-generalization, causal, member-production, billed-cost, or actual provider-processing-tier claims. The net-35 ratio includes accepted plus exact failed/retry fresh tokens; provider response tier and subscription credits remain separate."
 }

@@ -141,6 +141,7 @@ export function benchmarkPreflightReceipt({
       retryDelaySeconds: options.retryDelaySeconds,
       maxSessions: options.maxSessions ?? null,
       stopAfterFailedPair: options.stopAfterFailedPair,
+      ...(options.campaignStopPolicy ? { campaignStopPolicy: options.campaignStopPolicy } : {}),
       ...(options.measurementOnly === true ? { measurementOnly: true } : {})
     },
     ...(hostReadiness ? { hostReadiness } : {}),

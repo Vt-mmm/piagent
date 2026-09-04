@@ -147,6 +147,7 @@ export function benchmarkMeasurementConfiguration({ bootstrapMetadata, candidate
     infrastructureRetries: options.infrastructureRetries, retryDelaySeconds: options.retryDelaySeconds,
     transportCircuitBreaker: BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
     stopAfterFailedPair: options.stopAfterFailedPair,
+    ...(options.campaignStopPolicy ? { campaignStopPolicy: options.campaignStopPolicy } : {}),
     ...(options.measurementOnly ? { measurementOnly: true } : {}),
     order: fullOrder.map(item => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat })) };
   return Object.freeze({ configuration, environmentPolicy,

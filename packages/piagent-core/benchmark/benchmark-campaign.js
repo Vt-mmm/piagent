@@ -536,6 +536,21 @@ export function openProductionBenchmarkCampaign({ registryBase, suiteId, runId, 
         writePrivateAtomic(loaded.manifestPath, `${JSON.stringify(loaded.manifest, null, 2)}\n`);
         return this.snapshot();
       },
+      invalidateClaimPublication({ reason }) {
+        if (typeof reason !== "string" || !reason.trim()) {
+          fail("Production campaign publication failure reason is malformed");
+        }
+        if (loaded.manifest.status === "no-claim") return this.snapshot();
+        if (!["claim-sealed", "claim-passed"].includes(loaded.manifest.status)) {
+          fail("Only a sealed or finalized passing claim can be invalidated after publication failure");
+        }
+        const finalizedAt = new Date().toISOString();
+        loaded.manifest.status = "no-claim";
+        loaded.manifest.claimOutcome = { allowed: false, reason: reason.trim().slice(0, 240), finalizedAt };
+        loaded.manifest.completedAt = finalizedAt;
+        writePrivateAtomic(loaded.manifestPath, `${JSON.stringify(loaded.manifest, null, 2)}\n`);
+        return this.snapshot();
+      },
       finalizeTerminalNoClaim({ reason, runs }) {
         if (typeof reason !== "string" || !reason.trim()) {
           fail("Production campaign terminal no-claim reason is malformed");

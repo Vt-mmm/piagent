@@ -32,10 +32,11 @@ import {
   createProductionStageControl,
   durablePairedOutcomeFloorStop,
   pendProductionStageControl,
-  productionGuardBindingMatches,
   productionStageResumeDisposition,
   productionStageResumeWindow
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+import { productionExecutionBindingMatches, productionGuardBindingMatches,
+  productionMeasurementInvalidatingRecordIssues } from "../packages/piagent-core/benchmark/benchmark-production-completion.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
 import { runOfflineBenchmarkSession } from "../scripts/benchmark-session.mjs";
 import { providerBoundaryFailureDisposition } from "../scripts/benchmark-session-provider-boundary.mjs";
@@ -1740,6 +1741,7 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
     manifest,
     generatedAt: "2026-08-22T00:00:00.000Z"
   };
+
   const clean = buildBenchmarkStageDiagnostic(input);
   assert.equal(clean.diagnosticOnly, true);
   assert.equal(clean.claimEligible, false);
@@ -2024,6 +2026,109 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
   assert.equal(integrityBlocked.stageAdvanceAllowed, false);
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("grader-integrity-failed")));
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("scope-safety-evidence-failed")));
+});
+
+test("production-v3 complete measurement stages retain valid quality failures and block invalid measurements", () => {
+  const scenario = { id: "first" };
+  const future = { id: "second" };
+  const fullOrder = [scenario, future].flatMap((item) => ["piagent", "codex-cli"].map((surface) => ({
+    scenario: item,
+    surface,
+    repeat: 1
+  })));
+  const runs = [
+    stageDiagnosticRecord({ surface: "piagent" }),
+    stageDiagnosticRecord({ surface: "codex-cli" })
+  ];
+  for (const run of runs) {
+    run.runValidity = "valid";
+    run.failureClass = "none";
+    run.outcome = { runValidity: "valid", usageStatus: "exact", failureClass: "none" };
+  }
+  const candidate = runs.find((run) => run.surface === "piagent");
+  candidate.resolved = false;
+  candidate.failure = "agent-task-failure";
+  candidate.failureClass = "agent_task_failure";
+  candidate.runValidity = "valid";
+  candidate.outcome.failureClass = "agent_task_failure";
+  candidate.grade = { passed: false, score: 0, checks: [] };
+  candidate.workflow = { score: 0, checks: [{ id: "terminal-completion", passed: false }] };
+  const input = {
+    runId: "production-v3-complete-measurement",
+    reason: "max-sessions:2",
+    runs,
+    fullOrder,
+    candidateSurface: "piagent",
+    baselineSurface: "codex-cli",
+    requestedModel: "openai-codex/gpt-5.6-luna",
+    requestedThinking: "medium",
+    suite: { id: "production-v3", releaseGate: { minimumOutcomeScoreExclusive: 9.5,
+      requireCausalContextReceipt: true } },
+    manifest: { campaignStopPolicy: "measurement-invalidating-only", stopAfterFailedPair: false,
+      infrastructureRetries: 0 },
+    generatedAt: "2026-09-04T00:00:00.000Z"
+  };
+
+  const stopControl = { execution: { campaignStopPolicy: "measurement-invalidating-only",
+    stopAfterFailedPair: false, infrastructureRetries: 0 } };
+  assert.equal(productionExecutionBindingMatches(input.manifest, stopControl), true);
+  assert.equal(productionExecutionBindingMatches({ ...input.manifest, campaignStopPolicy: "paired-outcome-floor" },
+    stopControl), false);
+
+  const retained = buildBenchmarkStageDiagnostic(input);
+  assert.equal(retained.quality.passed, false);
+  assert.equal(retained.stageAdvanceAllowed, true, retained.blockingReasons.join(", "));
+  for (const id of ["no-baseline-pass-piagent-fail", "observed-paired-grade-noninferior",
+    "candidate-outcome-floor"]) {
+    assert.equal(retained.checks.find((check) => check.id === id).decisionRole, "final-only", id);
+  }
+
+  const invalidRuns = structuredClone(runs);
+  const invalidCandidate = invalidRuns.find((run) => run.surface === "piagent");
+  invalidCandidate.runValidity = "invalid_harness";
+  invalidCandidate.failureClass = "grader_failure";
+  invalidCandidate.graderIntegrity = { passed: false };
+  const invalid = buildBenchmarkStageDiagnostic({ ...input, runs: invalidRuns });
+  assert.equal(invalid.stageAdvanceAllowed, false);
+  assert.ok(invalid.blockingReasons.includes("measurement-validity"));
+});
+
+test("production-v3 per-record admission retains agent failures but immediately rejects measurement drift", () => {
+  const context = {
+    requestedModel: "openai-codex/gpt-5.6-luna",
+    requestedThinking: "medium",
+    requestedServiceTier: undefined,
+    requireFastServiceTier: false
+  };
+  const valid = stageDiagnosticRecord({ surface: "piagent" });
+  valid.runValidity = "valid";
+  valid.failureClass = "none";
+  valid.outcome = { runValidity: "valid", usageStatus: "exact", failureClass: "none" };
+  assert.deepEqual(productionMeasurementInvalidatingRecordIssues(valid, context), []);
+
+  const qualityFailure = structuredClone(valid);
+  qualityFailure.resolved = false;
+  qualityFailure.failureClass = "agent_task_failure";
+  qualityFailure.outcome.failureClass = "agent_task_failure";
+  assert.deepEqual(productionMeasurementInvalidatingRecordIssues(qualityFailure, context), []);
+
+  const cases = [
+    ["usage completeness", (run) => { run.usage.usageCompleteness = "unverified"; }, "accepted-usage-not-exact"],
+    ["token equation", (run) => { run.usage.fresh += 1; }, "accepted-usage-not-exact"],
+    ["model", (run) => { run.usage.model = "drifted/model"; }, "accepted-model-mismatch"],
+    ["thinking", (run) => { run.usage.thinkingLevel = "low"; }, "accepted-thinking-mismatch"],
+    ["provider wire", (run) => { run.providerWireEvidence.passed = false; }, "provider-wire-not-request-bound"]
+  ];
+  for (const [label, mutate, expected] of cases) {
+    const drifted = structuredClone(valid);
+    mutate(drifted);
+    assert.ok(productionMeasurementInvalidatingRecordIssues(drifted, context).includes(expected), label);
+  }
+  assert.ok(productionMeasurementInvalidatingRecordIssues(valid, {
+    ...context,
+    requestedServiceTier: "fast",
+    requireFastServiceTier: true
+  }).includes("fast-service-tier-evidence-failed"));
 });
 
 test("production partial stages hard-stop catastrophic fresh spend and exact subagent overuse from S12 onward", () => {
