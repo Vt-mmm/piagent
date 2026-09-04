@@ -277,6 +277,21 @@ function balancedCallEnd(code, openIndex) {
   return -1;
 }
 
+function enclosingTestDescriptions(code, strings, callStart) {
+  const descriptions = [];
+  const pattern = new RegExp(`\\b(?:it|test)\\s*\\(\\s*(${BOUND_STRING}[0-9]+__)\\s*,`, "g");
+  for (const match of code.matchAll(pattern)) {
+    if (match.index >= callStart) break;
+    const open = code.indexOf("(", match.index);
+    const end = balancedCallEnd(code, open);
+    const description = boundStringValue(match[1], strings);
+    if (end > callStart && typeof description === "string" && description.trim()) {
+      descriptions.push({ start: match.index, description });
+    }
+  }
+  return descriptions.sort((left, right) => right.start - left.start).map((item) => item.description);
+}
+
 function assertionSlices(code) {
   const assertions = [];
   const pattern = /\b(?:assert(?:\.[a-z][a-z0-9_]*)?|expect)\s*\(/gi;
@@ -342,7 +357,8 @@ function callableSlices(code, strings, callables) {
       ));
       if (boundAssertions.length > 0) calls.push({
         slice, values, strings, resultNames, argumentNames, assertionValues, prelude: code.slice(0, match.index),
-        assertions: boundAssertions.map((item) => item.code)
+        assertions: boundAssertions.map((item) => item.code),
+        descriptions: enclosingTestDescriptions(code, strings, match.index)
       });
     }
   }
@@ -519,6 +535,108 @@ function nonMutationAssertion(call) {
       || new RegExp(`\\bexpect\\s*\\(\\s*${escapeRegex(argument)}\\s*\\)\\s*\\.to(?:Strict)?Equal\\s*\\(\\s*${escapeRegex(snapshot)}\\b`, "i").test(assertion)
     ));
   });
+}
+
+function primitiveContractParameters(task) {
+  const contracts = new Map();
+  const text = [task?.summary, ...(Array.isArray(task?.acceptanceCriteria) ? task.acceptanceCriteria : [])]
+    .filter(Boolean).join("\n");
+  const pattern = /`([a-z_$][a-z0-9_$]*)`\s+(?:must|should|has\s+to)\s+be\s+(?:an?\s+)?(?:non[- ]empty\s+)?(string|integer|number|boolean|bigint|symbol)\b/gi;
+  for (const match of text.matchAll(pattern)) contracts.set(match[1], match[2].toLowerCase());
+  return contracts;
+}
+
+function balancedBlockEnd(code, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < code.length; index += 1) {
+    if (code[index] === "{") depth += 1;
+    else if (code[index] === "}" && --depth === 0) return index + 1;
+  }
+  return -1;
+}
+
+function declaredFunctionBody(sourceEntries, callable) {
+  const local = callable.split(".").at(-1);
+  if (!/^[a-z_$][a-z0-9_$]*$/i.test(local ?? "")) return undefined;
+  const pattern = new RegExp(`\\bfunction\\s+${escapeRegex(local)}\\s*\\(([^)]*)\\)\\s*\\{`, "i");
+  for (const entry of sourceEntries) {
+    const match = pattern.exec(entry.text);
+    if (!match) continue;
+    const open = entry.text.indexOf("{", match.index + match[0].length - 1);
+    const end = balancedBlockEnd(entry.text, open);
+    const parameters = match[1].split(",").map((item) => item.trim());
+    if (end > open && parameters.every((item) => /^[a-z_$][a-z0-9_$]*$/i.test(item))) {
+      return { body: entry.text.slice(open + 1, end - 1), parameters };
+    }
+  }
+  return undefined;
+}
+
+function primitiveGuardIndex(body, parameter, type) {
+  const escaped = escapeRegex(parameter);
+  const pattern = type === "integer"
+    ? new RegExp(`!\\s*Number\\.is(?:Safe)?Integer\\s*\\(\\s*${escaped}\\s*\\)`, "i")
+    : new RegExp(`typeof\\s+${escaped}\\s*!==?\\s*["']${escapeRegex(type)}["']`, "i");
+  const match = pattern.exec(body);
+  if (!match) return -1;
+  const ifStart = body.lastIndexOf("if", match.index);
+  const open = ifStart >= 0 ? body.indexOf("(", ifStart + 2) : -1;
+  const close = open >= 0 ? balancedCallEnd(body, open) : -1;
+  if (ifStart < 0 || open < 0 || match.index < open || match.index >= close) return -1;
+  const consequent = body.slice(close, close + 320);
+  return /^\s*(?:throw\b|\{[\s\S]{0,260}\bthrow\b)/.test(consequent) ? match.index : -1;
+}
+
+function parameterMutationObserved(body, parameter) {
+  const escaped = escapeRegex(parameter);
+  return [
+    new RegExp(`\\b${escaped}\\s*(?:\\[[^\\]]+\\]|\\.[a-z_$][a-z0-9_$]*)?\\s*(?:=(?!=|>)|\\+=|-=|\\*=|\/=|%=|\\+\\+|--)`, "i"),
+    new RegExp(`(?:\\+\\+|--)\\s*${escaped}\\b|\\bdelete\\s+${escaped}\\b`, "i"),
+    new RegExp(`\\b(?:Object\\.(?:assign|definePropert(?:y|ies))|Reflect\\.(?:deleteProperty|set))\\s*\\(\\s*${escaped}\\b`, "i"),
+    new RegExp(`\\b${escaped}\\.(?:copyWithin|fill|pop|push|reverse|shift|sort|splice|unshift)\\s*\\(`, "i")
+  ].some((pattern) => pattern.test(body));
+}
+
+function primitiveNonMutationEvidence(task, profiles, sourceEntries) {
+  const contracts = primitiveContractParameters(task);
+  if (contracts.size === 0) return false;
+  const callables = [...new Set(profiles.flatMap((profile) => profile.callables))];
+  return callables.length > 0 && callables.every((callable) => {
+    const declared = declaredFunctionBody(sourceEntries, callable);
+    if (!declared || declared.parameters.length === 0) return false;
+    return declared.parameters.every((parameter) => {
+      const type = contracts.get(parameter);
+      if (!type || parameterMutationObserved(declared.body, parameter)) return false;
+      const guard = primitiveGuardIndex(declared.body, parameter, type);
+      if (guard < 0) return false;
+      const prefix = declared.body.slice(0, guard);
+      return !new RegExp(`\\b[a-z_$][a-z0-9_$.]*\\s*\\([^)]*\\b${escapeRegex(parameter)}\\b`, "i").test(prefix);
+    });
+  });
+}
+
+function dependencyNeutralEvidence(corpus) {
+  const manifest = /(?:^|\/)(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|deno\.jsonc?|bun\.lockb?|requirements[^/]*\.txt|pyproject\.toml|poetry\.lock|cargo\.toml|cargo\.lock|go\.mod|go\.sum)$/i;
+  if (corpus.files.some((file) => manifest.test(file))) return false;
+  return corpus.sourceEntries.length > 0 && corpus.sourceEntries.every((entry) => (
+    moduleRecords(entry).every((record) => record.specifier.startsWith(".") || record.specifier.startsWith("node:"))
+  ));
+}
+
+function semanticTerm(value) {
+  if (/^(?:[a-z]+s|[a-z]+es)$/i.test(value) && !/(?:ss|us)$/i.test(value)) {
+    if (/(?:ches|shes|ses|xes|zes)$/i.test(value)) return value.slice(0, -2);
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
+function semanticTerms(value) {
+  const separated = String(value ?? "").replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return new Set((normalizedText(separated).match(/[a-z][a-z0-9_$]{1,}/g) ?? [])
+    .map(semanticTerm)
+    .filter((word) => !BEHAVIOR_STOPWORDS.has(word)
+      && !new Set(["and", "the", "with", "from", "into", "this", "that", "for", "are", "was", "were", "has", "have", "then"]).has(word)));
 }
 
 function definedExpectedExpression(expression, strings, prelude = "") {
@@ -730,7 +848,7 @@ export function verifierCommandsCoverTests(task, testPaths, cwd) {
   }));
 }
 
-function criterionBehaviorMatches(task, criterion, profiles, sourceFiles) {
+function criterionBehaviorMatches(task, criterion, profiles, corpus) {
   const rawCriterion = boundCriterionText(task, criterion);
   if (!rawCriterion || profiles.length === 0) return false;
   const text = normalizedText(rawCriterion);
@@ -776,8 +894,12 @@ function criterionBehaviorMatches(task, criterion, profiles, sourceFiles) {
       return expected !== undefined && assertedFlagValue(call, expected.name.slice(2), expected.value);
     }));
   }
-  if (/\b(?:do not|must not|without)\s+mutat|\bpreserve\s+(?:the\s+)?input/.test(text)) {
-    requirements.push(calls.some(nonMutationAssertion));
+  if (/\b(?:do not|must not|without)\s+mutat|\b(?:do not|must not)\s+[^.;]{0,100}\bor\s+mutat|\bpreserve\s+(?:the\s+)?input/.test(text)) {
+    requirements.push(calls.some(nonMutationAssertion)
+      || primitiveNonMutationEvidence(task, profiles, corpus.sourceEntries));
+  }
+  if (/\b(?:do not|must not|without)\s+add(?:ing)?\s+(?:new\s+)?dependenc/.test(text)) {
+    requirements.push(dependencyNeutralEvidence(corpus));
   }
   if (/\breturn shape\b|\breturned? (?:object|representation)\b/.test(text)) {
     requirements.push(calls.some((call) => assertionProvesDefinedField(call, "flags")
@@ -788,12 +910,16 @@ function criterionBehaviorMatches(task, criterion, profiles, sourceFiles) {
   if (errorClass) requirements.push(new RegExp(`\\b(?:assert\\.throws|rejects|tothrow)\\b[\\s\\S]{0,240}\\b${errorClass}\\b`, "i").test(code));
   if (requirements.length > 0) return requirements.every(Boolean);
   const names = new Set(profiles.flatMap((profile) => profile.callables).flatMap((name) => name.split(".")));
-  const paths = [...sourceFiles, ...profiles.map((profile) => profile.path)].join("\n");
+  const paths = [...corpus.sourceFiles, ...profiles.map((profile) => profile.path)].join("\n");
   const anchors = [...rawCriterion.matchAll(/\b[a-z_$][a-z0-9_$]{3,}\b/gi)]
     .map((match) => match[0]).filter((word) => !BEHAVIOR_STOPWORDS.has(word.toLowerCase()));
-  return anchors.some((anchor) => names.has(anchor)
+  const direct = anchors.some((anchor) => names.has(anchor)
     || new RegExp(`\\b${escapeRegex(anchor)}\\b`, "i").test(code)
     || new RegExp(`(?:^|[/_.-])${escapeRegex(anchor)}(?:[/_.-]|$)`, "i").test(paths));
+  const criterionTerms = semanticTerms(rawCriterion);
+  const descriptionTerms = semanticTerms(calls.flatMap((call) => call.descriptions ?? []).join("\n"));
+  const descriptionOverlap = [...criterionTerms].filter((term) => descriptionTerms.has(term));
+  return direct || descriptionOverlap.length >= 2;
 }
 
 function behavioralFocusRequired(input) {
@@ -819,7 +945,7 @@ function focusedBehaviorEvidence(input) {
   if (criterionBehaviorProofDisposition(input) !== "linked") return undefined;
   const linkage = testSourceLinkage(input.corpus);
   const profiles = linkedTestEvidence(linkage).filter((profile) => verifierCommandsCoverTests(input.task, [profile.path], input.cwd));
-  if (!criterionBehaviorMatches(input.task, input.criterion, profiles, input.corpus.sourceFiles)) return undefined;
+  if (!criterionBehaviorMatches(input.task, input.criterion, profiles, input.corpus)) return undefined;
   return {
     ...input.verifierEvidence,
     kind: "verifier-backed-focused-test",

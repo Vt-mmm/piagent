@@ -286,6 +286,11 @@ function isStandaloneOpaqueMetadata(line: string, current: string): boolean {
     && (!current || /[.!?;:]$/.test(current));
 }
 
+function isStandaloneAcceptanceLabel(value: string): boolean {
+  const normalized = value.trim();
+  return /^(?:acceptance criteria|behavior|contract|constraints|expected behavior|expected output|requirements|rules|validation):$/i.test(normalized);
+}
+
 export function automaticAcceptanceCriteria(
   prompt: string,
   changeMode: "source-change" | "read-only" = "source-change",
@@ -303,14 +308,21 @@ export function automaticAcceptanceCriteria(
     if (current) push(current);
     current = "";
   };
-  for (const line of lines) {
+  const listItem = /^(?:[-*+] |\d+[.)]\s+)/;
+  for (const [index, line] of lines.entries()) {
     const trimmed = line.trim();
-    if (/^(?:[-*+] |\d+[.)]\s+)/.test(trimmed)) {
+    if (listItem.test(trimmed)) {
+      if (isStandaloneAcceptanceLabel(current)) {
+        current = `${current} ${trimmed.replace(listItem, "")}`;
+        continue;
+      }
       flush();
       current = trimmed;
       continue;
     }
     if (!trimmed) {
+      const next = lines.slice(index + 1).find((candidate) => candidate.trim())?.trim() ?? "";
+      if (isStandaloneAcceptanceLabel(current) && listItem.test(next)) continue;
       flush();
       continue;
     }

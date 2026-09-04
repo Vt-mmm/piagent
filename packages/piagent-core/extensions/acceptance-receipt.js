@@ -157,7 +157,8 @@ export function inferAcceptanceObligations(text, changeMode = "source-change", o
       obligations.push("tenant-boundary");
     }
   }
-  const explicitInvalidInput = includesAny(value, [/\binvalid\b/, /\btypeerror\b/, /\bthrow\b/, /\bnon-negative\b/, /\bpositive integer\b/, /\binteger\b/]);
+  const namedNonEmptyString = /(?:`[a-z_$][a-z0-9_$]*`|\b[a-z_$][a-z0-9_$]*)\s+(?:must|should|has\s+to)\s+be\s+(?:an?\s+)?non[- ]empty\s+string\b/.test(value);
+  const explicitInvalidInput = namedNonEmptyString || includesAny(value, [/\binvalid\b/, /\btypeerror\b/, /\bthrow\b/, /\bnon-negative\b/, /\bpositive integer\b/, /\binteger\b/]);
   const rejectInvalidInput = /\breject(?:s|ed|ion)?\b/.test(value)
     && !/\breject(?:s|ed|ion)?\s+(?:no\s+)?valid\b/.test(value)
     && includesAny(value, [/\binvalid\b/, /\bbad\b/, /\bmalformed\b/, /\bnegative\b/, /\bnull\b/, /\bundefined\b/, /\bnon[- ]?(?:number|numeric)\b/, /\bout[- ]?of[- ]?range\b/]);
