@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 2.4
+> **Phiên bản:** 2.5
 >
-> **Trạng thái tổng:** IN_PROGRESS — D-014 đã duyệt cap P6 15/combined 123; dual provider-free fix đã qua retained replay và full offline gates; paid vẫn đóng chờ clean checkpoint + dry-run + preflight + protocol v5
+> **Trạng thái tổng:** BLOCKED_OPERATOR_DECISION — lease rerun3 đã tạo đủ hai record hợp lệ/exact; Piagent pass, Codex là `agent_tool_failure` hợp lệ ở scout; không có source fix hoặc rerun nào được phép theo contract đã khóa
 >
-> **Cập nhật gần nhất:** 2026-09-04T04:05:18Z (2026-09-04T11:05:18+07:00)
+> **Cập nhật gần nhất:** 2026-09-04T04:35:00Z (2026-09-04T11:35:00+07:00)
 >
 > **Chế độ thực thi:** một agent, local, tuần tự; không subagent, không cloud task
 >
@@ -15,7 +15,7 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** tạo clean local checkpoint từ remediation đã verify, bind dry-run/preflight/protocol v5 trên đúng identity và chỉ authorize paired lease rerun3; chưa chạy thêm provider
+> **Phase kế tiếp:** chờ operator quyết định có giữ Codex quality failure, không rerun lease và mở đúng 4 session incident/refusal còn lại bằng protocol mới hay không; P7/P8 vẫn đóng
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
 
@@ -382,7 +382,7 @@ P2 và P3 giải quyết hai arm khác nhau nhưng vẫn triển khai tuần t�
 | P3 | Pi lifecycle correction | DONE | 0 | PASS — seven-row operation/task matrix, refusal and reconnect regressions pass |
 | P4 | Evaluator và production-v3 | DONE_WITH_OPERATOR_WAIVER | 0 | Automated calibration pass; human review waived, `reviewed=false` retained |
 | P5 | Provider-free qualification | DONE | 0 | PASS — clean checkpoint + exact-108 dry-run + full provider-free preflight ready |
-| P6 | Paid canary ngoài S108 | IN_PROGRESS — dual fix provider-free verified; paid closed pending checkpoint/protocol v5 | 9/15 sessions; 193,761 fresh | Clean checkpoint + dry-run + preflight + protocol v5 chỉ cho lease rerun3 |
+| P6 | Paid canary ngoài S108 | BLOCKED_OPERATOR_DECISION — rerun3 có 2/2 record valid/exact, Piagent pass và Codex quality fail được giữ nguyên | 11/15 sessions; 231,974 fresh | Quyết định operator để supersede gate tạm v5; không rerun/fix theo outcome |
 | P7 | Freeze candidate/config | NOT_STARTED | 0 | Commit/tree/runtime/suite/config digests đóng |
 | P8 | Exact S108 | NOT_STARTED | 108 sessions | 108 accepted, exact usage, no invalid measurement |
 | P9 | Analysis/report | NOT_STARTED | 0 | PASS_VALID hoặc FAIL_VALID có evidence |
@@ -872,6 +872,12 @@ Mỗi task chạy một lần trên hai surfaces: 4 × 2 = 8 sessions.
 - Before-fix exact suite tái hiện `52/57 pass`, 5 fail: scope sai, zero inherited evidence, retained review receipt còn critical missing, exit-0 local policy false positive và local process failure sai class. Các biên adjacent/same-session/digest/exact-scope/no-negation vẫn fail-closed. Evidence `06-paid-canary/37-dual-fix-before-fix.v1.json`, SHA-256 `8daebff8675c09f8f6b9eaa14ec1531a393d3306bc9ac5ae20412acc885a9bed`.
 - Fix nhận diện hẹp explicit `requirements from prior turn` có action verb và chặn negated prior-turn reference; downstream vẫn yêu cầu adjacent completed source task, same session, exact digest continuity và exact child scope. Transport classifier chỉ nhận provider-policy trên terminal/nonzero failure cùng explicit refusal signal; exit 0 task text và local `policy` không còn là infrastructure failure.
 - Provider-free after-fix: focused `57/57`; exact retained rerun2 replay tự derive đúng scope/evidence hai file và nâng review task `3/5 -> 5/5`, critical missing `2 -> 0`; runner provider-policy control `1/1`; neighborhood `282 pass/18 environment skip/0 fail`; typecheck, architecture 599 file, docs, neutrality, secret scan và full offline verify pass. Evidence packet: `06-paid-canary/38-dual-fix-provider-free-verification.v1.json`. Provider sessions không đổi.
+- Clean commit `79a12a59580f750e38527d10907e9fd96cfc2a5e`, tree `16626d1c3db6b09d4283206602f1da717ce9aefa`; exact dry-run và preflight đều provider-free/pass. Protocol v5 + preflight binding v5 khóa đúng identity, suite `2e2747ee…`, verifier `b460c823…` và chỉ authorize `runs/02-lease-rerun-3` tối đa 2 sessions.
+- Lease rerun3 hoàn tất đủ hai accepted records, exact usage và không có infrastructure failure/retry. Piagent resolved/grade `10`, scope/safety/evidence/workflow pass, sửa đúng source/test, 3/3 turns `completed/completed`, acceptance `17/17` và `13/13 critical`; do đó P6-AE-03 và P6-TX-01 được paid-confirmed.
+- Stock Codex process exit `0`, exact usage, terminal message và lifecycle hợp lệ nhưng scout chứa một `command_execution` nonzero/failed; authoritative state machine phân loại `agent_tool_failure`, runner không dispatch implement/review, workspace giữ nguyên baseline stub và hidden grade `0`. Record này là quality failure hợp lệ, không phải transport/auth/usage/harness failure.
+- Contract trace provider-free xác nhận đây là behavior đã khóa ở P2: nonzero command luôn là failure signal; lifecycle-valid signal thành `agent_tool_failure`; journey dừng trước resume khi turn có `failureClass`; passing outcome không được chứa failed-command evidence. Exact paid command không được lưu theo privacy contract; independent `npm test` trên retained clean workspace exit `1`, nhưng chỉ được ghi là bounded correlation, không giả làm raw paid evidence.
+- Không có source/grader/prompt/oracle/threshold fix hợp lệ. Bỏ qua failed command hoặc rerun để chọn pass sau khi quan sát outcome sẽ là outcome-conditioned harness weakening, trái yêu cầu giữ failure thật. Inspection/blocker `06-paid-canary/42-lease-rerun3-inspection-and-blocker.v1.json`, SHA-256 `7ae2a23e3fb01927ef27f8bf7560303551c8ca30cd1236cc3f85eb8ac5f8040a`.
+- Rerun3 dùng 2 sessions/38,213 fresh/88,901 total; cumulative P6 = `11/15` sessions và `231,974` fresh. Còn đúng 4 sessions cho incident+refusal; không có slack cho lease rerun. Protocol v5 không cho mở hai pair còn lại vì Codex không grade-pass/terminal-complete; cần operator quyết định giữ failure và supersede đúng advancement gate tạm thời, không tăng cap và không rerun.
 
 ### Exit gate
 
@@ -1278,8 +1284,9 @@ Nếu source thay đổi sau P7:
 |---|---|---|---|---|---|---|
 | P4-HR-01 | P4 / P4-T09 | Automated calibration complete nhưng không có hai independent human first-pass reviews | `04-evaluator-calibration/operator-waiver.json`; packet SHA-256 `35d1050de638f621e63ad066ddaebf37869f81d0d3dbb5c2ee62aa3f3a51fb22` | `reviewed=false`, human threshold không khóa; final limitation bắt buộc | Operator explicit waiver do thiếu thời gian; tiếp tục operational gates nhưng không tạo reviewer evidence giả | WAIVED_BY_OPERATOR |
 | P6-AE-02 | P6 / P6-T05–T08 | Compound input/result-cap criteria của implementation task không được linked | `26-lease-rerun1-inspection.v1.json`; `30-acceptance-structural-before-fix.v1.json`; `31-acceptance-structural-fix-verification.v1.json`; paid rerun2 main task receipt trong `35-lease-rerun2-inspection-and-blocker.v1.json` | Retained artifact đạt 10/10 và rerun2 main implementation task đạt 12/12 | Giữ regression và không nới proof boundary | VERIFIED |
-| P6-AE-03 | P6 / P6-T05–T08 | Final `/review` task không custody source/test evidence từ prior mutation turn: relevant files nằm trong `baselineChangedFiles`/`finalWorkingTreeFiles`, nhưng `changedFiles=[]` làm 2 critical criteria pending | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `37-dual-fix-before-fix.v1.json`; `38-dual-fix-provider-free-verification.v1.json` | Exact retained replay đạt 5/5, 2/2 critical với đúng source/test; lineage adversarial vẫn fail-closed | Giữ regression; paid confirmation chỉ qua paired lease rerun3 sau checkpoint/protocol v5 | FIXED_PROVIDER_FREE_PENDING_PAID_CONFIRMATION |
-| P6-TX-01 | P6 / P6-T05–T08 | Transport classifier xem exit 0 + exact usage + generic local word `policy` là provider refusal dù 3/3 journey turns completed và không có structured provider refusal | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `37-dual-fix-before-fix.v1.json`; `38-dual-fix-provider-free-verification.v1.json` | Exit 0 task text trả no transport failure; local nonzero policy failure là agent-process; explicit provider safety refusal control vẫn provider-policy | Giữ structured/lexical boundary regressions; paid confirmation trong lease rerun3 | FIXED_PROVIDER_FREE_PENDING_PAID_CONFIRMATION |
+| P6-AE-03 | P6 / P6-T05–T08 | Final `/review` task không custody source/test evidence từ prior mutation turn: relevant files nằm trong `baselineChangedFiles`/`finalWorkingTreeFiles`, nhưng `changedFiles=[]` làm 2 critical criteria pending | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `37-dual-fix-before-fix.v1.json`; `38-dual-fix-provider-free-verification.v1.json`; `42-lease-rerun3-inspection-and-blocker.v1.json` | Exact retained replay đạt 5/5, 2/2 critical; paid rerun3 Piagent đạt aggregate 17/17, 13/13 critical và grade 10 | Giữ regression; không cần rerun/fix thêm | VERIFIED_PAID |
+| P6-TX-01 | P6 / P6-T05–T08 | Transport classifier xem exit 0 + exact usage + generic local word `policy` là provider refusal dù 3/3 journey turns completed và không có structured provider refusal | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `37-dual-fix-before-fix.v1.json`; `38-dual-fix-provider-free-verification.v1.json`; `42-lease-rerun3-inspection-and-blocker.v1.json` | Paid rerun3 Piagent exit 0/3 turns complete được accept, exact usage và hidden grade 10; không còn provider-policy false positive | Giữ structured/lexical boundary regressions | VERIFIED_PAID |
+| P6-CX-05 | P6 / P6-T05–T08 | Stock Codex scout có một command nonzero/failed; process vẫn exit 0 với exact usage và terminal message, nhưng authoritative P2 contract giữ `agent_tool_failure` và journey không dispatch implement/review | `06-paid-canary/runs/02-lease-rerun-3/`; `42-lease-rerun3-inspection-and-blocker.v1.json` | Record là valid quality failure, workspace không đổi, grade 0; protocol v5 chặn incident/refusal dù còn đúng 4 session | Không sửa contract hoặc rerun theo outcome; operator quyết định có giữ failure và mở untouched incident/refusal bằng protocol mới, cap 15/123 không đổi | BLOCKED_OPERATOR_DECISION |
 
 ---
 
@@ -1353,7 +1360,7 @@ Nếu source thay đổi sau P7:
 | P0–P1 | 0.5–1 ngày tập trung | 0 |
 | P2–P4 | 1–3 ngày tùy root cause còn ẩn | 0 |
 | P5 | 2–6 giờ | 0 |
-| P6 | 1–3 giờ cộng model latency | Đã dùng 9/15; còn đúng 6 session đã duyệt cho lease rerun3 + incident + refusal |
+| P6 | 1–3 giờ cộng model latency | Đã dùng 11/15; còn đúng 4 session cho incident + refusal, nhưng protocol v5 đang chặn chờ operator decision |
 | P7 | 1–2 giờ | 0 |
 | P8 | Khoảng 4–10 giờ; chốt lại từ canary | 108 sessions |
 | P9 | 2–4 giờ | 0 |
@@ -1367,7 +1374,7 @@ Nếu source thay đổi sau P7:
 
 Task tiếp theo:
 
-**Provider-free remediation verified; paid still closed.** Cumulative P6 đang ở `9/15` sessions và `193,761` fresh. Tạo clean local checkpoint, chạy exact dry-run và preflight với `providerSessionsStarted=0`, rồi bind protocol v5 chỉ authorize paired `runs/02-lease-rerun-3` tối đa 2 sessions. Incident/refusal/P7/P8 chưa được authorize cho tới khi lease pair hợp lệ và exit gate được inspect.
+**Paid loop stopped on a valid Codex quality failure; no fix or rerun is justified.** Rerun3 đã tạo đủ 2/2 accepted exact records: Piagent pass toàn bộ, Codex `agent_tool_failure` hợp lệ ở scout và không sửa workspace. Cumulative P6 đang ở `11/15` sessions, `231,974` fresh; còn đúng 4 session cho incident + refusal. Operator cần quyết định có ghi D-015 để giữ nguyên failure, không rerun lease, không đổi cap `15/123`, và cho phép bind clean checkpoint/dry-run/preflight/protocol mới chỉ chạy hai untouched pairs còn lại hay không. Trước quyết định đó, incident/refusal/P7/P8 đều không được authorize.
 
 P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=false` và `thresholdsLocked=false` tiếp tục là limitation, không phải pass evidence.
 
@@ -1392,3 +1399,4 @@ P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=f
 | 2.2 | 2026-09-04 | Structural acceptance-contract correction tách conjunct và bind proof đúng source/import/assertion; retained paid artifact đạt 10/10, 9/9 critical; adversarial/focused/neighborhood/architecture/typecheck/docs/neutrality/secret scan và full offline verify cuối đều pass, không dùng provider. P6-AE-02 chuyển sang fixed provider-free pending paid confirmation; bước tiếp theo là clean checkpoint + protocol/preflight mới chỉ cho targeted lease rerun |
 | 2.3 | 2026-09-04 | Clean commit/dry-run/preflight/protocol v4 authorize đúng lease rerun2. Pi dùng 1 session/35,285 fresh, exit 0, 3/3 turns complete, main task 12/12 và npm test pass; harness vẫn abort trước grader vì review task mất prior-turn evidence custody và transport classifier lexical false positive trên từ `policy`. Cumulative P6 9/14 sessions, 193,761 fresh; paid loop/P7/P8 dừng, cần operator duyệt dual fix và cap tối thiểu 15/combined 123 |
 | 2.4 | 2026-09-04 | D-014 duyệt dual fix và cap P6 15/combined 123. Exact before-fix 52/57; after-fix 57/57, retained rerun2 review replay đạt 5/5 và zero critical missing, transport exit-0/local-policy taxonomy đúng, adversarial lineage fail-closed; neighborhood 282 pass/18 skip, architecture/typecheck/docs/neutrality/secret scan và full offline verify pass, không dùng provider. Paid chờ clean checkpoint + dry-run/preflight/protocol v5 chỉ cho lease rerun3 |
+| 2.5 | 2026-09-04 | Clean checkpoint/dry-run/preflight/protocol v5 chạy lease rerun3 đủ hai sessions. Piagent resolved/grade 10, acceptance 17/17 và paid-confirm cả dual fix; Codex có exact valid `agent_tool_failure` ở scout, không dispatch implement/review, workspace sạch/unchanged và grade 0. Contract trace xác nhận không phải harness/transport defect nên không sửa hoặc rerun để chọn pass. P6 11/15, 231,974 fresh; chờ operator quyết định giữ failure và mở đúng 4 session incident/refusal còn lại, cap không đổi |
