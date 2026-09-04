@@ -10,6 +10,7 @@ import { requestGatewayControl } from "../packages/piagent-webui/gateway/control
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
 import { gatewayProfileState, readOrCreateCatalogKey } from "../packages/piagent-webui/gateway/profile-state.ts";
 import { ProjectRegistry } from "../packages/piagent-webui/gateway/project-registry.ts";
+import { acceptedJourneyTaskStatuses } from "./benchmark-journey-outcome.mjs";
 
 const PROTOCOL = "piagent-gateway-protocol-v1";
 const OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
@@ -46,11 +47,17 @@ async function candidateJourneyModules(packageRoot) {
 }
 
 function terminalLifecycleOutcome(input) {
-  const { expectedOperationStatus, observedOperationStatus, expectedTaskStatus, observedTaskStatus, turnIndex } = input ?? {};
+  const { expectedOperationStatus, observedOperationStatus, expectedTaskStatus, observedTaskStatus,
+    acceptedTaskStatuses = [expectedTaskStatus], turnIndex } = input ?? {};
   if (!TERMINAL_SETTLEMENTS.has(expectedOperationStatus) || !TERMINAL_SETTLEMENTS.has(observedOperationStatus)
     || !TASK_STATUSES.has(expectedTaskStatus) || !TASK_STATUSES.has(observedTaskStatus)
+    || !Array.isArray(acceptedTaskStatuses) || acceptedTaskStatuses.length < 1
+    || acceptedTaskStatuses.length > TASK_STATUSES.size
+    || new Set(acceptedTaskStatuses).size !== acceptedTaskStatuses.length
+    || !acceptedTaskStatuses.every(status => TASK_STATUSES.has(status))
+    || !acceptedTaskStatuses.includes(expectedTaskStatus)
     || !Number.isSafeInteger(turnIndex) || turnIndex < 1) fail("webui-terminal-lifecycle-outcome-invalid");
-  if (expectedOperationStatus === observedOperationStatus && expectedTaskStatus === observedTaskStatus) return null;
+  if (expectedOperationStatus === observedOperationStatus && acceptedTaskStatuses.includes(observedTaskStatus)) return null;
   return {
     schemaVersion: 2,
     kind: "terminal-lifecycle-mismatch",
@@ -551,11 +558,12 @@ export async function runPiagentWebUiJourney(options) {
         ?? "completed";
       if (!EXPECTED_SETTLEMENTS.has(expectedSettlement)) fail("webui-expected-settlement-invalid");
       const expectedOperationStatus = expectedSettlement === "refused" ? "completed" : expectedSettlement;
-      const expectedTaskStatus = expectedSettlement === "refused" ? "refused"
-        : expectedSettlement === "completed" ? index === turns.length - 1 ? "completed" : "pending"
-          : settlement.payload?.taskStatus;
+      const acceptedTaskStatuses = acceptedJourneyTaskStatuses({
+        expectedSettlement, turnIndex: index + 1, turnCount: turns.length
+      });
+      const expectedTaskStatus = acceptedTaskStatuses[0];
       const candidateOutcome = terminalLifecycleOutcome({ expectedOperationStatus,
-        observedOperationStatus: settlement.payload?.settlement, expectedTaskStatus,
+        observedOperationStatus: settlement.payload?.settlement, expectedTaskStatus, acceptedTaskStatuses,
         observedTaskStatus: settlement.payload?.taskStatus, turnIndex: index + 1 });
       if (candidateOutcome) {
         const durable = await readDurableTurnIfPresent(browser, receipt.sessionRef, turn.message, operationRef,
@@ -573,6 +581,7 @@ export async function runPiagentWebUiJourney(options) {
           expectedSettlement,
           expectedOperationStatus,
           expectedTaskStatus,
+          acceptedTaskStatuses,
           operationStatus: settlement.payload.settlement,
           taskStatus: settlement.payload.taskStatus,
           settlement: settlement.payload.settlement,
@@ -602,6 +611,7 @@ export async function runPiagentWebUiJourney(options) {
         expectedSettlement,
         expectedOperationStatus,
         expectedTaskStatus,
+        acceptedTaskStatuses,
         operationStatus: settlement.payload.settlement,
         taskStatus: settlement.payload.taskStatus,
         settlement: settlement.payload.settlement,
@@ -641,6 +651,7 @@ export async function runPiagentWebUiJourney(options) {
 }
 
 export {
+  acceptedJourneyTaskStatuses,
   GatewayJourneyClient,
   boundedForensicDeadline,
   bootstrapBrowserSession,

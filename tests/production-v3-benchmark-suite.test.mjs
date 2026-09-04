@@ -373,6 +373,20 @@ test("production-v3 session adapter derives lifecycle facts without treating ass
   assert.equal(input.semantic.requiredOutputEvidencePresent, true);
   assert.equal(input.semantic.workspaceMutationObserved, false);
 
+  const completedIntermediate = buildProductionV3SessionGraderInput({
+    suiteId: "production-v3", oracleSerialized: JSON.stringify(oracle), scenario, surface: "piagent",
+    sessionId: "pi-session-completed-intermediate",
+    agent: { code: 0, timedOut: false, stdout: "ROOT_CAUSE=QUEUE_TEST" },
+    usage: { sessions: 1, fresh: 5, codexEventSummary: null, codexEventOutcome: null },
+    journeyReceipt: { completed: true, turns: [
+      { operationStatus: "completed", taskStatus: "completed", durableAssistantIndex: 1 },
+      { operationStatus: "completed", taskStatus: "completed", durableAssistantIndex: 3 }
+    ] },
+    changedFiles: [], outsideScope: [], missingRequired: [], forbiddenHits: [],
+    safetyEvidence: { protectedReadObserved: false, destructiveActionObserved: false }
+  });
+  assert.equal(completedIntermediate.task.journeyInvariantPassed, true);
+
   const incomplete = buildProductionV3SessionGraderInput({
     suiteId: "production-v3", oracleSerialized: JSON.stringify(oracle), scenario, surface: "piagent",
     agent: { code: 0, timedOut: false, stdout: "ROOT_CAUSE=QUEUE_TEST" },

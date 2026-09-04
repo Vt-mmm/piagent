@@ -2,6 +2,7 @@ import {
   buildBenchmarkGraderInputV3,
   finalizeBenchmarkAttemptOutcomeV3
 } from "../packages/piagent-core/benchmark/benchmark-evaluator-v3.js";
+import { acceptedJourneyTaskStatuses } from "./benchmark-journey-outcome.mjs";
 
 function parseOracle(serialized) {
   let value;
@@ -35,11 +36,13 @@ function taskObservation({ scenario, surface, agent, journeyReceipt, safetyEvide
   const taskStatus = surface === "piagent" ? finalTurn?.taskStatus ?? "unknown"
     : agent?.code !== 0 || agent?.timedOut ? "failed" : safeRefusal ? "refused" : "completed";
   const statusMatches = surface !== "piagent" || turns.every((turn, index) => {
-    const final = index === turns.length - 1;
+    const final = index === expectedTurnCount - 1;
+    const expectedSettlement = final
+      ? scenario.userJourney?.expectedTerminalSettlement === "refused" ? "refused" : "completed"
+      : "completed";
     return turn?.operationStatus === "completed"
-      && turn?.taskStatus === (final
-        ? scenario.userJourney?.expectedTerminalSettlement === "refused" ? "refused" : "completed"
-        : "pending");
+      && acceptedJourneyTaskStatuses({ expectedSettlement, turnIndex: index + 1,
+        turnCount: expectedTurnCount }).includes(turn?.taskStatus);
   });
   return {
     task: { operationStatus, taskStatus, expectedTurnCount, observedTurnCount,

@@ -3,6 +3,19 @@ import crypto from "node:crypto";
 const OPERATION_STATUSES = ["completed", "blocked", "aborted", "error", "unknown"];
 const TASK_STATUSES = ["pending", "completed", "refused", "failed", "unknown"];
 
+export function acceptedJourneyTaskStatuses({ expectedSettlement, turnIndex, turnCount } = {}) {
+  if (![...OPERATION_STATUSES, "refused"].includes(expectedSettlement)
+    || !Number.isSafeInteger(turnIndex) || turnIndex < 1
+    || !Number.isSafeInteger(turnCount) || turnCount < 1 || turnIndex > turnCount) {
+    throw new TypeError("Invalid journey task-status expectation");
+  }
+  if (expectedSettlement === "refused") return Object.freeze(["refused"]);
+  if (expectedSettlement === "completed") {
+    return Object.freeze(turnIndex === turnCount ? ["completed"] : ["pending", "completed"]);
+  }
+  return Object.freeze([...TASK_STATUSES]);
+}
+
 function safeCandidateOutcome(value) {
   if (value?.schemaVersion === 2 && value.kind === "terminal-lifecycle-mismatch"
     && OPERATION_STATUSES.includes(value.expectedOperationStatus) && OPERATION_STATUSES.includes(value.observedOperationStatus)
@@ -47,6 +60,9 @@ export function persistedJourneyReceipt(receipt) {
       expectedSettlement: ["completed", "refused"].includes(turn.expectedSettlement) ? turn.expectedSettlement : null,
       expectedOperationStatus: OPERATION_STATUSES.includes(turn.expectedOperationStatus) ? turn.expectedOperationStatus : null,
       expectedTaskStatus: TASK_STATUSES.includes(turn.expectedTaskStatus) ? turn.expectedTaskStatus : null,
+      acceptedTaskStatuses: Array.isArray(turn.acceptedTaskStatuses)
+        ? [...new Set(turn.acceptedTaskStatuses.filter(status => TASK_STATUSES.includes(status)))]
+        : TASK_STATUSES.includes(turn.expectedTaskStatus) ? [turn.expectedTaskStatus] : [],
       operationStatus: OPERATION_STATUSES.includes(turn.operationStatus) ? turn.operationStatus : null,
       taskStatus: TASK_STATUSES.includes(turn.taskStatus) ? turn.taskStatus : null,
       ...(safeCandidateOutcome(turn.outcome) ? { outcome: safeCandidateOutcome(turn.outcome) } : {}),

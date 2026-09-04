@@ -13,6 +13,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import {
+  acceptedJourneyTaskStatuses,
   boundedForensicDeadline,
   durableTurnPosition,
   eventSummary,
@@ -160,6 +161,39 @@ test("terminal lifecycle mismatch keeps operation and task state independent", (
     "webui-terminal-lifecycle-operation-error-expected-completed-task-failed-expected-refused-turn-1");
   assert.throws(() => terminalLifecycleOutcome({ expectedOperationStatus: "completed", observedOperationStatus: "invalid",
     expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 2 }), /outcome-invalid/);
+});
+
+test("multi-turn lifecycle accepts a completed bounded intermediate task without weakening the final turn", () => {
+  const intermediate = acceptedJourneyTaskStatuses({
+    expectedSettlement: "completed", turnIndex: 1, turnCount: 3
+  });
+  assert.deepEqual(intermediate, ["pending", "completed"]);
+  for (const observedTaskStatus of intermediate) {
+    assert.equal(terminalLifecycleOutcome({
+      expectedOperationStatus: "completed",
+      observedOperationStatus: "completed",
+      expectedTaskStatus: intermediate[0],
+      acceptedTaskStatuses: intermediate,
+      observedTaskStatus,
+      turnIndex: 1
+    }), null);
+  }
+  for (const observedTaskStatus of ["refused", "failed", "unknown"]) {
+    assert.equal(terminalLifecycleOutcome({
+      expectedOperationStatus: "completed",
+      observedOperationStatus: "completed",
+      expectedTaskStatus: intermediate[0],
+      acceptedTaskStatuses: intermediate,
+      observedTaskStatus,
+      turnIndex: 1
+    })?.kind, "terminal-lifecycle-mismatch");
+  }
+  assert.deepEqual(acceptedJourneyTaskStatuses({
+    expectedSettlement: "completed", turnIndex: 3, turnCount: 3
+  }), ["completed"]);
+  assert.deepEqual(acceptedJourneyTaskStatuses({
+    expectedSettlement: "refused", turnIndex: 1, turnCount: 1
+  }), ["refused"]);
 });
 
 test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence", () => {
