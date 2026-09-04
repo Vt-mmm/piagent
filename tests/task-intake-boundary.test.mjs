@@ -21,6 +21,7 @@ function policy(prompt) {
 test("local path constraints remain mutation-capable", () => {
   for (const prompt of [
     "Implement frontend; do not edit files outside v-nexus-frontend/src/**.",
+    "Implement frontend; do not edit or create files outside v-nexus-frontend/src/**.",
     "Implement frontend; no edits to files outside v-nexus-frontend/src/**.",
     "Implement frontend; no source changes outside v-nexus-frontend/src/**.",
     "Implement frontend without editing files outside v-nexus-frontend/src/**.",
@@ -140,6 +141,25 @@ test("canonical workflow intent controls durable automatic intake", () => {
     assert.equal(automaticTaskIntakeEligible(prompt, []), false, prompt);
     assert.equal(automaticReadOnlyTaskIntakeEligible(prompt, []), false, prompt);
   }
+});
+
+test("an explicit task-wide edit-or-create prohibition keeps the frozen incident task read-only", () => {
+  const prompt = `/task Produce the final read-only incident diagnosis from \`logs/scheduler.log\` and
+\`config/worker.json\`. Do not edit or create any file.
+
+Correlate the gateway timeout, scheduler heartbeat, and configured heartbeat
+interval. Your response must end with two separate marker lines populated only
+from the repository evidence:
+
+\`INCIDENT_CAUSE=<cause code from the scheduler log>\`
+
+\`EVIDENCE=correlation:<id>;configured-heartbeat-ms:<value>;observed-latency-ms:<value>\`
+
+Keep the explanation concise and cite the relevant file names.`;
+
+  assert.equal(automaticTaskIntakeEligible(prompt, []), false);
+  assert.equal(automaticReadOnlyTaskIntakeEligible(prompt, []), true);
+  assert.deepEqual(policy(prompt), { mode: "read-only", mutationPolicy: "forbidden" });
 });
 
 test("domain read-only wording does not become task-wide read-only authority", () => {

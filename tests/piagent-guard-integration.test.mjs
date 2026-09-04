@@ -4326,7 +4326,7 @@ describe("piagent guard integration", () => {
     await harness.handlers.get("session_start")({}, ctx);
 
     const prompt = [
-      "Investigate logs/incident.log as a read-only incident task. Do not edit any file.",
+      "Investigate logs/incident.log as a read-only incident task. Do not edit or create any file.",
       "PRIVATE_LATE_OUTPUT_SENTINEL", "x".repeat(900),
       "Finish your response with ROOT_CAUSE=<code> as the last line using the code present in the log."
     ].join("\n");
@@ -4337,6 +4337,8 @@ describe("piagent guard integration", () => {
     assert.equal(started.message.details.runtimeIntakeStarted, true);
     assert.equal(started.message.details.runtimeTask.intakeMode, "runtime");
     const startedTask = activeSessionTask(cwd, "session-readonly");
+    assert.equal(startedTask.changeMode, "read-only");
+    assert.equal(startedTask.mutationPolicy, "forbidden");
     assert.equal(startedTask.summary.includes("ROOT_CAUSE"), false, "display summary intentionally omits the late directive");
     assert.equal(startedTask.operatorRequest, prompt, "private task state retains the complete late directive source");
     assert.match(started.message.content, /exact final-output contract/i);

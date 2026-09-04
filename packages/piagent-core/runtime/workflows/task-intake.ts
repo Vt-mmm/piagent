@@ -31,7 +31,7 @@ const AUTO_READ_ONLY_INTENT = /\b(?:analy[sz]e|audit|check|diagnos(?:e|is)|expla
 // durable zero-delta instruction distinct from local path authority and from a
 // temporary "inspect first, edit later" instruction.
 const AUTO_NO_MUTATION_CANDIDATES = [
-  /\b(?:do not|don't|must not|never)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
+  /\b(?:do not|don't|must not|never)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)(?:\s+(?:or|and)\s+create)?\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
   /\b(?:do not|don't|must not|never)\s+make\s+(?:any\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
   /\b(?:make\s+)?no\s+(?:(?:code|source|project|file|workspace|repo(?:sitory)?)\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
   /\bno\s+(?:project|source)\s+files?\s+(?:are\s+)?(?:changed|edited|modified|mutated)\b/i,
@@ -132,6 +132,11 @@ export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: 
   const explicitChange = isExplicitChangeRequest(folded);
   if (isNonAuthorizingChangeClarification(text)) return false;
   const noMutationBoundary = noMutationBoundarySignals(text);
+  // Verification-only execution keeps the source-task lane so the configured
+  // verifier is available, with mutation forbidden by its separate policy.
+  // For every non-execution task, a durable zero-delta boundary wins over
+  // incidental mutation verbs inside the prohibition itself.
+  if (noMutationBoundary.taskWide && !AUTO_EXECUTION_INTENT.test(folded)) return false;
   if (noMutationBoundary.temporary && !noMutationBoundary.taskWide) return false;
   if (hasGlobalReadOnlyBoundary(text)) return false;
   const signal = classifyContextTask(text);
