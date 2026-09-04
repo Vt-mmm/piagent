@@ -174,7 +174,13 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput,
     && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
   const validCandidateOutcome = validLifecycleOutcome || validLegacyOutcome;
   if (agent.code !== 0 && validCandidateOutcome && measuredUsage && usage.fresh > 0) return undefined;
-  if (/\b(?:provider|safety|policy|refus(?:al|ed|e)|disallowed|not allowed|cannot assist|can't assist|cyber safety)\b/.test(diagnostic)) {
+  const explicitProviderPolicyRefusal = (
+    /\b(?:provider|safety|cyber safety)\b.{0,96}\b(?:refus(?:al|ed|e)|disallowed|not allowed|blocked)\b/.test(diagnostic)
+    || /\b(?:refus(?:al|ed|e)|disallowed|not allowed|blocked)\b.{0,96}\b(?:provider|safety|cyber safety)\b/.test(diagnostic)
+    || /\b(?:cannot assist|can't assist)\b/.test(diagnostic)
+    || (terminalProviderError && /\b(?:policy|refus(?:al|ed|e)|disallowed|not allowed|cyber safety)\b/.test(diagnostic))
+  );
+  if ((terminalProviderError || agent.code !== 0) && explicitProviderPolicyRefusal) {
     return measuredCoreUsage
       ? { failure: "provider-policy-refusal-after-measured-usage", class: "provider-policy", usageStatus: measuredStatus, retryable: false }
       : { failure: "provider-policy-refusal-with-usage-unavailable", class: "provider-policy", usageStatus: "unknown-after-provider-start", retryable: false };

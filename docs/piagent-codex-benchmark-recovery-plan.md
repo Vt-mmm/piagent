@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 2.3
+> **Phiên bản:** 2.4
 >
-> **Trạng thái tổng:** BLOCKED — targeted lease rerun mới dùng 1 paid Pi session rồi bị harness abort; cumulative P6 9/14 sessions và 193,761 fresh, còn 5 sessions nhưng cần tối thiểu 6 để rerun lease + incident + refusal
+> **Trạng thái tổng:** IN_PROGRESS — D-014 đã duyệt cap P6 15/combined 123; dual provider-free fix đã qua retained replay và full offline gates; paid vẫn đóng chờ clean checkpoint + dry-run + preflight + protocol v5
 >
-> **Cập nhật gần nhất:** 2026-09-04T03:32:14Z (2026-09-04T10:32:14+07:00)
+> **Cập nhật gần nhất:** 2026-09-04T04:05:18Z (2026-09-04T11:05:18+07:00)
 >
 > **Chế độ thực thi:** một agent, local, tuần tự; không subagent, không cloud task
 >
@@ -15,7 +15,7 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** operator decision — duyệt provider-free fix cho review-evidence custody + transport taxonomy và nâng cap tối thiểu P6 `14 -> 15`, combined `122 -> 123`; chưa chạy thêm provider
+> **Phase kế tiếp:** tạo clean local checkpoint từ remediation đã verify, bind dry-run/preflight/protocol v5 trên đúng identity và chỉ authorize paired lease rerun3; chưa chạy thêm provider
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
 
@@ -382,7 +382,7 @@ P2 và P3 giải quyết hai arm khác nhau nhưng vẫn triển khai tuần t�
 | P3 | Pi lifecycle correction | DONE | 0 | PASS — seven-row operation/task matrix, refusal and reconnect regressions pass |
 | P4 | Evaluator và production-v3 | DONE_WITH_OPERATOR_WAIVER | 0 | Automated calibration pass; human review waived, `reviewed=false` retained |
 | P5 | Provider-free qualification | DONE | 0 | PASS — clean checkpoint + exact-108 dry-run + full provider-free preflight ready |
-| P6 | Paid canary ngoài S108 | BLOCKED — rerun2 exposed review-evidence custody + transport taxonomy defects | 9/14 sessions; 193,761 fresh | Operator approval cho dual fix và cap tối thiểu 15/combined 123 |
+| P6 | Paid canary ngoài S108 | IN_PROGRESS — dual fix provider-free verified; paid closed pending checkpoint/protocol v5 | 9/15 sessions; 193,761 fresh | Clean checkpoint + dry-run + preflight + protocol v5 chỉ cho lease rerun3 |
 | P7 | Freeze candidate/config | NOT_STARTED | 0 | Commit/tree/runtime/suite/config digests đóng |
 | P8 | Exact S108 | NOT_STARTED | 108 sessions | 108 accepted, exact usage, no invalid measurement |
 | P9 | Analysis/report | NOT_STARTED | 0 | PASS_VALID hoặc FAIL_VALID có evidence |
@@ -868,6 +868,10 @@ Mỗi task chạy một lần trên hai surfaces: 4 × 2 = 8 sessions.
 - Rerun2 dừng sau Pi session đầu: exact usage `35,285 fresh`, `84,949 total`, agent exit `0`, 3/3 journey turns `completed/completed`, provider wire/scope/output safety pass, patch đúng hai file và `npm test` pass; Codex chưa chạy. Main implementation task đạt `12/12`, nhưng review task chỉ `3/5` vì hai critical criteria không được linked; aggregate `15/17`, `11/13 critical`. Runner ghi `provider-policy-refusal-after-measured-usage` và abort trước hidden grader, tạo zero accepted ledger record.
 - Provider-free inspection xác định hai defect: review task có `baselineChangedFiles`/`finalWorkingTreeFiles` đúng hai file nhưng `changedFiles=[]`, trong khi acceptance corpus chỉ dùng current-turn changed files; transport classifier đồng thời gắn nhãn provider refusal cho exit `0` + exact usage chỉ vì diagnostic có từ generic `policy`. Evidence `35-lease-rerun2-inspection-and-blocker.v1.json`, SHA-256 `7a8e1ea71247f4840e9f646c77d4c6990f7643c7eb68b297d6c78c5897cf9947`.
 - Cumulative P6 = `9` sessions/`193,761` fresh. Cap 14 chỉ còn 5 sessions, trong khi candidate mới cần paired lease rerun 2 + incident 2 + refusal 2 = 6. Incident/refusal/P7/P8 vẫn không được authorize; tiếp tục tối thiểu cần P6 cap 15 và combined P6+P8 cap 123.
+- Operator decision `D-014` tại `2026-09-04T03:38:46Z` duyệt cả prior-turn review-evidence custody fix và transport taxonomy fix, nâng P6 cap `14 -> 15`, combined P6+P8 `122 -> 123`, không đổi frozen prompts/oracles/thresholds. Receipt `06-paid-canary/36-operator-dual-fix-cap-approval.v1.json`, SHA-256 `9bb419ab8239a95d16efcd8daa8ea2b54f0a3cc4ce6022dd857b258911ebf1cd`.
+- Before-fix exact suite tái hiện `52/57 pass`, 5 fail: scope sai, zero inherited evidence, retained review receipt còn critical missing, exit-0 local policy false positive và local process failure sai class. Các biên adjacent/same-session/digest/exact-scope/no-negation vẫn fail-closed. Evidence `06-paid-canary/37-dual-fix-before-fix.v1.json`, SHA-256 `8daebff8675c09f8f6b9eaa14ec1531a393d3306bc9ac5ae20412acc885a9bed`.
+- Fix nhận diện hẹp explicit `requirements from prior turn` có action verb và chặn negated prior-turn reference; downstream vẫn yêu cầu adjacent completed source task, same session, exact digest continuity và exact child scope. Transport classifier chỉ nhận provider-policy trên terminal/nonzero failure cùng explicit refusal signal; exit 0 task text và local `policy` không còn là infrastructure failure.
+- Provider-free after-fix: focused `57/57`; exact retained rerun2 replay tự derive đúng scope/evidence hai file và nâng review task `3/5 -> 5/5`, critical missing `2 -> 0`; runner provider-policy control `1/1`; neighborhood `282 pass/18 environment skip/0 fail`; typecheck, architecture 599 file, docs, neutrality, secret scan và full offline verify pass. Evidence packet: `06-paid-canary/38-dual-fix-provider-free-verification.v1.json`. Provider sessions không đổi.
 
 ### Exit gate
 
@@ -1274,8 +1278,8 @@ Nếu source thay đổi sau P7:
 |---|---|---|---|---|---|---|
 | P4-HR-01 | P4 / P4-T09 | Automated calibration complete nhưng không có hai independent human first-pass reviews | `04-evaluator-calibration/operator-waiver.json`; packet SHA-256 `35d1050de638f621e63ad066ddaebf37869f81d0d3dbb5c2ee62aa3f3a51fb22` | `reviewed=false`, human threshold không khóa; final limitation bắt buộc | Operator explicit waiver do thiếu thời gian; tiếp tục operational gates nhưng không tạo reviewer evidence giả | WAIVED_BY_OPERATOR |
 | P6-AE-02 | P6 / P6-T05–T08 | Compound input/result-cap criteria của implementation task không được linked | `26-lease-rerun1-inspection.v1.json`; `30-acceptance-structural-before-fix.v1.json`; `31-acceptance-structural-fix-verification.v1.json`; paid rerun2 main task receipt trong `35-lease-rerun2-inspection-and-blocker.v1.json` | Retained artifact đạt 10/10 và rerun2 main implementation task đạt 12/12 | Giữ regression và không nới proof boundary | VERIFIED |
-| P6-AE-03 | P6 / P6-T05–T08 | Final `/review` task không custody source/test evidence từ prior mutation turn: relevant files nằm trong `baselineChangedFiles`/`finalWorkingTreeFiles`, nhưng `changedFiles=[]` làm 2 critical criteria pending | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json` | Workflow aggregate 15/17, 11/13 critical; paid pair không tạo accepted record; recurrence thuộc acceptance-evidence class | Structural prior-turn evidence custody fix + adversarial provider-free gates; cần operator approval trước source change/rerun | BLOCKED_OPERATOR_DECISION |
-| P6-TX-01 | P6 / P6-T05–T08 | Transport classifier xem exit 0 + exact usage + generic local word `policy` là provider refusal dù 3/3 journey turns completed và không có structured provider refusal | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `packages/piagent-core/benchmark/benchmark-transport-evidence.js` | Harness abort trước hidden grader, zero accepted ledger, Codex pair chưa chạy | Structured provider-refusal classification; negative test cho successful exit/local policy wording; full provider-free gates | BLOCKED_OPERATOR_DECISION |
+| P6-AE-03 | P6 / P6-T05–T08 | Final `/review` task không custody source/test evidence từ prior mutation turn: relevant files nằm trong `baselineChangedFiles`/`finalWorkingTreeFiles`, nhưng `changedFiles=[]` làm 2 critical criteria pending | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `37-dual-fix-before-fix.v1.json`; `38-dual-fix-provider-free-verification.v1.json` | Exact retained replay đạt 5/5, 2/2 critical với đúng source/test; lineage adversarial vẫn fail-closed | Giữ regression; paid confirmation chỉ qua paired lease rerun3 sau checkpoint/protocol v5 | FIXED_PROVIDER_FREE_PENDING_PAID_CONFIRMATION |
+| P6-TX-01 | P6 / P6-T05–T08 | Transport classifier xem exit 0 + exact usage + generic local word `policy` là provider refusal dù 3/3 journey turns completed và không có structured provider refusal | `06-paid-canary/35-lease-rerun2-inspection-and-blocker.v1.json`; `37-dual-fix-before-fix.v1.json`; `38-dual-fix-provider-free-verification.v1.json` | Exit 0 task text trả no transport failure; local nonzero policy failure là agent-process; explicit provider safety refusal control vẫn provider-policy | Giữ structured/lexical boundary regressions; paid confirmation trong lease rerun3 | FIXED_PROVIDER_FREE_PENDING_PAID_CONFIRMATION |
 
 ---
 
@@ -1296,6 +1300,7 @@ Nếu source thay đổi sau P7:
 | D-011 | 2026-09-04 | Dừng paid loop sau lease targeted rerun; không chạy incident/refusal/P7/P8 | Acceptance evidence false negative tái diễn sau fix và 4 session còn lại không đủ rerun lease cộng hai untouched pairs | Chỉ đổi khi operator duyệt structural design review và tăng cap tối thiểu P6 14/combined 122 trước protocol mới |
 | D-012 | 2026-09-04 | Duyệt structural acceptance-contract redesign; nâng P6 cap 12→14 và combined P6+P8 cap 120→122 | Cần đúng 2 session targeted lease rerun ngoài 4 session incident/refusal còn lại; không nới prompt/oracle/threshold | Paid rerun chỉ sau retained reproducer, adversarial tests, full provider-free gates, clean checkpoint và protocol/preflight mới |
 | D-013 | 2026-09-04 | Dừng paid loop sau rerun2 Pi attempt; không chạy Codex/incident/refusal/P7/P8 | Protocol v4 stop policy bắt buộc dừng khi acceptance-evidence false negative tái diễn hoặc harness contradiction; attempt dùng exact 1 session/35,285 fresh, và cap còn 5 không đủ 6 session còn bắt buộc | Chỉ đổi khi operator duyệt dual provider-free fix và cap tối thiểu P6 15/combined 123 trước protocol mới |
+| D-014 | 2026-09-04 | Duyệt dual provider-free fix, nâng P6 cap 14→15 và combined P6+P8 cap 122→123, tiếp tục full paid plan | Cần sửa đúng hai root cause rồi còn đúng 6 session cho paired lease rerun3 + incident + refusal; không nới frozen canary contract | Paid chỉ mở lại sau retained/adversarial/full offline gates, clean checkpoint, dry-run, preflight và protocol v5 cùng identity |
 
 ---
 
@@ -1348,7 +1353,7 @@ Nếu source thay đổi sau P7:
 | P0–P1 | 0.5–1 ngày tập trung | 0 |
 | P2–P4 | 1–3 ngày tùy root cause còn ẩn | 0 |
 | P5 | 2–6 giờ | 0 |
-| P6 | 1–3 giờ cộng model latency | Đã dùng 9/14; continuation cần tối thiểu hard cap 15, chưa được duyệt |
+| P6 | 1–3 giờ cộng model latency | Đã dùng 9/15; còn đúng 6 session đã duyệt cho lease rerun3 + incident + refusal |
 | P7 | 1–2 giờ | 0 |
 | P8 | Khoảng 4–10 giờ; chốt lại từ canary | 108 sessions |
 | P9 | 2–4 giờ | 0 |
@@ -1362,7 +1367,7 @@ Nếu source thay đổi sau P7:
 
 Task tiếp theo:
 
-**Operator decision required.** Paid loop đang dừng tại `9/14` sessions và `193,761` fresh. Không chạy Codex counterpart, incident, refusal, P7 hoặc P8. Nếu tiếp tục, trước hết phải duyệt provider-free structural fix cho prior-turn review evidence custody và transport taxonomy; sau full gates/clean checkpoint phải nâng cap tối thiểu P6 `14 -> 15` và combined P6+P8 `122 -> 123`, rồi bind protocol mới chỉ authorize paired lease rerun.
+**Provider-free remediation verified; paid still closed.** Cumulative P6 đang ở `9/15` sessions và `193,761` fresh. Tạo clean local checkpoint, chạy exact dry-run và preflight với `providerSessionsStarted=0`, rồi bind protocol v5 chỉ authorize paired `runs/02-lease-rerun-3` tối đa 2 sessions. Incident/refusal/P7/P8 chưa được authorize cho tới khi lease pair hợp lệ và exit gate được inspect.
 
 P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=false` và `thresholdsLocked=false` tiếp tục là limitation, không phải pass evidence.
 
@@ -1386,3 +1391,4 @@ P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=f
 | 2.1 | 2026-09-04 | Operator decision D-012 duyệt structural acceptance-contract redesign, nâng P6 cap 12→14 và combined P6+P8 cap 120→122. P6-AE-02 chuyển sang provider-free remediation; paid authorization vẫn đóng cho tới clean checkpoint, dry-run, preflight và protocol mới |
 | 2.2 | 2026-09-04 | Structural acceptance-contract correction tách conjunct và bind proof đúng source/import/assertion; retained paid artifact đạt 10/10, 9/9 critical; adversarial/focused/neighborhood/architecture/typecheck/docs/neutrality/secret scan và full offline verify cuối đều pass, không dùng provider. P6-AE-02 chuyển sang fixed provider-free pending paid confirmation; bước tiếp theo là clean checkpoint + protocol/preflight mới chỉ cho targeted lease rerun |
 | 2.3 | 2026-09-04 | Clean commit/dry-run/preflight/protocol v4 authorize đúng lease rerun2. Pi dùng 1 session/35,285 fresh, exit 0, 3/3 turns complete, main task 12/12 và npm test pass; harness vẫn abort trước grader vì review task mất prior-turn evidence custody và transport classifier lexical false positive trên từ `policy`. Cumulative P6 9/14 sessions, 193,761 fresh; paid loop/P7/P8 dừng, cần operator duyệt dual fix và cap tối thiểu 15/combined 123 |
+| 2.4 | 2026-09-04 | D-014 duyệt dual fix và cap P6 15/combined 123. Exact before-fix 52/57; after-fix 57/57, retained rerun2 review replay đạt 5/5 và zero critical missing, transport exit-0/local-policy taxonomy đúng, adversarial lineage fail-closed; neighborhood 282 pass/18 skip, architecture/typecheck/docs/neutrality/secret scan và full offline verify pass, không dùng provider. Paid chờ clean checkpoint + dry-run/preflight/protocol v5 chỉ cho lease rerun3 |

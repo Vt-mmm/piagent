@@ -32,11 +32,15 @@ export function hasConditionalRepairIntent(text: string): boolean {
 
 function refersToEarlierImplementation(prompt: string): boolean {
   const folded = foldChangeIntent(prompt);
+  const negatesPriorTurnReview = /\b(?:do not|don't|without|ignore|skip)\s+(?:review|verify|inspect|test|check|fix|continue|complete|apply|address)\b[\s\S]{0,200}\b(?:implementation|requirements?|obligations?|changes?|fix|logic|work)\s+(?:from|in)\s+(?:the\s+)?(?:earlier|previous|prior)\s+(?:turn|message)\b/i
+    .test(folded);
+  if (negatesPriorTurnReview) return false;
   return [
     /\b(?:current|existing|earlier|previous|prior|above)\s+(?:changes?|fix|implementation|logic|work)\b/i,
     /\b(?:earlier|previous|prior|original|above)\s+(?:instructions?|obligations?|request|requirements?|task)\b/i,
     /\b(?:changes?|fix|implementation|logic|work)\s+(?:above|earlier|previously|just\s+(?:completed|made|implemented))\b/i,
     /\bwhat\s+(?:you|we)\s+just\s+(?:changed|fixed|implemented)\b/i,
+    /\b(?:review|verify|inspect|test|check|fix|continue|complete|apply|address)\b[\s\S]{0,200}\b(?:implementation|requirements?|obligations?|changes?|fix|logic|work)\s+(?:from|in)\s+(?:the\s+)?(?:earlier|previous|prior)\s+(?:turn|message)\b/i,
     /\b(?:implementation|phan|logic|thay doi|yeu cau)\s+(?:hien tai|truoc do|vua roi|vua sua|vua lam|vua trien khai)\b/i,
     /\b(?:vua sua|vua lam|vua trien khai|thay doi vua roi|thay doi truoc do)\b/i
   ].some((pattern) => pattern.test(folded));

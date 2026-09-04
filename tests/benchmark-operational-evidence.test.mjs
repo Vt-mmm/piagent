@@ -161,6 +161,36 @@ test("keeps exact token evidence independent from cost and never retries a paid 
   assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, { ...usage, total: 99 }, "process ended").usageStatus, "unknown-after-provider-start");
 });
 
+test("successful task diagnostics cannot become provider-policy failures through local wording", () => {
+  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
+    fresh: 75, usageCompleteness: "exact", cost: null };
+  for (const diagnostic of [
+    "completed under local verification policy",
+    "verified expected REFUSAL=INVALID_INPUT behavior",
+    "non-mutation policy and refusal assertions passed",
+    "provider safety policy refusal was the expected fixture text"
+  ]) {
+    assert.equal(
+      classifyPreUsageFailure({ code: 0, timedOut: false }, usage, diagnostic),
+      undefined,
+      diagnostic
+    );
+  }
+});
+
+test("a local policy process failure remains agent-process without a provider refusal signal", () => {
+  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
+    fresh: 75, usageCompleteness: "exact", cost: null };
+  assert.deepEqual(classifyPreUsageFailure(
+    { code: 1, timedOut: false }, usage, "local verification policy failed"
+  ), {
+    failure: "agent-exit-1-after-measured-usage",
+    class: "agent-process",
+    usageStatus: "measured-but-unaccepted",
+    retryable: false
+  });
+});
+
 test("accepts only an exact positive-usage structured lifecycle mismatch as a candidate outcome", () => {
   const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
     fresh: 75, usageCompleteness: "exact", cost: null };

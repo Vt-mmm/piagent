@@ -251,6 +251,27 @@ test("implementation follow-up scope prefers the completed task evidence over un
     ],
     "the exact benchmark follow-up reuses the earlier task evidence"
   );
+  assert.deepEqual(
+    automaticTaskScope(
+      "/review Run npm test, inspect working-tree diff, and verify implementation against every requirement from prior turn, including invalid inputs and non-mutation.",
+      [{ path: "src/unrelated-navigation.ts" }],
+      ["src/unrelated-navigation.ts"],
+      {
+        trace: { outcome: "completed" },
+        changedFiles: ["src/lease-renewal.js", "test/lease-renewal.test.js"],
+        contextManifest: []
+      }
+    ),
+    [
+      "src/lease-renewal.js",
+      "test/lease-renewal.test.js",
+      "test/**",
+      "tests/**",
+      "spec/**",
+      "__tests__/**"
+    ],
+    "the frozen canary /review wording focuses the immediately prior implementation"
+  );
   assert.ok(
     automaticTaskScope(
       "Fix the parser implementation.",
@@ -259,6 +280,15 @@ test("implementation follow-up scope prefers the completed task evidence over un
       priorTask
     ).includes("src/current-navigation.ts"),
     "ordinary new work continues to use current navigation context"
+  );
+  assert.ok(
+    automaticTaskScope(
+      "Do not review implementation from prior turn; fix the new parser instead.",
+      [{ path: "src/new-parser.ts" }],
+      [],
+      priorTask
+    ).includes("src/new-parser.ts"),
+    "an explicitly negated prior-turn review cannot inherit completed-task scope"
   );
 });
 
@@ -318,6 +348,7 @@ test("acceptance evidence inherits only an adjacent same-session implementation 
     { label: "different session", task: child, tasks: [child, { ...parent, sessionId: "session-b" }], current },
     { label: "digest discontinuity", task: { ...child, baselineFileDigests: { ...child.baselineFileDigests, "src/platform/config.js": digest("z") } }, tasks: [child, parent], current },
     { label: "no prior-work reference", task: { ...child, operatorRequest: "Run all tests and fix failures if any." }, tasks: [child, parent], current },
+    { label: "negated prior-turn reference", task: { ...child, operatorRequest: "Do not review implementation from prior turn; fix the new parser instead." }, tasks: [child, parent], current },
     { label: "forbidden mutation", task: { ...child, mutationPolicy: "forbidden" }, tasks: [child, parent], current },
     { label: "glob-only focus", task: { ...child, scope: ["src/**", "test/**"] }, tasks: [child, parent], current }
   ];
@@ -328,4 +359,13 @@ test("acceptance evidence inherits only an adjacent same-session implementation 
       entry.label
     );
   }
+  const frozenReview = {
+    ...child,
+    operatorRequest: "/review Run npm test, inspect working-tree diff, and verify implementation against every requirement from prior turn, including invalid inputs and non-mutation."
+  };
+  assert.deepEqual(
+    completedFollowupAcceptanceEvidenceFiles(frozenReview, [frozenReview, parent], [], current),
+    ["src/platform/config.js", "test/config.test.js"],
+    "the frozen /review wording inherits only the exact adjacent implementation files"
+  );
 });

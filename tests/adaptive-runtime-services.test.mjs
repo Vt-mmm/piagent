@@ -3538,7 +3538,7 @@ test("zero-delta verification follow-up binds acceptance only through exact impl
     changeMode: "source-change",
     mutationPolicy: "allowed",
     intakeMode: "runtime",
-    operatorRequest: "Verify the implementation against every obligation from the earlier request and fix failures if any.",
+    operatorRequest: "/review Run npm test, inspect working-tree diff, and verify implementation against every requirement from prior turn, including invalid inputs and non-mutation.",
     summary: "Verify the implementation from the earlier request. A value is absent only when undefined; preserve null, false, zero, and empty string.",
     acceptanceCriteria: acceptance.acceptanceCriteria,
     acceptanceReceipt: acceptance.receipt,
