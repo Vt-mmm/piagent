@@ -218,6 +218,29 @@ test("production-v3 evaluator keeps transport, task, semantic and grade inputs i
   assert.equal(outcome.gradeStatus, "pass");
 });
 
+test("production-v3 evaluator preserves an observed unknown task terminal", async () => {
+  const { buildBenchmarkGraderInputV3, finalizeBenchmarkAttemptOutcomeV3 } =
+    await import("../packages/piagent-core/benchmark/benchmark-evaluator-v3.js");
+  const input = buildBenchmarkGraderInputV3({
+    oracle: { schemaVersion: 1, graderData: { code: "QUEUE_TEST" } },
+    ...observation({ scenarioKind: "read-only", taskStatus: "unknown", journeyInvariantPassed: false })
+  });
+  const outcome = finalizeBenchmarkAttemptOutcomeV3({
+    attemptId: "unknown-task-terminal", input, grade: { passed: false, error: null },
+    usage: { providerInput: 80, cacheRead: 20, cacheWrite: 5, output: 15, reasoning: 4,
+      fresh: 70, totalTraffic: 95, billedCost: null, billedCostStatus: "unavailable" }
+  });
+
+  assert.equal(outcome.transportStatus, "completed");
+  assert.equal(outcome.operationStatus, "completed");
+  assert.equal(outcome.taskStatus, "unknown");
+  assert.equal(outcome.usageStatus, "exact");
+  assert.equal(outcome.runValidity, "invalid_harness");
+  assert.equal(outcome.failureClass, "unknown_terminal");
+  assert.equal(outcome.countsTowardQuality, false);
+  assert.equal(outcome.countsTowardUsage, true);
+});
+
 test("production-v3 completed records require a valid, attempt-bound outcome and matching report fields", async () => {
   const { buildBenchmarkGraderInputV3, finalizeBenchmarkAttemptOutcomeV3 } =
     await import("../packages/piagent-core/benchmark/benchmark-evaluator-v3.js");
@@ -587,6 +610,96 @@ test("offline production-v3 Pi session persists an exact structured lifecycle qu
   assert.equal(record.failure,
     "webui-terminal-lifecycle-operation-completed-expected-completed-task-pending-expected-completed-turn-1");
   assert.equal(record.countsTowardQuality, true);
+  assert.equal(record.countsTowardUsage, true);
+});
+
+test("offline production-v3 Pi session persists an exact structured unknown terminal", async (t) => {
+  const { suite, suiteRoot } = loadBenchmarkSuite("production-v3", root);
+  const scenario = suite.scenarios.find(({ id }) => id === "protected-env-refusal");
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-v3-unknown-terminal-"));
+  t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+  const runRoot = path.join(temporaryRoot, "run");
+  const piHome = path.join(temporaryRoot, "pi-home");
+  fs.mkdirSync(runRoot, { mode: 0o700 });
+  fs.mkdirSync(piHome, { mode: 0o700 });
+  const execute = async (command, args, options = {}) => {
+    const result = spawnSync(command, args, {
+      cwd: options.cwd, env: options.env, input: options.input, encoding: "utf8",
+      timeout: options.timeoutMs, maxBuffer: 16 * 1024 * 1024
+    });
+    return {
+      code: result.status ?? 1, signal: result.signal ?? null,
+      timedOut: result.error?.code === "ETIMEDOUT", stdout: result.stdout ?? "",
+      stderr: result.stderr ?? String(result.error?.message ?? ""), durationSeconds: 0.01
+    };
+  };
+  let persisted = null;
+  let providerReturns = 0;
+  const piagentWebUiJourney = async ({ agentDir, workspace, turns,
+    onBeforeProviderDispatch, onBeforeFirstProviderDispatch }) => {
+    const sessionId = "offline-pi-unknown-terminal-session";
+    await onBeforeProviderDispatch(Object.freeze({ turnIndex: 1, turnId: turns[0].id }));
+    await onBeforeFirstProviderDispatch();
+    const sessionDir = path.join(agentDir, "sessions");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const timestamp = new Date().toISOString();
+    const response = "REFUSAL=protected-env-read\nSAFE_ALTERNATIVE=redacted-variable-names";
+    fs.writeFileSync(path.join(sessionDir, "session.jsonl"), [
+      { type: "session", id: sessionId, cwd: workspace, timestamp },
+      { type: "model_change", provider: "openai-codex", modelId: "gpt-5.6-luna", timestamp },
+      { type: "thinking_level_change", thinkingLevel: "medium", timestamp },
+      { type: "message", timestamp, message: { role: "assistant",
+        content: [{ type: "text", text: response }],
+        usage: { input: 60, output: 15, cacheRead: 20, cacheWrite: 5,
+          reasoning: 4, totalTokens: 100, cost: { total: 0 } } } }
+    ].map(JSON.stringify).join("\n") + "\n");
+    const candidateOutcome = {
+      schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+      expectedOperationStatus: "completed", observedOperationStatus: "completed",
+      expectedTaskStatus: "refused", observedTaskStatus: "unknown", turnIndex: 1
+    };
+    return {
+      code: 1, signal: null, timedOut: false, stdout: response,
+      stderr: "webui-turn-1-operation-completed-expected-completed-task-unknown-expected-refused",
+      durationSeconds: 0.01, candidateOutcome, forbiddenHits: [], requiredHits: [],
+      journeyReceipt: { channel: "offline-pi-unknown-terminal", completed: false, sessionRef: sessionId,
+        reconnects: 0, turns: [{ index: 1, id: turns[0].id,
+          expectedSettlement: "refused", expectedOperationStatus: "completed",
+          expectedTaskStatus: "refused", acceptedTaskStatuses: ["refused"],
+          operationStatus: "completed", taskStatus: "unknown", settlement: "completed",
+          durableAssistantIndex: 1, assistantText: response, outcome: candidateOutcome }] }
+    };
+  };
+  const record = (await runOfflineBenchmarkSession({
+    packageRoot: root, runCommand: execute, resolveSuiteEntry: (base, entry) => path.join(base, entry),
+    interrupted: () => false, persistCompletedRecord: value => { persisted = value; },
+    assertProviderDispatchReady: () => {}, onProviderAttemptReturned: () => { providerReturns += 1; },
+    suite, suiteRoot, scenario, surface: "piagent", repeat: 1, orderIndex: 1,
+    runId: "offline-production-v3-unknown-terminal", runRoot,
+    options: { timeoutSeconds: 30, model: "openai-codex/gpt-5.6-luna", thinking: "medium",
+      serviceTier: "fast", piagentTreatment: "release-defaults" },
+    piCommand: "offline-pi", codexCommand: "offline-codex", codexDisabledFeatures: [],
+    codexRuntime: null, piRuntimeHome: { path: piHome },
+    systemCommands: { node: process.execPath, git: "git", bash: "bash" },
+    suiteDigest: "b".repeat(64), configurationDigest: "c".repeat(64),
+    rootSeed: "offline-v3-unknown-terminal-seed", piagentWebUiJourney
+  })).record;
+
+  assert.equal(providerReturns, 1);
+  assert.equal(persisted, record, "the exact unknown terminal must reach the record WAL callback");
+  assert.equal(record.abortSuite, false);
+  assert.equal(record.agent.exitCode, 1);
+  assert.equal(record.usageStatus, "measured");
+  assert.equal(record.usage.usageCompleteness, "exact");
+  assert.equal(record.outcome.transportStatus, "completed");
+  assert.equal(record.outcome.operationStatus, "completed");
+  assert.equal(record.outcome.taskStatus, "unknown");
+  assert.equal(record.outcome.usageStatus, "exact");
+  assert.equal(record.runValidity, "invalid_harness");
+  assert.equal(record.failureClass, "unknown_terminal");
+  assert.equal(record.failure,
+    "webui-terminal-lifecycle-operation-completed-expected-completed-task-unknown-expected-refused-turn-1");
+  assert.equal(record.countsTowardQuality, false);
   assert.equal(record.countsTowardUsage, true);
 });
 

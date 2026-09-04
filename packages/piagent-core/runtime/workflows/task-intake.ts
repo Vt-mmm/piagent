@@ -46,7 +46,14 @@ const AUTO_LOCAL_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:outs
 const AUTO_TEMPORARY_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:(?:not\\s+)?yet\\b|right\\s+now\\b|for\\s+now\\b|at\\s+(?:(?:this|the\\s+current)\\s+(?:step|stage|phase|time)|the\\s+moment)\\b|during\\s+(?:(?:this|the\\s+current)\\s+)?(?:step|stage|phase|planning)\\b|while\\b|unless\\b|until\\b|before\\b|hi(?:e|ệ)n\\s+t(?:a|ạ)i\\b|b(?:a|â)y\\s+gi(?:o|ờ)\\b)`, "i");
 const AUTO_GLOBAL_NO_ACCESS_BOUNDARY = /\b(?:do not|don't|must not|never)\s+(?:read|execute|write|delete|restore|hash|echo|compare)(?:\s*,\s*(?:read|execute|write|delete|restore|hash|echo|compare)){1,6}(?:\s*,?\s*or\s+(?:read|execute|write|delete|restore|hash|echo|compare))?\s+(?:any\s+|the\s+|this\s+)?(?:project|workspace|repository|repo|audit|environment)(?:\s+or\s+(?:project|workspace|repository|repo|audit|environment))?\s+(?:content|data|files?|records?|history)\b/i;
 const AUTO_PROTECTED_ACCESS_DENIAL = /\b(?:do not|don't|must not|never)\s+(?:inspect|read|open|access|copy|print|echo|reveal|expose|export|disclose)\s+(?:(?:the|a|an|any|all|this|that|complete|raw)\s+){0,3}(?:protected(?:[- ](?:credentials?|files?|data|material|secrets?|tokens?))?|credentials?|secrets?|tokens?|passwords?|api[- ]?keys?|auth(?:entication)?(?:\s+(?:data|material|values?|tokens?))?)\b/i;
+// Some refusal prompts establish the protected object in the preceding
+// boundary sentence and then refer to it only as "the file". Admit that
+// grammar only when both halves are explicit; a generic file denial alone is
+// not protected-material authority.
+const AUTO_PROTECTED_MATERIAL_BOUNDARY_CONTEXT = /\bthis\s+request\s+crosses\s+the\s+protected[- ]material\s+boundary\b/i;
+const AUTO_GENERIC_FILE_ACCESS_DENIAL = /\b(?:do not|don't|must not|never)\s+(?:inspect|read|open|access)\s+(?:(?:the|this|that|requested|referenced|target(?:ed)?)\s+){0,2}(?:files?|paths?)\b/i;
 const AUTO_REFUSAL_INTENT = /\b(?:refuse|decline|reject)\b/i;
+const AUTO_REFUSAL_NEGATION = /\b(?:do not|don't|must not|never)\s+(?:refuse|decline|reject)\b/i;
 const AUTO_GLOBAL_READ_ONLY_PATTERNS = [
   /^\s*\/?read-only\s*(?:$|[.!?:;—–-])/im,
   /^\s*\/?read-only\s+(?:task|run|session)\s*(?:$|[.!?:;—–-]|\b(?:to|for)\b)/im,
@@ -115,8 +122,11 @@ function hasGlobalNoAccessBoundary(text: string): boolean {
 }
 
 export function hasProtectedRefusalBoundary(text: string): boolean {
+  const accessDenied = AUTO_PROTECTED_ACCESS_DENIAL.test(text)
+    || (AUTO_PROTECTED_MATERIAL_BOUNDARY_CONTEXT.test(text) && AUTO_GENERIC_FILE_ACCESS_DENIAL.test(text));
   return AUTO_REFUSAL_INTENT.test(text)
-    && AUTO_PROTECTED_ACCESS_DENIAL.test(text)
+    && !AUTO_REFUSAL_NEGATION.test(text)
+    && accessDenied
     && noMutationBoundarySignals(text).taskWide;
 }
 
