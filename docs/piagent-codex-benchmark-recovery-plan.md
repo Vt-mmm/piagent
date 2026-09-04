@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 1.8
+> **Phiên bản:** 1.9
 >
-> **Trạng thái tổng:** IN_PROGRESS — P5 PASS; bắt đầu P6 paid out-of-suite canary, chưa gọi provider
+> **Trạng thái tổng:** IN_PROGRESS — P6 paid canary đã dùng 6/12 sessions; 2/8 record current-lineage valid; lease lifecycle fix đã qua full provider-free verification, chờ targeted paid rerun
 >
-> **Cập nhật gần nhất:** 2026-09-03T22:37:58Z (2026-09-04T05:37:58+07:00)
+> **Cập nhật gần nhất:** 2026-09-04T02:04:43Z (2026-09-04T09:04:43+07:00)
 >
 > **Chế độ thực thi:** một agent, local, tuần tự; không subagent, không cloud task
 >
@@ -15,7 +15,7 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** P6-T01/P6-T02 — đóng canary prompts/oracles và hard budget trước provider call đầu tiên
+> **Phase kế tiếp:** P6-T07/P6-T08 — bind protocol v3 trên checkpoint sạch rồi rerun riêng lease pair; dừng nếu cùng lifecycle root cause tái diễn
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
 
@@ -382,7 +382,7 @@ P2 và P3 giải quyết hai arm khác nhau nhưng vẫn triển khai tuần t�
 | P3 | Pi lifecycle correction | DONE | 0 | PASS — seven-row operation/task matrix, refusal and reconnect regressions pass |
 | P4 | Evaluator và production-v3 | DONE_WITH_OPERATOR_WAIVER | 0 | Automated calibration pass; human review waived, `reviewed=false` retained |
 | P5 | Provider-free qualification | DONE | 0 | PASS — clean checkpoint + exact-108 dry-run + full provider-free preflight ready |
-| P6 | Paid canary ngoài S108 | IN_PROGRESS — DESIGN | 0/8 sessions | 8/8 valid, cả hai arm có coding capability |
+| P6 | Paid canary ngoài S108 | IN_PROGRESS — 6/12 sessions; 2/8 current-lineage valid | 94,985 fresh; hard max 12 sessions | Lease fix provider-free pass; targeted lease rerun rồi incident/refusal tuần tự |
 | P7 | Freeze candidate/config | NOT_STARTED | 0 | Commit/tree/runtime/suite/config digests đóng |
 | P8 | Exact S108 | NOT_STARTED | 108 sessions | 108 accepted, exact usage, no invalid measurement |
 | P9 | Analysis/report | NOT_STARTED | 0 | PASS_VALID hoặc FAIL_VALID có evidence |
@@ -837,14 +837,25 @@ Mỗi task chạy một lần trên hai surfaces: 4 × 2 = 8 sessions.
 
 ### Tasks
 
-- [ ] **P6-T01** Đóng canary prompts/oracles trước provider call.
-- [ ] **P6-T02** Xác nhận budget cap từ dry-run.
-- [ ] **P6-T03** Chạy Codex source-change canary trước để bắt baseline capability defect sớm.
-- [ ] **P6-T04** Chạy Pi source-change canary.
+- [x] **P6-T01** Đóng canary prompts/oracles trước provider call.
+- [x] **P6-T02** Xác nhận budget cap từ dry-run.
+- [x] **P6-T03** Chạy Codex source-change canary trước để bắt baseline capability defect sớm.
+- [x] **P6-T04** Chạy Pi source-change canary.
 - [ ] **P6-T05** Chạy hai-arm multi-turn, read-only và refusal canaries.
 - [ ] **P6-T06** Xác nhận exact usage, terminal semantics, file changes và grader result cho 8/8.
 - [ ] **P6-T07** Nếu lỗi: reproduce đúng case, sửa root cause, chạy provider-free regression rồi chỉ rerun case canary bị lỗi.
 - [ ] **P6-T08** Nếu cùng root cause tái diễn hai lần, dừng paid loop và quay lại design review; không mở S108.
+
+### Execution log đến checkpoint resume
+
+- Frozen canary suite vẫn bất biến, digest `2e2747eefdab8d1a70f480a0c0d7ba8c9b6523e8379ad3ed0a48ce49a3721524`; calibration reference `20/20`, mutants killed `20/20`.
+- Header pair đầu dùng 2 sessions/35,333 fresh: Codex pass; Pi hidden grader pass nhưng terminal bị acceptance-evidence false negative. Fix đầu được checkpoint tại `bbf7ac87afefe3692ea3bab3c51c2065d9c5738d` sau negative test, neighborhood, full offline verify và secret scan.
+- Header targeted rerun dùng 2 sessions/25,735 fresh: cả hai surface resolved, grade `10`, exact usage, scope và safety pass. Inspection: `06-paid-canary/18-header-rerun-inspection.v1.json`, SHA-256 `0bb633b9defab5aac3a445686128d4207cea5fca814c763b42033110f95895b1`.
+- Lease pair đầu dùng 2 sessions/33,917 fresh: Codex pass; Pi dừng vì harness yêu cầu intermediate `/scout` task phải `pending` dù task đã hoàn tất hợp lệ. Root cause `journey-task-lifecycle-false-negative`, occurrence `1`; evidence `19-lease-pair1-root-cause.v1.md`, SHA-256 `be63168ffc60a49a0e42909aa4daacc3ce7d0952c5ac4c54c5682a3561ed1db6`.
+- Smallest scoped fix tại commit `42e50e60ac0792f4e935b52f821959e448f46844`: intermediate completed operation chấp nhận task `pending|completed`; final status vẫn exact; `refused|failed|unknown` vẫn bị reject. Before-fix `7 pass/2 fail`; focused `19/19`; neighborhood `41/41`.
+- Sau operator resume: evidence packet hash check pass; runner suite bị ngắt trước đó được chạy tới natural completion `75/75`; lifecycle/evaluator neighborhood `41/41`; typecheck pass; architecture `597` files pass. Full offline verify đầu phát hiện đúng generated public-exposure inventory stale (`4224 pass/3 fail`); refresh chuẩn chỉ đổi digest cây `tests`; targeted rerun `31/31`; full `npm run verify -- --offline` cuối pass.
+- Paid accounting hiện tại: `6` sessions, `94,985` fresh; còn tối đa `6` sessions, vừa đủ lease rerun + incident + refusal. Planned fresh stop `350,000`, absolute stop `520,000`; không còn session slack cho failure mới.
+- Pause checkpoint bất biến: `06-paid-canary/22-operator-pause-checkpoint.v1.json`, SHA-256 `75ed9733c8ac3120d5c4e0ac4919501f596c5f1fe5cd41ede40fc80070e7abaa`. Protocol v3/preflight v3 phải bind checkpoint sạch mới và chỉ authorize `runs/02-lease-rerun-1` trước.
 
 ### Exit gate
 
@@ -1276,15 +1287,15 @@ Nếu source thay đổi sau P7:
 
 - [x] Old campaign disposition hoàn tất và immutable.
 - [x] Outcome/failure/token contract đóng.
-- [ ] Stock Codex full closure được pin.
+- [x] Stock Codex full closure được pin.
 - [x] Codex exit 0 + error event bị phân loại đúng.
-- [ ] Codex mutation canary tạo đúng patch.
+- [x] Codex mutation canary tạo đúng patch.
 - [x] Pi non-composite settlement không đi vào composite path.
 - [x] Pi multi-turn operation/task state tách đúng.
 - [x] Pi safety refusal có semantic terminal đúng.
 - [ ] Incident read-only evidence pass hai arm.
 - [x] 27 scenario graders qua automated calibration/mutation tests; human calibration receipt còn chờ P4-T09.
-- [ ] Full provider-free qualification pass.
+- [x] Full provider-free qualification pass.
 - [ ] Out-of-suite paid canary 8/8 valid.
 - [ ] Candidate/config/runtime freeze hoàn tất.
 
@@ -1333,7 +1344,7 @@ Nếu source thay đổi sau P7:
 
 Task tiếp theo:
 
-**P6-T01/P6-T02** — đóng băng 4 canary ngoài production-v3, oracle và budget/stop policy trước provider call đầu tiên. Không mở S108 trong P6.
+**P6-T07/P6-T08** — tạo clean checkpoint + protocol/preflight v3, rồi chỉ rerun `lease-renewal-plan` pair vào output root mới. Nếu pair valid mới chạy incident và refusal tuần tự; không mở S108 khi chưa đủ 8/8 current-lineage records.
 
 P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=false` và `thresholdsLocked=false` tiếp tục là limitation, không phải pass evidence.
 
@@ -1352,3 +1363,4 @@ P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=f
 | 1.6 | 2026-09-04 | Operator explicit waive P4-T09 do không đủ thời gian reviewer A/B; không giả lập review, giữ `reviewed=false` và human threshold unlocked; P4 `DONE_WITH_OPERATOR_WAIVER`, bắt đầu P5 provider-free; provider sessions = 0 |
 | 1.7 | 2026-09-04 | P5 automated qualification trước checkpoint: focused 63/63, subsystem 723 pass/51 environment skip, full offline verify pass, exact-108 dry-run, identity negatives 4/4, deterministic journey 180/180, secret scan pass; preflight fail-closed trên dirty tree nên P5 chờ local clean checkpoint; provider sessions = 0 |
 | 1.8 | 2026-09-04 | Hoàn tất P5 trên clean checkpoint `082bf9d…`: full provider-free preflight ready, long-horizon 90/90, WebUI parity 9 suites, 4/4 lane pass, exact-108 dry-run và `providerSessionsStarted=0`; bắt đầu P6 canary design; P4 waiver limitation giữ nguyên |
+| 1.9 | 2026-09-04 | Ghi đầy đủ P6 tới operator resume: 6 paid sessions/94,985 fresh; header rerun valid 2/8 current-lineage; lease harness false negative được sửa tại `42e50e6…`; runner 75/75, neighborhood 41/41, typecheck/architecture và full offline verify pass sau generated exposure refresh; chờ clean checkpoint + protocol v3 trước targeted lease rerun |
