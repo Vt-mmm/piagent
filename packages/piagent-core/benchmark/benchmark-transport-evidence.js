@@ -57,6 +57,25 @@ export function observeBenchmarkTransportFailure(circuit, record) {
   };
 }
 
+export function validBenchmarkCandidateOutcome(candidateOutcome) {
+  const validLifecycleOutcome = candidateOutcome?.schemaVersion === 2
+    && candidateOutcome.kind === "terminal-lifecycle-mismatch"
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.expectedOperationStatus)
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedOperationStatus)
+    && ["pending", "completed", "refused", "failed", "unknown"].includes(candidateOutcome.expectedTaskStatus)
+    && ["pending", "completed", "refused", "failed", "unknown"].includes(candidateOutcome.observedTaskStatus)
+    && (candidateOutcome.expectedOperationStatus !== candidateOutcome.observedOperationStatus
+      || candidateOutcome.expectedTaskStatus !== candidateOutcome.observedTaskStatus)
+    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
+  const validLegacyOutcome = candidateOutcome?.schemaVersion === 1
+    && candidateOutcome.kind === "terminal-settlement-mismatch"
+    && ["completed", "blocked", "aborted", "error", "unknown", "refused"].includes(candidateOutcome.expectedSettlement)
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedSettlement)
+    && candidateOutcome.expectedSettlement !== candidateOutcome.observedSettlement
+    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
+  return validLifecycleOutcome || validLegacyOutcome;
+}
+
 export function classifyPreUsageFailure(agent, usage, diagnosticInput,
   { terminalProviderError = false, usageParsingError = false, candidateOutcome = null } = {}) {
   const diagnostic = String(diagnosticInput ?? "").toLowerCase();
@@ -157,22 +176,7 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput,
         };
   }
   if (codexOutcome?.runValidity === "valid" && codexOutcome.failureClass && measuredUsage) return undefined;
-  const validLifecycleOutcome = candidateOutcome?.schemaVersion === 2
-    && candidateOutcome.kind === "terminal-lifecycle-mismatch"
-    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.expectedOperationStatus)
-    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedOperationStatus)
-    && ["pending", "completed", "refused", "failed", "unknown"].includes(candidateOutcome.expectedTaskStatus)
-    && ["pending", "completed", "refused", "failed", "unknown"].includes(candidateOutcome.observedTaskStatus)
-    && (candidateOutcome.expectedOperationStatus !== candidateOutcome.observedOperationStatus
-      || candidateOutcome.expectedTaskStatus !== candidateOutcome.observedTaskStatus)
-    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
-  const validLegacyOutcome = candidateOutcome?.schemaVersion === 1
-    && candidateOutcome.kind === "terminal-settlement-mismatch"
-    && ["completed", "blocked", "aborted", "error", "unknown", "refused"].includes(candidateOutcome.expectedSettlement)
-    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedSettlement)
-    && candidateOutcome.expectedSettlement !== candidateOutcome.observedSettlement
-    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
-  const validCandidateOutcome = validLifecycleOutcome || validLegacyOutcome;
+  const validCandidateOutcome = validBenchmarkCandidateOutcome(candidateOutcome);
   if (agent.code !== 0 && validCandidateOutcome && measuredUsage && usage.fresh > 0) return undefined;
   const explicitProviderPolicyRefusal = (
     /\b(?:provider|safety|cyber safety)\b.{0,96}\b(?:refus(?:al|ed|e)|disallowed|not allowed|blocked)\b/.test(diagnostic)

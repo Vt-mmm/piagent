@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { validBenchmarkCandidateOutcome } from "../packages/piagent-core/benchmark/benchmark-transport-evidence.js";
 
 const OPERATION_STATUSES = ["completed", "blocked", "aborted", "error", "unknown"];
 const TASK_STATUSES = ["pending", "completed", "refused", "failed", "unknown"];
@@ -17,20 +18,12 @@ export function acceptedJourneyTaskStatuses({ expectedSettlement, turnIndex, tur
 }
 
 function safeCandidateOutcome(value) {
-  if (value?.schemaVersion === 2 && value.kind === "terminal-lifecycle-mismatch"
-    && OPERATION_STATUSES.includes(value.expectedOperationStatus) && OPERATION_STATUSES.includes(value.observedOperationStatus)
-    && TASK_STATUSES.includes(value.expectedTaskStatus) && TASK_STATUSES.includes(value.observedTaskStatus)
-    && (value.expectedOperationStatus !== value.observedOperationStatus || value.expectedTaskStatus !== value.observedTaskStatus)
-    && Number.isSafeInteger(value.turnIndex) && value.turnIndex > 0) {
+  if (!validBenchmarkCandidateOutcome(value)) return null;
+  if (value.schemaVersion === 2) {
     return { schemaVersion: 2, kind: value.kind, expectedOperationStatus: value.expectedOperationStatus,
       observedOperationStatus: value.observedOperationStatus, expectedTaskStatus: value.expectedTaskStatus,
       observedTaskStatus: value.observedTaskStatus, turnIndex: value.turnIndex };
   }
-  const expected = [...OPERATION_STATUSES, "refused"];
-  if (value?.schemaVersion !== 1 || value.kind !== "terminal-settlement-mismatch"
-    || !expected.includes(value.expectedSettlement) || !OPERATION_STATUSES.includes(value.observedSettlement)
-    || value.expectedSettlement === value.observedSettlement
-    || !Number.isSafeInteger(value.turnIndex) || value.turnIndex < 1) return null;
   return { schemaVersion: 1, kind: value.kind, expectedSettlement: value.expectedSettlement,
     observedSettlement: value.observedSettlement, turnIndex: value.turnIndex };
 }

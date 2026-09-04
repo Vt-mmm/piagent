@@ -2,6 +2,8 @@ import {
   buildBenchmarkGraderInputV3,
   finalizeBenchmarkAttemptOutcomeV3
 } from "../packages/piagent-core/benchmark/benchmark-evaluator-v3.js";
+import { validBenchmarkCandidateOutcome } from "../packages/piagent-core/benchmark/benchmark-transport-evidence.js";
+import { exactBenchmarkMeasuredUsage } from "../packages/piagent-core/benchmark/benchmark-usage.js";
 import { acceptedJourneyTaskStatuses } from "./benchmark-journey-outcome.mjs";
 
 function parseOracle(serialized) {
@@ -17,6 +19,14 @@ function integer(value) {
 
 function codexEventCount(summary, type) {
   return integer(summary?.eventTypes?.[type]);
+}
+
+function transportStatus(agent, usage) {
+  if (agent?.timedOut) return "interrupted";
+  if (agent?.code === 0) return "completed";
+  if (validBenchmarkCandidateOutcome(agent?.candidateOutcome)
+    && exactBenchmarkMeasuredUsage(usage) && usage.fresh > 0) return "completed";
+  return "failed";
 }
 
 function taskObservation({ scenario, surface, agent, journeyReceipt, safetyEvidence, missingRequired,
@@ -73,7 +83,7 @@ export function buildProductionV3SessionGraderInput({ suiteId, oracleSerialized,
   return buildBenchmarkGraderInputV3({
     oracle: parseOracle(oracleSerialized),
     transport: {
-      status: agent?.timedOut ? "interrupted" : agent?.code === 0 ? "completed" : "failed",
+      status: transportStatus(agent, usage),
       providerStarted,
       processExitCode: Number.isInteger(agent?.code) ? agent.code : null,
       threadIdPresent: [usage?.providerSessionId, sessionId].some(value =>

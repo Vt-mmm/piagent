@@ -351,7 +351,7 @@ test("production-v3 grader binds executable workspace checks to output, safety a
 test("production-v3 session adapter derives lifecycle facts without treating assistant text as tool evidence", async () => {
   const { createBenchmarkSafetyEvidenceObserver } =
     await import("../packages/piagent-core/benchmark/benchmark-safety-evidence.js");
-  const { buildProductionV3SessionGraderInput } =
+  const { buildProductionV3SessionGraderInput, finalizeProductionV3SessionOutcome } =
     await import("../scripts/benchmark-session-evaluator.mjs");
 
   const observer = createBenchmarkSafetyEvidenceObserver("protected-env-refusal");
@@ -423,6 +423,63 @@ test("production-v3 session adapter derives lifecycle facts without treating ass
   });
   assert.equal(incomplete.task.journeyInvariantPassed, false);
 
+  const exactUsage = {
+    providerSessionId: "pi-session-lifecycle-mismatch", sessions: 1,
+    input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4,
+    fresh: 75, total: 100, usageCompleteness: "exact"
+  };
+  for (const observedOperationStatus of ["completed", "blocked"]) {
+    const candidateOutcome = {
+      schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+      expectedOperationStatus: "completed", observedOperationStatus,
+      expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 2
+    };
+    const lifecycleFailure = buildProductionV3SessionGraderInput({
+      suiteId: "production-v3", oracleSerialized: JSON.stringify(oracle), scenario, surface: "piagent",
+      sessionId: "pi-session-lifecycle-mismatch",
+      agent: { code: 1, timedOut: false, stdout: "partial result", candidateOutcome },
+      usage: exactUsage,
+      journeyReceipt: { completed: false, turns: [
+        { operationStatus: "completed", taskStatus: "completed", durableAssistantIndex: 1 },
+        { operationStatus: observedOperationStatus, taskStatus: "pending", durableAssistantIndex: 3 }
+      ] },
+      changedFiles: [], outsideScope: [], missingRequired: [], forbiddenHits: [],
+      safetyEvidence: { protectedReadObserved: false, destructiveActionObserved: false }
+    });
+    assert.equal(lifecycleFailure.transport.status, "completed",
+      "a structured candidate lifecycle failure is not a provider transport failure");
+    assert.equal(lifecycleFailure.transport.processExitCode, 1,
+      "the wrapper exit remains explicit evidence");
+    const outcome = finalizeProductionV3SessionOutcome({
+      attemptId: `lifecycle-${observedOperationStatus}`,
+      input: lifecycleFailure,
+      grade: { passed: true, score: 10, checks: [] },
+      usage: exactUsage
+    });
+    assert.equal(outcome.transportStatus, "completed");
+    assert.equal(outcome.evidence.processExitCode, 1);
+    assert.equal(outcome.operationStatus, observedOperationStatus);
+    assert.equal(outcome.taskStatus, "failed");
+    assert.equal(outcome.usageStatus, "exact");
+    assert.equal(outcome.runValidity, "valid");
+    assert.equal(outcome.failureClass, "agent_task_failure");
+    assert.equal(outcome.countsTowardQuality, true);
+    assert.equal(outcome.countsTowardUsage, true);
+  }
+
+  const ordinaryProcessFailure = buildProductionV3SessionGraderInput({
+    suiteId: "production-v3", oracleSerialized: JSON.stringify(oracle), scenario, surface: "piagent",
+    sessionId: "pi-session-process-failure",
+    agent: { code: 1, timedOut: false, stdout: "process failed" }, usage: exactUsage,
+    journeyReceipt: { completed: false, turns: [
+      { operationStatus: "completed", taskStatus: "pending", durableAssistantIndex: 1 }
+    ] },
+    changedFiles: [], outsideScope: [], missingRequired: [], forbiddenHits: [],
+    safetyEvidence: { protectedReadObserved: false, destructiveActionObserved: false }
+  });
+  assert.equal(ordinaryProcessFailure.transport.status, "failed",
+    "an unstructured nonzero process exit must not be promoted to completed transport");
+
   const refusalScenario = {
     id: "protected-env-refusal", kind: "safety-refusal",
     userJourney: { turns: [{ id: "request" }], expectedTerminalSettlement: "refused" }
@@ -443,6 +500,94 @@ test("production-v3 session adapter derives lifecycle facts without treating ass
   assert.equal(refusalInput.task.taskStatus, "refused");
   assert.equal(refusalInput.semantic.boundaryExplained, true);
   assert.equal(refusalInput.semantic.safeAlternativeOffered, true);
+});
+
+test("offline production-v3 Pi session persists an exact structured lifecycle quality failure", async (t) => {
+  const { suite, suiteRoot } = loadBenchmarkSuite("production-v3", root);
+  const scenario = suite.scenarios.find(({ id }) => id === "cli-double-dash");
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-v3-pi-lifecycle-"));
+  t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+  const runRoot = path.join(temporaryRoot, "run");
+  const piHome = path.join(temporaryRoot, "pi-home");
+  fs.mkdirSync(runRoot, { mode: 0o700 });
+  fs.mkdirSync(piHome, { mode: 0o700 });
+  const execute = async (command, args, options = {}) => {
+    const result = spawnSync(command, args, {
+      cwd: options.cwd, env: options.env, input: options.input, encoding: "utf8",
+      timeout: options.timeoutMs, maxBuffer: 16 * 1024 * 1024
+    });
+    return {
+      code: result.status ?? 1, signal: result.signal ?? null,
+      timedOut: result.error?.code === "ETIMEDOUT", stdout: result.stdout ?? "",
+      stderr: result.stderr ?? String(result.error?.message ?? ""), durationSeconds: 0.01
+    };
+  };
+  let persisted = null;
+  let providerReturns = 0;
+  const piagentWebUiJourney = async ({ agentDir, workspace, turns,
+    onBeforeProviderDispatch, onBeforeFirstProviderDispatch }) => {
+    const sessionId = "offline-pi-lifecycle-session";
+    await onBeforeProviderDispatch(Object.freeze({ turnIndex: 1, turnId: turns[0].id }));
+    await onBeforeFirstProviderDispatch();
+    const sessionDir = path.join(agentDir, "sessions");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const timestamp = new Date().toISOString();
+    fs.writeFileSync(path.join(sessionDir, "session.jsonl"), [
+      { type: "session", id: sessionId, cwd: workspace, timestamp },
+      { type: "model_change", provider: "openai-codex", modelId: "gpt-5.6-luna", timestamp },
+      { type: "thinking_level_change", thinkingLevel: "medium", timestamp },
+      { type: "message", timestamp, message: { role: "assistant",
+        content: [{ type: "text", text: "Partial candidate result" }],
+        usage: { input: 60, output: 15, cacheRead: 20, cacheWrite: 5,
+          reasoning: 4, totalTokens: 100, cost: { total: 0 } } } }
+    ].map(JSON.stringify).join("\n") + "\n");
+    const candidateOutcome = {
+      schemaVersion: 2, kind: "terminal-lifecycle-mismatch",
+      expectedOperationStatus: "completed", observedOperationStatus: "completed",
+      expectedTaskStatus: "completed", observedTaskStatus: "pending", turnIndex: 1
+    };
+    return {
+      code: 1, signal: null, timedOut: false, stdout: "Partial candidate result",
+      stderr: "webui-turn-1-operation-completed-expected-completed-task-pending-expected-completed",
+      durationSeconds: 0.01, candidateOutcome, forbiddenHits: [], requiredHits: [],
+      journeyReceipt: { channel: "offline-pi-lifecycle", completed: false, sessionRef: sessionId,
+        reconnects: 0, turns: [{ index: 1, id: turns[0].id,
+          expectedSettlement: "completed", expectedOperationStatus: "completed",
+          expectedTaskStatus: "completed", acceptedTaskStatuses: ["completed"],
+          operationStatus: "completed", taskStatus: "pending", settlement: "completed",
+          durableAssistantIndex: 1, assistantText: "Partial candidate result", outcome: candidateOutcome }] }
+    };
+  };
+  const record = (await runOfflineBenchmarkSession({
+    packageRoot: root, runCommand: execute, resolveSuiteEntry: (base, entry) => path.join(base, entry),
+    interrupted: () => false, persistCompletedRecord: value => { persisted = value; },
+    assertProviderDispatchReady: () => {}, onProviderAttemptReturned: () => { providerReturns += 1; },
+    suite, suiteRoot, scenario, surface: "piagent", repeat: 1, orderIndex: 1,
+    runId: "offline-production-v3-pi-lifecycle", runRoot,
+    options: { timeoutSeconds: 30, model: "openai-codex/gpt-5.6-luna", thinking: "medium",
+      serviceTier: "fast", piagentTreatment: "release-defaults" },
+    piCommand: "offline-pi", codexCommand: "offline-codex", codexDisabledFeatures: [],
+    codexRuntime: null, piRuntimeHome: { path: piHome },
+    systemCommands: { node: process.execPath, git: "git", bash: "bash" },
+    suiteDigest: "b".repeat(64), configurationDigest: "c".repeat(64),
+    rootSeed: "offline-v3-pi-lifecycle-seed", piagentWebUiJourney
+  })).record;
+  assert.equal(providerReturns, 1);
+  assert.equal(persisted, record, "the exact quality failure must reach the record WAL callback");
+  assert.equal(record.abortSuite, false);
+  assert.equal(record.agent.exitCode, 1);
+  assert.equal(record.usageStatus, "measured");
+  assert.equal(record.usage.usageCompleteness, "exact");
+  assert.equal(record.outcome.transportStatus, "completed");
+  assert.equal(record.outcome.evidence.processExitCode, 1);
+  assert.equal(record.outcome.usageStatus, "exact");
+  assert.equal(record.outcome.taskStatus, "failed");
+  assert.equal(record.runValidity, "valid");
+  assert.equal(record.failureClass, "agent_task_failure");
+  assert.equal(record.failure,
+    "webui-terminal-lifecycle-operation-completed-expected-completed-task-pending-expected-completed-turn-1");
+  assert.equal(record.countsTowardQuality, true);
+  assert.equal(record.countsTowardUsage, true);
 });
 
 test("offline production-v3 runner persists the separated evaluator outcome and report fields", async (t) => {
