@@ -632,6 +632,58 @@ for (const event of events) console.log(JSON.stringify(event));
   return { dir, suite: path.join(suiteRoot, "suite.json"), fakePi, fakeCodex, operatorCodexHome, output: path.join(dir, "output") };
 }
 
+test("bootstrap snapshots Codex credentials for the implicit default surfaces", (t) => {
+  const value = fixture(t);
+  const previousCodexHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = value.operatorCodexHome;
+  t.after(() => {
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousCodexHome;
+  });
+  const snapshot = createBenchmarkExecutionSnapshot({
+    liveRoot: root,
+    argv: ["--suite", value.suite, "--dry-run"],
+    cwd: root
+  });
+  t.after(() => cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent,
+    snapshot.metadata.piAgentHome));
+  assert.deepEqual(snapshot.metadata.codexCredential?.identity, {
+    schemaVersion: 1,
+    credentialPresent: true,
+    contentBinding: "private-runtime-only",
+    environmentCredentialPolicy: "excluded-from-frozen-controlled-runtime"
+  });
+});
+
+test("bootstrap gives a resume manifest precedence over a contradictory surface flag", (t) => {
+  const value = fixture(t);
+  const previousCodexHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = value.operatorCodexHome;
+  t.after(() => {
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousCodexHome;
+  });
+  const resumeRoot = path.join(value.dir, "resume");
+  fs.mkdirSync(resumeRoot);
+  fs.writeFileSync(path.join(resumeRoot, "run-manifest.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    runId: "resume-bootstrap-precedence",
+    suite: { source: value.suite },
+    surfaces: ["piagent", "codex-cli"],
+    model: "test/fake-model",
+    allowPiAuthWriteback: false,
+    piCredentialVaultId: "a".repeat(32)
+  }, null, 2)}\n`);
+  const snapshot = createBenchmarkExecutionSnapshot({
+    liveRoot: root,
+    argv: ["--resume", resumeRoot, "--surfaces", "piagent,raw-pi", "--dry-run"],
+    cwd: root
+  });
+  t.after(() => cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent,
+    snapshot.metadata.piAgentHome));
+  assert.equal(snapshot.metadata.codexCredential?.identity?.credentialPresent, true);
+});
+
 test("dry-run validates the built-in suite without starting a model", () => {
   const result = spawnSync(process.execPath, [runner, "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
@@ -2737,7 +2789,6 @@ test("a passing production stage advertises the exact resume chunk and rejects a
   const first = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
-    "--surfaces", "piagent,codex-cli",
     "--model", "test/fake-model",
     "--thinking", "high",
     "--repeats", "2",
@@ -2748,6 +2799,19 @@ test("a passing production stage advertises the exact resume chunk and rejects a
   ], { cwd: root, encoding: "utf8", timeout: 60_000, env });
   assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
   const pendingManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.deepEqual(pendingManifest.codexCredentialIdentity, {
+    schemaVersion: 1,
+    credentialPresent: true,
+    contentBinding: "private-runtime-only",
+    environmentCredentialPolicy: "excluded-from-frozen-controlled-runtime"
+  });
+  assert.equal(pendingManifest.codexCredentialBridge, "frozen-auth-json-copy");
+  assert.deepEqual(pendingManifest.preflightRuntime.codexCredentialPolicy, {
+    source: "frozen-auth-json-snapshot",
+    environmentCredentials: "excluded",
+    copyIntegrity: "stable-fd-o-excl-fsync",
+    perDispatchIntegrity: "exact-private-stat-and-content-match"
+  });
   assert.equal(pendingManifest.stageControl.state, "review-pending");
   assert.equal(pendingManifest.campaignEvidence.providerStartedAttempts, 2);
   assert.equal(pendingManifest.campaignEvidence.status, "active");
@@ -2773,6 +2837,12 @@ test("a passing production stage advertises the exact resume chunk and rejects a
   assert.equal(report.comparison.campaignEvidence.status, report.comparison.tokenClaimAllowed ? "claim-passed" : "no-claim");
   assert.equal(report.comparison.campaignEvidence.claimOutcome.allowed, report.comparison.tokenClaimAllowed);
   const finalizedManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.deepEqual(finalizedManifest.codexCredentialIdentity, pendingManifest.codexCredentialIdentity);
+  assert.equal(finalizedManifest.codexCredentialBridge, pendingManifest.codexCredentialBridge);
+  assert.equal(finalizedManifest.configurationDigest, pendingManifest.configurationDigest);
+  assert.equal(finalizedManifest.providerFreeConfigurationDigest, pendingManifest.providerFreeConfigurationDigest);
+  assert.deepEqual(finalizedManifest.preflightRuntime.codexCredentialPolicy,
+    pendingManifest.preflightRuntime.codexCredentialPolicy);
   assert.equal(finalizedManifest.campaignEvidence.status, report.comparison.campaignEvidence.status);
   assert.equal(finalizedManifest.campaignEvidence.claimOutcome.allowed, report.comparison.tokenClaimAllowed);
   assert.equal(JSON.stringify(report).includes(pendingManifest.campaignEvidence.runRoot), false);

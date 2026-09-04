@@ -3,6 +3,7 @@ import path from "node:path";
 import { PIAGENT_BENCHMARK_TREATMENTS } from "./benchmark-runtime.js";
 
 export const benchmarkSurfaces = new Set(["raw-pi", "piagent", "codex-cli"]);
+export const defaultBenchmarkSurfaces = Object.freeze(["piagent", "codex-cli"]);
 const codexModes = new Set(["controlled", "native"]);
 const codexBaselines = new Set(["stock", "controlled-custom"]);
 const thinkingLevels = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -95,7 +96,7 @@ export function parseBenchmarkArgs(argv) {
   const registeredIncompatible = new Set();
   const options = {
     suite: "core-v1",
-    surfaces: ["piagent", "codex-cli"],
+    surfaces: [...defaultBenchmarkSurfaces],
     model: undefined,
     thinking: undefined,
     serviceTier: undefined,

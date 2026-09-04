@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { materializeBenchmarkCandidate } from "./benchmark-candidate.js";
+import { defaultBenchmarkSurfaces } from "./benchmark-cli.js";
 import {
   benchmarkPiCredentialFileIdentity,
   benchmarkPiHomeConfigIdentity,
@@ -555,14 +556,18 @@ function snapshotCodexCredential(temporaryRoot) {
 
 function requestsCodexSurface(argv, cwd, replay) {
   if (registeredManifestRequest(argv, cwd)) return true;
-  const explicit = optionValue(argv, "--surfaces");
-  if (explicit) return explicit.split(",").map((value) => value.trim()).includes("codex-cli");
   const resume = optionValue(argv, "--resume");
   if (resume) {
     const manifestPath = path.join(runRootFromResume(resume, cwd), "run-manifest.json");
     return fs.existsSync(manifestPath) && jsonFile(manifestPath, "benchmark resume manifest")?.surfaces?.includes("codex-cli") === true;
   }
-  return replay?.manifest?.surfaces?.includes("codex-cli") === true;
+  if (replay) {
+    const surfaces = replay.manifest?.surfaces ?? replay.report?.environment?.surfaces;
+    return Array.isArray(surfaces) && surfaces.includes("codex-cli");
+  }
+  const explicit = optionValue(argv, "--surfaces");
+  if (explicit) return explicit.split(",").map((value) => value.trim()).includes("codex-cli");
+  return defaultBenchmarkSurfaces.includes("codex-cli");
 }
 
 function isolatedSnapshotParent() {
