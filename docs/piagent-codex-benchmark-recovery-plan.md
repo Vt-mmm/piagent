@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 3.9
+> **Phiên bản:** 3.10
 >
-> **Trạng thái tổng:** AUTONOMOUS_QUALIFICATION — bộ chấm D-022 đã xác thực offline trên clean commit e230155; D-023/D-024 mở triển khai kiểm soát ngân sách rồi P7/S0 và fresh run-5. Chưa gọi provider khi các gate chưa pass. Run-4 vẫn INVALID_MEASUREMENT và bất biến.
+> **Trạng thái tổng:** OFFLINE_CONTRACT_REMEDIATION — run-5 đã dừng vì P8-GC-01 (đề bài thiếu chi tiết mà grader bắt buộc). Giữ nguyên mọi raw record; không resume/regrade/reuse/merge. Paid gate đóng, mục tiêu 35% chưa được chứng minh.
 >
-> **Cập nhật gần nhất:** 2026-09-05T02:24:08Z (2026-09-05T09:24:08+07:00)
+> **Cập nhật gần nhất:** 2026-09-05 (sau khi run-5 đóng và thu dọn lúc 04:10:29Z)
 >
 > **Chế độ thực thi:** paid benchmark local, tuần tự; subagent hỗ trợ các phần triển khai/kiểm thử độc lập được operator cho phép; không cloud task
 >
@@ -15,11 +15,23 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** hoàn tất admission ngân sách có lưu trạng thái, watchdog toàn stage và đánh giá mục tiêu từng bài; offline gates, clean checkpoint, S0/freeze mới rồi run-5 S12→S18→S54→S108. Không dừng để xin duyệt kỹ thuật từng bước trong phạm vi D-024.
+> **Phase kế tiếp:** sửa và xác thực hoàn toàn offline hợp đồng chấm và nhận diện bằng chứng Piagent; clean checkpoint, kiểm tra toàn bộ. Không tự khởi tạo campaign mới hoặc tăng cap đã duyệt.
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
 
-### Checkpoint hiện hành — D-024 tự triển khai trong phạm vi đã cấp
+### Checkpoint hiện hành — run-5 dừng, tiếp tục sửa offline
+
+Mục này thay thế chỉ dẫn vận hành của v3.9 bên dưới; không hủy hoặc sửa bằng chứng lịch sử.
+
+- Run-5 chạy trên clean commit `08b31c823ddad29d016da6a91714ab3ecb159210`, full offline và S0 đều PASS. S12 được xác thực máy, nhưng review chi tiết phát hiện P8-GC-01 trong lúc S18 đang chạy. S12 PASS không còn đủ để cấp quyền tiếp tục measurement có hợp đồng chấm bị thiếu.
+- Đã phát sinh `15` lượt mới, exact usage đủ cả `15`, có `14` accepted record và `1` interrupted attempt không dùng so sánh. Fresh mới `355,282`; active stage time `1,102,062ms`; không có unknown mới hoặc overshoot. Thu dọn process đã xác nhận, parent receipt không cho đóng stage/claim hoặc resume.
+- Combined P6+P8 đã dùng `63/156`; còn `93` lượt. Fresh campaign đủ `108` sẽ cần tối thiểu combined cap `171`. Đây chỉ là phép tính, chưa cấp quyền tăng cap hoặc chạy campaign mới; không bù thiếu bằng cách tái dùng 14 record cũ.
+- P8-GC-01: checkpoint, NDJSON, pagination và chat có loại lỗi/hành vi/nội dung lỗi chưa công bố; contract-sync thiếu schema `backend.requiredFields` đối chiếu `frontend.fields`. ID của replay cần làm rõ miền non-empty string. Review bao phủ đủ 27 ca và giữ nguyên P4 human-review waiver.
+- Sửa theo hướng công bố hợp đồng bắt buộc trong prompt thực sự được giao, giữ các yêu cầu chấm nghiêm ngặt. Kiểm tra độc lập còn phát hiện pagination không bắt lỗi thiếu lower clamp đã có trong đề: thêm assertion và sửa reference tương ứng, không nới oracle hay threshold.
+- Piagent có lỗi hoàn tất quy trình độc lập ở CLI, NDJSON, checkpoint và billing. Không đổi các failure này thành PASS. Chỉ sửa nhận diện bằng chứng có ràng buộc dataflow và xác minh thực thi; trường hợp thiếu test thật vẫn phải chặn.
+- Evidence: `18-autonomous-budget-and-goal/13-run5-stop-incident.v1.json` và `13-run5-raw-inventory.v1.json` niêm phong 1,150 file run-5. Các kết quả kiểm thử sửa mới được bổ sung riêng, không ghi lại receipt cũ. Mục tiêu 35%/không giảm performance vẫn UNPROVEN.
+
+### Lịch sử checkpoint v3.9 — D-024 tự triển khai trong phạm vi đã cấp
 
 Mục hiện hành này thay thế mọi chỉ dẫn pause/NOT_APPROVED, run-4 và single-agent lịch sử bên dưới; các đoạn đó được giữ để truy vết, không cấp quyền thực thi hiện tại.
 
@@ -412,8 +424,8 @@ P2 và P3 giải quyết hai arm khác nhau nhưng vẫn triển khai tuần t�
 | P4 | Evaluator và production-v3 | DONE_WITH_OPERATOR_WAIVER | 0 | Automated calibration pass; human review waived, `reviewed=false` retained |
 | P5 | Provider-free qualification | DONE | 0 | PASS — clean checkpoint + exact-108 dry-run + full provider-free preflight ready |
 | P6 | Paid canary ngoài S108 | DONE_WITH_RETAINED_VALID_CODEX_QUALITY_FAILURE | 19/19 sessions; 308,332 fresh | PASS — 8/8 final records measurement-valid; both-arm mutation capability, read-only và refusal pass; D-015 Codex failure giữ nguyên |
-| P7 | Freeze candidate/config | REQUALIFICATION_IN_PROGRESS | 0 | D-022 offline PASS; budget governor, per-problem goal assessment, full offline, clean commit và final S0 run-5 đang triển khai |
-| P8 | Exact S108 | AUTHORIZED_AFTER_QUALIFICATION | P8 used 29; combined 48/156; fresh run-5 max108 | D-024 không cần xin duyệt từng stage; guard/S0/freeze phải pass, không reuse bất kỳ invalid lineage nào |
+| P7 | Freeze candidate/config | OFFLINE_REMEDIATION | 0 mới sau stop | Qualification run-5 đã PASS nhưng hết hiệu lực cho source sửa sau P8-GC-01; cần xác thực source cuối mới |
+| P8 | Exact S108 | STOPPED_INVALID_MEASUREMENT | P8 used 44; combined 63/156 | Run-5 giữ 15 exact attempts/14 accepted, không resume/regrade/reuse; chưa cấp campaign mới hoặc cap171 |
 | P9 | Analysis/report | NOT_STARTED | 0 | PASS_VALID hoặc FAIL_VALID có evidence |
 | P10 | Private holdout/member pilot | NOT_STARTED | Tách budget | Claim generalization/production riêng |
 
@@ -1483,7 +1495,7 @@ Nếu source thay đổi sau P7:
 
 ## 29. Next action
 
-**Hiện hành v3.9:** triển khai và xác thực admission ngân sách D-024 cùng goal assessment từng bài; full offline trên source cuối, clean checkpoint, S0/freeze run-5, rồi chạy tuần tự S12→S18→S54→S108 mà không xin duyệt kỹ thuật từng stage. Ngưỡng chấm cũ không đổi. Nếu hết ngân sách hoặc measurement invalid, giữ bằng chứng thật và dừng paid; tiếp tục phần phân tích/fix offline hợp lệ. Chưa được claim đã giảm 35%.
+**Hiện hành v3.10:** run-5 đã dừng vì thiếu hợp đồng chấm; tiếp tục sửa và xác thực offline, giữ nguyên 15 lượt và mọi kết quả cũ. Không resume/regrade/reuse, không chạy thêm campaign hoặc tăng cap. Giữ mục tiêu 35% và performance, giữ ngưỡng chấm, chỉ công bố đủ yêu cầu và bổ sung kiểm tra yêu cầu đã có. Chưa có claim benchmark hợp lệ.
 
 ### Lịch sử next action v3.7 (đã được thay thế)
 
@@ -1529,3 +1541,4 @@ P4 human calibration đã được operator waive tại `P4-HR-W01`; `reviewed=f
 | 3.7 | 2026-09-04 | Ghi D-020 và run-3 S12 `12/12` valid; S18 resume dừng zero-provider vì initial/resume Codex credential bootstrap asymmetry P8-BS-01. Fix dùng shared effective surfaces, regressions/full offline pass và commit `f853f24…`. Pre-freeze S0 được dừng zero-provider để đồng bộ Plan trước final identity; paid đóng, fresh run-4 cần final P7/S0 và explicit D-021 `134→146` |
 | 3.8 | 2026-09-05 | Hoàn tất bộ chấm D-022 offline, clean commit e230155/full gate PASS, giữ run-4 invalid và một historical unknown; D-023 cấp cap156 nhưng strict budget chưa chứng minh, ghi phản ví dụ offline và đề xuất D-024 |
 | 3.9 | 2026-09-05 | Operator giao tự triển khai không chờ duyệt; chọn D-024 management thresholds trong108phiên mới, giữ unknown và thất bại thật, thêm goal assessment từng bài/latency trước run-5. Triển khai governor+watchdog+report rồi offline/S0/freeze; chưa có paid call |
+| 3.10 | 2026-09-05 | Run-5 dừng P8-GC-01 sau15lượt/14accepted; exact usage355,282fresh, combined63/156. Niêm phong raw, sửa hợp đồng và proof recognition offline; không tự cấp campaign mới/cap171 và không đổi kết quả cũ |

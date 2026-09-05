@@ -79,7 +79,7 @@ export function includesSearchText(value, query) { return normalizeSearchText(va
 `],
   "pagination-boundary": ["src/frontend/pagination.js", `function integer(value, minimum) { if (!Number.isSafeInteger(value) || value < minimum) throw new TypeError("invalid integer"); return value; }
 export function pageCount(totalItems, pageSize) { integer(totalItems, 0); integer(pageSize, 1); return Math.ceil(totalItems / pageSize); }
-export function clampPage(page, totalItems, pageSize) { integer(page, 1); const count = pageCount(totalItems, pageSize); return count === 0 ? 0 : Math.min(page, count); }
+export function clampPage(page, totalItems, pageSize) { if (!Number.isSafeInteger(page)) throw new TypeError("invalid page"); const count = pageCount(totalItems, pageSize); return count === 0 ? 0 : Math.max(1, Math.min(page, count)); }
 `],
   "quoted-csv": ["src/data/csv.js", `export function parseCsv(input) {
   const rows = []; let row = []; let field = ""; let quoted = false;

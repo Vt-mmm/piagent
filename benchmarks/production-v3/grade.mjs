@@ -151,7 +151,10 @@ switch (scenario) {
       assert.equal(pageCount(data.partial, data.size), Math.ceil(data.partial / data.size));
       assert.equal(pageCount(0, data.size), 0);
       assert.equal(clampPage(99, data.partial, data.size), Math.ceil(data.partial / data.size));
+      assert.equal(clampPage(0, data.partial, data.size), 1);
+      assert.equal(clampPage(-3, data.partial, data.size), 1);
       assert.equal(clampPage(1, 0, data.size), 0);
+      assert.equal(clampPage(-3, 0, data.size), 0);
     });
     await check("invalid-pagination-rejected", () => {
       assert.throws(() => pageCount(-1, 10), TypeError);
@@ -471,6 +474,15 @@ switch (scenario) {
       const aligned = { version: backend.version, statuses: [...backend.statuses].reverse(), fields: [...backend.requiredFields].reverse() };
       assert.deepEqual(compareSubscriptionContracts(backend, aligned), { compatible: true, missingStatuses: [], extraStatuses: [], missingFields: [], versionMismatch: false });
       assert.deepEqual(compareSubscriptionContracts({ ...backend, statuses: byteSort(backend.statuses) }, frontend).missingStatuses, [backend.statuses[data.omittedStatusIndex]]);
+      // Multiple declarations must distinguish UTF-8 byte order from JavaScript's
+      // UTF-16 default sort; a single missing field cannot establish this contract.
+      const unicodeDeclarations = ["😀", "\uE000", "a"];
+      const unicodeOrder = ["a", "\uE000", "😀"];
+      assert.deepEqual(compareSubscriptionContracts({ version: 1, statuses: unicodeDeclarations, requiredFields: unicodeDeclarations },
+        { version: 1, statuses: [], fields: [] }), { compatible: false, missingStatuses: unicodeOrder,
+        extraStatuses: [], missingFields: unicodeOrder, versionMismatch: false });
+      assert.deepEqual(compareSubscriptionContracts({ version: 1, statuses: [], requiredFields: [] },
+        { version: 1, statuses: unicodeDeclarations, fields: [] }).extraStatuses, unicodeOrder);
     });
     await check("contract-shape-validation", () => {
       assert.throws(() => compareSubscriptionContracts({ ...data.backend, statuses: [data.backend.statuses[0], data.backend.statuses[0]] }, { version: 1, statuses: [], fields: [] }), TypeError);

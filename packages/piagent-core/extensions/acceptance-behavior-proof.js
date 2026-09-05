@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { acceptanceContractConjuncts } from "./acceptance-contract-conjunction.js";
+import { braceScope, sameScope, unconditionalEvidenceScope, constantDeclarations, literalBinding, splitTopLevel, flatObjectSnapshot, boundStringValue, exactBoundValue, callArgumentNames } from "./acceptance-literal-dataflow.js";
 import { acceptanceResultContractEvidence } from "./acceptance-result-contract-evidence.js";
 import { criterionGraphValidationErrors } from "./criterion-graph.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
@@ -64,7 +65,7 @@ function normalizedText(value) {
 export function durableBehaviorProofRequired(text, changeMode = "source-change") {
   const value = String(text ?? "");
   if (changeMode === "read-only") return false;
-  return /\b(?:concurren|do not mutate|must not mutate|without mutating|return shape|returned? (?:element|object|value|representation)|preserve (?:the )?(?:api|input|output|return)|public api|exact error|typeerror|syntaxerror|rangeerror)\b/i.test(value);
+  return /\b(?:concurren|do not mutate|must not mutate|without mutating|inputs? must remain unchanged|return shape|returned? (?:element|object|value|representation)|preserve (?:the )?(?:api|input|output|return)|public api|exact error|typeerror|syntaxerror|rangeerror)\b/i.test(value);
 }
 
 function boundCriterionGraphNode(task, criterion) {
@@ -171,10 +172,6 @@ function bindJavaScriptStrings(value) {
   return { code: output.join(""), strings };
 }
 
-function boundStringValue(token, strings) {
-  const index = Number(String(token ?? "").match(/^__pi_bound_string_(\d+)__$/)?.[1]);
-  return Number.isInteger(index) ? strings[index] : undefined;
-}
 
 function moduleRecords(entry) {
   const evidence = String(entry.evidenceText ?? "");
@@ -336,19 +333,17 @@ function assignedCallNames(code, callStart) {
 
 function nextBindingWrite(code, name, after) {
   const escaped = escapeRegex(name);
-  const pattern = new RegExp(`\\b(?:const|let|var)\\s+${escaped}\\s*=|\\b${escaped}\\s*=(?!=|>)`, "g");
+  const pattern = new RegExp(`\\b(?:const|let|var)\\s+${escaped}\\s*=|\\b${escaped}\\s*(?:=(?!=|>)|(?:\\|\\||&&|\\?\\?|\\*\\*|<<|>>>?|[+*/%&|^\\-])=|\\+\\+|--)|(?:\\+\\+|--)\\s*\\b${escaped}\\b|[\\[{][^;\\n]*\\b${escaped}\\b[^;\\n]*[\\]}]\\s*=(?!=|>)`, "g");
   pattern.lastIndex = after;
   return pattern.exec(code)?.index ?? Number.POSITIVE_INFINITY;
 }
 
-function callArgumentNames(slice) {
-  const body = slice.slice(slice.indexOf("(") + 1, -1);
-  return [...body.matchAll(/(?:^|,)\s*([a-z_$][a-z0-9_$]*)\s*(?=,|$)/gi)].map((match) => match[1]);
-}
+
 
 function callableSlices(code, strings, callables) {
   const calls = [];
   const assertions = assertionSlices(code);
+  const declarations = constantDeclarations(code);
   for (const callable of callables) {
     const pattern = new RegExp(`\\b${escapeRegex(callable)}\\s*\\(`, "g");
     for (const match of code.matchAll(pattern)) {
@@ -356,7 +351,7 @@ function callableSlices(code, strings, callables) {
       const end = balancedCallEnd(code, open);
       if (end < 0) continue;
       const slice = code.slice(match.index, end);
-      const values = [...slice.matchAll(/__pi_bound_string_[0-9]+__/g)]
+      let values = [...slice.matchAll(/__pi_bound_string_[0-9]+__/g)]
         .map((item) => boundStringValue(item[0], strings)).filter((item) => typeof item === "string");
       const argumentNames = callArgumentNames(slice);
       const resultNames = [...new Set(assignedCallNames(code, match.index))];
@@ -373,35 +368,37 @@ function callableSlices(code, strings, callables) {
         [...assertion.code.matchAll(/__pi_bound_string_[0-9]+__/g)]
           .map((item) => boundStringValue(item[0], strings)).filter((item) => typeof item === "string")
       ));
-      if (boundAssertions.length > 0) calls.push({
+      const call = {
         callable,
         slice, values, strings, resultNames, argumentNames, assertionValues, prelude: code.slice(0, match.index),
         assertions: boundAssertions.map((item) => item.code),
-        descriptions: enclosingTestDescriptions(code, strings, match.index)
-      });
+        descriptions: enclosingTestDescriptions(code, strings, match.index),
+        code, declarations, start: match.index, end,
+        safeScope: unconditionalEvidenceScope(code, match.index),
+        scopedAssertions: boundAssertions.filter((assertion) => unconditionalEvidenceScope(code, assertion.start)
+          && sameScope(braceScope(code, assertion.start), braceScope(code, match.index)))
+      };
+      const callableRoot = callable.split(".")[0];
+      const callScope = braceScope(code, match.index);
+      if (declarations.some((entry) => entry.name === callableRoot && entry.start < match.index
+        && entry.scope.every((open, index) => callScope[index] === open))) call.safeScope = false;
+      for (const shadow of code.matchAll(new RegExp(`\\b(?:function|class)\\s+${escapeRegex(callableRoot)}\\b`, "g"))) {
+        if (braceScope(code, shadow.index).every((open, index) => callScope[index] === open)) call.safeScope = false;
+      }
+      const argumentsList = splitTopLevel(slice.slice(slice.indexOf("(") + 1, -1));
+      if (call.safeScope && argumentsList.length === 1 && /^[a-z_$][a-z0-9_$]*$/i.test(argumentsList[0])) {
+        const literal = literalBinding(call, argumentsList[0], match.index);
+        if (literal?.kind === "array" && literal.elements.every((item) => typeof item.value === "string")) {
+          call.values = literal.elements.map((item) => item.value);
+          call.assertions = call.scopedAssertions.map((assertion) => assertion.code);
+        }
+      }
+      if (boundAssertions.length > 0) calls.push(call);
     }
   }
   return calls;
 }
 
-function splitTopLevel(value) {
-  const parts = [];
-  let start = 0, round = 0, square = 0, curly = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    const token = value[index];
-    if (token === "(") round += 1;
-    else if (token === ")") round -= 1;
-    else if (token === "[") square += 1;
-    else if (token === "]") square -= 1;
-    else if (token === "{") curly += 1;
-    else if (token === "}") curly -= 1;
-    else if (token === "," && round === 0 && square === 0 && curly === 0) {
-      parts.push(value.slice(start, index).trim()); start = index + 1;
-    }
-  }
-  parts.push(value.slice(start).trim());
-  return parts;
-}
 
 function assertionComparisons(call) {
   return call.assertions.flatMap((assertion) => {
@@ -424,12 +421,6 @@ function assertionComparisons(call) {
   });
 }
 
-function exactBoundValue(expression, strings) {
-  const value = String(expression ?? "").trim();
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return boundStringValue(value, strings);
-}
 
 function propertyExpression(objectExpression, property, strings) {
   const value = String(objectExpression ?? "").trim();
@@ -523,6 +514,8 @@ function repeatedFlagExpectedValue(values) {
 
 function preCallSnapshotName(call, argument) {
   const escaped = escapeRegex(argument);
+  const objectSnapshot = flatObjectSnapshot(call, argument, assertionComparisons);
+  if (objectSnapshot) return objectSnapshot.name;
   const deepPatterns = [
     new RegExp(`\\b(?:const|let)\\s+([a-z_$][a-z0-9_$]*)\\s*=\\s*structuredClone\\s*\\(\\s*${escaped}\\s*\\)`, "gi"),
     new RegExp(`\\b(?:const|let)\\s+([a-z_$][a-z0-9_$]*)\\s*=\\s*JSON\\.parse\\s*\\(\\s*JSON\\.stringify\\s*\\(\\s*${escaped}\\s*\\)\\s*\\)`, "gi")
@@ -545,16 +538,22 @@ function preCallSnapshotName(call, argument) {
   return shallowPatterns.flatMap((pattern) => [...call.prelude.matchAll(pattern)].map((match) => match[1])).at(-1);
 }
 
-function nonMutationAssertion(call) {
-  return call.argumentNames.some((argument) => {
+function nonMutationAssertion(call, requireAll = false) {
+  const argumentsList = splitTopLevel(call.slice.slice(call.slice.indexOf("(") + 1, -1));
+  if (requireAll && (call.argumentNames.length !== argumentsList.length || !call.safeScope)) return false;
+  const provesArgument = (argument) => {
+    if (requireAll && literalBinding(call, argument, call.start)?.kind === "primitive") return true;
     const snapshot = preCallSnapshotName(call, argument);
     if (!snapshot) return false;
-    return call.assertions.some((assertion) => (
+    const assertions = requireAll ? call.scopedAssertions.map((entry) => entry.code) : call.assertions;
+    return assertions.some((assertion) => (
       new RegExp(`\\bassert\\.(?:deepEqual|deepStrictEqual|strictEqual)\\s*\\(\\s*${escapeRegex(argument)}\\s*,\\s*${escapeRegex(snapshot)}\\b`, "i").test(assertion)
       || new RegExp(`\\bexpect\\s*\\(\\s*${escapeRegex(argument)}\\s*\\)\\s*\\.to(?:Strict)?Equal\\s*\\(\\s*${escapeRegex(snapshot)}\\b`, "i").test(assertion)
     ));
-  });
+  };
+  return call.argumentNames.length > 0 && (requireAll ? call.argumentNames.every(provesArgument) : call.argumentNames.some(provesArgument));
 }
+
 
 function primitiveContractParameters(task) {
   const contracts = new Map();
@@ -913,8 +912,9 @@ function criterionConjunctMatches(task, rawCriterion, profiles, corpus) {
       return expected !== undefined && assertedFlagValue(call, expected.name.slice(2), expected.value);
     }));
   }
-  if (/\b(?:do not|must not|without)\s+mutat|\b(?:do not|must not)\s+[^.;]{0,100}\bor\s+mutat|\bpreserve\s+(?:the\s+)?input/.test(text)) {
-    requirements.push(calls.some(nonMutationAssertion)
+  if (/\b(?:do not|must not|without)\s+mutat|\b(?:do not|must not)\s+[^.;]{0,100}\bor\s+mutat|\bpreserve\s+(?:the\s+)?input|\binputs? must remain unchanged\b/.test(text)) {
+    const requireAll = /\binputs\b/.test(text);
+    requirements.push(calls.some((call) => nonMutationAssertion(call, requireAll))
       || primitiveNonMutationEvidence(task, profiles, corpus.sourceEntries));
   }
   if (/\b(?:do not|must not|without)\s+add(?:ing)?\s+(?:new\s+)?dependenc/.test(text)) {
