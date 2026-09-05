@@ -931,6 +931,7 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       "test('defaults and validates positive safe-integer limits', () => {",
       "  assert.equal(take(items).length, 20);",
       "  assert.deepEqual(take(items, { limit: 2 }), [0, 1]);",
+      "  assert.deepEqual(items, itemsBefore);",
       "  for (const limit of [0, -1, 1.5]) assert.throws(() => take(items, { limit }), TypeError);",
       "  assert.deepEqual(items, itemsBefore);",
       "});",

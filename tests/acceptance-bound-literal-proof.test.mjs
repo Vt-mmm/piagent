@@ -207,3 +207,91 @@ for (const [label, checks] of [
     ${objectSetup} bucket(event, window); ${checks}
   });` }), ["pending"]);
 });
+
+const takeSource = source + `
+export function take(items, options = {}) {
+  observed();
+  if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('options');
+  const limit = options.limit === undefined ? 20 : options.limit;
+  if (!Number.isSafeInteger(limit) || limit <= 0) throw new TypeError('limit');
+  return items.slice(0, limit);
+}
+`;
+const takeCriterion = "Implement take and focused tests without mutating caller inputs.";
+test("immediate copied primitive-array witness proves immutability independently of later loop", (t) => {
+  assert.deepEqual(prove(t, { code: takeSource, criteria: [takeCriterion], body: `
+    import { take } from '../src/subject.js';
+    const items = Array.from({ length: 25 }, (_, index) => index);
+    const itemsBefore = [...items];
+    test('ordinary examples', () => {
+      assert.equal(take(items).length, 20);
+      assert.deepEqual(take(items, { limit: 2 }), [0, 1]);
+      assert.deepEqual(items, itemsBefore);
+      for (const limit of [null, 0, -1, 1.5]) assert.throws(() => take(items, { limit }), TypeError);
+      assert.deepEqual(items, itemsBefore);
+      assert.throws(() => take(items, null), TypeError);
+    });` }), ["satisfied"]);
+});
+
+test("post-loop-only copied-array witness remains unknown without trusted liveness", (t) => {
+  assert.deepEqual(prove(t, { code: takeSource, criteria: [takeCriterion], body: `
+    import { take } from '../src/subject.js';
+    const items = Array.from({ length: 25 }, (_, index) => index);
+    const itemsBefore = [...items];
+    test('ordinary examples', () => {
+      assert.equal(take(items).length, 20);
+      assert.deepEqual(take(items, { limit: 2 }), [0, 1]);
+      for (const limit of [null, 0, -1, 1.5]) assert.throws(() => take(items, { limit }), TypeError);
+      assert.deepEqual(items, itemsBefore);
+    });` }), ["pending"]);
+});
+
+for (const [label, intervening] of [
+  ["early return in earlier loop", "for (const value of [0]) { return; }"],
+  ["unbraced early return", "for (const value of [0]) return;"],
+  ["unbraced dead snapshot", "if (false)"],
+  ["header object dead snapshot", "if (false && {})"],
+  ["header semicolon dead snapshot", "for (; false;)"]
+]) test(`copied array still abstains for ${label}`, (t) => {
+  const mutating = takeSource.replace("return items.slice(0, limit);", "items.push(99); return items.slice(0, limit);");
+  assert.deepEqual(prove(t, { code: mutating, criteria: [takeCriterion], body: `
+    import { take } from '../src/subject.js';
+    const items = Array.from({ length: 25 }, (_, index) => index);
+    const itemsBefore = [...items];
+    test('ordinary examples', () => {
+      take(items); ${intervening} assert.deepEqual(items, itemsBefore);
+    });` }), ["pending"]);
+});
+
+for (const [label, setup, loop, comparison = "assert.deepEqual(items, itemsBefore);"] of [
+  ["dead comparison after valid loop", "", "for (const limit of [0]) assert.throws(() => take(items, { limit }), TypeError);", "if (false) assert.deepEqual(items, itemsBefore);"],
+  ["false branch wrapping valid loop", "", "if (false) for (const limit of [0]) assert.throws(() => take(items, { limit }), TypeError);"],
+  ["short-circuit preceding valid loop", "false && assert.equal(1, 2);", "for (const limit of [0]) assert.throws(() => take(items, { limit }), TypeError);"],
+  ["callback block", "", "for (const limit of [0]) assert.throws(() => { take(items, { limit }); }, TypeError);"],
+  ["extra loop statement", "", "for (const limit of [0]) { assert.throws(() => take(items, { limit }), TypeError); Math.abs(limit); }"],
+  ["shadowed assertion", "const assert = { throws() {}, deepEqual() {} };", "for (const limit of [0]) assert.throws(() => take(items, { limit }), TypeError);"],
+  ["empty literal loop", "", "for (const limit of []) assert.throws(() => take(items, { limit }), TypeError);"]
+]) test(`unsupported loop continuation stays unproven for ${label}`, (t) => {
+  assert.deepEqual(prove(t, { code: takeSource, criteria: [takeCriterion], body: `
+    import { take } from '../src/subject.js';
+    const items = Array.from({ length: 25 }, (_, index) => index);
+    const itemsBefore = [...items];
+    test('ordinary examples', () => {
+      ${setup} take(items); ${loop} ${comparison}
+    });` }), ["pending"]);
+});
+
+for (const helper of [false, true]) test(`early process exit ${helper ? "through helper" : "in callback target"} cannot prove post-loop input stability`, (t) => {
+  let code = takeSource.replace("return items.slice(0, limit);", "items.push(99); return items.slice(0, limit);");
+  if (helper) code += "\nexport function stop() { process.exit(0); }\n";
+  else code = code.replace("throw new TypeError('limit');", "process.exit(0);");
+  assert.deepEqual(prove(t, { code, criteria: [takeCriterion], body: `
+    import { take${helper ? ", stop" : ""} } from '../src/subject.js';
+    const items = Array.from({ length: 25 }, (_, index) => index);
+    const itemsBefore = [...items];
+    test('ordinary examples', () => {
+      take(items);
+      for (const limit of [null, 0, -1, 1.5]) assert.throws(() => ${helper ? "stop" : "take"}(items, { limit }), TypeError);
+      assert.deepEqual(items, itemsBefore);
+    });` }), ["pending"]);
+});

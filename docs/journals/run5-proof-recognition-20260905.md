@@ -40,6 +40,20 @@ the source tree; these focused results alone do not qualify a paid campaign.
 
 ## Explicit residual work
 
+Full offline qualification on clean `167fc5e` found one failing repair-flow
+test (the runner counts its parent and leaf separately). Its copied input
+snapshot came only after a finite validation loop. An attempted loop-recognition
+exception was rejected by independent review: a callback can mutate the input
+then exit the process with code zero before the snapshot assertion. Node's
+aggregate passing-test count does not establish the named assertion completed.
+The product retains its conservative guard. The fresh repair-flow fixture adds
+an immediate snapshot assertion after valid calls and before the loop, while
+retaining its original post-loop assertion and every invalid-input repair case.
+This supplies a separate live witness; it does not establish general post-loop
+proof support. New process-exit negatives must remain pending. Array generator,
+alias and result-write rules are unchanged. Keep the first full receipt as FAIL
+and require a new clean qualification; never relabel the rejected prototype.
+
 - Billing's conditional `outside`, `late`, and `current` obligations are not
   established by matching a return label. The previously escaped shared period
   also remains unknown. These need independent input/output contract evidence.

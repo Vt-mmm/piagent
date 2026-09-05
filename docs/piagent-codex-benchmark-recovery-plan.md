@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 3.10
+> **Phiên bản:** 3.11
 >
 > **Trạng thái tổng:** OFFLINE_CONTRACT_REMEDIATION — run-5 đã dừng vì P8-GC-01 (đề bài thiếu chi tiết mà grader bắt buộc). Giữ nguyên mọi raw record; không resume/regrade/reuse/merge. Paid gate đóng, mục tiêu 35% chưa được chứng minh.
 >
-> **Cập nhật gần nhất:** 2026-09-05 (sau khi run-5 đóng và thu dọn lúc 04:10:29Z)
+> **Cập nhật gần nhất:** 2026-09-05 (offline full qualification kết thúc lúc 04:40:02Z)
 >
 > **Chế độ thực thi:** paid benchmark local, tuần tự; subagent hỗ trợ các phần triển khai/kiểm thử độc lập được operator cho phép; không cloud task
 >
@@ -30,6 +30,12 @@ Mục này thay thế chỉ dẫn vận hành của v3.9 bên dưới; không h�
 - Sửa theo hướng công bố hợp đồng bắt buộc trong prompt thực sự được giao, giữ các yêu cầu chấm nghiêm ngặt. Kiểm tra độc lập còn phát hiện pagination không bắt lỗi thiếu lower clamp đã có trong đề: thêm assertion và sửa reference tương ứng, không nới oracle hay threshold.
 - Piagent có lỗi hoàn tất quy trình độc lập ở CLI, NDJSON, checkpoint và billing. Không đổi các failure này thành PASS. Chỉ sửa nhận diện bằng chứng có ràng buộc dataflow và xác minh thực thi; trường hợp thiếu test thật vẫn phải chặn.
 - Evidence: `18-autonomous-budget-and-goal/13-run5-stop-incident.v1.json` và `13-run5-raw-inventory.v1.json` niêm phong 1,150 file run-5. Các kết quả kiểm thử sửa mới được bổ sung riêng, không ghi lại receipt cũ. Mục tiêu 35%/không giảm performance vẫn UNPROVEN.
+- Clean checkpoint `167fc5e` đã chạy full offline: 4,823 tests, 4,582 PASS, 239 skipped và 2 failure đếm cả parent/child của **một** test completion-repair. Test có snapshot chỉ sau vòng lặp; scope recognizer nghiêm hơn giữ pending. Bản thử nới loop recognition đã bị review bác vì callback có thể `process.exit(0)` trước assertion mà verifier vẫn exit 0. Giữ guard nghiêm; bổ sung assertion trực tiếp trước loop trong fixture phục hồi, đồng thời giữ nguyên assertion sau loop và toàn bộ invalid-input repair. Đây là cung cấp witness độc lập cho test, **không** giải quyết hỗ trợ proof sau loop nói chung. Giữ full receipt `17-full-offline-clean.v1.json` là FAIL; cần clean qualification mới.
+- Digest `9d137dfb…` thuộc focused trước commit; digest clean `167fc5e` đúng là `ea37543a…` vì sáu file mới chuyển từ untracked sang tracked trong thuật toán bind index mode. `21-candidate-index-correction.v1.json` giải thích cộng thêm; full receipt chứng minh candidate trước/sau không đổi. Không sửa receipt cũ.
+- Local Node byte-profile đã chạy diagnostic và 5 kiểm tra chuyên sâu PASS, không gọi provider, không kéo image hoặc mount paid workspace. Đây không phải approval cho criterion thật, không thay cho 239 skipped trong full suite và không chứng minh completion NDJSON/billing.
+- `22-chat-compound-audit.v1.json` xác nhận chat có 15 clauses gộp thành 3 parent (8/4/3) và một verifier. Release-default không có independent authority để chứng minh các parent; đây là product completion blocker còn mở. Không xóa guard, không chứng minh cả parent chỉ từ một matcher con; mọi conjunct vẫn bắt buộc. Node-family/conditional-proof mở rộng còn là đề xuất offline, chưa triển khai hoặc kích hoạt.
+- **Closure rule chống lặp:** từ candidate kế tiếp, chỉ lỗi làm sai identity, workload, đề–grader, lifecycle, accounting, cleanup hoặc classification mới mở lại source và làm campaign vô hiệu. `pending`, workflow completion failure, grader failure của lời giải, hoặc token/quality không đạt trên một attempt có measurement hợp lệ phải được giữ nguyên để S108 kết luận `FAIL_VALID`; không sửa Piagent giữa campaign và không dùng full benchmark làm integration test.
+- Phạm vi candidate hiện tại đóng ở contract disclosure, grader calibration, conservative proof correction và các test chống false acceptance. Không đưa Node-family/compound-proof feature mới vào freeze này. Mọi cải tiến sản phẩm đó chuyển sang vòng sau dựa trên kết quả S108, tránh đổi candidate trước khi có số đo.
 
 ### Lịch sử checkpoint v3.9 — D-024 tự triển khai trong phạm vi đã cấp
 
