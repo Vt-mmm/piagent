@@ -3,11 +3,11 @@
 
 > **Plan ID:** PBR-2026-09-03
 >
-> **Phiên bản:** 3.7
+> **Phiên bản:** 3.8
 >
-> **Trạng thái tổng:** IN_PROGRESS — P8 run-3 S12 có 12/12 record hợp lệ nhưng resume S18 dừng trước provider do P8-BS-01; fix bootstrap đã verify/commit, paid đóng trong khi đồng bộ Plan và làm P7/S0 cuối cho fresh run-4 trước D-021
+> **Trạng thái tổng:** OFFLINE_REMEDIATION — run-4 đã dừng INVALID_MEASUREMENT do P8-SR-01; D-022 chỉ duyệt sửa và xác thực bộ chấm offline. Paid đóng; không resume, regrade, reuse hoặc merge run-4.
 >
-> **Cập nhật gần nhất:** 2026-09-04T16:47:14Z (2026-09-04T23:47:14+07:00)
+> **Cập nhật gần nhất:** 2026-09-04T23:00:00Z (2026-09-05T06:00:00+07:00)
 >
 > **Chế độ thực thi:** paid benchmark một agent, local, tuần tự; provider-free read-only audit có thể song song; không cloud task
 >
@@ -15,9 +15,21 @@
 >
 > **Baseline lúc lập plan:** commit de5efed65aa7c24f7d0729d6a10bc5869f5b151b; tree 2c1c28f7ba5c88330ae260b94e6be4b1edd4b1c9
 >
-> **Phase kế tiếp:** commit bản Plan đồng bộ cuối, chạy lại exact full provider-free gate và four-lane S0 trên absent run-4; sau đó xin D-021 `134→146` trước mọi paid session
+> **Phase kế tiếp:** hoàn thành kiểm thử bộ chấm offline và review độc lập; đóng checkpoint bằng chứng. Không chạy S0/preflight/provider trong D-022; mọi replacement cần quyết định mới sau khi xử lý unknown usage và ngân sách.
 
 Tài liệu này là **Plan of Record** duy nhất cho đợt phục hồi benchmark. Mục đích là giúp triển khai và tracking theo bằng chứng, không tiếp tục sửa theo triệu chứng hoặc chạy provider để dò lỗi.
+
+### Checkpoint hiện hành — D-022 chỉ offline
+
+Mục này thay thế trạng thái vận hành và chỉ dẫn tiếp tục của các mục lịch sử v3.7 bên dưới. Các bảng run-3/run-4/S0/D-021 cũ được giữ để truy vết, không phải lệnh chạy hiện hành. Kết quả xác thực source cuối cùng được niêm phong ngoài Git trong evidence packet, tránh sửa candidate sau khi xác thực.
+
+- D-021 đã được duyệt cho run-4: combined cap `134→146`, tối đa `108` phiên mới. P7/S0 trên runtime hiện hành đã pass trước khi chạy; đó là bằng chứng lịch sử, không xác thực source sửa trong D-022.
+- Run-4 dừng bởi P8-SR-01: `10` provider-started/returned, `9` accepted exact record, `1` interrupted attempt có usage chưa xác định. Lineage là `INVALID_MEASUREMENT`, không resume/regrade/reuse/merge; raw evidence và hash giữ nguyên.
+- Combined P6+P8 đã dùng `48/146`, còn `98` phiên. Một workload mới đủ `108` phiên cần tối thiểu cap `156`; con số này chỉ là phép tính, **chưa được duyệt**. Known fresh subtotal P8 là `559,538`; tổng chính xác chưa xác định do một attempt unknown, không được coi là zero.
+- D-022: operator nói “duyệt em sửa và xác thực bộ chấm hoàn toàn offline trước”. Phạm vi chỉ gồm source fix, fake-provider tests, actual local fixture/grader và review độc lập; không provider, không tăng cap/token, không waiver unknown usage, không push/publish.
+- Sửa P8-SR-01 tập trung provenance câu trả lời cuối từ authoritative event stream, quan sát thao tác không an toàn qua toàn bộ journey, đối xứng lifecycle của refusal Piagent/Codex và giữ exact usage cho failure. Không đổi prompt, oracle, suite workload, threshold hay lịch sử chấm.
+- P4 human-review waiver vẫn `reviewed=false`, `thresholdsLocked=false`; review của subagent không thay thế reviewer A/B. P9/P10 chưa bắt đầu. Source sửa làm freeze cũ hết hiệu lực cho bất kỳ lượt đo mới nào.
+- Evidence hiện hành: `14-offline-refusal-grader-remediation/` dưới packet `/Users/vtamm/.pi/agent/benchmarks/piagent/benchmark-validity-recovery-20260903T164605Z`; approval `00-operator-approval.v1.json` và checkpoint cuối cùng trong phase này là điểm tiếp tục.
 
 ---
 

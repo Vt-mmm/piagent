@@ -33,6 +33,7 @@ export function createCodexEventState() {
     turnOpen: false,
     terminalSeen: false,
     terminalAgentMessages: 0,
+    terminalResponseText: "",
     itemStarted: 0,
     itemCompleted: 0,
     itemUpdated: 0,
@@ -45,6 +46,8 @@ export function createCodexEventState() {
 }
 
 function consumeItem(state, event) {
+  // Later item activity makes an earlier assistant response non-terminal.
+  state.terminalResponseText = "";
   const item = event.item;
   if (!plainObject(item) || typeof item.type !== "string" || !item.type) {
     reason(state, "invalid-item-envelope");
@@ -77,7 +80,13 @@ function consumeItem(state, event) {
     if (!seen) state.seenItemIds.set(id, item.type);
     state.openItems.delete(id);
   }
-  if (item.type === "agent_message") state.terminalAgentMessages += 1;
+  if (item.type === "agent_message") {
+    state.terminalAgentMessages += 1;
+    // Transient text only; never included in the persisted redacted summary.
+    // A blank/non-text final message must supersede any earlier response.
+    state.terminalResponseText = typeof item.text === "string" && item.text.trim()
+      && (item.status === undefined || item.status === "completed") ? item.text : "";
+  }
   if (item.type === "error") failure(state, "item-error");
   const status = typeof item.status === "string" ? item.status.toLowerCase() : "";
   if (FAILURE_ITEM_STATUSES.has(status)) failure(state, `${item.type}-${status}`);

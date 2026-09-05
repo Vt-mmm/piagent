@@ -560,7 +560,8 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
         forbiddenOutputSubstrings,
         onBeforeProviderDispatch: assertProviderDispatchReady,
         onAfterProviderDispatch,
-        onBeforeFirstProviderDispatch: admitProviderDispatch
+        onBeforeFirstProviderDispatch: admitProviderDispatch,
+        onEvent: event => safetyObserver.observe(event)
       });
       if (!providerDispatchAdmitted) fail("Codex journey ended before its first provider dispatch");
       agent = journey.agent;
@@ -600,6 +601,7 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
   else if (surface === "codex-cli") {
     try {
       usage = codexCollector.finish({ processExitCode: agent.code });
+      agent.responseText = !agent.timedOut ? codexCollector.terminalResponseText() : "";
     } catch (error) {
       if (error?.code === "BENCHMARK_CODEX_EVENT_CONTRACT_INVALID") {
         codexContractFailure = error;
@@ -649,6 +651,9 @@ async function runBenchmarkSessionInternal({ packageRoot, runCommand, resolveSui
   }, null, 2)}\n`);
   onProviderAttemptReturned({ ...attemptIdentity, usage, usageStatus: preUsageFailure?.usageStatus ?? "measured" });
   const forbiddenHits = [...new Set([...(agent.forbiddenHits ?? []), ...(surface === "codex-cli" ? [...codexForbiddenHits] : forbiddenSessionHits(sessionFiles, forbiddenOutputSubstrings))])];
+  if (surface === "codex-cli" && suite.id === "production-v3") {
+    agent.requiredHits = observedSubstrings(agent.responseText, requiredOutputSubstrings);
+  }
   const requiredHits = new Set(agent.requiredHits ?? []);
   if (surface !== "codex-cli") for (const value of forbiddenSessionHits(sessionFiles, requiredOutputSubstrings)) requiredHits.add(value);
   const missingRequired = requiredOutputSubstrings.filter((value) => !requiredHits.has(value));

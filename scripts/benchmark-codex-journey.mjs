@@ -145,7 +145,8 @@ export async function runCodexUserJourney({
   forbiddenOutputSubstrings,
   onBeforeProviderDispatch,
   onAfterProviderDispatch,
-  onBeforeFirstProviderDispatch
+  onBeforeFirstProviderDispatch,
+  onEvent = () => {}
 }) {
   if (typeof onBeforeProviderDispatch !== "function"
     || typeof onAfterProviderDispatch !== "function"
@@ -167,7 +168,7 @@ export async function runCodexUserJourney({
     } catch (error) { await failAfterUnresolvedDisposal(error, materialized); }
   }
   const started = Date.now(), deadline = started + timeoutMs;
-  const outputs = [], errors = [], usages = [], diagnostics = [], turnReceipts = [];
+  const outputs = [], responses = [], errors = [], usages = [], diagnostics = [], turnReceipts = [];
   const forbiddenHits = new Set();
   let threadId = null, code = 0, signal = null, timedOut = false, providerDispatchAdmitted = false,
     fatalProviderBoundaryError = null, fatalProviderBoundaryPhase = null;
@@ -200,7 +201,10 @@ export async function runCodexUserJourney({
         thinkingLevel: options.thinking,
         requestedServiceTier: options.serviceTier,
         eventContract: options.codexBaseline === "stock" ? "production-v3" : undefined,
-        onEvent: event => inspectForbiddenValue(event, forbiddenOutputSubstrings, turnForbiddenHits)
+        onEvent: event => {
+          inspectForbiddenValue(event, forbiddenOutputSubstrings, turnForbiddenHits);
+          onEvent(event);
+        }
       });
       const timing = createDeferredBenchmarkTimingCollector({ surface: "codex-cli" });
       let turnScopedBroker = scopedBrokers?.[index];
@@ -326,6 +330,7 @@ export async function runCodexUserJourney({
           }
           threadId ??= turnUsage.providerSessionId;
           usages.push(turnUsage);
+          responses.push(collector.terminalResponseText());
         } catch (error) {
           diagnostics.push({ type: "journey-usage", message: error instanceof Error ? error.message : String(error) });
           turnUsage = null;
@@ -379,6 +384,8 @@ export async function runCodexUserJourney({
       signal,
       timedOut,
       stdout: outputs.join("\n"),
+      responseText: code === 0 && !timedOut && turnReceipts.length === turns.length
+        ? responses.at(-1) ?? "" : "",
       stderr: errors.filter(Boolean).join("\n"),
       durationSeconds: (Date.now() - started) / 1000,
       forbiddenHits: [...forbiddenHits],

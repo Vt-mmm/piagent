@@ -588,6 +588,8 @@ function finishCodexUsage(state, processExitCode) {
   if (state.eventContract === "production-v3" && lifecycle.outcome.runValidity !== "valid") {
     throw codexContractError(`Codex JSONL event contract is invalid: ${lifecycle.outcome.reasonCodes.join(", ")}`, lifecycle, usage);
   }
+  state.terminalResponseText = lifecycle.outcome.terminalStatus === "completed" && processExitCode === 0
+    ? state.eventState.terminalResponseText : "";
   return usage;
 }
 
@@ -613,6 +615,7 @@ export function createCodexExecJsonlCollector(options = {}) {
     eventContract: options.eventContract,
     processExitCode: options.processExitCode,
     eventState: createCodexEventState(),
+    terminalResponseText: "",
     jsonlBytes: 0,
     jsonlHash: createHash("sha256")
   };
@@ -631,6 +634,7 @@ export function createCodexExecJsonlCollector(options = {}) {
   };
   return {
     write(chunk) {
+      state.terminalResponseText = "";
       if (failure) return;
       try {
         const bytes = Buffer.from(chunk);
@@ -649,6 +653,7 @@ export function createCodexExecJsonlCollector(options = {}) {
       }
     },
     finish(finalOptions = {}) {
+      state.terminalResponseText = "";
       if (!failure) buffer += decoder.end();
       if (!failure && buffer) {
         try { consumeLine(buffer); } catch (error) { failure = error; }
@@ -666,7 +671,8 @@ export function createCodexExecJsonlCollector(options = {}) {
     },
     diagnostics() {
       return state.diagnostics.map((item) => ({ ...item }));
-    }
+    },
+    terminalResponseText() { return state.terminalResponseText; }
   };
 }
 
