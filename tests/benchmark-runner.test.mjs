@@ -3141,6 +3141,8 @@ test("refuses to resume a partial ledger that lacks seed metadata", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /missing run-manifest\.json/);
   assert.match(result.stderr, /root seed cannot be recovered safely/);
+  assert.equal(fs.readFileSync(path.join(value.output, "runs.jsonl"), "utf8"), "{}\n");
+  assert.deepEqual(fs.readdirSync(value.output), ["runs.jsonl"], "resume denial must not create or repair evidence");
 });
 
 test("one command compares Piagent with controlled Codex CLI using strict JSONL usage", (t) => {

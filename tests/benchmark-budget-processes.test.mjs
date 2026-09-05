@@ -25,7 +25,7 @@ test("registry targets only registered provider groups and confirms dead groups"
   alive.add(12345); alive.add(99999);
   registry.handleMessage(packet("started"));
   const result = await registry.drain({ termGraceMs: 20, killGraceMs: 20, pollMs: 5 });
-  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.cleanupConfirmed, true, JSON.stringify(result));
   assert.deepEqual(signals, [[12345, "SIGTERM"], [12345, "SIGKILL"]]);
   assert.equal(alive.has(99999), true);
   assert.deepEqual(result.unconfirmedPids, []);
@@ -72,6 +72,69 @@ test("bounded drain reports surviving or uninspectable groups instead of assumin
   }
 });
 
+test("transient permission-denied liveness probes require later conclusive absence", async () => {
+  let probes = 0;
+  const { registry, signals } = fakeRegistry({ groupAlive: () => {
+    probes += 1;
+    if (probes <= 2) throw Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+    return false;
+  } });
+  registry.handleMessage(packet("started"));
+  const result = await registry.drain({ termGraceMs: 10, killGraceMs: 10, pollMs: 5 });
+  assert.equal(result.cleanupConfirmed, true);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.unconfirmedPids, []);
+  assert.deepEqual(signals, [[12345, "SIGTERM"]]);
+  assert.deepEqual(result.livenessProbeFailures, [{ pid: 12345, count: 2, lastErrorCode: "EPERM", latestObservation: "absent" }]);
+});
+
+test("permission-denied or malformed probes cannot substitute for confirmed group absence", async () => {
+  for (const groupAlive of [
+    () => { throw Object.assign(new Error("kill EPERM"), { code: "EPERM" }); },
+    () => undefined
+  ]) {
+    const { registry } = fakeRegistry({ groupAlive, signalGroup: () => {} });
+    registry.handleMessage(packet("started"));
+    const result = await registry.drain({ termGraceMs: 10, killGraceMs: 10, pollMs: 5 });
+    assert.equal(result.cleanupConfirmed, false);
+    assert.deepEqual(result.unconfirmedPids, [12345]);
+    assert.ok(result.errors.includes("process-group-cleanup-unconfirmed"));
+    assert.ok(result.errors.includes("process-group-liveness-unconfirmed"));
+    assert.equal(result.livenessProbeFailures[0].latestObservation, "unknown");
+  }
+});
+
+test("resolved probe diagnostics do not clear protocol or signal failures", async () => {
+  for (const kind of ["protocol", "signal"]) {
+    let probes = 0;
+    const { registry } = fakeRegistry({ groupAlive: () => {
+      if (++probes === 1) throw Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+      return false;
+    }, ...(kind === "signal" ? { signalGroup: () => { throw Object.assign(new Error("not permitted"), { code: "EPERM" }); } } : {}) });
+    registry.handleMessage(packet("started"));
+    if (kind === "protocol") assert.throws(() => registry.handleMessage(packet("started")), /duplicate/);
+    const result = await registry.drain({ termGraceMs: 0, killGraceMs: 0 });
+    assert.equal(result.cleanupConfirmed, false);
+    assert.deepEqual(result.unconfirmedPids, []);
+    assert.ok(result.errors.includes(kind === "protocol" ? "duplicate process registration" : "process-group-signal-unconfirmed"));
+    assert.equal(result.livenessProbeFailures[0].latestObservation, "absent");
+  }
+});
+
+test("a transient unknown followed by a live group still fails bounded cleanup", async () => {
+  let probes = 0;
+  const { registry } = fakeRegistry({ groupAlive: () => {
+    if (++probes === 1) throw Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+    return true;
+  }, signalGroup: () => {} });
+  registry.handleMessage(packet("started"));
+  const result = await registry.drain({ termGraceMs: 10, killGraceMs: 10, pollMs: 5 });
+  assert.equal(result.cleanupConfirmed, false);
+  assert.deepEqual(result.unconfirmedPids, [12345]);
+  assert.ok(result.errors.includes("process-group-cleanup-unconfirmed"));
+  assert.equal(result.livenessProbeFailures[0].latestObservation, "alive");
+});
+
 test("registry rejects late admission after core close and invalid timing bounds", async () => {
   const { registry } = fakeRegistry();
   await registry.drain();
@@ -90,6 +153,6 @@ test("parent kills a registered detached provider even when its event loop ignor
   registry.handleMessage(packet("started", child.pid));
   const result = await registry.drain({ termGraceMs: 40, killGraceMs: 1000, pollMs: 10 });
   await closed;
-  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.cleanupConfirmed, true, JSON.stringify(result));
   assert.ok(result.signals.some(value => value.pid === child.pid && value.signal === "SIGKILL"));
 });

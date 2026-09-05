@@ -124,8 +124,12 @@ async function main() {
   }
   assertBenchmarkLaunchEnvironmentSafe();
   const options = parseBenchmarkArgs(argv);
+  const resumeManifestPath = options.resume ? path.join(options.resume, "run-manifest.json") : null;
+  if (resumeManifestPath && !fs.existsSync(resumeManifestPath)) {
+    throw new Error("Cannot resume benchmark: missing run-manifest.json; the root seed cannot be recovered safely");
+  }
   const resumeManifest = options.resume
-    ? JSON.parse(fs.readFileSync(path.join(options.resume, "run-manifest.json"), "utf8")) : undefined;
+    ? JSON.parse(fs.readFileSync(resumeManifestPath, "utf8")) : undefined;
   const control = readBenchmarkBudgetControl({ options, resumeManifest, sourceRoot: liveRoot });
   if (control && !options.dryRun && !options.preflightOnly) assertBenchmarkBudgetParentReceipts(control);
   const launch = !options.dryRun && !options.preflightOnly

@@ -29,6 +29,7 @@ export function createBenchmarkBudgetProcessRegistry({ stageId, signalGroup = de
   const groups = new Map();
   const errors = [];
   const signals = [];
+  const livenessProbeFailures = new Map();
   let draining = false;
   let drainPromise;
   const note = code => { if (!errors.includes(code)) errors.push(code); };
@@ -39,9 +40,19 @@ export function createBenchmarkBudgetProcessRegistry({ stageId, signalGroup = de
   const inspect = pid => {
     try {
       const result = groupAlive(pid);
-      if (typeof result !== "boolean") throw new Error("invalid liveness result");
+      if (typeof result !== "boolean") throw Object.assign(new Error("invalid liveness result"), { code: "INVALID_LIVENESS_RESULT" });
+      const priorFailure = livenessProbeFailures.get(pid);
+      if (priorFailure) priorFailure.latestObservation = result ? "alive" : "absent";
       return result;
-    } catch { note("process-group-liveness-unconfirmed"); return true; }
+    } catch (error) {
+      // A dying POSIX group can transiently reject kill(group, 0), e.g. EPERM.
+      // This is NEVER proof of exit: retain ownership and retry within the same
+      // bounded drain. Only a later conclusive absent probe can resolve it.
+      const prior = livenessProbeFailures.get(pid);
+      const code = /^[A-Z0-9_]{1,80}$/.test(error?.code ?? "") ? error.code : "UNKNOWN";
+      livenessProbeFailures.set(pid, { pid, count: (prior?.count ?? 0) + 1, lastErrorCode: code, latestObservation: "unknown" });
+      return true;
+    }
   };
   const collectExited = () => {
     for (const [pid, status] of groups) if (status === "active" && !inspect(pid)) groups.set(pid, "closed");
@@ -49,7 +60,8 @@ export function createBenchmarkBudgetProcessRegistry({ stageId, signalGroup = de
   const snapshot = () => {
     const unconfirmedPids = [...groups].filter(([, status]) => status === "active").map(([pid]) => pid);
     return { schemaVersion: 1, stageId, registeredGroups: groups.size, cleanupConfirmed: errors.length === 0 && unconfirmedPids.length === 0,
-      unconfirmedPids, errors: [...errors], signals: signals.map(value => ({ ...value })), draining };
+      unconfirmedPids, errors: [...errors], signals: signals.map(value => ({ ...value })),
+      livenessProbeFailures: [...livenessProbeFailures.values()].map(value => ({ ...value })), draining };
   };
   const terminateAll = signal => {
     if (!["SIGINT", "SIGTERM", "SIGHUP", "SIGKILL"].includes(signal)) fail("unsupported termination signal");
@@ -111,6 +123,7 @@ export function createBenchmarkBudgetProcessRegistry({ stageId, signalGroup = de
           await waitForGroups(killGraceMs, pollMs);
           collectExited();
           if ([...groups.values()].includes("active")) note("process-group-cleanup-unconfirmed");
+          if ([...livenessProbeFailures.values()].some(value => value.latestObservation === "unknown")) note("process-group-liveness-unconfirmed");
           return snapshot();
         })();
       }
