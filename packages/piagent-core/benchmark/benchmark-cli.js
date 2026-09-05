@@ -40,6 +40,8 @@ Options:
   --seed <value>               Reproduce generated hidden variants.
   --timeout <seconds>          Per-agent timeout, 30-3600 seconds.
   --output <directory>         Report directory; must be empty or absent.
+  --budget-policy <file>       Identity-bound management stop thresholds; not a zero-overshoot cap.
+  --budget-state <file>        Durable accounting outside the source/workspace; required with policy.
   --keep-workspaces            Retain isolated workspaces and session logs.
   --replay-failures <report>   Re-run failed scenario/repeat pairs from a prior report.
   --resume <run-directory>     Continue an interrupted/paused run with the same seed.
@@ -113,6 +115,8 @@ export function parseBenchmarkArgs(argv) {
     scenarioIds: undefined,
     timeoutSeconds: undefined,
     output: undefined,
+    budgetPolicy: undefined,
+    budgetState: undefined,
     keepWorkspaces: false,
     replayFailures: undefined,
     replayRuns: undefined,
@@ -260,6 +264,15 @@ export function parseBenchmarkArgs(argv) {
       case "--keep-workspaces":
         options.keepWorkspaces = true;
         break;
+      case "--budget-policy":
+      case "--budget-state": {
+        registeredIncompatible.add(arg);
+        const key = arg === "--budget-policy" ? "budgetPolicy" : "budgetState";
+        if (options[key]) fail(`${arg} may only be supplied once`);
+        options[key] = path.resolve(requireValue(argv, index, arg));
+        index += 1;
+        break;
+      }
       case "--replay-failures":
         registeredIncompatible.add("--replay-failures");
         options.replayFailures = path.resolve(requireValue(argv, index, arg));
@@ -316,6 +329,7 @@ export function parseBenchmarkArgs(argv) {
     }
   }
   if (options.dryRun && options.preflightOnly) fail("--dry-run and --preflight-only are mutually exclusive");
+  if (Boolean(options.budgetPolicy) !== Boolean(options.budgetState)) fail("--budget-policy and --budget-state must be supplied together");
   if (options.preflightOnly && (options.resume || options.replayFailures)) fail("--preflight-only cannot resume or replay a prior run");
   if (options.registeredMeasurement && registeredIncompatible.size > 0) {
     fail(`--registered-measurement cannot be combined with ${[...registeredIncompatible].join(", ")}; its approved registration pins the complete matrix and resources`);

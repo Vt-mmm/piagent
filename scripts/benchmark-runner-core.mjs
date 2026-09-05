@@ -58,8 +58,9 @@ import {
   sameStringList
 } from "./benchmark-runner-support.mjs";
 import { runBenchmarkSession } from "./benchmark-session.mjs";
-import { createRegisteredBenchmarkScopedSessionFactory, registeredBenchmarkScopedSessionRequired
-} from "./benchmark-scoped-session-factory.mjs";
+import { readBenchmarkBudgetControl, assertBenchmarkBudgetBinding, openBenchmarkBudgetCore, createBudgetProviderCallbacks } from "./benchmark-budget-runtime.mjs";
+import { createBenchmarkBudgetProcessHooks } from "./benchmark-budget-ipc.mjs";
+import { createRegisteredBenchmarkScopedSessionFactory, registeredBenchmarkScopedSessionRequired } from "./benchmark-scoped-session-factory.mjs";
 import { assertBenchmarkHostReadinessStartReady, assertExistingBenchmarkHostReadiness, benchmarkHostReadinessPolicyDigest, collectReadyBenchmarkHostReadiness } from "./benchmark-runner-host-readiness.mjs";
 import { applyRegisteredMeasurementOptions, benchmarkMeasurementConfiguration, benchmarkRuntimeCommands,
   registeredMeasurementBinding as measurementBinding
@@ -75,15 +76,13 @@ const webUiAssetIdentity = bootstrapMetadata?.webUiAssets
   ? Object.fromEntries(Object.entries(bootstrapMetadata.webUiAssets).filter(([key]) => key !== "root"))
   : null;
 let interruptedSignal;
-const processController = createBenchmarkProcessController(() => Boolean(interruptedSignal));
+const processController = createBenchmarkProcessController(() => Boolean(interruptedSignal), createBenchmarkBudgetProcessHooks());
 const runCommand = processController.run;
-
 function installSignalForwarding() {
   return bindBenchmarkTerminationSignals({ interrupted: () => Boolean(interruptedSignal),
     interrupt: (signal) => { interruptedSignal = signal; },
     terminateAll: (signal) => processController.terminateAll(signal) });
 }
-
 async function runLegacy(argv) {
   const result = await runCommand("bash", [path.join(packageRoot, "scripts", "quality-benchmark.sh"), ...argv], { cwd: process.cwd(), inherit: true });
   process.exitCode = result.code;
@@ -105,10 +104,11 @@ async function main() {
   if (options.resume && options.output) fail("--resume uses the original report directory; do not pass --output", 1);
   const resumeState = options.resume ? loadResumeState(options.resume) : undefined;
   let releaseRunLock = resumeState?.releaseRunLock;
-  let codexRuntime, productionCampaign, piRuntimeHome, productionAbortFallback = () => {};
+  let codexRuntime, productionCampaign, piRuntimeHome, budgetRuntime, productionAbortFallback = () => {};
   let preservePiRuntime = false;
   try {
   applyBenchmarkResumeOptions(options, resumeState);
+  const budgetControl = readBenchmarkBudgetControl({ options, resumeManifest: resumeState?.manifest, sourceRoot: bootstrapMetadata?.liveRoot ?? packageRoot });
   if (options.replayFailures) {
     const replay = loadReplayFailurePlan(options.replayFailures);
     if (bootstrapMetadata?.replay && replay.source.reportDigest !== bootstrapMetadata.replay.digest) fail("Frozen replay report digest does not match bootstrap metadata", 1);
@@ -247,6 +247,7 @@ async function main() {
       }))
     : executionOrder(suite, options.repeats, options.surfaces, rootSeed);
   const productionSpendControlled = productionFullMatrixRequested;
+  assertBenchmarkBudgetBinding(budgetControl, { options, candidateDigest: candidateGuard.provenance.contentDigest, suiteDigest, fullOrder });
   const productionCampaignRequired = productionSpendControlled && suite.releaseGate?.requireCampaignAccounting === true;
   const providerFreeEvidenceRequired = productionProviderFreeEvidenceRequired({ productionSpendControlled,
     spendControl: productionSpendControl });
@@ -430,6 +431,7 @@ async function main() {
     process.stdout.write(`${plan}${codexPlan}\n  manifest:  ${manifestPath}\nDRY RUN: no model session started.\n`);
     return;
   }
+  if (!options.preflightOnly) budgetRuntime = openBenchmarkBudgetCore(budgetControl);
   if (productionSpendControlled) {
     if (!options.measurementOnly && !registeredMeasurementRun
       && options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
@@ -618,6 +620,7 @@ async function main() {
     codexCredentialIdentity: bootstrapMetadata.codexCredential?.identity ?? null,
     codexCredentialBridge,
     configurationDigest,
+    ...(budgetControl ? { budgetControl: budgetControl.identity } : {}),
     environmentPolicy,
     ...(verificationPlan ? { verificationPlan: { file: options.verificationPlan, identity: verificationPlan.identity } } : {}),
     ...(providerWirePlan ? { providerWirePlanDigest: providerWirePlan.planDigest } : {}),
@@ -704,6 +707,8 @@ async function main() {
   let newRuns = 0;
   try {
     for (const [index, item] of order.entries()) {
+      try { budgetRuntime?.check(); }
+      catch (error) { fatalRunError = error; break; }
       if (manifest.transportCircuitBreaker.state === "open") {
         fatalRunError = new Error(`Transport circuit breaker is open after ${manifest.transportCircuitBreaker.failures} failures; start a new run only after provider health is re-established`);
         break;
@@ -768,17 +773,11 @@ async function main() {
               && registeredBenchmarkScopedSessionRequired(registeredScopedSessionFactory, item.scenario.id)
               ? registeredScopedSessionFactory : undefined,
             piRuntimeHome,
-            systemCommands: {
-              node: runtimeCommands.node.resolvedPath,
-              git: runtimeCommands.git.resolvedPath,
-              bash: runtimeCommands.bash.resolvedPath
-            },
-            suiteDigest,
-            configurationDigest,
-            assertProviderDispatchReady: () => assertProviderBoundary("provider-dispatch"),
+            systemCommands: { node: runtimeCommands.node.resolvedPath, git: runtimeCommands.git.resolvedPath, bash: runtimeCommands.bash.resolvedPath },
+            suiteDigest, configurationDigest,
+            assertProviderDispatchReady: () => { budgetRuntime?.check(); return assertProviderBoundary("provider-dispatch"); },
             onAfterProviderDispatch: () => assertProviderBoundary("provider-return"),
-            onProviderAttemptStart: (attempt) => productionCampaign?.providerStarted(attempt),
-            onProviderAttemptReturned: (attempt) => productionCampaign?.providerReturned(attempt),
+            ...createBudgetProviderCallbacks(budgetRuntime, productionCampaign),
             persistCompletedRecord: (candidate) => stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding, record: candidate, infrastructureFailures, index: fullIndex - 1, expected: item, runId, suite, configurationDigest, runs }),
             rootSeed
           }));
@@ -936,6 +935,7 @@ async function main() {
     suiteDigest, suiteIdentity, terminalStop
   });
   } catch (error) { productionAbortFallback(error); writeProductionResumeAbortIfNeeded(resumeState, error); throw error; } finally {
+    budgetRuntime?.close();
     releaseRunLock?.();
     productionCampaign?.close();
     codexRuntime?.cleanup();

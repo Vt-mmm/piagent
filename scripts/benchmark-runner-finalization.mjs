@@ -9,6 +9,8 @@ import {
 import { codexModelName } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import { publicProductionBenchmarkCampaignEvidence } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import { benchmarkTrustChecklist } from "../packages/piagent-core/benchmark/benchmark-matrix.js";
+import { attachBenchmarkGoalAssessment } from "../packages/piagent-core/benchmark/benchmark-goal-report.js";
+import { renderBenchmarkMarkdown } from "../packages/piagent-core/benchmark/benchmark-report.js";
 import { adjudicateProductionV3Report, applyBenchmarkClaimRestrictions,
   productionV3FatalMeasurementEvidence } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
@@ -40,6 +42,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import { recoverOrphanedBenchmarkAttempts } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { benchmarkResumeCommand, benchmarkRunKey } from "./benchmark-runner-support.mjs";
+import { deferBenchmarkBudgetPublication } from "./benchmark-budget-publication.mjs";
 
 export function benchmarkReportExecutionMode({ options = {}, manifest = {} } = {}) {
   const measurementOnly = options.measurementOnly === true || manifest.measurementOnly === true;
@@ -66,7 +69,8 @@ export function finalizeProductionCampaignClaimOutcome({ productionCampaign, man
   const verdict = /^[a-z0-9._-]{1,120}$/i.test(String(report.verdict?.status ?? ""))
     ? report.verdict.status
     : "unavailable";
-  manifest.campaignEvidence = productionCampaign.finalizeClaim({
+  // The budgeted parent, not the core, owns the final campaign transition.
+  if (!manifest.budgetControl) manifest.campaignEvidence = productionCampaign.finalizeClaim({
     allowed,
     reason: measurementOnly ? "measurement-only-completed-no-release-claim"
       : allowed ? "release-token-claim-allowed" : `release-token-claim-not-allowed:${verdict}`
@@ -89,7 +93,7 @@ export function finalizeProductionCampaignTerminalNoClaim({ productionCampaign, 
 }
 
 export function rollbackProductionCampaignPublication({ productionCampaign, manifest, runRoot, error }) {
-  for (const name of ["report.html", "summary.txt", "report.json"]) {
+  for (const name of ["report.html", "report.md", "summary.txt", "report.json"]) {
     try { fs.rmSync(path.join(runRoot, name), { force: true }); } catch { /* Best effort; campaign authority still fails closed. */ }
   }
   if (!productionCampaign) return null;
@@ -390,8 +394,8 @@ export function finalizeBenchmarkRun(context) {
   try {
     finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot,
       verifiedLedgerRecords: reportLedger.records });
+    attachBenchmarkGoalAssessment({ report, suite, manifest, verifiedLedgerRecords: reportLedger.records });
     report.trustChecklist = benchmarkTrustChecklist(report);
-    text = renderBenchmarkText(report);
     const productionTokenClaimFailed = canonicalProductionSuite
       && suite.releaseGate?.requireEfficiencyClaim === true
       && report.comparison.tokenClaimAllowed !== true;
@@ -402,7 +406,10 @@ export function finalizeBenchmarkRun(context) {
       || report.comparison.workflowGate === false || report.comparison.categoryGate === false
       || report.comparison.suiteGate?.passed === false || productionTokenClaimFailed
       || productionV3VerdictFailed) process.exitCode = 1;
+    deferBenchmarkBudgetPublication({ report, manifest, runRoot });
+    text = renderBenchmarkText(report);
     writePrivate(path.join(runRoot, "report.html"), renderBenchmarkHtml(report));
+    writePrivate(path.join(runRoot, "report.md"), renderBenchmarkMarkdown(report));
     writePrivate(path.join(runRoot, "summary.txt"), text);
     for (const marker of ["paused.json", "stage-diagnostic.json", "interrupted.json", "aborted.json", "stopped.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
     writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);

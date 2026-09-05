@@ -23,7 +23,7 @@ function groupAlive(child) {
   }
 }
 
-export function createBenchmarkProcessController(interrupted) {
+export function createBenchmarkProcessController(interrupted, ownership = {}) {
   const active = new Set();
   const killTimers = new Map();
   const scheduleKill = (child, delay) => {
@@ -58,10 +58,21 @@ export function createBenchmarkProcessController(interrupted) {
       if (killTimer) clearTimeout(killTimer);
       killTimers.delete(child);
     };
-    if (!options.inherit && options.input !== undefined) {
-      child.stdin.on("error", () => { /* Child exit is reported by the process result. */ });
-      child.stdin.end(String(options.input));
-    }
+    let processError, registered = false, registration = Promise.resolve();
+    child.once("spawn", () => {
+      registration = Promise.resolve().then(async () => {
+        await ownership.started?.(child.pid);
+        registered = Boolean(ownership.started);
+        if (!options.inherit && options.input !== undefined && child.exitCode === null && child.signalCode === null) {
+          child.stdin.on("error", () => { /* Child exit is reported by the process result. */ });
+          child.stdin.end(String(options.input));
+        }
+      }).catch(error => {
+        processError = error;
+        terminateGroup(child, "SIGTERM");
+        scheduleKill(child, 500);
+      });
+    });
     let stdout = "";
     let stderr = "";
     const stdoutDigest = crypto.createHash("sha256");
@@ -99,11 +110,10 @@ export function createBenchmarkProcessController(interrupted) {
     let settled = false;
     child.once("error", (error) => {
       if (settled) return;
-      settled = true;
+      processError = error;
       if (timer) clearTimeout(timer);
-      cleanup();
       terminateGroup(child, "SIGTERM");
-      reject(error);
+      if (child.pid) scheduleKill(child, 500);
     });
     child.once("exit", (code, signal) => {
       if (timer) clearTimeout(timer);
@@ -113,10 +123,14 @@ export function createBenchmarkProcessController(interrupted) {
     child.once("close", (code, signal) => {
       if (settled) return;
       if (timer) clearTimeout(timer);
-      const finish = () => {
+      const finish = async () => {
         if (settled) return;
         settled = true;
+        await registration;
+        try { if (registered) await ownership.closed?.(child.pid); }
+        catch (error) { processError ??= error; }
         cleanup();
+        if (processError) { reject(processError); return; }
         resolve({ code: code ?? 1, signal, timedOut, stdout, stdoutHash: options.inherit ? undefined : stdoutDigest.digest("hex"), stderr, forbiddenHits: [...forbiddenHits], requiredHits: [...requiredHits], durationSeconds: (performance.now() - started) / 1000 });
       };
       if (!groupAlive(child)) {

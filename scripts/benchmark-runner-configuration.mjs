@@ -143,6 +143,7 @@ export function benchmarkMeasurementConfiguration({ bootstrapMetadata, candidate
     thinking: options.thinking ?? null, serviceTier: options.serviceTier ?? null,
     codexMode: options.codexMode, codexBaseline: options.codexBaseline, piagentTreatment: options.piagentTreatment,
     allowPiAuthWriteback: options.allowPiAuthWriteback,
+    ...(options.budgetControl ? { budgetControl: options.budgetControl } : {}),
     piCredentialVaultId: bootstrapMetadata.piAgentHome.vaultId, timeoutSeconds: options.timeoutSeconds,
     infrastructureRetries: options.infrastructureRetries, retryDelaySeconds: options.retryDelaySeconds,
     transportCircuitBreaker: BENCHMARK_TRANSPORT_CIRCUIT_POLICY,

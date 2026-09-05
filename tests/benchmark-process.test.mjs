@@ -92,3 +92,42 @@ test("process runner exposes monotonic stdout receipt offsets without changing d
   assert.ok(observations.every((value) => Number.isFinite(value) && value >= 0 && value <= result.durationSeconds));
   assert.ok(observations.every((value, index) => index === 0 || value >= observations[index - 1]));
 });
+
+test("process runner registers ownership before sending input and unregisters after group exit", async () => {
+  const events = [];
+  let registered = false;
+  const controller = createBenchmarkProcessController(() => false, {
+    async started(pid) {
+      assert.ok(pid > 1);
+      await new Promise(resolve => setTimeout(resolve, 30));
+      registered = true; events.push("started");
+    },
+    async closed(pid) {
+      assert.throws(() => process.kill(process.platform === "win32" ? pid : -pid, 0), { code: "ESRCH" });
+      events.push("closed");
+    }
+  });
+  const result = await controller.run(process.execPath, ["-e", "process.stdin.on('data', d => console.log(String(d)));"], {
+    input: "owned-input", timeoutMs: 5_000, onStdoutChunk() { assert.equal(registered, true); }
+  });
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /owned-input/);
+  assert.deepEqual(events, ["started", "closed"]);
+});
+
+test("process runner kills a child when ownership registration fails", async () => {
+  let pid;
+  const controller = createBenchmarkProcessController(() => false, {
+    async started(value) { pid = value; throw new Error("registration denied"); },
+    async closed() { assert.fail("unacknowledged registration cannot be closed"); }
+  });
+  await assert.rejects(controller.run(process.execPath, ["-e", "setInterval(()=>{},1000)"], { timeoutMs: 5_000 }), /registration denied/);
+  await waitForProcessExit(pid);
+});
+
+test("process runner rejects unconfirmed parent cleanup receipts", async () => {
+  const controller = createBenchmarkProcessController(() => false, {
+    async started() {}, async closed() { throw new Error("close denied"); }
+  });
+  await assert.rejects(controller.run(process.execPath, ["-e", ""], { timeoutMs: 5_000 }), /close denied/);
+});

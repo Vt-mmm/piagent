@@ -163,7 +163,7 @@ test("publication rollback removes favorable reports and durably invalidates sea
   passing.providerReturned({ ...attempt("passing"), usage: usage(10), usageStatus: "measured" });
   passing.sealForClaim([acceptedRun(attempt("passing"))]);
   passing.finalizeClaim({ allowed: true, reason: "release-token-claim-allowed" });
-  for (const name of ["report.html", "summary.txt", "report.json"]) {
+  for (const name of ["report.html", "report.md", "summary.txt", "report.json"]) {
     fs.writeFileSync(path.join(passingValue.runRoot, name), "stale favorable result\n", { mode: 0o600 });
   }
   const manifest = { schemaVersion: 1, runId: passingValue.runId };
@@ -176,7 +176,7 @@ test("publication rollback removes favorable reports and durably invalidates sea
   assert.equal(evidence.status, "no-claim");
   assert.equal(evidence.claimOutcome.allowed, false);
   assert.equal(evidence.claimOutcome.reason, "publication-failed:BENCHMARK_PUBLICATION_FAILED");
-  for (const name of ["report.html", "summary.txt", "report.json"]) {
+  for (const name of ["report.html", "report.md", "summary.txt", "report.json"]) {
     assert.equal(fs.existsSync(path.join(passingValue.runRoot, name)), false);
   }
   const persisted = JSON.parse(fs.readFileSync(path.join(passingValue.runRoot, "run-manifest.json"), "utf8"));
