@@ -47,7 +47,7 @@ test("compiler plan v2 binds the public Node profile and finite invocation data 
     ] }
   ] };
   const compiled = compileIndependentContract(JSON.stringify(input)), request = JSON.parse(compiled.requestText);
-  assert.equal(compiled.version, "bounded-node-profile-contract-comparison-v1");
+  assert.equal(compiled.version, "bounded-node-profile-contract-comparison-v3");
   assert.deepEqual(request.profile, expectedNodeProfile());
   assert.ok(request.cases.every(item => !Object.hasOwn(item, "expected")));
   for (const mutate of [value => { value.profile.digest = "0".repeat(64); }, value => { delete value.checks[0].cases[0].invocation; },

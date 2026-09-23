@@ -9,8 +9,8 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.6.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
+npm install -g --ignore-scripts @piagent/platform@1.7.0
 piagent-install --stable
 cd /path/to/project
 pi
@@ -26,7 +26,7 @@ pi
 ## Prerequisites
 
 - Node.js >=22.19.0.
-- Pi Coding Agent `0.84.1`.
+- Pi Coding Agent `0.86.1`.
 - Runtime rollout:
   - verified: macOS Apple Silicon + Bash, Linux x64 + Bash;
   - supported target cần smoke trước khi rollout rộng: macOS Intel + Bash, Linux ARM64 + Bash;
@@ -43,8 +43,8 @@ Mặc định team dùng stable helper:
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.6.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
+npm install -g --ignore-scripts @piagent/platform@1.7.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -106,7 +106,7 @@ Version mới nhất được hỏi npm registry nhiều nhất một lần mỗ
 Sequence thủ công vẫn dùng được, và bắt buộc theo thứ tự này — `piagent-install` **fail** nếu Pi host lệch bản pin, nó không tự nâng host:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -118,7 +118,7 @@ Full rollback dùng cùng sequence với `vPREVIOUS`, nhưng exact Pi host phả
 Nếu team publish npm private:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
 pi install npm:@your-scope/platform@x.y.z
 ```
 

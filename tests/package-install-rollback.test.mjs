@@ -218,7 +218,9 @@ describe("full-source package install, upgrade, and rollback", () => {
     assert.match(workflow, /matrix:\s*\n\s*os:\s*\n\s*- ubuntu-latest\s*\n\s*- macos-latest/);
     assert.match(workflow, /node-version:\s*["']22\.19\.0["']/);
     assert.match(workflow, /- name: Install Linux test tools\s*\n\s*if: runner\.os == 'Linux'[\s\S]*apt-get install --yes ripgrep/);
-    assert.match(workflow, /- name: Run policy regression tests\s*\n\s*run: npm test/);
+    assert.match(workflow, /- name: Run local verification\s*\n\s*run: bash scripts\/verify-local\.sh --offline/);
+    const gate = fs.readFileSync(path.join(repositoryRoot, "scripts", "verify-local.sh"), "utf8");
+    assert.ok(gate.includes('node --test --test-concurrency=2 "$ROOT"/tests/*.test.mjs'), "the canonical matrix gate must run the complete regression suite");
     assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
   });
 

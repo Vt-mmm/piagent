@@ -172,3 +172,103 @@ test("proof follows a statically imported renamed callable instead of lexical na
   const result = refreshedFixture(t, { sourceName: "selectJobs", localName: "choose" });
   assert.equal(result.criticalMissing.some((criterion) => criterion.hash === result.receipt.criteria[2].hash), false);
 });
+import { spawnSync as executeFallbackVerifier } from "node:child_process";
+
+// Finite interval records: field identity comes from the task and real imports.
+function intervalFixture(options = {}) {
+  const source = options.source ?? `function whole(value) { return Number.isFinite(value) && Number.isInteger(value); }
+export function classifyArrival(packet, frame) {
+  if (!packet || typeof packet !== 'object' || !frame || typeof frame !== 'object'
+    || ![packet.stamp, packet.receipt, frame.lo, frame.hi, frame.tolerance].every(whole)
+    || frame.tolerance < 0 || frame.lo >= frame.hi) throw new TypeError('invalid interval');
+  if (packet.stamp < frame.lo || packet.stamp >= frame.hi) return 'outside';
+  if (packet.receipt < packet.stamp - frame.tolerance) return 'early';
+  if (packet.receipt >= frame.hi + frame.tolerance) return 'late';
+  return 'current';
+}`;
+  const tests = options.tests ?? `import assert from 'node:assert/strict';
+import test from 'node:test';
+import { classifyArrival } from '../src/interval.js';
+const sample = (changes = {}) => ({ stamp: 10, receipt: 10, ...changes });
+const range = (changes = {}) => ({ lo: 10, hi: 20, tolerance: 2, ...changes });
+test('typed fields and interval relations', () => {
+  for (const invalid of [NaN, Infinity, -Infinity, 0.5, '10', null, undefined]) {
+    for (const field of ['stamp', 'receipt']) assert.throws(() => classifyArrival(sample({ [field]: invalid }), range()), TypeError);
+    for (const field of ['lo', 'hi', 'tolerance']) assert.throws(() => classifyArrival(sample(), range({ [field]: invalid })), TypeError);
+  }
+  assert.throws(() => classifyArrival(sample(), range({ tolerance: -1 })), TypeError);
+  assert.throws(() => classifyArrival(sample(), range({ hi: 10 })), TypeError);
+  assert.throws(() => classifyArrival(sample(), range({ hi: 9 })), TypeError);
+  for (const invalid of [null, undefined, 1, '', {}]) {
+    assert.throws(() => classifyArrival(invalid, range()), TypeError);
+    assert.throws(() => classifyArrival(sample(), invalid), TypeError);
+  }
+});`;
+  const context = options.context ?? 'Preserve `classifyArrival(packet, frame)`. Use the half-open interval `lo <= stamp < hi`. '
+    + '`receipt` is earlier than `stamp` by more than `tolerance`. Receipt at or after `hi + tolerance` is late. '
+    + 'All timestamps and the skew must be finite integers; the skew must be non-negative; require `lo < hi`; malformed values throw `TypeError`.';
+  return {taskText: options.selected ?? 'malformed values throw `TypeError`.', contextText: context,
+    sourceText: source, testText: tests, sourceEntries: [{path:'src/interval.js',text:source}],
+    testEntries: [{path:'test/interval.test.js',text:tests}], namedTargets: options.inferred ? [] : ['classifyArrival']};
+}
+
+function fallbackFixture() {
+  const original=intervalFixture();
+  const context='Preserve `classifyArrival(packet, frame)`. The interval is half-open: `lo <= stamp < hi`. '
+    +'Return `outside` for an occurrence outside that interval. For an in-period event, return `early` when `receipt` is earlier than `stamp` by more than `tolerance`; '
+    +'return `late` when receipt is at or after `hi + tolerance`; otherwise return `current`. '
+    +'All timestamps and the skew must be finite integers, the skew must be non-negative, and the period must have `lo < hi`; malformed values throw `TypeError`.';
+  const tests=original.testText.slice(0,original.testText.indexOf("test('typed"))+"test('default result', () => { assert.equal(classifyArrival(sample({stamp:11,receipt:11}),range()),'current'); });";
+  return {source:original.sourceText,tests,context,selected:'otherwise return `current`.'};
+}
+const fallbackCases=[
+ ['declared default',x=>x,'satisfied'],
+ ['wrong final result',x=>({...x,source:x.source.replace("return 'current';","return 'late';"),tests:x.tests.replace("'current');","'late');") }),'pending'],
+ ['missing typed guard',x=>({...x,source:x.source.replace('packet.receipt, ','')}),'pending'],
+ ['constant result',x=>({...x,source:"export function classifyArrival(packet, frame) { return 'current'; }"}),'pending'],
+ ['wrong outside boundary',x=>({...x,source:x.source.replace('packet.stamp < frame.lo','packet.stamp <= frame.lo')}),'pending'],
+ ['wrong early boundary',x=>({...x,source:x.source.replace('packet.receipt < packet.stamp','packet.receipt <= packet.stamp')}),'pending'],
+ ['wrong late boundary',x=>({...x,source:x.source.replace('packet.receipt >= frame.hi','packet.receipt > frame.hi')}),'pending'],
+ ['late guard absent',x=>({...x,source:x.source.replace("  if (packet.receipt >= frame.hi + frame.tolerance) return 'late';\n",'')}),'pending'],
+ ['late uses wrong offset',x=>({...x,source:x.source.replace('frame.hi + frame.tolerance','frame.hi - frame.tolerance')}),'pending'],
+ ['conditional final expression',x=>({...x,source:x.source.replace("return 'current';","return packet.receipt === 11 ? 'current' : 'late';")}),'pending'],
+ ['unreachable final literal',x=>({...x,source:x.source.replace("return 'current';","if(packet.receipt === 11) return 'current'; return 'late'; return 'current';")}),'pending'],
+ ['reordered earlier branches',x=>({...x,source:x.source.replace(/(  if \(packet.stamp[^\n]+\n)(  if \(packet.receipt <[^\n]+\n)/,'$2$1')}),'pending'],
+ ['detached expected literal',x=>({...x,tests:x.tests.replace("classifyArrival(sample({stamp:11,receipt:11}),range())","'current'")}),'pending'],
+ ['skipped result test',x=>({...x,tests:x.tests.replace("test('default", "test.skip('default") }),'pending'],
+ ['dead result assertion',x=>({...x,tests:x.tests.replace("() => { assert.equal", "() => { return; assert.equal") }),'pending'],
+ ['shadowed target',x=>({...x,tests:x.tests.replace("() => { assert.equal", "() => { const classifyArrival = () => 'current'; assert.equal") }),'pending'],
+ ['altered assertion intrinsic',x=>({...x,tests:x.tests.replace("() => { assert.equal", "() => { assert.equal = () => {}; assert.equal") }),'pending'],
+ ['Array alias mutation',x=>({...x,tests:x.tests.replace("() => { assert.equal", "() => { const borrowed=Array; borrowed.prototype.every=()=>true; assert.equal") }),'pending'],
+ ['factory result overwritten',x=>({...x,tests:x.tests.replace('stamp: 10, receipt: 10, ...changes','...changes, stamp: 10, receipt: 10')}),'pending'],
+ ['wrong observed result domain',x=>({...x,tests:x.tests.replace('stamp:11,receipt:11','stamp:9,receipt:9').replace("'current');","'outside');")}),'pending'],
+ ['context missing earlier branches',x=>({...x,context:'Preserve the API; otherwise return `current`. Malformed values throw `TypeError`.'}),'pending'],
+ ['context has conflicting fallback',x=>({...x,context:x.context+' Otherwise return `other`.'}),'pending'],
+ ['renamed fields and results',x=>{
+   let data=JSON.stringify(x);
+   for(const [from,to] of [['classifyArrival','routeReceipt'],['stamp','emitted'],['receipt','arrived'],['tolerance','allowance'],['packet','record'],['frame','interval'],['current','active'],['outside','excluded'],['early','skewed'],['late','delayed']]) {
+     // Rename literal labels without changing prose such as outside an interval.
+     if(['current','outside','early','late'].includes(from)) data=data.replaceAll('`'+from+'`','`'+to+'`').replaceAll("'"+from+"'","'"+to+"'");
+     else if(from!=='receipt') data=data.replace(new RegExp('\\b'+from+'\\b','g'),to);
+   }
+   return JSON.parse(data);
+ },'satisfied']
+];
+for(const [label,change,expected] of fallbackCases) test(`otherwise literal after actual verifier: ${label}`,t=>{
+  const fixture=change(fallbackFixture()),cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-fallback-receipt-'));
+  t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+  const sourcePath='interval.mjs',testPath='interval.test.mjs',command=`node --test ${testPath}`;
+  fs.writeFileSync(path.join(cwd,sourcePath),fixture.source);
+  fs.writeFileSync(path.join(cwd,testPath),fixture.tests.replace('../src/interval.js','./interval.mjs'));
+  const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(^PI_|^PIAGENT_|^OPENAI_|^ANTHROPIC_|^CODEX_|API_KEY|TOKEN|SECRET|AUTH|NODE_OPTIONS|NODE_TEST_CONTEXT)/.test(key)));
+  const run=executeFallbackVerifier(process.execPath,['--test','--test-reporter=tap',testPath],{cwd,env,encoding:'utf8',timeout:10000});
+  assert.equal(run.status,0,run.stdout+run.stderr);
+  const built=buildAcceptanceReceipt({summary:'Validate the declared otherwise result.',expectedOutput:fixture.context,acceptanceCriteria:[fixture.selected],changeMode:'source-change',source:'runtime'});
+  const digest=versionWorkingTreeHash('9'.repeat(64));
+  const task={...built,acceptanceReceipt:built.receipt,scope:[sourcePath,testPath],criterionGraph:compileCriterionGraph({acceptanceCriteria:built.acceptanceCriteria,scope:[sourcePath,testPath],verifyCommands:[command],changeMode:'source-change',createdAt:'2026-09-07T00:00:00.000Z'}),summary:'Validate the declared otherwise result.',expectedOutput:fixture.context,changeMode:'source-change',workingTreeDigestAlgorithm:'wt-content-v2',changedFiles:[sourcePath,testPath],verifyCommands:[command],
+    verifyEvidence:[{command,exitCode:run.status,observed:true,matchedProfileCommand:true,preWorkingTreeDigest:digest,workingTreeDigest:digest,recordedAt:'2026-09-07T00:00:00.000Z'}]};
+  const refresh=changed=>refreshAcceptanceReceipt(changed,{cwd,currentWorkingTreeDigest:digest});
+  assert.equal(refresh(task).receipt.criteria[0].status,expected);
+  if(expected==='satisfied') for(const changed of [{...task,verifyEvidence:[]},{...task,verifyEvidence:[{...task.verifyEvidence[0],exitCode:1}]},
+    {...task,verifyEvidence:[{...task.verifyEvidence[0],workingTreeDigest:versionWorkingTreeHash('8'.repeat(64))}]}]) assert.equal(refresh(changed).receipt.criteria[0].status,'pending');
+});

@@ -932,3 +932,34 @@ test("rejects self-references and dependency cycles in persisted work plans", ()
     }))
   })).join("; "), /cycle/);
 });
+
+
+for (const failure of ["diff", "enumeration", "disappear"]) {
+  test("working-tree snapshot remains unavailable after a Git probe fault: " + failure, t => {
+    const cwd = fixture(), bin = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-git-probe-"));
+    t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+    t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(cwd, "tracked.txt"), "changed fixture\n");
+    const nativeGit = fs.realpathSync(execFileSync("which", ["git"], { encoding: "utf8" }).trim());
+    const wrapper = ["#!" + process.execPath,
+      "const fs = require('node:fs'); const {spawnSync} = require('node:child_process');",
+      "const args = process.argv.slice(2), failure = " + JSON.stringify(failure) + ";",
+      "if ((failure === 'diff' && args[2] === 'diff') || (failure === 'enumeration' && args[2] === 'ls-files')) process.exit(128);",
+      "const result = spawnSync(" + JSON.stringify(nativeGit) + ", args);",
+      "if (result.stdout) process.stdout.write(result.stdout); if (result.stderr) process.stderr.write(result.stderr);",
+      "if (result.status === 0 && failure === 'disappear' && args[2] === 'rev-parse' && args[3] === '--verify' && args[4] === 'HEAD') fs.renameSync(args[1] + '/.git', args[1] + '/.git-withheld-by-fixture');",
+      "process.exit(result.status ?? 1);", ""].join("\n");
+    fs.writeFileSync(path.join(bin, "git"), wrapper, { mode: 0o700 });
+    const previousPath = process.env.PATH;
+    let snapshot;
+    try {
+      process.env.PATH = bin + path.delimiter + previousPath;
+      snapshot = workingTreeSnapshot(cwd);
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+    assert.equal(workingTreeSnapshotHasUnavailableEvidence(snapshot), true);
+    assert.equal(workingTreeObservation(snapshot).proofCapable, false);
+  });
+}

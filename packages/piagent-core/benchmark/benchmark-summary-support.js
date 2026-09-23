@@ -380,3 +380,29 @@ export function pairedQualityNoninferiorityEvidence({ suite, repeats, baselineRu
     families
   };
 }
+
+export function conditionalBothPassFreshUsage({ suite, repeats, allPairs, pairs, tokenPairs, baselineRuns, candidateRuns, allSuccessfulPairsFreshRatio }) {
+  return {
+    outcomeDefinition: "both-accepted-runs-resolved-including-safety-refusals",
+    usageDefinition: "exact-positive-fresh-same-model-and-thinking",
+    attemptScope: "accepted-attempts-only; all-attempt-costs-remain-in-tokenAccounting",
+    estimator: "geometric-mean-of-candidate-over-baseline-pair-ratios",
+    expectedPairs: suite.scenarios.length * repeats,
+    observedPairs: allPairs.length,
+    bothResolvedPairs: pairs.length,
+    eligiblePairs: tokenPairs.length,
+    excludedUnresolvedPairs: allPairs.length - pairs.length,
+    excludedUsagePairs: pairs.length - tokenPairs.length,
+    unpairedAcceptedRuns: baselineRuns.length + candidateRuns.length - 2 * allPairs.length,
+    ratio: rounded(allSuccessfulPairsFreshRatio, 4),
+    interpretation: "conditional-observation-only; not-overall-token-savings"
+  };
+}
+
+export function benchmarkOutcomePairs(baselineRuns, candidateRuns) {
+  const baselineByKey = new Map(baselineRuns.map((run) => [`${run.scenarioId}:${run.repeat}`, run]));
+  const allPairs = candidateRuns
+    .map((run) => ({ baseline: baselineByKey.get(`${run.scenarioId}:${run.repeat}`), candidate: run }))
+    .filter((pair) => pair.baseline);
+  return allPairs;
+}

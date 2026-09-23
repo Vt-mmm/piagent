@@ -19,6 +19,7 @@ export type RuntimeFactory = (info: PiSessionInfo, runtimeInstanceRef: string,
 export type ScopedBrokerRouter = { toolNames: readonly string[]; extensionFactory: (pi: any) => void;
   beginOperation(identity: WireOperation & { sessionId: string }): (reason: string) => void;
   settlementEvidence(): unknown; assertProviderDispatchReady(): true;
+  discardUnusedSettlement?(identity: { sessionId: string; operationRef: string; messageRequestId: string }): void;
   takeFatalProviderBoundaryError(): Error | null;
   assertOwnership(resourceLoader: any): unknown; dispose(): Promise<void> };
 const MAX_WIRE_JOURNAL_BYTES = 64 * 1024 * 1024;

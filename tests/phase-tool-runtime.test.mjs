@@ -146,7 +146,7 @@ describe("phase tool activation runtime", () => {
     }
     const verify = intendedPhaseTools(hostTools, available, state("verify"));
     assert.ok(verify.includes("bash"));
-    assert.deepEqual(verify.filter((tool) => tool.startsWith("piagent_")), ["piagent_source_checkout"]);
+    assert.deepEqual(verify.filter((tool) => tool.startsWith("piagent_")), ["piagent_wait", "piagent_source_checkout"]);
   });
 
   it("authorizes a runtime-owned normal task into execute before its first mutation with an audited plan skip", (t) => {

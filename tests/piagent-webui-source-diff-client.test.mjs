@@ -41,10 +41,11 @@ async function dirtyBaselineProvider() {
   const cwd = repository();
   fs.writeFileSync(path.join(cwd, "shared.txt"), "DIRTY AT TASK START\nkept\n");
   const baseline = workingTreeSnapshot(cwd);
+  const startedAt = new Date(Date.now() - 5 * 60_000).toISOString();
   let task = {
     ...structuredClone(taskFixture), taskId: "view-diff-task", taskRunId: "view-diff-task-run-1", sessionId: "view-diff-session",
     sessionName: "View diff", baselineChangedFiles: Object.keys(baseline), baselineFileDigests: baseline,
-    createdAt: "2026-08-13T13:00:00.000Z", updatedAt: "2026-08-13T13:00:00.000Z", trace: { outcome: "pending" }
+    createdAt: startedAt, updatedAt: startedAt, trace: { outcome: "pending" }
   };
   task.authoritySnapshot = createBoundTaskAuthority(task);
   await captureTaskBaselineManifest({ projectRoot: cwd, taskId: task.taskId, taskRunId: task.taskRunId,
@@ -192,7 +193,7 @@ describe("Piagent WebUI source tabs and diff projection", () => {
     assert.equal(runtimeOnlySnapshot.sourceChanges.projectionRevision, snapshot.sourceChanges.projectionRevision,
       "runtime event churn must not invalidate the source-only projection");
     assert.equal(runtimeOnlyWorkingTree.snapshotBinding.sourceProjectionRevision, expectedBinding.sourceProjectionRevision);
-    setTaskUpdatedAt("2026-08-13T13:00:01.000Z");
+    setTaskUpdatedAt(new Date(Date.parse(fixture.task().updatedAt) + 1000).toISOString());
     const authorityOnlySnapshot = await provider.snapshot();
     assert.notEqual(authorityOnlySnapshot.revision.taskRevision, runtimeOnlySnapshot.revision.taskRevision);
     assert.equal(authorityOnlySnapshot.sourceChanges.projectionRevision, snapshot.sourceChanges.projectionRevision,

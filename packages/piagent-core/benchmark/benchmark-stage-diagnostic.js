@@ -560,7 +560,8 @@ export function buildBenchmarkStageDiagnostic({
     ? productionProviderFreeEvidenceContextValidationErrors(manifest?.providerFreeEvidence, {
       source: manifest?.sourceIdentity,
       candidateProvenance: manifest?.candidateProvenance,
-      providerFreeConfigurationDigest: manifest?.providerFreeConfigurationDigest
+      providerFreeConfigurationDigest: manifest?.providerFreeConfigurationDigest,
+      treatmentDerivation: manifest?.treatmentDerivation
     })
     : [];
   const providerFreeObservedLaneIds = Array.isArray(manifest?.providerFreeEvidence?.lanes)

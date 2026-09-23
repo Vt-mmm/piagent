@@ -180,6 +180,9 @@ function snapshotReplay(argv, cwd, temporaryRoot) {
   const input = optionValue(argv, "--replay-failures");
   if (!input) return null;
   const origin = path.resolve(cwd, input);
+  if (argv.includes("--failed-attempts-only") && fs.existsSync(path.join(path.dirname(origin), "aborted.json"))) {
+    fail("Failed-only replay cannot snapshot an aborted source run");
+  }
   let bytes;
   let report;
   try {
@@ -502,7 +505,8 @@ function snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay, { 
     catch (error) { if (error?.code === "ENOENT") continue; throw error; }
     copied.push(name);
   }
-  writeBoundJson(path.join(configRoot, "settings.json"), {});
+  // Cache refreshes are provider requests; keep them outside the staged measurement.
+  writeBoundJson(path.join(configRoot, "settings.json"), { cacheWarming: "off" });
   fs.chmodSync(configRoot, 0o500);
   fs.chmodSync(runtimeParent, 0o700);
   const seedIdentity = benchmarkPiHomeConfigIdentity(configRoot, { requiredFileMode: "400" });
@@ -516,7 +520,7 @@ function snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay, { 
   } : null;
   const identity = {
     ...benchmarkPiHomePublicIdentity(configRoot, credentialReadiness.map(({ providerId, type }) => ({ providerId, type }))),
-    settingsPolicy: "deterministic-empty",
+    settingsPolicy: "deterministic-cache-warming-off-v1",
     operatorPackagesAndResources: "excluded"
   };
   return {
@@ -643,6 +647,13 @@ export function snapshotRegisteredBenchmarkMeasurement({ argv, cwd, temporaryRoo
   };
 }
 
+function requestedCandidateTreatment(argv, cwd) {
+  const resume = optionValue(argv, "--resume");
+  const manifest = resume ? jsonFile(path.join(runRootFromResume(resume, cwd), "run-manifest.json"), "resume treatment") : null;
+  return { piagentTreatment: manifest?.piagentTreatment ?? optionValue(argv, "--piagent-treatment"),
+    measurementOnly: manifest ? manifest.measurementOnly === true : argv.includes("--measurement-only") };
+}
+
 export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
   const root = fs.realpathSync(liveRoot);
   let temporaryRoot;
@@ -657,7 +668,7 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
   try {
     const sourceIdentityBefore = gitSourceIdentity(root);
     const candidateRoot = path.join(temporaryRoot, "candidate");
-    const candidate = materializeBenchmarkCandidate(root, candidateRoot);
+    const candidate = materializeBenchmarkCandidate(root, candidateRoot, requestedCandidateTreatment(argv, cwd));
     const sourceIdentityAfter = gitSourceIdentity(root);
     if (JSON.stringify(sourceIdentityBefore) !== JSON.stringify(sourceIdentityAfter)) {
       fail("Benchmark Git source identity changed while the candidate snapshot was being created");
@@ -704,6 +715,7 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
       sourceIdentity: sourceIdentityAfter,
       defaultOutputRoot: piAgentHome.defaultOutputRoot,
       candidateProvenance: candidate.provenance,
+      ...(candidate.treatmentDerivation ? { treatmentDerivation: candidate.treatmentDerivation } : {}),
       candidateIndex,
       runtimeDependencies: runtimeDependencies(candidateRoot, root),
       webUiAssets,

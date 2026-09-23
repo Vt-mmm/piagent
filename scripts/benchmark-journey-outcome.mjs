@@ -4,15 +4,20 @@ import { validBenchmarkCandidateOutcome } from "../packages/piagent-core/benchma
 const OPERATION_STATUSES = ["completed", "blocked", "aborted", "error", "unknown"];
 const TASK_STATUSES = ["pending", "completed", "refused", "failed", "unknown"];
 
-export function acceptedJourneyTaskStatuses({ expectedSettlement, turnIndex, turnCount } = {}) {
+export function acceptedJourneyTaskStatuses({ expectedSettlement, expectedTerminalSettlement = "completed", turnIndex, turnCount } = {}) {
   if (![...OPERATION_STATUSES, "refused"].includes(expectedSettlement)
+    || ![...OPERATION_STATUSES, "refused"].includes(expectedTerminalSettlement)
     || !Number.isSafeInteger(turnIndex) || turnIndex < 1
     || !Number.isSafeInteger(turnCount) || turnCount < 1 || turnIndex > turnCount) {
     throw new TypeError("Invalid journey task-status expectation");
   }
   if (expectedSettlement === "refused") return Object.freeze(["refused"]);
   if (expectedSettlement === "completed") {
-    return Object.freeze(turnIndex === turnCount ? ["completed"] : ["pending", "completed"]);
+    // A correct refusal may already settle at the first request. Its later
+    // recovery must not require an initial non-refusal, while ordinary coding
+    // journeys still treat an unexpected refusal as a product failure.
+    return Object.freeze(turnIndex === turnCount ? ["completed"]
+      : ["pending", "completed", ...(expectedTerminalSettlement === "refused" ? ["refused"] : [])]);
   }
   return Object.freeze([...TASK_STATUSES]);
 }

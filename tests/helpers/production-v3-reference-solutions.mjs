@@ -1,6 +1,6 @@
 const references = {
   "tenant-role-authorization": ["src/backend/auth.js", `export function canManage(user, resource) {
-  return Boolean(user && resource && user.active !== false && user.tenantId && resource.tenantId && user.tenantId === resource.tenantId && ["owner", "admin"].includes(user.role));
+  return Boolean(user && resource && user.active !== false && typeof user.tenantId === "string" && user.tenantId.length > 0 && typeof resource.tenantId === "string" && resource.tenantId.length > 0 && user.tenantId === resource.tenantId && ["owner", "admin"].includes(user.role));
 }
 `],
   "invoice-rounding": ["src/backend/invoice.js", `function integer(value, minimum, maximum = Number.MAX_SAFE_INTEGER) {
@@ -77,9 +77,9 @@ export function requestLifecycleReducer(state = initialRequestState, action) {
 }
 export function includesSearchText(value, query) { return normalizeSearchText(value).includes(normalizeSearchText(query)); }
 `],
-  "pagination-boundary": ["src/frontend/pagination.js", `function integer(value, minimum) { if (!Number.isSafeInteger(value) || value < minimum) throw new TypeError("invalid integer"); return value; }
+  "pagination-boundary": ["src/frontend/pagination.js", `function integer(value, minimum) { if (!Number.isInteger(value) || value < minimum) throw new TypeError("invalid integer"); return value; }
 export function pageCount(totalItems, pageSize) { integer(totalItems, 0); integer(pageSize, 1); return Math.ceil(totalItems / pageSize); }
-export function clampPage(page, totalItems, pageSize) { if (!Number.isSafeInteger(page)) throw new TypeError("invalid page"); const count = pageCount(totalItems, pageSize); return count === 0 ? 0 : Math.max(1, Math.min(page, count)); }
+export function clampPage(page, totalItems, pageSize) { if (!Number.isInteger(page)) throw new TypeError("invalid page"); const count = pageCount(totalItems, pageSize); return count === 0 ? 0 : Math.max(1, Math.min(page, count)); }
 `],
   "quoted-csv": ["src/data/csv.js", `export function parseCsv(input) {
   const rows = []; let row = []; let field = ""; let quoted = false;
@@ -96,7 +96,7 @@ export function clampPage(page, totalItems, pageSize) { if (!Number.isSafeIntege
     else field += char;
   }
   if (quoted) throw new SyntaxError("unterminated quoted field");
-  if (field !== "" || row.length > 0) { row.push(field); rows.push(row); }
+  if (field !== "" || row.length > 0 || text.endsWith('"')) { row.push(field); rows.push(row); }
   return rows;
 }
 `],
@@ -196,7 +196,7 @@ export function reduceWorkflowSession(state = initialWorkflowSession, event) {
 `],
   "bounded-retry": ["src/reliability/retry.js", `export async function retry(operation, options = {}) {
   const maxAttempts = options.maxAttempts ?? 3; const baseDelayMs = options.baseDelayMs ?? 10; const sleep = options.sleep ?? ((delay) => new Promise((resolve) => setTimeout(resolve, delay)));
-  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || !Number.isFinite(baseDelayMs) || baseDelayMs < 0 || typeof operation !== "function" || typeof sleep !== "function") throw new TypeError("invalid retry options");
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || !Number.isFinite(baseDelayMs) || baseDelayMs < 0 || typeof operation !== "function" || typeof sleep !== "function") throw new TypeError("invalid retry options");
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) { try { return await operation(attempt); } catch (error) { if (attempt === maxAttempts) throw error; await sleep(baseDelayMs * (2 ** (attempt - 1))); } }
 }
 `],
@@ -234,7 +234,7 @@ function nowTimestamp(value) {
   }
   throw new TypeError("now must be a millisecond number or Date");
 }
-export function isExpired(expiresAt, now) {
+export function isExpired(expiresAt, now = undefined) {
   const timestamp = expiryTimestamp(expiresAt);
   const current = arguments.length < 2 ? Date.now() : nowTimestamp(now);
   return current >= timestamp;

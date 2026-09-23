@@ -1,3 +1,6 @@
+import { isScopedDocsPolicy, validateScopedDocsPolicy, scopedDocsPlanBinding, prepareScopedDocsAttempt,
+  runScopedDocsVerification, SCOPED_DOCS_RECEIPT, SCOPED_DOCS_WORKER, DOCS_COMMAND_IDS } from "./benchmark-scoped-docs-verifier.mjs";
+import { validateProjectReceipt } from "./benchmark-scoped-project-verification-receipt.mjs";
 import { spawn } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, randomUUID, sign } from "node:crypto";
 import fs from "node:fs";
@@ -14,13 +17,13 @@ const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9_.:-]{1,160}$/;
 const UUID_V4 = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const SAFE_PATH = /^(?!\/)(?!.*\/\/)(?!.*\/$)(?!.*(?:^|\/)(?:\.{1,2}|\.git|\.pi|node_modules)(?:\/|$))[^\\\0-\x1f\x7f:%?#]+$/;
-const RECEIPT_FIELDS = ["version", "kind", "protocol", "verificationId", "action", "attemptId", "broker",
-  "manifestSha256", "capabilityDigest", "planDigest", "requestDigest", "sourceDigest", "environmentDigest",
-  "verifierDigest", "worker", "status", "verdict", "cleanup", "evidence", "startedAtMs", "deadlineAtMs",
-  "settledAtMs", "completionAllowed"];
 const POLICY_FIELDS = ["version", "configuredScripts", "configurationFiles", "syntaxFiles", "testFiles"];
 const EXPECTED_SCRIPTS = Object.freeze({ "type-check": "node scripts/check.mjs", lint: "node scripts/check.mjs",
   test: "node --test test/*.test.js", "test:e2e": "node --test test/*.test.js" });
+// Policy v1 expands this reviewed dependency-free checker into fixed --check
+// invocations. Other script bodies are not equivalent merely because the npm
+// script name stayed unchanged. Keep them outside this fixed policy.
+const FIXED_SYNTAX_CHECKER_SHA256 = "9af8698a75a04abce876f881181d6d9688220b1d0d71f08be98919a033cacdb5";
 const MAX_FILE_BYTES = 64 * 1024, MAX_FOOTPRINT_BYTES = 2 * 1024 * 1024, MAX_OUTPUT_BYTES = 256 * 1024;
 const REAP_GRACE_MS = 250;
 const sha = value => createHash("sha256").update(value).digest("hex");
@@ -77,6 +80,7 @@ function validatePaths(value, minimum, maximum, code) {
   return value;
 }
 function validatePolicy(value) {
+  if (isScopedDocsPolicy(value)) return validateScopedDocsPolicy(value, docsHelpers());
   exact(value, POLICY_FIELDS, "invalid-project-verifier-policy");
   exact(value.configuredScripts, ["type-check", "lint", "test", "test:e2e"], "invalid-project-verifier-policy");
   requireThat(value.version === SCOPED_PROJECT_VERIFIER_POLICY
@@ -129,6 +133,8 @@ function captureFootprint(projectRoot, policy) {
   catch { fail("project-package-json"); }
   requireThat(plain(packageValue?.scripts)
     && JSON.stringify(packageValue.scripts) === JSON.stringify(policy.configuredScripts), "project-configured-scripts");
+  requireThat(files.find(item => item.relativePath === "scripts/check.mjs")?.sha256 === FIXED_SYNTAX_CHECKER_SHA256,
+    "project-configured-checker-unsupported");
   const identity = files.map(({ relativePath, byteLength, sha256 }) => ({ relativePath, byteLength, sha256 }));
   return { files, sourceDigest: sha(JSON.stringify({ version: 1, files: identity })) };
 }
@@ -139,14 +145,20 @@ function stableNodeIdentity(nodeCommand) {
   return { nodeSha256, environmentDigest: sha(JSON.stringify({ version: 1, nodeSha256 })) };
 }
 
+function docsHelpers() { return { exact, validatePaths, validatePolicy, deepFreeze, stableFile, captureFootprint, scopedProjectVerifierDigest }; }
 export function scopedProjectVerifierDigest() {
-  return sha(stableFile(fileURLToPath(import.meta.url), 1024 * 1024, "project-verifier-source-drift"));
+  return sha(JSON.stringify([import.meta.url, new URL("./benchmark-scoped-docs-verifier.mjs", import.meta.url).href,
+    new URL("./benchmark-scoped-project-verification-receipt.mjs", import.meta.url).href]
+    .map(url => ({ name: path.basename(fileURLToPath(url)), sha256: sha(stableFile(fileURLToPath(url),
+      1024 * 1024, "project-verifier-source-drift")) }))));
 }
 
 export function scopedProjectVerificationPlanBinding({ projectRoot, nodeCommand, policy, timeoutMs } = {}) {
   const root = canonicalDirectory(projectRoot, "invalid-project-verifier-root"), approved = validatePolicy(policy);
   requireThat(Number.isSafeInteger(timeoutMs) && timeoutMs >= 25 && timeoutMs <= 30000,
     "invalid-project-verifier-plan");
+  if (isScopedDocsPolicy(approved)) return scopedDocsPlanBinding({ projectRoot: root, nodeCommand, policy: approved,
+    timeoutMs, protocol: SCOPED_PROJECT_VERIFICATION_PROTOCOL, verifierDigest: scopedProjectVerifierDigest() }, docsHelpers());
   const footprint = captureFootprint(root, approved), node = stableNodeIdentity(nodeCommand),
     requestDigest = sha(JSON.stringify(approved)), verifierDigest = scopedProjectVerifierDigest();
   const planDigest = sha(JSON.stringify({ version: 1, protocol: SCOPED_PROJECT_VERIFICATION_PROTOCOL,
@@ -215,6 +227,7 @@ function materializeStage(stage, footprint) {
   }
 }
 async function runPinnedProjectVerification(input) {
+  if (isScopedDocsPolicy(input.policy)) return runScopedDocsVerification(input, docsHelpers());
   let stage = null, cleanupConfirmed = true, result;
   try {
     const footprint = captureFootprint(input.projectRoot, input.policy), node = stableNodeIdentity(input.nodeCommand);
@@ -265,6 +278,8 @@ async function runPinnedProjectVerification(input) {
 }
 
 function normalizeExecution(execution, state) {
+  const docs = isScopedDocsPolicy(state.policy), worker = docs ? SCOPED_DOCS_WORKER : SCOPED_PROJECT_VERIFIER_WORKER,
+    ids = docs ? DOCS_COMMAND_IDS : ["type-check", "lint", "test", "test:e2e"];
   try {
     requireThat(plain(execution) && execution.runId === state.attemptId
       && execution.requestDigest === state.requestDigest && execution.sourceDigest === state.sourceDigest
@@ -278,12 +293,11 @@ function normalizeExecution(execution, state) {
       observation = execution.observation;
       exact(observation, ["schemaVersion", "workerVersion", "verificationRunId", "requestDigest", "sourceDigest",
         "commandSetDigest", "outcome", "commands"], "project-execution-binding-invalid");
-      requireThat(observation.schemaVersion === 1 && observation.workerVersion === SCOPED_PROJECT_VERIFIER_WORKER
+      requireThat(observation.schemaVersion === 1 && observation.workerVersion === worker
         && observation.verificationRunId === state.attemptId && observation.requestDigest === state.requestDigest
         && observation.sourceDigest === state.sourceDigest && observation.commandSetDigest === state.planDigest
         && ["passed", "failed"].includes(observation.outcome) && Array.isArray(observation.commands)
-        && observation.commands.length === 4, "project-execution-binding-invalid");
-      const ids = ["type-check", "lint", "test", "test:e2e"];
+        && observation.commands.length === ids.length, "project-execution-binding-invalid");
       for (const [index, command] of observation.commands.entries()) {
         exact(command, ["id", "invocationCount", "outcome", "outputSha256", "outputBytes"],
           "project-execution-binding-invalid");
@@ -310,40 +324,8 @@ function normalizeExecution(execution, state) {
 }
 
 export function validateScopedProjectVerificationReceipt(receipt) {
-  exact(receipt, RECEIPT_FIELDS, "invalid-verification-receipt");
-  exact(receipt.broker, ["identitySha256", "sourceSha256"], "invalid-verification-receipt");
-  exact(receipt.worker, ["runId", "version"], "invalid-verification-receipt");
-  exact(receipt.cleanup, ["confirmed"], "invalid-verification-receipt");
-  exact(receipt.evidence, ["executionSha256", "observationSha256", "reason", "outcome", "failedCommands"],
-    "invalid-verification-receipt");
-  requireThat(receipt.version === 2 && receipt.kind === SCOPED_PROJECT_VERIFICATION_RECEIPT
-    && receipt.protocol === SCOPED_PROJECT_VERIFICATION_PROTOCOL && typeof receipt.verificationId === "string"
-    && ID.test(receipt.verificationId) && Number.isSafeInteger(receipt.action) && receipt.action > 0
-    && UUID_V4.test(receipt.attemptId) && validHash(receipt.broker.identitySha256)
-    && validHash(receipt.broker.sourceSha256) && [receipt.manifestSha256, receipt.capabilityDigest,
-      receipt.planDigest, receipt.requestDigest, receipt.sourceDigest, receipt.environmentDigest,
-      receipt.verifierDigest, receipt.evidence.executionSha256].every(validHash)
-    && receipt.worker.runId === receipt.attemptId
-    && (receipt.worker.version === null || receipt.worker.version === SCOPED_PROJECT_VERIFIER_WORKER)
-    && ["completed", "timeout", "cancelled", "error"].includes(receipt.status)
-    && ["observation-recorded", "observation-unavailable"].includes(receipt.verdict)
-    && typeof receipt.cleanup.confirmed === "boolean"
-    && (receipt.evidence.observationSha256 === null || validHash(receipt.evidence.observationSha256))
-    && (receipt.evidence.reason === null || typeof receipt.evidence.reason === "string"
-      && /^[a-z0-9-]{1,80}$/.test(receipt.evidence.reason))
-    && (receipt.evidence.outcome === null || ["passed", "failed"].includes(receipt.evidence.outcome))
-    && Array.isArray(receipt.evidence.failedCommands) && receipt.evidence.failedCommands.length <= 4
-    && new Set(receipt.evidence.failedCommands).size === receipt.evidence.failedCommands.length
-    && receipt.evidence.failedCommands.every(item => ["type-check", "lint", "test", "test:e2e"].includes(item))
-    && (receipt.evidence.outcome === "failed") === (receipt.evidence.failedCommands.length > 0)
-    && [receipt.startedAtMs, receipt.deadlineAtMs, receipt.settledAtMs].every(validTime)
-    && receipt.deadlineAtMs >= receipt.startedAtMs && receipt.settledAtMs >= receipt.startedAtMs
-    && receipt.completionAllowed === false, "invalid-verification-receipt");
-  const observed = receipt.status === "completed" && receipt.cleanup.confirmed
-    && receipt.worker.version === SCOPED_PROJECT_VERIFIER_WORKER && validHash(receipt.evidence.observationSha256)
-    && receipt.evidence.reason === null && ["passed", "failed"].includes(receipt.evidence.outcome);
-  requireThat((receipt.verdict === "observation-recorded") === observed, "invalid-verification-receipt");
-  return true;
+  return validateProjectReceipt(receipt, { exact, plain, requireThat, validHash, validTime, validatePaths,
+    HASH, ID, UUID_V4, SCOPED_PROJECT_VERIFICATION_PROTOCOL, SCOPED_PROJECT_VERIFICATION_RECEIPT, SCOPED_PROJECT_VERIFIER_WORKER });
 }
 
 export function createScopedProjectVerificationSupervisor({ manifestSha256, brokerIdentitySha256,
@@ -380,7 +362,8 @@ export function createScopedProjectVerificationSupervisor({ manifestSha256, brok
     return active;
   }
   function envelope(state, normalized, settledAtMs) {
-    const receipt = { version: 2, kind: SCOPED_PROJECT_VERIFICATION_RECEIPT,
+    const docs = isScopedDocsPolicy(state.policy);
+    const receipt = { version: docs ? 3 : 2, kind: docs ? SCOPED_DOCS_RECEIPT : SCOPED_PROJECT_VERIFICATION_RECEIPT,
       protocol: SCOPED_PROJECT_VERIFICATION_PROTOCOL, verificationId: state.verificationId, action: state.action,
       attemptId: state.attemptId, broker: { identitySha256: brokerIdentitySha256, sourceSha256: brokerSourceSha256 },
       manifestSha256, capabilityDigest: state.capabilityDigest, planDigest: state.planDigest,
@@ -394,7 +377,7 @@ export function createScopedProjectVerificationSupervisor({ manifestSha256, brok
         outcome: normalized.observation?.outcome ?? null,
         failedCommands: normalized.observation?.commands.filter(item => item.outcome === "failed").map(item => item.id) ?? [] },
       startedAtMs: state.startedAtMs,
-      deadlineAtMs: state.deadlineAtMs, settledAtMs, completionAllowed: false };
+      deadlineAtMs: state.deadlineAtMs, settledAtMs, completionAllowed: false, ...(docs ? { scope: state.docsScope } : {}) };
     validateScopedProjectVerificationReceipt(receipt);
     return deepFreeze({ receipt, signature: sign(null, Buffer.from(JSON.stringify(receipt)), privateKey).toString("base64") });
   }
@@ -446,7 +429,8 @@ export function createScopedProjectVerificationSupervisor({ manifestSha256, brok
       requireThat(validTime(startedAtMs) && Number.isSafeInteger(startedAtMs + plan.timeoutMs)
         && UUID_V4.test(attemptId), "invalid-supervisor-runtime");
       let expire; const deadlineGate = new Promise(resolve => { expire = resolve; });
-      const state = { ...plan, verificationId: request.verificationId, action: request.action, attemptId,
+      const current = isScopedDocsPolicy(plan.policy) ? prepareScopedDocsAttempt(plan, docsHelpers()) : {};
+      const state = { ...plan, ...current, verificationId: request.verificationId, action: request.action, attemptId,
         startedAtMs, deadlineAtMs: startedAtMs + plan.timeoutMs, controller: new AbortController(), promise: null,
         cancelRequested: false, deadlineExpired: false, deadlineTimer: null, reapTimer: null, deadlineGate };
       active = state; state.deadlineTimer = setTimeout(() => {

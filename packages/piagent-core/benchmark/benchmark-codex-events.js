@@ -41,7 +41,11 @@ export function createCodexEventState() {
     openItems: new Map(),
     seenItemIds: new Map(),
     lifecycleViolations: new Set(),
-    failureSignals: new Set()
+    failureSignals: new Set(),
+    commandFailureSignals: new Set(),
+    pendingCommandFailures: 0,
+    commandFailureEvents: 0,
+    continuedCommandFailureEvents: 0
   };
 }
 
@@ -92,6 +96,20 @@ function consumeItem(state, event) {
   if (FAILURE_ITEM_STATUSES.has(status)) failure(state, `${item.type}-${status}`);
   if (item.type === "command_execution" && Number.isSafeInteger(item.exit_code) && item.exit_code !== 0) {
     failure(state, "command-exit-nonzero");
+  }
+  if (item.type === "command_execution") {
+    const nonzero = Number.isSafeInteger(item.exit_code) && item.exit_code !== 0;
+    if (status === "failed" || nonzero) {
+      state.commandFailureEvents += 1;
+      state.pendingCommandFailures += 1;
+      if (status === "failed") state.commandFailureSignals.add("command_execution-failed");
+      if (nonzero) state.commandFailureSignals.add("command-exit-nonzero");
+    } else if (item.exit_code === 0 && (status === "" || status === "completed")) {
+      // A later successful command is evidence that execution continued, not
+      // that the task is correct. Functional grading remains authoritative.
+      state.continuedCommandFailureEvents += state.pendingCommandFailures;
+      state.pendingCommandFailures = 0;
+    }
   }
 }
 
@@ -155,16 +173,21 @@ export function finishCodexLifecycle(state, { exactUsage, processExitCode } = {}
   if (Number.isInteger(processExitCode) && processExitCode !== 0) failure(state, "process-exit-nonzero");
   const violations = [...state.lifecycleViolations].sort();
   const signals = [...state.failureSignals].sort();
+  const terminalAgentMessage = state.terminalResponseText.trim().length > 0;
+  const continuedCommands = violations.length === 0 && processExitCode === 0 && terminalAgentMessage
+    && state.pendingCommandFailures === 0;
+  const terminalSignals = continuedCommands
+    ? signals.filter(signal => !state.commandFailureSignals.has(signal)) : signals;
   let failureClass = null;
   if (violations.length > 0) {
     const terminalOnly = violations.every(item => ["missing-or-duplicate-turn-terminal", "missing-or-invalid-terminal-usage"].includes(item));
     failureClass = terminalOnly ? "unknown_terminal" : "harness_contract_failure";
-  } else if (signals.length > 0) failureClass = "agent_tool_failure";
-  else if (state.terminalAgentMessages === 0) failureClass = "agent_task_failure";
+  } else if (terminalSignals.length > 0) failureClass = "agent_tool_failure";
+  else if (!terminalAgentMessage) failureClass = "agent_task_failure";
   const runValidity = violations.length > 0 ? "invalid_harness" : "valid";
   const providerStarted = state.turnStarted > 0;
   const summary = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: "codex-exec-jsonl-redacted-event-summary",
     events: state.events,
     eventTypes: sortedObject(state.eventTypes),
@@ -178,6 +201,9 @@ export function finishCodexLifecycle(state, { exactUsage, processExitCode } = {}
       openAtTerminal: state.openItems.size
     },
     failureSignals: signals,
+    terminalFailureSignals: terminalSignals,
+    commandFailureEvents: state.commandFailureEvents,
+    continuedCommandFailureEvents: state.continuedCommandFailureEvents,
     lifecycleViolations: violations,
     rawPayloadStored: false,
     promptsStored: false,
@@ -194,9 +220,9 @@ export function finishCodexLifecycle(state, { exactUsage, processExitCode } = {}
       terminalStatus: runValidity === "valid" ? failureClass ? "failed" : "completed" : "unknown",
       runValidity,
       failureClass,
-      reasonCodes: violations.length > 0 ? violations : signals.length > 0 ? signals
-        : state.terminalAgentMessages === 0 ? ["missing-terminal-agent-message"] : [],
-      terminalAgentMessage: state.terminalAgentMessages > 0,
+      reasonCodes: violations.length > 0 ? violations : terminalSignals.length > 0 ? terminalSignals
+        : !terminalAgentMessage ? ["missing-terminal-agent-message"] : [],
+      terminalAgentMessage,
       countsTowardQuality: runValidity === "valid",
       countsTowardUsage: providerStarted,
       usageStatus: exactUsage === true ? "exact" : providerStarted ? "unknown_post_provider" : "zero_pre_provider"

@@ -63,9 +63,6 @@ jobs:
           pi_version="$(node -p "require('./package.json').peerDependencies['@earendil-works/pi-coding-agent']")"
           npm install --global --ignore-scripts "@earendil-works/pi-coding-agent@$pi_version"
 
-      - name: Build WebUI release assets
-        run: npm run build --workspace @piagent/webui
-
       - name: Install WebUI Chromium
         shell: bash
         run: |
@@ -75,12 +72,8 @@ jobs:
             npx playwright install chromium
           fi
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Run policy regression tests
-        run: npm test
-
+      # The canonical gate builds assets, runs every policy/runtime test,
+      # checks the browser, and typechecks. Run it once per platform.
       - name: Run local verification
         run: bash scripts/verify-local.sh --offline
 

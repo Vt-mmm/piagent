@@ -295,3 +295,537 @@ for (const helper of [false, true]) test(`early process exit ${helper ? "through
       assert.deepEqual(items, itemsBefore);
     });` }), ["pending"]);
 });
+
+for (const clause of ['Do not mutate either argument.', 'Do not mutate both arguments.',
+  'Do not mutate all inputs.', 'Do not mutate either of the arguments.', 'Do not mutate any argument.']) {
+  for (const [label, mutation, checks, expected] of [
+    ['first argument changes', 'event.changed = true;', 'assert.deepEqual(window, beforeWindow);', 'pending'],
+    ['second argument changes', 'window.changed = true;', 'assert.deepEqual(event, beforeEvent);', 'pending'],
+    ['both arguments checked', '', 'assert.deepEqual(event, beforeEvent); assert.deepEqual(window, beforeWindow);', 'satisfied']
+  ]) test(`non-mutation quantifier ${clause}: ${label}`, t => {
+    const code = source.replace('export function classify(event, window) {', `export function classify(event, window) { ${mutation}`);
+    assert.deepEqual(prove(t, { criteria: [clause], code, body: `test('ordinary example', () => {
+      ${objectSetup} bucket(event, window); ${checks}
+    });` }), [expected]);
+  });
+}
+
+const deepSetup = "const event = { at: 15, received: 15 }; const window = { start: 10, end: 20, margin: 2 }; const beforeEvent = structuredClone(event); const beforeWindow = structuredClone(window);";
+const deepChecks = "assert.deepEqual(event, beforeEvent); assert.deepEqual(window, beforeWindow);";
+for (const [label, setup, mutation] of [
+  ['edited snapshot', deepSetup + " beforeWindow.changed = true;", 'window.changed = true;'],
+  ['snapshot alias escape', deepSetup + " const alias = beforeWindow; alias.changed = true;", 'window.changed = true;'],
+  ['shadowed structuredClone', "const structuredClone = value => value; " + deepSetup, 'window.changed = true;'],
+]) test('deep snapshot integrity: ' + label, t => {
+  const code = source.replace('export function classify(event, window) {', 'export function classify(event, window) { ' + mutation);
+  const actual = prove(t, { criteria: [UNCHANGED], code, body: "test('ordinary example', () => { " + setup + " bucket(event, window); " + deepChecks + " });" });
+  t.diagnostic(JSON.stringify({ label, receiptStatus: actual, publicVerifier: 'PASS', inputMutation: mutation }));
+  assert.deepEqual(actual, ['pending']);
+});
+test('deep snapshot integrity: independent deep clones still work', t => {
+  assert.deepEqual(prove(t, { criteria: [UNCHANGED], body: "test('ordinary example', () => { " + deepSetup + " bucket(event, window); " + deepChecks + " });" }), ['satisfied']);
+});
+for (const [label, before, after, checks = deepChecks, mutation = 'window.changed = true;'] of [
+  ['stale capture after later input change', 'window.changed = true;', '', deepChecks, 'delete window.changed;'],
+  ['restored input', '', 'delete window.changed;'],
+  ['restored input through alias', 'const alias = window;', 'delete alias.changed;'],
+  ['comparison message restores input', '', '', 'assert.deepEqual(event, beforeEvent); assert.deepEqual(window, beforeWindow, (delete window.changed, "message"));'],
+  ['local assertion shim', 'const assert = { deepEqual() {} };', ''],
+]) test('deep snapshot temporal control: ' + label, t => {
+  const code = source.replace('export function classify(event, window) {', 'export function classify(event, window) { ' + mutation);
+  const actual = prove(t, { criteria: [UNCHANGED], code, body: "test('ordinary example', () => { " + deepSetup + before + " bucket(event, window); " + after + checks + " });" });
+  assert.deepEqual(actual, ['pending']);
+});
+test('deep snapshot temporal control: source cannot replace the assertion implementation', t => {
+  const code = "import assert from 'node:assert/strict'; assert.deepEqual = function () {};\n" + source.replace('export function classify(event, window) {', 'export function classify(event, window) { window.changed = true;');
+  assert.deepEqual(prove(t, { criteria: [UNCHANGED], code, body: "test('ordinary example', () => { " + deepSetup + " bucket(event, window); " + deepChecks + " });" }), ['pending']);
+});
+test('deep snapshot temporal control: source cannot replace structuredClone with an alias', t => {
+  const code = "globalThis.structuredClone = value => value;\n" + source.replace('export function classify(event, window) {', 'export function classify(event, window) { window.changed = true;');
+  assert.deepEqual(prove(t, { criteria: [UNCHANGED], code, body: "test('ordinary example', () => { " + deepSetup + " bucket(event, window); " + deepChecks + " });" }), ['pending']);
+});
+test('deep snapshot temporal control: native clone cannot silently drop an accessor descriptor', t => {
+  const setup = "const event = { at: 15, received: 15 }; const window = { start: 10, end: 20, margin: 2, get hidden() { return 1; } }; const beforeEvent = structuredClone(event); const beforeWindow = structuredClone(window);";
+  const code = source.replace('export function classify(event, window) {', 'export function classify(event, window) { Object.defineProperty(window, "hidden", {value:1,writable:true,enumerable:true,configurable:true});');
+  assert.deepEqual(prove(t, { criteria: [UNCHANGED], code, body: "test('ordinary example', () => { " + setup + " bucket(event, window); " + deepChecks + " });" }), ['pending']);
+});
+test('deep snapshot temporal control: a primitive result assertion still permits stable clones', t => {
+  assert.deepEqual(prove(t, { criteria: [UNCHANGED], body: "test('ordinary example', () => { " + deepSetup + " assert.equal(bucket(event, window), 'current'); " + deepChecks + " });" }), ['satisfied']);
+});
+test('deep snapshot temporal control: a nested array and identity copy retain the original deep snapshot', t => {
+  const code = source + "\nexport function select(events) { observed(); return [events[2],events[1]]; }\n";
+  const body = "import {select} from '../src/subject.js'; test('ordinary example', () => { const events = [{id:'b',value:{n:1}},{id:'a'},{id:'b'}]; const before = structuredClone(events), identities = [...events]; assert.deepEqual(select(events), [events[2],events[1]]); assert.deepEqual(events,before); events.forEach((event,index) => assert.strictEqual(event,identities[index])); });";
+  assert.deepEqual(prove(t, {criteria:[UNCHANGED],code,body}), ['satisfied']);
+});
+test('deep snapshot temporal control: an escaping assertion method stays unsupported', t => {
+  const body = "test('ordinary example', () => { " + deepSetup + " bucket(event,window); " + deepChecks + " const carrier = () => assert.deepEqual; });";
+  assert.deepEqual(prove(t,{criteria:[UNCHANGED],body}), ['pending']);
+});
+
+// Finite interval records: field identity comes from the task and real imports.
+function intervalFixture(options = {}) {
+  const source = options.source ?? `function whole(value) { return Number.isFinite(value) && Number.isInteger(value); }
+export function classifyArrival(packet, frame) {
+  if (!packet || typeof packet !== 'object' || !frame || typeof frame !== 'object'
+    || ![packet.stamp, packet.receipt, frame.lo, frame.hi, frame.tolerance].every(whole)
+    || frame.tolerance < 0 || frame.lo >= frame.hi) throw new TypeError('invalid interval');
+  if (packet.stamp < frame.lo || packet.stamp >= frame.hi) return 'outside';
+  if (packet.receipt < packet.stamp - frame.tolerance) return 'early';
+  if (packet.receipt >= frame.hi + frame.tolerance) return 'late';
+  return 'current';
+}`;
+  const tests = options.tests ?? `import assert from 'node:assert/strict';
+import test from 'node:test';
+import { classifyArrival } from '../src/interval.js';
+const sample = (changes = {}) => ({ stamp: 10, receipt: 10, ...changes });
+const range = (changes = {}) => ({ lo: 10, hi: 20, tolerance: 2, ...changes });
+test('typed fields and interval relations', () => {
+  for (const invalid of [NaN, Infinity, -Infinity, 0.5, '10', null, undefined]) {
+    for (const field of ['stamp', 'receipt']) assert.throws(() => classifyArrival(sample({ [field]: invalid }), range()), TypeError);
+    for (const field of ['lo', 'hi', 'tolerance']) assert.throws(() => classifyArrival(sample(), range({ [field]: invalid })), TypeError);
+  }
+  assert.throws(() => classifyArrival(sample(), range({ tolerance: -1 })), TypeError);
+  assert.throws(() => classifyArrival(sample(), range({ hi: 10 })), TypeError);
+  assert.throws(() => classifyArrival(sample(), range({ hi: 9 })), TypeError);
+  for (const invalid of [null, undefined, 1, '', {}]) {
+    assert.throws(() => classifyArrival(invalid, range()), TypeError);
+    assert.throws(() => classifyArrival(sample(), invalid), TypeError);
+  }
+});`;
+  const context = options.context ?? 'Preserve `classifyArrival(packet, frame)`. Use the half-open interval `lo <= stamp < hi`. '
+    + '`receipt` is earlier than `stamp` by more than `tolerance`. Receipt at or after `hi + tolerance` is late. '
+    + 'All timestamps and the skew must be finite integers; the skew must be non-negative; require `lo < hi`; malformed values throw `TypeError`.';
+  return {taskText: options.selected ?? 'malformed values throw `TypeError`.', contextText: context,
+    sourceText: source, testText: tests, sourceEntries: [{path:'src/interval.js',text:source}],
+    testEntries: [{path:'test/interval.test.js',text:tests}], namedTargets: options.inferred ? [] : ['classifyArrival']};
+}
+
+function fallbackFixture() {
+  const original=intervalFixture();
+  const context='Preserve `classifyArrival(packet, frame)`. The interval is half-open: `lo <= stamp < hi`. '
+    +'Return `outside` for an occurrence outside that interval. For an in-period event, return `early` when `receipt` is earlier than `stamp` by more than `tolerance`; '
+    +'return `late` when receipt is at or after `hi + tolerance`; otherwise return `current`. '
+    +'All timestamps and the skew must be finite integers, the skew must be non-negative, and the period must have `lo < hi`; malformed values throw `TypeError`.';
+  const tests=original.testText.slice(0,original.testText.indexOf("test('typed"))+"test('default result', () => { assert.equal(classifyArrival(sample({stamp:11,receipt:11}),range()),'current'); });";
+  return {source:original.sourceText,tests,context,selected:'otherwise return `current`.'};
+}
+
+function snapshotFixture() {
+  const fixture=fallbackFixture(),prefix=fixture.tests.slice(0,fixture.tests.indexOf("test('default"));
+  return {...fixture,selected:'Inputs must remain unchanged.',tests:prefix+`test('all outcomes preserve both records', () => {
+  for (const changes of [{}, { stamp: 9 }, { receipt: 7 }, { receipt: 22 }, { receipt: '10' }]) {
+    const input = sample(changes), window = range(), before = structuredClone([input, window]);
+    if (typeof input.receipt === 'string') assert.throws(() => classifyArrival(input, window), TypeError);
+    else classifyArrival(input, window);
+    assert.deepEqual([input, window], before);
+  }
+});`};
+}
+const snapshotCases=[
+ ['five outcomes and both arguments',x=>x,'satisfied'],
+ ['input mutated and restored inside source',x=>({...x,source:x.source.replace("return 'current';","const prior = packet.stamp; packet.stamp = 100; packet.stamp = prior; return 'current';")}),'pending'],
+ ['event mutation hidden by snapshot alias',x=>({...x,source:x.source.replace("return 'current';","packet.stamp += 1; return 'current';"),tests:x.tests.replace('structuredClone([input, window])','[input, window]')}),'pending'],
+ ['period mutation hidden by snapshot alias',x=>({...x,source:x.source.replace("return 'current';","frame.tolerance += 1; return 'current';"),tests:x.tests.replace('structuredClone([input, window])','[input, window]')}),'pending'],
+ ['snapshot aliases both arguments',x=>({...x,tests:x.tests.replace('structuredClone([input, window])','[input, window]')}),'pending'],
+ ['snapshot taken after invocation',x=>({...x,tests:x.tests.replace(', before = structuredClone([input, window])','').replace('    assert.deepEqual','    const before = structuredClone([input, window]); assert.deepEqual')}),'pending'],
+ ['snapshot overwritten with live input',x=>({...x,tests:x.tests.replace('    assert.deepEqual','    before[0] = input; assert.deepEqual')}),'pending'],
+ ['comparison uses actual as expected',x=>({...x,tests:x.tests.replace('assert.deepEqual([input, window], before)','assert.deepEqual([input, window], [input, window])')}),'pending'],
+ ['only first argument compared',x=>({...x,tests:x.tests.replace('assert.deepEqual([input, window], before)','assert.deepEqual(input, before[0])')}),'pending'],
+ ['only second argument compared',x=>({...x,tests:x.tests.replace('assert.deepEqual([input, window], before)','assert.deepEqual(window, before[1])')}),'pending'],
+ ['loop skipped',x=>({...x,tests:x.tests.replace('  for (const changes','  if (false) for (const changes')}),'pending'],
+ ['assertion skipped',x=>({...x,tests:x.tests.replace('    assert.deepEqual','    if (false) assert.deepEqual')}),'pending'],
+ ['whole test skipped',x=>({...x,tests:x.tests.replace("test('all outcomes", "test.skip('all outcomes") }),'pending'],
+ ['current outcome absent',x=>({...x,tests:x.tests.replace('[{}, { stamp: 9 }','[{ stamp: 9 }')}),'pending'],
+ ['outside outcome absent',x=>({...x,tests:x.tests.replace(', { stamp: 9 }','')}),'pending'],
+ ['early outcome absent',x=>({...x,tests:x.tests.replace(', { receipt: 7 }','')}),'pending'],
+ ['late outcome absent',x=>({...x,tests:x.tests.replace(', { receipt: 22 }','')}),'pending'],
+ ['throw outcome absent',x=>({...x,tests:x.tests.replace(", { receipt: '10' }",'')}),'pending'],
+ ['local clone replacement hides source writes',x=>({...x,source:x.source.replace("return 'current';","packet.stamp += 1; return 'current';"),tests:x.tests.replace("test('all outcomes", "const structuredClone = value => value; test('all outcomes") }),'pending'],
+ ['assert replacement hides source writes',x=>({...x,source:x.source.replace("return 'current';","packet.stamp += 1; return 'current';"),tests:x.tests.replace('    assert.deepEqual','    assert.deepEqual = () => {}; assert.deepEqual')}),'pending'],
+ ['factory getter has no literal data ownership',x=>({...x,tests:x.tests.replace('stamp: 10, receipt: 10, ...changes','get stamp() { return 10; }, receipt: 10, ...changes')}),'pending'],
+ ['frozen-only tests lack snapshot evidence',x=>({...x,tests:x.tests.replace('input = sample(changes), window = range()','input = Object.freeze(sample(changes)), window = Object.freeze(range())').replace('    assert.deepEqual([input, window], before);','')}),'pending'],
+ ['clone alias is not the native primitive',x=>({...x,tests:x.tests.replace("test('all outcomes", "const clone = structuredClone; test('all outcomes").replace('before = structuredClone(', 'before = clone(')}),'pending'],
+ ['local window renamed',x=>({...x,tests:x.tests.replaceAll('window','intervalValue')}),'satisfied'],
+ ['strict grouped deep comparison',x=>({...x,tests:x.tests.replace('assert.deepEqual','assert.deepStrictEqual')}),'satisfied'],
+];
+for(const [label,change,expected] of snapshotCases) test(`grouped interval snapshot after actual verifier: ${label}`,t=>{
+  const fixture=change(snapshotFixture()),cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-interval-snapshot-'));
+  t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+  const sourcePath='interval.mjs',testPath='interval.test.mjs',command=`node --test ${testPath}`;
+  fs.writeFileSync(path.join(cwd,sourcePath),fixture.source);fs.writeFileSync(path.join(cwd,testPath),fixture.tests.replace('../src/interval.js','./interval.mjs'));
+  const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(^PI_|^PIAGENT_|^OPENAI_|^ANTHROPIC_|^CODEX_|API_KEY|TOKEN|SECRET|AUTH|NODE_OPTIONS|NODE_TEST_CONTEXT)/.test(key)));
+  const run=spawnSync(process.execPath,['--test','--test-reporter=tap',testPath],{cwd,env,encoding:'utf8',timeout:10000});
+  assert.equal(run.status,0,run.stdout+run.stderr);
+  const built=buildAcceptanceReceipt({summary:'Preserve both input records.',expectedOutput:fixture.context,acceptanceCriteria:[fixture.selected],changeMode:'source-change',source:'runtime'});
+  const digest=versionWorkingTreeHash('7'.repeat(64)),scope=[sourcePath,testPath];
+  const task={...built,acceptanceReceipt:built.receipt,scope,criterionGraph:compileCriterionGraph({acceptanceCriteria:built.acceptanceCriteria,scope,verifyCommands:[command],changeMode:'source-change',createdAt:'2026-09-07T00:00:00.000Z'}),summary:'Preserve both input records.',expectedOutput:fixture.context,changeMode:'source-change',workingTreeDigestAlgorithm:'wt-content-v2',changedFiles:scope,verifyCommands:[command],
+    verifyEvidence:[{command,exitCode:run.status,observed:true,matchedProfileCommand:true,preWorkingTreeDigest:digest,workingTreeDigest:digest,recordedAt:'2026-09-07T00:00:00.000Z'}]};
+  const refresh=changed=>refreshAcceptanceReceipt(changed,{cwd,currentWorkingTreeDigest:digest});
+  assert.equal(refresh(task).receipt.criteria[0].status,expected);
+  if(expected==='satisfied') for(const changed of [{...task,verifyEvidence:[]},{...task,verifyEvidence:[{...task.verifyEvidence[0],exitCode:1}]},
+    {...task,verifyEvidence:[{...task.verifyEvidence[0],workingTreeDigest:versionWorkingTreeHash('6'.repeat(64))}]}]) assert.equal(refresh(changed).receipt.criteria[0].status,'pending');
+});
+import { compileCriterionGraph as compileCachedGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
+
+function cacheFixture(options={}) {
+  const source=options.source ?? `function object(value) { return value && typeof value === 'object' && !Array.isArray(value); }
+function label(value) { return typeof value === 'string' && value.length > 0; }
+function whole(value) { return Number.isFinite(value) && Number.isInteger(value); }
+export function canReuse(grant, query) {
+  if (!object(grant) || !object(query)
+    || ![grant.teamId, grant.subjectId, grant.action, query.teamId, query.subjectId, query.action].every(label)
+    || ![grant.policyRevision, grant.evaluationTime, grant.until, query.currentPolicyRevision, query.at].every(whole)
+    || (query.revocation !== null && !whole(query.revocation))) throw new TypeError('invalid grant');
+  return grant.teamId === query.teamId && grant.subjectId === query.subjectId && grant.action === query.action
+    && grant.policyRevision === query.currentPolicyRevision && grant.evaluationTime <= query.at && query.at < grant.until
+    && !(query.revocation !== null && query.revocation <= query.at);
+}`;
+  const context=options.context ?? 'Preserve `canReuse(grant, query)`. Both inputs have matching non-empty team, subject, and action identifiers; '
+    +'the cached policy revision equals the current policy revision; evaluation is not in the future; and `query.at` is strictly before `grant.until`. '
+    +'A revocation at or before `query.at` invalidates the entry. Validate all time and revision fields as finite integers; '
+    +'`query.revocation` must be either null or a finite integer. Throw `TypeError` for malformed input. Do not mutate either argument.';
+  const imports=`import assert from 'node:assert/strict'; import test from 'node:test'; import {canReuse} from '../src/grant.js';
+const makeGrant = (changes = {}) => ({ teamId:'north',subjectId:'person',action:'edit',policyRevision:3,evaluationTime:10,until:20,...changes });
+const makeQuery = (changes = {}) => ({ teamId:'north',subjectId:'person',action:'edit',currentPolicyRevision:3,at:10,revocation:null,...changes });\n`;
+  const matrix=`test('object and every declared field', () => {
+ for(const invalid of [null,undefined,[],1,'',{}]) {
+  assert.throws(()=>canReuse(invalid,makeQuery()),TypeError); assert.throws(()=>canReuse(makeGrant(),invalid),TypeError);
+ }
+ for(const field of ['teamId','subjectId','action']) for(const invalid of ['',null,1,undefined]) {
+  assert.throws(()=>canReuse(makeGrant({[field]:invalid}),makeQuery()),TypeError);
+  assert.throws(()=>canReuse(makeGrant(),makeQuery({[field]:invalid})),TypeError);
+ }
+ for(const invalid of [NaN,Infinity,-Infinity,0.25,'10',null,undefined]) {
+  for(const field of ['policyRevision','evaluationTime','until']) assert.throws(()=>canReuse(makeGrant({[field]:invalid}),makeQuery()),TypeError);
+  for(const field of ['currentPolicyRevision','at']) assert.throws(()=>canReuse(makeGrant(),makeQuery({[field]:invalid})),TypeError);
+  if(invalid !== null) assert.throws(()=>canReuse(makeGrant(),makeQuery({revocation:invalid})),TypeError);
+ }
+});`;
+  const snapshots=`test('true false and throwing calls preserve both records', () => {
+ for(const input of [makeQuery(),makeQuery({revocation:10}),makeQuery({at:'10'})]) {
+  const cached=makeGrant(), beforeGrant=structuredClone(cached), beforeQuery=structuredClone(input);
+  if(typeof input.at === 'string') assert.throws(()=>canReuse(cached,input),TypeError);
+  else canReuse(cached,input);
+  assert.deepEqual(cached,beforeGrant); assert.deepEqual(input,beforeQuery);
+ }
+});`;
+  const tests=options.tests ?? imports+matrix+snapshots;
+  return {source,context,imports,matrix,snapshots,tests,input:{taskText:'Throw `TypeError` for malformed input.',contextText:context,sourceText:source,testText:tests,
+    sourceEntries:[{path:'src/grant.js',text:source}],testEntries:[{path:'test/grant.test.js',text:tests}],namedTargets:options.inferred?[]:['canReuse']}};
+}
+
+function runCacheReceipt(t,fixture,selected,expected) {
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-cached-record-control-'));t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+ const sourcePath='grant.mjs',testPath='grant.test.mjs',command=`node --test ${testPath}`,scope=[sourcePath,testPath];
+ fs.writeFileSync(path.join(cwd,sourcePath),fixture.source);fs.writeFileSync(path.join(cwd,testPath),fixture.tests.replace('../src/grant.js','./grant.mjs'));
+ const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(^PI_|^PIAGENT_|^OPENAI_|^ANTHROPIC_|^CODEX_|API_KEY|TOKEN|SECRET|AUTH|NODE_OPTIONS|NODE_TEST_CONTEXT)/.test(key)));
+ const run=spawnSync(process.execPath,['--test','--test-reporter=tap',testPath],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(run.status,0,run.stdout+run.stderr);
+ const built=buildAcceptanceReceipt({summary:'Validate cached grant records.',expectedOutput:fixture.context,acceptanceCriteria:[selected],changeMode:'source-change',source:'runtime'});
+ const digest=versionWorkingTreeHash('5'.repeat(64));
+ const task={...built,acceptanceReceipt:built.receipt,scope,criterionGraph:compileCachedGraph({acceptanceCriteria:built.acceptanceCriteria,scope,verifyCommands:[command],changeMode:'source-change',createdAt:'2026-09-07T00:00:00.000Z'}),summary:'Validate cached grant records.',expectedOutput:fixture.context,changeMode:'source-change',workingTreeDigestAlgorithm:'wt-content-v2',changedFiles:scope,verifyCommands:[command],verifyEvidence:[{command,exitCode:run.status,observed:true,matchedProfileCommand:true,preWorkingTreeDigest:digest,workingTreeDigest:digest,recordedAt:'2026-09-07T00:00:00.000Z'}]};
+ const refresh=changed=>refreshAcceptanceReceipt(changed,{cwd,currentWorkingTreeDigest:digest});
+ assert.equal(refresh(task).receipt.criteria[0].status,expected);
+ if(expected==='satisfied')for(const changed of [{...task,verifyEvidence:[]},{...task,verifyEvidence:[{...task.verifyEvidence[0],exitCode:1}]},{...task,verifyEvidence:[{...task.verifyEvidence[0],workingTreeDigest:versionWorkingTreeHash('4'.repeat(64))}]}])assert.equal(refresh(changed).receipt.criteria[0].status,'pending');
+ if(fixture.arrayWitness){
+  const script="import {canReuse} from './grant.mjs';const grant=Object.assign([],{teamId:'north',subjectId:'person',action:'edit',policyRevision:3,evaluationTime:10,until:20});const query={teamId:'north',subjectId:'person',action:'edit',currentPolicyRevision:3,at:10,revocation:null};console.log(canReuse(grant,query));";
+  const witness=spawnSync(process.execPath,['--input-type=module','-e',script],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(witness.status,0,witness.stderr);assert.equal(witness.stdout.trim(),'true','Array with valid-looking properties was wrongly accepted by this source');
+ }
+}
+for(const [label,change,expected] of [
+ ['both separate snapshots through true false throw',x=>x,'satisfied'],
+ ['wrapped context whitespace',x=>({...x,context:x.context.replace('all time and revision','all time\nand revision')}),'satisfied'],
+ ['source writes and restores grant',x=>({...x,source:x.source.replace('  return grant.teamId',"  const saved=grant.teamId; grant.teamId='changed'; grant.teamId=saved; return grant.teamId")}),'pending'],
+ ['grant mutation hidden by grant snapshot alias',x=>({...x,source:x.source.replace('  return grant.teamId',"  grant.teamId='changed'; return grant.teamId"),tests:x.tests.replace('beforeGrant=structuredClone(cached)','beforeGrant=cached')}),'pending'],
+ ['query mutation hidden by query snapshot alias',x=>({...x,source:x.source.replace('  return grant.teamId',"  query.teamId='changed'; return grant.teamId"),tests:x.tests.replace('beforeQuery=structuredClone(input)','beforeQuery=input')}),'pending'],
+ ['grant snapshot is an alias',x=>({...x,tests:x.tests.replace('beforeGrant=structuredClone(cached)','beforeGrant=cached')}),'pending'],
+ ['query snapshot is an alias',x=>({...x,tests:x.tests.replace('beforeQuery=structuredClone(input)','beforeQuery=input')}),'pending'],
+ ['only grant is compared',x=>({...x,tests:x.tests.replace(' assert.deepEqual(input,beforeQuery);','')}),'pending'],
+ ['only query is compared',x=>({...x,tests:x.tests.replace('assert.deepEqual(cached,beforeGrant); ','')}),'pending'],
+ ['grant compared to itself',x=>({...x,tests:x.tests.replace('assert.deepEqual(cached,beforeGrant)','assert.deepEqual(cached,cached)')}),'pending'],
+ ['snapshot values refreshed after call',x=>({...x,tests:x.tests.replace('  assert.deepEqual(cached,beforeGrant);',"  beforeGrant.teamId=cached.teamId; assert.deepEqual(cached,beforeGrant);")}),'pending'],
+ ['false outcome absent',x=>({...x,tests:x.tests.replace(',makeQuery({revocation:10})','')}),'pending'],
+ ['true outcome absent',x=>({...x,tests:x.tests.replace('[makeQuery(),makeQuery({revocation:10})','[makeQuery({revocation:10})')}),'pending'],
+ ['throw outcome absent',x=>({...x,tests:x.tests.replace(",makeQuery({at:'10'})",'')}),'pending'],
+ ['snapshots skipped',x=>({...x,tests:x.tests.replace("test('true false", "test.skip('true false")}),'pending'],
+ ['clone replaced by identity',x=>({...x,tests:x.tests.replace("test('object", "const structuredClone=value=>value; test('object")}),'pending'],
+ ['assert replaced to hide mutation',x=>({...x,source:x.source.replace('  return grant.teamId',"  grant.teamId='changed'; return grant.teamId"),tests:x.tests.replace("test('object", "assert.deepEqual=()=>{}; test('object")}),'pending'],
+ ['strict independent deep comparisons',x=>({...x,tests:x.tests.replaceAll('assert.deepEqual','assert.deepStrictEqual')}),'satisfied']
+]) test(`cached record snapshots after actual passing verifier: ${label}`,t=>runCacheReceipt(t,change(cacheFixture()),'Do not mutate either argument.',expected));
+
+function byteFixture() {
+ const source=`export function readFrames(pieces) {
+  if (!Array.isArray(pieces) || pieces.some(part => !(part instanceof Uint8Array))) throw new TypeError('byte chunks required');
+  const converter = new TextDecoder('utf-8', {fatal:true});
+  const rows = []; let buffered = '';
+  const collect = () => { for (const line of buffered.split('\n')) { if (line.length > 0) rows.push(JSON.parse(line)); } };
+  for (const part of pieces) { buffered += converter.decode(part, {stream:true}); }
+  buffered += converter.decode(); collect(); return rows;
+}`.replace("split('\n')","split('\\n')");
+ const tests=`import assert from 'node:assert/strict';
+import test from 'node:test';
+import {readFrames} from '../src/frames.js';
+const bytesOf = value => new TextEncoder().encode(value);
+test('byte buffers and view identities survive decoding', () => {
+ const storage = bytesOf('x{"n":1}\\ny'), view = storage.subarray(1,storage.length-1);
+ const tail = bytesOf('{"n":2}'), pieces = [view,tail];
+ const originalBytes = [Array.from(storage),Array.from(tail)];
+ const originalPieces = [...pieces];
+ assert.deepEqual(readFrames(pieces),[{n:1},{n:2}]);
+ assert.equal(pieces.length,originalPieces.length);
+ assert.deepEqual(pieces,originalPieces);
+ assert.strictEqual(pieces[0],view); assert.strictEqual(pieces[1],tail);
+ assert.deepEqual([Array.from(storage),Array.from(tail)],originalBytes);
+});`;
+ return {source,tests};
+}
+function runByteReceipt(t,fixture,expected) {
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-byte-snapshot-'));t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+ const sourcePath='src/frames.js',testPath='test/frames.test.js',command=`node --test ${testPath}`,scope=[sourcePath,testPath,...(fixture.manifestChange?['package.json']:[])];
+ fs.writeFileSync(path.join(cwd,'package.json'),JSON.stringify({type:'module',...(fixture.manifestChange?{dependencies:{unrequested:'1.0.0'}}:{})}));
+ for(const [name,text] of [[sourcePath,fixture.source],[testPath,fixture.tests]]){const file=path.join(cwd,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);}
+ const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(^PI_|^PIAGENT_|^OPENAI_|^ANTHROPIC_|^CODEX_|API_KEY|TOKEN|SECRET|AUTH|NODE_OPTIONS|NODE_TEST_CONTEXT)/.test(key)));
+ const run=spawnSync(process.execPath,['--test','--test-reporter=tap',testPath],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(run.status,0,run.stdout+run.stderr);assert.match(run.stdout,fixture.skipped?/^# skipped 1$/m:/^# pass 1$/m);
+ const selected='Do not mutate the chunk array or its buffers and do not add dependencies.';
+ const built=buildAcceptanceReceipt({summary:'Read byte frames without mutating inputs.',acceptanceCriteria:[selected],changeMode:'source-change',source:'runtime'}),digest=versionWorkingTreeHash(crypto.createHash('sha256').update(fixture.source).update(fixture.tests).digest('hex'));
+ const task={...built,acceptanceReceipt:built.receipt,summary:'Read byte frames without mutating inputs.',scope,criterionGraph:compileCriterionGraph({acceptanceCriteria:built.acceptanceCriteria,scope,verifyCommands:[command],changeMode:'source-change',createdAt:'2026-09-07T00:00:00.000Z'}),changeMode:'source-change',workingTreeDigestAlgorithm:'wt-content-v2',changedFiles:scope,verifyCommands:[command],verifyEvidence:[{command,exitCode:run.status,observed:true,matchedProfileCommand:true,preWorkingTreeDigest:digest,workingTreeDigest:digest,recordedAt:'2026-09-07T00:00:00.000Z'}]};
+ const refresh=changed=>refreshAcceptanceReceipt(changed,{cwd,currentWorkingTreeDigest:digest});assert.equal(refresh(task).receipt.criteria[0].status,expected);
+ if(expected==='satisfied')for(const changed of [{...task,verifyEvidence:[]},{...task,verifyEvidence:[{...task.verifyEvidence[0],exitCode:1}]},{...task,verifyEvidence:[{...task.verifyEvidence[0],workingTreeDigest:versionWorkingTreeHash('e'.repeat(64))}]}])assert.equal(refresh(changed).receipt.criteria[0].status,'pending');
+}
+for(const [label,change,expected] of [
+ ['native backing coverage and identities',x=>x,'satisfied'],
+ ['renamed API and input bindings',x=>({...x,source:x.source.replaceAll('readFrames','decodeMessages').replaceAll('pieces','segments'),tests:x.tests.replaceAll('readFrames','decodeMessages').replaceAll('pieces','segments')}),'satisfied'],
+ ['strict deep byte comparisons',x=>({...x,tests:x.tests.replaceAll('assert.deepEqual','assert.deepStrictEqual')}),'satisfied'],
+ ['omitted backing byte comparison',x=>({...x,tests:x.tests.replace(' assert.deepEqual([Array.from(storage),Array.from(tail)],originalBytes);','')}),'pending'],
+ ['view-only snapshot misses surrounding bytes',x=>({...x,tests:x.tests.replaceAll('Array.from(storage)','Array.from(view)')}),'pending'],
+ ['backing mutation hidden by view-only snapshot',x=>({...x,source:x.source.replace('  const converter',"  new Uint8Array(pieces[0].buffer)[0]=0; const converter"),tests:x.tests.replaceAll('Array.from(storage)','Array.from(view)')}),'pending'],
+ ['backing mutation hidden by aliased snapshots',x=>({...x,source:x.source.replace('  const converter',"  new Uint8Array(pieces[0].buffer)[0]=0; const converter"),tests:x.tests.replaceAll('[Array.from(storage),Array.from(tail)]','[storage,tail]')}),'pending'],
+ ['source array mutation followed by restoration',x=>({...x,source:x.source.replace('  const converter',"  pieces.reverse();pieces.reverse(); const converter")}),'pending'],
+ ['input mutation and restoration inside validation callback',x=>({...x,source:x.source.replace('part => !(part instanceof Uint8Array)',"part => {part.reverse();part.reverse();return !(part instanceof Uint8Array);}")}),'pending'],
+ ['chunk identities are an alias',x=>({...x,tests:x.tests.replace('originalPieces = [...pieces]','originalPieces = pieces')}),'pending'],
+ ['missing array length check',x=>({...x,tests:x.tests.replace(' assert.equal(pieces.length,originalPieces.length);','')}),'pending'],
+ ['missing array comparison',x=>({...x,tests:x.tests.replace(' assert.deepEqual(pieces,originalPieces);','')}),'pending'],
+ ['missing first chunk identity',x=>({...x,tests:x.tests.replace('assert.strictEqual(pieces[0],view); ','')}),'pending'],
+ ['missing second chunk identity',x=>({...x,tests:x.tests.replace(' assert.strictEqual(pieces[1],tail);','')}),'pending'],
+ ['chunk compared only to itself',x=>({...x,tests:x.tests.replace('assert.strictEqual(pieces[0],view)','assert.strictEqual(pieces[0],pieces[0])')}),'pending'],
+ ['byte projection patched to return no data',x=>({...x,source:x.source.replace('  const converter',"  new Uint8Array(pieces[0].buffer)[0]=0; const converter"),tests:x.tests.replace("test('byte", "Array.from=()=>[];test('byte")}),'pending'],
+ ['deep assertion patched to hide byte mutation',x=>({...x,source:x.source.replace('  const converter',"  new Uint8Array(pieces[0].buffer)[0]=0; const converter"),tests:x.tests.replace("test('byte", "assert.deepEqual=()=>{};test('byte")}),'pending'],
+ ['snapshot refreshed after the call',x=>({...x,tests:x.tests.replace(' const originalBytes = [Array.from(storage),Array.from(tail)];\n','').replace(' assert.equal(pieces.length',' const originalBytes = [Array.from(storage),Array.from(tail)];\n assert.equal(pieces.length')}),'pending'],
+ ['whole buffer view does not exercise partial view ownership',x=>({...x,tests:x.tests.replace("bytesOf('x{\"n\":1}\\ny'), view = storage.subarray(1,storage.length-1)","bytesOf('{\"n\":1}\\n'), view = storage.subarray(0,storage.length)")}),'pending'],
+ ['skipped snapshot test',x=>({...x,tests:x.tests.replace("test('byte", "test.skip('byte"),skipped:true}),'pending'],
+ ['unrequested dependency remains conjunctive',x=>({...x,manifestChange:true}),'pending'],
+ ['encoder native escapes through alias',x=>({...x,tests:x.tests.replace('const bytesOf =','const borrowed = TextEncoder;const bytesOf =')}),'pending']
+])test(`byte ownership after actual verifier: ${label}`,t=>runByteReceipt(t,change(byteFixture()),expected));
+
+function immutableReducerFixture() {
+ const source=`export const seed = Object.freeze({items:[],counter:0});
+export function change(input = seed, event) {
+ if (event.tag === 'set') {
+  if (!Number.isInteger(event.version) || event.version < input.counter) return input;
+  return {...input, counter:event.version, items:[...event.items]};
+ }
+ return input;
+}`;
+ const tests=`import assert from 'node:assert/strict';
+import test from 'node:test';
+import {seed,change} from '../src/reducer.js';
+test('records and array values remain unchanged', () => {
+ const state = Object.freeze({items:Object.freeze(['old']),counter:1});
+ for (const [tag,version] of [['set',2],['ignored',0]]) {
+  const action = Object.freeze({tag,version,items:Object.freeze(['new'])});
+  const result = change(state,action);
+  assert.deepEqual(state.items,['old']); assert.deepEqual(action.items,['new']);
+  if (tag === 'set') { assert.deepEqual(result.items,['new']); assert.notStrictEqual(result.items,action.items); }
+  else assert.strictEqual(result,state);
+ }
+});`;
+ return {source,tests};
+}
+function runImmutableReducerReceipt(t,fixture,expected) {
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-immutable-reducer-'));t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+ const sourcePath='src/reducer.js',testPath='test/reducer.test.js',command=`node --test ${testPath}`,scope=[sourcePath,testPath];
+ fs.writeFileSync(path.join(cwd,'package.json'),'{"type":"module"}');
+ for(const [name,text] of [[sourcePath,fixture.source],[testPath,fixture.tests]]){const file=path.join(cwd,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);}
+ const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(^PI_|^PIAGENT_|^OPENAI_|^ANTHROPIC_|^CODEX_|API_KEY|TOKEN|SECRET|AUTH|NODE_OPTIONS|NODE_TEST_CONTEXT)/.test(key)));
+ const run=spawnSync(process.execPath,['--test','--test-reporter=tap',testPath],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(run.status,0,run.stdout+run.stderr);assert.match(run.stdout,fixture.skipped?/^# skipped 1$/m:/^# pass 1$/m);
+ if(fixture.witness){const witness=spawnSync(process.execPath,['--input-type=module','-e',"import assert from 'node:assert/strict';import {change} from './src/reducer.js';const state={items:['old'],counter:1},action={tag:'set',version:2,items:['new']};"+fixture.witness],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(witness.status,0,witness.stdout+witness.stderr);}
+ const selected='Do not mutate state, actions, or result arrays.',built=buildAcceptanceReceipt({summary:'Preserve reducer input records.',acceptanceCriteria:[selected],changeMode:'source-change',source:'runtime'}),digest=versionWorkingTreeHash(crypto.createHash('sha256').update(fixture.source).update(fixture.tests).digest('hex'));
+ const task={...built,acceptanceReceipt:built.receipt,summary:'Preserve reducer input records.',scope,criterionGraph:compileCriterionGraph({acceptanceCriteria:built.acceptanceCriteria,scope,verifyCommands:[command],changeMode:'source-change',createdAt:'2026-09-07T00:00:00.000Z'}),changeMode:'source-change',workingTreeDigestAlgorithm:'wt-content-v2',changedFiles:scope,verifyCommands:[command],verifyEvidence:[{command,exitCode:run.status,observed:true,matchedProfileCommand:true,preWorkingTreeDigest:digest,workingTreeDigest:digest,recordedAt:'2026-09-07T00:00:00.000Z'}]};
+ const refresh=changed=>refreshAcceptanceReceipt(changed,{cwd,currentWorkingTreeDigest:digest});assert.equal(refresh(task).receipt.criteria[0].status,expected);
+ if(expected==='satisfied') for(const changed of [{...task,verifyEvidence:[]},{...task,verifyEvidence:[{...task.verifyEvidence[0],exitCode:1}]},{...task,verifyEvidence:[{...task.verifyEvidence[0],workingTreeDigest:versionWorkingTreeHash('a'.repeat(64))}]}])assert.equal(refresh(changed).receipt.criteria[0].status,'pending');
+}
+for(const [label,change,expected] of [
+ ['source branches contain no input writes',x=>x,'satisfied'],
+ ['ordinary mutable records',x=>({...x,tests:x.tests.replace("Object.freeze({items:Object.freeze(['old']),counter:1})","{items:['old'],counter:1}").replace("Object.freeze({tag,version,items:Object.freeze(['new'])})","{tag,version,items:['new']}")}),'satisfied'],
+ ['renamed exports and field names',x=>({...x,source:x.source.replaceAll('change','advance').replaceAll('input','current').replaceAll('event','command').replaceAll('items','entries'),tests:x.tests.replaceAll('change','advance').replaceAll('items','entries')}),'satisfied'],
+ ['strict deep input comparisons',x=>({...x,tests:x.tests.replaceAll('assert.deepEqual','assert.deepStrictEqual')}),'satisfied'],
+ ['conditional mutable state write',x=>({...x,source:x.source.replace(" if (event.tag", " if (!Object.isFrozen(input)) input.extra=true;\n if (event.tag"),witness:'change(state,action);assert.equal(state.extra,true);'}),'pending'],
+ ['conditional mutable action write',x=>({...x,source:x.source.replace(" if (event.tag", " if (!Object.isFrozen(event)) event.extra=true;\n if (event.tag"),witness:'change(state,action);assert.equal(action.extra,true);'}),'pending'],
+ ['conditional input array mutation',x=>({...x,source:x.source.replace(" if (event.tag", " if (!Object.isFrozen(input.items)) input.items.push('changed');\n if (event.tag"),witness:"change(state,action);assert.deepEqual(state.items,['old','changed']);"}),'pending'],
+ ['conditional action array mutation',x=>({...x,source:x.source.replace(" if (event.tag", " if (!Object.isFrozen(event.items)) event.items.push('changed');\n if (event.tag"),witness:"change(state,action);assert.deepEqual(action.items,['new','changed']);"}),'pending'],
+ ['freezing the input is also a source effect',x=>({...x,source:x.source.replace(" if (event.tag", " Object.freeze(input);\n if (event.tag"),witness:'assert.equal(Object.isFrozen(state),false);change(state,action);assert.equal(Object.isFrozen(state),true);'}),'pending'],
+ ['input write and restoration',x=>({...x,source:x.source.replace(" if (event.tag", " if (!Object.isFrozen(input)) {const saved=input.counter;input.counter=99;input.counter=saved;}\n if (event.tag")}),'pending'],
+ ['unknown helper cannot replace source proof',x=>({...x,source:'function isWhole(value){return Number.isInteger(value);}\n'+x.source.replace('Number.isInteger(event.version)','isWhole(event.version)')}),'pending'],
+ ['input default can call an effectful helper',x=>({...x,source:'function defaultState(){return seed;}\n'+x.source.replace('input = seed','input = defaultState()')}),'pending'],
+ ['unobserved source branch still has a write',x=>({...x,source:x.source.replace(" if (event.tag", " if (event.tag === 'unobserved') input.extra=true;\n if (event.tag"),witness:"change(state,{...action,tag:'unobserved'});assert.equal(state.extra,true);"}),'pending'],
+ ['missing state array input',x=>({...x,tests:x.tests.replace("items:Object.freeze(['old'])","items:'old'").replace("assert.deepEqual(state.items,['old'])","assert.deepEqual(state.items,'old')")}),'pending'],
+ ['missing action array input',x=>({...x,tests:x.tests.replace("items:Object.freeze(['new'])","items:'new'").replace("assert.deepEqual(action.items,['new'])","assert.deepEqual(action.items,'new')").replace("assert.deepEqual(result.items,['new'])","assert.deepEqual(result.items,['n','e','w'])")}),'pending'],
+ ['skipped witness',x=>({...x,tests:x.tests.replace("test('records", "test.skip('records"),skipped:true}),'pending'],
+ ['unreachable witness',x=>({...x,tests:x.tests.replace(' for (const [tag,version]', ' if (false) for (const [tag,version]')}),'pending'],
+ ['empty literal loop',x=>({...x,tests:x.tests.replace("[['set',2],['ignored',0]]","[]")}),'pending'],
+ ['live assertions compare only fixture values',x=>({...x,tests:x.tests.replace('const result = change(state,action)','const result = tag === \'set\' ? {...state,items:[...action.items]} : state')}),'pending'],
+ ['shadowed freeze helper',x=>({...x,tests:x.tests.replace("test('records", "const Object={freeze:value=>value};test('records")}),'pending'],
+ ['replaced assertion carrier',x=>({...x,tests:x.tests.replace("test('records", "assert.deepEqual=()=>{};test('records")}),'pending']
+])test(`pure reducer after actual verifier: ${label}`,t=>runImmutableReducerReceipt(t,change(immutableReducerFixture()),expected));
+
+import {parse as parseFactoryProgram,parseExpression as parseFactoryExpression} from '@babel/parser';
+import {flatRecordFactories as readRecordFactories,flatRecordValue as readRecordFact} from '../packages/piagent-core/extensions/acceptance-literal-dataflow.js';
+const recordFactorySource=`const empty=()=>({entities:{},applied:[]});const event=(overrides={})=>({id:'one',owner:'account',revision:0,payload:{count:1},...overrides});`;
+function factoryFact(expression,{source=recordFactorySource,nested=true,before=Infinity,bindings=new Map()}={}){
+ const program=parseFactoryProgram(source,{sourceType:'module'});return readRecordFact(parseFactoryExpression(expression),bindings,readRecordFactories(program,nested),before,0,nested);
+}
+function unpackRecordFact(value){
+ if(value?.kind==='record')return Object.fromEntries([...value.fields].map(([name,item])=>[name,unpackRecordFact(item)]));
+ if(value?.kind==='array')return value.elements.map(unpackRecordFact);return value?.value;
+}
+for(const [label,expression,wanted] of [
+ ['zero-argument nested state','empty()',{entities:{},applied:[]}],
+ ['nested default payload','event()',{id:'one',owner:'account',revision:0,payload:{count:1}}],
+ ['empty identifier override',"event({id:''})",{id:'',owner:'account',revision:0,payload:{count:1}}],
+ ['wrong-type identifier override','event({owner:1})',{id:'one',owner:1,revision:0,payload:{count:1}}],
+ ['two independently allocated events',"[event(),event({id:'two',payload:{count:2}})]",[{id:'one',owner:'account',revision:0,payload:{count:1}},{id:'two',owner:'account',revision:0,payload:{count:2}}]],
+ ['nested array payload','event({payload:{rows:[1,null,false]}})',{id:'one',owner:'account',revision:0,payload:{rows:[1,null,false]}}],
+ ['explicit undefined override','event({owner:undefined})',{id:'one',owner:undefined,revision:0,payload:{count:1}}],
+ ['explicit undefined factory argument','event(undefined)',{id:'one',owner:'account',revision:0,payload:{count:1}}],
+ ['literal computed key',"event({['owner']:''})",{id:'one',owner:'',revision:0,payload:{count:1}}],
+ ['case-sensitive fields',"({id:'one',ID:'two'})",{id:'one',ID:'two'}]
+])test(`nested record facts: ${label}`,()=>assert.deepEqual(unpackRecordFact(factoryFact(expression)),wanted));
+
+for(const [label,expression,options] of [
+ ['effectful argument to zero-argument factory','empty(sideEffect())',{}],
+ ['ignored literal argument to zero-argument factory','empty({id:1})',{}],
+ ['factory before declaration','event()',{before:0}],
+ ['getter payload','event({payload:{get count(){throw new Error("must not run");}}})',{}],
+ ['method payload','event({payload:{count(){return 1;}}})',{}],
+ ['function payload','event({payload:()=>1})',{}],
+ ['unknown invocation','event({payload:make()})',{}],
+ ['unknown value alias','event({payload:saved})',{}],
+ ['unknown factory alias','alias()',{source:recordFactorySource+'const alias=event;'}],
+ ['factory closes over an unknown value','event()',{source:"const seed={count:1};const event=(overrides={})=>({payload:seed,...overrides});"}],
+ ['effectful factory body','event()',{source:"const event=()=>{sideEffect();return {id:1};};"}],
+ ['async factory','event()',{source:"const event=async()=>({id:1});"}],
+ ['sparse array','event({payload:[,1]})',{}],
+ ['array spread','event({payload:[...[1]]})',{}],
+ ['record spread override','event({...{id:1}})',{}],
+ ['duplicate field names',"event({id:'one',id:'two'})",{}],
+ ['prototype field','event({__proto__:null})',{}],
+ ['nested prototype field','event({payload:{constructor:1}})',{}],
+ ['unknown computed key','event({[key]:1})',{}],
+ ['array expansion bound',`[${'event(),'.repeat(32)}event()]`,{}],
+ ['depth bound','({a:{b:{c:{d:{e:{f:{g:{h:1}}}}}}}})',{}],
+ ['numeric expression','event({revision:1+1})',{}],
+ ['second factory argument','event({}, sideEffect())',{}]
+])test(`nested record facts refuse ${label}`,()=>assert.equal(factoryFact(expression,options),undefined));
+
+test('nested record mode preserves missing versus explicitly undefined fields',()=>{
+ const absent=factoryFact('({id:"one"})'),present=factoryFact('({id:"one",owner:undefined})');
+ assert.equal(absent.fields.has('owner'),false);assert.equal(present.fields.has('owner'),true);
+ assert.equal(present.fields.get('owner').kind,'primitive');assert.equal(present.fields.get('owner').value,undefined);
+});
+test('nested records preserve bound loop values without reading unrelated aliases',()=>{
+ const row=factoryFact("event({id:''})");const value=factoryFact('[item]',{bindings:new Map([['item',row]])});
+ assert.equal(value.elements[0].fields.get('id').value,'');assert.equal(factoryFact('[other]',{bindings:new Map([['item',row]])}),undefined);
+});
+test('default flat mode retains its existing boundary',()=>{
+ for(const expression of ['({payload:{count:1}})','[1]','empty()','event()'])assert.equal(factoryFact(expression,{nested:false}),undefined);
+ assert.deepEqual(unpackRecordFact(factoryFact('({id:"one",revision:0})',{nested:false})),{id:'one',revision:0});
+ const source="const event=(overrides={})=>({id:'one',revision:0,...overrides});";
+ assert.deepEqual(unpackRecordFact(factoryFact("event({id:''})",{source,nested:false})),{id:'',revision:0});
+});
+
+function orderedRecordFixture(){
+ const source=`function object(value){return value && typeof value === 'object' && !Array.isArray(value);}
+function key(value){return typeof value === 'string' && value.length > 0;}
+export function applyRecords(seed, records){
+ if(!object(seed)||!object(seed.nodes)||!Array.isArray(seed.seenIds)||seed.seenIds.some(value=>!key(value))||!Array.isArray(records))throw new TypeError('state');
+ const output=structuredClone(seed);const seen=new Set(output.seenIds);
+ for(const item of records){
+  if(!object(item)||!key(item.recordKey)||!key(item.parentKey)||!Number.isInteger(item.expectedRevision)||item.expectedRevision<0)throw new TypeError('record');
+  if(seen.has(item.recordKey))continue;
+  const current=output.nodes[item.parentKey];
+  if(current!==undefined&&(!object(current)||!Number.isInteger(current.revision)||current.revision<0))throw new TypeError('node');
+  const revision=current?.revision??0;
+  if(revision!==item.expectedRevision)throw new Error('version conflict');
+  output.nodes[item.parentKey]={revision:revision+1,payload:structuredClone(item.value)};
+  output.seenIds.push(item.recordKey);seen.add(item.recordKey);
+ }
+ return output;
+}`;
+ const tests=`import assert from 'node:assert/strict';import test from 'node:test';import {applyRecords} from '../src/records.js';
+const empty=()=>({nodes:{},seenIds:[]});
+const entry=(changes={})=>({recordKey:'one',parentKey:'parent',expectedRevision:0,value:{n:1},...changes});
+test('preserves accepted record order',()=>{
+ const state=empty(),records=[entry(),entry({recordKey:'two',expectedRevision:1,value:{n:2}})];
+ const before=structuredClone([state,records]);const result=applyRecords(state,records);
+ assert.deepEqual(result,{nodes:{parent:{revision:2,payload:{n:2}}},seenIds:['one','two']});assert.deepEqual([state,records],before);
+});
+test('rejects malformed containers and declared fields',()=>{
+ for(const state of [null,[],{},{nodes:null,seenIds:[]},{nodes:{},seenIds:''},{nodes:{},seenIds:['']}])assert.throws(()=>applyRecords(state,[]),TypeError);
+ for(const item of [null,[],{},entry({recordKey:''}),entry({recordKey:1}),entry({parentKey:''}),entry({parentKey:null}),entry({expectedRevision:0.5}),entry({expectedRevision:'0'})]){
+  assert.throws(()=>applyRecords(empty(),[item]),TypeError);
+ }
+});`;
+ const definition='Each event has a unique non-empty string `recordKey`, a non-empty string `parentKey`, an integer `expectedRevision`, and `value`.';
+ const selected='Preserve applied-event order and reject malformed state or event shapes, including empty IDs, with `TypeError`.';
+ return {source,tests,definition,selected,signature:'applyRecords(seed, records)'};
+}
+function runOrderedRecordReceipt(t,fixture,wanted){
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-ordered-record-'));t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+ const sourcePath='src/records.js',testPath='test/records.test.js',scope=[sourcePath,testPath],command=`node --test ${testPath}`;
+ fs.writeFileSync(path.join(cwd,'package.json'),'{"type":"module"}');
+ for(const [name,text]of [[sourcePath,fixture.source],[testPath,fixture.tests]]){const file=path.join(cwd,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);}
+ const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(^PI_|^PIAGENT_|^OPENAI_|^ANTHROPIC_|^CODEX_|API_KEY|TOKEN|SECRET|AUTH|NODE_OPTIONS|NODE_TEST_CONTEXT)/.test(key)));
+ const run=spawnSync(process.execPath,['--test','--test-reporter=tap',testPath],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(run.status,0,run.stdout+run.stderr);
+ if(fixture.witness){const result=spawnSync(process.execPath,['--input-type=module','-e',"import assert from 'node:assert/strict';import {applyRecords} from './src/records.js';"+fixture.witness],{cwd,env,encoding:'utf8',timeout:10000});assert.equal(result.status,0,result.stdout+result.stderr);}
+ const expectedOutput=`Fix src/records.js without changing \`${fixture.signature}\`. ${fixture.definition} ${fixture.selected}`;
+ const built=buildAcceptanceReceipt({summary:'Apply versioned records.',expectedOutput,acceptanceCriteria:[fixture.definition,fixture.selected],changeMode:'source-change',source:'runtime'});
+ const digest=versionWorkingTreeHash(crypto.createHash('sha256').update(fixture.source).update(fixture.tests).digest('hex'));
+ const task={...built,acceptanceReceipt:built.receipt,summary:'Apply versioned records.',expectedOutput,scope,criterionGraph:compileCriterionGraph({acceptanceCriteria:built.acceptanceCriteria,scope,verifyCommands:[command],changeMode:'source-change',createdAt:'2026-09-07T00:00:00.000Z'}),changeMode:'source-change',workingTreeDigestAlgorithm:'wt-content-v2',changedFiles:scope,verifyCommands:[command],verifyEvidence:[{command,exitCode:run.status,observed:true,matchedProfileCommand:true,preWorkingTreeDigest:digest,workingTreeDigest:digest,recordedAt:'2026-09-07T00:00:00.000Z'}]};
+ const index=built.acceptanceCriteria.indexOf(fixture.selected),refresh=value=>refreshAcceptanceReceipt(value,{cwd,currentWorkingTreeDigest:digest}).receipt.criteria[index].status;
+ assert.ok(index>=0);assert.equal(refresh(task),wanted);
+ if(wanted==='satisfied')for(const other of [{...task,verifyEvidence:[]},{...task,verifyEvidence:[{...task.verifyEvidence[0],exitCode:1}]},{...task,verifyEvidence:[{...task.verifyEvidence[0],workingTreeDigest:versionWorkingTreeHash('a'.repeat(64))}]}])assert.equal(refresh(other),'pending');
+}
+for(const [label,change,wanted]of [
+ ['closed guards and actual order witness',x=>x,'satisfied'],
+ ['renamed API and declared fields',x=>Object.fromEntries(Object.entries(x).map(([k,v])=>[k,v.replaceAll('applyRecords','transition').replaceAll('recordKey','itemId').replaceAll('parentKey','groupId').replaceAll('expectedRevision','expectedVersion')])),'satisfied'],
+ ['renamed test assertion import',x=>({...x,tests:x.tests.replace('import assert','import check').replaceAll('assert.','check.')}),'satisfied'],
+ ['renamed source import alias',x=>({...x,tests:x.tests.replace('import {applyRecords}', 'import {applyRecords as transition}').replaceAll('applyRecords(', 'transition(')}),'satisfied'],
+ ['native strict deep order assertion',x=>({...x,tests:x.tests.replaceAll('assert.deepEqual','assert.deepStrictEqual')}),'satisfied'],
+ ['missing identifiers accepted by predicate',x=>({...x,source:x.source.replace("return typeof value === 'string'", "return value === undefined || typeof value === 'string'"),witness:"const output=applyRecords({nodes:{},seenIds:[]},[{parentKey:'parent',expectedRevision:0,value:1}]);assert.equal(output.seenIds[0],undefined);"}),'pending'],
+ ['missing event-array source guard',x=>({...x,source:x.source.replace('||!Array.isArray(records)','')}),'pending'],
+ ['missing lower-bound guard',x=>({...x,source:x.source.replace('||item.expectedRevision<0','')}),'pending'],
+ ['missing existing-node guard',x=>({...x,source:x.source.replace("  if(current!==undefined&&(!object(current)||!Number.isInteger(current.revision)||current.revision<0))throw new TypeError('node');\n",'')}),'pending'],
+ ['safe-integer guard changes the domain',x=>({...x,source:x.source.replaceAll('Number.isInteger','Number.isSafeInteger')}),'pending'],
+ ['unknown source helper',x=>({...x,source:'function copy(value){return structuredClone(value);}\n'+x.source.replace('const output=structuredClone(seed)','const output=copy(seed)')}),'pending'],
+ ['unobserved input mutation',x=>({...x,source:x.source.replace(' const output='," if(records.length===777)seed.extra=true;\n const output=")}),'pending'],
+ ['sorting loses original order outside the public order sample',x=>({...x,source:x.source.replace(' return output;', ' output.seenIds.sort();return output;'),witness:"const result=applyRecords({nodes:{},seenIds:[]},[{recordKey:'z',parentKey:'p',expectedRevision:0,value:1},{recordKey:'a',parentKey:'p',expectedRevision:1,value:2}]);assert.deepEqual(result.seenIds,['a','z']);"}),'pending'],
+ ['early source return before guards',x=>({...x,source:x.source.replace(' if(!object(seed)', ' if(records.length===777)return seed;\n if(!object(seed)')}),'pending'],
+ ['missing empty first-ID witness',x=>({...x,tests:x.tests.replace("entry({recordKey:''})",'entry({recordKey:1})')}),'pending'],
+ ['missing wrong-type first-ID witness',x=>({...x,tests:x.tests.replace('entry({recordKey:1})',"entry({recordKey:''})")}),'pending'],
+ ['missing empty second-ID witness',x=>({...x,tests:x.tests.replace("entry({parentKey:''})",'entry({parentKey:null})')}),'pending'],
+ ['missing wrong-type second-ID witness',x=>({...x,tests:x.tests.replace('entry({parentKey:null})',"entry({parentKey:''})")}),'pending'],
+ ['wrong-type ID cannot borrow another invalid field',x=>({...x,tests:x.tests.replace('entry({parentKey:null})',"entry({parentKey:null,recordKey:''})")}),'pending'],
+ ['fractional version cannot borrow invalid ID',x=>({...x,tests:x.tests.replace('entry({expectedRevision:0.5})',"entry({expectedRevision:0.5,recordKey:''})")}),'pending'],
+ ['missing fractional witness',x=>({...x,tests:x.tests.replace('entry({expectedRevision:0.5})',"entry({expectedRevision:'0'})")}),'pending'],
+ ['missing non-number witness',x=>({...x,tests:x.tests.replace("entry({expectedRevision:'0'})",'entry({expectedRevision:0.5})')}),'pending'],
+ ['missing state-array witness',x=>({...x,tests:x.tests.replace('state of [null,[],{}','state of [null,null,{}')}),'pending'],
+ ['missing event-object witness',x=>({...x,tests:x.tests.replace('item of [null,[],{}','item of [null,[],[]')}),'pending'],
+ ['missing applied-ID witness',x=>({...x,tests:x.tests.replace("{nodes:{},seenIds:['']}","{nodes:{},seenIds:''}")}),'pending'],
+ ['unexecuted rejection registration',x=>({...x,tests:x.tests.replace("test('rejects", "test.skip('rejects")}),'pending'],
+ ['unreachable malformed-state loop',x=>({...x,tests:x.tests.replace(' for(const state of', ' if(false)for(const state of')}),'pending'],
+ ['missing executable target rejection',x=>({...x,tests:x.tests.replaceAll('assert.throws(()=>applyRecords(', 'assert.throws(()=>{throw new TypeError();applyRecords(').replaceAll(',TypeError);', '},TypeError);')}),'pending'],
+ ['assertion replacement',x=>({...x,tests:x.tests.replace("test('rejects", "assert.throws=()=>{};test('rejects")}),'pending'],
+ ['factory initializer changed',x=>({...x,tests:x.tests.replace('value:{n:1},...changes','value:{n:1},...changes,recordKey:changes.recordKey??\'one\'')}),'pending'],
+ ['fixture-only positive order assertion',x=>({...x,tests:x.tests.replace('const result=applyRecords(state,records)',"const result={nodes:{parent:{revision:2,payload:{n:2}}},seenIds:['one','two']}")}),'pending'],
+ ['order assertion compares only one accepted identifier',x=>({...x,tests:x.tests.replace("entry(),entry({recordKey:'two',expectedRevision:1,value:{n:2}})","entry({value:{n:2}})").replace("revision:2,payload:{n:2}","revision:1,payload:{n:2}").replace("seenIds:['one','two']","seenIds:['one']")}),'pending'],
+ ['additional selected clause must remain required',x=>({...x,selected:x.selected+' Also reject whitespace-only identifiers.'}),'pending']
+])test(`ordered record proof after actual verifier: ${label}`,t=>runOrderedRecordReceipt(t,change(orderedRecordFixture()),wanted));

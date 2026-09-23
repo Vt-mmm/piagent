@@ -319,6 +319,8 @@ export function finalizeBenchmarkRun(context) {
       requestedServiceTier: options.serviceTier ?? null,
       ...(manifest.verificationPlan ? { independentVerification: manifest.verificationPlan.identity } : {}),
       piagentTreatment: piagentTreatment(options.piagentTreatment),
+      ...(manifest.acceptancePolicyBinding ? { acceptancePolicyBinding: manifest.acceptancePolicyBinding } : {}),
+      ...(manifest.treatmentDerivation ? { treatmentDerivation: manifest.treatmentDerivation } : {}),
       treatmentBaseline: lifecycles.length === 1 && lifecycles[0] === "steady-state"
         ? options.surfaces.includes("codex-cli")
           ? "piagent-initialized-and-onboarded; codex-clean-fixture"

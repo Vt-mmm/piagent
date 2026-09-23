@@ -221,8 +221,8 @@
     },
     {
       "path": "benchmarks",
-      "fileCount": 917,
-      "sha256": "a341bb5adf1f7833eb975c16bcdca4991d7beee93bf31df4ef9c65507b8e0e86"
+      "fileCount": 921,
+      "sha256": "4a2e4b8d74961711afdee982452f921c7f1834c975287c62c3a752f05d636e8a"
     },
     {
       "path": "evals/architecture-conformance-v1",
@@ -256,8 +256,8 @@
     },
     {
       "path": "tests",
-      "fileCount": 397,
-      "sha256": "4a837b42ceac66bdb92cc15188133bd73999f40c084537ac4ddce650764a331e"
+      "fileCount": 487,
+      "sha256": "80cb85689efe64ac415fa62af8fb6dc3717f6c381b6d732045c0de81fefc9b68"
     }
   ],
   "custodianComparisonRules": {

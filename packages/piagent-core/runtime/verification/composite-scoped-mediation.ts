@@ -2,6 +2,9 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual, types } from "node:util";
+import { readTaskBaselineSource } from "./acceptance-api-baseline.js";
+import { readWorkspaceFile } from "../inspection/workspace-file-reader.ts";
+import { workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 
 const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9:._~-]{0,159}$/;
@@ -9,6 +12,9 @@ const MAX_JOURNAL_BYTES = 32 * 1024 * 1024;
 const MAX_ROWS = 2_048;
 const SCOPED_VERIFICATION_PROTOCOL = "scoped-isolated-contract-v1";
 const SCOPED_PROJECT_VERIFICATION_PROTOCOL = "scoped-project-verifier-v1";
+// Legacy receipts cover the fixed Node script groups; v3 docs receipts carry
+// exact commands and signed current-document scope. Neither implies the other.
+const SCOPED_PROJECT_COMMANDS = new Set(["npm run type-check", "npm run lint", "npm test", "npm run test", "npm run test:e2e"]);
 const IDENTITY_V3_FIELDS = ["version", "armId", "taskId", "sessionId", "requestId", "operationId", "nonce",
   "sourceSha256", "assetTreeSha256", "configSha256", "brokerClosureSha256", "toolDefinitionsSha256",
   "manifestAuthoritySha256", "journalSignerSha256", "journalPathSha256", "contextPolicySha256", "sdkTreeSha256"];
@@ -29,7 +35,7 @@ type Action = { action: number; tool: string | null; requestSha256: string | nul
 type Snapshot = { manifest: any; rows: any[]; actions: Action[]; profileDigest: string; armDigest: string;
   reads: Map<string, Action[]>; writes: Map<string, Action[]>; verifications: Map<string, Action[]> };
 type FactInput = { fact: any; plan: any; contract: any; task: any; materials: readonly any[];
-  workspace: Record<string, string>; response?: any };
+  workspace: Record<string, string>; response?: any; projectRoot?: string };
 
 export function scopedBrokerToolDefinitionsSha256(): string { return sha(JSON.stringify(TOOL_DEFINITIONS)); }
 export function scopedBrokerProfileDigest(profile: string): string {
@@ -192,7 +198,7 @@ export function openScopedMediationEvidence(evidence: any, expected: { projectRo
       throw new Error("scoped-current-material-mismatch");
     if (binding.mode === "frozen" && (binding.sha256 !== material.sha256 || current.sha256 !== material.sha256))
       throw new Error("scoped-frozen-material-mismatch");
-    if (binding.mode !== "protected" && expected.task.baselineFileDigests?.[binding.relativePath] !== `wt-content-v2:${material.sha256}`)
+    if (binding.mode !== "protected" && sha(readTaskBaselineSource(expected.projectRoot, expected.task, binding.relativePath)) !== material.sha256)
       throw new Error("scoped-baseline-material-mismatch");
     if (binding.mode !== "protected" && !material.writable && current.sha256 !== material.sha256)
       throw new Error("scoped-readonly-material-drift");
@@ -201,6 +207,7 @@ export function openScopedMediationEvidence(evidence: any, expected: { projectRo
   if (manifest.verifications.length !== verifierFacts.length) throw new Error("scoped-verifier-policy-mismatch");
   const materialMap = currentMaterials;
   const reads = new Map<string, Action[]>(), writes = new Map<string, Action[]>(), verifications = new Map<string, Action[]>();
+  const observedDigests = new Map(manifest.materials.map((item: any) => [item.id, item.sha256]));
   const add = (map: Map<string, Action[]>, id: string, action: Action) => map.set(id, [...(map.get(id) ?? []), action]);
   for (const action of actions) {
     if (action.result.outcome !== "observed") continue;
@@ -212,14 +219,44 @@ export function openScopedMediationEvidence(evidence: any, expected: { projectRo
     const checks = manifest.verifications.filter((item: any) => action.tool === "scoped_verify"
       && action.requestSha256 === requestDigest("scoped_verify", { verificationId: item.id }));
     if (read.length + write.length + checks.length !== 1) throw new Error("scoped-observed-action-unbound");
-    if (read[0]) { if (action.result.materialSha256 !== read[0].sha256) throw new Error("scoped-read-result-mismatch"); add(reads, read[0].id, action); }
-    if (write[0]) { if (action.result.materialSha256 !== materialMap.get(write[0].id)?.sha256) throw new Error("scoped-write-result-mismatch"); add(writes, write[0].id, action); }
+    if (read[0]) { if (action.result.materialSha256 !== observedDigests.get(read[0].id)) throw new Error("scoped-read-result-mismatch"); add(reads, read[0].id, action); }
+    if (write[0]) { if (action.result.materialSha256 !== materialMap.get(write[0].id)?.sha256) throw new Error("scoped-write-result-mismatch"); add(writes, write[0].id, action); observedDigests.set(write[0].id, action.result.materialSha256); }
     if (checks[0]) add(verifications, checks[0].id, action);
   }
   const snapshot: Snapshot = { manifest, rows, actions, profileDigest: policy.parameters.profileDigest,
     armDigest: scopedBrokerArmDigest(manifest.identity), reads, writes, verifications };
   const capability = Object.freeze({ version: "scoped-mediation-capability-v1", journalSha256: sha(evidence.journalBytes),
     profileDigest: snapshot.profileDigest }); snapshots.set(capability, snapshot); return capability;
+}
+
+// A receipt covers only its signed command policy. Dynamic document bytes in
+// v3 must still match every writable material and the current workspace.
+export function scopedProjectReceiptCoversTask(receipt: any, input: FactInput): boolean {
+  const commands = input.task?.verifyCommands;
+  if (!Array.isArray(commands) || commands.length === 0 || commands.some(command => typeof command !== "string")) return false;
+  if (receipt?.kind !== "scoped-project-verification-receipt-v3")
+    return commands.every(command => SCOPED_PROJECT_COMMANDS.has(command.trim()));
+  const scope = receipt.scope;
+  if (receipt.version !== 3 || receipt.worker?.version !== "scoped-configured-docs-worker-v1"
+    || !scope || scope.kind !== "configured-docs-current-v1" || !HASH.test(scope.frozenSourceDigest)
+    || !isDeepStrictEqual(commands.map(command => command.trim()), scope.commands)
+    || !Array.isArray(scope.files) || scope.files.length < 1 || scope.files.length > 8) return false;
+  const paths = new Map(input.plan.materialBindings.map((item: any) => [item.id, item.relativePath]));
+  const expectedPaths = [...new Set(input.contract.facts.filter((fact: any) => fact.kind === "workspace-scope")
+    .flatMap((fact: any) => fact.parameters.allowedWriteMaterialIds.map((id: string) => paths.get(id))))].sort();
+  if (!isDeepStrictEqual(expectedPaths, scope.files.map((item: any) => item.relativePath))) return false;
+  if (!input.projectRoot || workingTreeSnapshotHasUnavailableEvidence(input.workspace)) return false;
+  try {
+    if (!isDeepStrictEqual(workingTreeSnapshot(input.projectRoot), input.workspace)) return false;
+    for (const file of scope.files) {
+      const material = input.materials.find((item: any) => item.relativePath === file.relativePath);
+      if (!HASH.test(file.sha256) || !material || material.sha256 !== file.sha256
+        || sha(readWorkspaceFile(input.projectRoot, file.relativePath, 65536)) !== file.sha256
+        || typeof material.text !== "string" || Buffer.byteLength(material.text) !== file.byteLength) return false;
+    }
+    if (!isDeepStrictEqual(workingTreeSnapshot(input.projectRoot), input.workspace)) return false;
+  } catch { return false; }
+  return receipt.sourceDigest === sha(JSON.stringify({ version: 1, frozenSourceDigest: scope.frozenSourceDigest, files: scope.files }));
 }
 
 function disposition(status: "pass" | "fail" | "unknown" | "error", fact: any, details: any,
@@ -250,7 +287,10 @@ export function scopedMediationFactObservation(capability: object, input: FactIn
       .filter(file => baseline[file] !== input.workspace[file]);
     const violation = observed.some(id => !allowed.has(id)) || changed.some(file => !allowedPaths.has(file));
     if (violation) return disposition("fail", fact, { observed, changed, allowed: [...allowed] }, ["scope-violation"], response);
-    const missing = [...allowed].filter(id => !value.writes.has(id));
+    // Permission to write does not require a mutation when review found no change.
+    // Every actual change still needs an observed write for the same bound path.
+    const observedPaths = new Set(observed.map(id => bindings.get(id)));
+    const missing = changed.filter(file => !observedPaths.has(file));
     return missing.length ? disposition("unknown", fact, { missing }, ["incomplete-mediation"], response)
       : disposition("pass", fact, { observed, changed }, [], response);
   }
@@ -261,7 +301,10 @@ export function scopedMediationFactObservation(capability: object, input: FactIn
       && action.receipt?.cleanup?.confirmed === true && action.result.verificationRunId === action.receipt.attemptId);
     if (matches.length !== 1) return disposition("unknown", fact, { matches: matches.length },
       ["incomplete-mediation"], response);
-    const receipt = matches[0].receipt, details = { verificationRunId: receipt.attemptId,
+    const receipt = matches[0].receipt;
+    if (!scopedProjectReceiptCoversTask(receipt, { ...input, projectRoot: value.manifest.root })) return disposition("unknown", fact,
+      { configuredCommandsOrCurrentFilesCovered: false }, ["incomplete-mediation"], response);
+    const details = { verificationRunId: receipt.attemptId,
       commandSetDigest: receipt.planDigest, outcome: receipt.evidence?.outcome,
       failedCommands: receipt.evidence?.failedCommands };
     if (receipt.evidence?.outcome === "failed" && Array.isArray(receipt.evidence.failedCommands)

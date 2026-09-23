@@ -9,6 +9,15 @@ import test from "node:test";
 
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { operatorRequestDigest, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
+import { productionV3ReferenceSolution } from "./helpers/production-v3-reference-solutions.mjs";
+import { workflowCoveredContracts } from "./helpers/workflow-public-coverage.mjs";
+import { provisionSyntaxParserRuntime } from "./helpers/guard-harness.mjs";
+import { openHostContractConfiguration, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { expectedNodeProfile } from "../packages/piagent-core/extensions/acceptance-executor/node-profile.mjs";
+import { compileIndependentContract, compareIndependentExecution } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
+import { benchmarkVerificationReceiptForTurn } from "../scripts/benchmark-independent-verification.mjs";
+import { resolveProjectProfileDocument } from "../packages/piagent-core/capabilities/project-profile.js";
+import { selectVerificationPlan } from "../packages/piagent-core/extensions/verification-intelligence.js";
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -80,6 +89,11 @@ function copyRuntimePlatform(temporary, piRoot) {
   const packageRoot = path.join(platformRoot, "packages", "piagent-core");
   fs.mkdirSync(path.dirname(packageRoot), { recursive: true });
   fs.cpSync(path.join(repoRoot, "packages", "piagent-core"), packageRoot, { recursive: true });
+  // This runtime matrix checks explicit strict handoff and recovery behavior.
+  const policyPath = path.join(packageRoot, "policies", "base-policy.json");
+  const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+  policy.finalGate.acceptanceProofMode = "enforce";
+  fs.writeFileSync(policyPath, `${JSON.stringify(policy, null, 2)}\n`);
   fs.copyFileSync(path.join(repoRoot, "package.json"), path.join(platformRoot, "package.json"));
   for (const directory of ["adapters", "packs", "evals"]) {
     fs.cpSync(path.join(repoRoot, directory), path.join(platformRoot, directory), { recursive: true });
@@ -94,6 +108,7 @@ function copyRuntimePlatform(temporary, piRoot) {
     "dir"
   );
   fs.symlinkSync(path.join(piRoot, "node_modules", "typebox"), path.join(dependencies, "typebox"), "dir");
+  provisionSyntaxParserRuntime(platformRoot);
   return { platformRoot, packageRoot };
 }
 
@@ -499,13 +514,152 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     }
   });
 
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pinned-runtime-e2e-"));
+  const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pinned-runtime-e2e-")));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
   const { packageRoot } = copyRuntimePlatform(temporary, piRoot);
   const host = await import(pathToFileURL(path.join(piRoot, "dist", "index.js")));
   const piAi = await import(pathToFileURL(path.join(dependencyPackageRoot(piRoot, "@earendil-works/pi-ai"), "dist", "index.js")));
   const guardModule = await import(`${pathToFileURL(path.join(packageRoot, "extensions", "piagent-guard.ts")).href}?e2e=${Date.now()}`);
   const guard = guardModule.default;
+
+  for (const outcome of ["correct", "wrong", "no-authority"]) await t.test(`workflow fixture whole-task authority route: ${outcome}`, {
+    skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET
+      ? "requires explicit local isolated-worker inputs; not a default-profile completion qualification" : false,
+    timeout: 60000
+  }, async subtest => {
+    // Direct SDK operation only: actual Node profile and v3 workflow request,
+    // but not the benchmark's scout/implement/review WebUI journey or treatment.
+    const id = `workflow-authority-${outcome}`, workspaceRoot = path.join(temporary, "workspaces", id);
+    const cwd = path.join(workspaceRoot, "project");
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+    fs.cpSync(path.join(repoRoot, "benchmarks/production-v3/project"), cwd, { recursive: true });
+    execFileSync("bash", [path.join(repoRoot, "scripts/init-project.sh"), cwd,
+      "--profile", "node-typescript", "--package-source", path.dirname(path.dirname(packageRoot))],
+    { cwd: repoRoot, env: { ...process.env, PIAGENT_NO_UPDATE_CHECK: "1" }, stdio: "pipe" });
+    execFileSync("git", ["init", "-q", cwd]);
+    execFileSync("git", ["-C", cwd, "config", "user.email", "piagent-test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    execFileSync("git", ["-C", cwd, "add", "."]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "public workflow fixture"]);
+    const profile = resolveProjectProfileDocument(path.dirname(path.dirname(packageRoot)),
+      JSON.parse(fs.readFileSync(path.join(cwd, ".pi/piagent-profile.json"), "utf8"))).profile;
+    const originalProfile = JSON.parse(fs.readFileSync(path.join(repoRoot, "adapters/node-typescript/profile.json"), "utf8"));
+    assert.deepEqual(profile.verifyCommands, originalProfile.verifyCommands);
+    assert.deepEqual(profile.runtimePolicy, originalProfile.runtimePolicy);
+    const message = fs.readFileSync(path.join(repoRoot, "benchmarks/production-v3/prompts/workflow-switch-same-session.md"), "utf8").trim();
+    const preview = benchmarkVerificationReceiptForTurn({ message, workflow: "platform-improve" }, {
+      profile, policy: JSON.parse(fs.readFileSync(path.join(repoRoot, "packages/piagent-core/policies/base-policy.json"), "utf8"))
+    });
+    const family = JSON.parse(fs.readFileSync(path.join(repoRoot, "adapters/node-typescript/contract-families.json"), "utf8"))
+      .families.find(item => item.id === "workflow-message-reducer" && item.version === 1);
+    const contracts = workflowCoveredContracts(preview.criteria, family);
+    assert.ok(contracts.every(contract => contract.checks.every(check => check.cases.every(item => item.id !== "unknown-event"))));
+    const previousConfig = process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG;
+    subtest.after(() => previousConfig === undefined ? delete process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG
+      : process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = previousConfig);
+    if (outcome === "no-authority") delete process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG;
+    else {
+      // Authority exists only in this private temporary test fixture. Neither
+      // production configuration nor registered measurement approval is changed.
+      fs.mkdirSync(path.join(temporary, "test-authority"), { recursive: true, mode: 0o700 });
+      const approval = writeHostContractApproval({ directory: path.join(temporary, "test-authority", id),
+        projectRoot: fs.realpathSync(cwd), installedRoot: path.dirname(path.dirname(packageRoot)), approved: true,
+        operatorRequestDigest: operatorRequestDigest(preview.query),
+        backend: { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID,
+          dockerSocket: process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000, profile: expectedNodeProfile() }, contracts });
+      process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = approval.configPath;
+    }
+    const [sourcePath, reference] = productionV3ReferenceSolution("workflow-switch-same-session");
+    const source = outcome === "wrong"
+      ? reference.replace('Object.hasOwn(event, "workflow")', 'event.workflow !== undefined') : reference;
+    if (outcome === "wrong") assert.notEqual(source, reference, "deliberate own-undefined validation defect must be applied");
+    const testSource = "import assert from 'node:assert/strict';\nimport test from 'node:test';\n"
+      + "import { initialWorkflowSession, reduceWorkflowSession } from '../src/platform/workflow-session.js';\n"
+      + "test('exported initial state and selected workflow', () => {\n"
+      + "assert.deepEqual(initialWorkflowSession, { currentWorkflow: null, messages: [] });\n"
+      + "assert.deepEqual(reduceWorkflowSession(undefined, { type: 'workflow/select', workflow: 'task' }), { currentWorkflow: 'task', messages: [] });\n});\n";
+    const command = selectVerificationPlan(profile, undefined, "source-change", cwd, [sourcePath, "test/**"]).commands[0];
+    const turns = [
+      ...["AGENTS.md", "README.md", "package.json", sourcePath].map((file, index) =>
+        toolTurn(`${id}-read-${index}`, "read", { path: file })),
+      toolTurn(`${id}-source`, "write", { path: sourcePath, content: source }),
+      toolTurn(`${id}-test`, "write", { path: "test/workflow-public.test.js", content: testSource }),
+      toolTurn(`${id}-verify`, "bash", { command }),
+      textTurn("Implemented the requested workflow reducer and ran the configured verification successfully. The requested work is complete.")
+    ];
+    const run = await runActualSession({ host, piAi, guard, cwd, temporary, id, prompt: preview.query, turns });
+    assert.deepEqual(run.extensionErrors, []);
+    const task = taskForSession(cwd, id);
+    assert.ok(task, JSON.stringify({ contexts: run.providerContexts, events: run.events }));
+    subtest.diagnostic(JSON.stringify({ outcome, taskOutcome: task.trace.outcome,
+      operatorDigestMatches: task.operatorRequestDigest === operatorRequestDigest(preview.query),
+      criteria: task.acceptanceReceipt.criteria.map(item => ({ id: item.id, status: item.status })),
+      tools: run.events.filter(event => event.type === "tool_execution_end").map(event => ({
+        id: event.toolCallId, isError: event.isError,
+        ...(event.isError ? { result: event.result } : {}) })), turnCount: run.turnCount }));
+    assert.equal(task.operatorRequestDigest, operatorRequestDigest(preview.query));
+    assert.equal(toolEvent(run.events, `${id}-verify`)?.isError, false, "the configured project verifier must execute successfully");
+    assert.ok(task.verifyEvidence.some(item => item.command === command && item.exitCode === 0));
+    if (outcome !== "no-authority") {
+      // Reopen the authenticated evidence store and independently recompare its
+      // actual worker observations. Task JSON statuses alone cannot prove this.
+      const configuration = openHostContractConfiguration({
+        configPath: process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG,
+        projectRoot: cwd, installedRoot: path.dirname(path.dirname(packageRoot)) });
+      try {
+        assert.equal(configuration.isCurrent(), true);
+        const currentDigest = workingTreeEvidenceDigest(workingTreeSnapshot(cwd));
+        const observations = contracts.map((contract, index) => {
+          const expected = outcome === "wrong" && [1, 3].includes(index) ? "fail" : "pass";
+          const event = configuration.store.latest({ taskRunId: task.taskRunId, criterionId: contract.criterionId });
+          assert.equal(event?.phase, "settled", "independent execution must really settle");
+          assert.equal(event.binding.criterionHash, contract.criterionHash);
+          assert.equal(event.binding.verifierDigest, configuration.payload.verifierDigest);
+          const evidence = JSON.parse(event.evidenceText), result = evidence.observed.result;
+          const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 2,
+            profile: expectedNodeProfile(), source: fs.readFileSync(path.join(cwd, sourcePath), "utf8"),
+            exportName: contract.exportName, checks: contract.checks }));
+          assert.equal(event.binding.planDigest, compiled.planDigest);
+          assert.equal(evidence.planDigest, compiled.planDigest);
+          assert.equal(evidence.snapshotDigest, event.binding.snapshotDigest);
+          assert.equal(evidence.observed.snapshotDigest, event.binding.snapshotDigest);
+          assert.equal(result.execution.runId, event.attemptId);
+          assert.equal(result.execution.status, "completed");
+          assert.equal(result.execution.cleanupConfirmed, true);
+          const compared = compareIndependentExecution(compiled, result.execution);
+          assert.equal(compared.verdict, expected);
+          assert.equal(evidence.verdict, expected);
+          assert.deepEqual(compared.counterexamples, result.counterexamples);
+          const criterion = task.acceptanceReceipt.criteria[index];
+          assert.ok(criterion.evidence.some(item => item.kind === "independent-contract"
+            && item.workingTreeDigest === currentDigest));
+          if (expected === "fail") {
+            assert.equal(criterion.status, "blocked");
+            assert.ok(compared.counterexamples.some(item => item.evidence.input.id === "invalid-duplicate-override"
+              && item.evidence.expected.outcome === "throw" && item.evidence.observed.outcome === "return"),
+            "own-undefined defect needs an actual independent counterexample, not an approval failure");
+          }
+          return { criterionId: contract.criterionId, verdict: compared.verdict,
+            failedCases: compared.counterexamples.map(item => item.evidence.input.id) };
+        });
+        subtest.diagnostic(JSON.stringify({ outcome, authenticatedWorkerObservations: observations }));
+      } finally { configuration.close(); }
+    }
+    if (outcome === "correct") {
+      assert.equal(task.trace.outcome, "completed", "correct sufficiently evidenced whole task must complete through the ordinary gate");
+      assert.ok(task.acceptanceReceipt.criteria.every(item => item.status === "satisfied"));
+      assert.ok(task.workPlan.every(item => item.status === "done"));
+    } else {
+      assert.notEqual(task.trace.outcome, "completed");
+      const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi/piagent-state/handoffs", `${task.taskRunId}.json`), "utf8"));
+      assert.equal(handoff.state.completionApproved, false);
+      assert.equal(handoff.nextSafeAction.action, "handoff");
+      if (outcome === "no-authority") {
+        assert.match(JSON.stringify(handoff), /independent-acceptance-proof-required/);
+        assert.equal(run.turnCount, turns.length, "missing authority cannot consume another model turn");
+      }
+    }
+  });
 
   await t.test("all four capability prompt shapes create bounded runtime tasks and can inspect their declared source", async () => {
     const testScope = ["test/**", "tests/**", "spec/**", "__tests__/**"];
@@ -831,6 +985,45 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     assert.equal(handoff.state.completionApproved, false);
     assert.match(handoff.state.missing.join("; "), /semantic review handoff: global-budget-exhausted/);
     assert.equal(handoff.nextSafeAction.action, "handoff");
+  });
+
+  for (const authorityProfile of [undefined, "strict-high-risk"]) await t.test(`unsupported compound proof hands off without a model continuation (${authorityProfile ?? "release-default"})`, async () => {
+    const id = `compound-${authorityProfile ?? "default"}`;
+    const command = "node --test test/chat.test.js";
+    const cwd = createProject(path.join(temporary, "workspaces", id), { authorityProfile, verifyCommands: [command] });
+    const [sourcePath, source] = productionV3ReferenceSolution("reconnect-chat-event-order");
+    writeFile(cwd, sourcePath, fs.readFileSync(path.join(repoRoot, "benchmarks/production-v3/project", sourcePath), "utf8"));
+    execFileSync("git", ["-C", cwd, "add", "."]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "compound proof baseline"]);
+    const prompt = fs.readFileSync(path.join(repoRoot, "benchmarks/production-v3/prompts/reconnect-chat-event-order.md"), "utf8");
+    // This passing smoke test does not claim all clauses are proven. The test
+    // exercises the missing assessment route, never supplies independent authority.
+    const testSource = "import assert from 'node:assert/strict';\n"
+      + "import { projectChatEvents } from '../src/frontend/chat-events.js';\n"
+      + "assert.deepEqual(projectChatEvents([]), { messages: [], processing: false });\n"
+      + "assert.throws(() => projectChatEvents(null), TypeError);\n";
+    const turns = [
+      toolTurn(`${id}-read`, "read", { path: sourcePath }),
+      toolTurn(`${id}-source`, "write", { path: sourcePath, content: source }),
+      toolTurn(`${id}-test`, "write", { path: "test/chat.test.js", content: testSource }),
+      toolTurn(`${id}-verify`, "bash", { command }),
+      textTurn("Implemented the chat projection. The configured verifier passes; the task is complete.")
+    ];
+    const run = await runActualSession({ host, piAi, guard, cwd, temporary, id, prompt, turns });
+    assert.deepEqual(run.extensionErrors, []);
+    assert.equal(toolEvent(run.events, `${id}-verify`)?.isError, false);
+    const task = taskForSession(cwd, id);
+    assert.ok(task.acceptanceCriteria.some(text => text.includes("\n")), "exercise the real grouped intake");
+    assert.equal(task.trace.outcome, "pending");
+    assert.ok(task.acceptanceReceipt.criteria.some(criterion => criterion.priority === "critical" && criterion.status === "pending"));
+    const recoveries = run.sessionEntries.filter(entry => entry.type === "custom_message" && entry.customType === "piagent-completion-recovery");
+    assert.equal(recoveries.length, 0, "a missing independent assessment route cannot be repaired by an automatic model diagnostic");
+    assert.equal(run.turnCount, turns.length, "no fallback model turn is spent after the handoff");
+    const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi/piagent-state/handoffs", `${task.taskRunId}.json`), "utf8"));
+    assert.equal(handoff.state.completionApproved, false);
+    assert.equal(handoff.nextSafeAction.action, "handoff");
+    assert.match(JSON.stringify(handoff), /independent-acceptance-proof-required/);
+    assert.equal(fs.readFileSync(path.join(cwd, sourcePath), "utf8"), source);
   });
 
   await t.test("completion recovery names the task-derived target, criterion, and missing proof dimension", async () => {

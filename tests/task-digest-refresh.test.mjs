@@ -8,7 +8,9 @@ const Type = {
   Object: () => ({}), String: () => ({}), Number: () => ({}), Array: () => ({}), Optional: (value) => value
 };
 
-test("explicit verify recording cannot bypass the automatic migration pre/post tree invariant", async () => {
+for (const diagnostic of [false, true]) test(diagnostic
+  ? "explicit verify recording retains unresolved focused failures beyond the recent-history limit"
+  : "explicit verify recording cannot bypass the automatic migration pre/post tree invariant", async () => {
   const snapshot = { "src/value.ts": versionWorkingTreeHash("a".repeat(64)) };
   const currentDigest = workingTreeEvidenceDigest(snapshot);
   let written;
@@ -22,8 +24,13 @@ test("explicit verify recording cannot bypass the automatic migration pre/post t
       archiveDigest: "b".repeat(64), archiveBytes: 10, baselineEvidenceDigest: "d".repeat(64), finalEvidenceDigest: "e".repeat(64), recordedAt: "2026-08-10T00:00:00.000Z"
     }
   };
+  if (diagnostic) task.verifyEvidence = [
+    { command: 'node focused.mjs', observed: true, matchedProfileCommand: false, exitCode: 1, workingTreeDigest: currentDigest },
+    ...Array.from({ length: 100 }, (_, i) => ({ command: `node history-${i}.mjs`, observed: true, matchedProfileCommand: true, exitCode: 0, workingTreeDigest: currentDigest }))
+  ];
   const tools = new Map();
   registerTaskCompletionTools({}, {
+    policy: { finalGate: { acceptanceProofMode: diagnostic ? 'diagnostic' : 'enforce' } },
     Type, StringEnum: () => ({}), registerPiagentTool: (_pi, definition) => tools.set(definition.name, definition),
     readTask: () => task, readObservedBashResults: () => [], observedBashLedgerPath: () => "unused",
     bashResults: { list: () => [] }, findMatchingObservedBashResult: () => ({ ok: true, entry: { recordedAt: "2026-08-10T00:01:00.000Z", isError: false, commandHash: "c".repeat(64) } }),
@@ -43,6 +50,10 @@ test("explicit verify recording cannot bypass the automatic migration pre/post t
   }, undefined, undefined, { cwd: "/tmp/digest-refresh", sessionManager: { getSessionId: () => "session-1" } });
 
   assert.equal(result.isError, undefined);
+  if (diagnostic) {
+    assert.ok(written.verifyEvidence.some(e => e.command === 'node focused.mjs' && e.exitCode === 1));
+    assert.equal(written.verifyEvidence.length, 101);
+  }
   assert.equal(written.workingTreeDigestMigration.status, "verification-refresh-required");
   assert.equal(written.workingTreeDigestMigration.requiredAction, "rerun-exact-verifier");
   assert.equal(written.verifyEvidence[0].workingTreeDigest, currentDigest);

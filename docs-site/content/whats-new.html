@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.7.0</p>
+  <h2 id="v1-7-0">Phiên dài giữ đúng việc, context và số liệu rõ ràng</h2>
+  <p class="section-lead">v1.7.0 cập nhật Pi 0.86.1, sửa phục hồi phiên và bổ sung chờ trong phiên đang mở.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3>Chờ theo yêu cầu</h3><p>Nhờ agent chờ tới lần kiểm tra tiếp theo; timer không gọi model trong khoảng chờ. Phiên phải còn mở.</p></article>
+    <article class="card"><h3>Context và usage</h3><p>Context ưu tiên file dùng được; token và kết quả kiểm tra được gắn đúng task.</p></article>
+    <article class="card"><h3>Giới hạn bằng chứng</h3><p>14 phiên từng lỗi đã PASS khi chạy lại riêng. Không gộp thành điểm 108 phiên mới hoặc claim tiết kiệm token tổng thể.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.6.1 · Reliability patch</p>
   <h2 id="v1-6-1">UI đúng trạng thái, review repo ngoài an toàn, helper ít tốn hơn</h2>
   <p class="section-lead">Bản vá này giữ nguyên model và thinking level, nhưng siết chặt lifecycle để response chỉ hiện khi task thật sự hoàn tất, đồng thời giới hạn helper và quyền đọc source ngoài theo đúng session.</p>

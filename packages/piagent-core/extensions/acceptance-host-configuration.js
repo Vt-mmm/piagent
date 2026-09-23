@@ -102,6 +102,16 @@ export function installedContractVerifierDigest(root) {
 }
 
 /** Structural/semantic validation only; a payload is not authenticated authority. */
+/** Request-set native-only steps grant no criterion receipts. Unknown requests
+ * and mutation-capable tasks cannot borrow another request's authority. */
+export function independentRequestAdmissionBlock(request, task) {
+  if (!request) return "independent host approval does not cover the current operator request";
+  if (request.nativeOnly === true && (task.changeMode !== "read-only" || task.mutationPolicy !== "forbidden")) {
+    return "native-only host approval requires a read-only mutation-forbidden task";
+  }
+  return undefined;
+}
+
 export function validateHostContractPayload(payload) {
   if ([HOST_CONTRACT_SET_VERSION, NODE_HOST_CONTRACT_SET_VERSION].includes(payload?.version)) {
     if (!exact(payload, ["version", "projectId", "verifierDigest", "plans"])
@@ -125,12 +135,14 @@ export function validateHostContractPlan(plan) {
     validatePlanList(plan.plans, plan.schemaVersion === 4 ? 3 : 1);
     return plan;
   }
+  if (Object.hasOwn(plan ?? {}, "nativeOnly")) throw new TypeError("Native-only steps require an explicit request set");
   validateSinglePlan(plan);
   return plan;
 }
 
 function validateSinglePlan(plan) {
-  if (!exact(plan, ["schemaVersion", "operatorRequestDigest", "backend", "contracts"]) || ![1, 3].includes(plan.schemaVersion)) {
+  if (!exact(plan, ["schemaVersion", "operatorRequestDigest", "backend", "contracts",
+    ...(Object.hasOwn(plan ?? {}, "nativeOnly") ? ["nativeOnly"] : [])]) || ![1, 3].includes(plan.schemaVersion)) {
     throw new TypeError("Invalid host contract plan");
   }
   validateContractBody(plan, plan.schemaVersion);
@@ -153,6 +165,7 @@ function validateContractBody(payload, schemaVersion = 1) {
   const backendFields = nodeProfile
     ? ["imageId", "dockerSocket", ...(hasDockerCommand ? ["dockerCommand"] : []), "timeoutMs", "profile"]
     : ["imageId", "dockerSocket", "timeoutMs"];
+  if (Object.hasOwn(payload.backend ?? {}, "startupAllowanceMs")) backendFields.push("startupAllowanceMs");
   if (!/^operator-request-v1:[a-f0-9]{64}$/.test(payload.operatorRequestDigest)
     || !exact(payload.backend, backendFields)
     || !/^sha256:[a-f0-9]{64}$/.test(payload.backend.imageId) || typeof payload.backend.dockerSocket !== "string"
@@ -164,9 +177,14 @@ function validateContractBody(payload, schemaVersion = 1) {
       || path.normalize(payload.backend.dockerCommand.path) !== payload.backend.dockerCommand.path
       || payload.backend.dockerCommand.path.includes("\0")
       || !HASH.test(String(payload.backend.dockerCommand.sha256 ?? "")))
+    || Object.hasOwn(payload.backend, "startupAllowanceMs") && (!Number.isSafeInteger(payload.backend.startupAllowanceMs)
+      || payload.backend.startupAllowanceMs < 0 || payload.backend.startupAllowanceMs > 60000)
     || !Number.isSafeInteger(payload.backend.timeoutMs) || payload.backend.timeoutMs < 25 || payload.backend.timeoutMs > 30000
     || nodeProfile && JSON.stringify(payload.backend.profile) !== JSON.stringify(expectedNodeProfile())
-    || !Array.isArray(payload.contracts) || payload.contracts.length < 1 || payload.contracts.length > 12) throw new TypeError("Invalid host contract approval");
+    || !Array.isArray(payload.contracts) || payload.contracts.length > 12
+    || (Object.hasOwn(payload, "nativeOnly")
+      ? !nodeProfile || payload.nativeOnly !== true || payload.contracts.length !== 0
+      : payload.contracts.length < 1)) throw new TypeError("Invalid host contract approval");
   const ids = new Set();
   for (const contract of payload.contracts) {
     if (nodeProfile && contract?.route === "composite") {
@@ -276,7 +294,8 @@ export function openHostContractConfiguration({ configPath, projectRoot, install
   const requests = setVersion ? payload.plans.map(plan => freeze({
     version: payload.version === NODE_HOST_CONTRACT_SET_VERSION ? NODE_HOST_CONTRACT_CONFIGURATION_VERSION : HOST_CONTRACT_CONFIGURATION_VERSION,
     projectId: payload.projectId, verifierDigest: payload.verifierDigest,
-    operatorRequestDigest: plan.operatorRequestDigest, backend: plan.backend, contracts: plan.contracts
+    operatorRequestDigest: plan.operatorRequestDigest, backend: plan.backend, contracts: plan.contracts,
+    ...(plan.nativeOnly === true ? { nativeOnly: true } : {})
   })) : [payload];
   function withCompositeAuthority({ contract, binding, create }) {
     const owner = payload.contracts?.includes(contract) ? payload : requests.find(request => request.contracts.includes(contract));

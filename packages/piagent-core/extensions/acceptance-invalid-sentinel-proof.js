@@ -72,7 +72,7 @@ function exactCallable(bodies, name) {
   return callable && exactName(callable) === name ? callable : null;
 }
 
-function exactFunction(callable, parameterCount) {
+function exactFunction(callable, parameterCount, allowUndefinedDefault = false) {
   const parameters = exactParameters(callable);
   const parameterSource = compact(exactField(callable, "exactParameterSource", "parameterSource"));
   return Boolean(callable)
@@ -81,8 +81,8 @@ function exactFunction(callable, parameterCount) {
     && callable.asynchronous === false
     && callable.ownsArguments === true
     && parameters.length === parameterCount
-    && parameterSource === parameters.join(",")
-    && (exactField(callable, "exactDefaultedParameters", "defaultedParameters") ?? []).length === 0
+    && (parameterSource === parameters.join(",")
+      || (allowUndefinedDefault && parameterCount === 2 && parameterSource === `${parameters[0]},${parameters[1]}=undefined`))
     && uniqueCaseFolded([exactName(callable), ...parameters]);
 }
 
@@ -393,7 +393,7 @@ function closedDirectThrowModuleProof(bodies, publicName) {
 
 function inlineDirectThrowModuleCandidate(bodies, publicName) {
   const callable = exactCallable(bodies, publicName);
-  if (!exactFunction(callable, 2)) return false;
+  if (!exactFunction(callable, 2, true)) return false;
   const declarations = bodies.exactDeclarations ?? bodies.declarations ?? [];
   const hasInlineStrictRegex = declarations.some((item) => {
     const candidate = exactCallable(bodies, item.name);
@@ -406,7 +406,7 @@ function inlineDirectThrowModuleCandidate(bodies, publicName) {
     && (body.includes("arguments.length") || body.includes("Date.now()"));
 }
 
-function closedInlineDirectThrowModuleProof(bodies, publicName) {
+function closedInlineDirectThrowModuleProof(bodies, publicName, contractText = "") {
   const candidate = inlineDirectThrowModuleCandidate(bodies, publicName);
   if (!candidate) return { candidate: false, proof: null };
   const statements = bodies.exactTopLevelStatements ?? [];
@@ -416,12 +416,14 @@ function closedInlineDirectThrowModuleProof(bodies, publicName) {
   if (!bodies.exactScanComplete || bodies.exactMappingComplete === false
     || (bodies.exactCaseFoldCollisions?.size ?? 0) > 0
     || declarations.length < 3 || declarations.length > 9 || statements.length !== declarations.length
-    || !exactFunction(callable, 2) || !exactClosedModuleParses(callable)
+    || !exactFunction(callable, 2, true) || !exactClosedModuleParses(callable)
     || exactParameters(callable).some((parameter) => declarations.some((item) => item.name.toLowerCase() === parameter.toLowerCase()))
-    || declarations.some((item) => !exactFunction(exactCallable(bodies, item.name), item.name === publicName ? 2 : 1))
+    || declarations.some((item) => !exactFunction(exactCallable(bodies, item.name), item.name === publicName ? 2 : 1, item.name === publicName))
     || statements.some((item) => !compact(item.source).startsWith(`${item.declarationName === publicName ? "export" : ""}function${item.declarationName}(`))
     || !intrinsicEnvironmentIsClosed(exactSource(callable), declarations.flatMap((item) => [item.name, ...item.parameters]), { caseSensitive: true })) return reject();
-  const result = temporalDataflowModuleProof(bodies, publicName);
+  const result = temporalDataflowModuleProof(bodies, publicName, {
+    expiryBeforeClock: /read\s+`?Date\.now\(\)`?\s+after validating\s+`?[A-Za-z_$][\w$]*`?/i.test(contractText)
+  });
   if (!result.proven) return reject(result.reasons);
   return { candidate: true, proof: {
     publicChain: { callable },
@@ -436,7 +438,7 @@ function closedInlineDirectThrowModuleProof(bodies, publicName) {
  * write, control path, case-fold collision, or indirect dependency edge.
  */
 export function invalidSentinelRejectionProof({
-  bodies, name, requestedErrors = [], requestedPartitions = [], requiredInputNames = null
+  bodies, name, requestedErrors = [], requestedPartitions = [], requiredInputNames = null, contractText = ""
 }) {
   if (!requestedErrors.includes("typeerror")) return failedProof();
   const publicCallable = bodies.get(name);
@@ -445,7 +447,7 @@ export function invalidSentinelRejectionProof({
   const sentinel = closedModuleProof(bodies, publicName);
   const directThrow = sentinel ? { candidate: false, proof: null } : closedDirectThrowModuleProof(bodies, publicName);
   const inlineDirectThrow = sentinel || directThrow.proof
-    ? { candidate: false, proof: null } : closedInlineDirectThrowModuleProof(bodies, publicName);
+    ? { candidate: false, proof: null } : closedInlineDirectThrowModuleProof(bodies, publicName, contractText);
   const closed = sentinel ?? directThrow.proof ?? inlineDirectThrow.proof;
   if (!closed) return failedProof(directThrow.candidate || inlineDirectThrow.candidate, inlineDirectThrow.reasons);
   if (requestedPartitions.some((partition) => ["non-array", "non-string"].includes(partition))) return failedProof(true);
@@ -460,7 +462,7 @@ export function invalidSentinelRejectionProof({
   const inputIndex = exactParameters(publicCallable).indexOf(matches[0]);
   if (inputIndex === 0) return { generic: true, candidate: true, partitions: new Set(closed.expiry.partitions) };
   if (inputIndex === 1 && publicCallable.ownsArguments === true) {
-    return { generic: true, candidate: true, partitions: new Set(closed.now.partitions) };
+    return { generic: true, candidate: true, preservesExplicitUndefined: Boolean(inlineDirectThrow.proof), partitions: new Set(closed.now.partitions) };
   }
   return failedProof(true);
 }

@@ -69,6 +69,17 @@ export type RecoveryDecision = {
 const REF = /^[a-z0-9][a-z0-9:._-]{0,255}$/i;
 const COUNTED_DISPOSITIONS = new Set<RecoveryDisposition>(["scheduled", "failed", "succeeded"]);
 
+export function applyProofCapabilityHandoff(selected: RecoveryDecision, missing: string[] = [], hasIndependentRecovery = false): RecoveryDecision {
+  let reason: RecoveryReasonCode | undefined;
+  if (selected.failureCategory === "unknown" && !hasIndependentRecovery && selected.action !== "blocked"
+    && missing.some(item => /^critical acceptance evidence independent-required\b/i.test(item))) reason = "independent-acceptance-proof-required";
+  else if (selected.failureCategory === "unknown" && !hasIndependentRecovery && selected.action !== "blocked"
+    && missing.some(item => /^critical acceptance evidence source-proof-required\b/i.test(item))) reason = "source-acceptance-proof-required";
+  else if (missing.some(item => /^critical acceptance evidence adapter-unresolved\b/i.test(item))) reason = "deterministic-adapter-proof-required";
+  return reason ? { ...selected, action: "handoff", continuation: "none", nextPhase: null,
+    sourceMutationAllowed: false, reasonCodes: [reason] } : selected;
+}
+
 function validIdentity(input: RecoveryPolicyInput): boolean {
   return Boolean(
     input.task?.taskId?.trim()

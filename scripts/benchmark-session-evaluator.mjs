@@ -25,7 +25,10 @@ function codexFailureEvidence(usage) {
   const summaries = Array.isArray(usage?.codexEventSummaries) && usage.codexEventSummaries.length > 0
     ? usage.codexEventSummaries : usage?.codexEventSummary ? [usage.codexEventSummary] : [];
   return summaries.reduce((counts, summary) => {
-    const signals = Array.isArray(summary?.failureSignals) ? summary.failureSignals : [];
+    // v2 separates command failures followed by successful execution from
+    // terminal failures. Historical v1 summaries retain their original meaning.
+    const signals = summary?.schemaVersion === 2 && Array.isArray(summary.terminalFailureSignals)
+      ? summary.terminalFailureSignals : Array.isArray(summary?.failureSignals) ? summary.failureSignals : [];
     counts.errorEvents += codexEventCount(summary, "error");
     counts.turnFailedEvents += integer(summary?.turns?.failed);
     counts.itemErrorEvents += Math.max(codexEventCount(summary, "item.error"), signals.includes("item-error") ? 1 : 0);
@@ -83,6 +86,7 @@ function taskObservation({ scenario, surface, agent, journeyReceipt, safetyEvide
       : "completed";
     return turn?.operationStatus === "completed"
       && acceptedJourneyTaskStatuses({ expectedSettlement, turnIndex: index + 1,
+        expectedTerminalSettlement: scenario.userJourney?.expectedTerminalSettlement ?? "completed",
         turnCount: expectedTurnCount }).includes(turn?.taskStatus);
   });
   return {

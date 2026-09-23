@@ -1,9 +1,10 @@
+import { dependencyGraphNonMutationEvidence } from "./acceptance-parameter-contract.js"; import { finiteIntervalNonMutationEvidence } from "./acceptance-temporal-contract.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { acceptanceContractConjuncts } from "./acceptance-contract-conjunction.js";
-import { braceScope, sameScope, unconditionalEvidenceScope, constantDeclarations, literalBinding, splitTopLevel, flatObjectSnapshot, boundStringValue, exactBoundValue, callArgumentNames } from "./acceptance-literal-dataflow.js";
+import { pureRecordNonMutationEvidence, byteArrayNonMutationEvidence, braceScope, sameScope, unconditionalEvidenceScope, constantDeclarations, literalBinding, splitTopLevel, flatObjectSnapshot, stableDeepSnapshot, boundStringValue, exactBoundValue, callArgumentNames } from "./acceptance-literal-dataflow.js";
 import { acceptanceResultContractEvidence } from "./acceptance-result-contract-evidence.js";
 import { criterionGraphValidationErrors } from "./criterion-graph.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
@@ -52,7 +53,6 @@ export function acceptanceEvidenceKey(evidence) {
     workingTreeDigest: evidence.workingTreeDigest
   });
 }
-
 
 function escapeRegex(value) {
   return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -521,7 +521,7 @@ function preCallSnapshotName(call, argument) {
     new RegExp(`\\b(?:const|let)\\s+([a-z_$][a-z0-9_$]*)\\s*=\\s*JSON\\.parse\\s*\\(\\s*JSON\\.stringify\\s*\\(\\s*${escaped}\\s*\\)\\s*\\)`, "gi")
   ];
   const deep = deepPatterns.flatMap((pattern) => [...call.prelude.matchAll(pattern)].map((match) => match[1])).at(-1);
-  if (deep) return deep;
+  if (deep) return stableDeepSnapshot(call, argument, deep, assertionComparisons) ? deep : undefined;
   const declaration = [...call.prelude.matchAll(new RegExp(`\\b(?:const|let)\\s+${escaped}\\s*=\\s*\\[([^\\]]*)\\]`, "gi"))].at(-1);
   const primitiveIndexFactory = new RegExp("\\b(?:const|let)\\s+" + escaped + "\\s*=\\s*Array\\.from\\s*\\(\\s*\\{\\s*length\\s*:\\s*\\d+\\s*\\}\\s*,\\s*\\(\\s*[a-z_$][a-z0-9_$]*\\s*,\\s*([a-z_$][a-z0-9_$]*)\\s*\\)\\s*=>\\s*\\1\\s*\\)", "i").test(call.prelude);
   const primitiveElements = primitiveIndexFactory || declaration && splitTopLevel(declaration[1]).every((item) => {
@@ -708,7 +708,7 @@ function linkedTestEvidence(linkage) {
     if (!/\b(?:assert(?:\.[a-z][a-z0-9_]*)?\s*\(|expect\s*\()/i.test(entry.evidenceText)) continue;
     const bound = bindJavaScriptStrings(entry.text);
     const calls = callableSlices(bound.code, bound.strings, callables);
-    if (calls.length > 0) profiles.push({ path: entry.path, code: bound.code, calls, callables, bindings });
+    if (calls.length > 0) profiles.push({ path: entry.path, raw: entry.text, evidenceCode: normalizedText(entry.evidenceText), code: bound.code, calls, callables, bindings });
   }
   return profiles;
 }
@@ -872,7 +872,7 @@ function criterionConjunctMatches(task, rawCriterion, profiles, corpus) {
   const calls = profiles.flatMap((profile) => profile.calls);
   const code = calls.flatMap((call) => call.assertions).join("\n");
   const requirements = [];
-  const resultEvidence = acceptanceResultContractEvidence(rawCriterion, profiles, corpus.sourceEntries);
+  const resultEvidence = acceptanceResultContractEvidence(rawCriterion, profiles, corpus.sourceEntries, [task?.summary, task?.expectedOutput, ...(task?.acceptanceCriteria ?? [])].filter(Boolean).join("\n"));
   if (resultEvidence !== undefined) requirements.push(resultEvidence);
   if (/\bfocused\s+tests?\b/.test(text)) requirements.push(calls.length > 0);
   if (/--[a-z0-9_-]+=[a-z0-9_<[{]/i.test(text) || /\bname\s*=\s*value\b/.test(text)) {
@@ -913,8 +913,8 @@ function criterionConjunctMatches(task, rawCriterion, profiles, corpus) {
     }));
   }
   if (/\b(?:do not|must not|without)\s+mutat|\b(?:do not|must not)\s+[^.;]{0,100}\bor\s+mutat|\bpreserve\s+(?:the\s+)?input|\binputs? must remain unchanged\b/.test(text)) {
-    const requireAll = /\binputs\b/.test(text);
-    requirements.push(calls.some((call) => nonMutationAssertion(call, requireAll))
+    const requireAll = /\binputs\b|\b(?:both|either|all|any)\s+(?:of\s+)?(?:the\s+)?(?:arguments?|inputs?)\b/.test(text);
+    requirements.push(dependencyGraphNonMutationEvidence({rawCriterion,profiles,sourceEntries:corpus.sourceEntries}) || pureRecordNonMutationEvidence({rawCriterion,profiles,sourceEntries:corpus.sourceEntries}) || byteArrayNonMutationEvidence({rawCriterion,profiles,sourceEntries:corpus.sourceEntries}) || finiteIntervalNonMutationEvidence({ rawCriterion, profiles, sourceEntries: corpus.sourceEntries, contextText: [task?.summary, task?.expectedOutput, ...(task?.acceptanceCriteria ?? [])].filter(Boolean).join("\n") }) || calls.some((call) => nonMutationAssertion({ ...call, sourceEntries: corpus.sourceEntries }, requireAll))
       || primitiveNonMutationEvidence(task, profiles, corpus.sourceEntries));
   }
   if (/\b(?:do not|must not|without)\s+add(?:ing)?\s+(?:new\s+)?dependenc/.test(text)) {

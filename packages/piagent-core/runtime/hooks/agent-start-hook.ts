@@ -5,13 +5,15 @@ import {
   buildContextPack,
   classifyContextTask,
   ensureContextIndexV2,
-  estimateContextTokens
+  estimateContextTokens,
+  shouldIndexPath
 } from "../../extensions/context-engine.js";
 import {
   buildSelectedContextPack,
   composeCriterionContextEntries
 } from "../../extensions/criterion-context-pack.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
+import { hasDurableContextEvidence } from "../../extensions/context-evidence.js";
 import { selectRepositoryMemoryFacts } from "../../extensions/repository-memory.js";
 import {
   contextPlanAcceptsConfidence,
@@ -173,13 +175,19 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       const criterionMode = dependencies.autoContextEnabled
         && !terminalUncertainSend
         && intake?.task?.criterionGraph?.mode === "criterion-graph";
+      const contextExcludePatterns = dependencies.contextExcludePatterns(ctx);
+      // Apply the pack's path eligibility before ranking a singleton fallback.
+      // Otherwise an unsupported/protected candidate can displace a usable
+      // planned source and then be discarded by the pack builder.
+      const packEligible = (entry: { path?: unknown }) => typeof entry.path === "string"
+        && shouldIndexPath(entry.path, { excludePatterns: contextExcludePatterns });
       const criterionEntries = !terminalUncertainSend && intake?.task?.criterionGraph?.mode === "criterion-graph"
         ? composeCriterionContextEntries({
             explicitPaths: signal.paths,
             criteria: intake.task.acceptanceCriteria,
-            plannedEntries: intake.plannedContext ?? [],
+            plannedEntries: (intake.plannedContext ?? []).filter(packEligible),
             plannedSelectionComplete: intake.plannedContextComplete === true,
-            retrievedItems: discoveryItems
+            retrievedItems: discoveryItems.filter(packEligible)
           }, { limit: criterionLimit })
         : [];
       const criterionContext = criterionMode
@@ -187,7 +195,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
             budgetTokens: criterionBudget,
             limit: criterionLimit,
             focusText: [query, ...intake.task.acceptanceCriteria].join("\n"),
-            excludePatterns: dependencies.contextExcludePatterns(ctx)
+            excludePatterns: contextExcludePatterns
           })
         : undefined;
       const criterionReasonCode = !dependencies.autoContextEnabled
@@ -207,7 +215,13 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       });
       const composedContext = criterionContext?.selected.length ? criterionContext : undefined;
       const deliveredSelectedContext = criterionMode ? undefined : selectedContext;
-      const content = [deliveredSelectedContext?.content, intake?.text, composedContext?.text].filter(Boolean).join("\n\n");
+      // An oversized file without evidenced ranges can legitimately produce an
+      // empty pack. Make the existing read-evidence requirement actionable;
+      // planned paths and earlier turns are not evidence of current delivery.
+      const contextReadGuidance = criterionMode && !composedContext && !hasDurableContextEvidence(intake?.task)
+        ? "No file content was delivered in the bounded context pack. Before completion, use the native read tool on a relevant source or test file in the task scope; use offset/limit for a large file. Shell inspection and passing tests do not record this read evidence. Do not reread the whole repository."
+        : undefined;
+      const content = [deliveredSelectedContext?.content, intake?.text, composedContext?.text, contextReadGuidance].filter(Boolean).join("\n\n");
       const deliveryTask = intake?.task ?? activeTask;
       const selectedPackPaths = deliveredSelectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(deliveredSelectedContext.details.paths)
         ? deliveredSelectedContext.details.paths.filter((value): value is string => typeof value === "string")

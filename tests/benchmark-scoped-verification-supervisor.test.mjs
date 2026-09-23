@@ -223,6 +223,17 @@ test("project verifier authenticates configured test failure without promoting i
   verifyScopedVerificationEnvelope(result.envelope, value.key.publicKey);
 });
 
+test("fixed project policy rejects a different configured checker before issuing a plan", t => {
+  // The fixed worker expands --check over syntaxFiles; it never executes an
+  // arbitrary replacement scripts/check.mjs. A new script identity therefore
+  // requires another policy, even if package.json retains the same names.
+  for (const checker of ["process.exit(7);\n", "// equivalent is not automatically approved\n"]) {
+    assert.throws(() => projectFixture(t, { mutate(projectRoot) {
+      fs.writeFileSync(path.join(projectRoot, "scripts/check.mjs"), checker);
+    } }), /project-configured-checker-unsupported/);
+  }
+});
+
 test("project verifier signs source drift before execution only as unavailable", async t => {
   const value = projectFixture(t), prepared = value.begin(23);
   fs.appendFileSync(path.join(value.projectRoot, "src/backend/auth.js"), "\n// drift\n");

@@ -236,3 +236,23 @@ export function buildOpenAiCodexWireFingerprint(input: {
     return unavailable(modelId, error instanceof SurfaceBoundError ? error.reasonCode : "surface-not-json");
   }
 }
+
+// Measurement remains outside the signed fingerprint contract. A new telemetry
+// field must not silently change an existing signed-receipt schema.
+export function measureProviderPayload(payload: unknown) {
+  if (!record(payload)) return null;
+  try {
+    // Validate the entire payload within the existing bounds before measuring.
+    // This is the JSON at this hook, not HTTP bytes or proof of a cache hit.
+    canonicalJson(payload);
+    const serialized = JSON.stringify(payload);
+    const measured = JSON.parse(serialized);
+    const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value) ?? "", "utf8");
+    const instructionsBytes = bytes(measured.instructions);
+    const toolsBytes = bytes(measured.tools);
+    const inputBytes = bytes(measured.input);
+    const totalBytes = Buffer.byteLength(serialized, "utf8");
+    return { basis: "hook-json-utf8" as const, instructionsBytes, toolsBytes, inputBytes,
+      remainingBytes: totalBytes - instructionsBytes - toolsBytes - inputBytes, totalBytes, cacheHit: null };
+  } catch { return null; }
+}

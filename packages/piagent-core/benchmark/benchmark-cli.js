@@ -44,6 +44,7 @@ Options:
   --budget-state <file>        Durable accounting outside the source/workspace; required with policy.
   --keep-workspaces            Retain isolated workspaces and session logs.
   --replay-failures <report>   Re-run failed scenario/repeat pairs from a prior report.
+  --failed-attempts-only       With replay, select only FAIL attempts on each original surface.
   --resume <run-directory>     Continue an interrupted/paused run with the same seed.
   --max-sessions <n>           Stop cleanly after n new sessions and resume later.
   --max-runtime-minutes <n>    Stop cleanly after the current session once the budget is used.
@@ -86,7 +87,8 @@ export function assertBenchmarkMeasurementOptions(options) {
   const incompatible = [
     [options.stopAfterFailedPair === true, "--stop-after-failed-pair"],
     [options.scenarioIds !== undefined && options.scenarioIds !== null, "--scenarios"],
-    [options.replayFailures != null || options.replayRuns != null || options.replaySource != null, "--replay-failures"],
+    [(options.replayFailures != null || options.replayRuns != null || options.replaySource != null)
+      && options.failedAttemptsOnly !== true, "--replay-failures"],
     [options.maxRuntimeMinutes !== undefined && options.maxRuntimeMinutes !== null, "--max-runtime-minutes"]
   ].filter(([enabled]) => enabled).map(([, name]) => name);
   if (incompatible.length > 0) {
@@ -119,6 +121,7 @@ export function parseBenchmarkArgs(argv) {
     budgetState: undefined,
     keepWorkspaces: false,
     replayFailures: undefined,
+    failedAttemptsOnly: false,
     replayRuns: undefined,
     replaySource: undefined,
     resume: undefined,
@@ -282,6 +285,11 @@ export function parseBenchmarkArgs(argv) {
         options.resume = path.resolve(requireValue(argv, index, arg));
         index += 1;
         break;
+      case "--failed-attempts-only":
+        registeredIncompatible.add(arg);
+        if (options.failedAttemptsOnly) fail("--failed-attempts-only may only be supplied once");
+        options.failedAttemptsOnly = true;
+        break;
       case "--max-sessions":
         options.maxSessions = positiveInteger(requireValue(argv, index, arg), arg, 1, 10_000);
         index += 1;
@@ -329,6 +337,9 @@ export function parseBenchmarkArgs(argv) {
     }
   }
   if (options.dryRun && options.preflightOnly) fail("--dry-run and --preflight-only are mutually exclusive");
+  if (options.failedAttemptsOnly && (!options.replayFailures || options.resume || !options.measurementOnly)) {
+    fail("--failed-attempts-only requires --replay-failures and --measurement-only, without --resume");
+  }
   if (Boolean(options.budgetPolicy) !== Boolean(options.budgetState)) fail("--budget-policy and --budget-state must be supplied together");
   if (options.preflightOnly && (options.resume || options.replayFailures)) fail("--preflight-only cannot resume or replay a prior run");
   if (options.registeredMeasurement && registeredIncompatible.size > 0) {

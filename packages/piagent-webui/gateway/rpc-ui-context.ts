@@ -16,13 +16,38 @@ export function rpcUiContext(): object {
     getThinkingBorderColor: () => plain,
     getBashModeBorderColor: () => plain
   });
-  return new Proxy({}, {
-    get(_target, property) {
-      if (property === GATEWAY_RUNTIME_UI_MARKER) return true;
-      if (property === "theme") return theme;
-      if (property === "confirm") return () => new Promise<boolean>(() => undefined);
-      if (property === "select" || property === "input") return async () => undefined;
-      return () => undefined;
-    }
-  });
+  const noop = () => undefined;
+  // Pi copies this context when wrapping prompts. Keep methods and the ownership
+  // marker enumerable so notification delivery and gateway detection survive.
+  return {
+    [GATEWAY_RUNTIME_UI_MARKER]: true,
+    theme,
+    confirm: () => new Promise<boolean>(() => undefined),
+    select: async () => undefined,
+    input: async () => undefined,
+    editor: async () => undefined,
+    custom: async () => undefined,
+    notify: noop,
+    onTerminalInput: () => noop,
+    setStatus: noop,
+    setWorkingMessage: noop,
+    setWorkingVisible: noop,
+    setWorkingIndicator: noop,
+    setHiddenThinkingLabel: noop,
+    setWidget: noop,
+    setFooter: noop,
+    setHeader: noop,
+    setTitle: noop,
+    pasteToEditor: noop,
+    setEditorText: noop,
+    getEditorText: () => "",
+    addAutocompleteProvider: noop,
+    setEditorComponent: noop,
+    getEditorComponent: noop,
+    getAllThemes: () => [],
+    getTheme: noop,
+    setTheme: () => ({ success: false, error: "UI not available" }),
+    getToolsExpanded: () => false,
+    setToolsExpanded: noop
+  };
 }

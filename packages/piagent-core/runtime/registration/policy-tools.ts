@@ -2,10 +2,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { stageContextDelivery } from "../context/context-delivery.ts";
 import { formatContextEfficiencyReport } from "../context/context-efficiency-format.ts";
 import { WORKFLOW_IDS } from "../workflows/webui-workflow.ts";
+import { registerSessionWaitTool } from "./session-wait-tool.ts";
 
 type PiagentToolGroup = any;
 type TechStackManifest = any;
-
 
 export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>): void {
   const {
@@ -21,6 +21,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
     resolvePermissionProfile, resolveRuntimePolicy, retrievalKey, runtimeState, searchContextIndexV2,
     techStackPath, telemetry, toolRegistryConfig, verifierCommandInstructions
   } = deps;
+  registerSessionWaitTool(pi, Type);
   registerPiagentTool(pi, {
     name: "piagent_tools",
     label: "Piagent Tool Loader",
@@ -31,7 +32,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
       "When recovery is necessary, load only the smallest group that resolves the reported missing evidence."
     ],
     parameters: Type.Object({
-      groups: Type.Array(StringEnum(["intake", "governance", "task", "recovery", "policy", "retrieval", "source", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
+      groups: Type.Array(StringEnum(["intake", "governance", "task", "waiting", "recovery", "policy", "retrieval", "source", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const groups = [...new Set(params.groups)] as PiagentToolGroup[];

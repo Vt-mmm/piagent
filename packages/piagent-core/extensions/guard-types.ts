@@ -488,6 +488,7 @@ export type ExternalActionPolicyConfig = {
 };
 
 export type FinalGateConfig = {
+  acceptanceProofMode?: "enforce" | "diagnostic";
   defaultMode?: "advisory" | "enforce";
   requireTaskContract?: boolean;
   requireContextManifest?: boolean;

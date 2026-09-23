@@ -10,6 +10,7 @@ export const PIAGENT_PRIMARY_TOOL_GROUP = Object.freeze({
   piagent_context: "intake",
   piagent_context_preflight: "intake",
   piagent_task_progress: "mutation",
+  piagent_wait: "retrieval",
   piagent_context_record: "recovery",
   piagent_verify_record: "verification",
   piagent_trace_record: "handoff",
@@ -49,7 +50,7 @@ export const PIAGENT_MUTATION_CAPABLE_TOOLS = new Set<string>([
   "piagent_profile_tech_context_record", "piagent_project_onboarding_record", "piagent_context_index_record", "piagent_memory_note"
 ]);
 export const PIAGENT_SEQUENTIAL_TOOLS = new Set<string>([
-  ...PIAGENT_MUTATION_CAPABLE_TOOLS, "piagent_source_checkout", "piagent_tools", "piagent_task_start", "piagent_task_progress", "piagent_context_record",
+  ...PIAGENT_MUTATION_CAPABLE_TOOLS, "piagent_wait", "piagent_source_checkout", "piagent_tools", "piagent_task_start", "piagent_task_progress", "piagent_context_record",
   "piagent_verify_record", "piagent_trace_record", "piagent_memory_citation_record"
 ]);
 
@@ -111,7 +112,7 @@ export function phaseToolPolicy(phase: TrajectoryPhase, changeMode: PhaseToolPol
   const readOnlySurface = changeMode === "read-only" || phase === "review";
   const modelVisiblePiagentTools = PIAGENT_TOOL_ORDER.filter((tool) => {
     const group = PIAGENT_PRIMARY_TOOL_GROUP[tool as keyof typeof PIAGENT_PRIMARY_TOOL_GROUP];
-    return PHASE_TOOL_ALLOW[phase].includes(tool)
+    return (PHASE_TOOL_ALLOW[phase].includes(tool) || tool === "piagent_wait" && primaryGroups.includes("retrieval"))
       && primaryGroups.includes(group)
       && !PIAGENT_OPERATOR_TOOLS.has(tool)
       && !PIAGENT_DIAGNOSTIC_TOOLS.has(tool)

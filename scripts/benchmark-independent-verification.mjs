@@ -548,7 +548,8 @@ function observeRequests({ configPath, projectRoot, installedRoot, plans, planDi
       const compilerVersion = codeContract ? templateFor(codeContract).version : null;
       const backendDigest = compilerVersion ? hash(JSON.stringify([DURABLE_EXECUTION_VERSION, compilerVersion,
         EXECUTION_SNAPSHOT_VERSION, plan.backend.imageId, plan.backend.dockerSocket,
-        plan.backend.dockerCommand, plan.backend.timeoutMs, profile ?? null])) : null;
+        plan.backend.dockerCommand, plan.backend.timeoutMs, profile ?? null,
+        ...(plan.backend.startupAllowanceMs ? [plan.backend.startupAllowanceMs] : [])])) : null;
       const publicationStore = plan.contracts.some(contract => contract.route === "composite")
         ? config.withCompositeRecovery(({ key, directory, projectRoot: approvedRoot }) =>
           openCompositeTaskPublicationStore({ key, directory, projectRoot: approvedRoot })) : null;

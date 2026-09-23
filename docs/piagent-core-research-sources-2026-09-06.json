@@ -1,0 +1,416 @@
+{
+  "schemaVersion": 1,
+  "planId": "PCL-2026-09-06",
+  "accessDate": "2026-09-06",
+  "sourceCount": 34,
+  "publicRepositoriesPinned": [
+    {
+      "repo": "earendil-works/pi",
+      "branch": "main",
+      "sha": "9767ba275f3e9a5ee0f5c5342249b629ab1b2282",
+      "date": "2026-09-05T22:30:17Z"
+    },
+    {
+      "repo": "openai/codex",
+      "branch": "main",
+      "sha": "ac192cd7937b0d73edc6dffe009940ae53782dd4",
+      "date": "2026-09-06T07:42:32Z"
+    },
+    {
+      "repo": "SWE-agent/mini-swe-agent",
+      "branch": "main",
+      "sha": "04d809ceab9df28f9adaed044884180159172930",
+      "date": "2026-09-03T05:05:59Z"
+    },
+    {
+      "repo": "Aider-AI/aider",
+      "branch": "main",
+      "sha": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c",
+      "date": "2026-05-22T14:02:20Z"
+    },
+    {
+      "repo": "OpenHands/software-agent-sdk",
+      "branch": "main",
+      "sha": "8ea8e3bc1d5e84542f7702b8813734ef600c9fce",
+      "date": "2026-09-06T12:38:12Z"
+    },
+    {
+      "repo": "google-gemini/gemini-cli",
+      "branch": "main",
+      "sha": "85aca163f6c73ac6ce380b5447359146b8adcae4",
+      "date": "2026-09-04T18:05:05Z"
+    },
+    {
+      "repo": "anomalyco/opencode",
+      "branch": "dev",
+      "sha": "337fd144d2ba144743368f78d9579a99cce175bd",
+      "date": "2026-09-06T04:32:46Z"
+    },
+    {
+      "repo": "cline/cline",
+      "branch": "main",
+      "sha": "dac3b35ba485dbab3b5a73aca239b0d07ce071cf",
+      "date": "2026-09-04T23:40:39Z"
+    }
+  ],
+  "sources": [
+    {
+      "id": "S01",
+      "title": "Pi release notes",
+      "type": "release",
+      "url": "https://github.com/earendil-works/pi/releases",
+      "readScope": "0.85.0 and 0.85.1 notes"
+    },
+    {
+      "id": "S02",
+      "title": "Pi agent loop",
+      "type": "code",
+      "url": "https://github.com/earendil-works/pi/blob/9767ba275f3e9a5ee0f5c5342249b629ab1b2282/packages/agent/src/agent-loop.ts",
+      "readScope": "runLoop steering, prepareNextTurn, error/abort and truncated tool calls"
+    },
+    {
+      "id": "S03",
+      "title": "Pi compaction",
+      "type": "code",
+      "url": "https://github.com/earendil-works/pi/blob/9767ba275f3e9a5ee0f5c5342249b629ab1b2282/packages/coding-agent/src/core/compaction/compaction.ts",
+      "readScope": "calculateContextTokens, getAssistantUsage, estimateContextTokens"
+    },
+    {
+      "id": "S04",
+      "title": "Unrolling the Codex agent loop",
+      "type": "blog",
+      "url": "https://openai.com/index/unrolling-the-codex-agent-loop/",
+      "readScope": "Agent loop and performance/cache/compaction sections"
+    },
+    {
+      "id": "S05",
+      "title": "Codex remote compaction",
+      "type": "code",
+      "url": "https://github.com/openai/codex/blob/ac192cd7937b0d73edc6dffe009940ae53782dd4/codex-rs/core/src/compact_remote.rs",
+      "readScope": "Request/step boundary, compaction metadata and precompact hooks"
+    },
+    {
+      "id": "S06",
+      "title": "Codex history",
+      "type": "code",
+      "url": "https://github.com/openai/codex/blob/ac192cd7937b0d73edc6dffe009940ae53782dd4/codex-rs/core/src/context_manager/history.rs",
+      "readScope": "Annotated normalized history view and metadata-related slices"
+    },
+    {
+      "id": "S07",
+      "title": "OpenAI model guidance GPT-5.5",
+      "type": "docs",
+      "url": "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.5",
+      "readScope": "Outcome/stopping conditions and assistant phase replay"
+    },
+    {
+      "id": "S08",
+      "title": "Effective context engineering",
+      "type": "blog",
+      "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "readScope": "Context components, retrieval, compaction and structured notes"
+    },
+    {
+      "id": "S09",
+      "title": "Writing effective tools",
+      "type": "blog",
+      "url": "https://www.anthropic.com/engineering/writing-tools-for-agents",
+      "readScope": "Tool boundaries, names, meaningful context and response formats"
+    },
+    {
+      "id": "S10",
+      "title": "Effective harnesses for long-running agents",
+      "type": "blog",
+      "url": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
+      "readScope": "Long-running failure modes, incremental progress and feature state"
+    },
+    {
+      "id": "S11",
+      "title": "Claude Code quality postmortem",
+      "type": "blog",
+      "url": "https://www.anthropic.com/engineering/april-23-postmortem",
+      "readScope": "Effort, context clearing, cache and verbosity regressions"
+    },
+    {
+      "id": "S12",
+      "title": "Demystifying evals for AI agents",
+      "type": "blog",
+      "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents",
+      "readScope": "Outcome, graders, capability/regression eval and quality signals"
+    },
+    {
+      "id": "S13",
+      "title": "Infrastructure noise",
+      "type": "blog",
+      "url": "https://www.anthropic.com/engineering/infrastructure-noise",
+      "readScope": "Resource enforcement, headroom, environment and latency confounders"
+    },
+    {
+      "id": "S14",
+      "title": "Dynamic context discovery",
+      "type": "blog",
+      "url": "https://cursor.com/blog/dynamic-context-discovery",
+      "readScope": "Tool outputs, history references, skills and MCP discovery"
+    },
+    {
+      "id": "S15",
+      "title": "Continually improving our agent harness",
+      "type": "blog",
+      "url": "https://cursor.com/blog/continually-improving-agent-harness",
+      "readScope": "Dynamic context, product metrics, rework and error classification"
+    },
+    {
+      "id": "S16",
+      "title": "Aider repository map",
+      "type": "docs",
+      "url": "https://aider.chat/docs/repomap.html",
+      "readScope": "Symbols, graph ranking and map budgets"
+    },
+    {
+      "id": "S17",
+      "title": "Aider repomap source",
+      "type": "code",
+      "url": "https://github.com/Aider-AI/aider/blob/5dc9490bb35f9729ef2c95d00a19ccd30c26339c/aider/repomap.py",
+      "readScope": "get_repo_map, ranked tags, cache and PageRank slices"
+    },
+    {
+      "id": "S18",
+      "title": "Aider edit formats",
+      "type": "docs",
+      "url": "https://aider.chat/docs/more/edit-formats.html",
+      "readScope": "Model-dependent formats and whole-file cost"
+    },
+    {
+      "id": "S19",
+      "title": "Aider edit block coder",
+      "type": "code",
+      "url": "https://github.com/Aider-AI/aider/blob/5dc9490bb35f9729ef2c95d00a19ccd30c26339c/aider/coders/editblock_coder.py",
+      "readScope": "apply_edits/dry-run, other-file fallback and partial failure feedback"
+    },
+    {
+      "id": "S20",
+      "title": "Separating code reasoning and editing",
+      "type": "blog",
+      "url": "https://aider.chat/2024/09/26/architect.html",
+      "readScope": "Architect/editor inference split and latency tradeoff"
+    },
+    {
+      "id": "S21",
+      "title": "Mini-SWE-agent overview",
+      "type": "docs",
+      "url": "https://mini-swe-agent.com/latest/",
+      "readScope": "Minimal agent/model/environment architecture"
+    },
+    {
+      "id": "S22",
+      "title": "Mini-SWE-agent default agent",
+      "type": "code",
+      "url": "https://github.com/SWE-agent/mini-swe-agent/blob/04d809ceab9df28f9adaed044884180159172930/src/minisweagent/agents/default.py",
+      "readScope": "DefaultAgent file including costs, limits, execution and serialization"
+    },
+    {
+      "id": "S23",
+      "title": "OpenHands condenser architecture",
+      "type": "docs",
+      "url": "https://docs.openhands.dev/sdk/arch/condenser",
+      "readScope": "Condenser, View, Condensation and implementations"
+    },
+    {
+      "id": "S24",
+      "title": "OpenHands condenser base",
+      "type": "code",
+      "url": "https://github.com/OpenHands/software-agent-sdk/blob/8ea8e3bc1d5e84542f7702b8813734ef600c9fce/openhands-sdk/openhands/sdk/context/condenser/base.py",
+      "readScope": "Read-only cached view and soft/hard condensation fallback"
+    },
+    {
+      "id": "S25",
+      "title": "OpenHands conversation state",
+      "type": "code",
+      "url": "https://github.com/OpenHands/software-agent-sdk/blob/8ea8e3bc1d5e84542f7702b8813734ef600c9fce/openhands-sdk/openhands/sdk/conversation/state.py",
+      "readScope": "EventLog and active-branch derived cache slices"
+    },
+    {
+      "id": "S26",
+      "title": "Gemini chat compression",
+      "type": "code",
+      "url": "https://github.com/google-gemini/gemini-cli/blob/85aca163f6c73ac6ce380b5447359146b8adcae4/packages/core/src/context/chatCompressionService.ts",
+      "readScope": "Reverse tool-output budget, summary/probe and empty/inflated summary guards"
+    },
+    {
+      "id": "S27",
+      "title": "Gemini loop detection",
+      "type": "code",
+      "url": "https://github.com/google-gemini/gemini-cli/blob/85aca163f6c73ac6ce380b5447359146b8adcae4/packages/core/src/services/loopDetectionService.ts",
+      "readScope": "Progress distinction, detection return types and LLM check scheduling"
+    },
+    {
+      "id": "S28",
+      "title": "OpenCode compaction",
+      "type": "code",
+      "url": "https://github.com/anomalyco/opencode/blob/337fd144d2ba144743368f78d9579a99cce175bd/packages/opencode/src/session/compaction.ts",
+      "readScope": "Prune completed/protected/recent outputs and minimum saving"
+    },
+    {
+      "id": "S29",
+      "title": "OpenCode processor",
+      "type": "code",
+      "url": "https://github.com/anomalyco/opencode/blob/337fd144d2ba144743368f78d9579a99cce175bd/packages/opencode/src/session/processor.ts",
+      "readScope": "Repeated tool argument check, stop/continue/compact, errors/retry policy slices"
+    },
+    {
+      "id": "S30",
+      "title": "Cline changelog",
+      "type": "changelog",
+      "url": "https://github.com/cline/cline/blob/dac3b35ba485dbab3b5a73aca239b0d07ce071cf/CHANGELOG.md",
+      "readScope": "Historical compaction/retry and provider model compatibility entries; not implementation audit"
+    },
+    {
+      "id": "S31",
+      "title": "SWE-agent ACI paper",
+      "type": "paper-abstract",
+      "url": "https://arxiv.org/abs/2405.15793",
+      "readScope": "Abstract and study scope only; no reproduction"
+    },
+    {
+      "id": "S32",
+      "title": "Lost in the Middle",
+      "type": "paper-abstract",
+      "url": "https://arxiv.org/abs/2307.03172",
+      "readScope": "Abstract and task/model scope only"
+    },
+    {
+      "id": "S33",
+      "title": "Cannot Self-Correct Reasoning Yet",
+      "type": "paper-abstract",
+      "url": "https://arxiv.org/abs/2310.01798",
+      "readScope": "Abstract and scope of intrinsic self-correction without external feedback"
+    },
+    {
+      "id": "S34",
+      "title": "Intrinsic Self-Correction Ability",
+      "type": "paper-abstract",
+      "url": "https://arxiv.org/abs/2406.15673",
+      "readScope": "Abstract and stated prompt/temperature conditions"
+    }
+  ],
+  "downloadedPublicFiles": [
+    {
+      "repo": "earendil-works/pi",
+      "commit": "9767ba275f3e9a5ee0f5c5342249b629ab1b2282",
+      "path": "packages/agent/src/agent-loop.ts",
+      "url": "https://raw.githubusercontent.com/earendil-works/pi/9767ba275f3e9a5ee0f5c5342249b629ab1b2282/packages/agent/src/agent-loop.ts",
+      "bytes": 22796,
+      "sha256": "1e16404a231912fbd7643d8317b15ec4cc6245ed8cedc37582a31d430a1cc6ac"
+    },
+    {
+      "repo": "earendil-works/pi",
+      "commit": "9767ba275f3e9a5ee0f5c5342249b629ab1b2282",
+      "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+      "url": "https://raw.githubusercontent.com/earendil-works/pi/9767ba275f3e9a5ee0f5c5342249b629ab1b2282/packages/coding-agent/src/core/compaction/compaction.ts",
+      "bytes": 30705,
+      "sha256": "d3f639c21c4b91ebbe9d5716914636c3eb37a19d434e11bd6653fef8050f1357"
+    },
+    {
+      "repo": "openai/codex",
+      "commit": "ac192cd7937b0d73edc6dffe009940ae53782dd4",
+      "path": "codex-rs/core/src/compact_remote.rs",
+      "url": "https://raw.githubusercontent.com/openai/codex/ac192cd7937b0d73edc6dffe009940ae53782dd4/codex-rs/core/src/compact_remote.rs",
+      "bytes": 20722,
+      "sha256": "f309fd541d8399696c6f75bb40d9f76a8be6d0b49a12630efadf8d07352f71c5"
+    },
+    {
+      "repo": "openai/codex",
+      "commit": "ac192cd7937b0d73edc6dffe009940ae53782dd4",
+      "path": "codex-rs/core/src/context_manager/history.rs",
+      "url": "https://raw.githubusercontent.com/openai/codex/ac192cd7937b0d73edc6dffe009940ae53782dd4/codex-rs/core/src/context_manager/history.rs",
+      "bytes": 48592,
+      "sha256": "73e5625014ece2d1e3a092318eac323629f51227fc14327fe954322cf79c69ff"
+    },
+    {
+      "repo": "SWE-agent/mini-swe-agent",
+      "commit": "04d809ceab9df28f9adaed044884180159172930",
+      "path": "src/minisweagent/agents/default.py",
+      "url": "https://raw.githubusercontent.com/SWE-agent/mini-swe-agent/04d809ceab9df28f9adaed044884180159172930/src/minisweagent/agents/default.py",
+      "bytes": 8043,
+      "sha256": "e8ef8aa365942d739c2ec5cb0879f60f377d2dc2de8ec670aaedf3bafb45a4c2"
+    },
+    {
+      "repo": "Aider-AI/aider",
+      "commit": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c",
+      "path": "aider/repomap.py",
+      "url": "https://raw.githubusercontent.com/Aider-AI/aider/5dc9490bb35f9729ef2c95d00a19ccd30c26339c/aider/repomap.py",
+      "bytes": 27306,
+      "sha256": "a5d4befe70445114b9f62da47b0eeb2a5384f9e84a0c083c77a4b339caf61ecd"
+    },
+    {
+      "repo": "Aider-AI/aider",
+      "commit": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c",
+      "path": "aider/coders/editblock_coder.py",
+      "url": "https://raw.githubusercontent.com/Aider-AI/aider/5dc9490bb35f9729ef2c95d00a19ccd30c26339c/aider/coders/editblock_coder.py",
+      "bytes": 19616,
+      "sha256": "244df08f5ccd19928bcdac1901ae591a7a786d12a6f70d31400baaefb5a136a3"
+    },
+    {
+      "repo": "OpenHands/software-agent-sdk",
+      "commit": "8ea8e3bc1d5e84542f7702b8813734ef600c9fce",
+      "path": "openhands-sdk/openhands/sdk/context/condenser/base.py",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/8ea8e3bc1d5e84542f7702b8813734ef600c9fce/openhands-sdk/openhands/sdk/context/condenser/base.py",
+      "bytes": 10085,
+      "sha256": "26ecce4b6c42de204396ec38cc94fb032adc6b20180b1d8315f09c1a78bca6a0"
+    },
+    {
+      "repo": "OpenHands/software-agent-sdk",
+      "commit": "8ea8e3bc1d5e84542f7702b8813734ef600c9fce",
+      "path": "openhands-sdk/openhands/sdk/conversation/state.py",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/8ea8e3bc1d5e84542f7702b8813734ef600c9fce/openhands-sdk/openhands/sdk/conversation/state.py",
+      "bytes": 32392,
+      "sha256": "441b4c5d5b5e6e7dfcab8a4b32039039fcff49088781e4eae98ed7397ca3cf74"
+    },
+    {
+      "repo": "google-gemini/gemini-cli",
+      "commit": "85aca163f6c73ac6ce380b5447359146b8adcae4",
+      "path": "packages/core/src/context/chatCompressionService.ts",
+      "url": "https://raw.githubusercontent.com/google-gemini/gemini-cli/85aca163f6c73ac6ce380b5447359146b8adcae4/packages/core/src/context/chatCompressionService.ts",
+      "bytes": 16644,
+      "sha256": "796b43770e9de160c2aa2db8f729eb3141072b82d5cfc380543e0e95bdb0567e"
+    },
+    {
+      "repo": "google-gemini/gemini-cli",
+      "commit": "85aca163f6c73ac6ce380b5447359146b8adcae4",
+      "path": "packages/core/src/services/loopDetectionService.ts",
+      "url": "https://raw.githubusercontent.com/google-gemini/gemini-cli/85aca163f6c73ac6ce380b5447359146b8adcae4/packages/core/src/services/loopDetectionService.ts",
+      "bytes": 26752,
+      "sha256": "f45c4eb345d2bba3b0920eb0858316e563cc1f2274f2883e5bea85efa7ce361a"
+    },
+    {
+      "repo": "anomalyco/opencode",
+      "commit": "337fd144d2ba144743368f78d9579a99cce175bd",
+      "path": "packages/opencode/src/session/compaction.ts",
+      "url": "https://raw.githubusercontent.com/anomalyco/opencode/337fd144d2ba144743368f78d9579a99cce175bd/packages/opencode/src/session/compaction.ts",
+      "bytes": 21236,
+      "sha256": "8d478570a7e4ad32b746030d4f86a1c673949b1e2259bd716b3885d99283289a"
+    },
+    {
+      "repo": "anomalyco/opencode",
+      "commit": "337fd144d2ba144743368f78d9579a99cce175bd",
+      "path": "packages/opencode/src/session/processor.ts",
+      "url": "https://raw.githubusercontent.com/anomalyco/opencode/337fd144d2ba144743368f78d9579a99cce175bd/packages/opencode/src/session/processor.ts",
+      "bytes": 27266,
+      "sha256": "0b31e207beda56bd9a4b9b88c9e42d89a0651dd011773748c8e2938dfc3dcb74"
+    },
+    {
+      "repo": "cline/cline",
+      "commit": "dac3b35ba485dbab3b5a73aca239b0d07ce071cf",
+      "path": "CHANGELOG.md",
+      "url": "https://raw.githubusercontent.com/cline/cline/dac3b35ba485dbab3b5a73aca239b0d07ce071cf/CHANGELOG.md",
+      "bytes": 125121,
+      "sha256": "220c798c0f3a18ce5e75a7d32670576708de0f81d8d10bf7e60e9ace3079ba14"
+    }
+  ],
+  "limitations": [
+    "Targeted static source inspection, not whole-repository audit.",
+    "Four papers read at abstract/scope level, not full-text reproduction.",
+    "Blog/docs snapshots may change after access date.",
+    "No foreign code executed; no provider inference or benchmark campaign launched."
+  ]
+}

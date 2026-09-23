@@ -7,7 +7,7 @@ import { expectedNodeProfile, MAX_TIMER_SCHEDULES, NODE_PROFILE_WORKER_VERSION }
 import { validateInvocation } from "./invocation.mjs";
 export { MAX_STRING_LENGTH, numberValue, validateValue } from "./values.mjs";
 
-export const WORKER_VERSION = "quickjs-contract-worker-v8";
+export const WORKER_VERSION = "quickjs-contract-worker-v9";
 export const NODE_WORKER_VERSION = NODE_PROFILE_WORKER_VERSION;
 export const MAX_REQUEST_BYTES = 512 * 1024;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;

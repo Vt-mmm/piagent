@@ -11,8 +11,8 @@ const focusedTest = [
   ""
 ].join("\n");
 
-function evidence(source, testText = focusedTest, taskText = criterion) {
-  const sourceEntry = { path: "src/parser.js", text: source };
+function evidence(source, testText = focusedTest, taskText = criterion, sourcePath = "src/parser.js") {
+  const sourceEntry = { path: sourcePath, text: source };
   const testEntry = { path: "test/parser.test.js", text: testText };
   return acceptanceInvalidInputEvidence({
     taskText,
@@ -166,7 +166,9 @@ describe("stateful terminal parser rejection evidence", () => {
       "if (text[index] === '\"') inQuotes = true;"
     ], { declaration: "  let inQuotes: boolean = false;" });
     assert.deepEqual(evidence(forOf), { sourceOk: true, testOk: true });
-    assert.deepEqual(evidence(typed), { sourceOk: true, testOk: true });
+    assert.deepEqual(evidence(typed, focusedTest.replace("../src/parser.js", "../src/parser.ts"), criterion, "src/parser.ts"),
+      { sourceOk: true, testOk: true });
+    assert.deepEqual(evidence(typed), { sourceOk: false, testOk: false }, "TypeScript syntax in a JavaScript module is not executable proof");
   });
 
   it("rejects dead counters, dead carriers, unrelated sentinels, and unrelated contracts", () => {
@@ -353,4 +355,90 @@ describe("stateful terminal parser rejection evidence", () => {
     const source = validParser.replace("    if (text[index] === '\"') inQuotes = true;", "    if (text[index] === '\"') { continue; }\n    if (text[index] === '\"') inQuotes = true;");
     assert.equal(evidence(source).sourceOk, false);
   });
+});
+
+// Exercise owned local bookkeeping and strict implicit export/import binding.
+describe("owned local parser bookkeeping", () => {
+  const proof = acceptanceInvalidInputEvidence;
+
+
+
+const sourcePath = 'src/data/csv.js';
+const source = "export function parseCsv(input) {\n  const rows = []; let row = []; let field = \"\"; let quoted = false;\n  const text = String(input);\n  for (let i = 0; i < text.length; i += 1) {\n    const char = text[i];\n    if (quoted) {\n      if (char === '\"' && text[i + 1] === '\"') { field += '\"'; i += 1; }\n      else if (char === '\"') quoted = false;\n      else field += char;\n    } else if (char === '\"' && field === \"\") quoted = true;\n    else if (char === \",\") { row.push(field); field = \"\"; }\n    else if (char === \"\\n\" || char === \"\\r\") { if (char === \"\\r\" && text[i + 1] === \"\\n\") i += 1; row.push(field); rows.push(row); row = []; field = \"\"; }\n    else field += char;\n  }\n  if (quoted) throw new SyntaxError(\"unterminated quoted field\");\n  if (field !== \"\" || row.length > 0 || text.endsWith('\"')) { row.push(field); rows.push(row); }\n  return rows;\n}\n";
+const clause='`parseCsv` must throw SyntaxError for an unterminated quoted field.';
+const tests=`import assert from 'node:assert/strict';import {parseCsv} from '../src/data/csv.js';assert.throws(()=>parseCsv('"unterminated'),SyntaxError);`;
+const evidence=sourceText=>proof({taskText:clause,sourceText,testText:tests,sourceEntries:[{path:sourcePath,text:sourceText}],testEntries:[{path:'test/parser.test.js',text:tests}],namedTargets:['parseCsv'],provenanceTargets:['parseCsv']});
+for(const [label,current,sourceOk] of [
+ ['owned local output arrays',source,true],
+ ['missing escaped-quote advance',source.replace("field += '\"'; i += 1;","field += '\"';"),false],
+ ['escape path exits before advancing',source.replace("field += '\"'; i += 1;","field += '\"'; continue; i += 1;"),false],
+ ['delimiter can skip an opening quote',source.replace('row.push(field); field = "";','i += 1; row.push(field); field = "";'),false],
+ ['constant array reassigned',source.replace('row = []; field = "";', 'rows = []; field = "";'),false],
+ ['output aliases the input',source.replace('let row = [];','let row = input;'),false],
+ ['overwritten array method',source.replace('const text = String(input);','row.push = () => {}; const text = String(input);'),false],
+ ['unknown argument evaluation',source.replaceAll('row.push(field)','row.push(transform(field))'),false],
+ ['unknown output helper',source.replaceAll('row.push(field)','append(row, field)'),false],
+ ['input escapes through local output',source.replaceAll('row.push(field)','row.push(input)'),false],
+ ['state reset before terminal guard',source.replace('if (quoted) throw','quoted = false; if (quoted) throw'),false],
+ ['missing terminal error',source.replace('if (quoted) throw new SyntaxError("unterminated quoted field");',''),false],
+ ['wrong terminal error',source.replace('new SyntaxError','new TypeError'),false],
+ ['early return before terminal guard',source.replace('if (quoted) throw','return rows; if (quoted) throw'),false],
+ ['carrier overwritten during scanning',source.replace('const char = text[i];','const char = text[i]; text = "";'),false],
+ ['computed push member',source.replaceAll('row.push(field)',"row['push'](field)"),false],
+ ['array mutated from callback',source.replace('row.push(field); field = "";', 'row.forEach(() => { quoted = false; }); row.push(field); field = "";'),false],
+ ['escaped-quote branch entirely removed',source.replace("if (char === '\"' && text[i + 1] === '\"') { field += '\"'; i += 1; }\n      else ",''),false]
+]) {
+ it(`local parser bookkeeping: ${label}`,()=>{
+ if (label !== 'owned local output arrays') assert.notEqual(current, source, 'fixture must change');
+ assert.equal(evidence(current).sourceOk,sourceOk,label);
+});
+ it(`implicit parser binding: ${label}`,()=>assert.equal(implicit(current).sourceOk,sourceOk));
+}
+function implicit(sourceText=source,taskText='Throw SyntaxError for an unterminated quoted field.',testText=tests,extra={}) {
+ return proof({taskText,sourceText,testText,sourceEntries:[{path:sourcePath,text:sourceText}],testEntries:[{path:'test/parser.test.js',text:testText}],namedTargets:[],provenanceTargets:[],...extra});
+}
+const more = [
+ ['independent close after escape', source.replace("else if (char === '\"') quoted = false;", "if (char === '\"') quoted = false;")],
+ ['shadowed local output', source.replace('const char = text[i];','const char = text[i]; const row = input;')],
+ ['array prototype receiver', source.replaceAll('row.push(field)','Array.prototype.push.call(row, field)')],
+ ['property mutation', source.replaceAll('row.push(field)','row.length = 0')],
+ ['escape index decremented',source.replace("field += '\"'; i += 1;", "field += '\"'; i -= 1;")],
+ ['extra escape index advance',source.replace("field += '\"'; i += 1;", "field += '\"'; i += 1; i += 1;")],
+ ['nonquote branch skips quote',source.replace('text[i + 1] === "\\n"',"text[i + 1] === '\"'")],
+];
+for(const [label,current] of more) it(`parser rejection control: ${label}`,()=>{
+ assert.notEqual(current,source);
+ assert.equal(evidence(current).sourceOk,false);
+ assert.equal(implicit(current).sourceOk,false);
+});
+for(const [label,src,clause,focus] of [
+ ['second export',source+'\nexport function unrelated(x) { return x; }'],
+ ['unrelated named target',source,'anotherParser must throw SyntaxError for an unterminated quoted field.'],
+ ['compound obligation',source,'Throw SyntaxError for an unterminated quoted field and preserve all inputs.'],
+ ['negated obligation',source,'Do not throw SyntaxError for an unterminated quoted field.'],
+ ['wrong constructor',source,'Throw TypeError for an unterminated quoted field.'],
+ ['wrong module import',source,undefined,tests.replace('../src/data/csv.js','../src/other.js')],
+ ['test binding reassigned',source,undefined,tests.replace('assert.throws','parseCsv = () => {throw new SyntaxError()}; assert.throws')],
+ ['export binding reassigned',source+'\nparseCsv = () => [];'],
+ ['error constructor shadowed',source.replace('const rows = [];','const SyntaxError = Error; const rows = [];')],
+])it(`implicit binding refuses ${label}`,()=>assert.equal(implicit(src,clause,focus).sourceOk,false));
+it('local names do not determine parser evidence',()=>{
+ const renamed=source.replace(/\brows\b/g,'records').replace(/\brow\b/g,'columns').replace(/\bfield\b/g,'cell').replace(/\bquoted\b/g,'inside');
+ assert.equal(evidence(renamed).sourceOk,true);assert.equal(implicit(renamed).sourceOk,true);
+});
+it('actual escaped-terminal witness distinguishes omitted advance',async()=>{
+ const correct=(await import('data:text/javascript,'+encodeURIComponent(source))).parseCsv;
+ const wrongSource=source.replace("field += '\"'; i += 1;","field += '\"';");assert.notEqual(wrongSource,source);
+ const wrong=(await import('data:text/javascript,'+encodeURIComponent(wrongSource))).parseCsv;
+ assert.throws(()=>correct('"a""'),SyntaxError);
+ assert.doesNotThrow(()=>wrong('"a""'));
+ assert.equal(implicit(wrongSource).sourceOk,false);
+});
+for(const [label,prefix] of [
+ ['modified inherited push','Array.prototype.push = () => { throw new Error("changed"); };'],
+ ['prototype alias','const methods = Array.prototype; methods.push = () => { throw new Error("changed"); };'],
+ ['literal prototype','[].__proto__.push = () => { throw new Error("changed"); };'],
+ ['reflection alias','const methods = Object.getPrototypeOf([]); methods.push = () => { throw new Error("changed"); };']
+])it(`local array calls refuse ${label}`,()=>assert.equal(implicit(prefix+'\n'+source).sourceOk,false));
+
 });

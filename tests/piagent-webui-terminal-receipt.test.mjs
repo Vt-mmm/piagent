@@ -50,14 +50,14 @@ function receiptEntries(receipt, suffix = "recovery") {
 
 function customMessage(receipt) { return { role: "custom", display: true, ...structuredClone(receipt) }; }
 
-function receiptStream(readReceipt, configure = () => {}, revision = "session-revision.receipt", taskOutcome = "completed") {
+function receiptStream(readReceipt, configure = () => {}, revision = "session-revision.receipt", taskOutcome = "completed", taskStatusOverride = null) {
   const events = new GatewayEventStore(), observed = [];
   events.subscribe((event) => observed.push(event));
   const stream = new GatewaySessionStream({ sessionRef: "session.receipt", operationRef: "operation.recovery",
     messageRequestId: "request.recovery", events, commitTerminalDeliveryReceipt: readReceipt });
   configure(stream);
-  stream.complete(revision, taskOutcome);
-  stream.complete(revision, taskOutcome);
+  stream.complete(revision, taskOutcome, taskStatusOverride);
+  stream.complete(revision, taskOutcome, taskStatusOverride);
   return observed;
 }
 
@@ -133,6 +133,29 @@ async function fixture(t, options = {}) {
 }
 
 if (!process.env.PIAGENT_RECEIPT_CRASH_CHILD) {
+
+test("receipt delivery completes a durably refused operation without granting task completion", async t => {
+  const f = await fixture(t, { outcome: "blocked" });
+  for (const [name, receipt, outcome, override, expected] of [
+    ["native refused", f.expectedReceipt, "blocked", "refused", "completed"],
+    ["ordinary blocked", f.expectedReceipt, "blocked", null, "blocked"],
+    ["failed is not refused", f.expectedReceipt, "failed", "refused", "blocked"],
+    ["no durable receipt", undefined, "blocked", "refused", "unknown"],
+    ["conflicting approval", { ...f.expectedReceipt, details: { ...f.expectedReceipt.details, completionApproved: true } }, "blocked", "refused", "blocked"],
+    ["conflicting gate", { ...f.expectedReceipt, details: { ...f.expectedReceipt.details, gateDecision: "pass" } }, "blocked", "refused", "blocked"]
+  ]) {
+    const observed = receiptStream(() => receipt, () => {}, "session-revision.receipt", outcome, override);
+    const settled = observed.filter(event => event.kind === "operation.settled");
+    assert.equal(settled.length, 1, name);
+    assert.equal(settled[0].payload.settlement, expected, name);
+    assert.notEqual(settled[0].payload.taskStatus, "completed", name);
+  }
+  for (const configure of [stream => stream.markAborted(), stream => stream.markError("fixture-error"),
+    stream => stream.markBlocked("fixture-block")]) {
+    const observed = receiptStream(() => f.expectedReceipt, configure, "session-revision.receipt", "blocked", "refused");
+    assert.notEqual(observed.find(event => event.kind === "operation.settled").payload.settlement, "completed");
+  }
+});
 
 test("reconnected read-only delivery recovery settles the observed durable receipt without a second model turn", async (t) => {
   const f = await fixture(t);

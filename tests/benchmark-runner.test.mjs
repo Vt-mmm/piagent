@@ -262,7 +262,7 @@ const probePiHome = (phase) => {
   if ((auth.test?.access ?? auth.test?.key) !== process.env.BENCHMARK_FAKE_PI_AUTH_CANARY) process.exit(21);
   if (fs.existsSync(path.join(home, "APPEND_SYSTEM.md"))) process.exit(22);
   if (process.env.BENCHMARK_FAKE_PI_EXPECT_CONTROLLED_SETTINGS === "1") {
-    if (JSON.stringify(JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8"))) !== "{}") process.exit(24);
+    if (JSON.stringify(JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8"))) !== JSON.stringify({ cacheWarming: "off" })) process.exit(24);
     if (process.env.PI_OFFLINE !== "1" || fs.existsSync(path.join(home, "npm"))) process.exit(25);
   }
   if (phase === "session" && fs.existsSync(path.join(home, "models-store.json"))) process.exit(23);
@@ -618,11 +618,11 @@ fs.writeFileSync(path.join(workspace, "result.txt"), process.env.BENCHMARK_FAKE_
 const events = [
   { type: "thread.started", thread_id: "fake-codex-thread" },
   { type: "turn.started" },
-  { type: "item.completed", item: { id: "message", type: "agent_message", text: "done" } },
   { type: "item.completed", item: { id: "edit", type: "file_change", status: "completed", changes: [{ path: "result.txt", kind: "update" }] } },
+  { type: "item.completed", item: { id: "message", type: "agent_message", text: "done" } },
   { type: "turn.completed", usage: { input_tokens: 100, cached_input_tokens: 20, cache_write_input_tokens: 0, output_tokens: 10, reasoning_output_tokens: 2 } }
 ];
-if (process.env.BENCHMARK_FAKE_CODEX_LARGE_OUTPUT === "1") events.splice(events.length - 1, 0, { type: "item.completed", item: { id: "large", type: "command_execution", aggregated_output: "x".repeat(5 * 1024 * 1024), exit_code: 0, status: "completed" } });
+if (process.env.BENCHMARK_FAKE_CODEX_LARGE_OUTPUT === "1") events.splice(events.length - 2, 0, { type: "item.completed", item: { id: "large", type: "command_execution", aggregated_output: "x".repeat(5 * 1024 * 1024), exit_code: 0, status: "completed" } });
 for (const event of events) console.log(JSON.stringify(event));
 `);
   fs.chmodSync(fakeCodex, 0o755);
@@ -850,7 +850,7 @@ test("a spend-controlled scenario subset skips full-matrix provider-free evidenc
   assert.equal(fs.existsSync(path.join(value.output, "aborted.json")), false);
 });
 
-test("production claim execution rejects a dirty release source before command or provider preflight", (t) => {
+test("installed diagnostic production policy checks command identity on a dirty source without starting a provider", (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-dirty-source-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const argv = [
@@ -878,8 +878,35 @@ test("production claim execution rejects a dirty release source before command o
       }
     });
     assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
-    assert.match(result.stderr, /requires a clean release source before auth, tool preflight, or any provider session/);
-    assert.doesNotMatch(result.stderr, /Required benchmark command is unavailable/);
+    assert.match(result.stderr, /Cannot inspect benchmark command .*provider-must-not-start/);
+    assert.doesNotMatch(result.stderr, /requires a clean release source/);
+    assert.equal(fs.existsSync(path.join(dir, "output")), false);
+  } finally {
+    cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent, snapshot.metadata.piAgentHome);
+  }
+});
+
+test("installed diagnostic policy reaches command binding on a dirty measurement source without granting a release claim", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-diagnostic-source-admission-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const argv = ["--suite", "production-v3", "--piagent-treatment", "release-defaults",
+    "--measurement-only", "--model", "openai-codex/gpt-5.6-luna", "--thinking", "medium",
+    "--service-tier", "fast", "--repeats", "2", "--timeout", "900", "--preflight-only",
+    "--output", path.join(dir, "output")];
+  const snapshot = createBenchmarkExecutionSnapshot({ liveRoot: root, argv, cwd: root });
+  try {
+    snapshot.metadata.sourceIdentity = { ...snapshot.metadata.sourceIdentity, dirty: true };
+    const result = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning",
+      "--import", path.join(snapshot.candidateRoot, "scripts/register-typescript-loader.mjs"),
+      path.join(snapshot.candidateRoot, "scripts/benchmark-runner-core.mjs"), ...argv], {
+      cwd: root, encoding: "utf8", timeout: 30000,
+      env: { ...benchmarkBootstrapEnvironment(snapshot.metadata),
+        PIAGENT_BENCHMARK_PI_COMMAND: path.join(dir, "provider-must-not-start"),
+        PIAGENT_BENCHMARK_CODEX_COMMAND: path.join(dir, "provider-must-not-start") }
+    });
+    assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /Cannot inspect benchmark command .*provider-must-not-start/);
+    assert.doesNotMatch(result.stderr, /requires a clean release source/);
     assert.equal(fs.existsSync(path.join(dir, "output")), false);
   } finally {
     cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent, snapshot.metadata.piAgentHome);
@@ -962,7 +989,8 @@ test("modern run executes suite and Piagent extension from the immutable preflig
   fs.writeFileSync(path.join(path.dirname(value.suite), "prompt.md"), "MUTATED LIVE PROMPT\n");
   fs.writeFileSync(path.join(path.dirname(value.suite), "grade.mjs"), 'process.stdout.write(`${JSON.stringify({ passed: false, checks: [{ id: "mutated", passed: false }] })}\\n`);\n');
   fs.writeFileSync(release, "continue\n");
-  const [code, signal] = await once(child, "exit");
+  const [code, signal] = child.exitCode !== null || child.signalCode !== null
+    ? [child.exitCode, child.signalCode] : await once(child, "exit");
   assert.equal(signal, null);
   assert.equal(code, 0, `${stdout}\n${stderr}\n${terminalArtifact(value.output)}`);
   const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
@@ -1262,7 +1290,7 @@ test("replaces operator package settings with deterministic offline benchmark se
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}\n${terminalArtifact(value.output)}`);
   const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
-  assert.equal(manifest.piAgentHome.identity.settingsPolicy, "deterministic-empty");
+  assert.equal(manifest.piAgentHome.identity.settingsPolicy, "deterministic-cache-warming-off-v1");
   assert.equal(manifest.piAgentHome.identity.operatorPackagesAndResources, "excluded");
   assert.equal(textTree(value.output).includes(packageCanary), false);
 });
@@ -3202,7 +3230,7 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   assert.equal(report.comparison.comparisonProtocolGate.passed, true);
   assert.equal(report.environment.piagentTreatment.id, "release-defaults");
   assert.equal(report.comparison.tokenClaimAllowed, false);
-  assert.equal(report.verdict.status, "observational-efficiency-only");
+  assert.equal(report.verdict.status, "measurement-only-no-claim");
   assert.match(result.stdout, /Comparison: Piagent vs Codex CLI/);
   assert.match(result.stdout, /cost n\/a/);
   const codexHomes = fs.readFileSync(codexHomeLog, "utf8").trim().split("\n");
@@ -4053,7 +4081,8 @@ test("forwards interruption and durably retains the unaccepted paid attempt", as
   assert.equal(inFlight.stage, "provider-may-start");
   assert.equal(fs.statSync(path.join(activeWorkspace, "inflight.json")).mode & 0o777, 0o600);
   child.kill("SIGINT");
-  const [code, signal] = await once(child, "exit");
+  const [code, signal] = child.exitCode !== null || child.signalCode !== null
+    ? [child.exitCode, child.signalCode] : await once(child, "exit");
   assert.equal(signal, null);
   assert.equal(code, 130);
   const fakePid = Number(fs.readFileSync(signalFile, "utf8").match(/started:(\d+)/)?.[1]);

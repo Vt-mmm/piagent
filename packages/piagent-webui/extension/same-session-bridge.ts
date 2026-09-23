@@ -1,3 +1,4 @@
+import { firstUserEntryAfter } from "./dispatch-user-entry.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -98,8 +99,8 @@ function messageText(message: any): string {
 }
 function firstMessageText(message: any): string { return Array.isArray(message?.content) ? String(message.content.find((item: any) => item?.type === "text")?.text ?? "") : String(message?.content ?? ""); }
 function dispatchEntry(pending: PendingDispatch, ctx: ExtensionContext): any | null {
-  return ctx.sessionManager.getBranch().find((entry: any) => entry?.type === "message" && entry.parentId === pending.leafBefore
-    && entry.message?.role === "user" && messageText(entry.message) === pending.observedText) ?? null;
+  const entry = firstUserEntryAfter(ctx.sessionManager.getBranch(), pending.leafBefore) as any;
+  return entry && messageText(entry.message) === pending.observedText ? entry : null;
 }
 export function chatContentDigest(payload: Pick<NewOperationChatCommand["payload"], "text" | "attachmentRefs">): string {
   return sha(canonical({ text: payload.text, attachmentRefs: payload.attachmentRefs }));
@@ -168,7 +169,6 @@ export class SameSessionPiBridge {
     const branch = ctx.sessionManager.getBranch();
     if (!Array.isArray(branch) || branch.length > MAX_SESSION_ENTRIES) throw new Error("webui-bridge-receipt-history-unavailable");
     const requested = new Map<string, { receipt: ChatReceipt; messageRequestId: string; contentDigest: string; attachmentRefs: string[]; entryId: string }>();
-    const entriesById = new Map(branch.map((entry: any) => [entry?.id, entry]));
     for (const entry of branch) {
       if (entry?.type !== "custom" || entry.customType !== WEBUI_CONTROL_ENTRY_TYPE) continue;
       if (!exactKeys(entry.data, ["receipt"]) && !exactKeys(entry.data, ["receipt", "messageRequestId", "contentDigest"])
@@ -193,8 +193,8 @@ export class SameSessionPiBridge {
           || receipt.requestedAt !== prior.receipt.requestedAt || !same(receipt.observedRevisionsBefore, prior.receipt.observedRevisionsBefore)
           || !same(receipt.identity, prior.receipt.identity) || !same(attachmentRefs, prior.attachmentRefs)) throw new Error("webui-bridge-receipt-store-corrupt");
         if (receipt.resultCode === "dispatch-observed") {
-          const evidence = entriesById.get(receipt.settlementEvidenceRef as string) as any;
-          if (!evidence || evidence.type !== "message" || evidence.parentId !== prior.entryId || evidence.message?.role !== "user"
+          const evidence = firstUserEntryAfter(branch, prior.entryId) as any;
+          if (!evidence || evidence.id !== receipt.settlementEvidenceRef
             || chatContentDigest({ text: firstMessageText(evidence.message), attachmentRefs: prior.attachmentRefs }) !== prior.contentDigest) throw new Error("webui-bridge-receipt-store-corrupt");
         }
       }
@@ -310,8 +310,7 @@ export class SameSessionPiBridge {
   observeMessageStart(event: { message?: unknown }, ctx: ExtensionContext): void {
     if (!this.refresh(ctx) || this.#binding?.state !== "ready") return; const pending = this.#pending, message = event.message as any;
     const leaf = pending ? ctx.sessionManager.getLeafEntry?.() : null;
-    const leafObserved = Boolean(pending && leaf?.type === "message" && leaf.id !== pending.leafBefore && leaf.parentId === pending.leafBefore && leaf.message?.role === "user"
-      && messageText(leaf.message) === pending.observedText);
+    const leafObserved = Boolean(pending && leaf?.id && dispatchEntry(pending, ctx)?.id === leaf.id);
     if (pending && pending.inputObserved && leafObserved && message?.role === "user" && messageText(message) === pending.observedText)
       this.#settlePending("dispatch-observed", "settled", null, true, leaf.id);
   }

@@ -301,7 +301,7 @@ function turnContext(event) {
 /**
  * Reads the persistent rollout written by a controlled Codex CLI thread and
  * joins it to receipts captured from the actual invocations. Codex writes
- * `thread_settings_applied` only for resume invocations, so the initial turn is
+ * resume settings checkpoints plus optional turn-start settings snapshots. The initial turn is
  * proven by strict argv/runtime/stdout identity plus session_meta/turn_context;
  * command config alone is never promoted. The rollout does not expose the
  * provider response body, so response-tier evidence remains absent.
@@ -341,6 +341,9 @@ export function inspectCodexRolloutServiceTierEvidence({
     const sessionIds = new Set();
     const tiers = [];
     let settingsEvents = 0;
+    let pendingSettingsEvents = 0;
+    let settingsThreadMismatchEvents = 0;
+    const settingsPerTurn = [];
     let sessionMetaEvents = 0;
     let sessionMetaWorkspaceMismatchEvents = 0;
     let turnContextEvents = 0;
@@ -369,6 +372,8 @@ export function inspectCodexRolloutServiceTierEvidence({
       const context = turnContext(event);
       if (context) {
         turnContextEvents += 1;
+        settingsPerTurn.push(pendingSettingsEvents);
+        pendingSettingsEvents = 0;
         if (!modelId || context.model !== modelId) turnContextModelMismatchEvents += 1;
         if (!reasoningEffort || (context.effort ?? context.reasoning_effort) !== reasoningEffort) {
           turnContextReasoningMismatchEvents += 1;
@@ -380,6 +385,9 @@ export function inspectCodexRolloutServiceTierEvidence({
       const settings = threadSettings(event);
       if (!settings) continue;
       settingsEvents += 1;
+      pendingSettingsEvents += 1;
+      const settingsThread = event.type === "event_msg" ? event.payload.thread_id : event.thread_id;
+      if (settingsThread !== undefined && settingsThread !== null && settingsThread !== threadId) settingsThreadMismatchEvents += 1;
       const tier = normalizedTier(settings.service_tier);
       if (tier) tiers.push(tier);
       else invalidTierEvents += 1;
@@ -438,6 +446,15 @@ export function inspectCodexRolloutServiceTierEvidence({
       ...(initialInvocationEvents === 1 && requested === "fast" ? ["priority"] : []),
       ...tiers
     ])].sort();
+    // Codex 0.155.1 checkpoints settings on resume and can emit them again
+    // when turn/start applies persistent overrides. Both precede that turn's
+    // context. Validate every raw snapshot, but count coverage per resume turn;
+    // extra, orphaned, missing, conflicting or foreign-thread snapshots fail.
+    const resumeSettingsEvents = settingsPerTurn.slice(1).filter(count => count === 1 || count === 2).length;
+    const settingsCoverageBound = settingsPerTurn.length === expectedProviderStarts
+      && settingsPerTurn[0] === 0
+      && resumeSettingsEvents === Math.max(0, expectedProviderStarts - 1)
+      && pendingSettingsEvents === 0 && settingsThreadMismatchEvents === 0;
     const diagnostics = [
       sessionMetaEvents !== 1 ? "codex-rollout-session-meta-count-mismatch" : null,
       sessionMetaWorkspaceMismatchEvents > 0 ? "codex-rollout-session-meta-workspace-mismatch" : null,
@@ -452,7 +469,7 @@ export function inspectCodexRolloutServiceTierEvidence({
       turnContextModelMismatchEvents > 0 ? "codex-rollout-turn-context-model-mismatch" : null,
       turnContextReasoningMismatchEvents > 0 ? "codex-rollout-turn-context-reasoning-mismatch" : null,
       turnContextWorkspaceMismatchEvents > 0 ? "codex-rollout-turn-context-workspace-mismatch" : null,
-      settingsEvents !== Math.max(0, expectedProviderStarts - 1) ? "codex-rollout-resume-settings-coverage-mismatch" : null,
+      !settingsCoverageBound ? "codex-rollout-resume-settings-coverage-mismatch" : null,
       invalidTierEvents > 0 ? "codex-rollout-thread-settings-tier-missing-or-invalid" : null,
       observedRequestTiers.length > 1 ? "codex-rollout-service-tier-conflict" : null,
       modelMismatchEvents > 0 ? "codex-rollout-model-mismatch" : null,
@@ -463,12 +480,12 @@ export function inspectCodexRolloutServiceTierEvidence({
       && receipts.length === expectedProviderStarts
       && initialInvocationEvents === 1
       && resumeInvocationEvents === expectedProviderStarts - 1
-      && settingsEvents === expectedProviderStarts - 1
+      && settingsCoverageBound
       && turnContextEvents === expectedProviderStarts;
     return {
       schemaVersion: 1,
       source: "codex-controlled-invocation-rollout-settings",
-      events: initialInvocationEvents + settingsEvents,
+      events: initialInvocationEvents + resumeSettingsEvents,
       requestedTiers: requested ? [requested] : [],
       observedRequestTiers,
       providerResponseTiers: [],
@@ -484,7 +501,11 @@ export function inspectCodexRolloutServiceTierEvidence({
       invocationEvents: receipts.length,
       initialInvocationEvents,
       resumeInvocationEvents,
-      resumeSettingsEvents: settingsEvents,
+      resumeSettingsEvents,
+      rawSettingsEvents: settingsEvents,
+      settingsPerTurn,
+      orphanSettingsEvents: pendingSettingsEvents,
+      settingsThreadMismatchEvents,
       turnContextEvents,
       sessionMetaEvents,
       invalidTierEvents,

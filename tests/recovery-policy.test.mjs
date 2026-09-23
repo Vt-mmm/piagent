@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { classifyVerificationFailure } from "../packages/piagent-core/extensions/verification-intelligence.js";
-import { RECOVERY_CEILINGS, recoveryDecisionValidationErrors, selectRecoveryDecision } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
+import { applyProofCapabilityHandoff, RECOVERY_CEILINGS, recoveryDecisionValidationErrors, selectRecoveryDecision } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
 
 function classification(category) {
   const samples = {
@@ -53,6 +53,46 @@ function history(inputValue, action, disposition = "failed", overrides = {}) {
 }
 
 describe("bounded recovery policy v1", () => {
+  it("does not spend a diagnostic turn on source proof when current focused tests already passed", () => {
+    const missing = ["critical acceptance evidence source-proof-required (ac-01:invalid-input-rejection)"];
+    const unknown = selectRecoveryDecision(input("unknown"));
+    const result = applyProofCapabilityHandoff(unknown, missing);
+    assert.equal(result.action, "handoff");
+    assert.equal(result.continuation, "none");
+    assert.equal(result.sourceMutationAllowed, false);
+    assert.deepEqual(result.reasonCodes, ["source-acceptance-proof-required"]);
+    assert.deepEqual(recoveryDecisionValidationErrors(result), []);
+    assert.deepEqual(applyProofCapabilityHandoff(result, missing), result);
+    assert.deepEqual(applyProofCapabilityHandoff(unknown, missing, true), unknown);
+    for (const category of ["test-assertion", "compile-typecheck", "environment", "permission-policy", "provider-network"] ) {
+      const observed = selectRecoveryDecision(input(category));
+      assert.deepEqual(applyProofCapabilityHandoff(observed, missing), observed);
+    }
+    const blocked = selectRecoveryDecision(input("unknown", { currentPhase: "terminal" }));
+    assert.deepEqual(applyProofCapabilityHandoff(blocked, missing), blocked);
+  });
+  it("hands off missing independent proof without treating it as a failed implementation", () => {
+    const missing = ["critical acceptance evidence independent-required (ac-01:invalid-input-rejection)"];
+    const unknown = selectRecoveryDecision(input("unknown"));
+    const result = applyProofCapabilityHandoff(unknown, missing);
+    assert.deepEqual(recoveryDecisionValidationErrors(result), []);
+    assert.equal(result.action, "handoff");
+    assert.equal(result.continuation, "none");
+    assert.equal(result.sourceMutationAllowed, false);
+    assert.deepEqual(result.reasonCodes, ["independent-acceptance-proof-required"]);
+    assert.deepEqual(result.counts, unknown.counts);
+    assert.deepEqual(applyProofCapabilityHandoff(result, missing), result, "repeated handoff cannot reopen continuation");
+    assert.deepEqual(applyProofCapabilityHandoff(unknown, missing, true), unknown, "independent recovery owns its own diagnosis");
+    assert.deepEqual(applyProofCapabilityHandoff(unknown, ["critical acceptance evidence (ac-01:invalid-input-rejection)"]), unknown,
+      "missing focused tests are not automatically classified as an unsupported capability");
+    for (const category of ["test-assertion", "compile-typecheck", "permission-policy", "scope-protected-path", "environment"]) {
+      const observed = selectRecoveryDecision(input(category));
+      assert.deepEqual(applyProofCapabilityHandoff(observed, missing), observed, `${category} retains its original recovery authority`);
+    }
+    const terminal = selectRecoveryDecision(input("unknown", { currentPhase: "terminal" }));
+    assert.deepEqual(applyProofCapabilityHandoff(terminal, missing), terminal);
+    assert.ok(recoveryDecisionValidationErrors({ ...result, action: "repair", continuation: "same-session", nextPhase: "repair", sourceMutationAllowed: true }).length);
+  });
   it("keeps independent cancellation, cleanup reconciliation and unsupported coverage non-mutating", () => {
     for (const [independentDisposition, category, action, continuation, reason] of [
       ["cancelled", "unknown", "handoff", "none", "independent-execution-cancelled"],

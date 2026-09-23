@@ -184,7 +184,7 @@ describe("canonical workflow catalog parity", () => {
       Optional: (value) => value,
       String: (options) => ({ type: "string", options })
     };
-    registerPolicyTools({}, {
+    registerPolicyTools({ on() {}, registerTool(definition) { registered.push(definition); } }, {
       Type,
       StringEnum: (values) => ({ enum: [...values] }),
       registerPiagentTool(_pi, definition) { registered.push(definition); }

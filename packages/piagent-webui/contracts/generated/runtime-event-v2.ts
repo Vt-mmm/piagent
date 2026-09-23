@@ -198,6 +198,7 @@ export type MessageRole =
 export type SafeChunk = string;
 export type NullableLongDisplayText = string | null;
 export type NullableTokenUsage = TokenUsage | null;
+export type StreamActivityCount = number;
 export type ChatHeldEvent = ChatControlEventBase & {
   kind: "chat.held";
   payload: {
@@ -850,6 +851,7 @@ export interface MessageCompletedPayload {
   blockCount: number;
   stopReason: NullableStopReason;
   usage: NullableTokenUsage;
+  streamActivity?: StreamActivity;
 }
 export interface TokenUsage {
   input: NullableCount;
@@ -858,6 +860,35 @@ export interface TokenUsage {
   cacheWrite: NullableCount;
   reasoning: NullableCount;
   total: NullableCount;
+}
+/**
+ * Content-free observations at the Pi message-update hook, not provider usage or network liveness. Only retained at message settlement; absent for legacy events.
+ */
+export interface StreamActivity {
+  schemaVersion: 1;
+  boundary: "pi-message-update-hook";
+  observedUpdates: StreamActivityCount;
+  textUpdates: StreamActivityCount;
+  thinkingUpdates: StreamActivityCount;
+  toolCallUpdates: StreamActivityCount;
+  otherUpdates: StreamActivityCount;
+  lastUpdateKind:
+    | null
+    | "start"
+    | "text_start"
+    | "text_delta"
+    | "text_end"
+    | "thinking_start"
+    | "thinking_delta"
+    | "thinking_end"
+    | "toolcall_start"
+    | "toolcall_delta"
+    | "toolcall_end"
+    | "done"
+    | "error"
+    | "other";
+  lastObservedAt: null | string;
+  countersCapped: boolean;
 }
 export interface MessageFailedEvent {
   kind: "message.failed";
@@ -871,6 +902,7 @@ export interface MessageFailedPayload {
   errorCode: string;
   message: string | null;
   contentDigest: NullableDigest;
+  streamActivity?: StreamActivity;
 }
 export interface ChatControlEventBase {
   correlation: {

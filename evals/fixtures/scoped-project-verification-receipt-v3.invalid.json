@@ -1,0 +1,57 @@
+{
+  "receipt": {
+    "version": 3,
+    "kind": "scoped-project-verification-receipt-v3",
+    "protocol": "scoped-project-verifier-v1",
+    "verificationId": "fixture",
+    "action": 1,
+    "attemptId": "00000000-0000-4000-8000-000000000000",
+    "broker": {
+      "identitySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "capabilityDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "planDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "requestDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "sourceDigest": "ae184c7f67b3417f0d652e6ed7b89e6057d40b39d27a4651b77112e647624b1d",
+    "environmentDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "verifierDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "worker": {
+      "runId": "00000000-0000-4000-8000-000000000000",
+      "version": null
+    },
+    "status": "error",
+    "verdict": "observation-unavailable",
+    "cleanup": {
+      "confirmed": false
+    },
+    "evidence": {
+      "executionSha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "observationSha256": null,
+      "reason": "fixture",
+      "outcome": null,
+      "failedCommands": []
+    },
+    "startedAtMs": 0,
+    "deadlineAtMs": 1,
+    "settledAtMs": 1,
+    "completionAllowed": true,
+    "scope": {
+      "kind": "configured-docs-current-v1",
+      "commands": [
+        "git diff --check",
+        "if test -f package.json && node -e \"const s=require('./package.json').scripts||{}; process.exit(s.test?0:1)\"; then npm test; else test -s README.md || test -d docs; fi"
+      ],
+      "frozenSourceDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+      "files": [
+        {
+          "relativePath": "docs/ops.md",
+          "byteLength": 13,
+          "sha256": "d2fa6bc907e705a244b254e5febb5ec32aac1cea31fb16184ce25cb493a3c56d"
+        }
+      ]
+    }
+  },
+  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+}

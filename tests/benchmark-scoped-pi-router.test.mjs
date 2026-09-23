@@ -124,3 +124,63 @@ test("Pi operation router exposes an exact one-shot fatal channel for custody op
   assert.equal(router.takeFatalProviderBoundaryError(), null, "the trusted fatal channel is one-shot");
   assert.throws(() => router.settlementEvidence(), /pi-router-settlement-unavailable/);
 });
+
+const retirement = suffix => {
+  const { inputText, ...identity } = operation(suffix); return identity;
+};
+test("Pi router discards unused closed custody with exact identity and no acceptance publication", async () => {
+  let evidenceReads = 0;
+  const router = createScopedBrokerPiOperationRouter({ open: reservation => {
+    const value = loaded({ sessionId: reservation.sessionId, operationId: reservation.operationRef,
+      nonce: reservation.messageRequestId }, reservation.operationRef);
+    const evidence = value.settlementEvidence;
+    value.settlementEvidence = () => { evidenceReads++; return evidence(); }; return value;
+  } });
+  const pi = piFixture(router), finish = router.beginOperation(operation("native"));
+  assert.throws(() => router.discardUnusedSettlement(retirement("native")), /pi-router-retirement-identity/);
+  await pi.handlers.get("before_agent_start")({}, { sessionManager: { getSessionId: () => "session-native" } });
+  assert.throws(() => router.discardUnusedSettlement(retirement("native")), /pi-router-retirement-identity/);
+  await pi.handlers.get("agent_end")();
+  assert.throws(() => router.discardUnusedSettlement(retirement("native")), /pi-router-retirement-unavailable/);
+  finish("operation-settled");
+  for (const key of ["sessionId", "operationRef", "messageRequestId"])
+    assert.throws(() => router.discardUnusedSettlement({ ...retirement("native"), [key]: "foreign" }), /pi-router-retirement-identity/);
+  assert.equal(evidenceReads, 0); assert.equal(router.status().consumed, false);
+  assert.equal(router.discardUnusedSettlement(retirement("native")), undefined);
+  router.discardUnusedSettlement(retirement("native"));
+  assert.equal(evidenceReads, 1); assert.equal(router.status().consumed, true);
+  assert.throws(() => router.settlementEvidence(), /pi-router-settlement-unavailable/);
+  const next = router.beginOperation(operation("next"));
+  assert.throws(() => router.discardUnusedSettlement(retirement("native")), /pi-router-retirement-unavailable/);
+  await pi.handlers.get("before_agent_start")({}, { sessionManager: { getSessionId: () => "session-native" } });
+  await pi.handlers.get("agent_end")(); next("operation-settled");
+  assert.deepEqual(router.settlementEvidence(), { label: "operation-next", actions: 0 });
+});
+
+test("Pi router cannot retire cancelled, blocked, fatal or invalid custody", async () => {
+  for (const variant of ["cancelled", "blocked", "fatal", "invalid-journal"]) {
+    const marker = new Error(`fixture-${variant}`);
+    let instance;
+    const router = createScopedBrokerPiOperationRouter({ open: reservation => {
+      if (variant === "fatal") throw marker;
+      instance = loaded({ sessionId: reservation.sessionId, operationId: reservation.operationRef,
+        nonce: reservation.messageRequestId }, variant);
+      if (variant === "blocked") { const status = instance.broker.status; instance.broker.status = () => ({ ...status(), blocked: true }); }
+      if (variant === "invalid-journal") instance.settlementEvidence = () => { throw marker; };
+      return instance;
+    } });
+    const pi = piFixture(router), finish = router.beginOperation(operation(variant));
+    if (variant === "fatal") {
+      await assert.rejects(pi.handlers.get("before_agent_start")({}, { sessionManager: { getSessionId: () => "session-native" } }), error => error === marker);
+    } else {
+      await pi.handlers.get("before_agent_start")({}, { sessionManager: { getSessionId: () => "session-native" } });
+      if (variant === "cancelled") instance.broker.cancel();
+      await pi.handlers.get("agent_end")();
+    }
+    finish("operation-settled");
+    assert.throws(() => router.discardUnusedSettlement(retirement(variant)), variant === "invalid-journal" ? error => error === marker : /pi-router-retirement-(unavailable|incomplete)/);
+    assert.equal(router.status().consumed, false);
+    assert.throws(() => router.beginOperation(operation("next")), /pi-router-operation-reuse/);
+    if (variant === "fatal") { assert.equal(router.takeFatalProviderBoundaryError(), marker); assert.equal(router.takeFatalProviderBoundaryError(), null); }
+  }
+});

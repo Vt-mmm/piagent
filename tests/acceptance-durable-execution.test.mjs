@@ -241,7 +241,7 @@ test("authenticated durable admission binds protocol v2 profile, compiler, typed
   const first = await runner.run(request), admitted = await runner.assess(first, { policy: "allow" });
   assert.equal(first.verdict, "pass", JSON.stringify(first));
   assert.equal(admitted.completionAllowed, true, JSON.stringify(admitted));
-  assert.equal(admitted.contractVersion, "bounded-node-profile-contract-comparison-v1");
+  assert.equal(admitted.contractVersion, "bounded-node-profile-contract-comparison-v3");
   assert.equal(admitted.profileDigest, expectedNodeProfile().digest);
   assert.equal(first.evidence.observed.result.execution.profileDigest, expectedNodeProfile().digest);
   assert.equal((await runner.run(request)).reused, true);
@@ -428,4 +428,46 @@ test("host death during a real worker run preserves its exact identity and block
   reopened.recordStoppedAttempt({ scope, attemptId, executorStopped: true });
   assert.equal((await resumed.run(request)).reason, "evidence-interrupted");
   assert.equal(reopened.latest(scope).attempt, 1);
+});
+
+
+test("declared API comparison is authenticated with current source and cannot be reused after an arity change", integration, async context => {
+  const f = fixture(context), profile = expectedNodeProfile();
+  fs.writeFileSync(f.sourceFile, "export function sum(a,b){return a+b}\n");
+  const planChecks = checks(); planChecks[0].cases[0].invocation = { kind: "call" };
+  planChecks[0].cases[0].expected.publicApi = { version: "declared-positional-api-v1", exports: [
+    { name: "sum", kind: "function", async: false, generator: false, parameters: ["required", "required"] }] };
+  const runner = createDurableContractRunner({ ...f.options, profile, checks: planChecks });
+  const first = await runner.run(request), receipt = await runner.assess(first, { policy: "allow" });
+  assert.equal(receipt.verdict, "pass"); assert.equal(receipt.completionAllowed, true);
+  fs.writeFileSync(f.sourceFile, "export function sum(a,b,extra){return a+b}\n");
+  assert.equal((await runner.assess(first, { policy: "allow" })).completionAllowed, false);
+  const second = await runner.run(request), changed = await runner.assess(second, { policy: "allow" });
+  assert.equal(second.reused, false); assert.equal(changed.verdict, "fail"); assert.equal(changed.completionAllowed, false);
+  assert.equal(changed.counterexamples[0].evidence.observed.publicApi.exports[0].parameters.length, 3);
+  f.store.close(); const reopened = f.open();
+  const restored = createDurableContractRunner({ ...f.options, store: reopened, profile, checks: planChecks });
+  const cached = await restored.run(request); assert.equal(cached.reused, true);
+  assert.equal((await restored.assess(cached, { policy: "allow" })).verdict, "fail");
+});
+
+test("startup allowance changes durable evidence identity without silently extending old approvals", async context => {
+  const { options, store } = fixture(context);
+  const configuration = { ...options, dockerSocket: "/piagent-test-backend-does-not-exist.sock", timeoutMs: 10000 };
+  for (const startupAllowanceMs of [-1, 60001, 0.5, null, "60000", NaN]) {
+    assert.throws(() => createDurableContractRunner({ ...configuration, startupAllowanceMs }), /Invalid approved/);
+  }
+  assert.equal(store.latest(scope), null);
+  const original = await createDurableContractRunner(configuration).run(request);
+  assert.equal(original.verdict, "error");
+  const originalBinding = store.latest(scope).binding.backendDigest;
+  const zero = await createDurableContractRunner({ ...configuration, startupAllowanceMs: 0 }).run(request);
+  assert.equal(zero.reused, true);
+  assert.equal(zero.attemptId, original.attemptId);
+  const extended = await createDurableContractRunner({ ...configuration, startupAllowanceMs: 60000 }).run(request);
+  assert.equal(extended.verdict, "error");
+  assert.equal(extended.reused, false);
+  assert.notEqual(extended.attemptId, original.attemptId);
+  assert.notEqual(store.latest(scope).binding.backendDigest, originalBinding);
+  assert.equal(store.latest(scope).attempt, 2);
 });

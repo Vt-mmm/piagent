@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { runIsolatedContract } from "./acceptance-isolated-executor.js";
-import { parseRequest, validateValue } from "./acceptance-executor/protocol.mjs";
+import { parseRequest, validateValue, MAX_STRING_LENGTH } from "./acceptance-executor/protocol.mjs";
 import { canonicalValue } from "./acceptance-executor/values.mjs";
 import { CASE_CAPABILITY_FIELDS, OBSERVATION_CAPABILITY_FIELDS, callbackIds, validateCallbackTrace, validateReturnIdentity, validateErrorObservation } from "./acceptance-executor/capabilities.mjs";
 import { validateReferenceIdentity } from "./acceptance-executor/reference-identity.mjs";
+import { validateDeclaredApi, observeDeclaredApi } from "./acceptance-declared-api.js";
 
-export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v5";
-export const NODE_INDEPENDENT_CONTRACT_VERSION = "bounded-node-profile-contract-comparison-v1";
+export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v6";
+export const NODE_INDEPENDENT_CONTRACT_VERSION = "bounded-node-profile-contract-comparison-v3";
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"];
@@ -29,7 +30,11 @@ function freeze(value) {
 
 function validateExpected(expected, item, nodeProfile = false) {
   const { args } = item;
-  shape(expected, ["outcome", "value", "errorClass", "clockReads", "dateArgsAfter", "argsAfter", ...OBSERVATION_CAPABILITY_FIELDS], ["outcome"]);
+  shape(expected, ["outcome", "value", "errorClass", "clockReads", "dateArgsAfter", "argsAfter", "publicApi", ...OBSERVATION_CAPABILITY_FIELDS], ["outcome"]);
+  if (Object.hasOwn(expected, "publicApi")) {
+    if (!nodeProfile) throw new TypeError("Declared API requires the explicit Node contract profile");
+    validateDeclaredApi(expected.publicApi);
+  }
   if (nodeProfile && item.invocation?.kind === "construct" && !["constructed", "throw"].includes(expected.outcome)) {
     throw new TypeError("Invalid constructor expectation");
   }
@@ -69,6 +74,14 @@ function validateExpected(expected, item, nodeProfile = false) {
   if (item.observeError && expected.outcome === "throw" || Object.hasOwn(expected, "errorObservation")) {
     if (expected.outcome !== "throw") throw new TypeError("Error observation on a return");
     validateErrorObservation(expected.errorObservation, item, { nodeProfile });
+  }
+  if (item.observeErrorMessage && expected.outcome === "throw" || Object.hasOwn(expected, "errorMessage")) {
+    if (!item.observeErrorMessage || expected.outcome !== "throw") throw new TypeError("Unexpected expected error message");
+    shape(expected.errorMessage, ["includes", "ignoreCase"]);
+    if (typeof expected.errorMessage.includes !== "string" || !expected.errorMessage.includes.length
+      || expected.errorMessage.includes.length > MAX_STRING_LENGTH || typeof expected.errorMessage.ignoreCase !== "boolean") {
+      throw new TypeError("Invalid expected error message");
+    }
   }
 }
 
@@ -119,8 +132,16 @@ export function compileIndependentContract(planText) {
 
 function matches(expected, observed) {
   if (expected.outcome !== observed.outcome) return false;
+  if (Object.hasOwn(expected, "publicApi") && !isDeepStrictEqual(expected.publicApi, observed.publicApi)) return false;
   if (expected.outcome === "return" && !isDeepStrictEqual(canonicalValue(expected.value), canonicalValue(observed.value))) return false;
   if (expected.outcome === "throw" && expected.errorClass !== observed.errorClass) return false;
+  if (Object.hasOwn(expected, "errorMessage")) {
+    if (typeof observed.errorMessage !== "string" || observed.errorMessage.length > MAX_STRING_LENGTH) return false;
+    // Literal text only, with ECMAScript /i semantics. No plan-supplied pattern
+    // syntax, flags, callbacks or expectations enter the guest.
+    const literal = expected.errorMessage.includes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!new RegExp(literal, expected.errorMessage.ignoreCase ? "i" : "").test(observed.errorMessage)) return false;
+  }
   if (Object.hasOwn(expected, "clockReads") && expected.clockReads !== observed.clockReads) return false;
   if (Object.hasOwn(expected, "dateArgsAfter") && !isDeepStrictEqual(expected.dateArgsAfter, observed.dateArgsAfter)) return false;
   if (Object.hasOwn(expected, "argsAfter") && !isDeepStrictEqual(expected.argsAfter.map(canonicalValue), observed.argsAfter?.map(canonicalValue))) return false;
@@ -150,6 +171,8 @@ export async function runIndependentContract({ planText, ...backend } = {}) {
 export function compareIndependentExecution(compiled, execution) {
   const counterexamples = [];
   const observations = new Map((execution.observation?.cases ?? []).map((item) => [item.id, item]));
+  const api = compiled.plan.checks.some(check => check.cases.some(item => Object.hasOwn(item.expected, "publicApi")))
+    ? observeDeclaredApi(compiled.plan.source) : null;
   let sequence, history = [];
   const checks = compiled.plan.checks.map((check) => {
     let caseCount = 0, incomplete = false, error = false, counterexampleRef;
@@ -157,9 +180,13 @@ export function compareIndependentExecution(compiled, execution) {
       const { expected: _expected, ...input } = item;
       if (!item.sequence || item.sequence !== sequence) history = [];
       sequence = item.sequence; history.push(input);
-      const observed = observations.get(item.id);
+      let observed = observations.get(item.id);
       if (!observed || observed.outcome === "unsupported") { incomplete = true; continue; }
       if (observed.outcome === "error") { error = true; continue; }
+      if (Object.hasOwn(item.expected, "publicApi")) {
+        if (api?.status !== "observed") { incomplete = true; continue; }
+        observed = { ...observed, publicApi: api.value };
+      }
       caseCount += 1;
       if (!matches(item.expected, observed)) {
         const evidence = { version: compiled.version ?? INDEPENDENT_CONTRACT_VERSION, planDigest: compiled.planDigest,

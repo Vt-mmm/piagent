@@ -69,6 +69,11 @@ after(() => {
 function copyPiagentPackage(root) {
   const packageRoot = path.join(root, "packages", "piagent-core");
   fs.cpSync(path.join(repoRoot, "packages", "piagent-core"), packageRoot, { recursive: true });
+  // Existing integration cases assert strict proof behavior; the release default is covered separately.
+  const policyPath = path.join(packageRoot, "policies", "base-policy.json");
+  const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+  policy.finalGate.acceptanceProofMode = "enforce";
+  fs.writeFileSync(policyPath, `${JSON.stringify(policy, null, 2)}\n`);
   fs.copyFileSync(path.join(repoRoot, "package.json"), path.join(root, "package.json"));
   fs.cpSync(path.join(repoRoot, "adapters"), path.join(root, "adapters"), { recursive: true });
   fs.cpSync(path.join(repoRoot, "packs"), path.join(root, "packs"), { recursive: true });
@@ -224,7 +229,8 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
 
-    assert.equal(harness.tools.size, 32);
+    assert.equal(harness.tools.size, 33);
+    assert.equal(harness.tools.get("piagent_wait")?.executionMode, "sequential");
     assert.equal(harness.tools.get("apply_patch")?.executionMode, "sequential");
     assert.equal(harness.tools.has("piagent_tools"), true);
     assert.equal(harness.tools.has("piagent_context_engine"), true);
@@ -271,14 +277,20 @@ describe("piagent guard integration", () => {
       "message_start",
       "model_select",
       "session_before_compact",
+      "session_before_fork",
+      "session_before_switch",
+      "session_before_tree",
       "session_compact",
       "session_info_changed",
       "session_shutdown",
       "session_start",
       "thinking_level_select",
       "tool_call",
+      "tool_execution_end",
+      "tool_execution_start",
       "tool_result",
-      "turn_end"
+      "turn_end",
+      "turn_start"
     ]);
     assert.equal(harness.getSessionName(), "pi:Integration Project");
     assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
@@ -4010,9 +4022,16 @@ describe("piagent guard integration", () => {
       } else {
         assert.notEqual(task.trace.outcome, "completed");
         assert.equal(criterion.status, "pending");
-        const recovery = harness.entries.find((entry) => entry.payload?.customType === "piagent-completion-recovery");
-        assert.equal(recovery.payload.details.recovery.sourceMutationAllowed, false);
-        assert.equal(recovery.payload.details.recovery.failureCategory, "unknown");
+        assert.match(claim.message.content[0].text, /NOT APPROVED/);
+        assert.match(claim.message.content[0].text, /handoff \(source-acceptance-proof-required\)/);
+        assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-completion-recovery"), false);
+        assert.equal(harness.entries.filter((entry) => entry.options?.triggerTurn === true).length, 0);
+        const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi/piagent-state/handoffs", `${task.taskRunId}.json`), "utf8"));
+        assert.equal(handoff.failure.recovery.sourceMutationAllowed, false);
+        assert.equal(handoff.failure.recovery.failureCategory, "unknown");
+        assert.equal(handoff.failure.recovery.counts.unknownDiagnosticPasses, 0);
+        assert.equal(handoff.state.completionApproved, false);
+        assert.equal(handoff.tree.latestVerifierMatchesCurrentTree, true);
       }
     }
   });
@@ -5208,6 +5227,57 @@ an operator-provided redacted excerpt are safe alternatives, but never include a
     assert.deepEqual(task.changedFiles, []);
   });
 
+  it("recovers missing context after an oversized intake pack without repeating passing verification", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root, { authorityProfile: "broad-default" });
+    const source = Array.from({ length: 400 }, (_, index) => `export const value${index} = ${index};`).join("\n");
+    fs.writeFileSync(path.join(cwd, "src", "large.js"), source);
+    const ctx = createContext(cwd, { sessionId: "context-recovery" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = "Verify the current implementation in src/large.js and fix any failure before reporting completion.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const started = await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable system prompt" }, ctx);
+    assert.match(started.message.content, /No file content was delivered/);
+    assert.match(started.message.content, /native read tool/);
+    assert.equal(started.message.details.contextDelivery, undefined, "navigation guidance is not observed content");
+    assert.deepEqual(activeSessionTask(cwd, "context-recovery").contextManifest, []);
+    for (const verifier of started.message.details.runtimeTask.verifyCommands) {
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+      assert.notEqual(allowed.block, true, allowed.reason);
+      await harness.handlers.get("tool_result")({ toolName: "bash", input: { command: verifier },
+        content: [{ type: "text", text: "pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
+    }
+    const claim = () => harness.handlers.get("message_end")({ message: { role: "assistant",
+      content: [{ type: "text", text: "Verification complete: the configured checks passed." }] } }, ctx);
+    await claim();
+    const recoveries = () => harness.entries.filter(entry => entry.payload?.customType === "piagent-completion-recovery");
+    assert.equal(recoveries().length, 1);
+    assert.deepEqual(recoveries()[0].payload.details.missing, ["context manifest"]);
+    assert.match(recoveries()[0].payload.content, /native read tool/);
+    assert.match(recoveries()[0].payload.content, /Reuse current-tree passing verification/);
+    assert.equal(activeSessionTask(cwd, "context-recovery").trace.outcome, "pending");
+    await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/large.js", offset: 1, limit: 10 },
+      content: [{ type: "text", text: "read failed" }], isError: true }, ctx);
+    const blocked = await claim();
+    assert.match(blocked.message.content[0].text, /NOT APPROVED/);
+    assert.equal(recoveries().length, 1, "the global continuation budget remains one");
+    const beforeRead = activeSessionTask(cwd, "context-recovery");
+    assert.deepEqual(beforeRead.contextManifest, [], "a failed read cannot satisfy the gate");
+    const input = { path: "src/large.js", offset: 1, limit: 10 };
+    assert.notEqual((await callToolCall(harness.handlers.get("tool_call"), ctx, "read", input)).block, true);
+    await harness.handlers.get("tool_result")({ toolName: "read", input,
+      content: [{ type: "text", text: source.split("\n").slice(0, 10).join("\n") }], isError: false }, ctx);
+    await claim();
+    const final = activeSessionTask(cwd, "context-recovery");
+    assert.equal(final.trace.outcome, "completed", "valid final evidence takes precedence over exhausted recovery");
+    assert.equal(final.verifyEvidence.length, beforeRead.verifyEvidence.length, "a bounded read does not rerun passing checks");
+    assert.equal(recoveries().length, 1);
+    assert.deepEqual(final.changedFiles, []);
+    assert.equal(fs.readFileSync(path.join(cwd, "src", "large.js"), "utf8"), source);
+  });
+
   it("completes an allowed automatic task with exact current-tree verification and zero task delta", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
@@ -5569,6 +5639,44 @@ an operator-provided redacted excerpt are safe alternatives, but never include a
         else assert.equal(latest.attempt, ["repair", "exhausted"].includes(scenarioKind) ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
       }
     } finally { authority.close(); }
+  });
+
+  it("does not complete a zero-delta runtime review with unproved critical requirements", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "src/value.js"), "export function parseValue(value) { return value; }\n");
+    execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    execFileSync("git", ["-C", cwd, "add", "src/value.js"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "value baseline"]);
+    const ctx = createContext(cwd, { sessionId: "zero-delta-missing-proof", sessionName: "ZERO-DELTA-PROOF" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = "Verify parseValue in src/value.js and fix any failures in scope if needed. Invalid input must throw TypeError. Run the configured checks.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] } }, ctx);
+    const task = activeSessionTask(cwd, "zero-delta-missing-proof");
+    assert.equal(task.changeMode, "source-change");
+    assert.equal(task.mutationPolicy, "allowed");
+    assert.equal(task.acceptanceReceipt.source, "runtime");
+    await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/value.js" },
+      content: [{ type: "text", text: fs.readFileSync(path.join(cwd, "src/value.js"), "utf8") }], isError: false }, ctx);
+    for (const [index, command] of task.verifyCommands.entries()) {
+      const toolCallId = `zero-delta-verifier-${index}`;
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command }, toolCallId);
+      assert.notEqual(allowed.block, true, allowed.reason);
+      await harness.handlers.get("tool_result")({ toolCallId, toolName: "bash", input: { command },
+        content: [{ type: "text", text: "generic smoke pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
+    }
+    const before = activeSessionTask(cwd, "zero-delta-missing-proof");
+    assert.deepEqual(before.changedFiles, []);
+    assert.ok(before.acceptanceReceipt.criteria.some(item => item.priority === "critical" && item.status !== "satisfied"));
+    await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Verification complete." }] } }, ctx);
+    const after = activeSessionTask(cwd, "zero-delta-missing-proof");
+    assert.notEqual(after.trace.outcome, "completed", "absence of a mutation or inherited scope cannot bypass critical proof");
+    assert.deepEqual(after.changedFiles, []);
   });
 
   it("binds a zero-delta verification receipt only to the adjacent completed implementation", async () => {

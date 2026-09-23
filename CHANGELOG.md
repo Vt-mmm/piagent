@@ -4,6 +4,49 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.7.0 - 2026-09-22
+
+### Session recovery, context, and accounting
+
+- Updated the supported Pi host to 0.86.1. Preserved the selected model and
+  thinking level while correcting SDK lifecycle, usage, and WebUI settlement.
+- Added `piagent_wait` for requested pauses inside an open session. The local
+  timer does not call the model while waiting; cancellation, session changes,
+  and replay retain explicit interrupted or pending state.
+- Bound task usage, edit/verifier timing, and context delivery to the active
+  task. Filtered unsupported context files before selection and kept scoped
+  native-read recovery when no context pack can be delivered.
+- Extended source-bound acceptance and bounded executor checks, preserving
+  rejection of verified failures and finite handoff for unsupported work.
+- Set acceptance proof to diagnostic by default. Unproved criteria remain
+  pending with an explicit no-quality-claim completion note; task contract,
+  scope, passing verification, and trace remain hard gates. Reviewed package
+  policies can select strict `enforce` mode when required.
+
+### Diagnostic benchmark closure
+
+- Separated recovered command errors from terminal failures in the controlled
+  comparison collector and added exact failed-attempt selection for diagnostics.
+- Clarified three public task contracts and verification examples, and corrected
+  reconnect grading to compare public state while allowing internal cleanup.
+- The historical 108-session run remains 49/54 Piagent PASS and 45/54 comparison
+  PASS. A separate selected rerun passed all 14 formerly failed attempts;
+  the other 94 attempts were not rerun. Inputs changed for three scenarios, so
+  these results are not combined into a new 108-session score.
+- The selected rerun used 640,121 fresh tokens and 3,010,425 including cache.
+  Fresh usage increased 23.0% across that subset. This release makes no new
+  aggregate token-saving or production-performance claim. The operator closed
+  the paid benchmark cycle; release validation does not open provider sessions.
+
+### Install and update
+
+```sh
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
+npm install -g --ignore-scripts @piagent/platform@1.7.0
+piagent-install --stable
+piagent-doctor
+```
+
 ## v1.6.1 - 2026-08-26
 
 ### Runtime continuity and truthful WebUI state

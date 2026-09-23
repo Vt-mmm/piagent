@@ -326,6 +326,12 @@
         }
       ]
     },
+    "errorMessagePredicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["includes","ignoreCase"],
+      "properties": {"includes": {"type": "string","minLength": 1,"maxLength": 4096},"ignoreCase": {"type": "boolean"}}
+    },
     "expected": {
       "type": "object",
       "additionalProperties": false,
@@ -338,6 +344,7 @@
         "callbackTrace": {"$ref": "#/$defs/callbackTrace"},
         "returnIdentity": {"type": "array","maxItems": 16,"uniqueItems": true,"items": {"type": "integer","minimum": 0,"maximum": 15}},
         "errorObservation": {"$ref": "#/$defs/errorObservation"},
+        "errorMessage": {"$ref": "#/$defs/errorMessagePredicate"},
         "referenceIdentity": {"$ref": "#/$defs/referenceIdentity"},
         "argsAfter": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/inputValue"}},
         "dateArgsAfter": {
@@ -355,7 +362,7 @@
         {
           "properties": {"outcome": {"const": "return"}},
           "required": ["value"],
-          "not": {"anyOf": [{"required": ["errorClass"]},{"required": ["errorObservation"]}]}
+          "not": {"anyOf": [{"required": ["errorClass"]},{"required": ["errorObservation"]},{"required": ["errorMessage"]}]}
         },
         {
           "properties": {"outcome": {"const": "throw"}},
@@ -377,6 +384,7 @@
         "awaitResult": {"const": true},
         "observeIdentity": {"const": true},
         "observeError": {"const": true},
+        "observeErrorMessage": {"const": true},
         "callbacks": {"type": "array","minItems": 1,"maxItems": 8,"items": {"$ref": "#/$defs/callbackInput"}},
         "errors": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "#/$defs/errorInput"}},
         "referencePairs": {"$ref": "#/$defs/referencePairs"},
@@ -385,6 +393,8 @@
         "expected": {"$ref": "#/$defs/expected"}
       },
       "allOf": [
+        {"if": {"required": ["observeErrorMessage"],"properties": {"expected": {"properties": {"outcome": {"const": "throw"}}}}},"then": {"properties": {"expected": {"required": ["errorMessage"]}}}},
+        {"if": {"properties": {"expected": {"required": ["errorMessage"]}}},"then": {"required": ["observeErrorMessage"]}},
         {"if": {"required": ["referencePairs"]},"then": {"properties": {"expected": {"required": ["referenceIdentity"]}}}},
         {"if": {"required": ["callbacks"]},"then": {"properties": {"expected": {"required": ["callbackTrace"]}}}},
         {
@@ -404,6 +414,7 @@
       "properties": {
         "imageId": {"type": "string","pattern": "^sha256:[a-f0-9]{64}$"},
         "dockerSocket": {"type": "string","pattern": "^/[^\u0000]*$"},
+        "startupAllowanceMs": {"type": "integer","minimum": 0,"maximum": 60000},
         "timeoutMs": {"type": "integer","minimum": 25,"maximum": 30000}
       }
     },
@@ -704,11 +715,13 @@
         }
       ]
     },
+    "declaredApi": {"type":"object","additionalProperties":false,"required":["version","exports"],"properties":{"version":{"const":"declared-positional-api-v1"},"exports":{"type":"array","minItems":1,"maxItems":32,"items":{"oneOf":[{"type":"object","additionalProperties":false,"required":["name","kind","async","generator","parameters"],"properties":{"name":{"type":"string","pattern":"^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},"kind":{"const":"function"},"async":{"type":"boolean"},"generator":{"type":"boolean"},"parameters":{"type":"array","maxItems":16,"items":{"oneOf":[{"const":"required"},{"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"default"},"value":{"$ref":"#/$defs/outputValue"}}},{"type":"object","additionalProperties":false,"required":["kind","name","value","frozen"],"properties":{"kind":{"const":"default-binding"},"name":{"type":"string","pattern":"^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},"value":{"$ref":"#/$defs/outputValue"},"frozen":{"type":"boolean"}}}]}}}},{"type":"object","additionalProperties":false,"required":["name","kind","value","frozen"],"properties":{"name":{"type":"string","pattern":"^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$"},"kind":{"const":"const-value"},"value":{"$ref":"#/$defs/outputValue"},"frozen":{"type":"boolean"}}}]}}}},
     "expectedV2": {
       "type": "object",
       "additionalProperties": false,
       "required": ["outcome"],
       "properties": {
+        "publicApi": {"$ref": "#/$defs/declaredApi"},
         "outcome": {"enum": ["return","throw","constructed"]},
         "value": {"$ref": "#/$defs/outputValueV2"},
         "errorClass": {"enum": ["TypeError","RangeError","SyntaxError","ReferenceError","EvalError","URIError","Error","non-error"]},
@@ -716,6 +729,7 @@
         "callbackTrace": {"$ref": "#/$defs/callbackTrace"},
         "returnIdentity": {"type": "array","maxItems": 16,"uniqueItems": true,"items": {"type": "integer","minimum": 0,"maximum": 15}},
         "errorObservation": {"$ref": "#/$defs/errorObservationV2"},
+        "errorMessage": {"$ref": "#/$defs/errorMessagePredicate"},
         "referenceIdentity": {"$ref": "#/$defs/referenceIdentity"},
         "argsAfter": {"type": "array","maxItems": 16,"items": {"$ref": "#/$defs/inputValueV2"}},
         "dateArgsAfter": {
@@ -733,7 +747,7 @@
         {
           "properties": {"outcome": {"const": "return"}},
           "required": ["value"],
-          "not": {"anyOf": [{"required": ["errorClass"]},{"required": ["errorObservation"]}]}
+          "not": {"anyOf": [{"required": ["errorClass"]},{"required": ["errorObservation"]},{"required": ["errorMessage"]}]}
         },
         {
           "properties": {"outcome": {"const": "throw"}},
@@ -742,7 +756,7 @@
         },
         {
           "properties": {"outcome": {"const": "constructed"}},
-          "not": {"anyOf": [{"required": ["value"]},{"required": ["errorClass"]},{"required": ["returnIdentity"]},{"required": ["errorObservation"]}]}
+          "not": {"anyOf": [{"required": ["value"]},{"required": ["errorClass"]},{"required": ["returnIdentity"]},{"required": ["errorObservation"]},{"required": ["errorMessage"]}]}
         }
       ]
     },
@@ -759,6 +773,7 @@
         "awaitResult": {"const": true},
         "observeIdentity": {"const": true},
         "observeError": {"const": true},
+        "observeErrorMessage": {"const": true},
         "callbacks": {"type": "array","minItems": 1,"maxItems": 8,"items": {"$ref": "#/$defs/callbackInputV2"}},
         "errors": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "#/$defs/errorInputV2"}},
         "referencePairs": {"$ref": "#/$defs/referencePairsV2"},
@@ -768,6 +783,8 @@
         "invocation": {"$ref": "#/$defs/invocation"}
       },
       "allOf": [
+        {"if": {"required": ["observeErrorMessage"],"properties": {"expected": {"properties": {"outcome": {"const": "throw"}}}}},"then": {"properties": {"expected": {"required": ["errorMessage"]}}}},
+        {"if": {"properties": {"expected": {"required": ["errorMessage"]}}},"then": {"required": ["observeErrorMessage"]}},
         {"if": {"required": ["referencePairs"]},"then": {"properties": {"expected": {"required": ["referenceIdentity"]}}}},
         {"if": {"required": ["callbacks"]},"then": {"properties": {"expected": {"required": ["callbackTrace"]}}}},
         {
@@ -784,7 +801,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id","digest","workerVersion"],
-      "properties": {"id": {"const": "node-workload-api-v1"},"digest": {"$ref": "#/$defs/hash"},"workerVersion": {"const": "quickjs-node-profile-worker-v1"}}
+      "properties": {"id": {"const": "node-workload-api-v1"},"digest": {"$ref": "#/$defs/hash"},"workerVersion": {"const": "quickjs-node-profile-worker-v4"}}
     },
     "dockerCommand": {
       "type": "object",
@@ -803,6 +820,7 @@
         "imageId": {"type": "string","pattern": "^sha256:[a-f0-9]{64}$"},
         "dockerSocket": {"type": "string","pattern": "^/[^\u0000]*$"},
         "dockerCommand": {"$ref": "#/$defs/dockerCommand"},
+        "startupAllowanceMs": {"type": "integer","minimum": 0,"maximum": 60000},
         "timeoutMs": {"type": "integer","minimum": 25,"maximum": 30000},
         "profile": {"$ref": "#/$defs/profileV2"}
       }
@@ -902,13 +920,54 @@
     "planV2": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion","operatorRequestDigest","backend","contracts"],
+      "required": [
+        "schemaVersion",
+        "operatorRequestDigest",
+        "backend",
+        "contracts"
+      ],
       "properties": {
-        "schemaVersion": {"const": 3},
-        "operatorRequestDigest": {"type": "string","pattern": "^operator-request-v1:[a-f0-9]{64}$"},
-        "backend": {"$ref": "#/$defs/backendV2"},
-        "contracts": {"$ref": "#/$defs/contractsV2"}
-      }
+        "schemaVersion": {
+          "const": 3
+        },
+        "operatorRequestDigest": {
+          "type": "string",
+          "pattern": "^operator-request-v1:[a-f0-9]{64}$"
+        },
+        "backend": {
+          "$ref": "#/$defs/backendV2"
+        },
+        "contracts": {
+          "type": "array",
+          "maxItems": 12
+        },
+        "nativeOnly": {
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "nativeOnly"
+            ]
+          },
+          "then": {
+            "properties": {
+              "contracts": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "contracts": {
+                "$ref": "#/$defs/contractsV2"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

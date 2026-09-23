@@ -1435,3 +1435,54 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     await new Promise((resolve) => setTimeout(resolve, 100));
   });
 });
+
+it("retires only completed native scoped custody and preserves lazy composite evidence", async t => {
+  for (const variant of ["completed", "pending", "retirement-error", "composite"]) {
+    const { root, key } = state(t), cwd = path.join(root, "project"); fs.mkdirSync(cwd);
+    const target = { ...info(root, `retirement-${variant}.jsonl`), cwd, id: `retirement-${variant}` };
+    const template = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals/fixtures/task-contract.valid.json"), "utf8"));
+    const task = writeTaskContract(cwd, { ...template, taskId: `retirement-task-${variant}`,
+      taskRunId: `retirement-run-${variant}`, sessionId: target.id, sessionName: "Retirement control",
+      trace: { outcome: ["completed", "retirement-error"].includes(variant) ? "completed" : "pending", recordedAt: new Date().toISOString() } });
+    bindSessionTask(cwd, target.id, task.sessionName, task);
+    let evidenceCalls = 0;
+    t.after(registerIndependentAcceptanceProvider(cwd, task, { read: () => ({ entries: [] }),
+      webUiSettlementApplicability: () => variant === "composite" ? "composite" : "not-applicable",
+      async settleWebUi(_task, input) { await input.evidence(); return { status: "blocked", reason: "fixture not approved" }; } }));
+    const events = new GatewayEventStore(), observed = [], retired = [], listeners = new Set();
+    events.subscribe(event => observed.push(event));
+    const emit = event => { for (const listener of listeners) listener(event); };
+    const session = { isIdle: true, isStreaming: false,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      async prompt() {
+        this.isIdle = false; this.isStreaming = true; emit({ type: "agent_start" });
+        emit({ type: "message_start", message: { role: "assistant" } });
+        emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Scoped lifecycle result." } });
+        emit({ type: "message_end", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Scoped lifecycle result." }] } });
+        this.isIdle = true; this.isStreaming = false; emit({ type: "agent_settled" });
+      } };
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: `gateway_retirement_${variant}`, key,
+      leases: new SessionLeaseStore(path.join(root, "leases"), key), listSessions: async () => [target], events,
+      runtimeFactory: async () => ({ session, async dispose() {} }),
+      compositeSettlementEvidence() { evidenceCalls++; return { fixture: true }; },
+      scopedBrokerRouter: { discardUnusedSettlement(identity) {
+        retired.push(identity); if (variant === "retirement-error") throw new Error("fixture-invalid-custody");
+      }, settlementEvidence() { throw new Error("explicit-evidence-callback-must-retain-ownership"); } } });
+    supervisor.setProjectionReader(async () => ({ sessionRevision: "revision_retired", liveState: "idle" }));
+    try {
+      const messageRequestId = `message-retirement-${variant}`;
+      const started = await supervisor.send(sessionRefForPath(key, target.path), { delivery: "new-operation",
+        message: "Finish the current turn.", messageRequestId, expectedOperationRef: null }, "revision_before_retirement");
+      await waitFor(() => observed.some(event => event.kind === "operation.settled" && event.payload.operationRef === started.operationRef));
+      assert.equal(evidenceCalls, variant === "composite" ? 1 : 0);
+      assert.deepEqual(retired, ["completed", "retirement-error"].includes(variant)
+        ? [{ sessionId: target.id, operationRef: started.operationRef, messageRequestId }] : []);
+      const terminal = observed.find(event => event.kind === "operation.settled").payload;
+      assert.equal(terminal.settlement, variant === "retirement-error" ? "error" : variant === "composite" ? "blocked" : "completed");
+      if (variant === "retirement-error") {
+        assert.equal(terminal.reasonCode, "scoped-operation-retirement-failed");
+        assert.equal(observed.some(event => event.kind === "message.completed"), false);
+      }
+    } finally { await supervisor.close(); }
+  }
+});

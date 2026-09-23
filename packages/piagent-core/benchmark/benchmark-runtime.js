@@ -70,7 +70,8 @@ export const PIAGENT_BENCHMARK_TREATMENTS = Object.freeze({
     PIAGENT_HELPERS_MODE: "off",
     PIAGENT_EXECUTION_BACKEND: "host",
     PIAGENT_INTELLIGENCE_ENGINE: "off"
-  })
+  }),
+  "acceptance-diagnostic": Object.freeze({})
 });
 
 const strippedEnvironmentKeys = Object.freeze([

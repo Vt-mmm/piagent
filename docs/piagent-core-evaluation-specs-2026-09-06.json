@@ -1,0 +1,706 @@
+{
+  "planId": "PCL-2026-09-06",
+  "status": "PROPOSED_SPECS_NOT_EXECUTABLE_CORPUS",
+  "count": 24,
+  "development": 12,
+  "holdout": 12,
+  "splitBasis": "Distinct proposed root-cause clusters; custodian must also exclude prior PRB/development exposure and shared root causes before binding actual source. These public outlines are not sealed unseen holdout tasks.",
+  "specs": [
+    {
+      "id": "D01",
+      "splitProposal": "development",
+      "category": "existing-code-bug",
+      "rootCauseCluster": "unicode-key-normalization",
+      "requirement": "Normalize composed and decomposed search keys while preserving display text.",
+      "behavioralAcceptance": [
+        "Equivalent keys match; distinct keys and original labels remain distinct.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "node --test test/search-normalization.test.mjs"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D02",
+      "splitProposal": "development",
+      "category": "existing-code-bug",
+      "rootCauseCluster": "calendar-offset-conversion",
+      "requirement": "Correct calendar date conversion at explicit UTC offsets.",
+      "behavioralAcceptance": [
+        "Boundary dates and leap days retain the requested local day.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "python -m pytest tests/test_calendar_offsets.py"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H01",
+      "splitProposal": "holdout",
+      "category": "existing-code-bug",
+      "rootCauseCluster": "integer-precision-loss",
+      "requirement": "Preserve large numeric identifiers through an existing adapter.",
+      "behavioralAcceptance": [
+        "Identifiers above safe integer range round-trip without collision.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "node --test test/identifier-adapter.test.mjs"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H02",
+      "splitProposal": "holdout",
+      "category": "existing-code-bug",
+      "rootCauseCluster": "resource-ownership-transfer",
+      "requirement": "Fix a transferred stream resource being closed by its former owner.",
+      "behavioralAcceptance": [
+        "Transferred and retained resources each close exactly once under the existing lifecycle.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "python -m pytest tests/test_resource_ownership.py"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D03",
+      "splitProposal": "development",
+      "category": "multi-file-feature",
+      "rootCauseCluster": "cursor-stable-ordering",
+      "requirement": "Add a cursor API and its caller using stable ordering for tied values.",
+      "behavioralAcceptance": [
+        "The complete client flow returns each record once without changing the public ordering contract.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- cursor-flow"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D04",
+      "splitProposal": "development",
+      "category": "multi-file-feature",
+      "rootCauseCluster": "form-cross-field-validation",
+      "requirement": "Add server and client validation for dependent fields in an existing form.",
+      "behavioralAcceptance": [
+        "Invalid combinations show the same actionable error; valid submissions remain accepted.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- dependent-form"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H03",
+      "splitProposal": "holdout",
+      "category": "multi-file-feature",
+      "rootCauseCluster": "idempotency-key-scope",
+      "requirement": "Add idempotent replay handling across API and persistence layers.",
+      "behavioralAcceptance": [
+        "Same key and body returns the original result; differing body conflicts without another effect.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- idempotency-flow"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H04",
+      "splitProposal": "holdout",
+      "category": "multi-file-feature",
+      "rootCauseCluster": "locale-fallback-chain",
+      "requirement": "Add locale selection across storage, service and presentation layers.",
+      "behavioralAcceptance": [
+        "Missing translations follow the agreed fallback chain and preserve explicit locale selection.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- locale-flow"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D05",
+      "splitProposal": "development",
+      "category": "compatible-refactor",
+      "rootCauseCluster": "dependency-direction-cycle",
+      "requirement": "Extract an existing persistence interface to remove an import cycle.",
+      "behavioralAcceptance": [
+        "Existing public calls and behavior remain unchanged; dependency direction is acyclic.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- persistence-boundary"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D06",
+      "splitProposal": "development",
+      "category": "compatible-refactor",
+      "rootCauseCluster": "python-relative-import-resolution",
+      "requirement": "Reorganize a Python package without breaking supported import entry points.",
+      "behavioralAcceptance": [
+        "CLI and library imports work from installed and source layouts.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "python -m pytest tests/test_public_imports.py"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H05",
+      "splitProposal": "holdout",
+      "category": "compatible-refactor",
+      "rootCauseCluster": "serialized-version-compatibility",
+      "requirement": "Refactor a serializer while retaining its legacy version reader.",
+      "behavioralAcceptance": [
+        "Existing bytes decode to the same values; unsupported versions fail explicitly.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- serializer-compatibility"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H06",
+      "splitProposal": "holdout",
+      "category": "compatible-refactor",
+      "rootCauseCluster": "css-cascade-specificity",
+      "requirement": "Move visual constants to shared tokens while retaining intended cascade behavior.",
+      "behavioralAcceptance": [
+        "Components retain computed styles and focus visibility in declared themes.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- theme-regression"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D07",
+      "splitProposal": "development",
+      "category": "debug-from-evidence",
+      "rootCauseCluster": "connection-pool-release",
+      "requirement": "Use a supplied sanitized trace to fix a connection pool lease leak.",
+      "behavioralAcceptance": [
+        "Every acquisition releases on success and failure; bounded repeated workload does not exhaust pool.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- pool-lifecycle"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D08",
+      "splitProposal": "development",
+      "category": "debug-from-evidence",
+      "rootCauseCluster": "query-plan-index-selection",
+      "requirement": "Diagnose a slow query from an authorized synthetic execution plan.",
+      "behavioralAcceptance": [
+        "The selected query returns identical results and uses the intended bounded access path.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "python -m pytest tests/test_query_plan.py"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H07",
+      "splitProposal": "holdout",
+      "category": "debug-from-evidence",
+      "rootCauseCluster": "lock-acquisition-order",
+      "requirement": "Diagnose a deadlock using a sanitized interleaving trace.",
+      "behavioralAcceptance": [
+        "Competing operations complete in the agreed ordering without dropping work.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- lock-order"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H08",
+      "splitProposal": "holdout",
+      "category": "debug-from-evidence",
+      "rootCauseCluster": "filesystem-case-resolution",
+      "requirement": "Diagnose a build failure caused by case-sensitive import resolution.",
+      "behavioralAcceptance": [
+        "The build resolves imports on the declared case-sensitive environment.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run build"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D09",
+      "splitProposal": "development",
+      "category": "resume-correction",
+      "rootCauseCluster": "source-path-rename-after-pause",
+      "requirement": "Continue an authorized edit after the operator renames its source path.",
+      "behavioralAcceptance": [
+        "Old-path evidence is stale; the actual new path is inspected before mutation.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- resumed-rename"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D10",
+      "splitProposal": "development",
+      "category": "resume-correction",
+      "rootCauseCluster": "superseded-user-requirement",
+      "requirement": "Resume after a user replaces one behavioral requirement.",
+      "behavioralAcceptance": [
+        "The current requirement and all remaining obligations survive compaction; superseded behavior is absent.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- corrected-requirement"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H09",
+      "splitProposal": "holdout",
+      "category": "resume-correction",
+      "rootCauseCluster": "uncertain-external-side-effect",
+      "requirement": "Resume a task whose earlier external operation has unknown completion.",
+      "behavioralAcceptance": [
+        "No repeated external operation; reconcile through authorized read-only evidence or finite handoff.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "node --test test/uncertain-operation.test.mjs"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "handoff-if-authority-or-source-unavailable",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H10",
+      "splitProposal": "holdout",
+      "category": "resume-correction",
+      "rootCauseCluster": "repository-baseline-change",
+      "requirement": "Resume after a new repository baseline invalidates an earlier verifier.",
+      "behavioralAcceptance": [
+        "Old clean-tree verification does not approve the new revision; exact verifier runs on current source.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run test -- revision-resume"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D11",
+      "splitProposal": "development",
+      "category": "small-docs-config",
+      "rootCauseCluster": "environment-precedence",
+      "requirement": "Correct a bounded configuration precedence bug.",
+      "behavioralAcceptance": [
+        "Explicit operator setting takes precedence over default without exposing values.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "node --test test/config-precedence.test.mjs"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "D12",
+      "splitProposal": "development",
+      "category": "small-docs-config",
+      "rootCauseCluster": "documentation-navigation-target",
+      "requirement": "Repair one broken local documentation navigation target.",
+      "behavioralAcceptance": [
+        "The link resolves to the intended existing section and neighboring links remain valid.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "npm run docs:check"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H11",
+      "splitProposal": "holdout",
+      "category": "small-docs-config",
+      "rootCauseCluster": "cli-exit-code-contract",
+      "requirement": "Align one CLI help example and implementation with its documented exit contract.",
+      "behavioralAcceptance": [
+        "Success and usage-error exits match the retained documented behavior.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "node --test test/cli-exit.test.mjs"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    },
+    {
+      "id": "H12",
+      "splitProposal": "holdout",
+      "category": "small-docs-config",
+      "rootCauseCluster": "schema-default-materialization",
+      "requirement": "Fix missing default materialization at an existing configuration boundary.",
+      "behavioralAcceptance": [
+        "Omitted values receive defaults and explicit false or zero remains unchanged.",
+        "Preserve unrelated declared behavior and explicit operator constraints."
+      ],
+      "sourceIdentity": {
+        "repository": null,
+        "revision": null,
+        "treeSha256": null,
+        "rightsApproval": null
+      },
+      "sourceStatus": "UNAVAILABLE_REQUIRES_AUTHORIZED_BACKLOG",
+      "verification": {
+        "proposedCommands": [
+          "node --test test/schema-defaults.test.mjs"
+        ],
+        "validatedForSelectedSource": false,
+        "existingVerifierAuthorityRequired": true
+      },
+      "completionContract": "correct-completed; wrong-blocked; unsupported-finite-handoff-not-completed",
+      "expectedDisposition": "completed-only-with-current-contract-evidence",
+      "providerRunsAuthorized": 0,
+      "fixtureIsRealWorkEvidence": false
+    }
+  ]
+}

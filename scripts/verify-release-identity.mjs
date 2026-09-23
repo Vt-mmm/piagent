@@ -58,7 +58,7 @@ const packageLock = readJson("package-lock.json");
 const capabilityLock = readJson(".pi/piagent-profile.lock.json");
 const version = rootPackage.version;
 const expectedTag = `v${version}`;
-const supportedPiHost = "0.84.1";
+const supportedPiHost = "0.86.1";
 
 // The package is published now, so the old private-forever rule is gone. What
 // still has to hold is that a scoped package cannot reach the registry as
@@ -75,9 +75,11 @@ if (!version?.includes("-") && rootPackage.publishConfig?.tag !== undefined) fai
 if (rootPackage.repository?.url !== "git+https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
 if (corePackage.repository?.url !== rootPackage.repository.url) fail("core package repository URL does not match the root package");
 const runtimeDependencies = rootPackage.dependencies ?? {};
-if (JSON.stringify(runtimeDependencies) !== JSON.stringify({ ws: "8.21.3" })) {
-  fail("root package runtime dependencies must contain only the pinned local Gateway WebSocket transport");
+if (JSON.stringify(runtimeDependencies) !== JSON.stringify({ "@babel/parser": "7.29.8", ws: "8.21.3" })) {
+  fail("root package runtime dependencies must contain only the pinned syntax parser and local Gateway WebSocket transport");
 }
+if (JSON.stringify(packageLock.packages?.[""]?.dependencies) !== JSON.stringify(runtimeDependencies)) fail("package-lock runtime dependencies do not match package.json");
+if (packageLock.packages?.["node_modules/@babel/parser"]?.version !== runtimeDependencies["@babel/parser"]) fail("syntax parser lock version does not match the runtime pin");
 if (packageLock.name !== rootPackage.name || packageLock.packages?.[""]?.name !== rootPackage.name) fail("package-lock root identity does not match package.json");
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) fail("package.json version is not a supported release version");
 if (corePackage.version !== version) fail("root and core package versions do not match");

@@ -23,7 +23,7 @@ import type { ObservedTaskContext } from "../session/runtime-state.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { filterGrepProtectedContent, filterProtectedPathListContent } from "./tool-result-content-guards.ts";
-import { patchLineStats } from "./tool-result-metadata.ts";
+import { editVerificationMarker, patchLineStats } from "./tool-result-metadata.ts";
 import { handledNavigationToolResult } from "./tool-result-navigation.ts";
 import { attachRetrievalCheckpoint, observeRetrievalResult } from "./tool-result-retrieval.ts";
 import { appendToolResultText, boundedToolResultText, countChangedStringLeaves, isPlainRecord, numericExitCode, redactToolResultTextContent, successfulToolResult } from "./tool-result-value-helpers.ts";
@@ -460,8 +460,8 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     const lineStats = patchLineStats(event.details);
     const editRecoveryFailure = ["edit-anchor-not-unique", "edit-anchor-stale"].includes(String(toolFailureReasonCode));
     record(ctx, {
-      activityId: `result:${resultFingerprintId}`,
-      event: "tool_result",
+      activityId: `result:${resultFingerprintId}`, event: "tool_result",
+      ...editVerificationMarker(taskIdentity, eventTree, successfulToolResult(event), changedPaths),
       recordedAt: dependencies.now(),
       toolCallId: resultFingerprintId,
       toolName: event.toolName,

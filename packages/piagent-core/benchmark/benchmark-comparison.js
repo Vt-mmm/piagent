@@ -1,3 +1,4 @@
+import { DIAGNOSTIC_TREATMENT, validDiagnosticPolicyBinding } from "./benchmark-diagnostic-treatment.js";
 import { PIAGENT_BENCHMARK_TREATMENTS } from "./benchmark-runtime.js";
 import { normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
 import { geometricMean, geometricMeanConfidence95, geometricMeanConfidence95Raw, median, rounded } from "./benchmark-statistics.js";
@@ -14,6 +15,14 @@ export function comparisonProtocol(environment, suite, baselineSurface) {
   const recordedTreatment = environment.piagentTreatment?.environment;
   const treatmentRecorded = typeof treatmentId === "string"
     && expectedTreatment
+    && (!environment.acceptancePolicyBinding || (validDiagnosticPolicyBinding(environment.acceptancePolicyBinding)
+      && (environment.measurementOnly === true
+        || environment.acceptancePolicyBinding.origin === "installed-release-policy")))
+    && (treatmentId !== DIAGNOSTIC_TREATMENT || (environment.measurementOnly === true
+      && validDiagnosticPolicyBinding(environment.acceptancePolicyBinding)
+      && environment.acceptancePolicyBinding.origin === undefined))
+    && (treatmentId !== "release-defaults" || !environment.acceptancePolicyBinding
+      || environment.acceptancePolicyBinding.origin === "installed-release-policy")
     && plainObject(recordedTreatment)
     && JSON.stringify(recordedTreatment) === JSON.stringify(expectedTreatment);
   const checks = {

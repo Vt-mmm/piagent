@@ -27,6 +27,8 @@ export type DurableContractConfiguration = {
   verifierDigest: string;
   getProjectVerificationDigest: (input: ProjectVerificationRequest) => string | null | Promise<string | null>;
   timeoutMs?: number;
+  /** Extra attached-command wait; guest watchdog and CPU/wall budgets are unchanged. */
+  startupAllowanceMs?: number;
 };
 export type DurableContractResult = Readonly<{
   version: typeof DURABLE_EXECUTION_VERSION;

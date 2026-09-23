@@ -16,8 +16,12 @@
     "authority": "enforce"
   },
   "differenceContract": {
-    "environmentKeys": ["PIAGENT_PHASE_TOOLS"],
-    "capabilityIds": ["CAP-09"],
+    "environmentKeys": [
+      "PIAGENT_PHASE_TOOLS"
+    ],
+    "capabilityIds": [
+      "CAP-09"
+    ],
     "changedFrom": "shadow",
     "changedTo": "on",
     "allOtherTreatmentValuesEqual": true
@@ -33,7 +37,7 @@
     },
     {
       "path": "tests/phase-tools-evaluation.test.mjs",
-      "sha256": "6a3686db841273e6003279c026a2c7a9907601d457bb42d1f5621577c8f70357"
+      "sha256": "7f264447903ef795834d7f0867add1ad38adf8336d092e1a4506dc977f414e6f"
     },
     {
       "path": "evals/fs5-pilot-protocol.v1.json",

@@ -1,7 +1,8 @@
+import { criticalAcceptanceRecoveryGuidance, type CriticalRecoveryProjection } from "../recovery/acceptance-recovery-guidance.ts";
 import crypto from "node:crypto";
 import path from "node:path";
-import { completionPreparationCurrent, completionPreparationDeferred } from "../verification/completion-preparation.ts";
-import type { CompletionPreparation } from "../verification/completion-preparation.ts";
+import { completionPreparationCurrent, completionPreparationDeferred, type CompletionPreparation } from "../verification/completion-preparation.ts";
+import { apiBaselineCriterionEvidence as apiBaselineEvidence } from "../verification/acceptance-api-baseline.js";
 import { createCompositeCompletionFinalizer } from "../verification/composite-completion-finalizer.ts";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { acceptanceCriticalRecoveryProjection, applyAcceptanceRecoveryProvenance } from "../../extensions/acceptance-receipt.js";
@@ -26,33 +27,14 @@ import { semanticRepairProvenance } from "../recovery/semantic-repair-handshake.
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
-type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[] };
-type CriticalRecoveryProjection = { criterionText: string; targets: string[]; missingDimensions: string[]; proofHints: string[]; diagnosticHints?: string[] };
+type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[];
+  acceptanceProof?: { mode: "enforce" | "diagnostic"; pendingCriterionIds: string[]; missing: string[] } };
 function exactPathCoverage(expectedPaths: string[], reviewedPaths: string[] | undefined): boolean {
   const expected = [...new Set(expectedPaths)].sort();
   const reviewed = [...new Set(reviewedPaths ?? [])].sort();
   return expected.length > 0
     && expected.length === reviewed.length
     && expected.every((file, index) => file === reviewed[index]);
-}
-function compactRecoveryField(value: unknown, maximum: number): string {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
-  return text.length > maximum ? `${text.slice(0, Math.max(0, maximum - 1)).trimEnd()}…` : text;
-}
-function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProjection[], includeProofHints = true): string[] {
-  if (projections.length === 0) return [];
-  const lines = ["Critical proof targets (derived only from the current task contract and working tree):"];
-  for (const projection of projections.slice(0, 8)) {
-    const targets = projection.targets.map((item) => compactRecoveryField(item, 80)).filter(Boolean).slice(0, 8);
-    const dimensions = projection.missingDimensions.map((item) => compactRecoveryField(item, 80)).filter(Boolean).slice(0, 8);
-    const criterion = compactRecoveryField(projection.criterionText, 700);
-    lines.push(`- Target: ${targets.join(", ") || "task-scoped behavior"}; missing proof: ${dimensions.join(", ") || "focused-evidence"}; criterion: ${criterion}`);
-  }
-  const hints = [...new Set(projections.flatMap((projection) => includeProofHints ? projection.proofHints : projection.diagnosticHints ?? [])
-    .map((hint) => compactRecoveryField(hint, 300))
-    .filter(Boolean))].slice(0, 8);
-  if (hints.length > 0) lines.push(includeProofHints ? "Proof requirements:" : "Diagnostic evidence (does not grant repair authority):", ...hints.map((hint) => `- ${hint}`));
-  return lines;
 }
 type CompletionHookDependencies = {
   state: RuntimeSessionState;
@@ -303,6 +285,10 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
           return { message: { ...event.message, content } };
         }
         observeTrajectorySync(ctx, syncTrajectory?.(ctx, task, { sourceHook: "completion", handoffObserved: true }), telemetry);
+        const diagnosticProof = projectedGate.acceptanceProof?.mode === "diagnostic" ? projectedGate.acceptanceProof : undefined;
+        const diagnosticNotice = diagnosticProof?.pendingCriterionIds.length
+          ? `Diagnostic acceptance: ${diagnosticProof.pendingCriterionIds.length} criteria remain unproved; no quality claim.` : undefined;
+        if (diagnosticNotice) projected.trace.notes = [projected.trace.notes, diagnosticNotice].filter(Boolean).join("\n");
         projected = withRecoveryProvenance(ctx, projected, projectedGate, currentDigests, null);
         task = writeTask(ctx.cwd, projected);
         observeTrajectorySync(ctx, syncTrajectory?.(ctx, task, { sourceHook: "completion" }), telemetry);
@@ -312,6 +298,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         recordCompletionAudit(ctx, task, {
           outcome: "completed",
           evidence: {
+            ...(diagnosticProof ? { acceptanceProof: diagnosticProof } : {}),
             changedFiles: task.changedFiles,
             lifecycleMode: runtimeLifecycleMode(task)
           }
@@ -319,6 +306,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         persistHandoff(ctx, task, projectedGate, currentDigests, null);
         const trace = {
           event: "task_auto_completed",
+          ...(diagnosticProof ? { acceptanceProof: diagnosticProof } : {}),
           taskId: task.taskId,
           taskRunId: task.taskRunId,
           sessionId: task.sessionId,
@@ -328,6 +316,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         appendTrace(ctx.cwd, trace);
         appendSessionTrace(pi, trace);
         telemetry(ctx, trace);
+        if (diagnosticNotice) return { message: prependAssistantNotice(event.message, `[Piagent diagnostic] ${diagnosticNotice}\n`) };
         return;
       }
       task = writeTask(ctx.cwd, { ...task, changedFiles: projected.changedFiles, finalWorkingTreeFiles: projected.finalWorkingTreeFiles,
@@ -339,6 +328,18 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     if (gate.decision === "pass") return;
     const selectedRecovery = recoveryDecision(ctx, task, gate, currentDigest);
     const missingAcceptanceProof = gate.missing.some((item) => /^critical acceptance evidence\b/i.test(item));
+    let criticalRecovery: CriticalRecoveryProjection[] = [];
+    if (missingAcceptanceProof) {
+      try {
+        criticalRecovery = acceptanceCriticalRecoveryProjection(task, {
+          cwd: ctx.cwd, apiBaselineEvidence,
+          changedFiles: acceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskDeltaFilesFromSnapshot(task, currentDigests)),
+          currentWorkingTreeDigest: currentDigest
+        }) as CriticalRecoveryProjection[];
+      } catch {
+        // The exact gate remains authoritative if advisory projection is unavailable.
+      }
+    }
     const lifecycleMode = runtimeLifecycleMode(task);
     const continuation = planRecoveryContinuation(ctx.cwd, task, selectedRecovery, {
       lifecycleMode, currentWorkingTreeDigest: currentDigest, missing: gate.missing, missingVerifyCommands: gate.missingVerifyCommands
@@ -363,24 +364,11 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
           recoveryRequested: true
         }), telemetry);
       }
-      let criticalRecovery: CriticalRecoveryProjection[] = [];
-      if (missingAcceptanceProof) {
-        try {
-          criticalRecovery = acceptanceCriticalRecoveryProjection(task, {
-            cwd: ctx.cwd,
-            changedFiles: acceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskDeltaFilesFromSnapshot(task, currentDigests)),
-            currentWorkingTreeDigest: currentDigest
-          }) as CriticalRecoveryProjection[];
-        } catch {
-          // Exact gate evidence remains the fail-closed fallback when advisory projection is unavailable.
-        }
-      }
-      const criticalRecoveryGuidance = criticalAcceptanceRecoveryGuidance(criticalRecovery);
       const recoveryGuidance = selectedRecovery.action === "repair" && selectedRecovery.sourceMutationAllowed
         ? missingAcceptanceProof
           ? [
             "Continue the same bounded task with one acceptance-proof repair pass.",
-            ...criticalRecoveryGuidance,
+            ...criticalAcceptanceRecoveryGuidance(criticalRecovery),
             "Add or correct focused tests for every missing critical obligation. Assert exact boundary partitions and requested error classes; if a focused test exposes a defect, repair the evidence-backed source before rerunning verification.",
             ...verifierInstructions(gate.missingVerifyCommands),
             "Do not repeat a failed hypothesis, expand permission, or perform an external action."
@@ -404,6 +392,9 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
             "Do not mutate project source, expand permission, or perform an external action during this retry."
           ];
       const otherMissing = gate.missing.filter((item) => !/^critical acceptance evidence\b/i.test(item));
+      const contextReadGuidance = gate.missing.includes("context manifest")
+        ? ["Record the missing context evidence with the native read tool on one relevant source or test region in the task scope (use offset/limit for a large file). Shell inspection and test results do not satisfy this gate. Reuse current-tree passing verification; run only missing or stale verifiers."]
+        : [];
       const missingSummary = criticalRecovery.length > 0
         ? [
           `${criticalRecovery.length} critical acceptance proof target(s)`,
@@ -415,6 +406,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         `Task ${task.taskId} cannot finish yet. Missing: ${missingSummary}.`,
         `Recovery: ${selectedRecovery.action}; class: ${selectedRecovery.failureCategory}; reasons: ${selectedRecovery.reasonCodes.join(", ")}.`,
         ...(independentVerificationRecovery(ctx.cwd, task, currentDigest)?.guidance ?? []),
+        ...contextReadGuidance,
         ...recoveryGuidance
       ].join("\n");
       pi.sendMessage(
@@ -466,6 +458,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
       `Task ${task.taskId} (${task.taskRunId}) is still open.`,
       `Missing: ${gate.missing.join(", ") || "a completed task trace"}.`,
       `Recovery disposition: ${finalRecovery.action} (${finalRecovery.reasonCodes.join(", ")}).`,
+      ...criticalAcceptanceRecoveryGuidance(criticalRecovery, false),
       ...(independentVerificationRecovery(ctx.cwd, task, currentDigest)?.guidance ?? []),
       ...verifierInstructions(gate.missingVerifyCommands),
       "The response below is preserved as work in progress and must not be treated as a completion report.",

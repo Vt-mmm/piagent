@@ -136,6 +136,21 @@ export function createScopedBrokerPiOperationRouter({ open } = {}) {
       const evidence = completed.loaded.settlementEvidence(); consumed = true;
       return evidence;
     },
+    discardUnusedSettlement(identity) {
+      requireThat(identity && Object.keys(identity).length === 3
+        && ["sessionId", "operationRef", "messageRequestId"].every(name =>
+          typeof identity[name] === "string" && ID.test(identity[name])
+          && identity[name] === completed?.reservation[name]), "pi-router-retirement-identity");
+      requireThat(!shuttingDown && !pending && !active && completed?.loaded
+        && completed.reason === "operation-settled" && !boundaryFailure,
+        "pi-router-retirement-unavailable");
+      if (consumed) return;
+      const status = completed.loaded.broker.status();
+      requireThat(status.ended && !status.cancelled && !status.blocked
+        && status.inflightVerification === null, "pi-router-retirement-incomplete");
+      // Validate closed custody, then discard it without publishing acceptance facts.
+      completed.loaded.settlementEvidence(); consumed = true;
+    },
     assertProviderDispatchReady() {
       if (boundaryFailure) throw boundaryFailure.error;
       requireThat(!shuttingDown && active && !active.loaded.broker.status().ended,

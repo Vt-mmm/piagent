@@ -5,6 +5,8 @@ import type { TaskContract } from "../../extensions/guard-types.ts";
 import { readSolverShadowEvents } from "../solver/solver-shadow.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
 import type { TrajectoryPhase } from "../trajectory/trajectory-types.ts";
+import { readTaskUsage } from "./task-usage.ts";
+import type { CompletionSource } from "./edit-verifier-timing.ts";
 
 export const TASK_EFFICIENCY_METRICS_VERSION = "task-efficiency-v1" as const;
 
@@ -44,12 +46,14 @@ function phaseDurations(task: TaskContract, trajectory: ReturnType<typeof readTr
 export function buildTaskEfficiencyMetrics(
   cwd: string,
   task: TaskContract,
-  input: { activeToolGroups?: string[]; exactUsage?: ExactUsage } = {}
+  input: { activeToolGroups?: string[]; exactUsage?: ExactUsage; completionSource?: CompletionSource } = {}
 ) {
   const sessionHash = hash(task.sessionId);
   const solverStore = readSolverShadowEvents(cwd);
-  const solverEvent = [...solverStore.records].reverse().find((event) => event.sessionHash === sessionHash);
   const trajectory = readTrajectoryStore(cwd, task.taskRunId);
+  const recommendation = trajectory.status === "ok" ? trajectory.state?.recommendationRef : null;
+  const solverEvent = recommendation ? [...solverStore.records].reverse().find((event) => event.sessionHash === sessionHash
+    && event.featureHash === recommendation.featureHash && hash(JSON.stringify(event.decision)) === recommendation.decisionDigest) : undefined;
   const decision = solverEvent?.decision;
   const helperUsage = task.acceptanceReceipt?.helperUsage;
   const provenance = task.acceptanceReceipt?.provenance;
@@ -58,9 +62,10 @@ export function buildTaskEfficiencyMetrics(
   const relevantFileMs = relevantEvent && contextEvidence.length > 0 ? duration(task.createdAt, relevantEvent.observedAt) : null;
   const recommendedTools = decision?.toolGroups ?? [];
   const activeTools = [...new Set(input.activeToolGroups ?? [])].sort();
+  const usage = readTaskUsage(cwd, task, input.completionSource);
   const exactUsage = input.exactUsage && (input.exactUsage.tokens !== null || input.exactUsage.cost !== null)
     ? input.exactUsage
-    : { tokens: null, cost: null, currency: null, source: "unavailable" as const };
+    : { tokens: usage.tokens, cost: null, currency: null, source: usage.tokens === null ? "unavailable" as const : "pi-runtime" as const, scope: usage.scope };
 
   return {
     schemaVersion: 1,
@@ -95,12 +100,11 @@ export function buildTaskEfficiencyMetrics(
       recommendedGroups: recommendedTools,
       activeGroups: activeTools,
       activeRecommendedGroups: activeTools.filter((group) => recommendedTools.includes(group)),
-      actualInvocationCounts: null
+      actualInvocationCounts: usage.actualInvocationCounts
     },
     timing: {
       taskDurationMs: duration(task.createdAt, task.updatedAt),
-      timeToFirstCorrectEditMs: null,
-      timeToFirstCorrectEditReason: "no persisted edit-to-verifier causal marker"
+      ...usage.editTiming
     },
     verification: {
       attempts: task.verifyEvidence.length,
@@ -130,6 +134,7 @@ export function buildTaskEfficiencyMetrics(
       acceptance: task.acceptanceReceipt?.criteria.map((item) => ({ id: item.id, status: item.status })) ?? [],
       recoveryDisposition: provenance?.finalRecoveryDisposition ?? "unknown"
     },
-    exactUsage
+    exactUsage,
+    usageAccounting: usage
   };
 }

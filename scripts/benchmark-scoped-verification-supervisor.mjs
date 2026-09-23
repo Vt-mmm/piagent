@@ -1,3 +1,4 @@
+import { SCOPED_DOCS_RECEIPT } from "./benchmark-scoped-docs-verifier.mjs";
 import { createHash, createPrivateKey, createPublicKey, randomUUID, sign, verify } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
@@ -114,7 +115,7 @@ function validateReceipt(receipt) {
 
 export function verifyScopedVerificationEnvelope(envelope, receiptPublicKey) {
   exact(envelope, ["receipt", "signature"], "invalid-verification-envelope");
-  if (envelope.receipt?.kind === SCOPED_PROJECT_VERIFICATION_RECEIPT)
+  if ([SCOPED_PROJECT_VERIFICATION_RECEIPT, SCOPED_DOCS_RECEIPT].includes(envelope.receipt?.kind))
     validateScopedProjectVerificationReceipt(envelope.receipt);
   else validateReceipt(envelope.receipt);
   requireThat(typeof envelope.signature === "string" && /^[A-Za-z0-9+/]+={0,2}$/.test(envelope.signature),

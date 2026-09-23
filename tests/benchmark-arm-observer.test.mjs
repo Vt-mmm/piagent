@@ -106,7 +106,7 @@ test("qualified launcher rejects malformed or cross-root v3 identity and defers 
   const arm = { version: 3, armId: "A", candidateRoot: fs.realpathSync(candidate), candidateDigest: "a".repeat(64),
     configSha256: "b".repeat(64), brokerClosureSha256: "c".repeat(64), toolDefinitionsSha256: "d".repeat(64),
     manifestAuthoritySha256: "e".repeat(64), journalSignerSha256: "f".repeat(64), journalPathSha256: "1".repeat(64),
-    contextPolicySha256: scopedContextPolicySha256(contextPolicy), sdkRoot: fs.realpathSync(sdk), sdkVersion: "0.84.1",
+    contextPolicySha256: scopedContextPolicySha256(contextPolicy), sdkRoot: fs.realpathSync(sdk), sdkVersion: "0.86.1",
     sdkTreeSha256: scopedTreeIdentity(fs.realpathSync(sdk)).sha256,
     assetsRoot: fs.realpathSync(assets), assetTreeSha256: scopedTreeIdentity(fs.realpathSync(assets)).sha256,
     runtimeHome: fs.realpathSync(runtime) };
@@ -287,7 +287,7 @@ async function tailFixture(t, factories = []) {
   const cwd = path.join(root, "project"), agentDir = path.join(root, "agent");
   fs.mkdirSync(cwd); fs.mkdirSync(agentDir);
   const host = await import(pathToFileURL(path.join(hostRoot, "dist/index.js")));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(hostRoot, "package.json"))).version, "0.84.1");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(hostRoot, "package.json"))).version, "0.86.1");
   const metrics = { sdkSessions: 0, directCallbacks: 0, streams: 0, authRetrievals: 0, providerRegistrations: 0, modelTurns: 0 };
   const denied = key => () => { metrics[key]++; throw new Error(`tail-forbidden-${key}`); };
   const model = { id: "tail-fixture", name: "Direct callback fixture", api: "tail-fixture", provider: "tail-fixture",

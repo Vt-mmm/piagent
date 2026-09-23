@@ -1,6 +1,6 @@
 # Isolated contract worker (experimental)
 
-This experimental worker supplies bounded behavioral observations for JavaScript modules in an explicitly approved in-memory source graph, including primitive/Date inputs, bounded array/record data and explicit multi-call histories. Worker v8 retains opt-in Promise jobs, data-declared callbacks, direct return identity and error-property observations, and adds selected nested object identity. It is reachable through host-approved verification; the worker itself cannot approve completion. External/package imports, timers, arbitrary object graphs and unsupported values must not silently count as supported behavior.
+This experimental worker supplies bounded behavioral observations for JavaScript modules in an explicitly approved in-memory source graph, including primitive/Date inputs, bounded array/record data and explicit multi-call histories. Worker v9 retains v8 capabilities and adds opt-in bounded error-message observation. It is reachable through host-approved verification; the worker itself cannot approve completion. External/package imports, timers, arbitrary object graphs and unsupported values must not silently count as supported behavior.
 
 ## Authority and isolation
 
@@ -65,3 +65,39 @@ See the [design and qualification obligations](../../../../docs/decisions/harnes
 An approved case may declare 1–16 `referencePairs`, each with a unique `id` and two selectors (`left`, `right`). A selector has a `root` (`argument`, `return` or `error`) and `path`, an array of at most eight string property keys. An argument root also requires its `index`; an error root requires `observeError: true`. These are bounded data paths, never expressions. Each declared pair requires an ordered `{id, same}` entry in `expected.referenceIdentity` and the settled worker observation. Old worker responses cannot supply v8 evidence.
 
 For example, compare `{root:"error",path:["checkpoint"]}` with `{root:"argument",index:1,path:[]}` to require a new attached checkpoint, or `{root:"return",path:["results"]}` with `{root:"argument",index:1,path:["results"]}` to reject a result array borrowed from an action. Captured identity and own-property descriptor intrinsics run before any candidate-controlled getter or proxy trap. Such unsupported paths abstain instead of executing accessors. Inherited properties are not traversed. Missing paths, absent return/error roots and primitives are not object aliases, so `same:false` alone does **not** establish that a field exists or has the correct shape: the accompanying typed value or error-property expectations must do that. Paths refer to actual objects at the end of this invocation, not pre-call handles or cross-case live references. Existing argument snapshots remain necessary to reject mutation. No resource ceiling or approval rule is relaxed.
+
+## Error messages (worker v9 / Node profile worker v2)
+
+`observeErrorMessage: true` requests a separate `errorMessage` on a throw. It reads
+only the first inert string `message` descriptor in a prototype chain bounded to
+32 objects and checks that complete chain for tracked proxies before error-class
+observation. Getters, proxies, coercion, non-string messages, excessive depth or
+messages longer than 4096 UTF-16 code units produce unsupported/unknown. No stack
+is read. A verified absence throughout the complete inert chain is `null`; this
+is observed missing data, not a stand-in for unavailable observation. Primitive
+throws also have `null` and retain their `non-error` classification.
+
+The host-only expectation is `errorMessage: {includes: "conflict", ignoreCase: true}`.
+The non-empty literal is bounded to 4096 code units. `ignoreCase` is required and
+uses ECMAScript non-Unicode case-insensitive matching; metacharacters are escaped,
+not interpreted as a plan-supplied expression. Missing required observation is
+rejected. Unsupported execution never becomes a behavioral counterexample.
+
+Without this opt-in, message collection and existing `observeError` property
+semantics are unchanged. Observed message text may appear in private diagnostic
+receipts/counterexamples, so do not enable it for contracts containing secrets or
+publish raw observations without review. Expectations never enter the guest.
+Worker/comparison versions and Node-profile/installed-verifier digests change;
+old images and approvals are not qualified by new source tests. This capability
+does not activate any plan, supply completion authority or change benchmark mode.
+
+Node profile worker v4 hashes the same pinned Node executable with a 1 MiB buffer instead of reading its approximately 120 MB body into one temporary. Every byte and the expected SHA-256 remain identical; the request wall, case thread-CPU, container CPU/memory and watchdog limits are unchanged. The worker/profile/source identity changes, so old observations are not current v4 evidence. This addresses measured bootstrap allocation/I/O overhead, not a wider supported API or a retry allowance.
+
+
+### Docker startup and control deadlines
+
+The host executor allows up to 60 seconds for each Docker create, inspect, or removal command. These control requests can wait on daemon maintenance independently of guest execution. An inconclusive create is reconciled by its unique name, owner label and pinned image. A timed-out create is never retried or started; an owned late container is removed. If ownership or removal cannot be established, cleanup remains unconfirmed.
+
+The approved backend may specify `startupAllowanceMs`, an integer from 0 to 60000 (default 0). The attached start command waits at most `timeoutMs + startupAllowanceMs`. This is an additional bound on the entire attached command, not a measurement of time spent before guest startup. The image watchdog and guest CPU/wall limits remain unchanged. An explicit old `timeoutMs` is not silently extended. Cancellation interrupts the attached command; ownership checks and cleanup still run afterward.
+
+Selection recipes, signed host approvals, durable execution identities and benchmark observations bind the allowance. Changing it requires a new approved backend identity and cannot reuse evidence collected with a different allowance. Omitting it and explicitly setting zero have identical execution semantics. A longer allowance does not grant completion, add a retry, or turn uncertain cleanup into success.

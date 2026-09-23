@@ -8,13 +8,13 @@ export const MAX_CALLBACK_DELAY_JOBS = 32;
 export const MAX_CALLBACK_TRACE_CHARS = 32768;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$/;
 export const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error"];
-export const CASE_CAPABILITY_FIELDS = ["awaitResult", "observeIdentity", "observeError", "callbacks", "errors", "referencePairs"];
-export const OBSERVATION_CAPABILITY_FIELDS = ["callbackTrace", "returnIdentity", "errorObservation", "referenceIdentity"];
+export const CASE_CAPABILITY_FIELDS = ["awaitResult", "observeIdentity", "observeError", "observeErrorMessage", "callbacks", "errors", "referencePairs"];
+export const OBSERVATION_CAPABILITY_FIELDS = ["callbackTrace", "returnIdentity", "errorObservation", "errorMessage", "referenceIdentity"];
 export const callbackIds = item => new Set((item.callbacks ?? []).map(callback => callback.id));
 
 export function validateCaseCapabilities(item, { nodeProfile = false, budget } = {}) {
   validateReferencePairs(item, { backingStore: nodeProfile });
-  for (const key of ["awaitResult", "observeIdentity", "observeError"]) {
+  for (const key of ["awaitResult", "observeIdentity", "observeError", "observeErrorMessage"]) {
     if (Object.hasOwn(item, key) && item[key] !== true) throw new TypeError("Invalid case capability");
   }
   const errors = new Set();
@@ -104,12 +104,21 @@ export function validateErrorObservation(value, item, { nodeProfile = false, typ
   if (value.properties.type !== "record") throw new TypeError("Invalid observed error properties");
 }
 
+export function validateErrorMessage(value, item) {
+  // null means the inert prototype chain was fully observed and had no message.
+  // Unavailable/executable/oversized messages use outcome:unsupported instead.
+  if (!item.observeErrorMessage || value !== null && (typeof value !== "string" || value.length > MAX_STRING_LENGTH)) {
+    throw new TypeError("Invalid observed error message");
+  }
+}
+
 export function validateObservedCapabilities(observation, item, { nodeProfile = false, typedOutputBudget } = {}) {
   const settled = ["return", "throw", "constructed"].includes(observation.outcome);
   for (const [field, required, validate] of [
     ["callbackTrace", settled && Boolean(item.callbacks), validateCallbackTrace],
     ["returnIdentity", observation.outcome === "return" && item.observeIdentity, validateReturnIdentity],
     ["errorObservation", observation.outcome === "throw" && item.observeError, validateErrorObservation],
+    ["errorMessage", observation.outcome === "throw" && item.observeErrorMessage, validateErrorMessage],
     ["referenceIdentity", settled && Boolean(item.referencePairs), validateReferenceIdentity]
   ]) {
     if (required) validate(observation[field], item, { nodeProfile, typedOutputBudget });

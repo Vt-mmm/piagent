@@ -38,7 +38,8 @@ import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-we
 const root = path.resolve(import.meta.dirname, "..");
 const taskFixture = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/task-contract.valid.json"), "utf8"));
 const schemaRegistry = createWebUiSchemaRegistry();
-let cwd, server, provider, eventStore, currentTask;
+let cwd, server, provider, eventStore, currentTask, fixtureStartedAt;
+const fixtureTime = (offset = 0) => new Date(fixtureStartedAt + offset).toISOString();
 
 function git(...args) {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -63,6 +64,7 @@ class BrowserEventStore {
 }
 
 async function createFixture() {
+  fixtureStartedAt = Date.now() - 5 * 60_000;
   cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-browser-"));
   execFileSync("git", ["init", "-q", cwd]);
   git("config", "user.email", "test@example.com");
@@ -85,7 +87,7 @@ async function createFixture() {
     ...structuredClone(taskFixture), taskId: "browser-task", taskRunId: "browser-task-run-1", sessionId: "browser-session",
     sessionName: "WebUI browser session", summary: "Xác minh WebUI local trong trình duyệt thật",
     baselineChangedFiles: Object.keys(baseline), baselineFileDigests: baseline, trace: { outcome: "pending" },
-    createdAt: "2026-08-13T13:00:00.000Z", updatedAt: "2026-08-13T13:00:00.000Z"
+    createdAt: fixtureTime(0), updatedAt: fixtureTime(0)
   };
   currentTask.authoritySnapshot = createBoundTaskAuthority(currentTask);
   currentTask = writeTaskContract(cwd, currentTask);
@@ -94,23 +96,23 @@ async function createFixture() {
   const helperRequest = createHelperRequest({ policy: helperPolicy, objective: "Inspect source boundaries", taskId: currentTask.taskId,
     taskRunId: currentTask.taskRunId, sessionId: currentTask.sessionId, parentReadScope: ["src/**"], parentWriteScope: ["src/**"],
     parentAllowedTools: ["read", "grep", "find", "ls"] });
-  const helperBudget = new OwnedWorkBudgetController(), reservation = helperBudget.reserve(cwd, helperRequest, "2026-08-13T13:00:30.000Z");
-  helperBudget.release(cwd, helperRequest, reservation.reservationId, "succeeded", { calls: 2, tokens: 320, output: "private helper output" }, "2026-08-13T13:01:30.000Z");
+  const helperBudget = new OwnedWorkBudgetController(), reservation = helperBudget.reserve(cwd, helperRequest, fixtureTime(30000));
+  helperBudget.release(cwd, helperRequest, reservation.reservationId, "succeeded", { calls: 2, tokens: 320, output: "private helper output" }, fixtureTime(90000));
   appendContextTelemetry(cwd, { sessionId: currentTask.sessionId, taskId: currentTask.taskId, taskRunId: currentTask.taskRunId,
-    recordedAt: "2026-08-13T13:02:00.000Z", event: "session_compact", reason: "threshold", willRetry: false, fromExtension: false });
+    recordedAt: fixtureTime(120000), event: "session_compact", reason: "threshold", willRetry: false, fromExtension: false });
   appendContextTelemetry(cwd, { sessionId: currentTask.sessionId, taskId: currentTask.taskId, taskRunId: currentTask.taskRunId,
-    recordedAt: "2026-08-13T13:03:00.000Z", event: "tool_result", toolName: "bash", compacted: true, compactedCaptures: 1,
+    recordedAt: fixtureTime(180000), event: "tool_result", toolName: "bash", compacted: true, compactedCaptures: 1,
     outputChars: 120000, outputLines: 3000 });
   await captureTaskBaselineManifest({ projectRoot: cwd, taskId: currentTask.taskId, taskRunId: currentTask.taskRunId,
     sessionId: currentTask.sessionId, capturedAt: currentTask.createdAt, baselineTreeDigest: workingTreeEvidenceDigest(baseline) });
   fs.writeFileSync(path.join(cwd, "src", "example.ts"), "export const value = 'AFTER TASK';\n");
   git("add", "src/example.ts");
   const currentDigests = workingTreeSnapshot(cwd), currentTreeDigest = workingTreeEvidenceDigest(currentDigests);
-  const handoff = writeHandoffProjection(cwd, buildHandoffProjection(cwd, currentTask, { generatedAt: "2026-08-13T13:04:00.000Z",
+  const handoff = writeHandoffProjection(cwd, buildHandoffProjection(cwd, currentTask, { generatedAt: fixtureTime(240000),
     currentDigests, gate: { decision: "fail", missing: ["operator review"], missingVerifyCommands: currentTask.verifyCommands,
       currentWorkingTreeDigest: currentTreeDigest }, recovery: null }));
   appendContextTelemetry(cwd, { sessionId: currentTask.sessionId, taskId: currentTask.taskId, taskRunId: currentTask.taskRunId,
-    recordedAt: "2026-08-13T13:04:00.000Z", event: "handoff_projection_written", phase: handoff.state.phase,
+    recordedAt: fixtureTime(240000), event: "handoff_projection_written", phase: handoff.state.phase,
     completionApproved: handoff.state.completionApproved, recoveryAction: handoff.nextSafeAction.action });
   eventStore = new BrowserEventStore();
   provider = new CoreInspectionProvider({ cwd, sessionId: currentTask.sessionId, runtimeInstanceId: "runtime.browser-e2e",
@@ -245,7 +247,7 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
 
   const readsBeforeLiveFailure = snapshotReads;
   failNextLiveSnapshot = true;
-  currentTask = { ...currentTask, sessionName: "WebUI recovered one failed live refresh", updatedAt: "2026-08-13T13:00:00.500Z" };
+  currentTask = { ...currentTask, sessionName: "WebUI recovered one failed live refresh", updatedAt: fixtureTime(500) };
   eventStore.cursor = "event-cursor.browser-live-snapshot-failure";
   provider.publishObserved({ eventCursor: eventStore.cursor, kind: "runtime.phase-changed" });
   await expect.poll(() => snapshotReads, { timeout: 10_000 }).toBeGreaterThanOrEqual(readsBeforeLiveFailure + 2);
@@ -254,7 +256,7 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
   assert.equal(eventStore.replayCalls.filter((cursor) => cursor === "event-cursor.browser-resynced").length, 1,
     "a retried live snapshot failure must not replace the healthy EventSource");
 
-  currentTask = { ...currentTask, sessionName: "WebUI live update received", updatedAt: "2026-08-13T13:00:01.000Z" };
+  currentTask = { ...currentTask, sessionName: "WebUI live update received", updatedAt: fixtureTime(1000) };
   eventStore.cursor = "event-cursor.browser-live";
   provider.publishObserved({ eventCursor: eventStore.cursor, kind: "runtime.phase-changed" });
   await expect(page.getByText("WebUI live update received", { exact: true }).filter({ visible: true })).toBeVisible();
@@ -956,7 +958,7 @@ test("pauses at a safe point, resumes without a model turn, and stops only after
   const taskInput = { ...structuredClone(taskFixture), taskId: "browser-lifecycle-task",
     taskRunId: "task-20260814000000-browser01", sessionId: "browser-lifecycle-session", sessionName: "TASK browser lifecycle",
     summary: "Kiểm tra điều khiển task", baselineChangedFiles: [], baselineFileDigests: {}, trace: { outcome: "pending" },
-    createdAt: "2026-08-14T00:00:00.000Z", updatedAt: "2026-08-14T00:00:00.000Z" };
+    createdAt: fixtureTime(240000), updatedAt: fixtureTime(240000) };
   taskInput.authoritySnapshot = createBoundTaskAuthority(taskInput);
   const task = writeTaskContract(controlCwd, taskInput);
   bindSessionTask(controlCwd, task.sessionId, task.sessionName, task);

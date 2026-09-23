@@ -233,6 +233,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
       `lowConfidencePacks: ${report.metrics.lowConfidencePacks}/${report.sample.contextPacks}`,
       `editRecovery: ${report.metrics.editRecoveryContextCount}/${report.metrics.editRecoveryFailures} failures returned context; ${report.metrics.editRecoverySuppressedFailures} suppressed; ${report.metrics.editRecoveryEstimatedTokens} estimated tokens; classification coverage ${formatPercent(report.metrics.editRecoveryFailureEvidenceCoverage)}`,
       `taskEfficiency: ${taskEfficiency ? `${taskEfficiency.solver.route}; verify=${taskEfficiency.verification.attempts}; outcome=${taskEfficiency.outcome.task}` : "no active task"}`,
+      ...(taskEfficiency ? [`taskUsage: ${taskEfficiency.usageAccounting.status}; observed SDK tokens=${formatCount(taskEfficiency.exactUsage.tokens)}; billed cost=unknown; requests=${taskEfficiency.usageAccounting.requests}`] : []),
       ...report.recommendations.map((recommendation) => `- ${recommendation}`)
     ].join("\n"), { ...report, taskEfficiency });
   }

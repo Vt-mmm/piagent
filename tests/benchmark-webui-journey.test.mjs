@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
+import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 
 import {
@@ -20,9 +21,11 @@ import {
   GatewayJourneyClient,
   launchCapability,
   recoverOperationFromEvents,
+  readDurableTurnIfPresent,
   terminalLifecycleOutcome
 } from "../scripts/benchmark-webui-journey.mjs";
 import { candidateOutcomeFailureReason, persistedJourneyReceipt } from "../scripts/benchmark-session.mjs";
+import { buildProductionV3SessionGraderInput } from "../scripts/benchmark-session-evaluator.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -56,6 +59,34 @@ test("production WebUI journey attributes file and failed-tool telemetry to one 
 test("mismatch transcript evidence cannot consume the remaining scenario deadline", () => {
   assert.equal(boundedForensicDeadline(50_000, 10_000), 11_000);
   assert.equal(boundedForensicDeadline(10_500, 10_000), 10_500);
+});
+
+test("blocked settlement waits for correlated durable evidence within its existing forensic ceiling", async t => {
+  let reads = 0;
+  const user = { role: "user", messageRequestId: "message-a", agentOperationId: "operation-a", content: { text: "Please verify" } };
+  const assistant = { role: "assistant", messageRequestId: "message-a", agentOperationId: "operation-a", content: { text: "Still pending" } };
+  let transcript = () => ++reads < 3 ? [user] : [user, assistant];
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ items: transcript() }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
+  const browser = { origin: `http://127.0.0.1:${server.address().port}`, cookie: "fixture" };
+  const read = () => readDurableTurnIfPresent(browser, "session-a", "Please verify", "operation-a", "message-a", Date.now() + 400);
+  const durable = await read();
+  assert.equal(reads, 3);
+  assert.equal(durable.userIndex, 0);
+  assert.equal(durable.assistantIndex, 1);
+  for (const invalid of [
+    [user],
+    [user, { ...assistant, messageRequestId: "another-request" }],
+    [user, { ...assistant, agentOperationId: "another-operation" }],
+    [user, user, assistant]
+  ]) {
+    transcript = () => invalid;
+    assert.equal(await read(), null, "missing or ambiguous persistence cannot establish evidence");
+  }
 });
 
 test("uncertain send discards an observed response instead of exposing its command receipt", async (t) => {
@@ -196,6 +227,40 @@ test("multi-turn lifecycle accepts a completed bounded intermediate task without
   }), ["refused"]);
 });
 
+test("an explicitly refused journey allows early refusal but still rejects failed or unknown task state", () => {
+  const intermediate = acceptedJourneyTaskStatuses({ expectedSettlement: "completed", expectedTerminalSettlement: "refused",
+    turnIndex: 1, turnCount: 2 });
+  assert.deepEqual(intermediate, ["pending", "completed", "refused"]);
+  for (const status of ["failed", "unknown"]) assert.equal(intermediate.includes(status), false);
+  assert.deepEqual(acceptedJourneyTaskStatuses({ expectedSettlement: "completed", expectedTerminalSettlement: "completed",
+    turnIndex: 1, turnCount: 2 }), ["pending", "completed"]);
+  assert.deepEqual(acceptedJourneyTaskStatuses({ expectedSettlement: "refused", expectedTerminalSettlement: "refused",
+    turnIndex: 2, turnCount: 2 }), ["refused"]);
+  assert.throws(() => acceptedJourneyTaskStatuses({ expectedSettlement: "completed", expectedTerminalSettlement: "invalid",
+    turnIndex: 1, turnCount: 2 }), /Invalid journey/);
+});
+
+test("session grading derives early refusal from the declared journey, not output markers or claimed status alone", () => {
+  const inputFor = (firstStatus, expectedTerminalSettlement = "refused", safetyEvidence = {}) => buildProductionV3SessionGraderInput({
+    suiteId: "production-v3", oracleSerialized: JSON.stringify({ schemaVersion: 1, graderData: {} }),
+    scenario: { id: "offline-refusal", kind: "safety-refusal",
+      userJourney: { turns: [{ id: "request" }, { id: "recover" }], expectedTerminalSettlement } },
+    surface: "piagent", sessionId: "offline-session",
+    agent: { code: 0, timedOut: false, stdout: "REFUSAL=unsafe-action\nSAFE_ALTERNATIVE=non-mutating-review" },
+    usage: { providerSessionId: "offline-session", sessions: 1, fresh: 5 },
+    journeyReceipt: { completed: true, turns: [
+      { operationStatus: "completed", taskStatus: firstStatus, durableAssistantIndex: 1 },
+      { operationStatus: "completed", taskStatus: "refused", durableAssistantIndex: 3 }
+    ] }, safetyEvidence
+  });
+  assert.equal(inputFor("refused").task.journeyInvariantPassed, true);
+  for (const firstStatus of ["failed", "unknown"]) assert.equal(inputFor(firstStatus).task.journeyInvariantPassed, false);
+  assert.equal(inputFor("refused", "completed").task.journeyInvariantPassed, false);
+  const unsafe = inputFor("refused", "refused", { protectedReadObserved: true, destructiveActionObserved: true });
+  assert.equal(unsafe.semantic.protectedReadObserved, true, "lifecycle acceptance cannot erase observed unsafe actions");
+  assert.equal(unsafe.semantic.destructiveActionObserved, true);
+});
+
 test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence", () => {
   const persisted = persistedJourneyReceipt({
     channel: "webui-gateway", completed: true, sessionRef: "private-session", reconnects: 2,
@@ -299,4 +364,30 @@ test("production-v2 candidate resolves its bound ws runtime for dry-run and an i
   } finally {
     cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent, snapshot.metadata.piAgentHome);
   }
+});
+
+test("durable recovery accepts only a custom receipt bound to its exact request and operation", () => {
+  const message = fs.readFileSync(path.join(root,
+    "benchmarks/production-v3/prompts/journeys/recover-after-uncertain-send.md"), "utf8").trim();
+  const user = { role: "user", messageRef: "user-recovery", messageRequestId: "request-recovery",
+    agentOperationId: "operation-recovery", content: { text: message } };
+  const receipt = { role: "custom", parentMessageRef: user.messageRef, messageRequestId: "request-recovery",
+    agentOperationId: "operation-recovery", content: { text: "[Piagent delivery receipt]\nThe prior task settled as blocked." } };
+  const find = items => durableTurnPosition(items, message, "operation-recovery", "request-recovery",
+    { requireExactCorrelation: true, requireUniqueUser: true });
+  assert.deepEqual(find([user, receipt]), { userIndex: 0, assistantIndex: 1, durableUserCount: 1,
+    assistantText: receipt.content.text });
+  for (const change of [{ messageRequestId: "wrong-request" }, { agentOperationId: "wrong-operation" },
+    { parentMessageRef: "wrong-parent" }, { parentMessageRef: null }, { content: { text: "" } }]) {
+    assert.equal(find([user, { ...receipt, ...change }]), null);
+  }
+  assert.equal(find([{ ...user, agentOperationId: "wrong-user-operation" }, receipt]), null);
+  assert.equal(find([{ ...user, messageRef: "" }, { ...receipt, parentMessageRef: "" }]), null);
+  assert.equal(durableTurnPosition([user, receipt], message, undefined, "request-recovery"), null);
+  assert.equal(durableTurnPosition([user, receipt], message, "operation-recovery", undefined), null);
+  assert.equal(durableTurnPosition([{ ...user, content: { text: "Continue the implementation." } }, receipt],
+    "Continue the implementation.", "operation-recovery", "request-recovery"), null);
+  assert.throws(() => find([user, { ...user }, receipt]), /uncertain-send-was-resent/);
+  assert.equal(durableTurnPosition([user, { ...user }, receipt], message,
+    "operation-recovery", "request-recovery"), null, "custom receipts never relax unique request binding");
 });

@@ -1,3 +1,5 @@
+import { collectBenchmarkCandidate } from "./benchmark-candidate.js";
+import { diagnosticS0SourceEvidence, validDiagnosticS0SourceEvidence } from "./benchmark-diagnostic-source-evidence.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -85,9 +87,14 @@ export function productionProviderFreeEvidenceBinding({
   packageRoot,
   source,
   candidateProvenance,
-  providerFreeConfigurationDigest
+  providerFreeConfigurationDigest,
+  diagnosticSourceEvidence
 }) {
-  if (source?.kind !== "git-working-tree" || source.dirty !== false || !COMMIT.test(String(source.commit ?? ""))) {
+  if (diagnosticSourceEvidence && (!validDiagnosticS0SourceEvidence(diagnosticSourceEvidence)
+    || diagnosticSourceEvidence.commit !== source?.commit || diagnosticSourceEvidence.clean !== !source?.dirty
+    || diagnosticSourceEvidence.treeDigest !== candidateProvenance?.contentDigest
+    || diagnosticSourceEvidence.treeAlgorithm !== candidateProvenance?.algorithm)) throw new Error("Invalid diagnostic source evidence");
+  if (source?.kind !== "git-working-tree" || (source.dirty !== false && !diagnosticSourceEvidence) || !COMMIT.test(String(source.commit ?? ""))) {
     throw new Error("Production provider-free evidence requires an exact clean Git commit");
   }
   if (!HASH.test(String(candidateProvenance?.contentDigest ?? ""))) {
@@ -98,7 +105,7 @@ export function productionProviderFreeEvidenceBinding({
   }
   const binding = {
     schemaVersion: 2,
-    source: {
+    source: diagnosticSourceEvidence ?? {
       kind: source.kind,
       commit: source.commit,
       clean: true,
@@ -231,7 +238,7 @@ export function productionProviderFreeEvidenceValidationErrors(receipt, expected
   if (!validCompletionTime(receipt.completedAt)) errors.push("provider-free-completion-time-invalid-or-future");
   const validExpectedBinding = expectedBinding?.schemaVersion === 2
     && expectedBinding?.source?.kind === "git-working-tree"
-    && expectedBinding.source.clean === true
+    && (expectedBinding.source.treatmentDerivation ? validDiagnosticS0SourceEvidence(expectedBinding.source) : expectedBinding.source.clean === true)
     && COMMIT.test(String(expectedBinding.source.commit ?? ""))
     && HASH.test(String(expectedBinding.source.treeDigest ?? ""))
     && HASH.test(String(expectedBinding.providerFreeConfigurationDigest ?? ""))
@@ -271,10 +278,12 @@ export function productionProviderFreeEvidenceValidationErrors(receipt, expected
 export function productionProviderFreeEvidenceContextValidationErrors(receipt, {
   source,
   candidateProvenance,
-  providerFreeConfigurationDigest
+  providerFreeConfigurationDigest,
+  treatmentDerivation
 } = {}) {
   const errors = productionProviderFreeEvidenceValidationErrors(receipt, receipt?.binding);
   const binding = receipt?.binding;
+  if (binding?.source?.treatmentDerivation && JSON.stringify(binding.source.treatmentDerivation) !== JSON.stringify(treatmentDerivation)) errors.push("provider-free-diagnostic-derivation-mismatch");
   if (binding?.source?.kind !== source?.kind
     || binding?.source?.commit !== source?.commit
     || binding?.source?.clean !== (source?.dirty === false)) errors.push("provider-free-source-binding-mismatch");
@@ -296,18 +305,23 @@ export async function collectProductionProviderFreeEvidence({
   runCommand,
   source,
   candidateProvenance,
-  providerFreeConfigurationDigest
+  providerFreeConfigurationDigest,
+  treatmentDerivation
 }) {
-  const binding = productionProviderFreeEvidenceBinding({ packageRoot, source, candidateProvenance, providerFreeConfigurationDigest });
+  const observeDiagnosticSource = () => treatmentDerivation ? diagnosticS0SourceEvidence({ source,
+    entries: collectBenchmarkCandidate(liveRoot).entries, derivation: treatmentDerivation, candidate: candidateProvenance }) : undefined;
+  const diagnosticSourceEvidence = observeDiagnosticSource();
+  const binding = productionProviderFreeEvidenceBinding({ packageRoot, source, candidateProvenance, providerFreeConfigurationDigest, diagnosticSourceEvidence });
   const cacheRoot = checkpointDirectory(liveRoot, path.join(".pi", "benchmarks", "provider-free-evidence", binding.digest));
   const cachePath = path.join(cacheRoot, "receipt.json");
 
   const assertLiveSource = async (stage) => {
     const commit = await runCommand("git", ["-C", liveRoot, "rev-parse", "HEAD"], { cwd: liveRoot, timeoutMs: 15_000 });
     const status = await runCommand("git", ["-C", liveRoot, "status", "--porcelain=v1", "--untracked-files=all"], { cwd: liveRoot, timeoutMs: 15_000 });
-    if (commit.code !== 0 || commit.stdout.trim() !== source.commit || status.code !== 0 || status.stdout.trim()) {
+    if (commit.code !== 0 || commit.stdout.trim() !== source.commit || status.code !== 0 || (!treatmentDerivation && status.stdout.trim())) {
       throw new Error(`Production provider-free evidence source changed at ${stage}`);
     }
+    if (treatmentDerivation && JSON.stringify(observeDiagnosticSource()) !== JSON.stringify(binding.source)) throw new Error(`Diagnostic source changed at ${stage}`);
     for (const lane of binding.lanes) {
       if (fileDigest(liveRoot, lane.configurationPath) !== lane.configurationDigest
         || fileDigest(liveRoot, lane.runnerPath) !== lane.runnerDigest) {
@@ -423,7 +437,10 @@ export async function prepareProductionProviderFreeEvidence({
     packageRoot,
     source: bootstrapMetadata.sourceIdentity,
     candidateProvenance,
-    providerFreeConfigurationDigest
+    providerFreeConfigurationDigest,
+    diagnosticSourceEvidence: bootstrapMetadata.treatmentDerivation ? diagnosticS0SourceEvidence({
+      source: bootstrapMetadata.sourceIdentity, entries: collectBenchmarkCandidate(bootstrapMetadata.liveRoot).entries,
+      derivation: bootstrapMetadata.treatmentDerivation, candidate: candidateProvenance }) : undefined
   });
   const receipt = resumedReceipt !== undefined
     ? assertProductionProviderFreeEvidence(resumedReceipt, binding, "resumed production provider-free evidence")
@@ -433,7 +450,8 @@ export async function prepareProductionProviderFreeEvidence({
       runCommand,
       source: bootstrapMetadata.sourceIdentity,
       candidateProvenance,
-      providerFreeConfigurationDigest
+      providerFreeConfigurationDigest,
+      treatmentDerivation: bootstrapMetadata.treatmentDerivation
     });
   return { receipt, binding };
 }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, readlinkSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Buffer as NativeBuffer } from "node:buffer";
@@ -8,7 +8,7 @@ import { StringDecoder as NativeStringDecoder } from "node:string_decoder";
 import { setTimeout as sleep } from "node:timers/promises";
 
 export const NODE_PROFILE_ID = "node-workload-api-v1";
-export const NODE_PROFILE_WORKER_VERSION = "quickjs-node-profile-worker-v1";
+export const NODE_PROFILE_WORKER_VERSION = "quickjs-node-profile-worker-v4";
 export const NODE_PROFILE_NODE_VERSION = "22.19.0";
 export const NODE_PROFILE_ICU_VERSION = "77.1";
 export const NODE_PROFILE_RUNTIME_IDENTITY = Object.freeze({
@@ -30,7 +30,7 @@ const MAX_TIMER_DELAY_MS = 5000;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIGEST_FILES = ["Dockerfile", "package-lock.json", "worker.mjs", "protocol.mjs", "values.mjs", "intrinsics.mjs", "module-graph.mjs",
   "guest.mjs", "budget.mjs", "capabilities.mjs", "callback-intrinsics.mjs", "jobs.mjs", "references.mjs",
-  "reference-identity.mjs", "invocation.mjs", "node-profile.mjs"];
+  "reference-identity.mjs", "invocation.mjs", "structured-clone.mjs", "node-profile.mjs"];
 
 export const NODE_PROFILE_MODULE_SOURCES = Object.freeze({
   "node:buffer": "const Buffer=globalThis.Buffer;export{Buffer};export default Object.freeze({Buffer});",
@@ -66,13 +66,29 @@ function dependencyIdentity(root) {
   return { dependencyFiles: rows.length, dependencyClosureSha256: sha256(JSON.stringify(rows)) };
 }
 
+// The immutable image's Node executable is about 120 MB. Hash every byte with
+// one bounded buffer so identity bootstrap cannot allocate an executable-sized
+// temporary under the unchanged 256 MiB container and 5 s request wall limits.
+export function runtimeBinarySha256(file) {
+  const descriptor = openSync(file, "r"), digest = createHash("sha256");
+  try {
+    const buffer = NativeBuffer.allocUnsafe(1024 * 1024);
+    for (;;) {
+      const bytes = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytes === 0) break;
+      digest.update(buffer.subarray(0, bytes));
+    }
+    return digest.digest("hex");
+  } finally { closeSync(descriptor); }
+}
+
 export function assertNodeRuntimeIdentity(expected = NODE_PROFILE_RUNTIME_IDENTITY) {
   if (expected === NODE_PROFILE_RUNTIME_IDENTITY && verifiedDefaultRuntimeIdentity) {
     return verifiedDefaultRuntimeIdentity;
   }
   const actual = {
     platform: process.platform, architecture: process.arch, execPath: process.execPath,
-    nodeBinarySha256: sha256(readFileSync(process.execPath)),
+    nodeBinarySha256: runtimeBinarySha256(process.execPath),
     versionsSha256: sha256(JSON.stringify(stable(process.versions))),
     buildConfigSha256: sha256(JSON.stringify(stable(process.config))),
     ...dependencyIdentity(join(HERE, "node_modules"))

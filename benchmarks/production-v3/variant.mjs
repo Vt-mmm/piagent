@@ -166,4 +166,13 @@ switch (scenarioId) {
   default: throw new Error(`unsupported production scenario ${scenarioId}`);
 }
 
+// Public regression checks belong only to their scenario. They contain fixed,
+// disclosed examples, never the private seed/oracle or a reference implementation.
+// Use the existing smoke path so configured verifier footprints remain unchanged.
+if (["revoked-session-cache", "abort-reconnect-supersession", "expiry-boundary"].includes(scenarioId)) {
+  const smoke = fs.readFileSync(new URL("./project/test/smoke.test.js", import.meta.url), "utf8");
+  const checks = fs.readFileSync(new URL(`./public-checks/${scenarioId}.js`, import.meta.url), "utf8");
+  write("test/smoke.test.js", `${smoke}\n${checks}`);
+}
+
 fs.writeFileSync(oraclePath, `${JSON.stringify(oracle)}\n`, { mode: 0o600 });

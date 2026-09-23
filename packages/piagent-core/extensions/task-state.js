@@ -655,9 +655,9 @@ function gitHasHead(cwd) {
   }
 }
 
-function workingTreeFilesForGitRoot(cwd, observeRename) {
-  if (!isGitWorkingTree(cwd)) return [];
-  const changed = gitHasHead(cwd)
+function workingTreeFilesForGitRoot(cwd, observeRename, knownHead = null) {
+  if (knownHead === null && !isGitWorkingTree(cwd)) return [];
+  const changed = (knownHead ?? gitHasHead(cwd))
     ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"]), observeRename)
     : gitOutput(cwd, ["ls-files", "-z"]).split("\0").filter(Boolean);
   const untracked = gitOutput(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
@@ -856,7 +856,7 @@ export function workingTreeSnapshot(cwd, options = {}) {
         paths.forEach((file) => protectedAliases.add(file));
     };
     try {
-      const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename)) {
+      const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename, hasHead)) {
         const projectPath = prefixedGitPath(root.prefix, file);
         snapshot[projectPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead, isProtectedProjectPath(projectPath) || protectedAliases.has(file) ? projectPath : null);
       }

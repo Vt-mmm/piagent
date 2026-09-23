@@ -4,6 +4,16 @@
 // the guard out of the copy.
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
+
+export function provisionSyntaxParserRuntime(root) {
+  const manifestPath = createRequire(import.meta.url).resolve("@babel/parser/package.json");
+  const packageRoot = path.dirname(manifestPath);
+  const installed = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const declared = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../../package.json"), "utf8")).dependencies["@babel/parser"];
+  if (installed.version !== declared) throw new Error("fixture syntax parser must match the declared runtime pin");
+  fs.cpSync(packageRoot, path.join(root, "node_modules/@babel/parser"), { recursive: true });
+}
 
 export function writeModule(target, source) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -11,8 +21,10 @@ export function writeModule(target, source) {
 }
 
 // The guard imports its host runtime by package name. A copied tree has no
-// node_modules, so the few entry points it touches are stubbed.
+// node_modules, so host entry points are stubbed. Syntax proof uses the real
+// pinned parser, never a stub. Real dependency installation has separate tests.
 export function writeRuntimeStubs(root) {
+  provisionSyntaxParserRuntime(root);
   writeModule(path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"), JSON.stringify({
     type: "module",
     exports: "./index.js"

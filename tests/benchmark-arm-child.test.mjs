@@ -58,7 +58,7 @@ async function gatewayProbe(tail = false) {
   assert.equal(fs.realpathSync(installedPiHostRoot()), fs.realpathSync(hostRoot));
   const state = gatewayProfileState(agentDir), project = new ProjectRegistry(state.root, readOrCreateCatalogKey(state)).register(cwd);
   let seamReads = 0, gateway, client;
-  const options = { packageRoot: candidateRoot, expectedPiVersion: "0.84.1", agentDir, staticRoot: before.assetsRoot };
+  const options = { packageRoot: candidateRoot, expectedPiVersion: "0.86.1", agentDir, staticRoot: before.assetsRoot };
   // These are deliberately unsupported options. A does not read them: passing
   // a facade/callback into an arbitrary JS object does not install an observer.
   for (const key of ["host", "runtimeFactory", "onSession", "onPayload"]) Object.defineProperty(options, key,
@@ -88,7 +88,7 @@ async function gatewayProbe(tail = false) {
     assert.deepEqual(Object.keys(gateway).sort(), ["close", "descriptor", "wait"]);
     assert.equal(client.events.filter(event => event.kind === "operation.started").length, 0);
     return { mode: "actual-immutable-A-top-level-webui", before, after: sourceIdentity(candidateRoot),
-      sdkRoot: fs.realpathSync(hostRoot), sdkVersion: "0.84.1", unsupportedOptionReads: seamReads,
+      sdkRoot: fs.realpathSync(hostRoot), sdkVersion: "0.86.1", unsupportedOptionReads: seamReads,
       publicGatewayKeys: Object.keys(gateway).sort(), publicContextKeys: contexts[0].contextKeys,
       sessionCreate: { phase: receipt.phase, resultCode: receipt.resultCode }, sessionStarts: contexts.length,
       ...(tail ? { tail: { registeredAtAllStarts: contexts.every(row => row.tailRegistered === true),
@@ -247,7 +247,7 @@ async function qualifiedGatewayProbe(caseId = "allowed-read-write-verify") {
     brokerClosureSha256: raw.brokerClosureSha256, toolDefinitionsSha256: raw.toolDefinitionsSha256,
     manifestAuthoritySha256: raw.manifestAuthoritySha256, journalSignerSha256: raw.journalSignerSha256,
     journalPathSha256: raw.journalPathSha256, contextPolicySha256: raw.contextPolicySha256,
-    sdkRoot: fs.realpathSync(hostRoot), sdkVersion: "0.84.1", sdkTreeSha256: raw.sdkTreeSha256,
+    sdkRoot: fs.realpathSync(hostRoot), sdkVersion: "0.86.1", sdkTreeSha256: raw.sdkTreeSha256,
     assetsRoot: before.assetsRoot, assetTreeSha256: raw.assetTreeSha256, runtimeHome: fs.realpathSync(agentDir) };
   const routerMarker = Object.assign(new Error("qualified-pi-second-turn-custody-denied"), {
     code: "BENCHMARK_EXECUTION_ASSET_MISMATCH", brokerCode: "session-custody-arm-drift",

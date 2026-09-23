@@ -308,8 +308,8 @@ describe("package distribution", () => {
     const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "publish.yml"), "utf8");
     assert.match(workflow, /fetch-depth:\s*0/, "publish checkout must include release-tag history");
     assert.match(workflow, /apt-get install --yes ripgrep/, "publish job must install its Linux test prerequisite");
-    assert.match(workflow, /- name: Install WebUI Chromium\s*\n\s*run: npx playwright install --with-deps chromium/,
-      "publish job must install the browser used by local verification");
+    assert.match(workflow, /publish:\s*\n\s*needs: verify/, "publication must wait for the complete platform matrix");
+    assert.match(workflow, /- name: Package lifecycle verification\s*\n\s*run: node --test[^\n]*tests\/package-distribution\.test\.mjs[^\n]*tests\/package-install-rollback\.test\.mjs/, "the publishing runner must validate its built package");
     assert.match(workflow, /if \[\[ "\$version" == \*-\* \]\]; then tag="next"; fi/);
     assert.match(workflow, /npm publish --tag "\$\{\{ steps\.npm-tag\.outputs\.value \}\}"/);
   });
@@ -497,7 +497,14 @@ describe("package distribution", () => {
     const agentRoot = path.join(root, "agent");
     const benchmarkSource = path.join(agentRoot, "git", "github.com", "Vt-mmm", "piagent");
     fs.mkdirSync(path.dirname(benchmarkSource), { recursive: true });
-    fs.cpSync(path.join(root, "lib", "node_modules", "@piagent", "platform"), benchmarkSource, { recursive: true });
+    const installedSource = path.join(root, "lib", "node_modules", "@piagent", "platform");
+    // Preserve the installed package's relative dependency-bin links. Resolving
+    // them while copying invents absolute links outside the candidate fixture.
+    fs.cpSync(installedSource, benchmarkSource, { recursive: true, verbatimSymlinks: true });
+    const parserBin = path.join("node_modules", ".bin", "parser");
+    const parserTarget = fs.readlinkSync(path.join(installedSource, parserBin));
+    assert.equal(path.isAbsolute(parserTarget), false);
+    assert.equal(fs.readlinkSync(path.join(benchmarkSource, parserBin)), parserTarget);
     const gitEnvironment = {
       ...process.env,
       GIT_CONFIG_GLOBAL: os.devNull,

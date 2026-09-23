@@ -194,3 +194,14 @@ test("review mutation: checkpoint contracts reject sorted serialization and chan
     assert.ok(result.counterexamples.length > 0);
   }
 });
+
+
+test("selection preview preserves only a bounded explicit startup allowance", () => {
+  const approved = recipe(); approved.backend.startupAllowanceMs = 60000;
+  const preview = select(approved);
+  assert.equal(preview.status, "preview-only");
+  assert.equal(preview.plan.backend.startupAllowanceMs, 60000);
+  for (const startupAllowanceMs of [-1, 60001, 1.5, null, "60000"]) {
+    assert.throws(() => select({ ...approved, backend: { ...approved.backend, startupAllowanceMs } }), /Invalid selection backend/);
+  }
+});

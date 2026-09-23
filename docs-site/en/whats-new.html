@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.6.1 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.7.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -102,6 +102,17 @@
               <h1>Safer task flow with less manual coordination</h1>
               <p>Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.7.0</p>
+  <h2 id="v1-7-0">Long sessions with clearer context and accounting</h2>
+  <p class="section-lead">v1.7.0 supports Pi 0.86.1, repairs session recovery, and adds waiting within an open session.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3>Requested waiting</h3><p>Ask the agent to wait until the next useful check. The timer makes no model calls while waiting; the session must remain open.</p></article>
+    <article class="card"><h3>Context and usage</h3><p>Context prioritizes supported files, and usage and verification results remain bound to the correct task.</p></article>
+    <article class="card"><h3>Evidence boundary</h3><p>All 14 formerly failed attempts passed a separate rerun. This is not a new 108-session score or an aggregate token-saving claim.</p></article>
+  </div>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.6.1 · Reliability patch</p>
   <h2 id="v1-6-1">Truthful UI state, safe external review, and lower helper overhead</h2>

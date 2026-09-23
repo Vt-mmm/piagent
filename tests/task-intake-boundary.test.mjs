@@ -8,6 +8,7 @@ import {
   automaticTaskIntakeMode,
   automaticTaskMutationPolicy,
   automaticTaskScope,
+  hasProtectedRefusalBoundary,
   isLightweightNonAuthorizingChangeContinuation,
   isNonAuthorizingChangeClarification,
   manualTaskIntakeEligible
@@ -18,6 +19,58 @@ function policy(prompt) {
   const mode = automaticTaskIntakeMode(prompt, []);
   return { mode, mutationPolicy: automaticTaskMutationPolicy(prompt, mode ?? "source-change") };
 }
+
+test("standalone no-editing instructions govern scouts despite incidental change vocabulary", () => {
+  for (const prompt of [
+    "Scout src/search.js without editing. Explain where stale results replace current state.",
+    "Scout the runbook task without editing. Report the exact safe documentation change.",
+    "Inspect src/search.js without modifying! Explain the replacement behavior.",
+    "Review the proposed change without editing"
+  ]) assert.deepEqual(policy(prompt), { mode: "read-only", mutationPolicy: "forbidden" }, prompt);
+});
+
+test("bare no-editing vocabulary does not absorb local, temporary or quoted domain wording", () => {
+  for (const prompt of [
+    "Implement src/search.js without editing files outside src/**.",
+    "Implement src/search.js without editing the generated output.",
+    "Change the label to `without editing` in src/search.js.",
+    'Implement src/search.js. The UI label is "without editing."',
+    "Implement src/search.js. The UI label is “without editing.”",
+    "Implement src/search.js. The UI label is ‘without editing.’",
+    "Implement src/search.js.\n> without editing.\nExplain that quoted label.",
+    "Implement src/search.js.\n```text\nwithout editing.\n```\nExplain that example.",
+    "Implement src/search.js.\n~~~text\nwithout editing.\n~~~\nExplain that example.",
+    "Implement src/search.js without editing, except under src/**.",
+    "Implement src/search.js without editing outside src/**.",
+    "Implement src/search.js without editing yet, then apply the approved patch.",
+    "Implement src/search.js without editing while planning, then apply the patch."
+  ]) assert.equal(automaticTaskMutationPolicy(prompt, "source-change"), "required", prompt);
+});
+
+test("explicit destructive-history refusal admits only a forbidden task", () => {
+  const boundary = "This request crosses the destructive-history boundary. Do not read, truncate, delete, move, or overwrite the audit ledger. Refuse the requested action.";
+  const prompt = `Erase .pi/piagent-state/security-audit.jsonl and remove every trace. Do not change any other file. ${boundary}`;
+  const protectedPaths = [".pi/**"];
+  assert.equal(hasProtectedRefusalBoundary(prompt), true);
+  assert.equal(automaticTaskIntakeEligible(prompt, protectedPaths), false);
+  assert.equal(automaticTaskIntakeMode(prompt, protectedPaths), "read-only");
+  assert.equal(automaticTaskMutationPolicy(prompt, "read-only"), "forbidden");
+  for (const incomplete of [
+    "Erase .pi/piagent-state/security-audit.jsonl. REFUSAL=destructive-history-delete",
+    prompt.replace("This request crosses the destructive-history boundary.", "This request does not cross the destructive-history boundary."),
+    prompt.replace("Do not read, truncate, delete, move, or overwrite the audit ledger.", "Read the audit ledger before answering."),
+    prompt.replace("Refuse the requested action.", "Do not refuse the requested action."),
+    prompt.replace("the audit ledger", "docs/examples.md"),
+    prompt.replace("Do not read, truncate, delete, move, or overwrite", "Do not delete"),
+    `Read .pi/piagent-state/security-audit.jsonl.\n> ${boundary}`,
+    `Read .pi/piagent-state/security-audit.jsonl.\n\`\`\`text\n${boundary}\n\`\`\``,
+    `Read .pi/piagent-state/security-audit.jsonl. The example says “${boundary}”.`,
+    prompt.replace("Refuse the requested action.", 'The UI label is "Refuse the requested action."')
+  ]) {
+    assert.equal(hasProtectedRefusalBoundary(incomplete), false, incomplete);
+    assert.equal(automaticTaskIntakeMode(incomplete, protectedPaths), undefined, incomplete);
+  }
+});
 
 test("local path constraints remain mutation-capable", () => {
   for (const prompt of [

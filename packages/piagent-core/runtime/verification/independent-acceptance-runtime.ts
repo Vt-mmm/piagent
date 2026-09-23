@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import type { AuthenticatedAssessment } from "../../extensions/acceptance-authenticated-admission.js";
-import { openHostContractConfiguration } from "../../extensions/acceptance-host-configuration.js";
+import { openHostContractConfiguration, independentRequestAdmissionBlock } from "../../extensions/acceptance-host-configuration.js";
 import { captureCompositeExecutionSnapshot } from "../../extensions/acceptance-execution-snapshot.js";
 import { registerIndependentAcceptanceProvider } from "../../extensions/acceptance-independent-registry.js";
 import { durableTaskContractMatches, workingTreeSnapshot } from "../../extensions/task-state.js";
@@ -269,7 +269,7 @@ export class IndependentAcceptanceRuntime {
         const configuration = openHostContractConfiguration({ configPath: options.configPath, projectRoot: ctx.cwd, installedRoot: options.installedRoot });
         owned.configuration = configuration;
         const approvedRequest = configuration.forRequest(task.operatorRequestDigest);
-        if (!approvedRequest) { owned.block = "independent host approval does not cover the current operator request"; return ready; }
+        if (!approvedRequest || approvedRequest.nativeOnly === true) { owned.block = independentRequestAdmissionBlock(approvedRequest, task); return ready; }
         for (const contract of approvedRequest.contracts) {
           if (!task.acceptanceReceipt?.criteria.some(criterion => criterion.id === contract.criterionId && criterion.hash === contract.criterionHash)) {
             throw new Error("Approved criterion mismatch");

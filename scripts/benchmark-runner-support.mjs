@@ -241,7 +241,9 @@ export function benchmarkExecutionPlan({
     "Piagent automatic benchmark",
     `  platform:  v${packageVersion}`,
     `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
-    ...(options.measurementOnly === true ? ["  mode:      measurement-only · full 108-session observation · no release claim"] : []),
+    ...(options.measurementOnly === true ? [options.failedAttemptsOnly
+      ? "  mode:      measurement-only · selected failed attempts · no full-matrix or release claim"
+      : "  mode:      measurement-only · full 108-session observation · no release claim"] : []),
     ...(options.measurementOnly !== true && options.campaignStopPolicy === "measurement-invalidating-only"
       ? ["  mode:      complete measurement · retain valid agent failures · adjudicate the release claim at S108"]
       : []),
@@ -264,7 +266,7 @@ export function benchmarkExecutionPlan({
     ...(options.replaySource ? [`  replay:    ${options.replaySource.runId ?? "prior-report"} · ${options.replayRuns.length} sessions`] : []),
     ...(resumeState ? [`  resume:    ${resumeState.manifest.runId}`] : []),
     `  variants:  ${suite.scenarios.some((scenario) => scenario.variantGenerator) ? `generated · seed ${rootSeedDigest.slice(0, 16)}` : "static"}`,
-    `  ordering:  ${suite.schemaVersion === 2 ? "seeded paired blocks" : "paired alternating"}`,
+    `  ordering:  ${options.failedAttemptsOnly ? "original failed-attempt ledger order" : suite.schemaVersion === 2 ? "seeded paired blocks" : "paired alternating"}`,
     `  timeout:   ${options.timeoutSeconds}s per session`,
     "  grading:   hidden verifier + scope + output safety + Pi task evidence"
   ].join("\n");

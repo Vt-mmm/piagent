@@ -1,4 +1,5 @@
 import { MAX_CALLBACK_CALLS, MAX_CALLBACK_TRACE_CHARS } from "./capabilities.mjs";
+import { MAX_STRING_LENGTH } from "./values.mjs";
 
 // Spliced only into the worker-owned pre-candidate closure. No host callback,
 // expected answer, dynamic code template or globally reachable registry.
@@ -79,6 +80,25 @@ export const CALLBACK_INTRINSICS = `
       return value;
     };
     callbacks[id] = fn; apply(wmSet, callbackReferences, [fn, id]); return fn;
+  }
+  function errorMessage(value) {
+    let current = value, message = null, found = false, depth = 0;
+    if (current !== null && typeof current !== 'object' && typeof current !== 'function') return '{"value":null}';
+    while (current !== null) {
+      // Check the entire chain before errorClass may use isPrototypeOf. An own
+      // message must not hide a proxy deeper in the thrown object's prototypes.
+      if (++depth > 32 || apply(has, proxies, [current])) return '{"reason":"error-message-unsupported"}';
+      if (!found) {
+        const property = descriptor(current, 'message');
+        if (property) {
+          if (!own(property, 'value') || typeof property.value !== 'string'
+            || property.value.length > ${MAX_STRING_LENGTH}) return '{"reason":"error-message-unsupported"}';
+          message = property.value; found = true;
+        }
+      }
+      current = prototype(current);
+    }
+    return '{"value":' + (message === null ? 'null' : stringify(message)) + '}';
   }
   function errorObservation(value) {
     if (value !== null && (typeof value === 'object' || typeof value === 'function') && apply(has, proxies, [value])) {

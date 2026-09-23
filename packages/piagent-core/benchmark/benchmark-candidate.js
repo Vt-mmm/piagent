@@ -1,3 +1,4 @@
+import { deriveDiagnosticCandidateEntries } from "./benchmark-diagnostic-treatment.js";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -324,8 +325,10 @@ function hardenReadOnly(root) {
   }
 }
 
-export function materializeBenchmarkCandidate(root, snapshotRoot) {
-  const candidate = collectBenchmarkCandidate(root);
+export function materializeBenchmarkCandidate(root, snapshotRoot, options = {}) {
+  const source = collectBenchmarkCandidate(root);
+  const derived = deriveDiagnosticCandidateEntries(source.entries, options);
+  const candidate = { entries: derived.entries, provenance: candidateProvenance(derived.entries) };
   privateDirectory(snapshotRoot);
   for (const entry of candidate.entries) materializeEntry(snapshotRoot, entry);
   verifyExactSnapshotTree(snapshotRoot, candidate.entries);
@@ -335,7 +338,9 @@ export function materializeBenchmarkCandidate(root, snapshotRoot) {
     fail(`Benchmark snapshot bytes do not match the frozen candidate provenance (${candidate.provenance.contentDigest} != ${observed.contentDigest})`);
   }
   hardenReadOnly(snapshotRoot);
-  return { provenance: observed, index };
+  return { provenance: observed, index,
+    ...(derived.derivation ? { treatmentDerivation: { ...derived.derivation,
+      sourceCandidateProvenance: source.provenance, derivedCandidateProvenance: observed } } : {}) };
 }
 
 export function validBenchmarkCandidateProvenance(value) {

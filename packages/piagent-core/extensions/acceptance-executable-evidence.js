@@ -1,4 +1,6 @@
+import { assertionCarrierBindings, testRunnerBindings, importedCallableBindingIsStable, assertionCarrierIsStable, TEST_RUNNER_EXPORT_KINDS } from "./acceptance-test-bindings.js";
 import { INVALID_DATE_CONSTRUCTION, tupleRegistrationIsClosed } from "./acceptance-tuple-shapes.js";
+import { browserWindowReferencesAreLocal, directPrimitiveArgument } from "./acceptance-local-binding.js";
 
 const ERROR_CONSTRUCTORS = ["typeerror", "rangeerror", "syntaxerror", "referenceerror", "urierror", "evalerror", "aggregateerror", "error"];
 
@@ -10,91 +12,9 @@ function escapeRegex(value) {
   return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function assertionCarrierBindings(testText) {
-  const bindings = [];
-  const add = (name, start, end) => {
-    if (name) bindings.push({ name: name.toLowerCase(), start, end });
-  };
-  for (const match of testText.matchAll(/\bimport\s+([a-z_$][a-z0-9_$]*)\s+from\s+__pi_node_assert_module_literal__\s*;?/gi)) {
-    add(match[1], match.index, match.index + match[0].length);
-  }
-  for (const match of testText.matchAll(/\bimport\s+\*\s+as\s+([a-z_$][a-z0-9_$]*)\s+from\s+__pi_node_assert_module_literal__\s*;?/gi)) {
-    add(match[1], match.index, match.index + match[0].length);
-  }
-  for (const match of testText.matchAll(/\bimport\s*\{([^}]{1,500})\}\s*from\s+__pi_node_assert_module_literal__\s*;?/gi)) {
-    for (const item of match[1].split(",")) {
-      const strict = item.trim().match(/^strict(?:\s+as\s+([a-z_$][a-z0-9_$]*))?$/i);
-      if (strict) add(strict[1] ?? "strict", match.index, match.index + match[0].length);
-    }
-  }
-  for (const match of testText.matchAll(/\bconst\s+([a-z_$][a-z0-9_$]*)\s*=\s*require\s*\(\s*__pi_node_assert_module_literal__\s*\)(?:\s*\.\s*strict)?\s*;?/gi)) {
-    add(match[1], match.index, match.index + match[0].length);
-  }
-  for (const match of testText.matchAll(/\bconst\s*\{\s*strict\s*:\s*([a-z_$][a-z0-9_$]*)\s*\}\s*=\s*require\s*\(\s*__pi_node_assert_module_literal__\s*\)\s*;?/gi)) {
-    add(match[1], match.index, match.index + match[0].length);
-  }
-  return bindings.slice(0, 8);
-}
-
-const TEST_RUNNER_EXPORT_KINDS = new Map([
-  ["test", "test"], ["it", "test"], ["describe", "suite"], ["suite", "suite"]
-]);
-
-function testRunnerBindings(testText) {
-  const bindings = [];
-  const add = (name, kind, start, end) => {
-    if (name && kind) bindings.push({ name: name.toLowerCase(), kind, start, end });
-  };
-  for (const match of testText.matchAll(/\bimport\s+([a-z_$][a-z0-9_$]*)(?:\s*,\s*\{[^}]{1,500}\})?\s+from\s+__pi_node_test_module_literal__\s*;?/gi)) {
-    add(match[1], "test", match.index, match.index + match[0].length);
-  }
-  for (const match of testText.matchAll(/\bimport\s+(?:[a-z_$][a-z0-9_$]*\s*,\s*)?\{([^}]{1,500})\}\s+from\s+__pi_node_test_module_literal__\s*;?/gi)) {
-    for (const raw of match[1].split(",")) {
-      const item = raw.trim().match(/^(test|it|describe|suite)(?:\s+as\s+([a-z_$][a-z0-9_$]*))?$/i);
-      if (item) add(item[2] ?? item[1], TEST_RUNNER_EXPORT_KINDS.get(item[1].toLowerCase()), match.index, match.index + match[0].length);
-    }
-  }
-  for (const match of testText.matchAll(/\bconst\s+([a-z_$][a-z0-9_$]*)\s*=\s*require\s*\(\s*__pi_node_test_module_literal__\s*\)\s*;?/gi)) {
-    add(match[1], "test", match.index, match.index + match[0].length);
-  }
-  for (const match of testText.matchAll(/\bconst\s+([a-z_$][a-z0-9_$]*)\s*=\s*require\s*\(\s*__pi_node_test_module_literal__\s*\)\s*\.\s*(test|it|describe|suite)\s*;?/gi)) {
-    add(match[1], TEST_RUNNER_EXPORT_KINDS.get(match[2].toLowerCase()), match.index, match.index + match[0].length);
-  }
-  for (const match of testText.matchAll(/\bconst\s*\{([^}]{1,500})\}\s*=\s*require\s*\(\s*__pi_node_test_module_literal__\s*\)\s*;?/gi)) {
-    for (const raw of match[1].split(",")) {
-      const item = raw.trim().match(/^(test|it|describe|suite)(?:\s*:\s*([a-z_$][a-z0-9_$]*))?$/i);
-      if (item) add(item[2] ?? item[1], TEST_RUNNER_EXPORT_KINDS.get(item[1].toLowerCase()), match.index, match.index + match[0].length);
-    }
-  }
-  return bindings.slice(0, 16);
-}
-
-function importedCallableBindingIsStable(testText, binding, bindings) {
-  const escaped = escapeRegex(binding.name);
-  const withoutDeclaration = `${testText.slice(0, binding.start)}${" ".repeat(binding.end - binding.start)}${testText.slice(binding.end)}`;
-  if (bindings.filter((candidate) => candidate.name === binding.name).length !== 1) return false;
-  if (new RegExp(`\\b(?:const|let|var|function|class)\\s+${escaped}\\b|\\bfunction\\b[^({]{0,200}\\([^)]*\\b${escaped}\\b|\\bcatch\\s*\\([^)]*\\b${escaped}\\b|(?:\\([^)]*\\b${escaped}\\b[^)]*\\)|\\b${escaped})\\s*=>`, "i").test(withoutDeclaration)) return false;
-  if (new RegExp(`(?<![.$a-z0-9_])${escaped}\\b\\s*(?:(?<![=!<>])=(?!=|>)|\\+\\+|--|[+*/%&|^-]=)|(?:\\+\\+|--)\\s*\\b${escaped}\\b`, "i").test(withoutDeclaration)) return false;
-  if (new RegExp(`\\b(?:const|let|var)\\s+[a-z_$][a-z0-9_$]*\\s*=\\s*${escaped}\\b|\\b(?:const|let|var)\\s*\\{[^}\\n]{0,500}\\}\\s*=\\s*${escaped}\\b`, "i").test(withoutDeclaration)) return false;
-  if (new RegExp(`(?<![.$a-z0-9_])[a-z_$][a-z0-9_$]*\\s*(?<![=!<>])=(?!=|>)\\s*${escaped}\\b`, "i").test(withoutDeclaration)) return false;
-  const member = `${escaped}\\s*(?:\\.\\s*[a-z_$][a-z0-9_$]*|\\[[^\\]]{1,300}\\])`;
-  if (new RegExp(`\\b${member}\\s*(?:=|\\+\\+|--|[+*/%&|^-]=|(?:&&|\\|\\||\\?\\?)=)|(?:\\+\\+|--)\\s*\\b${member}|\\bdelete\\s+${escaped}\\s*(?:\\.|\\[)|\\b${escaped}\\s*\\.\\s*__(?:definegetter|definesetter)__\\s*\\(`, "i").test(withoutDeclaration)) return false;
-  if (new RegExp(`(?:\\{[^}\\n]{0,500}\\b${member}[^}\\n]{0,500}\\}|\\[[^\\]\\n]{0,500}\\b${member}[^\\]\\n]{0,500}\\])\\s*=|\\bfor(?:\\s+await)?\\s*\\(\\s*(?:${member}|\\{[^}\\n]{0,500}\\b${member}[^}\\n]{0,500}\\}|\\[[^\\]\\n]{0,500}\\b${member}[^\\]\\n]{0,500}\\])\\s+(?:of|in)\\b`, "i").test(withoutDeclaration)) return false;
-  if (new RegExp(`\\b(?:object|reflect)\\s*\\.\\s*[a-z_$][a-z0-9_$]*\\s*\\(\\s*${escaped}\\s*[,)]|\\b[a-z_$][a-z0-9_$.]*\\s*\\(\\s*${escaped}\\s*[,)]`, "i").test(withoutDeclaration)) return false;
-  for (const match of withoutDeclaration.matchAll(new RegExp(`\\b${escaped}\\b`, "gi"))) {
-    const suffix = withoutDeclaration.slice(match.index + match[0].length);
-    if (/^\s*\(/.test(suffix) || /^\s*\.\s*[a-z_$][a-z0-9_$]*\s*\(/i.test(suffix)) continue;
-    return false;
-  }
-  return true;
-}
-
-function assertionCarrierIsStable(testText, binding) {
-  return importedCallableBindingIsStable(testText, binding, assertionCarrierBindings(testText));
-}
-
 function assertionEvidenceFileSupported(testText) {
-  if (/\\|__pi_(?:code_generation|module_loader)_module_literal__|\b(?:eval|createrequire)\b|\b(?:process|globalthis|global|window|self|this)\b|\bmodule\s*\.\s*(?:require|constructor|_load)\b|\.\s*constructor\b|\bfunction\s*\(|(?:=|[,([])\s*function\b(?!\s+[a-z_$][a-z0-9_$]*\s*\()/i.test(testText)) return false;
+  if (!browserWindowReferencesAreLocal(testText)) return false;
+  if (/\\|__pi_(?:code_generation|module_loader)_module_literal__|\b(?:eval|createrequire)\b|\b(?:process|globalthis|global|self|this)\b|\bmodule\s*\.\s*(?:require|constructor|_load)\b|\.\s*constructor\b|\bfunction\s*\(|(?:=|[,([])\s*function\b(?!\s+[a-z_$][a-z0-9_$]*\s*\()/i.test(testText)) return false;
   if (/\brequire\b(?!\s*\()/i.test(testText)) return false;
   for (const match of testText.matchAll(/\b(?:require|import)\s*\(/gi)) {
     const open = testText.indexOf("(", match.index);
@@ -160,9 +80,11 @@ function withoutModuleBindingDeclarations(code, moduleToken) {
 }
 
 function moduleBindingEscapes(code, binding) {
+  // Returning a direct module method call does not return the module binding.
+  // Bare members and bound methods remain escapes; mutation checks still apply.
   const name = `(?<![.$a-z0-9_])${escapeRegex(binding)}\\b`;
   if (new RegExp(`\\b(?:const|let|var)\\s+[a-z_$][a-z0-9_$]*\\s*=\\s*(?:${name}|\\{[^}\\n]{0,500}${name}|\\[[^\\]\\n]{0,500}${name})`, "i").test(code)) return true;
-  if (new RegExp(`(?<![=!<>])=(?!=|>)\\s*${name}|\\breturn\\s+${name}|=>\\s*${name}|\\.\\.\\.\\s*${name}`, "i").test(code)) return true;
+  if (new RegExp(`(?<![=!<>])=(?!=|>)\\s*${name}|\\breturn\\s+${name}|=>\\s*${name}(?!\\s*\\.\\s*[a-z_$][a-z0-9_$]*\\s*\\()|\\.\\.\\.\\s*${name}`, "i").test(code)) return true;
   if (new RegExp(`(?:\\(|\\{|\\[|,|:)\\s*(?:[a-z_$][a-z0-9_$]*\\s*:\\s*)?${name}\\s*(?:,|\\)|\\}|\\])`, "i").test(code)) return true;
   return new RegExp(`(?:\\(|,)\\s*${name}\\s*(?:,|\\))`, "i").test(code);
 }
@@ -240,7 +162,6 @@ function topLevelArgumentRanges(text, openIndex, endIndex) {
 export function evidenceTopLevelArguments(text, openIndex, endIndex) {
   return topLevelArgumentRanges(text, openIndex, endIndex).map((argument) => argument.text);
 }
-
 function operationArguments(operation, target) {
   const callable = String(target ?? "").replace(/^\*\./, "");
   if (!callable) return [];
@@ -288,7 +209,7 @@ function literalBooleanTernarySelection(raw) {
 function annotateInvalidArgumentCoverage(assertions) {
   const proofPartitions = new Set(["fractional", "invalid-calendar-date-string", "invalid-date-object", "invalid-date-string", "missing", "negative", "non-finite-number", "unsafe-integer"]);
   const directInvalidPartitions = new Set(["invalid-calendar-date-string", "invalid-date-object", "invalid-date-string", "missing", "non-finite-number"]);
-  const argumentPartitions = (raw) => {
+  const argumentPartitions = (raw, collection = false) => {
     let selected = literalBooleanTernarySelection(raw);
     if (selected.kind === "unknown") return new Set();
     while (selected.kind === "selected") {
@@ -296,7 +217,7 @@ function annotateInvalidArgumentCoverage(assertions) {
       if (selected.kind === "unknown") return new Set();
     }
     const value = selected.value;
-    const values = value.startsWith("[") && balancedEnd(value, 0, "[", "]") === value.length
+    const values = collection && value.startsWith("[") && balancedEnd(value, 0, "[", "]") === value.length
       ? topLevelArgumentRanges(value, 0, value.length).map((item) => item.text.trim()) : [value];
     const partitions = new Set();
     for (const item of values) {
@@ -304,6 +225,7 @@ function annotateInvalidArgumentCoverage(assertions) {
         if (INVALID_DATE_CONSTRUCTION.test(item)) partitions.add("invalid-date-object");
         continue; // Constructor arguments are not the value passed to the entrypoint.
       }
+      if (!directPrimitiveArgument(item)) continue;
       for (const partition of evidencePartitionSignals(item)) if (proofPartitions.has(partition)) partitions.add(partition);
       if (/^__pi_(?:invalid_(?:calendar_)?date|unparseable_date)_string_literal__$/.test(item)) partitions.add("invalid-date-string");
       if (item === "__pi_invalid_calendar_date_string_literal__") partitions.add("invalid-calendar-date-string");
@@ -342,7 +264,7 @@ function annotateInvalidArgumentCoverage(assertions) {
         for (const binding of assertion.iterationBindings ?? []) {
           if (!new RegExp(`\\b${escapeRegex(binding.variable)}\\b`, "i").test(argumentsList[index])) continue;
           required.add(index);
-          addPartitions(index, argumentPartitions(binding.literal));
+          if (literalBooleanTernarySelection(argumentsList[index]).value === binding.variable) addPartitions(index, argumentPartitions(binding.literal, true));
         }
       }
     }
@@ -421,8 +343,8 @@ function simpleConstantValue(raw) {
 
 function operationTargets(raw, callableNames) {
   let operation = String(raw ?? "").trim();
-  const arrow = operation.indexOf("=>");
-  if (arrow !== -1) operation = operation.slice(arrow + 2).trim();
+  const arrow = operation.match(/^(?:async\s+)?(?:\([^()]*\)|[a-z_$][a-z0-9_$]*)\s*=>/i);
+  if (arrow) operation = operation.slice(arrow[0].length).trim();
   else if (/^function\b/.test(operation)) operation = operation.slice(operation.indexOf("{")).trim();
   if (operation.startsWith("{") && balancedEnd(operation, 0, "{", "}") === operation.length) operation = operation.slice(1, -1).trim();
   operation = operation.replace(/^(?:return\s+)?(?:await\s+)?/, "").replace(/;\s*$/, "").trim();
@@ -460,7 +382,7 @@ function evidencePartitionSignals(text) {
   if (/\bundefined\b/.test(text)) signals.add("missing");
   if (/__pi_empty_string_literal__/.test(text)) signals.add("empty-string");
   if (/__pi_whitespace_string_literal__/.test(text)) signals.add("whitespace-string");
-  if (/(?:^|[^\w.])-\s*(?:\d+(?:\.\d+)?|infinity)\b/.test(text)) signals.add("negative");
+  if (/(?:^|[^\w.])-\s*(?:\d+(?:\.\d+)?)\b/.test(text)) signals.add("negative");
   if (/(?:^|[^\w.])(?:\d+\.\d+|\.\d+)(?:[^\w.]|$)/.test(text)) signals.add("fractional");
   if (/(?:^|[^\w.])0n?(?:[^\w.]|$)/.test(text)) signals.add("zero");
   if (/\b(?:nan|infinity)\b|number\.(?:positive_|negative_)?infinity/.test(text)) signals.add("non-finite");
@@ -759,12 +681,31 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     return Boolean(prefix.match(/(?:^|[;{])\s*(?:\(([^()]{1,160})\)|([^;{}()]{1,160}))\s*\?[\s\S]{0,400}$/));
   };
   const directlyInside = rangeDirectlyContains;
+  const transparentTryRanges = [];
   const directBaseContext = (start) => {
-    if (registeredRanges.some((range) => directlyInside(range, start))) return true;
+    if ([...registeredRanges, ...transparentTryRanges].some((range) => directlyInside(range, start))) return true;
     if (bracedDepthAt(start) !== 0) return false;
     const prefix = testText.slice(Math.max(testText.lastIndexOf(";", start - 1) + 1, 0), start);
     return !/=>|\bfunction\b/.test(prefix);
   };
+  // A catch-free try with a restoration-only finally cannot turn a failed
+  // assertion into success. Keep the body in the same live registration;
+  // catches, abrupt finalizers and uncalled/nested conditional blocks abstain.
+  for (const match of testText.matchAll(/\btry\s*\{/g)) {
+    if (!directBaseContext(match.index) || triviallyDisabled(match.index)
+      || [...declarationRanges, ...skippedRanges, ...conditionalRanges].some(range => match.index >= range.start && match.index < range.end)) continue;
+    const parent = [...registeredRanges, ...transparentTryRanges].filter(range => directlyInside(range, match.index)).at(-1);
+    if (abruptBefore(parent?.start ?? 0, match.index, bracedDepthAt(parent?.start ?? 0))) continue;
+    const open = testText.indexOf("{", match.index), end = balancedEnd(testText, open, "{", "}");
+    if (end === -1) continue;
+    const finalizer = testText.slice(end).match(/^\s*finally\s*\{/);
+    if (!finalizer) continue;
+    const finalOpen = end + finalizer[0].lastIndexOf("{"), finalEnd = balancedEnd(testText, finalOpen, "{", "}");
+    if (finalEnd === -1) continue;
+    const cleanup = testText.slice(finalOpen + 1, finalEnd - 1);
+    if (!/^(?:\s*[a-z_$][a-z0-9_$]*(?:\s*\.\s*[a-z_$][a-z0-9_$]*)*\s*=\s*[a-z_$][a-z0-9_$]*\s*;)*\s*$/i.test(cleanup)) continue;
+    transparentTryRanges.push({ start: open + 1, end: end - 1, braced: true });
+  }
   const structurallyConnected = (start) => directBaseContext(start)
     && ![...declarationRanges, ...skippedRanges, ...conditionalRanges].some((range) => start >= range.start && start < range.end)
     && !triviallyDisabled(start);
@@ -869,11 +810,11 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     if (headerEnd !== -1) unsupportedControlRanges.push(statementRange(headerEnd));
   }
   const abruptlyUnreachable = (start) => {
-    const containers = [...registeredRanges, ...iterationRanges]
+    const containers = [...registeredRanges, ...transparentTryRanges, ...iterationRanges]
       .filter((range) => start >= range.start && start < range.end)
       .sort((left, right) => right.start - left.start);
-    const containerStart = containers[0]?.start ?? 0;
-    return abruptBefore(containerStart, start, bracedDepthAt(containerStart));
+    return (containers.length > 0 ? containers : [{ start: 0 }])
+      .some(container => abruptBefore(container.start, start, bracedDepthAt(container.start)));
   };
   const iterationVariableIsLive = (range, start) => {
     const escaped = escapeRegex(range.variable);

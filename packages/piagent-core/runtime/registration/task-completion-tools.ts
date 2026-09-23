@@ -1,5 +1,7 @@
+import { retainFocusedVerification } from "../../extensions/acceptance-focused-verification.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { completionPreparationCurrent } from "../verification/completion-preparation.ts";
+import { apiBaselineCriterionEvidence as apiBaselineEvidence } from "../verification/acceptance-api-baseline.js";
 import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 import { durableContextEvidenceEntries, isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { mergeObservedTaskContext } from "../../extensions/task-contract-view.js";
@@ -176,7 +178,9 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
           matchedProfileCommand,
           workingTreeDigest
         });
-        task.verifyEvidence = task.verifyEvidence.slice(-100);
+        task.verifyEvidence = policy?.finalGate?.acceptanceProofMode === "diagnostic"
+          ? retainFocusedVerification(task.verifyEvidence, workingTreeDigest, currentWorkspaceRevisionDigest(ctx.cwd))
+          : task.verifyEvidence.slice(-100);
       }
       const taskLocalDelta = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected;
       const verificationCanSettleSourceTask = taskLocalDelta.length > 0 || task.mutationPolicy === "allowed";
@@ -185,7 +189,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso());
       }
       const acceptance = refreshAcceptanceReceipt(task, {
-        cwd: ctx.cwd,
+        cwd: ctx.cwd, apiBaselineEvidence,
         changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskLocalDelta),
         currentWorkingTreeDigest: workingTreeDigest
       });
@@ -327,7 +331,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         }
       };
       nextTask = refreshAcceptanceReceipt(nextTask, {
-        cwd: ctx.cwd,
+        cwd: ctx.cwd, apiBaselineEvidence,
         changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, nextTask, finalFileDigests, nextTask.changedFiles),
         currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
       }).task as TaskContract;
@@ -340,7 +344,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         ? semanticRepairCompletionBlock?.(ctx.cwd, nextTask.taskRunId)
         : undefined;
       if (semanticBlock) gate = { ...gate, decision: "fail", missing: [...new Set([...gate.missing, semanticBlock])] };
-      if (params.outcome === "completed" && (semanticBlock || (runtime.finalGate === "enforce" && gate.decision === "fail"))) {
+      if (params.outcome === "completed" && (semanticBlock || ((runtime.finalGate === "enforce" || gate.acceptanceProof?.mode === "diagnostic") && gate.decision === "fail"))) {
         const blockedTrace = {
           taskId: nextTask.taskId,
           taskRunId: nextTask.taskRunId,
@@ -377,6 +381,10 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         };
       }
 
+      if (gate.acceptanceProof?.mode === "diagnostic" && gate.acceptanceProof.pendingCriterionIds.length > 0) {
+        nextTask.trace.notes = [nextTask.trace.notes,
+          `Diagnostic acceptance: ${gate.acceptanceProof.pendingCriterionIds.length} criteria remain unproved; no quality claim.`].filter(Boolean).join("\n");
+      }
       let handoffPreview: any;
       try {
         handoffPreview = buildHandoffProjection(ctx.cwd, nextTask, {
@@ -404,6 +412,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         taskRunId: nextTask.taskRunId,
         sessionId: nextTask.sessionId,
         event: "trace_record",
+        ...(gate.acceptanceProof?.mode === "diagnostic" ? { acceptanceProof: gate.acceptanceProof } : {}),
         outcome: params.outcome,
         changedFiles: nextTask.changedFiles,
         friction: nextTask.trace.friction,
@@ -418,6 +427,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         phase: params.failedAt ?? "review",
         evidence: {
           outcome: params.outcome,
+          ...(gate.acceptanceProof?.mode === "diagnostic" ? { acceptanceProof: gate.acceptanceProof } : {}),
           changedFiles: written.changedFiles,
           failedAt: written.failedAt,
           ruledOut: written.ruledOut
@@ -434,7 +444,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
       }
 
       return {
-        content: [{ type: "text", text: `Trace recorded for ${nextTask.taskId}: ${params.outcome}${gate.decision === "fail" ? ` (gate warning: missing ${gate.missing.join(", ")})` : ""}` }],
+        content: [{ type: "text", text: `Trace recorded for ${nextTask.taskId}: ${params.outcome}${gate.acceptanceProof?.mode === "diagnostic" && gate.acceptanceProof.pendingCriterionIds.length > 0 ? " (diagnostic acceptance; no quality claim)" : ""}${gate.decision === "fail" ? ` (gate warning: missing ${gate.missing.join(", ")})` : ""}` }],
         details: { task: compactTaskDetails(written), gate, completionReceipt: buildCompletionReceiptView(written, { cwd: ctx.cwd, gate }) }
       };
     }

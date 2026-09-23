@@ -1,3 +1,5 @@
+import { captureWorkspaceVerificationSnapshot } from "../../extensions/workspace-verification-snapshot.js";
+import { diagnosticDeliveryMatchesTask, type DiagnosticDelivery } from "../recovery/diagnostic-delivery.ts";
 import type { TaskContract } from "../../extensions/guard-types.js";
 import {
   handoffIdentityMatchesTask,
@@ -62,6 +64,7 @@ export type TerminalUncertainSendReceipt = {
     outcome: TaskContract["trace"]["outcome"];
     gateDecision: "pass" | "fail";
     completionApproved: boolean;
+    diagnosticDelivery?: DiagnosticDelivery;
     changedFiles: string[];
     missing: string[];
     nextSafeAction: string;
@@ -111,12 +114,21 @@ export function terminalUncertainSendReceipt(
   if (!handoff
     || !handoffIdentityMatchesTask(handoff.identity, task)
     || handoff.state.taskOutcome !== task.trace.outcome) return undefined;
-  if (handoff.state.completionApproved === true) {
+  if (handoff.state.completionApproved === true || handoff.state.diagnosticDelivery) {
     const authoritativeAcceptance = taskAcceptanceDisposition(task);
     if (handoff.acceptance.required !== authoritativeAcceptance.required
       || handoff.acceptance.satisfied !== authoritativeAcceptance.satisfied
       || handoff.acceptance.criteriaCount !== authoritativeAcceptance.criteriaCount
       || handoff.acceptance.dispositionDigest !== authoritativeAcceptance.dispositionDigest) return undefined;
+  }
+  const diagnosticDelivery = handoff.state.diagnosticDelivery;
+  if (diagnosticDelivery && !diagnosticDeliveryMatchesTask(diagnosticDelivery, task, taskAcceptanceDisposition(task).dispositionDigest)) return undefined;
+  if (diagnosticDelivery) {
+    try {
+      const current = captureWorkspaceVerificationSnapshot(cwd);
+      if (!current.proofCapable || current.digest !== handoff.tree.currentDigest
+        || current.workspaceRevisionDigest !== handoff.tree.workspaceRevisionDigest) return undefined;
+    } catch { return undefined; }
   }
   const changedFiles = bounded(handoff.changedFiles.current, 12);
   const missing = bounded(handoff.state.missing, 12);
@@ -125,6 +137,7 @@ export function terminalUncertainSendReceipt(
     "[Piagent delivery receipt]",
     `The immediately preceding task already settled as ${handoff.state.taskOutcome}; its durable contract was reused and no command, mutation, message, or model turn was replayed.`,
     `Completion approved: ${approved ? "yes" : "no"}. Gate: ${handoff.state.gateDecision}.`,
+    ...(diagnosticDelivery ? ["Diagnostic delivery only: unproved criteria remain pending; no quality claim."] : []),
     ...(changedFiles.length > 0 ? [`Changed files: ${changedFiles.join(", ")}.`] : []),
     ...(missing.length > 0 ? [`Still missing: ${missing.join("; ")}.`] : []),
     `Next safe action: ${handoff.nextSafeAction.action}.`
@@ -141,6 +154,7 @@ export function terminalUncertainSendReceipt(
       outcome: task.trace.outcome,
       gateDecision: handoff.state.gateDecision,
       completionApproved: approved,
+      ...(diagnosticDelivery ? { diagnosticDelivery } : {}),
       changedFiles,
       missing,
       nextSafeAction: handoff.nextSafeAction.action,

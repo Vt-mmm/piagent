@@ -150,7 +150,7 @@ pi install git:github.com/Vt-mmm/piagent
 
 Use `git:github.com/Vt-mmm/piagent@vX.Y.Z` when pinning a reproducible project package source.
 
-Runtime support follows the root release matrix: Node.js `>=22.19.0`, Pi Coding Agent `0.84.1`, verified rollout on macOS Apple Silicon + Bash and Linux x64 + Bash, supported-target smoke verification for macOS Intel/Linux ARM64, no native Windows team rollout target yet, and WSL2 experimental.
+Runtime support follows the root release matrix: Node.js `>=22.19.0`, Pi Coding Agent `0.86.1` (SDK upgrade under local qualification; historical platform evidence below used `0.84.1`), verified rollout on macOS Apple Silicon + Bash and Linux x64 + Bash, supported-target smoke verification for macOS Intel/Linux ARM64, no native Windows team rollout target yet, and WSL2 experimental.
 
 ## Project profile
 

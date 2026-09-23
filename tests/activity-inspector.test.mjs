@@ -17,7 +17,7 @@ import { registerActivityInspector } from "../packages/piagent-core/runtime/regi
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 
 const fixture = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/task-contract.valid.json"), "utf8"));
-const TEST_AT = "2026-08-13T14:00:00.000Z";
+const TEST_AT = new Date(Date.now() - 5 * 60_000).toISOString();
 
 function workspace() {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-inspector-"));

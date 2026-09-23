@@ -66,17 +66,10 @@ jobs:
       - name: Build WebUI release assets
         run: npm run build --workspace @piagent/webui
 
-      - name: Install WebUI Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Local verification
-        run: npm run verify
+      # Both platform gates already passed this exact commit through needs: verify.
+      # Recheck the tarball/install boundary on the actual publishing runner.
+      - name: Package lifecycle verification
+        run: node --test --test-concurrency=2 tests/package-distribution.test.mjs tests/package-install-rollback.test.mjs tests/release-identity.test.mjs
 
       - name: Capability catalog is in sync
         run: npm run capabilities:check

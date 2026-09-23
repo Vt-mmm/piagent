@@ -1,3 +1,5 @@
+import { inferAcceptanceObligations } from "./acceptance-obligations.js";
+export { inferAcceptanceObligations };
 import path from "node:path";
 import { changedFileAcceptanceCorpus, emptyAcceptanceCorpus, isAcceptanceTestPath } from "./acceptance-language-adapters.js";
 import { durableContextEvidenceEntries, hasDurableContextEvidence } from "./context-evidence.js";
@@ -17,6 +19,12 @@ import { temporalProofReasonGuidance } from "./acceptance-boundary-guidance.js";
 import { acceptancePrecedenceContractGuidance, acceptancePrecedenceReceiptEvidence } from "./acceptance-precedence-contract.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
 import { independentAcceptanceState, applyIndependentCriterionAssessment } from "./acceptance-independent-registry.js";
+import { missingAcceptanceProofCapabilities } from "./acceptance-proof-capability.js";
+import { boundAcceptanceClauseGroup, allClauseEvidence } from "./acceptance-clause-group.js";
+import { documentContentCriterionEvidence } from "./acceptance-document-content.js";
+import { invalidInputReceiptProof } from "./acceptance-invalid-input-receipt.js";
+import { boundaryTargetHasLiveSuccess } from "./acceptance-boundary-binding.js";
+import { apiBaselineCriterionEvidence, apiBaselineRecoveryProjection } from "./acceptance-api-baseline.js";
 export const ACCEPTANCE_RECEIPT_SCHEMA_VERSION = 1;
 export const ACCEPTANCE_STATUSES = new Set(["pending", "satisfied", "blocked"]);
 export const ACCEPTANCE_PRIORITIES = new Set(["normal", "critical"]);
@@ -77,9 +85,6 @@ function normalizedText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
-function includesAny(text, patterns) {
-  return patterns.some((pattern) => pattern.test(text));
-}
 function pathBoundaryMentioned(text, patterns) {
   const value = normalizedText(text);
   return uniqueStrings(patterns).some((pattern) => {
@@ -110,69 +115,6 @@ function acceptanceReadOnlyInferenceOptions(input, text) {
     readOnlyBoundary: boundaryPatterns.length > 0
       && readOnlyBoundaryTiedToPattern(text, boundaryPatterns)
   };
-}
-
-export function inferAcceptanceObligations(text, changeMode = "source-change", options = {}) {
-  const value = normalizedText(text);
-  // A source path locates the change; it does not declare a storage API.
-  const storageText = value.replace(/\b(?:[a-z0-9_.@-]+\/)+[a-z0-9_.@/-]+\b/g, " ");
-  const accessControlText = storageText.replace(/`[^`\n]*`/g, " ");
-  const obligations = [];
-  if (changeMode === "read-only" || options.mutationPolicy === "forbidden" || options.readOnlyBoundary === true) {
-    obligations.push("read-only-evidence");
-  }
-  const actorAccessControl = includesAny(accessControlText, [
-    /\b(?:admins?|roles?|owners?|users?|callers?|resources?)\b[\s\S]{0,80}\b(?:access|allow(?:ed)?|deny|denied|block(?:ed)?|forbid(?:den)?|manag(?:e|es|ed|ing))\b/,
-    /\b(?:access|allow(?:ed)?|deny|denied|block(?:ed)?|forbid(?:den)?|manag(?:e|es|ed|ing))\b[\s\S]{0,80}\b(?:admins?|roles?|owners?|users?|callers?|resources?)\b/
-  ]);
-  const explicitAuthorization = includesAny(accessControlText, [
-    /\bauth(?:orization)?\b/, /\bunauthoriz(?:ed|ation)\b/, /\bpermission\b/
-  ]) || actorAccessControl;
-  const ownerAccessControl = /\bowner\b/.test(accessControlText) && includesAny(accessControlText, [
-    /\busers?\b/, /\bresources?\b/, /\baccess\b/, /\bmanag(?:e|es|ed|ing)\b/, /\bauth(?:orization)?\b/, /\bpermission\b/, /\broles?\b/
-  ]);
-  if (explicitAuthorization || ownerAccessControl) {
-    obligations.push("authorization-deny-case");
-  }
-  const tenantMentioned = includesAny(value, [/\btenants?\b/, /\bcross[- ]tenant\b/, /\bsame[- ]tenant\b/, /\btenantid\b/]);
-  const tenantStorage = tenantMentioned && includesAny(storageText, [
-    /\bcache\b/, /\bcache[- ]?key\b/, /\bstorage\b/, /\bcollision\b/, /\bentity\b/, /\bsame tuple\b/
-  ]);
-  const strongAuthorization = includesAny(accessControlText, [
-    /\bauth(?:orization)?\b/, /\bunauthoriz(?:ed|ation)\b/, /\bpermission\b/
-  ]);
-  const tenantActorAccess = tenantMentioned && actorAccessControl;
-  const explicitTenantAccessBoundary = includesAny(value, [
-    /\bcross[- ]tenant\b/, /\bsame[- ]tenant\b/, /\btenant boundary\b/,
-    /\btenantid\b[\s\S]{0,100}\b(?:equal|match|same non-empty|access|allow|deny|block|forbid)/,
-    /\b(?:access|allow|deny|block|forbid)[\s\S]{0,100}\btenantid\b/
-  ]) && includesAny(value, [
-    /\baccess\b/, /\ballow(?:ed)?\b/, /\b(?:deny|denied)\b/, /\bblock(?:ed)?\b/, /\bforbid(?:den)?\b/,
-    /\bequal\b/, /\bmatch(?:es|ed|ing)?\b/, /\bsame non-empty\b/
-  ]);
-  if (tenantMentioned) {
-    if (tenantStorage) {
-      obligations.push("tenant-storage-isolation");
-    } else if (strongAuthorization || ownerAccessControl || tenantActorAccess || explicitTenantAccessBoundary) {
-      obligations.push("tenant-boundary");
-    }
-  }
-  const namedNonEmptyString = /(?:`[a-z_$][a-z0-9_$]*`|\b[a-z_$][a-z0-9_$]*)\s+(?:must|should|has\s+to)\s+be\s+(?:an?\s+)?non[- ]empty\s+string\b/.test(value);
-  const explicitInvalidInput = namedNonEmptyString || includesAny(value, [/\binvalid\b/, /\btypeerror\b/, /\bthrow\b/, /\bnon-negative\b/, /\bpositive integer\b/, /\binteger\b/]);
-  const rejectInvalidInput = /\breject(?:s|ed|ion)?\b/.test(value)
-    && !/\breject(?:s|ed|ion)?\s+(?:no\s+)?valid\b/.test(value)
-    && includesAny(value, [/\binvalid\b/, /\bbad\b/, /\bmalformed\b/, /\bnegative\b/, /\bnull\b/, /\bundefined\b/, /\bnon[- ]?(?:number|numeric)\b/, /\bout[- ]?of[- ]?range\b/]);
-  if (explicitInvalidInput || rejectInvalidInput) {
-    obligations.push("invalid-input-rejection");
-  }
-  if (includesAny(value, [/\bboundary\b/, /\bceil(?:ing)?\b/, /\bclamp\b/, /\bmin(?:imum)?\b/, /\bmax(?:imum)?\b/, /\binclusive\b/, /\bzero\b/, /\b0\b/, /\bexpiry\b/, /\bround(?:ing)?\b/, /\bedge\b/, /\bfalsey\b/, /\bfalsy\b/, /\bnullish\b/, /\bdefault(?:s)?\b/, /\bpreserv(?:e|ed|es|ing)\b/])) {
-    obligations.push("boundary-case");
-  }
-  if (includesAny(value, [/\bmutation\b/, /\bunchanged\b/, /\bwithout changing\b/, /\bbackward\b/, /\bapi\b/, /\bexported api\b/, /\bfocused\b/])) {
-    obligations.push("backward-compatibility");
-  }
-  if (changeMode === "source-change") obligations.push("verification-evidence");
-  return [...new Set(obligations)];
 }
 
 function generatedCriterionForObligation(obligation) {
@@ -285,6 +227,12 @@ export function buildAcceptanceReceipt(input = {}) {
     changeMode,
     acceptanceReadOnlyInferenceOptions(input, baseText)
   );
+  // Generated lifecycle metadata may suggest advisory checks, but cannot
+  // create a mandatory product requirement absent from operator intent.
+  // Keep the full receipt hash and useful existing follow-up diagnostics.
+  const operatorText = [input.summary, ...(Array.isArray(input.acceptanceCriteria) ? input.acceptanceCriteria : [])].filter(Boolean).join("\n");
+  const operatorObligations = new Set(inferAcceptanceObligations(operatorText, changeMode,
+    acceptanceReadOnlyInferenceOptions(input, operatorText)));
   const texts = uniqueStrings(Array.isArray(input.acceptanceCriteria) ? input.acceptanceCriteria : []);
   const generatedObligations = new Map();
   for (const obligation of obligations) {
@@ -304,7 +252,7 @@ export function buildAcceptanceReceipt(input = {}) {
       : generatedCriterionForObligation("verification-evidence"));
   }
   const acceptanceCriteria = texts.slice(0, MAX_CRITERIA);
-  const durableBehaviorProof = durableBehaviorProofRequired(baseText, changeMode);
+  const durableBehaviorProof = durableBehaviorProofRequired(input.source === "runtime" ? operatorText : baseText, changeMode);
   const criteria = acceptanceCriteria.map((text, index) => {
     const inferred = inferAcceptanceObligations(
       text,
@@ -320,7 +268,9 @@ export function buildAcceptanceReceipt(input = {}) {
       id: criterionId(text, obligation, index),
       hash: sha256(text),
       obligation,
-      priority: compoundAcceptanceCriterion(text) || CRITICAL_OBLIGATIONS.has(obligation) || (durableBehaviorProof && obligation !== "verification-evidence") ? "critical" : "normal",
+      priority: input.source === "runtime" && generatedObligations.has(text) && !operatorObligations.has(obligation)
+        ? "normal"
+        : compoundAcceptanceCriterion(text) || CRITICAL_OBLIGATIONS.has(obligation) || (durableBehaviorProof && obligation !== "verification-evidence") ? "critical" : "normal",
       status: "pending",
       evidence: []
     };
@@ -694,7 +644,7 @@ function focusedContractEvidence(obligation, task, corpus, verifierEvidence, cri
   };
 }
 
-function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest) {
+function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest, sourceProofRequiredIds, apiBaselineEvidence, strictClauseProof = false) {
   const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest);
   const latestVerifyEvidence = latestObservedVerificationEvidence(task?.verifyEvidence);
   const verifyEvidence = meaningfulVerificationCommands(task?.verifyCommands ?? [])
@@ -709,6 +659,18 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
     workingTreeDigest: currentWorkingTreeDigest
   } : undefined;
   if (semanticConflictReasons(obligation, task, corpus, criterion).length > 0) return undefined;
+  // An exact API-preservation clause cannot borrow weaker evidence from an inferred category.
+  const api = apiBaselineCriterionEvidence({ task, criterion, cwd, corpus, currentWorkingTreeDigest, workspaceRevisionDigest, apiBaselineEvidence });
+  if (api.handled) return api.evidence;
+  const document = documentContentCriterionEvidence({ task, criterion, corpus, cwd, passingVerifier, verifierEvidence, currentWorkingTreeDigest, workspaceRevisionDigest });
+  if (document.handled) return document.evidence;
+  // Group children require a checker covering the complete clause. Legacy
+  // lexical/category matches may cover only one phrase in a longer sentence.
+  if (strictClauseProof) {
+    const text = acceptanceCriterionText(task, criterion);
+    return /^(?:Run the configured verification[.]?|The configured verification command passes after the final mutation[.]?)$/.test(text)
+      && passingVerifier ? verifierEvidence : undefined;
+  }
 
   if (obligation === "read-only-evidence") {
     const readOnlyEvidence = durableContextEvidenceEntries(task);
@@ -748,7 +710,15 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
   const precedence = acceptancePrecedenceReceiptEvidence({ obligation, taskText: acceptanceCriterionText(task, criterion), sourceEntries: corpus.sourceEntries, testEntries: corpus.testEntries, namedTargets: namedCodeTargets(task, criterion, corpus.sourceText), passingVerifier, verifierEvidence, sourceFiles: corpus.sourceFiles, testFiles: corpus.testFiles, verifierCoversTests: verifierCommandsCoverTests(task, corpus.testFiles, cwd) }); if (precedence.handled) return precedence.evidence;
 
   const generic = genericCriterionEvidence({ obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, verifierEvidence, passingVerifier, cwd });
-  if (generic.handled) return generic.evidence;
+  if (generic.handled) {
+    // A neutral artifact (for example a runbook) has no executable source
+    // linkage. Passing project smoke cannot establish its required content;
+    // use the existing finite missing-proof handoff without granting authority.
+    if (!generic.evidence && passingVerifier && criterion.priority === "critical"
+      && obligation === "requested-behavior" && corpus.adapter.status === "neutral"
+      && corpus.files.length > 0) sourceProofRequiredIds?.add(criterion.id);
+    return generic.evidence;
+  }
 
   if (!corpus.adapter.proofCapable) return undefined;
 
@@ -766,27 +736,20 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
 
   if (obligation === "invalid-input-rejection") {
     const criterionText = invalidInputCriterionText(task, criterion);
-    const { sourceOk, testOk } = acceptanceInvalidInputEvidence({
-      taskText: criterionText,
-      sourceText: corpus.sourceText,
-      testText: corpus.testText,
-      sourceEntries: corpus.sourceEntries,
-      testEntries: corpus.testEntries,
-      namedTargets: namedCodeTargets(task, criterion, corpus.sourceText, criterionText),
-      provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, criterionText)
+    const result = invalidInputReceiptProof({
+      proofInput: { taskText: criterionText, contextText: acceptanceTaskText(task), sourceText: corpus.sourceText, testText: corpus.testText,
+        sourceEntries: corpus.sourceEntries, testEntries: corpus.testEntries,
+        namedTargets: namedCodeTargets(task, criterion, corpus.sourceText, criterionText),
+        provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, criterionText) },
+      passingVerifier, verifierEvidence, sourceFiles: corpus.sourceFiles, testFiles: corpus.testFiles,
+      verifierCoversTests: verifierCommandsCoverTests(task, corpus.testFiles, cwd)
     });
-    if (passingVerifier && corpus.sourceFiles.length > 0 && verifierCommandsCoverTests(task, corpus.testFiles, cwd) && sourceOk && testOk) {
-      return {
-        ...verifierEvidence,
-        kind: "verifier-backed-focused-test",
-        summary: "Configured verifier passed with focused invalid-input tests for named entrypoints.",
-        paths: [...new Set([...corpus.sourceFiles, ...corpus.testFiles])]
-      };
-    }
-    return undefined;
+    if (result.sourceProofRequired) sourceProofRequiredIds?.add(criterion.id);
+    return result.evidence;
   }
 
   if (obligation === "boundary-case") {
+    if (!boundaryTargetHasLiveSuccess({ task, criterion, corpus })) return undefined;
     const expirySourceOk = /\b(?:expiresat|expiry|expires|expired|timestamp|now)\b/.test(corpus.sourceText)
       && /(?:===|!==|>=|<=|>|<)/.test(corpus.sourceText);
     const testOk = /boundary|edge|zero|ceil|clamp|min|max|inclusive|exact|equal|equality|expired|expiry|past|future|partial|round|falsey|falsy|nullish|default|retrylimit|label|\bfalse\b|\b0\b/.test(corpus.testText);
@@ -809,7 +772,7 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
 
 export function refreshAcceptanceReceipt(task, options = {}) {
   const receipt = normalizeAcceptanceReceipt(task?.acceptanceReceipt);
-  if (!receipt) return { task, missing: [], criticalMissing: [], adapterAbstained: [], changed: false };
+  if (!receipt) return { task, missing: [], criticalMissing: [], adapterAbstained: [], independentRequired: [], sourceProofRequired: [], changed: false };
   const cwd = options.cwd;
   const changedFiles = uniqueStrings(options.changedFiles ?? task.changedFiles ?? task.observedChangedFiles ?? []);
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest;
@@ -817,6 +780,7 @@ export function refreshAcceptanceReceipt(task, options = {}) {
   const recordedAt = options.recordedAt ?? new Date().toISOString();
   const corpus = cwd ? changedFileAcceptanceCorpus(cwd, changedFiles) : emptyAcceptanceCorpus(changedFiles);
   const independent = independentAcceptanceState(cwd, task, currentWorkingTreeDigest).assessments;
+  const sourceProofRequiredIds = new Set();
   let changed = false;
   for (const [index, criterion] of receipt.criteria.entries()) {
     if (!acceptanceCriterionBindingValid(task, receipt, criterion, index)) {
@@ -824,10 +788,33 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       continue;
     }
     const compound = compoundAcceptanceCriterion(task.acceptanceCriteria[index]);
-    if (compound && criterion.priority !== "critical") { criterion.priority = "critical"; changed = true; }
+    const runtimeArtifactContent = receipt.source === "runtime" && task.changeMode === "source-change"
+      && criterion.obligation === "requested-behavior" && corpus.adapter.status === "neutral"
+      && corpus.files.length > 0;
+    if ((compound || runtimeArtifactContent) && criterion.priority !== "critical") { criterion.priority = "critical"; changed = true; }
     if (independent.has(criterion.id)) { changed = applyIndependentCriterionAssessment(criterion, independent.get(criterion.id), currentWorkingTreeDigest, recordedAt) || changed; continue; }
     if (compound) {
-      changed = resetUnprovenCriterion(criterion) || changed;
+      const group = boundAcceptanceClauseGroup(task, receipt, criterion, index);
+      const childEvidence = group && task.changeMode === "source-change" && cwd
+        && task.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM && isCurrentWorkingTreeDigest(currentWorkingTreeDigest)
+        ? group.children.map(child => {
+          const inferred = inferAcceptanceObligations(child.text, task.changeMode);
+          const obligation = inferred.find(item => item !== "verification-evidence" && item !== "backward-compatibility")
+            ?? (isVerificationOnlyCriterion(child.text) ? "verification-evidence" : undefined)
+            ?? (inferred.includes("backward-compatibility") ? "backward-compatibility" : "requested-behavior");
+          const derived = { id: child.id, hash: child.hash, obligation, priority: "critical", status: "pending", evidence: [] };
+          const projected = { ...task, expectedOutput: [task.expectedOutput, group.context].filter(Boolean).join("\n"),
+            acceptanceCriteria: task.acceptanceCriteria.map((text, position) => position === index ? child.text : text),
+            acceptanceReceipt: { ...receipt, criteria: receipt.criteria.map((item, position) => position === index ? derived : item) } };
+          const evidence = evidenceForObligation(obligation, projected, corpus, currentWorkingTreeDigest, derived, cwd,
+            workspaceRevisionDigest, undefined, options.apiBaselineEvidence, true);
+          return { id: child.id, hash: child.hash, evidence };
+        }) : [];
+      const evidence = allClauseEvidence(group, childEvidence, currentWorkingTreeDigest);
+      const previous = JSON.stringify(criterion);
+      resetUnprovenCriterion(criterion);
+      if (evidence) addEvidence(criterion, evidence, recordedAt);
+      changed = JSON.stringify(criterion) !== previous || changed;
       continue;
     }
     if (task?.changeMode === "source-change" && cwd) {
@@ -837,7 +824,7 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       criterion.evidence = [];
       const evidence = task?.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM
         && isCurrentWorkingTreeDigest(currentWorkingTreeDigest)
-        ? evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest)
+        ? evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest, sourceProofRequiredIds, options.apiBaselineEvidence)
         : undefined;
       if (evidence) addEvidence(criterion, evidence, recordedAt);
       const nextEvidence = (criterion.evidence ?? []).map(evidenceKey);
@@ -845,16 +832,15 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       continue;
     }
     if (criterion.status === "satisfied") continue;
-    const evidence = evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest);
+    const evidence = evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest, undefined, options.apiBaselineEvidence);
     if (evidence) changed = addEvidence(criterion, evidence, recordedAt) || changed;
   }
-  const missing = receipt.criteria.filter((criterion) => criterion.status !== "satisfied");
-  const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest);
-  const adapterAbstained = missing.filter((criterion) => criterionBehaviorProofDisposition({ obligation: criterion.obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, passingVerifier }) === "unknown");
-  const criticalMissing = missing.filter((criterion) => (criterion.priority === "critical" || criterionRequiresBehavioralProof(task, criterion, acceptanceTaskText(task))
-  ));
+  const { missing, criticalMissing, adapterAbstained, independentRequired, sourceProofRequired } = missingAcceptanceProofCapabilities(task, receipt, {
+    corpus, passingVerifier: hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest),
+    taskText: acceptanceTaskText(task), independentAssessments: independent, sourceProofRequiredIds
+  });
   return {
-    task: { ...task, acceptanceReceipt: receipt }, receipt, missing, criticalMissing, adapterAbstained, changed
+    task: { ...task, acceptanceReceipt: receipt }, receipt, missing, criticalMissing, adapterAbstained, independentRequired, sourceProofRequired, changed
   };
 }
 
@@ -886,12 +872,13 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
     const criterionText = (Array.isArray(task?.acceptanceCriteria) ? task.acceptanceCriteria : [])
       .find((text) => typeof text === "string" && sha256(text) === criterion.hash && !GENERATED_ACCEPTANCE_TEXTS.has(text));
     if (!criterionText) continue;
+    const api = apiBaselineRecoveryProjection({ task, criterion, criterionText, cwd, corpus, currentWorkingTreeDigest, workspaceRevisionDigest, apiBaselineEvidence: options.apiBaselineEvidence }); if (api.handled) { if (api.projection) projections.push(api.projection); continue; }
     if (compoundAcceptanceCriterion(criterionText)) {
       projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText, targets: [], missingDimensions: ["independent-compound-proof"], proofHints: ["Use an approved independent assessment covering every clause of this exact criterion. A partial verifier or source heuristic cannot prove the group; do not edit source solely to satisfy that heuristic."] });
       continue;
     }
     if (disposition === "unknown") { projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: [], missingDimensions: ["adapter-linkage"], proofHints: ["Add a focused executable test with a direct relative import to the changed source, or configure a deterministic language adapter that resolves this helper/barrel path; then rerun the exact verifier."] }); continue; }
-    if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest)) continue;
+    if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest, undefined, options.apiBaselineEvidence)) continue;
     const evidenceCriterionText = criterion.obligation === "invalid-input-rejection" ? invalidInputCriterionText(task, criterion) : criterionText;
     const targets = namedCodeTargets(task, criterion, corpus.sourceText, evidenceCriterionText);
     const missingDimensions = [], sourceProofReasons = [];
@@ -899,7 +886,7 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
     if (criterion.obligation === "invalid-input-rejection") {
       if (corpus.sourceFiles.length === 0 || corpus.testFiles.length === 0) continue;
       const proof = acceptanceInvalidInputEvidence({
-        taskText: evidenceCriterionText, sourceText: corpus.sourceText, testText: corpus.testText,
+        taskText: evidenceCriterionText, contextText: acceptanceTaskText(task), sourceText: corpus.sourceText, testText: corpus.testText,
         sourceEntries: corpus.sourceEntries, testEntries: corpus.testEntries,
         namedTargets: targets, provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, evidenceCriterionText), includeDiagnostics: true
       });

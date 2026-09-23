@@ -1,3 +1,4 @@
+import { buildDiagnosticDelivery, diagnosticCompletionMissing, diagnosticDeliveryStateErrors, validDiagnosticDelivery, type DiagnosticDelivery } from "./diagnostic-delivery.ts";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,7 +24,7 @@ import { readTrajectoryStore, trajectoryStatePath } from "../trajectory/trajecto
 export const HANDOFF_SCHEMA_VERSION = 1 as const;
 export const HANDOFF_PROJECTION_VERSION = "handoff-v2" as const;
 
-type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[]; currentWorkingTreeDigest?: string };
+type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[]; currentWorkingTreeDigest?: string; acceptanceProof?: { mode: "enforce" | "diagnostic"; pendingCriterionIds: string[]; missing: string[] } };
 type DigestRef = { sha256: string; chars: number };
 type LatestVerifier = HandoffVerifierBinding & {
   command: string;
@@ -40,7 +41,7 @@ export type HandoffProjection = {
   generatedAt: string;
   identity: { taskId: string; taskRunId: string; sessionHash: string; sessionName: string | null; attempt: number; maxAttempts: number };
   goal: { summary: string; expectedOutput: string; acceptanceCriteria: string[]; scope: string[]; outOfScope: string[] };
-  state: { phase: string | null; taskOutcome: TaskContract["trace"]["outcome"]; gateDecision: "pass" | "fail"; completionApproved: boolean; missing: string[] };
+  state: { phase: string | null; taskOutcome: TaskContract["trace"]["outcome"]; gateDecision: "pass" | "fail"; completionApproved: boolean; missing: string[]; diagnosticDelivery?: DiagnosticDelivery };
   acceptance: { required: boolean; satisfied: boolean; criteriaCount: number; dispositionDigest: string };
   decisionsAndInvariants: string[];
   contextReferences: { required: string[]; observed: Array<{ path: string; reason: string }>; memory: Array<{ path: string; reason: string }> };
@@ -105,6 +106,10 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
   if (value.schemaVersion !== HANDOFF_SCHEMA_VERSION || value.projectionVersion !== HANDOFF_PROJECTION_VERSION) errors.push("handoff projection version is invalid");
   if (typeof value.generatedAt !== "string" || !Number.isFinite(Date.parse(value.generatedAt))) errors.push("generatedAt is invalid");
   const identity = record(value.identity), state = record(value.state), acceptance = record(value.acceptance), tree = record(value.tree);
+  const diagnostic = state?.diagnosticDelivery;
+  const diagnosticValid = validDiagnosticDelivery(diagnostic, acceptance?.dispositionDigest);
+  errors.push(...diagnosticDeliveryStateErrors(state, acceptance));
+  const deliveryApproved = state?.completionApproved === true || diagnosticValid;
   if (!identity
     || Object.keys(identity).some((field) => !IDENTITY_FIELDS.has(field))
     || [...IDENTITY_FIELDS].some((field) => !(field in identity))
@@ -118,7 +123,7 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
     || identity.maxAttempts < 1
     || identity.attempt > identity.maxAttempts) errors.push("identity is invalid");
   if (!state || !["pending", "completed", "blocked", "partial", "failed"].includes(String(state.taskOutcome)) || !["pass", "fail"].includes(String(state.gateDecision)) || typeof state.completionApproved !== "boolean" || !Array.isArray(state.missing)) errors.push("state is invalid");
-  if (state?.completionApproved === true && (state.gateDecision !== "pass" || state.taskOutcome !== "completed")) errors.push("completionApproved conflicts with operational truth");
+  if (deliveryApproved && (state.gateDecision !== "pass" || state.taskOutcome !== "completed")) errors.push("completionApproved conflicts with operational truth");
   if (!acceptance
     || Object.keys(acceptance).some((field) => !ACCEPTANCE_FIELDS.has(field))
     || [...ACCEPTANCE_FIELDS].some((field) => !(field in acceptance))
@@ -129,7 +134,7 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
     || acceptance.criteriaCount > 12
     || !HASH.test(String(acceptance.dispositionDigest))) errors.push("acceptance disposition is invalid");
   if (state?.completionApproved === true && acceptance?.satisfied !== true) errors.push("completionApproved requires satisfied acceptance");
-  if (state?.completionApproved === true && Array.isArray(state.missing) && state.missing.length > 0) errors.push("completionApproved cannot retain missing completion evidence");
+  if (deliveryApproved && Array.isArray(state.missing) && state.missing.some((item: unknown) => !(diagnosticValid && item === "acceptance-criteria-pending"))) errors.push("completionApproved cannot retain missing completion evidence");
   const migration = record(tree?.migration);
   const migrationValid = tree?.migration === null || Boolean(
     migration
@@ -190,7 +195,7 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
     || summary.chars < 0
     || summary.chars > 20_000)) errors.push("latest verifier is invalid");
   errors.push(...handoffVerifierBindingErrors(tree, latestVerifier));
-  if (state?.completionApproved === true && tree?.evidenceCurrent !== true) errors.push("completionApproved requires current tree evidence");
+  if (deliveryApproved && tree?.evidenceCurrent !== true) errors.push("completionApproved requires current tree evidence");
   const requiredArrays = [value.decisionsAndInvariants, value.goal?.acceptanceCriteria, value.goal?.scope, value.contextReferences?.observed, value.changedFiles?.current, value.verification?.exactCommands, value.failure?.warnings, value.ruledOutHypotheses];
   if (requiredArrays.some((entry) => !Array.isArray(entry))) errors.push("projection collections are invalid");
   const classification = value.failure?.classification;
@@ -215,18 +220,18 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
     || !Array.isArray(nextSafeAction.exactCommands)
     || nextSafeAction.exactCommands.some((command: unknown) => typeof command !== "string")) errors.push("next safe action is invalid");
   if (nextSafeAction?.sourceMutationAllowed === true && nextSafeAction.action !== "repair") errors.push("only repair may project source mutation");
-  if (state?.completionApproved === true && (nextSafeAction?.action !== "completed"
+  if (deliveryApproved && (nextSafeAction?.action !== "completed"
     || nextSafeAction.continuation !== "none"
     || nextSafeAction.sourceMutationAllowed !== false
     || !Array.isArray(nextSafeAction.exactCommands)
     || nextSafeAction.exactCommands.length !== 0)) errors.push("completionApproved requires a completed next safe action");
-  if (state?.completionApproved === true && (!Array.isArray(verification?.missingCommands) || verification.missingCommands.length > 0)) errors.push("completionApproved cannot retain missing verifier commands");
-  if (state?.completionApproved === true && Array.isArray(verification?.exactCommands) && verification.exactCommands.length > 0
+  if (deliveryApproved && (!Array.isArray(verification?.missingCommands) || verification.missingCommands.length > 0)) errors.push("completionApproved cannot retain missing verifier commands");
+  if (deliveryApproved && Array.isArray(verification?.exactCommands) && verification.exactCommands.length > 0
     && (tree?.latestVerifierMatchesCurrentTree !== true
       || !latestVerifier
       || !verification.exactCommands.includes(latestVerifier.command))) errors.push("completionApproved requires current exact verifier evidence");
   if (recovery === null) {
-    const expectedAction = state?.completionApproved === true ? "completed" : "handoff";
+    const expectedAction = deliveryApproved ? "completed" : "handoff";
     if (nextSafeAction?.action !== expectedAction || nextSafeAction?.continuation !== "none"
       || nextSafeAction?.sourceMutationAllowed !== false || nextSafeAction?.exactCommands?.length !== 0) errors.push("next safe action conflicts with recovery state");
     if (requiredAuthority?.required !== false || requiredAuthority?.kind !== "none" || requiredAuthority?.reasonCodes?.length !== 0) errors.push("required authority conflicts with recovery state");
@@ -390,13 +395,10 @@ export function buildHandoffProjection(
     && evidenceCurrent
     && gateDigestCurrent
     && currentExactVerifier;
-  const completionMissing = strings([
-    ...options.gate.missing,
-    ...(options.gate.decision === "pass" && !acceptanceSatisfied ? ["acceptance-criteria-pending"] : []),
-    ...(options.gate.decision === "pass" && !evidenceCurrent ? ["working-tree-evidence-not-current"] : []),
-    ...(options.gate.decision === "pass" && !gateDigestCurrent ? ["completion-gate-tree-digest-untrusted-or-mismatched"] : []),
-    ...(options.gate.decision === "pass" && !currentExactVerifier ? ["current exact verifier evidence"] : [])
-  ], 50, 500);
+  const diagnosticDelivery = buildDiagnosticDelivery(task, options.gate, acceptanceDisposition,
+    evidenceCurrent && gateDigestCurrent && currentExactVerifier);
+  const completionMissing = strings(diagnosticCompletionMissing(options.gate.decision, options.gate.missing,
+    acceptanceSatisfied, evidenceCurrent, gateDigestCurrent, currentExactVerifier), 50, 500);
   const ruledOut = task.ruledOut ? [{ ref: digest(text(task.ruledOut, 1000)), summary: text(task.ruledOut, 300) }] : [];
   const latestVerifier: LatestVerifier | null = observed ? {
     command: text(observed.command, 1000),
@@ -422,7 +424,7 @@ export function buildHandoffProjection(
     state: {
       phase: trajectory.enforcementSafe ? trajectory.state?.currentPhase ?? null : null,
       taskOutcome: task.trace.outcome, gateDecision: options.gate.decision, completionApproved,
-      missing: completionMissing
+      missing: completionMissing, ...(diagnosticDelivery ? { diagnosticDelivery } : {})
     },
     acceptance: acceptanceDisposition,
     decisionsAndInvariants: [
@@ -454,7 +456,7 @@ export function buildHandoffProjection(
     ruledOutHypotheses: ruledOut,
     requiredAuthority: authority(recovery),
     nextSafeAction: {
-      action: recovery?.action ?? (completionApproved ? "completed" : "handoff"),
+      action: recovery?.action ?? (completionApproved || diagnosticDelivery ? "completed" : "handoff"),
       continuation: recovery?.continuation ?? "none",
       sourceMutationAllowed: recovery?.sourceMutationAllowed === true,
       exactCommands: recovery?.action === "retry" || recovery?.action === "repair" ? strings(task.verifyCommands, 50, 1000) : []

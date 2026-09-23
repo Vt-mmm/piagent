@@ -297,3 +297,60 @@ test("a fresh production-v3 finalization exception writes the INVALID_MEASUREMEN
   assert.deepEqual(aborted.verdict.measurementValidity,
     { passed: false, failures: ["fatal:BENCHMARK_LEDGER_INVALID"] });
 });
+
+function conditionalReport(runs) {
+  return summarizeBenchmark({ suite, runId: "conditional-denominator-test", repeats: suite.defaultRepeats,
+    runs, baselineSurface: "codex-cli", candidateSurface: "piagent",
+    environment: { measurementOnly: true } });
+}
+
+test("conditional both-pass ratio exposes every filter without dropping failed runs", () => {
+  const runs = failedRecords();
+  // Four both-resolved pairs, but only one has comparable exact positive usage.
+  for (const run of runs.slice(0, 8)) run.resolved = true;
+  runs[2].usageStatus = "unknown-after-provider-start";
+  runs[4].usage = usage(0);
+  runs[6].usage.model = "different/model";
+  // A one-sided success must not enter the conditional usage sample.
+  runs[8].resolved = true;
+  const report = conditionalReport(runs);
+  const value = report.comparison.conditionalBothPassFreshUsage;
+  assert.equal(report.runCount, 108);
+  assert.equal(report.runs.length, 108);
+  assert.deepEqual(value, {
+    outcomeDefinition: "both-accepted-runs-resolved-including-safety-refusals",
+    usageDefinition: "exact-positive-fresh-same-model-and-thinking",
+    attemptScope: "accepted-attempts-only; all-attempt-costs-remain-in-tokenAccounting",
+    estimator: "geometric-mean-of-candidate-over-baseline-pair-ratios",
+    expectedPairs: 54, observedPairs: 54, bothResolvedPairs: 4, eligiblePairs: 1,
+    excludedUnresolvedPairs: 50, excludedUsagePairs: 3, unpairedAcceptedRuns: 0,
+    ratio: 9, interpretation: "conditional-observation-only; not-overall-token-savings"
+  });
+  assert.equal(report.surfaces.piagent.resolved, 5);
+  assert.equal(report.surfaces.codexCli.resolved, 4);
+  assert.equal(report.comparison.allSuccessfulPairsFreshTokenRatio, value.ratio);
+  for (const rendered of [renderBenchmarkText(report), renderBenchmarkHtml(report)]) {
+    assert.match(rendered, /eligible 1\/54 observed pairs \(54 expected\)/);
+    assert.match(rendered, /not overall token savings/);
+  }
+});
+
+test("conditional ratio has no value when no pair qualifies, including unknown-only successes", () => {
+  for (const resolved of [false, true]) {
+    const runs = failedRecords();
+    for (const run of runs) { run.resolved = resolved; if (resolved) run.usageStatus = "unknown-after-provider-start"; }
+    const report = conditionalReport(runs);
+    assert.equal(report.comparison.conditionalBothPassFreshUsage.eligiblePairs, 0);
+    assert.equal(report.comparison.conditionalBothPassFreshUsage.ratio, null);
+    assert.equal(report.runCount, 108);
+  }
+});
+
+test("conditional coverage distinguishes missing partner from observed failed pair", () => {
+  const runs = failedRecords().slice(0, -1);
+  const value = conditionalReport(runs).comparison.conditionalBothPassFreshUsage;
+  assert.equal(value.expectedPairs, 54);
+  assert.equal(value.observedPairs, 53);
+  assert.equal(value.unpairedAcceptedRuns, 1);
+  assert.equal(value.excludedUnresolvedPairs, 53);
+});

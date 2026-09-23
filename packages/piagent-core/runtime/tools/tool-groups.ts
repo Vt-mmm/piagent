@@ -10,6 +10,7 @@ export const PIAGENT_TOOL_GROUPS = {
     "piagent_context_preflight"
   ],
   task: ["piagent_task_progress"],
+  waiting: ["piagent_wait"],
   recovery: [
     "piagent_context_record",
     "piagent_verify_record",
@@ -53,6 +54,10 @@ export type PiagentToolGroup = keyof typeof PIAGENT_TOOL_GROUPS;
 export const PIAGENT_TOOL_ORDER = Object.values(PIAGENT_TOOL_GROUPS).flat();
 export const PIAGENT_TOOL_NAMES = new Set<string>(PIAGENT_TOOL_ORDER);
 
+function waitingGroups(prompt: string): PiagentToolGroup[] {
+  return /\b(?:wait|poll|monitor|check back|follow up|follow-up)\b|(?:chờ|theo dõi|kiểm tra lại)/iu.test(prompt) ? ["waiting"] : [];
+}
+
 const SUPPORTED_GIT_REPOSITORY_URL = /(?:^|[\s("'\[])https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(?:\.git)?(?:[\/?#][^\s)"'\]]*)?/i;
 const SUPPORTED_GIT_SSH_REFERENCE = /(?:^|[\s("'\[])git@(?:github\.com|gitlab\.com|bitbucket\.org):[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(?:\.git)?(?:$|[\s)"'\]])/i;
 
@@ -71,6 +76,7 @@ export function toolGroupsForPrompt(prompt: string): PiagentToolGroup[] {
   }
 
   groups.add("intake");
+  for (const group of waitingGroups(prompt)) groups.add(group);
   if (signal.lane !== "tiny") groups.add("task");
   if (/\b(context (?:engine|index|search|diagnostic)|source checkout|vendor checkout)\b/.test(lower)) {
     groups.add("retrieval");
@@ -90,7 +96,8 @@ export function toolGroupsForPrompt(prompt: string): PiagentToolGroup[] {
 
 export function activeTaskToolGroups(task: TaskContract): PiagentToolGroup[] {
   const mode = runtimeLifecycleMode(task);
-  if (mode.startsWith("automatic")) return [];
-  if (mode.startsWith("assisted")) return ["task"];
-  return ["task", "recovery"];
+  const waiting = waitingGroups(task.operatorRequest ?? task.summary ?? "");
+  if (mode.startsWith("automatic")) return waiting;
+  if (mode.startsWith("assisted")) return ["task", ...waiting];
+  return ["task", "recovery", ...waiting];
 }

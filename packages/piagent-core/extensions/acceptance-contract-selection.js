@@ -100,9 +100,11 @@ export function validateContractSelection(selection, criterionHash) {
 export function parseContractSelectionRecipe(text) {
   const recipe = parse(text, 512 * 1024);
   shape(recipe, ["schemaVersion", "backend", "selections"]);
-  shape(recipe.backend, ["imageId", "dockerSocket", "timeoutMs"]);
+  shape(recipe.backend, ["imageId", "dockerSocket", "timeoutMs"], ["startupAllowanceMs"]);
   if (typeof recipe.backend.imageId !== "string" || !/^sha256:[a-f0-9]{64}$/.test(recipe.backend.imageId)
     || typeof recipe.backend.dockerSocket !== "string" || !path.isAbsolute(recipe.backend.dockerSocket) || recipe.backend.dockerSocket.includes("\0")
+    || Object.hasOwn(recipe.backend, "startupAllowanceMs") && (!Number.isSafeInteger(recipe.backend.startupAllowanceMs)
+      || recipe.backend.startupAllowanceMs < 0 || recipe.backend.startupAllowanceMs > 60000)
     || !Number.isSafeInteger(recipe.backend.timeoutMs) || recipe.backend.timeoutMs < 25 || recipe.backend.timeoutMs > 30000) throw new TypeError("Invalid selection backend");
   if (recipe.schemaVersion !== 1 || !Array.isArray(recipe.selections) || recipe.selections.length < 1 || recipe.selections.length > 12) {
     throw new TypeError("Invalid selection recipe");

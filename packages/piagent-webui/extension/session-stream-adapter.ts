@@ -10,13 +10,37 @@ const MAX_DELTA = 16_384;
 const MAX_MESSAGE_STREAM_EVENTS = 128;
 const STREAM_FLUSH_CHARS = 1_024;
 const STREAM_FLUSH_INTERVAL_MS = 100;
+const MAX_OBSERVED_UPDATES = 100_000;
+const UPDATE_KINDS = new Set(["start", "text_start", "text_delta", "text_end", "thinking_start", "thinking_delta",
+  "thinking_end", "toolcall_start", "toolcall_delta", "toolcall_end", "done", "error"]);
 const ANSI = /\u001b(?:[@-_]|\[[0-?]*[ -/]*[@-~])/g;
 const PRIVATE_KEY_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 const PRIVATE_KEY_END = /-----END [A-Z ]*PRIVATE KEY-----/;
 
 type MessageRole = "user" | "assistant" | "tool-result";
+type StreamActivity = { schemaVersion: 1; boundary: "pi-message-update-hook"; observedUpdates: number;
+  textUpdates: number; thinkingUpdates: number; toolCallUpdates: number; otherUpdates: number;
+  lastUpdateKind: string | null; lastObservedAt: string | null; countersCapped: boolean };
 type ActiveMessage = { ref: string; role: MessageRole; rawBuffer: string; chunkSequence: number; truncated: boolean;
-  emittedEvents: number; lastFlushAt: number; thinking: Set<number>; thinkingStreaming: Set<number>; thinkingCompleted: Set<number> };
+  emittedEvents: number; lastFlushAt: number; thinking: Set<number>; thinkingStreaming: Set<number>; thinkingCompleted: Set<number>;
+  streamActivity: StreamActivity };
+
+function newStreamActivity(): StreamActivity {
+  return { schemaVersion: 1, boundary: "pi-message-update-hook", observedUpdates: 0, textUpdates: 0, thinkingUpdates: 0,
+    toolCallUpdates: 0, otherUpdates: 0, lastUpdateKind: null, lastObservedAt: null, countersCapped: false };
+}
+
+// This observes delivery to the Pi hook, not network traffic or provider usage.
+// Count before projection filtering; never retain an update payload or its text.
+function observeStreamActivity(activity: StreamActivity, kind: unknown, now: Date): void {
+  const known = typeof kind === "string" && UPDATE_KINDS.has(kind) ? kind : "other";
+  activity.lastUpdateKind = known; activity.lastObservedAt = now.toISOString();
+  if (activity.observedUpdates >= MAX_OBSERVED_UPDATES) { activity.countersCapped = true; return; }
+  activity.observedUpdates++;
+  const category = known.startsWith("text_") ? "textUpdates" : known.startsWith("thinking_") ? "thinkingUpdates"
+    : known.startsWith("toolcall_") ? "toolCallUpdates" : "otherUpdates";
+  activity[category]++;
+}
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function opaque(prefix: string, value: unknown): string { return `${prefix}.${hash(JSON.stringify(value))}`; }
@@ -131,7 +155,7 @@ export class PiSessionStreamAdapter {
     const source = messageRole === "tool-result" ? "" : safe(text(message), MAX_STREAM_BUFFER).text;
     this.#activeByRole.set(messageRole, { ref: messageRef, role: messageRole, rawBuffer: "", chunkSequence: 0, truncated: false,
       emittedEvents: 0, lastFlushAt: this.#now().getTime(),
-      thinking: new Set(), thinkingStreaming: new Set(), thinkingCompleted: new Set() });
+      thinking: new Set(), thinkingStreaming: new Set(), thinkingCompleted: new Set(), streamActivity: newStreamActivity() });
     this.#lastMessageRef = messageRef;
     const draft = this.#draft(snapshot, "message.started", { role: messageRole, contentDigest: source ? digest(source) : null,
       textChars: source ? source.length : null, imageCount: imageCount(message) }, { sourceObservedAt: message?.timestamp, messageRef });
@@ -168,6 +192,7 @@ export class PiSessionStreamAdapter {
   }
   messageUpdated(event: { assistantMessageEvent?: any }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
     const update = event.assistantMessageEvent, active = this.#activeByRole.get("assistant"); if (!active || !update) return [];
+    observeStreamActivity(active.streamActivity, update.type, this.#now());
     if (update.type === "text_delta" && typeof update.delta === "string") {
       if (active.emittedEvents >= MAX_MESSAGE_STREAM_EVENTS) { active.truncated = true; return []; }
       const remaining = MAX_STREAM_BUFFER - active.rawBuffer.length;
@@ -206,13 +231,15 @@ export class PiSessionStreamAdapter {
     if (messageRole === "assistant" && (reason === "error" || reason === "aborted")) {
       const error = safe(message?.errorMessage, 500);
       const failed = this.#draft(snapshot, "message.failed", { role: "assistant", reason, errorCode: reason === "error" ? "assistant-message-error" : "assistant-message-aborted",
-        message: error.text || null, contentDigest: finalText.text ? digest(finalText.text) : null },
+        message: error.text || null, contentDigest: finalText.text ? digest(finalText.text) : null,
+        streamActivity: { ...active.streamActivity } },
       { sourceObservedAt: message?.timestamp, messageRef: active.ref, redacted: finalText.redacted || error.redacted, truncated: finalText.truncated || error.truncated });
       if (failed) drafts.push(failed); return drafts;
     }
     const completed = this.#draft(snapshot, "message.completed", { role: messageRole, contentDigest: finalText.text ? digest(finalText.text) : null,
       contentRef: null, textPreview: messageRole === "tool-result" ? null : finalText.text.slice(0, 4_000), textChars: messageRole === "tool-result" ? null : finalText.text.length,
-      blockCount: Math.min(10_000, Array.isArray(message?.content) ? message.content.length : finalText.text ? 1 : 0), stopReason: reason, usage: usage(message) },
+      blockCount: Math.min(10_000, Array.isArray(message?.content) ? message.content.length : finalText.text ? 1 : 0), stopReason: reason, usage: usage(message),
+      ...(messageRole === "assistant" ? { streamActivity: { ...active.streamActivity } } : {}) },
     { sourceObservedAt: message?.timestamp, messageRef: active.ref, redacted: finalText.redacted, truncated: finalText.truncated || active.truncated });
     if (completed) drafts.push(completed); return drafts;
   }

@@ -2051,6 +2051,25 @@
         }
       ]
     },
+    "streamActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Content-free observations at the Pi message-update hook, not provider usage or network liveness. Only retained at message settlement; absent for legacy events.",
+      "required": ["schemaVersion", "boundary", "observedUpdates", "textUpdates", "thinkingUpdates", "toolCallUpdates", "otherUpdates", "lastUpdateKind", "lastObservedAt", "countersCapped"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "boundary": { "const": "pi-message-update-hook" },
+        "observedUpdates": { "$ref": "#/$defs/streamActivityCount" },
+        "textUpdates": { "$ref": "#/$defs/streamActivityCount" },
+        "thinkingUpdates": { "$ref": "#/$defs/streamActivityCount" },
+        "toolCallUpdates": { "$ref": "#/$defs/streamActivityCount" },
+        "otherUpdates": { "$ref": "#/$defs/streamActivityCount" },
+        "lastUpdateKind": { "enum": [null, "start", "text_start", "text_delta", "text_end", "thinking_start", "thinking_delta", "thinking_end", "toolcall_start", "toolcall_delta", "toolcall_end", "done", "error", "other"] },
+        "lastObservedAt": { "anyOf": [{ "type": "null" }, { "type": "string", "format": "date-time", "maxLength": 40 }] },
+        "countersCapped": { "type": "boolean" }
+      }
+    },
+    "streamActivityCount": { "type": "integer", "minimum": 0, "maximum": 100000 },
     "messageCompletedPayload": {
       "type": "object",
       "additionalProperties": false,
@@ -2090,6 +2109,9 @@
         },
         "usage": {
           "$ref": "#/$defs/nullableTokenUsage"
+        },
+        "streamActivity": {
+          "$ref": "#/$defs/streamActivity"
         }
       }
     },
@@ -2121,6 +2143,9 @@
         },
         "contentDigest": {
           "$ref": "#/$defs/nullableDigest"
+        },
+        "streamActivity": {
+          "$ref": "#/$defs/streamActivity"
         }
       }
     },

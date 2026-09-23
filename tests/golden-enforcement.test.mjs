@@ -116,7 +116,7 @@ const runtimeValidators = {
 // coverage from a fixture filename. Their structural fixtures run below.
 const schemaOnlyFixtures = new Set([
   "codex-relative-efficiency-v1", "composite-criterion", "context-index", "project-profile",
-  "scoped-project-verification-receipt-v2", "scoped-verification-receipt-v1"
+  "scoped-project-verification-receipt-v2", "scoped-project-verification-receipt-v3", "scoped-verification-receipt-v1"
 ]);
 const schemaValidators = createRootSchemaRegistry(repositoryRoot);
 

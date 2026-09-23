@@ -3,14 +3,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OFFLINE=false
+KEEP_GOING=false
+failed_commands=()
 
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/verify-local.sh [--offline]
+  scripts/verify-local.sh [--offline] [--keep-going]
 
 Options:
   --offline   Skip checks that require a local Pi login/model catalog.
+  --keep-going  Run all build/test groups after a group fails; retain a failing final exit.
 USAGE
 }
 
@@ -18,6 +21,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --offline)
       OFFLINE=true
+      shift
+      ;;
+    --keep-going)
+      KEEP_GOING=true
       shift
       ;;
     -h|--help)
@@ -634,9 +641,9 @@ if (!rootPkg.pi.subagents?.agents?.length) {
   throw new Error("root package.json missing pi.subagents.agents");
 }
 const expectedPeers = {
-  "@earendil-works/pi-ai": "0.84.1",
-  "@earendil-works/pi-coding-agent": "0.84.1",
-  typebox: "1.3.7"
+  "@earendil-works/pi-ai": "0.86.1",
+  "@earendil-works/pi-coding-agent": "0.86.1",
+  typebox: "1.3.27"
 };
 for (const [name, version] of Object.entries(expectedPeers)) {
   if (rootPkg.peerDependencies?.[name] !== version) throw new Error(`root package peer ${name} must be pinned to ${version}`);
@@ -686,8 +693,13 @@ run_quietly() {
   if ! output="$(cd "$ROOT" && "$@" 2>&1)"; then
     printf '%s\n' "$output" >&2
     echo "$label failed; the output above is why" >&2
-    exit 1
+    failed_commands+=("$label")
+    if [[ "$KEEP_GOING" != true ]]; then
+      exit 1
+    fi
+    return 0
   fi
+  echo "PASS: $label"
 }
 
 require_documented "auth.json" "$ROOT/docs" "$ROOT/packages/piagent-core" "$ROOT/templates"
@@ -863,55 +875,9 @@ if [[ -n "$non_text_sources" ]]; then
   exit 1
 fi
 
-public_wording_pattern="$(
-  node --input-type=module <<'NODE'
-const terms = [
-  ["platform-", "mig", "ration"].join(""),
-  ["codex-", "mig", "ration"].join(""),
-  ["codex-", "par", "ity"].join(""),
-  ["benchmark-", "par", "ity"].join(""),
-  ["harness-", "mig", "ration"].join(""),
-  ["agent-", "stuff"].join(""),
-  ["mit", "suhiko"].join(""),
-  ["Cod", "ex CLI"].join(""),
-  ["Claude", " CLI"].join(""),
-  ["Claude", " Code"].join(""),
-  ["claude", " mcp"].join(""),
-  ["codex", " mcp"].join(""),
-  ["Cod", "ex-inspired"].join(""),
-  ["Cod", "ex-grade"].join(""),
-  ["Pi vs ", "Codex"].join(""),
-  ["vs ", "Claude"].join(""),
-  ["reference ", "repo"].join(""),
-  ["repo ", "tham ", "khảo"].join(""),
-  ["nguồn ", "tham ", "khảo"].join(""),
-  ["tham ", "khảo"].join("")
-];
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-console.log(terms.map(escapeRegex).join("|"));
-NODE
-)"
-
-# Every surface an outsider reads: the published docs, the site, and the strings
-# the runtime prints back at an operator. The site is checked at its source,
-# since `build-docs-site.mjs --check` separately proves the committed pages match
-# it; the builder itself is listed too, because navigation labels and page titles
-# live there rather than in a content fragment.
-if grep -R -E -i \
-  "$public_wording_pattern" \
-  "$ROOT/README.md" \
-  "$ROOT/docs" \
-  "$ROOT/docs-site/content" \
-  "$ROOT/scripts/build-docs-site.mjs" \
-  "$ROOT/packages/piagent-core/README.md" \
-  "$ROOT/packages/piagent-core/prompts" \
-  "$ROOT/packages/piagent-core/mcp" \
-  "$ROOT/packages/piagent-core/extensions" \
-  "$ROOT/packages/piagent-core/runtime" \
-  "$ROOT/templates/project/AGENTS.md" >/dev/null; then
-  echo "Public docs contain non-neutral platform wording"
-  exit 1
-fi
+# Preserve exact source names only in reviewed research records; product and
+# operator surfaces retain the complete neutrality policy.
+node "$ROOT/scripts/check-public-wording.mjs"
 
 node --check "$ROOT/packages/piagent-core/extensions/piagent-guard.ts" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/context-engine.js" >/dev/null
@@ -953,7 +919,9 @@ node "$ROOT/scripts/check-doc-languages.mjs" >/dev/null
 node "$ROOT/scripts/verify-translation-pairing.mjs" >/dev/null
 node "$ROOT/scripts/check-third-party-neutrality.mjs" >/dev/null
 run_quietly "npm run build --workspace @piagent/webui" npm run build --workspace @piagent/webui
-run_quietly "npm test" npm test
+# Integration files each own a real SDK and may run bounded worker processes.
+# Limit competing files without changing selection, assertions or deadlines.
+run_quietly "node --test --test-concurrency=2 tests/*.test.mjs" env PIAGENT_NO_UPDATE_CHECK=1 node --test --test-concurrency=2 "$ROOT"/tests/*.test.mjs
 run_quietly "npm run test:webui:e2e" npm run test:webui:e2e
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   run_quietly "npm run typecheck" npm run typecheck
@@ -1044,4 +1012,8 @@ bash "$ROOT/scripts/profile-doctor.sh" "$ROOT" "$ROOT/adapters/python/profile.js
 bash "$ROOT/scripts/profile-doctor.sh" "$ROOT" "$ROOT/adapters/web-frontend/profile.json" >/dev/null
 bash "$ROOT/scripts/team-doctor.sh" "$ROOT" --strict-share >/dev/null
 
+if [[ ${#failed_commands[@]} -gt 0 ]]; then
+  printf 'FAIL: %s\n' "${failed_commands[@]}" >&2
+  exit 1
+fi
 echo "PASS: piagent-platform scaffold is complete"

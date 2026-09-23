@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { materializeBenchmarkCandidate } from "../packages/piagent-core/benchmark/benchmark-candidate.js";
-import { bindSessionTask, operatorRequestDigest, writeTaskContract
+import { bindSessionTask, operatorRequestDigest, writeTaskContract, workingTreeSnapshot
 } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkVerificationOperatorRequest } from "../scripts/benchmark-independent-verification.mjs";
 import { openScopedMediationEvidence, scopedBrokerArmDigest, scopedBrokerProfileDigest,
@@ -23,6 +23,23 @@ import { scopedCommonRuntimeClosureIdentity, scopedContextPolicySha256,
   scopedProjectVerificationPlanBinding, scopedToolDefinitionsSha256,
   SCOPED_PROJECT_VERIFIER_POLICY
 } from "../scripts/benchmark-scoped-verification-supervisor.mjs";
+
+import { captureTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-store.ts";
+import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+
+async function captureVerifierBaseline(f, source) {
+  execFileSync("git", ["-C", f.workspace, "init", "-q"]);
+  fs.writeFileSync(path.join(f.workspace, ".gitignore"), ".pi/\nprotected.env\n");
+  execFileSync("git", ["-C", f.workspace, "add", "--", ".gitignore", "input.txt", "package.json", "src", "scripts", "test"]);
+  source.createdAt = new Date().toISOString();
+  source.baselineFileDigests = workingTreeSnapshot(f.workspace);
+  source.baselineChangedFiles = Object.keys(source.baselineFileDigests);
+  await captureTaskBaselineManifest({ projectRoot: f.workspace, taskId: source.taskId,
+    taskRunId: source.taskRunId, sessionId: source.sessionId, capturedAt: source.createdAt,
+    baselineTreeDigest: workingTreeEvidenceDigest(source.baselineFileDigests),
+    isProtectedProjectPath: candidate => candidate === "protected.env" });
+  f.mediationTask = source;
+}
 
 const root = path.resolve(import.meta.dirname, ".."),
   nodeCommand = "/Users/vtamm/.pi/agent/harness-next-minimum-node.RWsUI4/node-v22.19.0-darwin-arm64/bin/node",
@@ -156,7 +173,7 @@ function piFixture(router) {
   return { handlers, definitions };
 }
 
-function projectVerifierDisposition(f, evidence) {
+function projectVerifierDisposition(f, evidence, verifyCommands = ["npm run type-check", "npm run lint", "npm test", "npm run test:e2e"]) {
   const manifest = JSON.parse(evidence.manifestBytes), inputSha256 = sha(fs.readFileSync(path.join(f.workspace, "input.txt"))),
     verifier = { id: "verifier", kind: "project-verifier-current",
       parameters: { commandSetDigest: f.verifierPlanDigest } },
@@ -170,9 +187,7 @@ function projectVerifierDisposition(f, evidence) {
       { id: "protected", relativePath: "protected.env", mode: "protected", sha256: null }],
     plan = { identity: { configDigest: manifest.identity.measurementConfigurationSha256,
       armDigest: scopedBrokerArmDigest(manifest.identity) }, materialBindings: materials.map(item => ({ ...item })) },
-    contract = { facts: [verifier, context, scope, policy] }, task = { taskId: manifest.identity.taskId,
-      sessionId: manifest.identity.sessionId, operatorRequestDigest: manifest.identity.requestId,
-      baselineFileDigests: { "input.txt": `wt-content-v2:${inputSha256}` } },
+    contract = { facts: [verifier, context, scope, policy] }, task = { ...f.mediationTask, verifyCommands },
     capability = openScopedMediationEvidence(evidence, { projectRoot: f.workspace, task,
       operationRef: manifest.identity.operationId, messageRequestId: manifest.identity.nonce,
       plan, contract, materials });
@@ -275,6 +290,7 @@ test("session custody hosts one real project verifier and removes its private li
     operatorRequest: f.operatorRequest, operatorRequestDigest: operatorRequestDigest(f.operatorRequest),
     trace: { outcome: "pending" } };
   delete source.authoritySnapshot;
+  await captureVerifierBaseline(f, source);
   const task = writeTaskContract(f.workspace, source); bindSessionTask(f.workspace, sessionId, task.sessionName, task);
   await runtime.handlers.get("session_start")();
   const finish = router.beginOperation({ sessionId, operationRef: "operation-project-verifier",
@@ -295,6 +311,14 @@ test("session custody hosts one real project verifier and removes its private li
   const disposition = projectVerifierDisposition(f, evidence);
   assert.equal(disposition.status, "pass"); assert.equal(disposition.counterexampleRef, null);
   assert.deepEqual(disposition.reasonCodes, []); assert.match(disposition.observationDigest, /^[a-f0-9]{64}$/);
+  // A signed PASS for the fixed Node worker cannot cover different native
+  // commands. In particular the docs profile also requires git diff checking.
+  for (const verifyCommands of [["git diff --check", "npm test"], ["npm test -- --different-suite"], [], undefined]) {
+    const observed = projectVerifierDisposition(f, evidence, verifyCommands === undefined ? null : verifyCommands);
+    assert.equal(observed.status, "unknown", JSON.stringify({ verifyCommands, observed }));
+    assert.ok(observed.reasonCodes.includes("incomplete-mediation"));
+  }
+  assert.equal(projectVerifierDisposition(f, evidence, ["npm test"]).status, "pass");
   const turnRoots = fs.readdirSync(f.custodyRoot).map(name => path.join(f.custodyRoot, name));
   assert.equal(turnRoots.length, 1);
   const brokerConfig = JSON.parse(fs.readFileSync(path.join(turnRoots[0], "config.json"), "utf8"));
@@ -314,6 +338,7 @@ test("signed project-verifier failure becomes composite FAIL rather than infrast
     operatorRequest: f.operatorRequest, operatorRequestDigest: operatorRequestDigest(f.operatorRequest),
     trace: { outcome: "pending" } };
   delete source.authoritySnapshot;
+  await captureVerifierBaseline(f, source);
   const task = writeTaskContract(f.workspace, source); bindSessionTask(f.workspace, sessionId, task.sessionName, task);
   await runtime.handlers.get("session_start")();
   const finish = router.beginOperation({ sessionId, operationRef: "operation-project-failure",

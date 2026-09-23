@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.7.0</p>
+  <h2 id="v1-7-0">Long sessions with clearer context and accounting</h2>
+  <p class="section-lead">v1.7.0 supports Pi 0.86.1, repairs session recovery, and adds waiting within an open session.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3>Requested waiting</h3><p>Ask the agent to wait until the next useful check. The timer makes no model calls while waiting; the session must remain open.</p></article>
+    <article class="card"><h3>Context and usage</h3><p>Context prioritizes supported files, and usage and verification results remain bound to the correct task.</p></article>
+    <article class="card"><h3>Evidence boundary</h3><p>All 14 formerly failed attempts passed a separate rerun. This is not a new 108-session score or an aggregate token-saving claim.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.6.1 · Reliability patch</p>
   <h2 id="v1-6-1">Truthful UI state, safe external review, and lower helper overhead</h2>
   <p class="section-lead">This patch keeps the selected model and thinking level unchanged while tightening lifecycle truth, limiting helper expansion, and granting external-source reads only to the exact checkout for the current session.</p>

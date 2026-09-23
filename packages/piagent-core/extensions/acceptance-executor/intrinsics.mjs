@@ -2,6 +2,7 @@ import { MAX_COLLECTION_LENGTH, MAX_STRING_LENGTH, MAX_VALUE_DEPTH, MAX_VALUE_NO
 import { CALLBACK_INTRINSICS } from "./callback-intrinsics.mjs";
 import { REFERENCE_INTRINSICS } from "./reference-identity.mjs";
 import { INVOCATION_INTRINSICS } from "./invocation.mjs";
+import { STRUCTURED_CLONE_INTRINSICS } from "./structured-clone.mjs";
 
 // This closure is evaluated before the candidate. Only the worker retains its
 // handle; it installs no host callback, oracle, serializer or receipt writer.
@@ -105,15 +106,17 @@ export const INTRINSICS = `(() => {
       return '{"reason":' + stringify(code) + '}';
     }
   }
+  ${STRUCTURED_CLONE_INTRINSICS}
   ${CALLBACK_INTRINSICS}
   ${REFERENCE_INTRINSICS}
   ${INVOCATION_INTRINSICS}
   return {
+    installStructuredClone, cloneFault: () => cloneFailure,
     makeDate: value => new D(value), dateTime: value => apply(getTime, value, []),
     defineData: (object, key, value) => { define(object, key, dataDescriptor(value, true)); },
     typeOf: value => typeof value, observeValue, referenceIdentity, invokeTarget, clockReads: () => reads,
     beginCapabilities, makeError, makeCallback, callback: id => callbacks[id],
-    callbackFault: () => callbackFault, callbackTrace: () => '[' + trace + ']', errorObservation,
+    callbackFault: () => callbackFault, callbackTrace: () => '[' + trace + ']', errorObservation, errorMessage,
     awaitValue: value => apply(promiseResolve, NativePromise, [value]),
     sameReference: (left, right) => left !== null && typeof left === 'object' && same(left, right),
     beginCall: (mock, value) => {

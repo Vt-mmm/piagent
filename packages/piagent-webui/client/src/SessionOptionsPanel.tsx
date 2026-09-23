@@ -65,7 +65,7 @@ export function SessionOptionsPanel({ snapshot, refreshSnapshot }: { snapshot: P
       <div className="session-options-copy">
         <p className="section-kicker">Model &amp; thinking</p>
         <h2 id="session-options-title">{localize(locale, "Thiết lập cho Pi session", "Pi session settings")}</h2>
-        <p>{localize(locale, "Chỉ thay đổi khi Pi đang chờ. Thao tác này không gọi model, nhưng Pi 0.84.1 cũng cập nhật mặc định người dùng.", "Settings can only change while Pi is idle. This does not call the model, but Pi 0.84.1 also updates user defaults.")}</p>
+        <p>{localize(locale, "Chỉ thay đổi khi Pi đang chờ. Thao tác này không gọi model, nhưng Pi 0.86.1 cũng cập nhật mặc định người dùng.", "Settings can only change while Pi is idle. This does not call the model, but Pi 0.86.1 also updates user defaults.")}</p>
       </div>
       {catalog?.state === "ready" ? <div className="session-options-controls">
         <label><span>Model</span><select aria-label={localize(locale, "Chọn model", "Select model")} value={modelRef} disabled={pending !== null || !actions?.setModel.available}

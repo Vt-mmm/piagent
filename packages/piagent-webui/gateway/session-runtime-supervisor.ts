@@ -1,7 +1,8 @@
+import { closeSessionRuntimes } from "./session-runtime-close.ts";
 import { createHmac, randomBytes } from "node:crypto";
 import { webUiModelRef, webUiTaskRevision } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
 import { activeSessionTask } from "../../piagent-core/extensions/task-state.js";
-import { settleIndependentWebUiOperation } from "../../piagent-core/extensions/acceptance-independent-registry.js";
+import { createSessionOperationSettlement } from "./session-operation-settlement.ts";
 import { inspectTaskControlState } from "../../piagent-core/runtime/inspection/task-control-journal.ts";
 import { piApprovalBroker, type ApprovalAuthority, type ApprovalBrokerEvent } from "../../piagent-core/runtime/inspection/approval-broker.ts";
 import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type SessionOwnerProjection, type PiSessionInfo } from "./session-catalog.ts";
@@ -14,14 +15,10 @@ import { launchSessionPrompt, type LaunchedSessionPrompt, type SessionSendResult
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../shared/message-correlation.ts";
 import { terminalDeliveryRequest, terminalDeliveryReceiptCommitter, terminalDeliverySessionEntries } from "../server/terminal-delivery-receipt.ts";
 import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation, type SessionOperationDeadlinePolicy, type SessionOperationWatchdogOptions } from "./session-operation-watchdog.ts";
-import { createProductionRuntimeFactory, type RuntimeFactory, type RuntimeHandle, type ScopedBrokerRouter } from "./session-runtime-factory.ts";
+import { createProductionRuntimeFactory, type RuntimeFactory, type ScopedBrokerRouter } from "./session-runtime-factory.ts";
 import { projectSessionRuntimeOwnership } from "./session-runtime-ownership.ts";
 const MAX_WARM_RUNTIMES = 10;
-type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info: PiSessionInfo; operationRef: string | null;
-  messageRequestId: string | null; cancelWire: ((reason: string) => void) | null;
-  stream: GatewaySessionStream | null; unsubscribe: (() => void) | null; completion: Promise<void> | null; settling: boolean; approvalWaiting: boolean;
-  unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null; sessionManager: any | null;
-  watchdog: SessionOperationWatchdog | null; lastSessionRevision: string | null };
+import type { ActiveRuntime } from "./session-runtime-state.ts";
 type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" }; type RuntimeCommandResult = Awaited<ReturnType<typeof executeRuntimeCommand>>;
 export type { EffectiveSessionOptions } from "./session-effective-options.ts";
 export type SessionCreateResult = { sessionRef: string; effectiveOptions: EffectiveSessionOptions };
@@ -32,9 +29,10 @@ export class SessionRuntimeSupervisor {
   readonly #leases: SessionLeaseStore; readonly #listSessions: () => Promise<PiSessionInfo[]>;
   readonly #runtimeFactory: RuntimeFactory; readonly #events: GatewayEventStore;
   readonly #host: any | null; readonly #operationDeadlinePolicy: SessionOperationDeadlinePolicy;
-  readonly #resolveProject: ((projectRef: string) => string | null) | null; readonly #compositeSettlementEvidence: (() => unknown | Promise<unknown>) | null;
+  readonly #resolveProject: ((projectRef: string) => string | null) | null;
+  readonly #settleOperation: ReturnType<typeof createSessionOperationSettlement>;
   readonly #active = new Map<string, ActiveRuntime>(); readonly #opening = new Map<string, Promise<SessionLeaseSnapshot>>();
-  readonly #created = new Map<string, PiSessionInfo>(); #closed = false; #readProjection: ((sessionRef: string) => Promise<Projection>) | null = null;
+  readonly #created = new Map<string, PiSessionInfo>(); #closed = false; #closing: Promise<void> | null = null; #readProjection: ((sessionRef: string) => Promise<Projection>) | null = null;
   constructor(options: {
     gatewayInstanceRef: string;
     key: Buffer;
@@ -59,8 +57,7 @@ export class SessionRuntimeSupervisor {
     this.#host = options.host ?? null;
     this.#operationDeadlinePolicy = sessionOperationDeadlinePolicy(options.operationWatchdog);
     this.#resolveProject = options.resolveProject ?? null;
-    this.#compositeSettlementEvidence = options.compositeSettlementEvidence
-      ?? (options.scopedBrokerRouter ? () => options.scopedBrokerRouter!.settlementEvidence() : null);
+    this.#settleOperation = createSessionOperationSettlement(options);
     if (options.runtimeFactory) this.#runtimeFactory = options.runtimeFactory;
     else {
       if (!options.host || !options.agentDir || !options.packageRoot) throw new Error("session-runtime-factory-unavailable");
@@ -451,10 +448,9 @@ export class SessionRuntimeSupervisor {
     const restartRequired = stream.runtimeRestartRequired, messageRequestId = active.messageRequestId; let projection: Projection | null = null;
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.settling = true;
     const task = activeSessionTask(active.info.cwd, active.info.id);
-    const settlement = await settleIndependentWebUiOperation(active.info.cwd, task, { operationRef, messageRequestId,
-      manager: active.sessionManager ?? active.runtime.session?.sessionManager,
-      evidence: this.#compositeSettlementEvidence ?? (() => { throw new Error("composite-settlement-evidence-unavailable"); }) });
-    if (settlement.status === "blocked") stream.markBlocked("composite-settlement-blocked");
+    const settlement = await this.#settleOperation(active.info.cwd, task, {
+      sessionId: active.info.id, operationRef, messageRequestId, stream,
+      manager: active.sessionManager ?? active.runtime.session?.sessionManager });
     try {
       if (this.#readProjection) {
         const read = await boundedResult(this.#readProjection(sessionRef), this.#operationDeadlinePolicy.projectionTimeoutMs);
@@ -489,12 +485,16 @@ export class SessionRuntimeSupervisor {
         operationRef: null, ...(messageRequestId ? { messageRequestId } : {}), reasonCode: "runtime-restart-failed" });
     }
   }
-  async close(): Promise<void> {
-    if (this.#closed) return;
-    this.#closed = true;
-    await Promise.allSettled([...this.#opening.values()]);
-    await Promise.allSettled([...this.#active.entries()].filter(([, active]) => active.operationRef)
-      .map(([sessionRef, active]) => this.abort(sessionRef, active.operationRef!, true)));
-    await Promise.allSettled([...this.#active.keys()].map((sessionRef) => this.release(sessionRef)));
+  close(): Promise<void> {
+    if (!this.#closing) {
+      this.#closed = true;
+      this.#closing = closeSessionRuntimes({ opening: this.#opening, active: this.#active,
+        terminationTimeoutMs: this.#operationDeadlinePolicy.terminationTimeoutMs,
+        abort: (sessionRef, operationRef) => this.abort(sessionRef, operationRef, true),
+        release: sessionRef => this.release(sessionRef),
+        quarantine: (sessionRef, operationRef, active, reasonCode) =>
+          this.#quarantineRuntime(sessionRef, operationRef, active, active.stream!, reasonCode) });
+    }
+    return this.#closing;
   }
 }

@@ -14,7 +14,7 @@
         "plans": {"type": "array","minItems": 1,"maxItems": 32,"items": {"$ref": "approved-host-contracts.schema.json#/$defs/plan"}}
       }
     },
-    {"$ref": "approved-host-contracts.schema.json#/$defs/planV2"},
+    {"allOf": [{"$ref": "approved-host-contracts.schema.json#/$defs/planV2"}, {"not": {"required": ["nativeOnly"]}}]},
     {
       "type": "object",
       "additionalProperties": false,

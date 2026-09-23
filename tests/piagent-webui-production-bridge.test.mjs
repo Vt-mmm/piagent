@@ -510,3 +510,30 @@ describe("Piagent WebUI production same-session bridge", () => {
     assert.equal(sends, 0);
   });
 });
+
+for (const interveningRole of ["system", "assistant", "user"]) {
+  it(`only traverses SDK system entries before the causally observed user message: ${interveningRole}`, async () => {
+    const surface = context(`session_system_prefix_${interveningRole}`); let bridge;
+    const options = { runtimeInstanceId: "runtime_system_prefix", now: () => new Date("2026-08-13T12:00:01.000Z") };
+    const pi = {
+      appendEntry(customType, data) { surface.append({ type: "custom", customType, data }); },
+      sendUserMessage(text) {
+        bridge.observeInput({ source: "extension", text }, surface.ctx);
+        surface.append({ type: "message", message: { role: interveningRole, content: "unrelated prefix" } });
+        const entry = surface.append({ type: "message", message: { role: "user", content: [{ type: "text", text }] } });
+        bridge.observeMessageStart({ message: entry.message }, surface.ctx);
+        bridge.observeAgentSettled(surface.ctx);
+      }
+    };
+    bridge = new SameSessionPiBridge(pi, options); bridge.bind(surface.ctx);
+    const value = command(bridge.snapshot()); const receipt = await bridge.execute(value);
+    assert.equal(receipt.resultCode, interveningRole === "system" ? "dispatch-observed" : "dispatch-unknown");
+    const rebuilt = new SameSessionPiBridge(pi, options); rebuilt.bind(surface.ctx);
+    const replay = await rebuilt.execute(value);
+    assert.equal(replay.resultCode, receipt.resultCode); assert.equal(replay.deduplicated, true);
+    if (interveningRole === "system") {
+      surface.entries.find(entry => entry.message?.role === "system").message.role = "assistant";
+      assert.throws(() => new SameSessionPiBridge(pi, options).bind(surface.ctx), /receipt-store-corrupt/);
+    }
+  });
+}

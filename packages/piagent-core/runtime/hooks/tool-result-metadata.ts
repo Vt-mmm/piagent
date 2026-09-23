@@ -11,3 +11,12 @@ export function patchLineStats(details: unknown): { additions?: number; deletion
   }
   return { additions, deletions };
 }
+
+export function editVerificationMarker(identity: { taskId: string; taskRunId: string } | undefined,
+  tree: { proofCapable: boolean; digest: string; workspaceRevisionDigest: string | null } | undefined,
+  successful: boolean, changedPaths: string[]) {
+  return { taskUsageVersion: 1, taskId: identity?.taskId, taskRunId: identity?.taskRunId,
+    mutationObserved: successful && changedPaths.length > 0 && tree?.proofCapable === true,
+    postWorkingTreeDigest: tree?.proofCapable ? tree.digest : null,
+    postWorkspaceRevisionDigest: tree?.proofCapable ? tree.workspaceRevisionDigest : null };
+}

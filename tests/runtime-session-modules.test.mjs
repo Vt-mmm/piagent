@@ -1462,6 +1462,42 @@ describe("runtime session modules", () => {
     assert.equal(telemetry.filter((entry) => entry.event === "context_pack").length, 2);
   });
 
+  for (const excluded of ["scripts/check.mjs", "src/private.js"]) {
+    it(`selects a usable planned source before an ineligible context fallback: ${excluded}`, async () => {
+      const ctx = extensionContext();
+      fs.mkdirSync(path.join(ctx.cwd, "src"), { recursive: true });
+      fs.mkdirSync(path.join(ctx.cwd, "scripts"), { recursive: true });
+      fs.writeFileSync(path.join(ctx.cwd, "src/feature.js"), "export const enabled = true;\n");
+      fs.writeFileSync(path.join(ctx.cwd, excluded), "export const OMITTED_SENTINEL = true;\n");
+      const handlers = new Map(), telemetry = [];
+      const state = new RuntimeSessionState({ maxObservedContext: 2 });
+      const pi = { on: (name, handler) => handlers.set(name, handler), getThinkingLevel: () => "medium",
+        getActiveTools: () => [], getAllTools: () => [] };
+      const task = { taskId: "verify", taskRunId: "verify-run", intakeMode: "runtime", changeMode: "source-change",
+        mutationPolicy: "allowed", scope: ["src/feature.js"], acceptanceCriteria: ["Run configured checks."],
+        contextManifest: [], verifyCommands: ["npm test"], criterionGraph: { mode: "criterion-graph", nodes: [] } };
+      registerAgentStartHook(pi, {
+        state, autoContextEnabled: true, contextDeltaShadowMode: "off", activeTask: () => undefined,
+        readProtectedPaths: () => ["src/private.js"], contextExcludePatterns: () => ["src/private.js"],
+        ensureContextIndex: async () => ({ status: { exists: false, stale: false } }),
+        promptPackKey: (_ctx, hash) => hash, retrievalKey: (_ctx, query) => query,
+        startAutomaticTask: async () => ({ started: true, task, text: "Verify the current implementation.",
+          plannedContext: [excluded, "src/feature.js"].map(path => ({ path, reason: "criterion-01 behavior target" })),
+          plannedContextComplete: true }),
+        telemetry: (_ctx, payload) => telemetry.push(payload)
+      });
+      const result = await handlers.get("before_agent_start")({
+        prompt: "Verify the current implementation and run configured checks; fix any failure.", systemPrompt: "stable"
+      }, ctx);
+      assert.deepEqual(result.message.details.paths, ["src/feature.js"]);
+      assert.match(result.message.content, /export const enabled = true/);
+      assert.doesNotMatch(result.message.content, /OMITTED_SENTINEL|No file content was delivered/);
+      assert.equal(typeof result.message.details.contextDelivery.deliveryId, "string");
+      assert.deepEqual(task.contextManifest, [], "delivery must still be confirmed before the gate can use it");
+      assert.equal(telemetry.find(event => event.event === "criterion_context_pack").selected, 1);
+    });
+  }
+
   it("preserves an active task resume for a later authorized turn after a lightweight Vietnamese choice", async () => {
     const handlers = new Map();
     const state = new RuntimeSessionState({ maxObservedContext: 2 });

@@ -1,9 +1,11 @@
+import { observedFocusedTestSummary, retainFocusedVerification, unresolvedFocusedVerification } from "./acceptance-focused-verification.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { apiBaselineCriterionEvidence as apiBaselineEvidence } from "../runtime/verification/acceptance-api-baseline.js";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -77,13 +79,8 @@ import { replayTaskCheckpoints } from "./task-journal.js";
 import type { FailureClassification } from "./failure-types.ts";
 import { recordCompletionAudit, recordMutationCheckpoint, recordTaskProgressCheckpoints, recordTaskStartCheckpoint, recordVerificationCheckpoint } from "./task-runtime-audit.js";
 import {
-  applyAcceptanceRecoveryProvenance,
-  acceptanceBaselineGuidance,
-  acceptanceProofGuidance,
-  acceptanceSemanticConflicts,
-  buildAcceptanceReceipt,
-  invalidateAcceptanceReceiptAfterMutation,
-  refreshAcceptanceReceipt
+  applyAcceptanceRecoveryProvenance, acceptanceBaselineGuidance, acceptanceProofGuidance, acceptanceSemanticConflicts,
+  buildAcceptanceReceipt, invalidateAcceptanceReceiptAfterMutation, refreshAcceptanceReceipt
 } from "./acceptance-receipt.js";
 import { acceptanceLanguageAdapterForPath, isAcceptanceTestPath } from "./acceptance-language-adapters.js";
 import { allVerifyCommandsPassCurrentTree, changedSnapshotFiles, compactTaskDetails, mergeObservedTaskContext, passingVerifyCommandsForDigest, taskDeltaFilesFromSnapshot } from "./task-contract-view.js";
@@ -107,6 +104,7 @@ import {
 import { cleanSessionNameInput, currentSessionName, hasOperatorSessionName } from "../runtime/session/message-signals.ts";
 import { buildSemanticCompactionInstructions } from "../runtime/session/system-prompt.ts";
 import { buildContextPreflight, buildUsageSnapshot, formatContextPreflight, formatCount, formatPercent, formatUsageSnapshot } from "../runtime/session/usage.ts";
+import { registerTaskUsageHooks } from "../runtime/product/task-usage-hooks.ts";
 import {
   formatToolResultCaptureStatus,
   readRecentToolResultCaptures
@@ -149,7 +147,7 @@ import { readRuntimeVersionMetadata, RuntimeSnapshotCapture } from "../runtime/m
 import { recordRuntimeSnapshotTelemetry } from "../runtime/model/snapshot-telemetry.ts";
 import { captureAuthenticatedModelCatalogFromContext } from "../runtime/model/authenticated-catalog.ts";
 import { normalizeOpenAiCodexReasoningPayload } from "../runtime/model/openai-codex-reasoning.ts";
-import { buildOpenAiCodexWireFingerprint } from "../runtime/model/provider-wire-fingerprint.ts";
+import { buildOpenAiCodexWireFingerprint, measureProviderPayload } from "../runtime/model/provider-wire-fingerprint.ts";
 import { registerFastModeCommand, ServiceTierRuntime } from "../runtime/model/service-tier-runtime.ts";
 import { ModelRouteRuntime, readModelRouteEvents } from "../runtime/model/model-route-runtime.ts";
 import { parentRoutingModeFromEnvironment, routingObjectiveFromEnvironment } from "../runtime/model/model-route-policy.ts";
@@ -164,7 +162,7 @@ import { PhaseToolRuntime, phaseToolModeFromEnvironment } from "../runtime/tools
 import { parseApplyPatchTargets, registerApplyPatchTool } from "../runtime/tools/apply-patch-tool.ts";
 import { authorityReplacementState, ensureTaskAuthorityResumePolicy } from "../runtime/policy/authority-resume-policy.ts";
 import { taskAuthorityDecision } from "../runtime/policy/task-authority-runtime.ts";
-import { selectRecoveryDecision } from "../runtime/recovery/recovery-policy.ts";
+import { applyProofCapabilityHandoff, selectRecoveryDecision } from "../runtime/recovery/recovery-policy.ts";
 import type { RecoveryDecision } from "../runtime/recovery/recovery-policy.ts";
 import { inspectTaskResumeState } from "../runtime/recovery/resume-state.ts";
 import { SemanticRepairRuntime } from "../runtime/recovery/semantic-repair-runtime.ts";
@@ -177,6 +175,7 @@ import { performanceReviewToolDecision, performanceReviewToolKind } from "../run
 import { expectedModelMutationProof } from "../runtime/quality/model-mutation-proof.ts";
 import { EditFreshnessGuard, editFreshnessModeFromEnvironment } from "../runtime/quality/edit-freshness-guard.ts";
 import { captureVerifierFileSnapshot } from "../runtime/inspection/verifier-snapshot-store.ts";
+import { finalGateConfig } from "./acceptance-diagnostic-policy.ts";
 import { fallbackBasePolicy } from "./fallback-base-policy.ts";
 import { prefixCompletions, registerPiagentTool, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
@@ -209,7 +208,6 @@ import type {
   ContextIndexSettings,
   ExecPolicyConfig,
   ExternalActionPolicyConfig,
-  FinalGateConfig,
   MemorySettings,
   OrchestrationMode,
   OrchestrationPolicySettings,
@@ -1295,16 +1293,6 @@ function externalActionPolicyConfig(policy: BasePolicy): Required<ExternalAction
   };
 }
 
-function finalGateConfig(policy: BasePolicy): Required<FinalGateConfig> {
-  return {
-    defaultMode: policy.finalGate?.defaultMode ?? DEFAULT_POLICY.finalGate?.defaultMode ?? "enforce",
-    requireTaskContract: policy.finalGate?.requireTaskContract ?? true,
-    requireContextManifest: policy.finalGate?.requireContextManifest ?? true,
-    requireVerifyEvidence: policy.finalGate?.requireVerifyEvidence ?? true,
-    requireTrace: policy.finalGate?.requireTrace ?? true,
-    requirePassingVerify: policy.finalGate?.requirePassingVerify ?? true
-  };
-}
 
 function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
   const numberValue = typeof value === "number" ? value : Number(value);
@@ -1879,17 +1867,19 @@ function recordObservedTaskVerification(
   pendingContext: ObservedTaskContext[],
   maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>,
   eventTree?: ReturnType<typeof captureWorkspaceVerificationSnapshot>,
-  readProtectedPaths: string[] = [], preWorkspaceRevisionDigest?: string
+  readProtectedPaths: string[] = [], preWorkspaceRevisionDigest?: string, diagnosticFocused = false
 ): TaskContract | undefined {
   const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
   if (!task || task.trace.outcome !== "pending") return;
   const command = String(observed.normalizedCommand ?? observed.command ?? "").trim();
   const observedAtMs = Date.parse(observed.recordedAt ?? "");
   const taskCreatedAtMs = Date.parse(task.createdAt);
+  const matchedProfileCommand = commandMatchesVerifyPlan(command, task.verifyCommands);
+  const focusedTest = diagnosticFocused && observedFocusedTestSummary(observed.outputText);
   if (
     !command
     || !observed.commandHash
-    || !commandMatchesVerifyPlan(command, task.verifyCommands)
+    || (!matchedProfileCommand && !focusedTest)
     || !Number.isFinite(observedAtMs)
     || !Number.isFinite(taskCreatedAtMs)
     || observedAtMs < taskCreatedAtMs
@@ -1915,17 +1905,17 @@ function recordObservedTaskVerification(
     task.verifyEvidence.push({
       command: redactText(command),
       exitCode,
-      summary: `Runtime observed configured verifier exit ${exitCode} (${classification.category}${classification.retryable ? ", retryable" : ""}).`,
+      summary: `Runtime observed ${matchedProfileCommand ? "configured" : "focused"} verifier exit ${exitCode} (${classification.category}${classification.retryable ? ", retryable" : ""}).`,
       recordedAt: evidenceRecordedAt,
       observed: true,
       observedAt,
       isError: observed.isError === true,
-      matchedProfileCommand: true,
+      matchedProfileCommand,
       preWorkingTreeDigest,
       workingTreeDigest: currentDigest,
       preWorkspaceRevisionDigest, workspaceRevisionDigest
     });
-    task.verifyEvidence = task.verifyEvidence.slice(-100);
+    task.verifyEvidence = diagnosticFocused ? retainFocusedVerification(task.verifyEvidence, currentDigest, workspaceRevisionDigest) : task.verifyEvidence.slice(-100);
     try {
       captureVerifierFileSnapshot({
         projectRoot: ctx.cwd, taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId,
@@ -1946,7 +1936,7 @@ function recordObservedTaskVerification(
     ? applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso())
     : { changed: false, mode: runtimeLifecycleMode(task) };
   const acceptance = refreshAcceptanceReceipt(task, {
-    cwd: ctx.cwd,
+    cwd: ctx.cwd, apiBaselineEvidence,
     changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskLocalDelta),
     currentWorkingTreeDigest: currentDigest
   });
@@ -2038,7 +2028,7 @@ function completionTaskProjection(
     }
   };
   return refreshAcceptanceReceipt(projected, {
-    cwd,
+    cwd, apiBaselineEvidence,
     changedFiles: taskAcceptanceEvidenceFiles(cwd, projected, finalFileDigests, changedFiles),
     currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
   }).task as TaskContract;
@@ -3504,8 +3494,9 @@ function evaluateTaskGate(
   warnings: string[];
   currentWorkingTreeDigest?: string;
   changedFileEvidence?: ReturnType<typeof taskChangedFileEvidence>;
+  acceptanceProof?: { mode: "enforce" | "diagnostic"; pendingCriterionIds: string[]; missing: string[] };
 } {
-  const finalGate = finalGateConfig(policy);
+  const finalGate = finalGateConfig(policy, DEFAULT_POLICY);
   const missing: string[] = [];
   const warnings: string[] = [];
   if (!task) {
@@ -3550,6 +3541,7 @@ function evaluateTaskGate(
     missingVerifyCommands = plannedVerifyCommands.filter((command) => !passingCommands.has(command.trim()));
     if (missingVerifyCommands.length > 0) missing.push(`observed passing verify evidence for every configured command (${missingVerifyCommands.length} missing)`);
   }
+  if (finalGate.acceptanceProofMode === "diagnostic" && unresolvedFocusedVerification(task.verifyEvidence, currentWorkingTreeDigest, currentWorkspaceRevisionDigest(cwd)).length > 0) missing.push("current passing rerun of failed focused verification");
   if (finalGate.requireTrace && task.trace.outcome !== "completed") missing.push("completed final trace");
   const incompleteSteps = (task.workPlan ?? []).filter((step) => step.status === "pending" || step.status === "in-progress" || step.status === "failed");
   if (task.trace.outcome === "completed" && incompleteSteps.length > 0) {
@@ -3569,24 +3561,27 @@ function evaluateTaskGate(
     missing.push(`mutation-forbidden task has observed changes (${changedFileEvidence.expected.join(", ")})`);
   }
   const acceptance = refreshAcceptanceReceipt(task, {
-    cwd,
+    cwd, apiBaselineEvidence,
     changedFiles: acceptanceEvidenceFiles,
     currentWorkingTreeDigest
   });
   const semanticEnforcement = taskAuthorityDecision(task, "CAP-13", "block").allowed;
-  // Runtime-compiled source tasks already carry operator-derived atomic
-  // criteria and a deterministic language adapter disposition.  A known,
-  // evidence-linkable critical obligation is therefore completion truth, not
-  // optional semantic-review policy.  Keep adapter-unknown obligations under
-  // CAP-13 so broad-default never invents proof or blocks unsupported stacks.
+  // Runtime-derived critical proof gates completion. A zero-delta review
+  // uses its strictly bound evidence scope without claiming a new mutation.
+  // Neutral artifacts with missing content proof use source-proof-required;
+  // unsupported language policy remains under the existing CAP-13 authority.
+  const proofMissing: string[] = [];
   const runtimeCriticalProofEnforcement = task.changeMode === "source-change"
-    && task.acceptanceReceipt?.source === "runtime"
-    && task.changedFiles.length > 0;
+    && task.acceptanceReceipt?.source === "runtime";
   const abstainedIds = new Set(acceptance.adapterAbstained.map((criterion) => criterion.id));
-  const adapterCritical = acceptance.criticalMissing.filter((criterion) => abstainedIds.has(criterion.id));
-  const linkedCritical = acceptance.criticalMissing.filter((criterion) => !abstainedIds.has(criterion.id));
-  if ((semanticEnforcement || runtimeCriticalProofEnforcement) && linkedCritical.length > 0) missing.push(`critical acceptance evidence (${linkedCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")})`);
-  if (semanticEnforcement && adapterCritical.length > 0) missing.push(`critical acceptance evidence adapter-unresolved (${adapterCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: add a direct-relative focused test or configure a deterministic adapter`);
+  const independentIds = new Set(acceptance.independentRequired.map((criterion) => criterion.id));
+  const sourceProofIds = new Set(acceptance.sourceProofRequired.map((criterion) => criterion.id));
+  const adapterCritical = acceptance.criticalMissing.filter((criterion) => abstainedIds.has(criterion.id) && !independentIds.has(criterion.id));
+  const linkedCritical = acceptance.criticalMissing.filter((criterion) => !abstainedIds.has(criterion.id) && !independentIds.has(criterion.id) && !sourceProofIds.has(criterion.id));
+  if ((semanticEnforcement || runtimeCriticalProofEnforcement) && sourceProofIds.size > 0) proofMissing.push(`critical acceptance evidence source-proof-required (${acceptance.sourceProofRequired.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: source proof remains unestablished after current focused tests passed; seek assessment, not source repair without a counterexample`);
+  if ((semanticEnforcement || runtimeCriticalProofEnforcement) && independentIds.size > 0) proofMissing.push(`critical acceptance evidence independent-required (${acceptance.independentRequired.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: an approved independent assessment must cover every clause; missing proof is not an observed source defect`);
+  if ((semanticEnforcement || runtimeCriticalProofEnforcement) && linkedCritical.length > 0) proofMissing.push(`critical acceptance evidence (${linkedCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")})`);
+  if (semanticEnforcement && adapterCritical.length > 0) proofMissing.push(`critical acceptance evidence adapter-unresolved (${adapterCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: add a direct-relative focused test or configure a deterministic adapter`);
   const acceptanceConflicts = acceptanceSemanticConflicts(task, {
     cwd,
     changedFiles: acceptanceEvidenceFiles
@@ -3603,7 +3598,12 @@ function evaluateTaskGate(
   if (normalMissing.length > 0) {
     warnings.push(`Acceptance criteria pending evidence: ${normalMissing.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}`);
   }
-  return { decision: missing.length === 0 ? "pass" : "fail", missing, missingVerifyCommands, warnings, currentWorkingTreeDigest, changedFileEvidence };
+  const acceptanceProof = { mode: finalGate.acceptanceProofMode,
+    pendingCriterionIds: acceptance.missing.map(criterion => criterion.id), missing: proofMissing };
+  if (finalGate.acceptanceProofMode === "diagnostic" && acceptanceProof.pendingCriterionIds.length > 0) {
+    warnings.push(`Diagnostic acceptance: ${acceptanceProof.pendingCriterionIds.length} criteria remain unproved; no quality claim. ${proofMissing.join("; ")}`);
+  } else missing.push(...proofMissing);
+  return { decision: missing.length === 0 ? "pass" : "fail", missing, missingVerifyCommands, warnings, currentWorkingTreeDigest, changedFileEvidence, ...(finalGate.acceptanceProofMode === "diagnostic" ? { acceptanceProof } : {}) };
 }
 
 function appendTrace(cwd: string, payload: Record<string, unknown>): void {
@@ -3883,7 +3883,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
         providerTextVerbosity: wire.textVerbosity,
         providerToolChoiceKind: wire.toolChoiceKind,
         providerToolChoiceHash: wire.toolChoiceHash,
-        requestPrefixFingerprint: wire.requestPrefixFingerprint
+        requestPrefixFingerprint: wire.requestPrefixFingerprint,
+        payloadMeasurement: measureProviderPayload(serviceTier.payload)
       });
     }
     return normalized.changed || serviceTier.changed ? serviceTier.payload : undefined;
@@ -4065,9 +4066,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       dependencyMutationAuthorized,
       independentDisposition: independentRecovery?.independentDisposition
     });
-    return gate?.missing.some((item) => /^critical acceptance evidence adapter-unresolved\b/i.test(item))
-      ? { ...selected, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false, reasonCodes: ["deterministic-adapter-proof-required"] }
-      : selected;
+    return applyProofCapabilityHandoff(selected, gate?.missing, Boolean(independentRecovery));
   }
 
   function trajectoryRecoveryOptions(ctx: ExtensionContext, task: TaskContract, options: any): any {
@@ -4164,6 +4163,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
     }
   });
+  registerTaskUsageHooks(pi, { activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined, telemetry });
   pi.on("turn_end", (event, ctx) => independentAcceptance.observeTurnEnd(ctx, event.message));
 
   registerInputHook(pi, {
@@ -4256,7 +4256,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     redactText,
     observedTaskContext: observedTaskContextFromToolResult,
     recordObservedTaskChanges,
-    recordObservedTaskVerification,
+    recordObservedTaskVerification: (...args) => recordObservedTaskVerification(...args, policy.finalGate?.acceptanceProofMode === "diagnostic"),
     extractLikelyPath: extractLikelyPathFromInput,
     mutationTargets: taskMutationTargets,
     isShellTool: (toolName) => SHELL_TOOL_NAMES.has(toolName),
@@ -4617,7 +4617,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const governedTaskProfile = !profileMode.startsWith("unprofiled") && !profileMode.includes("unreadable");
     const taskContractRequired = governedTaskProfile
       && runtime.finalGate === "enforce"
-      && finalGateConfig(policy).requireTaskContract;
+      && finalGateConfig(policy, DEFAULT_POLICY).requireTaskContract;
     if (sessionTask?.trace.outcome === "pending" && (sessionTask.changeMode === "read-only" || sessionTask.mutationPolicy === "forbidden")
       && !SHELL_TOOL_NAMES.has(event.toolName) && isTaskMutationTool(event.toolName, toolInput)) {
       return {

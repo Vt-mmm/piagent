@@ -36,9 +36,15 @@ Trong session Pi đầu tiên của project, chạy `/onboard`. Hằng ngày, d�
 - Project-specific business logic nằm trong project profile hoặc adapter, không đưa vào core.
 
 Task Contract v2 hiện gắn task/session/run identity với current-tree verification,
-strict acceptance receipt, hash-chained journal checkpoint, retry có giới hạn và
+acceptance receipt giữ nguyên tiêu chí chưa được chứng minh, hash-chained journal checkpoint, retry có giới hạn và
 terminal outcome bất biến. Đây là operational record do cùng runtime tạo ra,
 không phải independent attestation.
+
+Policy cài sẵn của v1.7.0 dùng chế độ diagnostic cho acceptance proof: tiêu chí
+chưa được chứng minh vẫn ở trạng thái pending và khi hoàn tất sẽ ghi rõ không có
+khẳng định chất lượng. Task contract, scope, bước verify đang pass và trace vẫn
+chặn hoàn tất nếu thiếu. Khi cần chứng minh mọi tiêu chí trước khi hoàn tất,
+chọn `acceptanceProofMode: "enforce"` trong package policy đã được review.
 
 Adaptive Context Planner dùng model, thinking và context usage do Pi báo để đặt
 budget có giới hạn; repository-memory hint luôn có citation và không thay thế
@@ -196,7 +202,7 @@ Xem [bằng chứng benchmark](https://piagent.io.vn/benchmark) và
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.6.1`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.7.0`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
+import { performance } from "node:perf_hooks";
 import { isAbsolute, join, normalize } from "node:path";
 import { stat } from "node:fs/promises";
 import { MAX_RESPONSE_BYTES, parseRequest, parseResponse } from "./acceptance-executor/protocol.mjs";
@@ -10,6 +11,10 @@ import { executionSourceText } from "./acceptance-executor/module-graph.mjs";
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/;
 const CONTAINER_ID = /^[a-f0-9]{64}$/;
 const OWNER_LABEL = "io.piagent.contract-execution";
+// Docker maintenance can delay control-plane requests without running guest
+// code. Guest CPU/wall limits and the image watchdog remain independent.
+const DAEMON_TIMEOUT_MS = 60_000;
+const CREATE_RECONCILIATION_MS = 5_000;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const DOCKER_COMMAND_FIELDS = ["path", "sha256"];
 
@@ -80,7 +85,7 @@ function materializePinnedDockerCommand(binding) {
   }
 }
 
-function command(socket, args, { input = "", timeoutMs = 5000, signal,
+function command(socket, args, { input = "", timeoutMs = DAEMON_TIMEOUT_MS, signal,
   maxBytes = MAX_RESPONSE_BYTES, dockerCommand } = {}) {
   return new Promise((resolve) => {
     if (signal?.aborted) { resolve({ reason: "cancelled", code: null, stdout: "" }); return; }
@@ -138,15 +143,29 @@ export function isolatedContainerConfigurationMatches(container) {
     && host.Ulimits?.some((limit) => limit.Name === "nofile" && limit.Soft === 64 && limit.Hard === 64));
 }
 
-async function inspectOwned(socket, target, imageId, runId, dockerCommand) {
+async function inspectOwned(socket, target, imageId, runId, dockerCommand, timeoutMs = DAEMON_TIMEOUT_MS) {
   const inspected = await command(socket, ["inspect", "--type", "container", target],
-    { maxBytes: 64 * 1024, dockerCommand });
+    { maxBytes: 64 * 1024, dockerCommand, timeoutMs });
   if (inspected.code !== 0 || inspected.reason) return null;
   try {
     const [container] = JSON.parse(inspected.stdout);
     if (!CONTAINER_ID.test(container?.Id) || container.Image !== imageId || container.Config?.Labels?.[OWNER_LABEL] !== runId) return null;
     return container;
   } catch { return null; }
+}
+
+async function reconcileTimedOutCreate(socket, imageId, runId, dockerCommand) {
+  const deadline = performance.now() + CREATE_RECONCILIATION_MS;
+  while (performance.now() < deadline) {
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) break;
+    const container = await inspectOwned(socket, `piagent-contract-${runId}`, imageId, runId, dockerCommand, remaining);
+    if (container) return container;
+    const pause = Math.min(250, deadline - performance.now());
+    if (pause > 0) await new Promise(resolve => setTimeout(resolve, pause));
+  }
+  // An absent container is not proof that the remote request had no effect.
+  return null;
 }
 
 /**
@@ -157,13 +176,14 @@ async function inspectOwned(socket, target, imageId, runId, dockerCommand) {
  * to host evaluation. Expected answers are not part of the worker protocol.
  */
 export async function runIsolatedContract(options = {}) {
-  const { requestText, imageId, dockerSocket, dockerCommand, timeoutMs = 10000, signal,
+  const { requestText, imageId, dockerSocket, dockerCommand, timeoutMs = 10000, startupAllowanceMs = 0, signal,
     executionRunId, profile, ...unknown } = options;
   if (Object.keys(unknown).length) throw new TypeError("Invalid isolated executor configuration");
   const request = parseRequest(requestText);
   if (typeof imageId !== "string" || !IMAGE_ID.test(imageId) || typeof dockerSocket !== "string"
     || !isAbsolute(dockerSocket) || dockerSocket.includes("\0")
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 25 || timeoutMs > 30000
+    || !Number.isSafeInteger(startupAllowanceMs) || startupAllowanceMs < 0 || startupAllowanceMs > 60000
     || (executionRunId !== undefined && (typeof executionRunId !== "string"
       || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(executionRunId)))
     || request.schemaVersion === 2 && JSON.stringify(profile) !== JSON.stringify(request.profile)
@@ -191,8 +211,11 @@ export async function runIsolatedContract(options = {}) {
       const created = await command(dockerSocket, isolatedContainerArguments(imageId, runId),
         { maxBytes: 4096, signal, dockerCommand: activeDockerCommand });
       const target = created.stdout.trim();
-      const container = await inspectOwned(dockerSocket,
+      let container = await inspectOwned(dockerSocket,
         CONTAINER_ID.test(target) ? target : `piagent-contract-${runId}`, imageId, runId, activeDockerCommand);
+      if (!container && created.reason === "timeout") {
+        container = await reconcileTimedOutCreate(dockerSocket, imageId, runId, activeDockerCommand);
+      }
       if (!container) return { ...result, cleanupConfirmed: false };
       containerId = container.Id;
       if (!isolatedContainerConfigurationMatches(container)) {
@@ -201,7 +224,8 @@ export async function runIsolatedContract(options = {}) {
         result = { ...base, status: created.reason === "cancelled" ? "cancelled" : "error", reason: "container-create-incomplete" };
       } else {
         const executed = await command(dockerSocket, ["start", "--attach", "--interactive", containerId],
-          { input: requestText, timeoutMs, signal, dockerCommand: activeDockerCommand });
+          { input: requestText, timeoutMs: timeoutMs + startupAllowanceMs,
+            signal, dockerCommand: activeDockerCommand });
         const state = await inspectOwned(dockerSocket, containerId, imageId, runId, activeDockerCommand);
         if (executed.reason || executed.code !== 0 || !state || state.State?.Running || state.State?.OOMKilled || state.State?.ExitCode !== 0) {
           const reason = executed.reason ?? (state?.State?.OOMKilled ? "container-memory-limit" : "worker-exit-failed");

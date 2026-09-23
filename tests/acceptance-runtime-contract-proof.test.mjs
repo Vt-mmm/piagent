@@ -193,3 +193,47 @@ test("a mutable object still needs an explicit non-mutation assertion", () => {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+
+test("runtime content requirements cannot borrow generic smoke as completion proof", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-docs-content-proof-"));
+  try {
+    fs.mkdirSync(path.join(cwd, "docs"));
+    const requirement = "Include both configuration values verbatim in docs/ops.md.";
+    const built = buildAcceptanceReceipt({ source: "runtime", changeMode: "source-change",
+      summary: "Update docs/ops.md from config/service.json.", acceptanceCriteria: [requirement] });
+    const criterion = built.receipt.criteria.find(item => item.hash === crypto.createHash("sha256").update(requirement).digest("hex"));
+    for (const content of ["# Operations\nRestart: unavailable\n", "# Operations\nRestart: service-restart\n"]) {
+      fs.writeFileSync(path.join(cwd, "docs/ops.md"), content);
+      const digest = versionWorkingTreeHash(crypto.createHash("sha256").update(content).digest("hex"));
+      const task = currentTask(built.acceptanceCriteria, built.receipt, "npm test", digest);
+      task.summary = "Update docs/ops.md from config/service.json.";
+      task.scope = task.changedFiles = task.observedChangedFiles = ["docs/ops.md"];
+      const result = refreshAcceptanceReceipt(task, { cwd, currentWorkingTreeDigest: digest });
+      const actual = result.receipt.criteria.find(item => item.id === criterion.id);
+      assert.equal(actual.priority, "critical", "runtime neutral-artifact content is completion truth");
+      assert.equal(actual.status, "pending", "neither correct nor wrong content is proved by unrelated smoke");
+      assert.deepEqual(actual.evidence, []);
+      assert.ok(result.criticalMissing.some(item => item.id === criterion.id));
+      assert.ok(result.sourceProofRequired.some(item => item.id === criterion.id), "neutral content takes the finite missing-proof route");
+    }
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+});
+
+
+test("runtime lifecycle metadata cannot invent a product boundary requirement", () => {
+  const input = { summary: "Verify the current implementation and fix any failure before reporting completion.",
+    expectedOutput: "The current implementation is verified and any evidence-backed failure is repaired; zero task delta remains valid when no repair is needed.",
+    acceptanceCriteria: ["Every configured verification command passes against the final working tree."],
+    changeMode: "source-change", mutationPolicy: "allowed", source: "runtime" };
+  const built = buildAcceptanceReceipt(input);
+  assert.equal(built.receipt.criteria.some(item => item.obligation === "boundary-case" && item.priority === "critical"), false,
+    "zero task delta can remain advisory but cannot mandate a zero-input product contract");
+  const explicit = buildAcceptanceReceipt({ ...input, acceptanceCriteria: ["Return zero when there are no items."] });
+  assert.ok(explicit.receipt.criteria.some(item => item.obligation === "boundary-case" && item.priority === "critical"));
+  const model = buildAcceptanceReceipt({ ...input, source: "model", expectedOutput: "Return zero when there are no items." });
+  assert.ok(model.receipt.criteria.some(item => item.obligation === "boundary-case" && item.priority === "critical"), "operator-supplied model task expected output remains a requirement");
+  const boundText = [input.summary, input.expectedOutput, ...input.acceptanceCriteria].join("\n");
+  assert.equal(built.receipt.promptHash, crypto.createHash("sha256").update(boundText).digest("hex"),
+    "the complete receipt binding is unchanged even when metadata is excluded from inference");
+});

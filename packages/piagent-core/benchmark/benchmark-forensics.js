@@ -796,7 +796,7 @@ export function benchmarkCausalContextReceipt(events, {
   };
 }
 
-export function loadReplayFailurePlan(reportPath) {
+export function loadReplayFailurePlan(reportPath, { failedAttemptsOnly = false } = {}) {
   let report;
   try {
     report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
@@ -810,11 +810,25 @@ export function loadReplayFailurePlan(reportPath) {
     : [];
   if (surfaces.length !== 2 || !surfaces.includes("piagent")) fail("Replay report must contain the two original benchmark surfaces", 1);
   const failedKeys = new Set((report.runs ?? [])
-    .filter((run) => run?.surface === "piagent" && run.resolved !== true)
+    .filter((run) => failedAttemptsOnly
+      ? surfaces.includes(run?.surface) && run.resolved === false
+      : run?.surface === "piagent" && run.resolved !== true)
     .map((run) => `${run.scenarioId}:${run.repeat}`));
-  if (failedKeys.size === 0) fail("Replay report has no failed Piagent runs", 1);
+  if (failedKeys.size === 0) fail(failedAttemptsOnly ? "Replay report has no failed attempts" : "Replay report has no failed Piagent runs", 1);
   const replayRuns = [];
-  for (const key of failedKeys) {
+  if (failedAttemptsOnly) {
+    const seen = new Set();
+    for (const run of report.runs ?? []) {
+      const key = `${run.scenarioId}:${run.surface}:${run.repeat}`;
+      if (seen.has(key)) fail(`Replay report contains duplicate attempt coordinate ${key}`, 1);
+      seen.add(key);
+      if (!surfaces.includes(run.surface) || run.resolved !== false) continue;
+      if (run.usage?.usageCompleteness !== "exact" || run.outcome?.runValidity !== "valid") {
+        fail(`Failed-only replay requires valid, exactly accounted source attempt ${key}`, 1);
+      }
+      replayRuns.push({ scenarioId: run.scenarioId, surface: run.surface, repeat: run.repeat });
+    }
+  } else for (const key of failedKeys) {
     const pair = (report.runs ?? []).filter((run) => `${run.scenarioId}:${run.repeat}` === key && surfaces.includes(run.surface));
     if (pair.length !== surfaces.length || new Set(pair.map((run) => run.surface)).size !== surfaces.length) {
       fail(`Replay report must contain exactly one record for both original surfaces at failed pair ${key}`, 1);
@@ -842,6 +856,10 @@ export function loadReplayFailurePlan(reportPath) {
     }
     evidenceComplete = true;
   }
+  if (failedAttemptsOnly && (!evidenceComplete || !report.completedAt
+    || fs.existsSync(path.join(path.dirname(reportPath), "aborted.json")))) {
+    fail("Failed-only replay requires a completed, ledger-bound source run without aborted.json", 1);
+  }
   return {
     suite: manifest?.suite?.source ?? report?.suite?.source ?? report?.suite?.id ?? "production-v1",
     seed,
@@ -855,6 +873,8 @@ export function loadReplayFailurePlan(reportPath) {
       reportPath,
       reportDigest: crypto.createHash("sha256").update(fs.readFileSync(reportPath)).digest("hex"),
       evidenceComplete,
+      ...(failedAttemptsOnly ? { selection: "failed-attempts", selectedAttempts: replayRuns.length,
+        originalAttemptCount: report.runs.length } : {}),
       runId: report?.runId ?? null,
       failedPairs: [...failedKeys].sort()
     }

@@ -32,10 +32,13 @@ export function createGuestSession(QuickJS, request, overallDeadline, typedOutpu
     const result = context.evalCode(INTRINSICS);
     if (result.error) { keep(result.error); throw new Error("Intrinsic initialization failed"); }
     const intrinsics = retain(result.value);
-    methods = Object.fromEntries(["makeDate", "dateTime", "typeOf", "errorClass", "clockReads", "beginCall", "observeValue", "defineData",
-      "beginCapabilities", "makeError", "makeCallback", "callback", "callbackFault", "callbackTrace", "errorObservation", "awaitValue", "sameReference", "referenceIdentity", "invokeTarget"]
+    methods = Object.fromEntries(["installStructuredClone", "cloneFault", "makeDate", "dateTime", "typeOf", "errorClass", "clockReads", "beginCall", "observeValue", "defineData",
+      "beginCapabilities", "makeError", "makeCallback", "callback", "callbackFault", "callbackTrace", "errorObservation", "errorMessage", "awaitValue", "sameReference", "referenceIdentity", "invokeTarget"]
       .map((name) => [name, retain(context.getProp(intrinsics, name))]));
-    if (request.schemaVersion === 2) profile = createNodeProfile({ runtime, context, retain, interrupted });
+    if (request.schemaVersion === 2) {
+      take(context.callFunction(methods.installStructuredClone, context.undefined));
+      profile = createNodeProfile({ runtime, context, retain, interrupted });
+    }
   }
   function input(value) {
     switch (value.type) {
@@ -118,8 +121,10 @@ export function createGuestSession(QuickJS, request, overallDeadline, typedOutpu
         if (moduleResult.error) {
           keep(moduleResult.error);
           const timedOut = interrupted();
-          initializationFailure = { outcome: importDenied && !timedOut ? "unsupported" : "error",
-            reason: timedOut ? interruption : importDenied ? "module-import-unsupported" : "module-initialization-failed" };
+          const cloneFault = take(context.callFunction(methods.cloneFault, context.undefined));
+          const cloneReason = context.typeof(cloneFault) === "string" ? context.getString(cloneFault) : null;
+          initializationFailure = { outcome: (importDenied || cloneReason) && !timedOut ? "unsupported" : "error",
+            reason: timedOut ? interruption : importDenied ? "module-import-unsupported" : cloneReason ?? "module-initialization-failed" };
           return incomplete(initializationFailure.reason, initializationFailure.outcome);
         }
         const module = retain(moduleResult.value);
@@ -179,13 +184,22 @@ export function createGuestSession(QuickJS, request, overallDeadline, typedOutpu
       }
       const profileFault = profile?.fault();
       if (profileFault) return incomplete(profileFault.reason, profileFault.outcome);
+      const cloneFault = take(context.callFunction(methods.cloneFault, context.undefined));
+      if (context.typeof(cloneFault) === "string") return incomplete(context.getString(cloneFault), "unsupported");
       const callbackError = callbackFault();
       if (callbackError) return incomplete(callbackError);
       let observation;
       if (threw) {
+        let message;
+        if (item.observeErrorMessage) {
+          const result = JSON.parse(context.getString(take(context.callFunction(methods.errorMessage, context.undefined, returned))));
+          if (result.reason) return incomplete(result.reason, "unsupported");
+          message = result.value;
+        }
         const errorClass = context.getString(take(context.callFunction(methods.errorClass, context.undefined, returned)));
         if (errorClass === "InternalError") return incomplete("guest-resource-error");
         observation = { id: item.id, outcome: "throw", errorClass };
+        if (item.observeErrorMessage) observation.errorMessage = message;
         if (item.observeError) {
           const result = JSON.parse(context.getString(take(context.callFunction(methods.errorObservation, context.undefined, returned))));
           if (result.reason) return incomplete(result.reason, "unsupported");

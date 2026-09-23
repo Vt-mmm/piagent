@@ -116,7 +116,7 @@ for (const contract of contracts) {
 }
 
 for (const [scenarioId, expectedCount] of [
-  ["resumable-checkpoint-partial-failure", 11], ["backend-frontend-contract-sync", 9]
+  ["resumable-checkpoint-partial-failure", 12], ["backend-frontend-contract-sync", 9]
 ]) {
   test(`production-v3 ${scenarioId} keeps atomic runtime acceptance criteria`, () => {
     const scenario = suite.scenarios.find(value => value.id === scenarioId);

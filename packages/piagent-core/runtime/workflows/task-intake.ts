@@ -27,10 +27,12 @@ const AUTO_ACCEPTANCE_CRITERIA_MAX = 12;
 const AUTO_INTAKE_READ_ONLY_LEAD = /^\s*\/?(?:analy[sz]e|audit|check|discuss|explain|inspect|plan|research|review|scout|summari[sz]e|why|how|can\s+(?:you|we)|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
 const AUTO_INTAKE_MANUAL_RISK = /\b(?:credential|database|deploy|destructive|encryption|external provider|payment|permission|production|publish|secret|token rotation)\b/i;
 const AUTO_READ_ONLY_INTENT = /\b(?:analy[sz]e|audit|check|diagnos(?:e|is)|explain|inspect|investigate|plan|research|review|scout|summari[sz]e|triage|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
+const AUTO_STANDALONE_NO_MUTATION = /\bwithout\s+(?:editing|changing|modifying|mutating|touching|writing)(?=\s*(?:[.!?]|$))/i;
 // Candidate wording is separated from the following qualifier. This keeps a
 // durable zero-delta instruction distinct from local path authority and from a
 // temporary "inspect first, edit later" instruction.
 const AUTO_NO_MUTATION_CANDIDATES = [
+  AUTO_STANDALONE_NO_MUTATION,
   /\b(?:do not|don't|must not|never)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)(?:\s+(?:or|and)\s+create)?\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
   /\b(?:do not|don't|must not|never)\s+create\s+(?:or|and)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
   /\b(?:do not|don't|must not|never)\s+make\s+(?:any\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
@@ -52,6 +54,8 @@ const AUTO_PROTECTED_ACCESS_DENIAL = /\b(?:do not|don't|must not|never)\s+(?:ins
 // not protected-material authority.
 const AUTO_PROTECTED_MATERIAL_BOUNDARY_CONTEXT = /\bthis\s+request\s+crosses\s+the\s+protected[- ]material\s+boundary\b/i;
 const AUTO_GENERIC_FILE_ACCESS_DENIAL = /\b(?:do not|don't|must not|never)\s+(?:inspect|read|open|access)\s+(?:(?:the|this|that|requested|referenced|target(?:ed)?)\s+){0,2}(?:files?|paths?)\b/i;
+const AUTO_DESTRUCTIVE_HISTORY_BOUNDARY_CONTEXT = /\bthis\s+request\s+crosses\s+the\s+destructive[- ]history\s+boundary\b/i;
+const AUTO_AUDIT_LEDGER_ACCESS_DENIAL = /\b(?:do not|don't|must not|never)\s+(?:read|inspect|open|access)(?:\s*,\s*(?:truncate|delete|move|overwrite)){1,4}(?:\s*,?\s*(?:or|and)\s+(?:truncate|delete|move|overwrite))?\s+(?:the|this)\s+audit\s+(?:ledger|history|log)\b/i;
 const AUTO_REFUSAL_INTENT = /\b(?:refuse|decline|reject)\b/i;
 const AUTO_REFUSAL_NEGATION = /\b(?:do not|don't|must not|never)\s+(?:refuse|decline|reject)\b/i;
 const AUTO_GLOBAL_READ_ONLY_PATTERNS = [
@@ -96,12 +100,29 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+// Bare "without editing." is a directive only in prose, not quoted UI text,
+// an example block, or repository data quoted by the operator.
+function boundaryDirectiveProse(text: string): string {
+  let fence: string | undefined;
+  return text.split("\n").map(line => {
+    const marker = line.match(/^\s*(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = undefined;
+      return "<quoted-content>";
+    }
+    if (fence || /^\s*>/.test(line)) return "<quoted-content>";
+    return line.replace(/`[^`\n]*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|“[^”]*”|‘[^’]*’/g, "<quoted-content>");
+  }).join("\n");
+}
+
 function noMutationBoundarySignals(text: string): { taskWide: boolean; temporary: boolean } {
   let temporary = false;
   for (const pattern of AUTO_NO_MUTATION_CANDIDATES) {
+    const candidateText = pattern === AUTO_STANDALONE_NO_MUTATION ? boundaryDirectiveProse(text) : text;
     const matcher = new RegExp(pattern.source, `${pattern.flags}g`);
-    for (const match of text.matchAll(matcher)) {
-      const tail = text.slice((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 160);
+    for (const match of candidateText.matchAll(matcher)) {
+      const tail = candidateText.slice((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 160);
       if (AUTO_LOCAL_BOUNDARY_TAIL.test(tail)) continue;
       if (AUTO_TEMPORARY_BOUNDARY_TAIL.test(tail)) {
         temporary = true;
@@ -124,10 +145,12 @@ function hasGlobalNoAccessBoundary(text: string): boolean {
 export function hasProtectedRefusalBoundary(text: string): boolean {
   const accessDenied = AUTO_PROTECTED_ACCESS_DENIAL.test(text)
     || (AUTO_PROTECTED_MATERIAL_BOUNDARY_CONTEXT.test(text) && AUTO_GENERIC_FILE_ACCESS_DENIAL.test(text));
+  const directive = boundaryDirectiveProse(text);
   return AUTO_REFUSAL_INTENT.test(text)
     && !AUTO_REFUSAL_NEGATION.test(text)
-    && accessDenied
-    && noMutationBoundarySignals(text).taskWide;
+    && ((accessDenied && noMutationBoundarySignals(text).taskWide)
+      || (AUTO_REFUSAL_INTENT.test(directive) && AUTO_DESTRUCTIVE_HISTORY_BOUNDARY_CONTEXT.test(directive)
+        && AUTO_AUDIT_LEDGER_ACCESS_DENIAL.test(directive)));
 }
 
 const PLAUSIBLE_SCOPE_ROOT = /^(?:\.github|app|apps|bin|config|docs|examples|lib|logs|packages|pages|public|scripts|spec|src|test|tests|vendor|__tests__)(?:\/|$)/i;

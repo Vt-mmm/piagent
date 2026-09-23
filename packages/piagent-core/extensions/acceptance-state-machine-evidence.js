@@ -1,3 +1,4 @@
+import { boundedTopLevelStatements } from "./acceptance-callable-scanner.js";
 import { rejectionStatementErrorClass } from "./acceptance-error-classes.js";
 
 function escapeRegex(value) {
@@ -163,6 +164,7 @@ function preLoopStatementsProven(text, offset, carrier) {
   let prefix = text.slice(0, offset), escaped = escapeRegex(carrier);
   prefix = prefix.replace(new RegExp(`\\bconst\\s+${escaped}\\s*=\\s*string\\s*\\(\\s*[a-z_$][a-z0-9_$]*\\s*\\)\\s*(?:;|(?=\\r?\\n))`, "gi"), " ");
   prefix = prefix.replace(/\b(?:let|var)\s+[a-z_$][a-z0-9_$]*(?:\s*:\s*(?:boolean|string))?\s*=\s*(?:false|__pi_empty_string_literal__)\s*(?:;|(?=\r?\n))/gi, " ");
+  prefix = prefix.replace(/\b(?:const|let)\s+[a-z_$][a-z0-9_$]*\s*=\s*\[\s*\]\s*(?:;|(?=\r?\n))/gi, " ");
   return /^[\s;]*$/.test(prefix);
 }
 
@@ -326,11 +328,12 @@ function counterFlowProven(text, loop, ranges, state, truthyOffset) {
   for (const relativeOffset of directBindingMutations(bodyText, loop.counter)) {
     const offset = loop.start + relativeOffset;
     if (!new RegExp(`^${escapeRegex(loop.counter)}\\s*(?:\\+\\+|\\+=\\s*1)\\s*(?:;|(?=\\r?\\n|}))`, "i").test(text.slice(offset))) return false;
-    if (offset >= truthyOffset) continue;
+
     const ancestors = ranges.filter((range) => offset >= range.start && offset < range.end);
     const stateGuard = ancestors.some((range) => new RegExp(`^${escapeRegex(state)}(?:\\s*={2,3}\\s*true)?$`, "i").test(stripOuterParentheses(range.condition)));
     const nextQuote = ancestors.some((range) => new RegExp(`\\b${escapeRegex(loop.carrier)}\\b\\s*\\[\\s*${escapeRegex(loop.counter)}\\s*\\+\\s*1\\s*\\]\\s*={3}\\s*__pi_double_quote_string_literal__`, "i").test(range.condition));
-    if ((!stateGuard || !nextQuote) && !initiallyFalseAuxiliaryGuard(text, loop, ranges, ancestors, state)) return false;
+    const nonQuoteSkip = ancestors.some(range => nonQuoteInputCondition(range.condition, loop, true));
+    if ((!stateGuard || !nextQuote) && !nonQuoteSkip && !initiallyFalseAuxiliaryGuard(text, loop, ranges, ancestors, state)) return false;
   }
   return true;
 }
@@ -341,7 +344,9 @@ function priorSiblingControlProven(text, loop, ranges, state, truthyOffset) {
     && braceDepthAt(loopText, item.conditionStart - loop.start) === 0)) {
     if (truthyOffset >= range.start && truthyOffset < range.end) continue;
     if (text[range.start] === "{" && statePattern.test(stripOuterParentheses(range.condition))
-      && !/^\s*else\b/i.test(text.slice(range.end))) continue;
+      && (!/^\s*else\b/i.test(text.slice(range.end))
+        || ranges.some(next => next.conditionStart > range.end && truthyOffset >= next.start && truthyOffset < next.end
+          && /^\s*else\s*$/i.test(text.slice(range.end, next.conditionStart)) && quoteInputGuard(next.condition, loop)))) continue;
     return false;
   }
   return true;
@@ -362,12 +367,33 @@ function statementFragmentProven(raw, loop) {
   if (loop.counter && new RegExp(`^(?:${escapeRegex(loop.counter)}\\s*(?:\\+\\+|\\+=\\s*1)|\\+\\+\\s*${escapeRegex(loop.counter)})$`, "i").test(value)) return true;
   if (loop.booleanBindings.some((name) => new RegExp(`^${escapeRegex(name)}\\s*=\\s*(?:true|false)$`, "i").test(value))) return true;
   if (inputs && loop.emptyAccumulators.some((name) => new RegExp(`^${escapeRegex(name)}\\s*\\+=\\s*(?:${inputs})$`, "i").test(value))) return true;
+  if (loop.emptyAccumulators.some(name => new RegExp(`^${escapeRegex(name)}\\s*=\\s*__pi_empty_string_literal__$`, "i").test(value)
+    || new RegExp(`^${escapeRegex(name)}\\s*\\+=\\s*__pi_double_quote_string_literal__$`, "i").test(value))) return true;
+  if (loop.resettableArrays.some(name => new RegExp(`^${escapeRegex(name)}\\s*=\\s*\\[\\s*\\]$`, "i").test(value))) return true;
+  if (ownedArrayPushPattern(loop, true).test(value)) return true;
   return Boolean(loop.counter && loop.items.some((name) => new RegExp(`^const\\s+${escapeRegex(name)}\\s*=\\s*${carrierItem}$`, "i").test(value)));
+}
+
+function ownedArrayPushPattern(loop, anchored = false) {
+  const arrays = loop.arrayBindings.map(escapeRegex).join("|");
+  const values = [...loop.arrayBindings, ...loop.emptyAccumulators].map(escapeRegex).join("|");
+  return arrays && values ? new RegExp(`${anchored ? "^" : "\\b"}(?:${arrays})\\.push\\s*\\(\\s*(?:${values})\\s*\\)${anchored ? "$" : ""}`, "gi") : /(?!) /;
+}
+
+function nonQuoteInputCondition(raw, loop, requireLookahead = false) {
+  const value = stripOuterParentheses(raw), parts = value.split(requireLookahead ? /\s*&&\s*/ : /\s*(?:&&|\|\|)\s*/);
+  const current = [...loop.items.map(escapeRegex), ...(loop.counter ? [`${escapeRegex(loop.carrier)}\\s*\\[\\s*${escapeRegex(loop.counter)}\\s*\\]`] : [])].join("|");
+  const next = loop.counter ? `${escapeRegex(loop.carrier)}\\s*\\[\\s*${escapeRegex(loop.counter)}\\s*\\+\\s*1\\s*\\]` : "(?!)";
+  const literal = "__pi_(?:(?:whitespace|empty)_)?string_literal__";
+  const isCurrent = part => new RegExp(`^(?:${current})\\s*===\\s*${literal}$`, "i").test(stripOuterParentheses(part));
+  const isNext = part => new RegExp(`^${next}\\s*===\\s*${literal}$`, "i").test(stripOuterParentheses(part));
+  return parts.length > 0 && parts.length <= 4 && parts.every(part => isCurrent(part) || isNext(part))
+    && parts.some(isCurrent) && (!requireLookahead || parts.length === 2 && parts.some(isNext));
 }
 
 function loopStatementsProven(loopBody, loop) {
   if (/\b(?:break|delete|new|return|throw|typeof|void)\b/i.test(loopBody)) return false;
-  if (/\b(?!if\b)[a-z_$][a-z0-9_$]*\s*(?:\?\.\s*)?\(|\b[a-z_$][a-z0-9_$]*\s*__pi_template_literal__|[\])]\s*(?:\?\.\s*)?\(/i.test(loopBody)) return false;
+  if (/\b(?!if\b)[a-z_$][a-z0-9_$]*\s*(?:\?\.\s*)?\(|\b[a-z_$][a-z0-9_$]*\s*__pi_template_literal__|[\])]\s*(?:\?\.\s*)?\(/i.test(loopBody.replace(ownedArrayPushPattern(loop), ""))) return false;
   for (const match of loopBody.matchAll(/;/g)) {
     const start = Math.max(loopBody.lastIndexOf(";", match.index - 1), loopBody.lastIndexOf("{", match.index - 1), loopBody.lastIndexOf("}", match.index - 1)) + 1;
     if (!statementFragmentProven(loopBody.slice(start, match.index), loop)) return false;
@@ -395,10 +421,32 @@ function loopConditionsProven(ranges, loop, state) {
   return ranges.every((range) => {
     const condition = stripOuterParentheses(range.condition);
     if (!sideEffectFreeCondition(condition)) return false;
-    if (statePattern.test(condition) || quoteInputGuard(condition, loop)) return true;
+    if (statePattern.test(condition) || quoteInputGuard(condition, loop) || nonQuoteInputCondition(condition, loop)) return true;
+    const quoteParts = topLevelParts(condition.replaceAll("&&", "\u0000"), "\u0000");
+    if (quoteParts.length === 2 && quoteInputGuard(quoteParts[0], loop) && next
+      && new RegExp(`^${next}\\s*===\\s*${quote}$`, "i").test(stripOuterParentheses(quoteParts[1]))) return true;
     if (next && new RegExp(`^(?:${next}\\s*={3}\\s*${quote}|${quote}\\s*={3}\\s*${next})$`, "i").test(condition)) return true;
     return loop.booleanBindings.some((name) => name !== state && new RegExp(`^(?:!\\s*${escapeRegex(name)}|${escapeRegex(name)}(?:\\s*={2,3}\\s*(?:true|false))?)$`, "i").test(condition));
   });
+}
+
+function escapedQuoteBranchProven(text, loop, ranges, state, transitions) {
+  const truthy = transitions.find(item => item?.write.value === "true"), falsy = transitions.find(item => item?.write.value === "false");
+  if (!truthy || !falsy) return false;
+  const next = loop.counter && new RegExp(`\\b${escapeRegex(loop.carrier)}\\s*\\[\\s*${escapeRegex(loop.counter)}\\s*\\+\\s*1\\s*\\]\\s*===\\s*__pi_double_quote_string_literal__`, "i");
+  const escapeRanges = next ? ranges.filter(range => next.test(range.condition)) : [];
+  const fieldOpening = loop.emptyAccumulators.some(name => new RegExp(`\\b${escapeRegex(name)}\\b`, "i").test(truthy.immediate.condition));
+  if (!escapeRanges.length) return !fieldOpening;
+  if (escapeRanges.length !== 1) return false;
+  const escape = escapeRanges[0], ancestors = ranges.filter(range => escape.conditionStart >= range.start && escape.end <= range.end);
+  if (!ancestors.some(range => new RegExp(`^${escapeRegex(state)}(?:\\s*={2,3}\\s*true)?$`, "i").test(stripOuterParentheses(range.condition)))
+    || ![...ancestors, escape].some(range => quoteInputGuard(range.condition.split("&&")[0], loop))) return false;
+  const raw = text.slice(escape.start, escape.end).trim().replace(/^\{\s*|\s*\}$/g, "");
+  const fields = loop.emptyAccumulators.map(escapeRegex).join("|");
+  const append = fields ? `(?:(?:${fields})\\s*\\+=\\s*__pi_double_quote_string_literal__\\s*;\\s*)?` : "";
+  if (!new RegExp(`^${append}${escapeRegex(loop.counter)}\\s*(?:\\+\\+|\\+=\\s*1)\\s*;?\\s*$`, "i").test(raw)) return false;
+  return /^\s*else\s*$/i.test(text.slice(escape.end, falsy.immediate.conditionStart))
+    || /^\s*else\s*(?:\{\s*)?$/i.test(text.slice(escape.end, falsy.offset));
 }
 
 function transitionShapeProven(text, transitions) {
@@ -442,8 +490,9 @@ function truthyTransitionTailProven(text, loop, transition) {
 // Prove only one narrow terminal state-machine rejection shape. Callers must
 // still establish stable exports/imports, live assertions, error constructors,
 // the exact current verifier, and a current-tree changed source/test corpus.
-export function statefulTerminalRejectionEvidence(body, parameters, requestedErrors, contractText, targetName, sourceCode) {
-  if (!affirmativeQuotedTerminalContract(contractText, targetName)) return false;
+export function statefulTerminalRejectionEvidence(body, parameters, requestedErrors, contractText, targetName, sourceCode, uniqueExportBinding = false) {
+  const implicitContract = uniqueExportBinding && /^\s*(?:(?:must|shall|should)\s+)?(?:throw|raise)\s+`?SyntaxError`?\s+for\s+(?:an?\s+)?unterminated\s+quoted?\s+field[.!]?\s*$/i.test(String(contractText ?? ""));
+  if (!implicitContract && !affirmativeQuotedTerminalContract(contractText, targetName)) return false;
   const loops = [];
   for (const match of body.matchAll(/\bfor\s*\(/gi)) {
     if (braceDepthAt(body, match.index) !== 0 || priorUnconditionalExit(body, match.index) || topLevelControlBefore(body, match.index)) continue;
@@ -471,7 +520,13 @@ export function statefulTerminalRejectionEvidence(body, parameters, requestedErr
       .filter((item) => braceDepthAt(body, item.index) === 0).map((item) => item[1].toLowerCase());
     const booleanBindings = [...body.slice(0, match.index).matchAll(/\b(?:let|var)\s+([a-z_$][a-z0-9_$]*)(?:\s*:\s*boolean)?\s*=\s*false\s*(?:;|(?=\r?\n))/gi)]
       .filter((item) => braceDepthAt(body, item.index) === 0).map((item) => item[1].toLowerCase());
-    const loop = { ...evidence, start: bodyStart + 1, end: bodyEnd - 1, items: [...new Set(items)], inputNames: [...new Set(inputNames)], emptyAccumulators, booleanBindings };
+    const arrayBindings = [...body.slice(0, match.index).matchAll(/\b(?:const|let)\s+([a-z_$][a-z0-9_$]*)\s*=\s*\[\s*\]\s*(?:;|(?=\r?\n))/gi)]
+      .filter(item => braceDepthAt(body, item.index) === 0).map(item => item[1].toLowerCase());
+    // Local array calls rely on ordinary inherited methods; abstain on module initialization effects.
+    const module = arrayBindings.length > 0 ? boundedTopLevelStatements(sourceCode) : null;
+    if (module && (!module.complete || module.statements.some(item => item.kind !== "function-declaration"))) continue;
+    const resettableArrays = arrayBindings.filter(name => new RegExp(`\\blet\\s+${escapeRegex(name)}\\s*=`, "i").test(body.slice(0, match.index)));
+    const loop = { ...evidence, start: bodyStart + 1, end: bodyEnd - 1, items: [...new Set(items)], inputNames: [...new Set(inputNames)], emptyAccumulators, booleanBindings, arrayBindings, resettableArrays };
     if (loopStatementsProven(loopBody, loop)) loops.push(loop);
   }
   if (loops.length === 0) return false;
@@ -494,6 +549,7 @@ export function statefulTerminalRejectionEvidence(body, parameters, requestedErr
     const truthyOffset = writes.find((item) => item.write.value === "true").offset;
     const truthyTransition = transitions.find((item) => item?.write.value === "true");
     if (!loopConditionsProven(ranges, loop, state) || transitions.some((item) => !item) || !transitionShapeProven(body, transitions)
+      || !escapedQuoteBranchProven(body, loop, ranges, state, transitions)
       || !counterFlowProven(body, loop, ranges, state, truthyOffset)
       || !priorSiblingControlProven(body, loop, ranges, state, truthyOffset)
       || !truthyTransitionTailProven(body, loop, truthyTransition)) continue;

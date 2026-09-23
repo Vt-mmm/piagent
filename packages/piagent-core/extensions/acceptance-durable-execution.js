@@ -32,7 +32,7 @@ const unavailable = (reason, attemptId) => Object.freeze({ version: DURABLE_EXEC
  */
 export function createDurableContractRunner({ store, projectRoot, sourcePath, modulePaths, authorizeSourceRead,
   exportName, checks, profile, imageId, dockerSocket, dockerCommand, verifierDigest,
-  getProjectVerificationDigest, timeoutMs = 10000 } = {}) {
+  getProjectVerificationDigest, timeoutMs = 10000, startupAllowanceMs = 0 } = {}) {
   if (!store || typeof store.reserve !== "function" || typeof store.settle !== "function"
     || typeof verifierDigest !== "string" || !HASH.test(verifierDigest) || typeof getProjectVerificationDigest !== "function"
     || typeof imageId !== "string" || !/^sha256:[a-f0-9]{64}$/.test(imageId)
@@ -43,6 +43,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, mo
       || typeof dockerCommand.path !== "string" || !isAbsolute(dockerCommand.path)
       || normalize(dockerCommand.path) !== dockerCommand.path || dockerCommand.path.includes("\0")
       || !HASH.test(String(dockerCommand.sha256 ?? "")))
+    || !Number.isSafeInteger(startupAllowanceMs) || startupAllowanceMs < 0 || startupAllowanceMs > 60000
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 25 || timeoutMs > 30000) throw new TypeError("Invalid approved durable verifier configuration");
   // Compile before retaining the plan to detach it from later caller mutations.
   const nodeProfile = profile !== undefined;
@@ -60,7 +61,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, mo
   const completed = new WeakMap();
   const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, template.version,
     EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, approvedDockerCommand ?? null,
-    timeoutMs, template.plan.profile ?? null]));
+    timeoutMs, template.plan.profile ?? null, ...(startupAllowanceMs ? [startupAllowanceMs] : [])]));
 
   async function run({ scope, criterionHash, maxAttempts, retry = false, signal } = {}) {
     if (typeof criterionHash !== "string" || !HASH.test(criterionHash)) throw new TypeError("Invalid current criterion hash");
@@ -112,7 +113,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, mo
       observed = await runSnapshotBoundContract({ ...snapshotRequest, exportName, checks: approvedChecks,
         ...(nodeProfile ? { profile: template.plan.profile } : {}), imageId, dockerSocket,
         ...(approvedDockerCommand === undefined ? {} : { dockerCommand: approvedDockerCommand }),
-        timeoutMs, signal, executionRunId: reserved.event.attemptId });
+        timeoutMs, startupAllowanceMs, signal, executionRunId: reserved.event.attemptId });
     } catch {
       observed = { verdict: "error", reason: "independent-execution-threw" };
     }

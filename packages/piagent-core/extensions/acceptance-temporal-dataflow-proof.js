@@ -35,7 +35,7 @@ function proveTypeError(expression) {
   if (expression[2].some((arg) => arg[0] !== "id" || !/^__pi_[a-z0-9_]*(?:string|number)_literal__$/.test(arg[1]))) fail("rejection-message-effect-unproven");
 }
 
-function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { remaining: 15000 }) {
+function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { remaining: 15000 }, rules = {}) {
   const logic = evidenceBooleanAlgebra();
   const boolean = (value) => term("boolean", value);
   const atom = (name) => logic.atom(name);
@@ -392,6 +392,7 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
       if (receiver[1] === "Date" && member === "UTC" && [3, 7].includes(args.length)) return term("utc", ...args);
       if (receiver[1] === "Date" && member === "now" && args.length === 0 && mode === "public") {
         if (!implies(state.path, omitted)) fail("eager-clock-fallback-unproven");
+        if (rules.expiryBeforeClock && !implies(state.path, expiryCoverage)) fail("clock-before-expiry-validation");
         clockCoverage = cover(clockCoverage, state.path); return term("clock");
       }
       fail();
@@ -530,7 +531,7 @@ function temporalModel(mode, helperNames = {}, graph = new Map(), budget = { rem
  * topology, calendar bounds, proleptic reconstruction, error class and lazy
  * omission handling are independent obligations, not a source-text template.
  */
-export function temporalDataflowModuleProof(bodies, publicName) {
+export function temporalDataflowModuleProof(bodies, publicName, rules = {}) {
   try {
     const declarations = bodies.exactDeclarations ?? [];
     if (declarations.some((item) => RESERVED.test(item.name))) fail("temporal-binding-collision");
@@ -572,15 +573,15 @@ export function temporalDataflowModuleProof(bodies, publicName) {
     // Preserve precise diagnostics for the original closed two-helper surface.
     if (helpers.length === 2 && directParsers.length === 1) {
       const expiry = directParsers[0], now = helpers.find((item) => item !== expiry);
-      const expiryCoverage = temporalModel("expiry", {}, graph, budget).prove(expiry);
-      const nowCoverage = temporalModel("now", { expiry: expiry.exactDeclarationName }, graph, budget).prove(now);
-      const publicCoverage = temporalModel("public", { expiry: expiry.exactDeclarationName, now: now.exactDeclarationName }, graph, budget).prove(graph.get(publicName).callable);
+      const expiryCoverage = temporalModel("expiry", {}, graph, budget, rules).prove(expiry);
+      const nowCoverage = temporalModel("now", { expiry: expiry.exactDeclarationName }, graph, budget, rules).prove(now);
+      const publicCoverage = temporalModel("public", { expiry: expiry.exactDeclarationName, now: now.exactDeclarationName }, graph, budget, rules).prove(graph.get(publicName).callable);
       requireClosedCoverage(expiryCoverage, nowCoverage, publicCoverage);
       return { proven: true, reasons: [], expiry, now };
     }
     const failures = [];
     const proveRole = (role, callable, names = {}) => {
-      try { return temporalModel(role, names, graph, budget).prove(callable); }
+      try { return temporalModel(role, names, graph, budget, rules).prove(callable); }
       catch (error) {
         if (budget.remaining < 0) throw error;
         failures.push({ role, name: callable.exactDeclarationName, error }); return null;
@@ -592,7 +593,7 @@ export function temporalDataflowModuleProof(bodies, publicName) {
         .map((callable) => ({ callable, coverage: proveRole("now", callable, { expiry: expiry.exactDeclarationName }) })).filter((item) => item.coverage);
       for (const { callable: now, coverage: nowCoverage } of nowCandidates) {
         try {
-          const publicCoverage = temporalModel("public", { expiry: expiry.exactDeclarationName, now: now.exactDeclarationName }, graph, budget).prove(graph.get(publicName).callable);
+          const publicCoverage = temporalModel("public", { expiry: expiry.exactDeclarationName, now: now.exactDeclarationName }, graph, budget, rules).prove(graph.get(publicName).callable);
           requireClosedCoverage(expiryCoverage, nowCoverage, publicCoverage);
           return { proven: true, reasons: [], expiry, now };
         } catch (error) {

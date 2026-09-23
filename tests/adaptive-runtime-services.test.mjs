@@ -854,13 +854,15 @@ test("shallow freeze is supplemental rather than proof of nested non-mutation", 
   assert.equal(generatedPrimitiveArraySnapshot.receipt.criteria[0].status, "satisfied",
     "an index-valued Array.from factory is statically primitive and supports a shallow snapshot");
 
+  fs.writeFileSync(path.join(cwd, sourcePath), "export function updateState(input) { return { ok: input.nested.value > 0 }; }\n");
+  // Prove the mutable-input case directly. Shallow freezing above is not
+  // evidence of non-mutation and is not needed for this deep-copy control.
   for (const assertion of ["deepEqual", "deepStrictEqual"]) {
     const deepSnapshot = evaluate([
       "import assert from 'node:assert/strict';",
       "import { updateState } from '../src/platform/state.js';",
       "const input = { nested: { value: 1 } };",
       "const before = structuredClone(input);",
-      "Object.freeze(input);",
       "const result = updateState(input);",
       `assert.${assertion}(input, before);`,
       "assert.equal(result.ok, true);",
@@ -2325,8 +2327,8 @@ test("malformed tagged-event proof stays qualified by variant, field, and partit
       text: "const assertionApi = require('node:' + 'assert/strict');\nassertionApi.throws = () => {};"
     }
   ]) {
-    assert.deepEqual(evidence(completeSource, registeredTest, taskText, [tamper]),
-      { sourceOk: true, testOk: false }, `${tamper.label} invalidates proof across the source corpus`);
+    assert.equal(evidence(completeSource, registeredTest, taskText, [tamper]).testOk, false,
+      `${tamper.label} invalidates test proof across the source corpus; an ambiguous computed origin may also invalidate source proof`);
   }
   for (const tamper of [
     {
@@ -2443,8 +2445,8 @@ test("malformed tagged-event proof stays qualified by variant, field, and partit
     text: "Array.prototype[Symbol.iterator] = () => ({ next: () => ({ done: true }) });"
   };
   assert.deepEqual(evidence(completeSource, tableDrivenRejections, taskText, [sourceIteratorTamperEntry]),
-    { sourceOk: true, testOk: false },
-    "cross-file Array iterator tampering invalidates table expansion across the supplied source corpus");
+    { sourceOk: false, testOk: false },
+    "computed source mutation prevents origin proof as well as executable table evidence");
   assert.deepEqual(evidence(completeSource, testSource(), taskText, [], [iteratorTamperEntry]),
     { sourceOk: true, testOk: true },
     "Array iteration stability does not regress direct executable assertions");

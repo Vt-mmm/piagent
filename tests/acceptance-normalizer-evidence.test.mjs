@@ -882,3 +882,59 @@ test("normalizer propagation fails closed for async, caught, conditional, unrela
   ];
   for (const source of invalidSources) assert.equal(evidence(source).sourceOk, false, source);
 });
+
+// The operation's outer callback and callbacks passed as arguments have distinct roles.
+const callbackInputPrefix = 'import assert from "node:assert/strict"; import test from "node:test"; import { attempt } from "../src/attempt.js"; ';
+const callbackInputTest = (body) => callbackInputPrefix + `test("callback input", async () => { ${body} });`;
+const callbackInputAssertions = (body) => executableRejectionAssertions(
+  sanitizeJavaScriptEvidence(callbackInputTest(body)).toLowerCase(), new Set(["attempt"])
+);
+for (const operation of [
+  'attempt(() => 1, { limit: 0 })',
+  'attempt(() => { calls++; }, { limit: 0, sleep: async () => { sleeps++; } })',
+  '() => attempt(() => 1, { limit: 0 })',
+  'async () => attempt(() => 1, { limit: 0 })',
+  '() => { return attempt(() => 1, { limit: 0 }); }'
+]) test(`rejection operation keeps the outer call with callback arguments: ${operation}`, () => {
+  const assertions = callbackInputAssertions(`await assert.rejects(${operation}, TypeError);`);
+  assert.equal(assertions.length, 1);
+  assert.deepEqual(assertions[0].targets, ["attempt"]);
+  assert.deepEqual(assertions[0].errorClasses, ["typeerror"]);
+  assert.equal(assertions[0].mode, "rejects");
+});
+// Anonymous function expressions remain outside the existing lexical evidence contract.
+for (const body of [
+  'await assert.rejects(attempt(function () { return 1; }, { limit: 0, sleep: () => 0 }), TypeError);',
+  'await assert.rejects(function () { return attempt(() => 1, { limit: 0 }); }, TypeError);',
+  'assert.rejects(attempt(() => 1, { limit: 0 }), TypeError);',
+  'if (false) { await assert.rejects(attempt(() => 1, { limit: 0 }), TypeError); }',
+  'return; await assert.rejects(attempt(() => 1, { limit: 0 }), TypeError);',
+  'const unused = async () => { await assert.rejects(attempt(() => 1, { limit: 0 }), TypeError); };',
+  'await assert.rejects(other(() => attempt(() => 1, { limit: 0 })), TypeError);',
+  'await assert.rejects(() => { attempt(() => 1, { limit: 0 }); unrelated(); }, TypeError);',
+  'await assert.rejects(() => false && attempt(() => 1, { limit: 0 }), TypeError);',
+  'await assert.rejects(Promise.reject(new TypeError()), TypeError);',
+  '[0, -1].forEach(async limit => { await assert.rejects(attempt(() => 1, { limit }), TypeError); });',
+  'for (const limit of [0, -1]) { continue; await assert.rejects(attempt(() => 1, { limit }), TypeError); }'
+]) test(`callback arguments do not make unbound or unobserved assertions executable: ${body}`, () => {
+  assert.deepEqual(callbackInputAssertions(body), []);
+});
+test("callback arguments preserve literal iteration binding and async source mode", () => {
+  const text = callbackInputTest('for (const limit of [0, -1, 1.5, NaN]) { let calls = 0; await assert.rejects(attempt(() => { calls++; }, { limit }), TypeError); assert.equal(calls, 0); }');
+  const assertions = executableRejectionAssertions(sanitizeJavaScriptEvidence(text).toLowerCase(), new Set(["attempt"]));
+  assert.equal(assertions.length, 1);
+  assert.deepEqual(assertions[0].iterationVariables, ["limit"]);
+  const source = 'export async function attempt(operation, options) { const limit = options.limit; if (!Number.isInteger(limit) || limit < 1) throw new TypeError(); return operation(); }';
+  const check = (code, tests = text) => namedEvidence({source:code, testText:tests, taskText:'Invalid options must throw TypeError.', target:'attempt', sourcePath:'src/attempt.js'});
+  assert.deepEqual(check(source), {sourceOk:true, testOk:true});
+  assert.equal(check(source.replace('async function', 'function')).testOk, false);
+  assert.equal(check(source.replace('if (!Number.isInteger(limit) || limit < 1) throw new TypeError(); ', '')).sourceOk, false);
+  assert.equal(check(source, text.replace('TypeError);', 'RangeError);')).testOk, false);
+  assert.equal(check(source, text.replace('../src/attempt.js', '../src/unrelated.js')).testOk, false);
+  assert.equal(check(source, text.replace('for (const limit', 'const attempt = async () => { throw new TypeError(); }; for (const limit')).testOk, false);
+});
+test("synchronous outer callbacks still bind a call that receives nested callbacks", () => {
+  const assertions = callbackInputAssertions('assert.throws(() => attempt(() => 1, { limit: 0 }), TypeError);');
+  assert.equal(assertions.length, 1);
+  assert.equal(assertions[0].mode, 'throws');
+});

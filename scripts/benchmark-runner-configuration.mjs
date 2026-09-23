@@ -142,6 +142,8 @@ export function benchmarkMeasurementConfiguration({ bootstrapMetadata, candidate
     rootSeedDigest, surfaces: options.surfaces, model: options.model ?? null,
     thinking: options.thinking ?? null, serviceTier: options.serviceTier ?? null,
     codexMode: options.codexMode, codexBaseline: options.codexBaseline, piagentTreatment: options.piagentTreatment,
+    ...(options.acceptancePolicyBinding ? { acceptancePolicyBinding: options.acceptancePolicyBinding } : {}),
+    ...(bootstrapMetadata.treatmentDerivation ? { treatmentDerivation: bootstrapMetadata.treatmentDerivation } : {}),
     allowPiAuthWriteback: options.allowPiAuthWriteback,
     ...(options.budgetControl ? { budgetControl: options.budgetControl } : {}),
     piCredentialVaultId: bootstrapMetadata.piAgentHome.vaultId, timeoutSeconds: options.timeoutSeconds,
@@ -150,6 +152,7 @@ export function benchmarkMeasurementConfiguration({ bootstrapMetadata, candidate
     stopAfterFailedPair: options.stopAfterFailedPair,
     ...(options.campaignStopPolicy ? { campaignStopPolicy: options.campaignStopPolicy } : {}),
     ...(options.measurementOnly ? { measurementOnly: true } : {}),
+    ...(options.failedAttemptsOnly ? { failedAttemptsOnly: true, replaySource: options.replaySource } : {}),
     order: fullOrder.map(item => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat })) };
   return Object.freeze({ configuration, environmentPolicy,
     configurationDigest: crypto.createHash("sha256").update(JSON.stringify(configuration)).digest("hex") });

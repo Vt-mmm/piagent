@@ -198,6 +198,55 @@ for (const scenario of suite.scenarios) {
   });
 }
 
+
+const retainedContractCounterexamples = [
+  {
+    scenarioId: "tenant-role-authorization",
+    checkId: "tenant-role-boundary",
+    correct: 'typeof user.tenantId === "string" && user.tenantId.length > 0 && typeof resource.tenantId === "string" && resource.tenantId.length > 0 && user.tenantId === resource.tenantId',
+    defective: 'user.tenantId && resource.tenantId && user.tenantId === resource.tenantId'
+  },
+  {
+    scenarioId: "quoted-csv",
+    checkId: "quoted-csv-records",
+    correct: `if (field !== "" || row.length > 0 || text.endsWith('"'))`,
+    defective: `if (field !== "" || row.length > 0)`
+  },
+  {
+    scenarioId: "bounded-retry",
+    checkId: "bounded-success",
+    correct: "Number.isInteger(maxAttempts)",
+    defective: "Number.isSafeInteger(maxAttempts)"
+  }
+];
+
+for (const control of retainedContractCounterexamples) {
+  test(`production-v3 grader rejects the retained contract defect for ${control.scenarioId}`, (t) => {
+    const rootDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-v3-retained-defect-"));
+    t.after(() => fs.rmSync(rootDirectory, { recursive: true, force: true }));
+    const scenario = suite.scenarios.find(({ id }) => id === control.scenarioId);
+    const generated = generate(rootDirectory, scenario, `retained-defect-${scenario.id}`, "positive");
+    const [sourcePath, correct] = productionV3ReferenceSolution(scenario.id, generated.oracle);
+    assert.ok(correct.includes(control.correct));
+    write(generated.workspace, sourcePath, correct);
+    const input = inputFor(scenario, generated.oracle);
+    const positive = grade(scenario, generated.workspace, input, rootDirectory, "positive");
+    assert.equal(positive.passed, true, JSON.stringify(positive));
+
+    const wrong = correct.replace(control.correct, control.defective);
+    assert.notEqual(wrong, correct);
+    const wrongWorkspace = copyGenerated(rootDirectory, scenario, generated, "retained-defect");
+    write(wrongWorkspace, sourcePath, wrong);
+    const negative = grade(scenario, wrongWorkspace, input, rootDirectory, "retained-defect");
+    assert.equal(negative.passed, false, JSON.stringify(negative));
+    assert.deepEqual(negative.checks.filter(({ passed }) => !passed).map(({ id }) => id),
+      [control.checkId]);
+    assert.deepEqual(negative.checks.map(({ id }) => id), positive.checks.map(({ id }) => id));
+    assert.equal(negative.failureClass, "agent_task_failure");
+    assert.equal(Object.hasOwn(negative, "error"), false);
+  });
+}
+
 test("production-v3 oracle and reference material stay outside every model-visible workspace", (t) => {
   const rootDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-v3-leakage-"));
   t.after(() => fs.rmSync(rootDirectory, { recursive: true, force: true }));
@@ -270,3 +319,27 @@ test("production-v3 prepares a blinded 12-item two-reviewer packet without inven
   assert.equal(state.thresholdsLocked, false);
   assert.equal(suite.assurance.reviewed, false);
 });
+
+// A-v2 explicitly selects JavaScript Number division, including represented
+// integers outside the safe-integer range. The grader must distinguish exact
+// integer arithmetic rounded back to Number from the approved public API.
+for (const variant of ["reference", "exact-integer-rounded", "safe-integer-only"]) {
+  test(`A-v2 pagination Number contract calibration: ${variant}`, t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pagination-number-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const scenario = suite.scenarios.find(item => item.id === "pagination-boundary");
+    const generated = generate(directory, scenario, "approved-pagination-number-boundaries", "number-contract");
+    const [sourcePath, reference] = productionV3ReferenceSolution(scenario.id, generated.oracle);
+    let source = reference;
+    if (variant === "exact-integer-rounded") source = source.replace("Math.ceil(totalItems / pageSize)",
+      "Number((BigInt(totalItems) + BigInt(pageSize) - 1n) / BigInt(pageSize))");
+    if (variant === "safe-integer-only") source = source.replace("Number.isInteger(value)", "Number.isSafeInteger(value)");
+    if (variant !== "reference") assert.notEqual(source, reference);
+    write(generated.workspace, sourcePath, source);
+    const result = grade(scenario, generated.workspace, inputFor(scenario, generated.oracle), directory, variant);
+    const ceiling = result.checks.find(check => check.id === "ceiling-boundaries");
+    assert.ok(ceiling);
+    assert.equal(ceiling.passed, variant === "reference", `${variant}: approved Number boundaries must determine this check`);
+    assert.equal(result.passed, variant === "reference");
+  });
+}

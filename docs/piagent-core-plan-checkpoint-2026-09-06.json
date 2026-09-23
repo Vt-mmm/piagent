@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "planId": "PCL-2026-09-06",
+  "version": "1.0",
+  "recordedAt": "2026-09-06T15:00:32.362336+00:00",
+  "status": "RESEARCH_COMPLETE_IMPLEMENTATION_PAUSED",
+  "repository": "/Users/vtamm/Documents/piagent-35-recovery-20260831T090020Z/implementation",
+  "head": "c3a4427396984554eb1571e687caba0f831176ae",
+  "branch": "codex/piagent-35-recovery-20260831",
+  "parentBenchmarkPlanId": "PRB-108-2026-09-06",
+  "parentEvidence": {
+    "name": "benchmark-validity-recovery-20260906T135741Z",
+    "manifestSha256": "995bcc902f89e40e7ea0828b6e6d9fdcc9098bfb5f35ee7418624aa6ba4ab5fa",
+    "sealedEvidenceModified": false
+  },
+  "research": {
+    "primarySources": 34,
+    "publicRepositoriesPinned": 8,
+    "selectedCodeFiles": 13,
+    "changelogs": 1,
+    "papersReadAtAbstractScopeOnly": 4
+  },
+  "preservation": {
+    "preexistingGitStatusEntries": 153,
+    "e14ChangedFileHashesMatchedBeforeWrite": 153,
+    "scopedSourceAndDocFilesCheckedBeforeWrite": 2456,
+    "sourceChangesInThisResearchTurn": 0,
+    "stagedPaths": [],
+    "onlyNewDocumentationFiles": [
+      "piagent-core-improvement-plan.md",
+      "piagent-core-reasoning-research-2026-09-06.md",
+      "piagent-core-research-sources-2026-09-06.json",
+      "piagent-core-plan-checkpoint-2026-09-06.json"
+    ],
+    "candidateIdentityNote": "New nonignored docs change whole-candidate selection. E14 source/test evidence remains historical and is not rebound by this checkpoint."
+  },
+  "boundaries": {
+    "implementationPaused": true,
+    "sdkUpgraded": false,
+    "testsRunThisResearchTurn": false,
+    "providerInferenceCallsThisResearchTurn": 0,
+    "campaignReserved": false,
+    "paidAuthorityCreated": false,
+    "subagentsSpawned": false,
+    "worktreeCreated": false,
+    "pushedOrPublished": false,
+    "benchmarkTreatmentChanged": false,
+    "d026Rebound": false,
+    "run6Verdict": "INVALID_MEASUREMENT"
+  },
+  "artifacts": [
+    {
+      "path": "docs/piagent-core-improvement-plan.md",
+      "sha256": "b8bc53d19e753e40e9f7371248b49049933d0a9227585f6f182d8a32dc37a049",
+      "bytes": 38504
+    },
+    {
+      "path": "docs/piagent-core-reasoning-research-2026-09-06.md",
+      "sha256": "bb1ce6a8544a8b72c7574226621515d257ec0e1bbd7f311d949edfe5039895d1",
+      "bytes": 26595
+    },
+    {
+      "path": "docs/piagent-core-research-sources-2026-09-06.json",
+      "sha256": "939bf4e91e916417bf9ee626a10caad39c4be8a42758436089afee3cd82a4654",
+      "bytes": 17191
+    }
+  ],
+  "nextActionAfterOfflineResume": "C0 preservation and hunk manifest, then C1 exact usage to task report wiring; no provider launch or full suite first."
+}

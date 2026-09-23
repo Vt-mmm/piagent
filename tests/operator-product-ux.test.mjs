@@ -19,6 +19,7 @@ import {
   formatLiveTaskStatus,
   formatProductPreflight
 } from "../packages/piagent-core/runtime/product/operator-projections.ts";
+import { trajectoryRecommendationRef } from "../packages/piagent-core/runtime/trajectory/trajectory-runtime.ts";
 import { SolverShadowRuntime } from "../packages/piagent-core/runtime/solver/solver-shadow.ts";
 import { createTrajectoryState, createTrajectoryTransition, reduceTrajectory } from "../packages/piagent-core/runtime/trajectory/trajectory-state.ts";
 import { appendTrajectoryTransition, writeTrajectoryState } from "../packages/piagent-core/runtime/trajectory/trajectory-store.ts";
@@ -76,14 +77,14 @@ function solverInput(request, overrides = {}) {
   };
 }
 
-function writeTrajectory(cwd, current) {
+function writeTrajectory(cwd, current, recommendationRef = null) {
   let state = createTrajectoryState({
     taskId: current.taskId,
     taskRunId: current.taskRunId,
     sessionId: current.sessionId,
     changeMode: current.changeMode,
     riskLane: current.riskLane,
-    createdAt: current.createdAt
+    createdAt: current.createdAt, recommendationRef
   });
   for (const input of [
     { to: "plan", cause: "plan-observed", sourceHook: "task-state", observedAt: "2026-08-08T00:00:01.000Z" },
@@ -286,11 +287,13 @@ describe("operator product UX", () => {
   it("reports bounded task efficiency with hashed identity, honest nulls, and old-session compatibility", () => {
     const cwd = workspace();
     const current = task({ summary: "secret raw task text" });
-    new SolverShadowRuntime("shadow").evaluate(cwd, current.sessionId, solverInput("Implement src/a.ts"));
-    writeTrajectory(cwd, current);
+    const evaluation = new SolverShadowRuntime("shadow").evaluate(cwd, current.sessionId, solverInput("Implement src/a.ts"));
+    writeTrajectory(cwd, current, trajectoryRecommendationRef(evaluation.decision));
+    new SolverShadowRuntime("shadow").evaluate(cwd, current.sessionId, solverInput("Review a different complex task without edits", { profileMode: "docs" }));
     const metrics = buildTaskEfficiencyMetrics(cwd, current, { activeToolGroups: ["task", "retrieval"] });
     assert.match(metrics.identity.sessionHash, /^[a-f0-9]{64}$/);
     assert.equal(metrics.solver.route, "direct");
+    assert.equal(buildTaskEfficiencyMetrics(cwd, { ...current, taskRunId: "another-run" }).solver.route, "unknown");
     assert.equal(metrics.timing.timeToFirstCorrectEditMs, null);
     assert.equal(metrics.exactUsage.tokens, null);
     assert.equal(metrics.tools.actualInvocationCounts, null);

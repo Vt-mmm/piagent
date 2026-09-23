@@ -304,8 +304,18 @@ export class GatewaySessionStream {
       // The canonical transcript renders a custom receipt. Never stream it as
       // assistant text or open a model turn just to supply a final message.
       this.#lastMessageRef = ref("receipt");
-      this.#settlement = receipt.details.outcome === "completed" && receipt.details.completionApproved
-        && receipt.details.gateDecision === "pass" ? { outcome: "completed", reasonCode: null }
+      const diagnostic = receipt.details.diagnosticDelivery as { mode?: string; qualityClaim?: string } | undefined;
+      const diagnosticDelivered = taskOutcome === "completed" && receipt.details.completionApproved === false
+        && diagnostic?.mode === "diagnostic" && diagnostic.qualityClaim === "withheld";
+      const completedTask = receipt.details.outcome === "completed" && (receipt.details.completionApproved || diagnosticDelivered)
+        && receipt.details.gateDecision === "pass";
+      // Delivery of an already refused task is a completed operation, never
+      // approval to perform the refused action. Both the committed receipt
+      // and the supervisor's current native task projection must agree.
+      const refusedTask = taskOutcome === "blocked" && taskStatusOverride === "refused"
+        && receipt.details.outcome === "blocked" && receipt.details.completionApproved === false
+        && receipt.details.gateDecision === "fail";
+      this.#settlement = completedTask || refusedTask ? { outcome: "completed", reasonCode: null }
         : { outcome: "blocked", reasonCode: "terminal-receipt-not-approved" };
     }
     this.#flush(true);

@@ -12,4 +12,4 @@ completed before that failure and the failed index as `nextIndex`.
 the inclusive range `0..items.length` and an array `results` satisfying
 `results.length === nextIndex`; reject malformed shapes, negative or
 out-of-range indices, and results length mismatches with `TypeError`.
-Do not mutate inputs. Run the configured verification.
+Do not mutate inputs, except for the required assignment of the new checkpoint to the thrown error: that single `error.checkpoint` assignment is permitted even when the error is also reachable from an input. No other input mutation is permitted. Run the configured verification.

@@ -89,6 +89,10 @@ switch (scenario) {
       const tenantId = data.cases.find(([user]) => user?.tenantId)?.[0].tenantId;
       assert.equal(canManage({ tenantId, role: "owner", active: true }, { tenantId }), true);
       assert.equal(canManage({ tenantId, role: "admin", active: true }, { tenantId }), true);
+      for (const invalidTenantId of [7, {}]) {
+        assert.equal(canManage({ tenantId: invalidTenantId, role: "owner", active: true },
+          { tenantId: invalidTenantId }), false);
+      }
     });
     break;
   }
@@ -150,6 +154,11 @@ switch (scenario) {
       assert.equal(pageCount(data.exact, data.size), data.exact / data.size);
       assert.equal(pageCount(data.partial, data.size), Math.ceil(data.partial / data.size));
       assert.equal(pageCount(0, data.size), 0);
+      // Approved Number semantics include represented integers above 2**53.
+      for (const [total, expected] of [[2 ** 54, 6004799503160661], [2 ** 55, 12009599006321322]]) {
+        assert.equal(pageCount(total, 3), expected);
+        assert.equal(clampPage(total, total, 3), expected);
+      }
       assert.equal(clampPage(99, data.partial, data.size), Math.ceil(data.partial / data.size));
       assert.equal(clampPage(0, data.partial, data.size), 1);
       assert.equal(clampPage(-3, data.partial, data.size), 1);
@@ -165,7 +174,10 @@ switch (scenario) {
   }
   case "quoted-csv": {
     const { parseCsv } = await load("src/data/csv.js");
-    await check("quoted-csv-records", () => assert.deepEqual(parseCsv(data.input), data.expected));
+    await check("quoted-csv-records", () => {
+      assert.deepEqual(parseCsv(data.input), data.expected);
+      assert.deepEqual(parseCsv('""'), [[""]]);
+    });
     await check("unterminated-quote-rejected", () => assert.throws(() => parseCsv('a,"broken'), SyntaxError));
     break;
   }
@@ -237,6 +249,12 @@ switch (scenario) {
       assert.equal(value, "ok");
       assert.deepEqual(calls, Array.from({ length: data.successAfter }, (_, index) => index + 1));
       assert.deepEqual(delays, Array.from({ length: data.successAfter - 1 }, (_, index) => data.baseDelayMs * (2 ** index)));
+      let immediateCalls = 0;
+      const immediate = await retry(() => { immediateCalls += 1; return "immediate"; }, {
+        maxAttempts: 2 ** 54, baseDelayMs: 1, sleep: async () => assert.fail("unexpected sleep")
+      });
+      assert.equal(immediate, "immediate");
+      assert.equal(immediateCalls, 1);
     });
     await check("final-failure-no-sleep", async () => {
       const delays = [];
@@ -312,7 +330,9 @@ switch (scenario) {
       const entry = structuredClone(data.entry); const request = structuredClone(data.request);
       assert.equal(isCachedAccessUsable(entry, request), true);
       assert.equal(isCachedAccessUsable(entry, { ...request, tenantId: data.otherTenant }), false);
+      assert.equal(isCachedAccessUsable(entry, { ...request, userId: `${request.userId}-other` }), false);
       assert.equal(isCachedAccessUsable(entry, { ...request, capability: data.otherCapability }), false);
+      assert.equal(isCachedAccessUsable({ ...entry, evaluatedAt: request.now + 1 }, request), false);
       assert.equal(isCachedAccessUsable(entry, { ...request, currentPermissionRevision: entry.permissionRevision + 1 }), false);
       assert.equal(isCachedAccessUsable(entry, { ...request, now: entry.expiresAt }), false);
       assert.equal(isCachedAccessUsable(entry, { ...request, revokedAt: request.now }), false);
@@ -347,11 +367,20 @@ switch (scenario) {
     break;
   }
   case "abort-reconnect-supersession": {
-    const { initialRequestState, requestLifecycleReducer } = await load("src/frontend/request-lifecycle.js");
+    const { initialRequestState, requestLifecycleReducer: reduce } = await load("src/frontend/request-lifecycle.js");
+    const publicState = ({ activeRequestId, connectionEpoch, loading, results, error }) =>
+      ({ activeRequestId, connectionEpoch, loading, results, error });
+    const requestLifecycleReducer = (state, action) => {
+      const stateBefore = structuredClone(state), actionBefore = structuredClone(action);
+      const result = reduce(state, action);
+      assert.deepEqual(state, stateBefore, "state must not be mutated");
+      assert.deepEqual(action, actionBefore, "action and result arrays must not be mutated");
+      return result;
+    };
     await check("epoch-request-and-duplicate-settlement", () => {
       const first = requestLifecycleReducer(initialRequestState, { type: "request/start", requestId: data.firstId, epoch: 1 });
       const reconnected = requestLifecycleReducer(first, { type: "connection/reconnect", epoch: 2 });
-      assert.deepEqual(reconnected, { ...first, activeRequestId: null, connectionEpoch: 2, loading: false, error: null });
+      assert.deepEqual(publicState(reconnected), { ...publicState(first), activeRequestId: null, connectionEpoch: 2, loading: false, error: null });
       const staleAfterReconnect = requestLifecycleReducer(reconnected, { type: "request/success", requestId: data.firstId, epoch: 1, results: [data.oldResult] });
       assert.equal(staleAfterReconnect, reconnected);
       const second = requestLifecycleReducer(reconnected, { type: "request/start", requestId: data.secondId, epoch: 2 });
@@ -361,7 +390,7 @@ switch (scenario) {
       assert.equal(stale, second);
       const results = [data.currentResult];
       const settled = requestLifecycleReducer(second, { type: "request/success", requestId: data.secondId, epoch: 2, results });
-      assert.deepEqual(settled, { ...second, activeRequestId: null, loading: false, results, error: null });
+      assert.deepEqual(publicState(settled), { ...publicState(second), activeRequestId: null, loading: false, results, error: null });
       assert.notEqual(settled.results, results);
       assert.equal(requestLifecycleReducer(settled, { type: "request/success", requestId: data.secondId, epoch: 2, results }), settled);
     });
@@ -369,11 +398,20 @@ switch (scenario) {
       const started = requestLifecycleReducer({ ...initialRequestState, results: [data.oldResult], connectionEpoch: 3 }, { type: "request/start", requestId: data.firstId, epoch: 3 });
       const older = requestLifecycleReducer(started, { type: "connection/reconnect", epoch: 2 });
       assert.equal(older, started);
+      assert.equal(requestLifecycleReducer(started, { type: "connection/reconnect", epoch: 3 }), started);
       const wrongEpoch = requestLifecycleReducer(started, { type: "request/failure", requestId: data.firstId, epoch: 2, error: data.error });
       assert.equal(wrongEpoch, started);
       const failed = requestLifecycleReducer(started, { type: "request/failure", requestId: data.firstId, epoch: 3, error: data.error });
-      assert.deepEqual(failed, { ...started, activeRequestId: null, loading: false, error: data.error });
+      assert.deepEqual(publicState(failed), { ...publicState(started), activeRequestId: null, loading: false, error: data.error });
       assert.deepEqual(failed.results, [data.oldResult]);
+      assert.equal(requestLifecycleReducer(failed, { type: "request/failure", requestId: data.firstId, epoch: 3, error: data.error }), failed);
+    });
+    await check("start-epoch-ordering", () => {
+      const state = { ...initialRequestState, connectionEpoch: 3, error: data.error };
+      assert.equal(requestLifecycleReducer(state, { type: "request/start", requestId: data.firstId, epoch: 2 }), state);
+      const started = requestLifecycleReducer(state, { type: "request/start", requestId: data.firstId, epoch: 4 });
+      assert.deepEqual(publicState(started), { ...publicState(state), activeRequestId: data.firstId, connectionEpoch: 4, loading: true, error: null });
+      assert.equal(requestLifecycleReducer(started, { type: "request/success", requestId: data.firstId, epoch: 3, results: [data.oldResult] }), started);
     });
     break;
   }

@@ -13,6 +13,7 @@ import { atMostWithinFloatingPrecision, geometricMean, median, rounded } from ".
 import { hierarchicalMatrixRatioSummary, hierarchicalMatrixReportSummary, primaryEfficiencyMatrixSummary } from "./benchmark-matrix-summary.js";
 import { benchmarkInfrastructureFailureLedgerIssues, benchmarkTokenAccounting as buildBenchmarkTokenAccounting } from "./benchmark-usage.js";
 import {
+  benchmarkOutcomePairs, conditionalBothPassFreshUsage,
   efficiencyScore,
   evaluateDurationBandGate,
   evaluateFreshTokenBandGate,
@@ -86,10 +87,7 @@ export function summarizeBenchmark({
     delete sanitized.timingDiagnostics;
     return sanitized;
   });
-  const baselineByKey = new Map(baselineRuns.map((run) => [`${run.scenarioId}:${run.repeat}`, run]));
-  const allPairs = candidateRuns
-    .map((run) => ({ baseline: baselineByKey.get(`${run.scenarioId}:${run.repeat}`), candidate: run }))
-    .filter((pair) => pair.baseline);
+  const allPairs = benchmarkOutcomePairs(baselineRuns, candidateRuns);
   const pairs = allPairs.filter((pair) => pair.baseline.resolved && pair.candidate.resolved);
   const tokenPairs = pairs.filter(comparableAttemptUsage);
   const completeOutcomeScenarios = completePairedScenarioCount(allPairs, repeats);
@@ -836,6 +834,8 @@ export function summarizeBenchmark({
       },
       fixedWorkloadFamilyRatios: familyClusteredFixedWorkload.families,
       allSuccessfulPairsFreshTokenRatio: rounded(allSuccessfulPairsFreshRatio, 4),
+      conditionalBothPassFreshUsage: conditionalBothPassFreshUsage({ suite, repeats, allPairs, pairs, tokenPairs,
+        baselineRuns, candidateRuns, allSuccessfulPairsFreshRatio }),
       freshTokenRatio: rounded(freshRatio, 4),
       freshTokenRatioRaw: freshRatio,
       freshTokenRatioConfidence95: freshRatioConfidence95,

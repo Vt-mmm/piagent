@@ -151,7 +151,7 @@ test("snapshot-bound protocol v2 retains the exact Node profile and typed input 
     expected: { outcome: "return", value: { type: "string", value: "hello" } } }] }];
   const result = await runSnapshotBoundContract({ ...request, profile, imageId, dockerSocket, exportName: "run", checks });
   assert.equal(result.verdict, "pass", JSON.stringify(result));
-  assert.equal(result.result.version, "bounded-node-profile-contract-comparison-v1");
+  assert.equal(result.result.version, "bounded-node-profile-contract-comparison-v3");
   assert.equal(result.result.execution.profileDigest, profile.digest);
   const invalid = { ...profile, digest: "0".repeat(64) };
   await assert.rejects(runSnapshotBoundContract({ ...request, profile: invalid, imageId, dockerSocket, exportName: "run", checks }));

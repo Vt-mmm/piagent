@@ -318,8 +318,12 @@ test("real isolated worker reports timeout and memory faults without success", i
   assert.ok(resources.caseCpuMicros > 0);
   assert.ok(resources.caseThreadCpuMicros >= 300000); assert.ok(resources.caseWallMicros > 0);
   assert.equal(infinite.cleanupConfirmed, true);
-  const memory = await run("export function run() { return new ArrayBuffer(128 * 1024 * 1024); }");
+  // This case classifies a guest resource fault, not an outer transport deadline.
+  // Allow daemon/attach latency while retaining the guest memory, CPU and wall limits.
+  const memory = await run("export function run() { return new ArrayBuffer(128 * 1024 * 1024); }", undefined,
+    { startupAllowanceMs: 20000 });
   assert.equal(memory.status, "error", JSON.stringify(memory));
+  assert.equal(memory.observation?.cases[0]?.reason, "guest-resource-error", JSON.stringify(memory));
   assert.equal(memory.cleanupConfirmed, true);
   const fakeClock = await run("Date.now=()=>0; globalThis.performance={now:()=>0}; export function run(){ while(true){} }");
   assert.equal(fakeClock.status, "timeout", JSON.stringify(fakeClock));
@@ -399,4 +403,156 @@ test("a delayed CREATE can outlive the cancelled CLI without becoming confirmed 
   assert.equal(barrier.state.startRequests, 0);
   assert.equal((await dockerJson(dockerSocket, "DELETE", `/containers/${id}?force=true`)).status, 204);
   assert.equal((await dockerJson(dockerSocket, "GET", `/containers/${id}/json`)).status, 404);
+});
+
+// A pinned test-owned CLI models daemon delays without executing candidate code.
+// The real worker tests above still establish guest budgets and observation truth.
+async function delayedDaemonFixture(context, behavior = {}) {
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-daemon-delay-")));
+  const commandPath = path.join(directory, "docker"), socketPath = path.join(directory, "daemon.sock");
+  const statePath = path.join(directory, "state.json"), tracePath = path.join(directory, "trace.jsonl");
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const image = `sha256:${"a".repeat(64)}`, containerId = "b".repeat(64);
+  const cli = `#!${process.execPath}
+const fs = require('node:fs'), crypto = require('node:crypto');
+const args = process.argv.slice(2), action = args[2], behavior = ${JSON.stringify(behavior)};
+const statePath = ${JSON.stringify(statePath)}, tracePath = ${JSON.stringify(tracePath)};
+const containerId = ${JSON.stringify(containerId)}, image = ${JSON.stringify(image)};
+fs.appendFileSync(tracePath, JSON.stringify({ action, at: Date.now() }) + '\\n');
+const read = () => fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath)) : null;
+const write = state => fs.writeFileSync(statePath, JSON.stringify(state));
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function main() {
+  if (action === 'create') {
+    const owner = args[args.indexOf('--name') + 1].replace('piagent-contract-', '');
+    write({ owner, started: false, visibleAfter: Date.now() + (behavior.lateCreateMs || 0) });
+  }
+  if (action === behavior.delayAction) await pause(behavior.delayMs);
+  if (action === 'create') return process.stdout.write(containerId + '\\n');
+  if (action === 'inspect') {
+    const state = read();
+    if (!state || Date.now() < state.visibleAfter) return process.stdout.write('[]\\n');
+    return process.stdout.write(JSON.stringify([{
+      Id: containerId, Image: image,
+      Config: { User: '65534:65534', WorkingDir: '/executor',
+        Labels: { 'io.piagent.contract-execution': behavior.wrongOwner ? 'another-owner' : state.owner },
+        Entrypoint: ['timeout', '--signal=KILL', '8s', 'node', '--max-old-space-size=96', '/executor/worker.mjs'] },
+      HostConfig: { NetworkMode: 'none', ReadonlyRootfs: true, Privileged: false, Init: true,
+        CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges'], PidsLimit: 32, Memory: 268435456,
+        MemorySwap: 268435456, NanoCpus: 1e9, IpcMode: 'private',
+        Ulimits: [{ Name: 'cpu', Soft: 10, Hard: 12 }, { Name: 'nofile', Soft: 64, Hard: 64 }] },
+      Mounts: [], State: { Running: false, OOMKilled: false, ExitCode: 0 }
+    }]));
+  }
+  if (action === 'start') {
+    const state = read(); state.started = true; write(state);
+    const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk);
+    const text = Buffer.concat(chunks).toString(), request = JSON.parse(text);
+    process.stdout.write(JSON.stringify({ schemaVersion: 1, workerVersion: ${JSON.stringify(WORKER_VERSION)},
+      requestDigest: crypto.createHash('sha256').update(text).digest('hex'), status: 'completed',
+      cases: request.cases.map(item => ({ id: item.id, outcome: 'return', value: { type: 'boolean', value: true },
+        dateArgsAfter: [], clockReads: 0 })) }));
+  }
+  if (action === 'rm') { fs.unlinkSync(statePath); process.stdout.write(containerId + '\\n'); }
+}
+main().catch(error => { process.stderr.write(error.message); process.exitCode = 1; });
+`;
+  fs.writeFileSync(commandPath, cli, { mode: 0o500 });
+  const server = net.createServer();
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(socketPath, resolve); });
+  context.after(() => server.close());
+  return {
+    options: { requestText: sourceRequest("export const run=()=>true"), imageId: image, dockerSocket: socketPath,
+      dockerCommand: { path: commandPath, sha256: createHash("sha256").update(cli).digest("hex") } },
+    trace: () => fs.readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)),
+    remaining: () => fs.existsSync(statePath)
+  };
+}
+
+for (const [action, delayMs] of [["create", 5500], ["inspect", 5500], ["rm", 5500], ["start", 10500]]) {
+  test(`daemon maintenance delay during ${action} retains the complete owned observation`, { timeout: 90000 }, async context => {
+    const fixture = await delayedDaemonFixture(context, { delayAction: action, delayMs });
+    const result = await runIsolatedContract({ ...fixture.options, timeoutMs: 10000, startupAllowanceMs: 60000 });
+    assert.equal(result.status, "completed", JSON.stringify(result));
+    assert.equal(result.cleanupConfirmed, true);
+    assert.equal(result.observation.cases[0].value.value, true);
+    assert.equal(fixture.remaining(), false);
+    assert.equal(fixture.trace().filter(item => item.action === "create").length, 1);
+    assert.equal(fixture.trace().filter(item => item.action === "start").length, 1);
+  });
+}
+
+test("an explicit attach deadline remains exact without an approved startup allowance", { timeout: 10000 }, async context => {
+  const fixture = await delayedDaemonFixture(context, { delayAction: "start", delayMs: 1000 });
+  const result = await runIsolatedContract({ ...fixture.options, timeoutMs: 25 });
+  assert.equal(result.status, "timeout", JSON.stringify(result));
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.observation, undefined);
+  assert.equal(fixture.remaining(), false);
+});
+
+test("daemon reconciliation never adopts another owner's container", { timeout: 10000 }, async context => {
+  const fixture = await delayedDaemonFixture(context, { wrongOwner: true });
+  const result = await runIsolatedContract(fixture.options);
+  assert.equal(result.status, "error"); assert.equal(result.cleanupConfirmed, false);
+  assert.equal(result.observation, undefined); assert.equal(fixture.remaining(), true);
+  assert.deepEqual(fixture.trace().map(item => item.action), ["create", "inspect"]);
+});
+
+test("late creation after the daemon deadline is reconciled without another execution", { timeout: 90000 }, async context => {
+  const fixture = await delayedDaemonFixture(context, { delayAction: "create", delayMs: 70000, lateCreateMs: 60700 });
+  const result = await runIsolatedContract(fixture.options);
+  assert.equal(result.status, "error", JSON.stringify(result));
+  assert.equal(result.reason, "container-create-incomplete");
+  assert.equal(result.cleanupConfirmed, true); assert.equal(result.observation, undefined);
+  assert.equal(fixture.remaining(), false);
+  const actions = fixture.trace().map(item => item.action);
+  assert.equal(actions.filter(action => action === "create").length, 1);
+  assert.equal(actions.includes("start"), false);
+  assert.ok(actions.filter(action => action === "inspect").length >= 2);
+  assert.equal(actions.at(-1), "rm");
+});
+
+test("durable execution forwards approved startup allowance with an explicit attach deadline", { timeout: 30000 }, async context => {
+  const { createDurableContractRunner } = await import("../packages/piagent-core/extensions/acceptance-durable-execution.js");
+  const { openAcceptanceEvidenceStore } = await import("../packages/piagent-core/extensions/acceptance-evidence-store.js");
+  const { createSecretKey, randomBytes } = await import("node:crypto");
+  const fixture = await delayedDaemonFixture(context, { delayAction: "start", delayMs: 10500 });
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-startup-binding-")));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const projectRoot = path.join(directory, "project"); fs.mkdirSync(projectRoot);
+  const git = (...args) => execFileSync("git", ["-C", projectRoot, ...args], { stdio: "pipe" });
+  git("init", "-q"); git("config", "user.name", "Test"); git("config", "user.email", "test@example.com");
+  fs.writeFileSync(path.join(projectRoot, "run.mjs"), "export const run=()=>true;\n");
+  git("add", "run.mjs"); git("commit", "-qm", "fixture");
+  const store = openAcceptanceEvidenceStore({ filePath: path.join(directory, "evidence.sqlite"), projectRoot,
+    key: createSecretKey(randomBytes(32)) });
+  context.after(() => store.close());
+  const { requestText, ...backend } = fixture.options;
+  const runner = createDurableContractRunner({ ...backend, projectRoot, store, sourcePath: "run.mjs",
+    authorizeSourceRead: () => true, exportName: "run", timeoutMs: 10000, startupAllowanceMs: 2000,
+    verifierDigest: "c".repeat(64), getProjectVerificationDigest: () => "d".repeat(64),
+    checks: [{ id: "result", cases: [{ id: "one", args: [],
+      expected: { outcome: "return", value: { type: "boolean", value: true } } }] }] });
+  const result = await runner.run({ scope: { taskRunId: "startup", criterionId: "result" },
+    criterionHash: "a".repeat(64), maxAttempts: 1 });
+  assert.equal(result.verdict, "pass", JSON.stringify(result));
+  assert.equal(result.evidence.observed.result.execution.cleanupConfirmed, true);
+  assert.equal(fixture.remaining(), false);
+  assert.equal(fixture.trace().filter(item => item.action === "start").length, 1);
+});
+
+test("approved startup allowance still obeys cancellation during attach", { timeout: 10000 }, async context => {
+  const fixture = await delayedDaemonFixture(context, { delayAction: "start", delayMs: 10500 });
+  const controller = new AbortController();
+  const poll = setInterval(() => {
+    try { if (fixture.trace().some(item => item.action === "start")) controller.abort(); } catch {}
+  }, 20);
+  context.after(() => clearInterval(poll));
+  const result = await runIsolatedContract({ ...fixture.options, timeoutMs: 10000, startupAllowanceMs: 60000,
+    signal: controller.signal });
+  assert.equal(result.status, "cancelled", JSON.stringify(result));
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.observation, undefined);
+  assert.equal(fixture.remaining(), false);
 });

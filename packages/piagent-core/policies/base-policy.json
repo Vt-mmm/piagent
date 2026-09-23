@@ -264,6 +264,7 @@
   },
   "finalGate": {
     "defaultMode": "enforce",
+    "acceptanceProofMode": "diagnostic",
     "requireTaskContract": true,
     "requireContextManifest": true,
     "requireVerifyEvidence": true,

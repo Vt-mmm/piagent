@@ -1,3 +1,4 @@
+import { DIAGNOSTIC_TREATMENT } from "./benchmark-diagnostic-treatment.js";
 import { exactBenchmarkMeasuredUsage } from "./benchmark-usage.js";
 
 const RESTRICTION_VERDICTS = new Set([
@@ -319,7 +320,9 @@ export function applyBenchmarkClaimRestrictions(report, { tokenReason, replaySou
       flag: "replayDiagnosticOnly"
     });
   }
-  if (measurementOnly === true || report.environment?.measurementOnly === true) {
+  if (measurementOnly === true || report.environment?.measurementOnly === true
+    || report.environment?.piagentTreatment?.id === DIAGNOSTIC_TREATMENT
+    || report.environment?.acceptancePolicyBinding?.mode === "diagnostic") {
     report.environment = { ...report.environment, measurementOnly: true, executionMode: "measurement-only" };
     diagnostic(report, {
       tier: "diagnostic-measurement-only",

@@ -18,3 +18,4 @@
 !node-profile.mjs
 !node_modules/
 !node_modules/**
+!structured-clone.mjs

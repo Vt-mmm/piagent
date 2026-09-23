@@ -155,14 +155,14 @@ export function snapshotPlanSource(snapshot) {
  * ignored source bytes, so both are bound independently here.
  */
 export async function runSnapshotBoundContract({ projectRoot, sourcePath, modulePaths, authorizeSourceRead, exportName, checks,
-  profile, imageId, dockerSocket, dockerCommand, timeoutMs, signal, executionRunId } = {}) {
+  profile, imageId, dockerSocket, dockerCommand, timeoutMs, startupAllowanceMs, signal, executionRunId } = {}) {
   const request = { projectRoot, sourcePath, modulePaths, authorizeSourceRead };
   const before = captureExecutionSnapshot(request);
   const nodeProfile = profile !== undefined;
   const result = await runIndependentContract({
     planText: JSON.stringify({ schemaVersion: nodeProfile ? 2 : 1, ...(nodeProfile ? { profile } : {}),
       ...snapshotPlanSource(before), exportName, checks }), imageId, dockerSocket,
-    ...(dockerCommand === undefined ? {} : { dockerCommand }), timeoutMs, signal, executionRunId
+    ...(dockerCommand === undefined ? {} : { dockerCommand }), timeoutMs, startupAllowanceMs, signal, executionRunId
   });
   let after;
   try { after = captureExecutionSnapshot(request); }

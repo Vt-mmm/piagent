@@ -1,3 +1,4 @@
+import { finiteIntervalFallbackEvidence } from "./acceptance-temporal-contract.js";
 import { normalizePathCandidate } from "./policy-core.js";
 
 function escapeRegex(value) {
@@ -136,7 +137,8 @@ function sourceResultContract(body, idsRequired, capParameter) {
   return returnExpressions(body).some((expression) => (!idsRequired || idMap.test(expression)) && (!cap || cap.test(expression)));
 }
 
-export function acceptanceResultContractEvidence(rawCriterion, profiles, sourceEntries) {
+export function acceptanceResultContractEvidence(rawCriterion, profiles, sourceEntries, contextText) {
+  if (/^otherwise\s+return\b/i.test(String(rawCriterion).trim())) return finiteIntervalFallbackEvidence({ rawCriterion, profiles, sourceEntries, contextText });
   const text = String(rawCriterion ?? "").toLowerCase();
   const idsRequired = /\breturn(?:s|ed)?\s+only\b[^.;]{0,80}\bids?\b/.test(text);
   const capParameter = String(rawCriterion ?? "").match(/\bcapped\s+at\s+`?([a-z_$][a-z0-9_$]*)`?/i)?.[1];

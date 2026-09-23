@@ -24,3 +24,10 @@ The neutrality gate scans active WebUI governance and client source. Historical
 records and implementation-specific integration documentation may retain an
 actual third-party name when it is necessary to explain compatibility or a
 security decision.
+
+Reviewed research records may name the tools whose primary sources they cite;
+source titles must stay accurate. The explicit record list in
+`scripts/check-public-wording.mjs` permits source names only. It does not permit
+promotional comparisons, ranking claims, copied branding, or new authority.
+Unlisted documents and all runtime/operator surfaces retain the full wording
+check. A document cannot opt itself out with a comment or metadata flag.

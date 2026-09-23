@@ -39,7 +39,7 @@
           "required": ["runId", "version"],
           "properties": {
             "runId": { "$ref": "#/$defs/uuidV4" },
-            "version": { "type": ["string", "null"], "enum": ["quickjs-contract-worker-v8", null] }
+            "version": { "type": ["string", "null"], "enum": ["quickjs-contract-worker-v9", null] }
           }
         },
         "status": { "enum": ["completed", "timeout", "cancelled", "error"] },

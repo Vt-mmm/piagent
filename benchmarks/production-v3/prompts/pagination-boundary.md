@@ -1,6 +1,7 @@
 Correct `src/frontend/pagination.js`.
 
-`pageCount(totalItems, pageSize)` must use exact ceiling division, return zero
+`pageCount(totalItems, pageSize)` must return `Math.ceil(totalItems / pageSize)`
+using JavaScript Number division, return zero
 for zero items, and throw `TypeError` unless total items is a non-negative
 integer and page size is a positive integer. `clampPage` returns zero when no
 pages exist; otherwise it clamps an integer page to the inclusive range

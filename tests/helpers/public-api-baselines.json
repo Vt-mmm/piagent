@@ -1,0 +1,457 @@
+[
+  {
+    "sourcePath": "src/backend/auth.js",
+    "sha256": "98743a99257d75100ddca29f8827da0f1869d41ae9d55843e5f27880bbd4ecc9",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "canManage",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/backend/revocation-cache.js",
+    "sha256": "53b7ec12381b36e25f854ac0c50ddb07e5595d2ba3ae1a371fb39b2a0f6871de",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "isCachedAccessUsable",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/backend/invoice.js",
+    "sha256": "604a95351479ca1ba5f620a99b5f9a18f31126e42a7f450bb163031f0218b795",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "invoiceTotalCents",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            {
+              "kind": "default",
+              "value": {
+                "type": "number",
+                "value": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/backend/billing-window.js",
+    "sha256": "7f1c7682d0771093e4b116df87f6f30e9f33b56b8eb70c49bc5714198aca76aa",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "billingBucket",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/data/csv.js",
+    "sha256": "b7811a0ac5d20ee316078287d1ebb1db9811a893c99ca89ebd47117a4995c947",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "parseCsv",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/data/dedup.js",
+    "sha256": "93de066358db6b29a2eab49cd6b11f0451eb04c9e1d2375f0e7cfff8981c7cf4",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "deduplicateEvents",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/data/versioned-replay.js",
+    "sha256": "d653fe98d42ccaca05c5ab446724fdbe5df0be42d85e17602054032aa6c48a44",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "replayVersionedEvents",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/data/ndjson-stream.js",
+    "sha256": "b03dfdfaaa26d6c4c24c8efdf8c8b0e53bdc188639ad43aa7aa048a65d5f5af4",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "parseNdjsonChunks",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/frontend/chat-events.js",
+    "sha256": "e8b231af1596fc25707b7595e0ce414fde906ce84f13cf6f37974215b521ab7d",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "projectChatEvents",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/frontend/request-lifecycle.js",
+    "sha256": "55bf07a2780f3952f3658c70722ee6cc6a898a87cab614a73e7bd50e4780f4b4",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "initialRequestState",
+          "kind": "const-value",
+          "value": {
+            "type": "record",
+            "value": [
+              {
+                "key": "activeRequestId",
+                "value": {
+                  "type": "null"
+                }
+              },
+              {
+                "key": "connectionEpoch",
+                "value": {
+                  "type": "number",
+                  "value": 0
+                }
+              },
+              {
+                "key": "loading",
+                "value": {
+                  "type": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "key": "results",
+                "value": {
+                  "type": "array",
+                  "value": []
+                }
+              },
+              {
+                "key": "error",
+                "value": {
+                  "type": "null"
+                }
+              }
+            ]
+          },
+          "frozen": true
+        },
+        {
+          "name": "requestLifecycleReducer",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            {
+              "kind": "default-binding",
+              "name": "initialRequestState",
+              "value": {
+                "type": "record",
+                "value": [
+                  {
+                    "key": "activeRequestId",
+                    "value": {
+                      "type": "null"
+                    }
+                  },
+                  {
+                    "key": "connectionEpoch",
+                    "value": {
+                      "type": "number",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "key": "loading",
+                    "value": {
+                      "type": "boolean",
+                      "value": false
+                    }
+                  },
+                  {
+                    "key": "results",
+                    "value": {
+                      "type": "array",
+                      "value": []
+                    }
+                  },
+                  {
+                    "key": "error",
+                    "value": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              },
+              "frozen": true
+            },
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/frontend/pagination.js",
+    "sha256": "9a94bd711ed5f5f6f6aca97517b63e4905aef0a0424920d5fce0752311f1ca25",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "clampPage",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required",
+            "required"
+          ]
+        },
+        {
+          "name": "pageCount",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/platform/workspace.js",
+    "sha256": "0398ab06ce4807bd33da8d3790947622740cd30fa12f7150159e56d18c27a84d",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "workspaceOrder",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/platform/workflow-session.js",
+    "sha256": "7bc0c735f95406b6e5d9d860bf7f3b60837b230d055628c8b6625e172dda0ebd",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "initialWorkflowSession",
+          "kind": "const-value",
+          "value": {
+            "type": "record",
+            "value": [
+              {
+                "key": "currentWorkflow",
+                "value": {
+                  "type": "null"
+                }
+              },
+              {
+                "key": "messages",
+                "value": {
+                  "type": "array",
+                  "value": []
+                }
+              }
+            ]
+          },
+          "frozen": true
+        },
+        {
+          "name": "reduceWorkflowSession",
+          "kind": "function",
+          "async": false,
+          "generator": false,
+          "parameters": [
+            {
+              "kind": "default-binding",
+              "name": "initialWorkflowSession",
+              "value": {
+                "type": "record",
+                "value": [
+                  {
+                    "key": "currentWorkflow",
+                    "value": {
+                      "type": "null"
+                    }
+                  },
+                  {
+                    "key": "messages",
+                    "value": {
+                      "type": "array",
+                      "value": []
+                    }
+                  }
+                ]
+              },
+              "frozen": true
+            },
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/reliability/retry.js",
+    "sha256": "5e8957a70517da4d563216f9fbb5825ca00a3fc6e1fbb1c7edaa3502faafafcf",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "retry",
+          "kind": "function",
+          "async": true,
+          "generator": false,
+          "parameters": [
+            "required",
+            {
+              "kind": "default",
+              "value": {
+                "type": "record",
+                "value": []
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/reliability/checkpoint.js",
+    "sha256": "23ca4f1f62b697041201e9e861250545f74687c67cd050105a4b301e882dafc7",
+    "status": "observed",
+    "value": {
+      "version": "declared-positional-api-v1",
+      "exports": [
+        {
+          "name": "resumeWork",
+          "kind": "function",
+          "async": true,
+          "generator": false,
+          "parameters": [
+            "required",
+            "required",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "sourcePath": "src/reliability/expiry.js",
+    "sha256": "a3416ffdb092b7daa9c2a881dcd18deea9348c85eda633ad3d436471ff5cdd46",
+    "status": "unsupported",
+    "reason": "declared-api-unsupported"
+  }
+]

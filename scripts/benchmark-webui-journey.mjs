@@ -10,6 +10,7 @@ import { requestGatewayControl } from "../packages/piagent-webui/gateway/control
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
 import { gatewayProfileState, readOrCreateCatalogKey } from "../packages/piagent-webui/gateway/profile-state.ts";
 import { ProjectRegistry } from "../packages/piagent-webui/gateway/project-registry.ts";
+import { isUncertainSendContinuation } from "../packages/piagent-core/runtime/session/uncertain-send-continuation.ts";
 import { acceptedJourneyTaskStatuses } from "./benchmark-journey-outcome.mjs";
 
 const PROTOCOL = "piagent-gateway-protocol-v1";
@@ -312,7 +313,18 @@ function durableTurnPosition(items, message, operationRef, messageRequestId,
   if (requireUniqueUser && userMatches.length > 1) fail("webui-uncertain-send-was-resent");
   const userIndex = userMatches.at(-1) ?? -1;
   if (userIndex < 0) return null;
-  const assistantIndex = items.findIndex((item, index) => index > userIndex && item?.role === "assistant"
+  // The canonical transcript projects a durably confirmed delivery receipt as
+  // custom, not as a fabricated assistant/model message. Only the existing
+  // narrow recovery protocol may consume it, bound to one exact request/turn.
+  const terminalReceipt = item => item?.role === "custom" && isUncertainSendContinuation(message)
+    && userMatches.length === 1 && typeof messageRequestId === "string" && messageRequestId.length > 0
+    && typeof operationRef === "string" && operationRef.length > 0
+    && items[userIndex]?.messageRequestId === messageRequestId && item.messageRequestId === messageRequestId
+    && items[userIndex]?.agentOperationId === operationRef && item.agentOperationId === operationRef
+    && typeof items[userIndex]?.messageRef === "string" && items[userIndex].messageRef.length > 0
+    && item.parentMessageRef === items[userIndex].messageRef;
+  const assistantIndex = items.findIndex((item, index) => index > userIndex
+    && (item?.role === "assistant" || terminalReceipt(item))
     && (requireExactCorrelation ? item.messageRequestId === messageRequestId
       : !correlatedUsers || item.messageRequestId === messageRequestId)
     && (!operationRef || !item.agentOperationId || item.agentOperationId === operationRef)
@@ -341,12 +353,13 @@ async function waitForDurableTurn(browser, sessionRef, message, operationRef, me
 async function readDurableTurnIfPresent(browser, sessionRef, message, operationRef, messageRequestId, deadline) {
   try {
     const forensicDeadline = boundedForensicDeadline(deadline);
-    const pathname = `/api/v1/sessions/${encodeURIComponent(sessionRef)}/inspection/transcript?limit=100`;
-    const transcript = await withTimeout(readJson(browser, pathname, forensicDeadline),
-      remaining(forensicDeadline, "mismatch-transcript"), "mismatch-transcript");
-    const position = durableTurnPosition(Array.isArray(transcript?.items) ? transcript.items : [], message,
-      operationRef, messageRequestId, { allowBlockedAssistant: true });
-    return position ? { transcript, ...position } : null;
+    // Settlement can precede the durable transcript projection. Reuse the
+    // existing reader within the same forensic ceiling; never rerun a turn or
+    // promote missing/foreign transcript evidence into a successful outcome.
+    return await withTimeout(waitForDurableTurn(browser, sessionRef, message, operationRef,
+      messageRequestId, forensicDeadline, { allowBlockedAssistant: true,
+        requireExactCorrelation: true, requireUniqueUser: true }),
+    remaining(forensicDeadline, "mismatch-transcript"), "mismatch-transcript");
   } catch {
     return null;
   }
@@ -559,7 +572,8 @@ export async function runPiagentWebUiJourney(options) {
       if (!EXPECTED_SETTLEMENTS.has(expectedSettlement)) fail("webui-expected-settlement-invalid");
       const expectedOperationStatus = expectedSettlement === "refused" ? "completed" : expectedSettlement;
       const acceptedTaskStatuses = acceptedJourneyTaskStatuses({
-        expectedSettlement, turnIndex: index + 1, turnCount: turns.length
+        expectedSettlement, expectedTerminalSettlement: options.expectedTerminalSettlement ?? "completed",
+        turnIndex: index + 1, turnCount: turns.length
       });
       const expectedTaskStatus = acceptedTaskStatuses[0];
       const candidateOutcome = terminalLifecycleOutcome({ expectedOperationStatus,
@@ -659,5 +673,6 @@ export {
   eventSummary,
   launchCapability,
   recoverOperationFromEvents,
+  readDurableTurnIfPresent,
   terminalLifecycleOutcome
 };

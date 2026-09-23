@@ -9,6 +9,10 @@ import {
 } from "../workflows/webui-workflow.ts";
 import { buildOnboardingWorkflowPrompt, buildWorkflowFollowUp } from "../workflows/workflow-follow-up.ts";
 
+import type { TaskContract } from "../../extensions/guard-types.js";
+import { activeSessionTask } from "../../extensions/task-state.js";
+import { isUncertainSendContinuation, terminalUncertainSendReceipt } from "../session/uncertain-send-continuation.ts";
+
 type ExtensionContext = any;
 
 export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, any>): any {
@@ -78,6 +82,12 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
         `alias: /${workflow} <request>`
       ].join("\n"), { workflow });
       return;
+    }
+    // Namespace commands run before the input hook. Recover a current durable
+    // receipt here so their deferred extension prompt cannot open a model turn.
+    if (isUncertainSendContinuation(rest) && ctx.isIdle()) {
+      const receipt = terminalUncertainSendReceipt(ctx.cwd, activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined);
+      if (receipt) { emitRuntimeMessage(ctx, receipt.customType, receipt.content, receipt.details); return; }
     }
     sendWorkflowFollowUp(buildWorkflowFollowUp(workflow, rest));
     ctx.ui.notify(`Workflow launched: ${workflow}`, "info");

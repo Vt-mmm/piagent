@@ -83,7 +83,9 @@ function terminalHandoffRecovery(current, overrides = {}) {
 }
 
 describe("safe task resume state", () => {
-  it("restores phase/checkpoint identity and invalidates verifier evidence after a tree change", () => {
+  it("restores phase/checkpoint identity and invalidates verifier evidence after a tree change", t => {
+    // This fixture captures evidence in August; keep its clock inside the retention window.
+    t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-08-08T00:00:05.000Z") });
     const cwd = workspace();
     const current = task();
     const verifiedDigest = workingTreeEvidenceDigest(workingTreeSnapshot(cwd));
@@ -116,6 +118,18 @@ describe("safe task resume state", () => {
     assert.match(resume.reason, /must be refreshed/);
     assert.equal(resume.reconstruction.nextAction.action, "rerun-exact-verifier");
     assert.deepEqual(resume.reconstruction.nextAction.exactCommands, ["npm test"]);
+    t.mock.timers.setTime(Date.parse("2026-09-07T00:00:03.999Z"));
+    const retained = inspectTaskResumeState(cwd, current, current.sessionId, undefined, { protectedPaths: [] });
+    assert.deepEqual(retained.invalidatedVerifierFiles, ["src/a.ts"]);
+    assert.equal(retained.invalidatedVerifierFilesKnown, true);
+    t.mock.timers.setTime(Date.parse("2026-09-07T00:00:04.000Z"));
+    const expired = inspectTaskResumeState(cwd, current, current.sessionId, undefined, { protectedPaths: [] });
+    assert.deepEqual(expired.invalidatedVerifierFiles, []);
+    assert.equal(expired.invalidatedVerifierFilesKnown, false);
+    assert.equal(expired.staleVerifierEvidence, true);
+    assert.deepEqual(expired.invalidatedVerifierCommands, ["npm test"]);
+    assert.equal(expired.reconstruction.nextAction.action, "rerun-exact-verifier");
+    assert.deepEqual(expired.reconstruction.nextAction.exactCommands, ["npm test"]);
   });
 
   it("keeps stale legacy verifier files explicitly unknown when no sidecar exists", () => {

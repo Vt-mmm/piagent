@@ -407,3 +407,54 @@ test("the installed dispatcher previews approval without writes, then creates au
   assert.equal(f.open({ installedRoot: repositoryRoot }).isCurrent(), true);
   assert.equal(run(["--approve"]).status, 1, "existing authority is never overwritten");
 });
+
+test("explicit native-only request sets carry no receipts and cannot weaken legacy or code plans", t => {
+  const f = fixture(t), code = nodePlan(f.options), native = {
+    ...nodePlan(f.options, `operator-request-v1:${"d".repeat(64)}`), nativeOnly: true, contracts: [] };
+  const input = { ...requestSet(f.options), plans: [native, code] };
+  const plan = { schemaVersion: 4, plans: input.plans };
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const approvalSchema = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  ajv.addSchema(approvalSchema);
+  const validPlan = ajv.compile(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/host-contract-plan.schema.json"))));
+  assert.equal(validateHostContractPlan(plan), plan); assert.equal(validPlan(plan), true, JSON.stringify(validPlan.errors));
+  assert.throws(() => validateHostContractPlan(native), /explicit request set/); assert.equal(validPlan(native), false);
+  const payload = prepareHostContractApproval(input);
+  assert.equal(ajv.validate(approvalSchema.$id, payload), true, JSON.stringify(ajv.errors));
+  writeHostContractApproval(input); const config = f.open();
+  assert.equal(config.forRequest(native.operatorRequestDigest).nativeOnly, true);
+  assert.deepEqual(config.forRequest(native.operatorRequestDigest).contracts, []);
+  assert.deepEqual(config.forRequest(code.operatorRequestDigest).contracts, code.contracts);
+  assert.equal(config.forRequest(`operator-request-v1:${"f".repeat(64)}`), null);
+  for (const bad of [{ ...native, nativeOnly: false }, { ...native, contracts: code.contracts },
+    { ...code, contracts: [] }, { ...native, schemaVersion: 1 }]) {
+    assert.throws(() => validateHostContractPlan({ schemaVersion: 4, plans: [bad] }));
+    assert.equal(validPlan({ schemaVersion: 4, plans: [bad] }), false);
+  }
+  const stored = JSON.parse(fs.readFileSync(f.configPath));
+  delete stored.payload.plans[0].nativeOnly;
+  fs.writeFileSync(f.configPath, JSON.stringify(stored));
+  assert.equal(config.isCurrent(), false); assert.throws(() => f.open(), /unauthenticated/);
+});
+
+test("startup allowance is schema checked, signed and revoked on modification", t => {
+  const f = fixture(t);
+  const schema = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  for (const startupAllowanceMs of [-1, 60001, 1.5, null, "60000"]) {
+    assert.throws(() => prepareHostContractApproval({ ...f.options,
+      backend: { ...f.options.backend, startupAllowanceMs } }), /Invalid host contract/);
+  }
+  f.options.backend.startupAllowanceMs = 60000;
+  const preview = prepareHostContractApproval(f.options);
+  assert.equal(ajv.validate(schema, preview), true, JSON.stringify(ajv.errors));
+  assert.equal(preview.backend.startupAllowanceMs, 60000);
+  writeHostContractApproval(f.options);
+  const configuration = f.open();
+  assert.equal(configuration.forRequest(f.options.operatorRequestDigest).backend.startupAllowanceMs, 60000);
+  const stored = JSON.parse(fs.readFileSync(f.configPath));
+  stored.payload.backend.startupAllowanceMs = 0;
+  fs.writeFileSync(f.configPath, JSON.stringify(stored));
+  assert.equal(configuration.isCurrent(), false);
+  assert.throws(() => f.open(), /unauthenticated/);
+});
