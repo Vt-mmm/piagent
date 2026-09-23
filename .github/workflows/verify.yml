@@ -17,9 +17,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-    # macOS completes the full policy + offline verification matrix in roughly
-    # 20 minutes on a cold runner. Keep enough headroom for release audits.
-    timeout-minutes: 40
+    # The v1.7.0 tag hit the 40-minute limit twice during macOS verification,
+    # while the same commit passed the PR matrix. Leave room for slow runners.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:

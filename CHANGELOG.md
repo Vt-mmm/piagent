@@ -4,7 +4,13 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-## v1.7.0 - 2026-09-22
+## v1.7.1 - 2026-09-23
+
+The v1.7.0 tag was not published: both tag workflow attempts reached the
+40-minute macOS job limit during offline verification, even though the same
+commit passed the pull-request matrix. v1.7.1 keeps the runtime and benchmark
+boundary below and raises that CI limit to 75 minutes. No additional provider
+sessions were run.
 
 ### Session recovery, context, and accounting
 
@@ -42,10 +48,16 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ```sh
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
-npm install -g --ignore-scripts @piagent/platform@1.7.0
+npm install -g --ignore-scripts @piagent/platform@1.7.1
 piagent-install --stable
 piagent-doctor
 ```
+
+## v1.7.0 - not published
+
+The annotated tag exists, but its macOS tag gate timed out twice at 40 minutes.
+The publish job was skipped, and no `@piagent/platform@1.7.0` npm package or
+GitHub Release was created. Use v1.7.1 for installation.
 
 ## v1.6.1 - 2026-08-26
 
