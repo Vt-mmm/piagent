@@ -1297,14 +1297,21 @@ test("LOCAL profile broker IO v1", { skip: !process.env.PIAGENT_BROKER_PROFILE_O
 });
 
 // PR1 is one finite, provider-free bootstrap/catalog batch, never G0 qualification.
-function nativeDenialProbe({ progressPath, sentinelPath, outside, root, address, wrongAddress }) {
+function nativeDenialProbeConfig({ progressPath, sentinelPath, outside, root, address, wrongAddress }) {
+  return { progressPath, sentinelPath, outsideWrite: path.join(outside, "new"),
+    insidePath: path.join(root, "allowed"), allowedPort: address.port, wrongPort: wrongAddress.port };
+}
+
+function nativeDenialProbe() {
+  // Paths and ports are data passed to the child, never interpolated into JavaScript source.
   return `const fs=require('node:fs'),http=require('node:http');
-const mark=(phase,detail={})=>fs.appendFileSync(${JSON.stringify(progressPath)},JSON.stringify({phase,...detail})+'\\n');
+const cfg=JSON.parse(process.env.PIAGENT_NATIVE_DENIAL_CONFIG);
+const mark=(phase,detail={})=>fs.appendFileSync(cfg.progressPath,JSON.stringify({phase,...detail})+'\\n');
 mark('js-entered');const checks={};
-for(const [key,fn]of[['outsideRead',()=>fs.readFileSync(${JSON.stringify(sentinelPath)})],['outsideWrite',()=>fs.writeFileSync(${JSON.stringify(path.join(outside,"new"))},'x')]]){try{fn();checks[key]=false}catch(e){checks[key]=['EPERM','EACCES'].includes(e.code);mark(key,{code:e.code})}}
-fs.writeFileSync(${JSON.stringify(path.join(root,"allowed"))},'ok');checks.insideWrite=fs.readFileSync(${JSON.stringify(path.join(root,"allowed"))},'utf8')==='ok';
+for(const [key,fn] of [['outsideRead',()=>fs.readFileSync(cfg.sentinelPath)],['outsideWrite',()=>fs.writeFileSync(cfg.outsideWrite,'x')]]){mark(key+'-start');try{fn();checks[key]=false;mark(key,{unexpectedSuccess:true})}catch(e){checks[key]=['EPERM','EACCES'].includes(e.code);mark(key,{code:e.code})}}
+mark('insideWrite-start');fs.writeFileSync(cfg.insidePath,'ok');checks.insideWrite=fs.readFileSync(cfg.insidePath,'utf8')==='ok';mark('insideWrite',{pass:checks.insideWrite});
 const get=port=>new Promise(resolve=>{const r=http.get({host:'127.0.0.1',port,path:'/preflight'},s=>{s.resume();resolve({kind:'response',status:s.statusCode})});r.on('error',e=>resolve({kind:'error',code:e.code}));r.setTimeout(750,()=>{resolve({kind:'timeout'});r.destroy()})});
-(async()=>{const allowed=await get(${address.port});checks.allowedLoopback=allowed.kind==='response'&&allowed.status===204;mark('allowedLoopback',allowed);const denied=await get(${wrongAddress.port});checks.wrongLoopbackDenied=denied.kind==='error'&&['EPERM','EACCES'].includes(denied.code);mark('wrongLoopback',denied);mark('complete',{checks});process.stdout.write(JSON.stringify(checks));process.exitCode=Object.values(checks).every(Boolean)?0:1})().catch(e=>{mark('uncaught',{code:e.code});process.exitCode=1});`;
+(async()=>{mark('allowedLoopback-start');const allowed=await get(cfg.allowedPort);checks.allowedLoopback=allowed.kind==='response'&&allowed.status===204;mark('allowedLoopback',allowed);mark('wrongLoopback-start');const denied=await get(cfg.wrongPort);checks.wrongLoopbackDenied=denied.kind==='error'&&['EPERM','EACCES'].includes(denied.code);mark('wrongLoopback',denied);mark('complete',{checks});process.stdout.write(JSON.stringify(checks));process.exitCode=Object.values(checks).every(Boolean)?0:1})().catch(e=>{mark('uncaught',{code:e.code,message:e.message});process.exitCode=1});`;
 }
 
 // This checks generated control flow with in-memory stubs; it grants no OS/network qualification.
@@ -1329,8 +1336,9 @@ async function runMockNativeProbe({ refusedWrongPort = false, reproduceBrokenSuf
     });
     return request;
   } };
-  const mockProcess = { stdout: { write(text) { output.push(text); } }, exitCode: undefined };
-  let generated = nativeDenialProbe(options);
+  const mockProcess = { env: { PIAGENT_NATIVE_DENIAL_CONFIG: JSON.stringify(nativeDenialProbeConfig(options)) },
+    stdout: { write(text) { output.push(text); } }, exitCode: undefined };
+  let generated = nativeDenialProbe();
   if (reproduceBrokenSuffix) { assert.ok(generated.endsWith("});")); generated = generated.slice(0, -1) + "()"; }
   let thrown;
   try {
@@ -1888,7 +1896,8 @@ test("PR1 native finite bootstrap and Luna catalog", { skip: process.env.PIAGENT
     fs.writeFileSync(path.join(mcpRoot, "materials", "public.txt"), spec.mcp.fixtureText, { flag: "wx", mode: 0o400 });
     assert.equal(sha(Buffer.from(spec.mcp.fixtureText)), spec.mcp.fixtureSha256);
     const progressPath = path.join(root, "preflight-progress.jsonl");
-    const probe = nativeDenialProbe({ progressPath, sentinelPath, outside, root, address, wrongAddress });
+    env.PIAGENT_NATIVE_DENIAL_CONFIG = JSON.stringify(nativeDenialProbeConfig({ progressPath, sentinelPath, outside, root, address, wrongAddress }));
+    const probe = nativeDenialProbe();
     const definitions = [
       { id: "node-bootstrap", target: plan.pins.node.path, args: ["--version"], profilePath: nodeProfilePath, profileSha256: sha(nodeProfile), cap: 3000 },
       { id: "node-denials", target: plan.pins.node.path, args: ["-e", probe], profilePath: nodeProfilePath, profileSha256: sha(nodeProfile), cap: 3000 },
@@ -2113,13 +2122,11 @@ test("G0 exact Luna isolated CodeMode catalog only", { skip: !process.env.PIAGEN
   const derivedProfile = profile + `\n(allow process-exec (literal ${JSON.stringify(process.execPath)}))\n(allow file-read* (literal ${JSON.stringify(process.execPath)}))\n`;
   fs.writeFileSync(preflightProfile, derivedProfile);
   const progressPath = path.join(root, "preflight-progress.jsonl"), fatalPath = path.join(root, "node-fatal-report.json");
-  const probe = `const fs=require('node:fs'),http=require('node:http');
-const mark=(phase,detail={})=>fs.appendFileSync(${JSON.stringify(progressPath)},JSON.stringify({phase,...detail})+'\\n');
-mark('js-entered');const checks={};
-for(const [key,fn] of [['outsideRead',()=>fs.readFileSync(${JSON.stringify(path.join(outside,"sentinel"))})],['outsideWrite',()=>fs.writeFileSync(${JSON.stringify(path.join(outside,"new"))},'x')]]){mark(key+'-start');try{fn();checks[key]=false;mark(key,{unexpectedSuccess:true})}catch(e){checks[key]=['EPERM','EACCES'].includes(e.code);mark(key,{code:e.code})}}
-mark('insideWrite-start');fs.writeFileSync(${JSON.stringify(path.join(root,"allowed"))},'ok');checks.insideWrite=fs.readFileSync(${JSON.stringify(path.join(root,"allowed"))},'utf8')==='ok';mark('insideWrite',{pass:checks.insideWrite});
-const get=port=>new Promise(resolve=>{const r=http.get({host:'127.0.0.1',port,path:'/preflight'},s=>{s.resume();resolve({kind:'response',status:s.statusCode})});r.on('error',e=>resolve({kind:'error',code:e.code}));r.setTimeout(750,()=>{resolve({kind:'timeout'});r.destroy()})});
-(async()=>{mark('allowedLoopback-start');const allowed=await get(${port});checks.allowedLoopback=allowed.kind==='response'&&allowed.status===204;mark('allowedLoopback',allowed);mark('wrongLoopback-start');const denied=await get(${wrongPort});checks.wrongLoopbackDenied=denied.kind==='error'&&['EPERM','EACCES'].includes(denied.code);mark('wrongLoopback',denied);mark('complete',{checks});process.stdout.write(JSON.stringify(checks));process.exitCode=Object.values(checks).every(Boolean)?0:1})().catch(e=>{mark('uncaught',{code:e.code,message:e.message});process.exitCode=1})()`;
+  env.PIAGENT_NATIVE_DENIAL_CONFIG = JSON.stringify(nativeDenialProbeConfig({
+    progressPath, sentinelPath: path.join(outside, "sentinel"), outside, root,
+    address: { port }, wrongAddress: { port: wrongPort }
+  }));
+  const probe = nativeDenialProbe();
   const readBounded = (file, maxBytes) => {
     if (!fs.existsSync(file)) return { exists: false };
     const sizeBytes = fs.statSync(file).size;

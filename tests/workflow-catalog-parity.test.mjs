@@ -112,7 +112,7 @@ describe("canonical workflow catalog parity", () => {
       "every model workflow has one prompt; onboard is the one runtime-built workflow");
 
     const help = workflowHelpLines().join("\n");
-    for (const id of WORKFLOW_IDS) assert.match(help, new RegExp(`/workflow ${id.replace(/-/g, "\\-")} `));
+    for (const id of WORKFLOW_IDS) assert.ok(help.includes(`/workflow ${id} `));
   });
 
   it("keeps browser workflow inventory on the Gateway's canonical WebUI projection", () => {
@@ -247,13 +247,13 @@ describe("canonical workflow catalog parity", () => {
 
     await harness.commands.get("workflow").handler("help", harness.ctx);
     assert.equal(harness.messages.at(-1).customType, "piagent-workflow-help");
-    for (const id of WORKFLOW_IDS) assert.match(harness.messages.at(-1).content, new RegExp(`/workflow ${id.replace(/-/g, "\\-")} `));
+    for (const id of WORKFLOW_IDS) assert.ok(harness.messages.at(-1).content.includes(`/workflow ${id} `));
 
     const fresh = harness.commands.get("fresh");
     const completions = await fresh.getArgumentCompletions("");
     assert.deepEqual(completions.map((item) => item.value), [...WORKFLOW_IDS, "help"]);
     await fresh.handler("help", harness.ctx);
-    for (const id of WORKFLOW_IDS) assert.match(harness.messages.at(-1).content, new RegExp(`/fresh ${id.replace(/-/g, "\\-")} `));
+    for (const id of WORKFLOW_IDS) assert.ok(harness.messages.at(-1).content.includes(`/fresh ${id} `));
     assert.equal(buildFreshCommand(repositoryRoot, "onboard", "/workflow onboard", "start clean"), "/fresh onboard");
     assert.deepEqual(FRESH_COMMAND_ACTIONS, [...WORKFLOW_IDS, "help"]);
     for (const id of WORKFLOW_IDS) assert.equal(FRESH_COMMAND_HELP.some((line) => line.startsWith(`/fresh ${id} `)), true);

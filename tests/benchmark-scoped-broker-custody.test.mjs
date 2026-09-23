@@ -15,7 +15,7 @@ import { scopedFrozenQualificationIdentity } from "../scripts/benchmark-scoped-f
 import { scopedCommonRuntimeClosureIdentity, scopedContextPolicySha256
 } from "../scripts/benchmark-scoped-verification-supervisor.mjs";
 
-const nodeCommand = "/Users/vtamm/.pi/agent/harness-next-minimum-node.RWsUI4/node-v22.19.0-darwin-arm64/bin/node";
+const nodeCommand = fs.realpathSync(process.execPath);
 const brokerScript = path.resolve(import.meta.dirname, "../scripts/benchmark-scoped-tool-broker.mjs");
 const sha = value => createHash("sha256").update(value).digest("hex");
 

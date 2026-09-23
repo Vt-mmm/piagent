@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:9d0b048617f5c1580725a45ca1ef814e10589ebb9f3b04e9bc3a8f501a874bb3",
+    "packageDigest": "sha256:7e7606e892b42a34fcf71bfef06731f695c59fac84bb571a3d269875b6842151",
     "packageSource": "../",
     "packageVersion": "1.7.0",
     "runtimeFiles": [
@@ -2790,8 +2790,8 @@
         "path": "scripts/benchmark-scoped-docs-verifier.mjs"
       },
       {
-        "byteSize": 41856,
-        "digest": "sha256:f71b228780ac4e32961f1c77ebe86a3082d8a38d4b36d0304bc9e33ec6bfa21d",
+        "byteSize": 41877,
+        "digest": "sha256:e1b5447fd7aa5b41bd834c9c8ac0c68730e20f363ab97be27dd8e329d018a8d0",
         "path": "scripts/benchmark-scoped-frozen-qualification.mjs"
       },
       {

@@ -41,11 +41,18 @@ async function gatewayProbe(tail = false) {
   const observations = path.join(root, "public-context.jsonl");
   const payloadObservations = path.join(root, "tail-payload-events.jsonl");
   if (tail) fs.writeFileSync(payloadObservations, "");
-  fs.writeFileSync(extension, `import fs from "node:fs";\nexport default function(pi) {\n` +
-    (tail ? `pi.on("before_provider_request",()=>{fs.appendFileSync(${JSON.stringify(payloadObservations)},"callback\\n");});\n` : "") +
-    `pi.on("session_start",(_event,ctx)=>fs.appendFileSync(${JSON.stringify(observations)},JSON.stringify({` +
-    `kind:"session-start",tailRegistered:${tail},sessionId:ctx.sessionManager.getSessionId(),contextKeys:Object.keys(ctx).sort()})+"\\n"));\n` +
-    `}\n`);
+  fs.writeFileSync(path.join(path.dirname(extension), "probe-config.json"),
+    JSON.stringify({ observations, payloadObservations, tail }));
+  fs.writeFileSync(extension, `import fs from "node:fs";
+const config = JSON.parse(fs.readFileSync(new URL("./probe-config.json", import.meta.url), "utf8"));
+export default function(pi) {
+  if (config.tail) pi.on("before_provider_request", () => fs.appendFileSync(config.payloadObservations, "callback\\n"));
+  pi.on("session_start", (_event, ctx) => fs.appendFileSync(config.observations, JSON.stringify({
+    kind: "session-start", tailRegistered: config.tail, sessionId: ctx.sessionManager.getSessionId(),
+    contextKeys: Object.keys(ctx).sort()
+  }) + "\\n"));
+}
+`);
   fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ packages: [], skills: [], promptTemplates: [], themes: [],
     retry: { enabled: false, maxRetries: 0 }, compaction: { enabled: false } }));
   const candidateImport = relative => import(pathToFileURL(path.join(candidateRoot, relative)));

@@ -42,7 +42,7 @@ async function captureVerifierBaseline(f, source) {
 }
 
 const root = path.resolve(import.meta.dirname, ".."),
-  nodeCommand = "/Users/vtamm/.pi/agent/harness-next-minimum-node.RWsUI4/node-v22.19.0-darwin-arm64/bin/node",
+  nodeCommand = fs.realpathSync(process.execPath),
   brokerScript = path.join(root, "scripts", "benchmark-scoped-tool-broker.mjs"),
   taskTemplate = JSON.parse(fs.readFileSync(path.join(root, "evals", "fixtures", "task-contract.valid.json"), "utf8"));
 const sha = value => createHash("sha256").update(value).digest("hex");

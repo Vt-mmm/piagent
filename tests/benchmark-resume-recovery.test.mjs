@@ -146,7 +146,10 @@ test("observation custody rejects a second suffix and a reserved row substitutio
 });
 
 test("observation custody detects lock loss, parent alias and journal inode replacement", t => {
-  const f = observationFixture(t), custody = f.open(); f.release(); f.relock();
+  const f = observationFixture(t), custody = f.open();
+  const lock = path.join(f.runRoot, ".benchmark-run.lock");
+  fs.renameSync(lock, `${lock}.displaced`);
+  f.release(); f.relock();
   assert.throws(() => custody.observer.readCheckpoint(), /run-lock-changed/);
   const g = observationFixture(t); g.open(); const bytes = fs.readFileSync(g.journalPath);
   fs.renameSync(g.journalPath, g.journalPath + ".old"); fs.writeFileSync(g.journalPath, bytes, { mode: 0o600 });

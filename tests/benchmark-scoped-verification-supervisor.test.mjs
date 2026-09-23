@@ -98,11 +98,11 @@ test("common runtime closure follows static and constant-template transitive imp
   fs.writeFileSync(path.join(helpers, "dynamic.mjs"),
     'import { child } from "./dynamic-child.mjs"; export const dynamic = child;\n');
   fs.writeFileSync(path.join(scripts, "benchmark-scoped-tool-broker.mjs"),
-    'import { pure } from "./helpers/pure.mjs"; export const broker = pure;\n');
+    'import {\n pure\n} from "./helpers/pure.mjs"; export const broker = pure;\n');
   fs.writeFileSync(path.join(scripts, "benchmark-scoped-verification-supervisor.mjs"),
     'export { broker } from "./benchmark-scoped-tool-broker.mjs";\n');
   fs.writeFileSync(path.join(scripts, "benchmark-arm-observer.mjs"),
-    'export const observer = import("./helpers/pure.mjs");\n');
+    'import\n "./helpers/pure.mjs"; export const observer = import("./helpers/pure.mjs");\n');
   fs.writeFileSync(path.join(scripts, "benchmark-webui-journey.mjs"),
     'const HELPERS = "./helpers"; export const journey = import(`${HELPERS}/dynamic.mjs`);\n');
   const before = scopedCommonRuntimeClosureIdentity(root), repeat = scopedCommonRuntimeClosureIdentity(root);

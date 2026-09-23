@@ -317,7 +317,8 @@ const COMMON_RUNTIME_SEEDS = Object.freeze(["scripts/benchmark-scoped-tool-broke
   "scripts/benchmark-scoped-verification-supervisor.mjs", "scripts/benchmark-arm-observer.mjs",
   "scripts/benchmark-webui-journey.mjs"]);
 const LOCAL_IMPORT_PATTERNS = [
-  /\bimport\s+(?!\()(?:(?:[^"'`;]|\n)*?\sfrom\s*)?["']([^"']+)["']/g,
+  /\bimport\s+["']([^"']+)["']/g,
+  /\bimport\s(?!\()[^"'`;]*?\bfrom\s*["']([^"']+)["']/g,
   /\bexport\s+(?:\*|\{[^}]*\})\s+from\s+["']([^"']+)["']/g,
   /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g
 ];
