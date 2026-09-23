@@ -12,9 +12,11 @@ chỉ hoạt động khi operator chọn mode tương ứng; `/model`, CLI `--mo
 ## Capability routing trước task
 
 Piagent có contract `low | medium | high | ultra`, tách khỏi tên model cụ thể.
-Mapping đánh giá OpenAI hiện tại là Luna/medium, Terra/medium, Sol/high và
-Sol/xhigh; authenticated catalog phải có đúng model/effort, nếu không decision
-trả `unavailable` thay vì substitute.
+Mapping v2 hiện tại là GPT-6 Luna/medium, Sol/medium, Sol/high và
+Astra/xhigh cho bốn tier `low | medium | high | ultra`. Mapping v1 của họ 5.6
+chỉ dùng để đọc lại corpus benchmark lịch sử. Authenticated catalog phải có
+đúng model/effort; khi GPT-6 chưa được cấp, router ghi rõ fallback 5.6 tương
+ứng, và trả `unavailable` nếu cả hai lựa chọn đều vắng mặt.
 
 ```text
 PIAGENT_PARENT_ROUTING=off|shadow|recommend|auto
