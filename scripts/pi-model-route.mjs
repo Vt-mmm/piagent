@@ -50,7 +50,7 @@ function profileFacts() {
 }
 
 function parse(argv) {
-  const options = { prompt: "", promptFile: "", objective: "balance", json: false, execute: false, yes: false, pinned: false, currentModel: "openai-codex/gpt-5.6-sol", currentEffort: "high", passthrough: [] };
+  const options = { prompt: "", promptFile: "", objective: "balance", json: false, execute: false, yes: false, pinned: false, currentModel: "openai-codex/gpt-6-sol", currentEffort: "high", passthrough: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--") { options.passthrough = argv.slice(index + 1); break; }

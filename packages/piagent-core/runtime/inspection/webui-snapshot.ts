@@ -248,7 +248,7 @@ function capabilities(identity: WebUiIdentity, generatedAt: string, resyncRequir
     capabilities: {
       inspect: { status: "available", version: 1, reason: null, sourceViews: ["task", "working-tree", "staged"] },
       "control.chat": unavailableCapability("chat-control-not-enabled", "The same-session bridge exists, but transcript, queue, server control and browser UX are not enabled"),
-      "control.lifecycle": unavailableCapability("lifecycle-contract-incomplete", "Pi 0.86.1 lacks semantic Pause and an acknowledged phase-complete Stop contract"),
+      "control.lifecycle": unavailableCapability("lifecycle-contract-incomplete", "Pi host lacks semantic Pause and an acknowledged phase-complete Stop contract"),
       "control.resumeAndContinue": unavailableCapability("compound-control-unavailable", "Resume is unavailable until a durable acknowledged Pause contract exists"),
       "control.sessionOptions": unavailableCapability("effect-scope-not-productionized", "Model and thinking APIs exist but lifecycle and persistence scope enforcement is not enabled"),
       attachments: unavailableCapability("attachments-not-implemented", "Attachments are not implemented"),

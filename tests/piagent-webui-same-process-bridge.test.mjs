@@ -42,8 +42,8 @@ describe("Piagent WebUI same-process bridge proof", () => {
     }
   });
 
-  it("keeps Stop partial and semantic Pause, Resume and approval unavailable on Pi 0.86.1", () => {
-    const surface = surfaces(), proof = probeSameProcessBridge({ hostVersion: "0.86.1", runtimeInstanceId: "runtime_01", pi: surface.pi, ctx: surface.ctx });
+  it("keeps Stop partial and semantic Pause, Resume and approval unavailable on the pinned Pi host", () => {
+    const surface = surfaces(), proof = probeSameProcessBridge({ hostVersion: PINNED_BRIDGE_HOST_VERSION, runtimeInstanceId: "runtime_01", pi: surface.pi, ctx: surface.ctx });
     assert.equal(proof.features.stop.state, "partial");
     assert.equal(proof.features.stop.reasonCode, "void-abort-without-operation-ack");
     assert.equal(proof.features.pause.state, "unavailable");
@@ -62,7 +62,7 @@ describe("Piagent WebUI same-process bridge proof", () => {
     assert.equal(unsupported.compatible, false); assert.equal(unsupported.overall, "inspect-only");
     assert.equal(unsupported.features.sameProcessIdentity.reasonCode, "unsupported-host-version");
     const incomplete = surfaces({ pi: { sendUserMessage: undefined }, ctx: { sessionManager: { getSessionId: () => "", getBranch: () => [] } } });
-    const unavailable = probeSameProcessBridge({ hostVersion: "0.86.1", runtimeInstanceId: "runtime_01", pi: incomplete.pi, ctx: incomplete.ctx });
+    const unavailable = probeSameProcessBridge({ hostVersion: PINNED_BRIDGE_HOST_VERSION, runtimeInstanceId: "runtime_01", pi: incomplete.pi, ctx: incomplete.ctx });
     assert.equal(unavailable.sessionRef, null); assert.equal(unavailable.overall, "inspect-only");
     assert.equal(unavailable.features.chatDispatch.state, "unavailable");
   });

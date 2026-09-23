@@ -18,33 +18,40 @@ function configureDefault(input) {
 }
 
 describe("model scope defaults", () => {
-  it("uses gpt-5.6-sol high consistently for the Codex default and cycle scope", () => {
+  it("uses gpt-6-sol high consistently for the Codex default and cycle scope", () => {
     const settings = configureDefault();
     assert.equal(settings.defaultProvider, "openai-codex");
-    assert.equal(settings.defaultModel, "gpt-5.6-sol");
+    assert.equal(settings.defaultModel, "gpt-6-sol");
     assert.equal(settings.defaultThinkingLevel, "high");
     assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.5:high"));
     assert.ok(!settings.enabledModels.includes("openai-codex/gpt-5.5:xhigh"));
     assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.6-luna:medium"));
     assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.6-terra:high"));
     assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.6-sol:high"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-luna:medium"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-sol:medium"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-sol:high"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-astra:xhigh"));
     assert.ok(settings.enabledModels.includes("openai-codex/*"));
   });
 
   it("falls back to high without a suffix and preserves an explicit override", () => {
-    assert.equal(configureDefault("openai-codex/gpt-5.6-sol").defaultThinkingLevel, "high");
-    assert.equal(configureDefault("openai-codex/gpt-5.6-sol:xhigh").defaultThinkingLevel, "xhigh");
+    assert.equal(configureDefault("openai-codex/gpt-6-sol").defaultThinkingLevel, "high");
+    assert.equal(configureDefault("openai-codex/gpt-6-astra:xhigh").defaultThinkingLevel, "xhigh");
   });
 
   it("keeps the global settings template on the same default", () => {
     const template = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "templates", "global", "settings.json"), "utf8"));
     assert.equal(template.defaultProvider, "openai-codex");
-    assert.equal(template.defaultModel, "gpt-5.6-sol");
+    assert.equal(template.defaultModel, "gpt-6-sol");
     assert.equal(template.defaultThinkingLevel, "high");
     assert.ok(template.enabledModels.includes("openai-codex/gpt-5.5:high"));
     assert.ok(template.enabledModels.includes("openai-codex/gpt-5.6-luna:medium"));
     assert.ok(template.enabledModels.includes("openai-codex/gpt-5.6-terra:high"));
     assert.ok(template.enabledModels.includes("openai-codex/gpt-5.6-sol:high"));
+    assert.ok(template.enabledModels.includes("openai-codex/gpt-6-luna:medium"));
+    assert.ok(template.enabledModels.includes("openai-codex/gpt-6-sol:high"));
+    assert.ok(template.enabledModels.includes("openai-codex/gpt-6-astra:xhigh"));
     assert.ok(template.enabledModels.includes("openai-codex/*"));
 
     const projectTemplate = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "templates", "project", ".pi", "settings.json"), "utf8"));

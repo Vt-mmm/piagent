@@ -4,6 +4,22 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.8.0 - 2026-09-23
+
+- Pinned Pi host and Pi AI to 0.87.1 so Codex-authenticated sessions and the WebUI can list GPT-6 Astra, Sol, and Luna. Pi's authenticated catalog remains the authority for availability and supported thinking levels.
+- Added a new parent-routing map: Luna Medium for bounded work, Sol Medium/High for everyday and higher-risk work, and Astra Extra High for broad ambiguous work. Parent routing stays off by default; explicit model pins remain unchanged. If a GPT-6 target is unavailable, the router records a legacy 5.6 fallback instead of silently substituting it. The historical v1 mapping and benchmark corpus remain frozen.
+- New setup and WebUI sessions prefer GPT-6 Sol High when authenticated. Existing sessions and explicit user settings are not rewritten by the package. Astra's unsupported `off` level is omitted from WebUI choices.
+- Verified the release without paid provider turns; the prior 108-session comparison is historical evidence for v1.7.1, not a GPT-6 performance or token-saving claim.
+
+### Install and update
+
+```sh
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
+npm install -g --ignore-scripts @piagent/platform@1.8.0
+piagent-install --stable
+piagent-doctor --offline
+```
+
 ## v1.7.1 - 2026-09-23
 
 The v1.7.0 tag was not published: both tag workflow attempts reached the

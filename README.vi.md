@@ -40,7 +40,7 @@ acceptance receipt giữ nguyên tiêu chí chưa được chứng minh, hash-ch
 terminal outcome bất biến. Đây là operational record do cùng runtime tạo ra,
 không phải independent attestation.
 
-Policy cài sẵn của v1.7.1 dùng chế độ diagnostic cho acceptance proof: tiêu chí
+Policy cài sẵn của v1.8.0 dùng chế độ diagnostic cho acceptance proof: tiêu chí
 chưa được chứng minh vẫn ở trạng thái pending và khi hoàn tất sẽ ghi rõ không có
 khẳng định chất lượng. Task contract, scope, bước verify đang pass và trace vẫn
 chặn hoàn tất nếu thiếu. Khi cần chứng minh mọi tiêu chí trước khi hoàn tất,
@@ -202,7 +202,7 @@ Xem [bằng chứng benchmark](https://piagent.io.vn/benchmark) và
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.7.1`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.8.0`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

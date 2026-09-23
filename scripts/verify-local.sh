@@ -641,8 +641,8 @@ if (!rootPkg.pi.subagents?.agents?.length) {
   throw new Error("root package.json missing pi.subagents.agents");
 }
 const expectedPeers = {
-  "@earendil-works/pi-ai": "0.86.1",
-  "@earendil-works/pi-coding-agent": "0.86.1",
+  "@earendil-works/pi-ai": "0.87.1",
+  "@earendil-works/pi-coding-agent": "0.87.1",
   typebox: "1.3.27"
 };
 for (const [name, version] of Object.entries(expectedPeers)) {
@@ -945,7 +945,7 @@ if [[ "$OFFLINE" == true || "${PIAGENT_VERIFY_OFFLINE:-}" == "1" || "${CI:-}" ==
 else
   bash "$ROOT/scripts/pi-model-catalog.sh" --json >/dev/null
 fi
-bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-5.6-sol:high >/dev/null
+bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-6-sol:high >/dev/null
 node "$ROOT/scripts/mcp-manage.mjs" --list >/dev/null
 node "$ROOT/scripts/mcp-manage.mjs" --dry-run --preset popular --scope project --project "$ROOT" >/dev/null
 node --input-type=module - "$ROOT" <<'NODE'

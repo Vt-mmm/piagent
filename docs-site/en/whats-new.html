@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.7.1 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -102,6 +102,18 @@
               <h1>Safer task flow with less manual coordination</h1>
               <p>Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.8.0</p>
+  <h2 id="v1-8-0">Astra, Sol, and Luna in Piagent</h2>
+  <p class="section-lead">Pi 0.87.1 exposes all three GPT-6 models through the authenticated catalog. New sessions prefer Sol High; parent routing remains opt-in.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3>Luna</h3><p>Focused, verifiable tasks: the low tier at Medium effort.</p></article>
+    <article class="card"><h3>Sol</h3><p>Everyday coding: the medium and high tiers; the new-session default is High when available.</p></article>
+    <article class="card"><h3>Astra</h3><p>Broad or ambiguous work: the ultra tier at Extra High. Explicit pins and existing sessions stay intact.</p></article>
+  </div>
+  <p>The router selects only authenticated models and records a legacy 5.6 fallback. The old 108-session result does not measure GPT-6 performance or token savings.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.7.1</p>
   <h2 id="v1-7-0">Long sessions with clearer context and accounting</h2>

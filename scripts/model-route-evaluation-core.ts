@@ -32,6 +32,7 @@ export function evaluateModelRouteCorpus(input: unknown) {
       const features = extractTaskFeatures({ ...structuredClone(corpus.defaults), ...structuredClone(template.overrides), request: template.request });
       const policyInput = {
         features, catalog: catalog(variant.catalog), mode: variant.mode, objective: variant.objective,
+        mappingVersion: corpus.mappingVersion,
         selectionSource: variant.selectionSource,
         current: { provider: "openai-codex", modelId: "gpt-5.6-sol", effort: "high" },
         freshTaskBoundary: variant.freshTaskBoundary, hostBoundary: variant.hostBoundary

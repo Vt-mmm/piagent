@@ -217,10 +217,9 @@ export class SessionInspectionRegistry {
       return [{ modelRef: webUiModelRef(provider, modelId), provider, modelId, displayName: safeName(value.name ?? modelId),
         reasoning: value.reasoning, imageInput: inputs ? inputs.includes("image") : null, thinkingLevels }];
     });
-    // Keep the WebUI new-session baseline deterministic and visible. If the
-    // preferred model is not authenticated, the host's own default remains the
-    // safe fallback instead of silently substituting another catalog entry.
-    const defaultModel = models.find((value) => value.provider === "openai-codex" && value.modelId === "gpt-5.6-sol");
+    // Only offer a default present in the authenticated host catalog. Retain
+    // the previous Sol baseline for accounts that have not received GPT-6 yet.
+    const defaultModel = ["gpt-6-sol", "gpt-5.6-sol"].map((id) => models.find((value) => value.provider === "openai-codex" && value.modelId === id)).find(Boolean);
     return { schemaVersion: 1, version: "piagent-session-creation-options-v1", generatedAt: new Date().toISOString(),
       projects: [...projects.values()].slice(0, 200), models,
       defaultModelRef: defaultModel?.modelRef ?? null, defaultThinkingLevel: defaultModel ? "high" : null,

@@ -17,6 +17,12 @@ const catalog = {
   ],
   warnings: []
 };
+const gpt6Catalog = { ...catalog, models: [
+  { provider: "openai-codex", modelId: "gpt-6-luna", contextWindow: 272000, reasoning: true, imageInput: true, supportedThinkingLevels: ["low", "medium", "high", "xhigh", "max"] },
+  { provider: "openai-codex", modelId: "gpt-6-sol", contextWindow: 272000, reasoning: true, imageInput: true, supportedThinkingLevels: ["low", "medium", "high", "xhigh", "max"] },
+  { provider: "openai-codex", modelId: "gpt-6-astra", contextWindow: 272000, reasoning: true, imageInput: true, supportedThinkingLevels: ["low", "medium", "high", "xhigh", "max"] },
+  ...catalog.models
+] };
 
 function features(request = "Fix src/a.ts and run npm test", overrides = {}) {
   return extractTaskFeatures({
@@ -52,6 +58,35 @@ function decide(overrides = {}) {
 }
 
 describe("deterministic parent model routing", () => {
+  it("maps the authenticated GPT-6 family to four workload tiers", () => {
+    const low = decide({ catalog: gpt6Catalog });
+    const medium = decide({ catalog: gpt6Catalog, features: features("Fix src/a.ts", { ambiguity: "medium", riskLane: "normal" }) });
+    const high = decide({ catalog: gpt6Catalog, features: features("Refactor the platform", { scopeEstimate: "broad", ambiguity: "medium" }) });
+    const ultra = decide({ catalog: gpt6Catalog, features: features("Refactor the entire platform somehow", { scopeEstimate: "broad", ambiguity: "high" }) });
+    assert.deepEqual([low.modelId, medium.modelId, high.modelId, ultra.modelId], ["gpt-6-luna", "gpt-6-sol", "gpt-6-sol", "gpt-6-astra"]);
+    assert.deepEqual([low.effort, medium.effort, high.effort, ultra.effort], ["medium", "medium", "high", "xhigh"]);
+    assert.equal(low.mappingVersion, "openai-codex-model-route-map-v2");
+    assert.ok(!low.reasonCodes.includes("legacy-model-fallback"));
+  });
+
+  it("records a legacy fallback and preserves explicitly selected GPT-6 models", () => {
+    const fallback = decide();
+    assert.equal(fallback.modelId, "gpt-5.6-luna");
+    assert.ok(fallback.reasonCodes.includes("legacy-model-fallback"));
+    const pinned = decide({ catalog: gpt6Catalog, mode: "auto", selectionSource: "explicit-user-pin",
+      current: { provider: "openai-codex", modelId: "gpt-6-astra", effort: "max" }, hostBoundary: "prelaunch" });
+    assert.equal(pinned.modelId, "gpt-6-astra");
+    assert.equal(pinned.effort, "max");
+    assert.equal(pinned.enforced, false);
+  });
+
+  it("keeps the frozen v1 mapping for its historical offline corpus", () => {
+    const legacy = decide({ catalog: gpt6Catalog, mappingVersion: "openai-codex-model-route-map-v1" });
+    assert.equal(legacy.modelId, "gpt-5.6-luna");
+    assert.equal(legacy.mappingVersion, "openai-codex-model-route-map-v1");
+    assert.ok(!legacy.reasonCodes.includes("legacy-model-fallback"));
+  });
+
   it("recommends Luna only for explicit, bounded, verified low-risk work", () => {
     const first = decide();
     const second = decide();

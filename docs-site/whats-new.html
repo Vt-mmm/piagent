@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.7.1 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -102,6 +102,18 @@
               <h1>Luồng task an toàn hơn, ít thao tác tay hơn</h1>
               <p>Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.8.0</p>
+  <h2 id="v1-8-0">Astra, Sol và Luna trong Piagent</h2>
+  <p class="section-lead">Pi 0.87.1 đưa ba model GPT-6 vào danh sách đã đăng nhập. Phiên mới ưu tiên Sol High; tier routing vẫn là lựa chọn bật riêng.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3>Luna</h3><p>Việc gọn, rõ phạm vi và có thể kiểm tra: tier low ở Medium effort.</p></article>
+    <article class="card"><h3>Sol</h3><p>Công việc lập trình hằng ngày: tier medium/high; mặc định phiên mới ở High effort khi có quyền dùng.</p></article>
+    <article class="card"><h3>Astra</h3><p>Việc rộng hoặc mơ hồ: tier ultra ở Extra High. Model đã pin và phiên cũ được giữ nguyên.</p></article>
+  </div>
+  <p>Router chỉ chọn model có trong catalog đã đăng nhập; fallback 5.6 được ghi rõ. Kết quả 108 phiên cũ không phải phép đo GPT-6 và bản này không claim tiết kiệm token.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.7.1</p>
   <h2 id="v1-7-0">Phiên dài giữ đúng việc, context và số liệu rõ ràng</h2>

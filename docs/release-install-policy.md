@@ -7,6 +7,10 @@ Pi Agent Platform uses explicit release sources for team rollout. Personal machi
 
 This file is the canonical install, update, rollback, and release checklist. Other docs link here instead of maintaining a second release procedure.
 
+## v1.8.0 model-family boundary
+
+Pi 0.87.1 adds authenticated GPT-6 Astra, Sol and Luna choices. This release updates the SDK pin, new-session defaults and opt-in routing map, while keeping explicit model pins, prior task state and the frozen 5.6 benchmark evidence intact. Compatibility is checked without paid provider turns. The 108-session v1.7.1 result does not measure GPT-6 quality, latency or token use; a new comparative claim needs a separately approved, paired measurement.
+
 ## v1.7.1 release boundary
 
 The operator closed the paid benchmark cycle on 2026-09-22. This release uses
@@ -32,12 +36,12 @@ ordinary `release-defaults` treatment.
 
 ## Supported runtime matrix
 
-All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.86.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
+All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.87.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.7.1 | Rollout guidance |
+| Surface | Status for v1.8.0 | Rollout guidance |
 |---|---|---|
-| macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
-| Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
+| macOS Apple Silicon (`darwin/arm64`) + Bash | Local compatibility and browser checks passed; full PR/tag gate required. | Roll out after the v1.8.0 release gate passes. |
+| Linux x64 + Bash | Full GitHub Actions PR/tag gate required. | Roll out after the v1.8.0 release gate passes. |
 | macOS Intel (`darwin/x64`) + Bash | Supported target; not currently a dedicated release-gate runner. | Run `piagent-doctor` plus the target project's smoke/verify suite before broad rollout. |
 | Linux ARM64 + Bash | Supported target; not currently a dedicated release-gate runner. | Run `piagent-doctor` plus the target project's smoke/verify suite before broad rollout. |
 | Native Windows x64/ARM64 | Not supported for team rollout in this release. | Node is available on Windows, but platform helper scripts and shell parsing assume Bash/POSIX semantics. Use a verified macOS/Linux surface for release-critical work. |
@@ -129,7 +133,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.7.1` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.8.0` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -148,8 +152,8 @@ Use this flow when the team needs both terminal commands and the Pi package:
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
-npm install -g --ignore-scripts @piagent/platform@1.7.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
+npm install -g --ignore-scripts @piagent/platform@1.8.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -157,8 +161,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.7.1 (helper package version)
-tag: v1.7.1
+currentRelease: v1.8.0 (helper package version)
+tag: v1.8.0
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -175,7 +179,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.7.1
+pi install git:github.com/Vt-mmm/piagent@v1.8.0
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -240,7 +244,7 @@ Running it from a git checkout is refused rather than replacing that checkout's 
 The same sequence by hand, which must keep this order because `piagent-install` fails against a host that does not match the version it pins and does not install one itself:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.86.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable

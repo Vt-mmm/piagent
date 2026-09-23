@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:6ea6ab6ff4779e9586b47f060165f69a49bc5910cb250cd0c68e9c3e3a94498e",
+    "packageDigest": "sha256:eed6fe5cce8bae4327ea92abe6c66c14c80ce3490165284fd80beac784b6eb64",
     "packageSource": "../",
-    "packageVersion": "1.7.1",
+    "packageVersion": "1.8.0",
     "runtimeFiles": [
       {
         "byteSize": 6780,
-        "digest": "sha256:730f2be8cca07ed2641753c3d52eb5ee7c44d00b673ad669cb572d5a20b51a08",
+        "digest": "sha256:ecfcecd00af300963be872408afccf4b2e18dfc0001cbfa74e4bd2616d6d2775",
         "path": "package.json"
       },
       {
         "byteSize": 984,
-        "digest": "sha256:cc63cbaeaa6dbd58fe4a68606df96f45c439ae0f1d50af7a990cf2c6ce50d070",
+        "digest": "sha256:4f469bd53d7017b2b928621e30cb3814d65f959a111f39a474ef2b2b3df5ecd8",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1166,7 +1166,7 @@
       },
       {
         "byteSize": 984,
-        "digest": "sha256:cc63cbaeaa6dbd58fe4a68606df96f45c439ae0f1d50af7a990cf2c6ce50d070",
+        "digest": "sha256:4f469bd53d7017b2b928621e30cb3814d65f959a111f39a474ef2b2b3df5ecd8",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1426,7 +1426,7 @@
       },
       {
         "byteSize": 7528,
-        "digest": "sha256:2c46f3f2bcd1f1695bdf1def0a801afa6f8856deaeb55c1ce9e24876b514c47a",
+        "digest": "sha256:90730ea4993adb37293a8f8da528fe32d5c13c35b079ae37a42442829a714783",
         "path": "packages/piagent-core/runtime/inspection/same-process-bridge-proof.ts"
       },
       {
@@ -1545,8 +1545,8 @@
         "path": "packages/piagent-core/runtime/inspection/verifier-snapshot-store.ts"
       },
       {
-        "byteSize": 34083,
-        "digest": "sha256:a4527d9cea7d07cb8d8bef6fc67d88072d541a5ba8c6fd56c9f2a3902f3b0074",
+        "byteSize": 34081,
+        "digest": "sha256:aef27bf4249c980ab3c06b108f111e687bdd326c64ce5b2c328c6ef6d72ca834",
         "path": "packages/piagent-core/runtime/inspection/webui-snapshot.ts"
       },
       {
@@ -1575,8 +1575,8 @@
         "path": "packages/piagent-core/runtime/model/capabilities.ts"
       },
       {
-        "byteSize": 10351,
-        "digest": "sha256:15941a39df0860db7c8b66962e11b27a9b7d06d40b6cc2e1a96dc3002d3814fd",
+        "byteSize": 11855,
+        "digest": "sha256:3e4425d42888e0e3c83d53002db7bf82b7c8b0246a5a27aa3be8c57abaf34a73",
         "path": "packages/piagent-core/runtime/model/model-route-policy.ts"
       },
       {
@@ -1585,8 +1585,8 @@
         "path": "packages/piagent-core/runtime/model/model-route-runtime.ts"
       },
       {
-        "byteSize": 8350,
-        "digest": "sha256:eeb56de486a7dfce1933a957309bd5f156802c0fdf5777ef0b8b161a960aab82",
+        "byteSize": 8774,
+        "digest": "sha256:2817386d4a51c133534592ed4c634e713edd57eeb7bda711f98ade94be095b88",
         "path": "packages/piagent-core/runtime/model/model-route-types.ts"
       },
       {
@@ -2310,9 +2310,9 @@
         "path": "packages/piagent-webui/contracts/generated/snapshot-v1.ts"
       },
       {
-        "byteSize": 848117,
-        "digest": "sha256:5f4085ba59c0418063dc7c9b353ddcb90a542d5c3e70571875d8433fb0b417f5",
-        "path": "packages/piagent-webui/dist/client/assets/index-DiKRmCEP.js"
+        "byteSize": 848103,
+        "digest": "sha256:1a0f8c9e813fd5863ae249908def9c5f022f035e547ac70daf258f0427072efa",
+        "path": "packages/piagent-webui/dist/client/assets/index-Cui9AAV_.js"
       },
       {
         "byteSize": 53043,
@@ -2321,12 +2321,12 @@
       },
       {
         "byteSize": 159565,
-        "digest": "sha256:127a69b205acc3c3b2ac40d7ce6a3c7359fda02321151117a7f82e1a292ab8b7",
-        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-DGk34zJT.js"
+        "digest": "sha256:9e557d3ab6046ec555b382707c4b8f74a782d8eea29d9ce09839ae98ada2875f",
+        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-DMU7Xe_O.js"
       },
       {
         "byteSize": 580,
-        "digest": "sha256:2b3f9ead41a6c0814a246d396146d21e2b1b8ad0292e80aaf240c5474b366663",
+        "digest": "sha256:02d0924ba1760b910b93c778e8772f3760d50a5a696615d81404edefb01a2126",
         "path": "packages/piagent-webui/dist/client/index.html"
       },
       {
@@ -2505,8 +2505,8 @@
         "path": "packages/piagent-webui/gateway/session-effective-options.ts"
       },
       {
-        "byteSize": 17474,
-        "digest": "sha256:0b44acaa61828809fe6bc000dbd883826fdd02fea043aceca17ff2724f3179e4",
+        "byteSize": 17443,
+        "digest": "sha256:18a3891f7302d0327852d9d65d6c4e8f8bd1b77263a2f860376e2a610fa0db99",
         "path": "packages/piagent-webui/gateway/session-inspection-registry.ts"
       },
       {
@@ -2860,8 +2860,8 @@
         "path": "scripts/capability-catalog.mjs"
       },
       {
-        "byteSize": 4460,
-        "digest": "sha256:03fefe48aa527a645cabb75ac40399dbfd0d6358145212e5ddd2ca2e339078dd",
+        "byteSize": 4596,
+        "digest": "sha256:d45f3dafcda5e47b3230c2d0ff72325d70b102e7186027e02077e2a4de1ec4a6",
         "path": "scripts/configure-model-scope.sh"
       },
       {
@@ -2890,8 +2890,8 @@
         "path": "scripts/init-project.sh"
       },
       {
-        "byteSize": 27579,
-        "digest": "sha256:9df83a7f4c69701efa4eb2e6a0afc92971b57095870f87111b3b73bfa267cef4",
+        "byteSize": 27575,
+        "digest": "sha256:798471b140c44dd63329e4e589b7279dd646c8d4f8d3701955bf230fb8733e36",
         "path": "scripts/install-global.sh"
       },
       {
@@ -2920,8 +2920,8 @@
         "path": "scripts/pi-model-catalog.sh"
       },
       {
-        "byteSize": 7773,
-        "digest": "sha256:09619ce97fb1ef030b7a25080a8466faba3997284042ec0221a0401f78fc7dda",
+        "byteSize": 7771,
+        "digest": "sha256:83f2924522e6723ad1b4781ef6bbdfd223b5d652b768d234cab05132b49d02db",
         "path": "scripts/pi-model-route.mjs"
       },
       {
@@ -2960,8 +2960,8 @@
         "path": "scripts/select-independent-verification.mjs"
       },
       {
-        "byteSize": 17433,
-        "digest": "sha256:e289488f9fef1e678350e40db8a5bb4dd0bf42270336fc5be8ca29f4dd0af214",
+        "byteSize": 17429,
+        "digest": "sha256:864bde20e457145d57515b7bb9df6c3b96d39bce46b36069c12c723aae4d53a7",
         "path": "scripts/setup.sh"
       },
       {

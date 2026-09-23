@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const PINNED_BRIDGE_HOST_VERSION = "0.86.1" as const;
+export const PINNED_BRIDGE_HOST_VERSION = "0.87.1" as const;
 export const SAME_PROCESS_BRIDGE_PROOF_VERSION = "piagent-webui-same-process-bridge-v1" as const;
 
 const HOST_EVENTS = Object.freeze([

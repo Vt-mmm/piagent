@@ -180,7 +180,7 @@ writes are constrained to declared scope; final completion needs every planned
 verify command and changed-file evidence. Read-only scouts do not need a source
 verifier and must leave the working tree unchanged.
 
-The installed v1.7.1 policy treats incomplete acceptance proof as diagnostic:
+The installed v1.8.0 policy treats incomplete acceptance proof as diagnostic:
 unproved criteria remain pending and completion carries no quality claim. Task
 contract, scope, current passing verification, and trace still gate completion.
 Select `acceptanceProofMode: "enforce"` in a reviewed package policy when every
@@ -369,7 +369,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.7.1` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.8.0` or a reviewed commit.
 
 Ready for:
 

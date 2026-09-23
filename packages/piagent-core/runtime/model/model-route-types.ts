@@ -4,7 +4,9 @@ import type { AuthenticatedModelCatalog } from "./authenticated-catalog.ts";
 
 export const MODEL_ROUTE_DECISION_SCHEMA_VERSION = 1 as const;
 export const MODEL_ROUTE_POLICY_VERSION = "model-route-v1" as const;
-export const OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION = "openai-codex-model-route-map-v1" as const;
+export const LEGACY_OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION = "openai-codex-model-route-map-v1" as const;
+export const OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION = "openai-codex-model-route-map-v2" as const;
+export type ModelRouteMappingVersion = typeof LEGACY_OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION | typeof OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION;
 
 export const PARENT_ROUTING_MODES = Object.freeze(["off", "shadow", "recommend", "auto"] as const);
 export const ROUTING_OBJECTIVES = Object.freeze(["intelligence", "balance", "cost"] as const);
@@ -26,7 +28,7 @@ export type ModelRouteDisposition = "preserved" | "shadowed" | "recommended" | "
 export type ModelRouteDecision = {
   schemaVersion: typeof MODEL_ROUTE_DECISION_SCHEMA_VERSION;
   policyVersion: typeof MODEL_ROUTE_POLICY_VERSION;
-  mappingVersion: typeof OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION;
+  mappingVersion: ModelRouteMappingVersion;
   featureHash: string;
   mode: ParentRoutingMode;
   objective: RoutingObjective;
@@ -88,13 +90,14 @@ export function authenticatedCatalogDigest(catalog: AuthenticatedModelCatalog): 
 }
 
 export function createModelRouteDecision(
-  input: Omit<ModelRouteDecision, "schemaVersion" | "policyVersion" | "mappingVersion" | "decisionDigest">
+  input: Omit<ModelRouteDecision, "schemaVersion" | "policyVersion" | "mappingVersion" | "decisionDigest"> & { mappingVersion?: ModelRouteMappingVersion }
 ): ModelRouteDecision {
+  const { mappingVersion = OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION, ...decisionInput } = input;
   const payload = {
     schemaVersion: MODEL_ROUTE_DECISION_SCHEMA_VERSION,
     policyVersion: MODEL_ROUTE_POLICY_VERSION,
-    mappingVersion: OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION,
-    ...structuredClone(input)
+    mappingVersion,
+    ...structuredClone(decisionInput)
   } satisfies Omit<ModelRouteDecision, "decisionDigest">;
   return validateModelRouteDecision({ ...payload, decisionDigest: digestPayload(payload) });
 }
@@ -108,7 +111,8 @@ export function modelRouteDecisionValidationErrors(input: unknown): string[] {
   ];
   if (value.schemaVersion !== MODEL_ROUTE_DECISION_SCHEMA_VERSION
     || value.policyVersion !== MODEL_ROUTE_POLICY_VERSION
-    || value.mappingVersion !== OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION) errors.push("model route schema/policy/mapping version is invalid");
+    || (value.mappingVersion !== LEGACY_OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION
+      && value.mappingVersion !== OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION)) errors.push("model route schema/policy/mapping version is invalid");
   if (typeof value.featureHash !== "string" || !HASH.test(value.featureHash)) errors.push("featureHash must be sha256 hex");
   if (!PARENT_ROUTING_MODES.includes(value.mode as ParentRoutingMode)) errors.push("mode is invalid");
   if (!ROUTING_OBJECTIVES.includes(value.objective as RoutingObjective)) errors.push("objective is invalid");

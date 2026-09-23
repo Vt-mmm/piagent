@@ -4,8 +4,11 @@ import {
   authenticatedCatalogDigest,
   CAPABILITY_BANDS,
   createModelRouteDecision,
+  LEGACY_OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION,
+  OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION,
   type CapabilityBand,
   type ModelRouteDecision,
+  type ModelRouteMappingVersion,
   type ModelSelectionSource,
   type ParentRoutingMode,
   type RoutingObjective
@@ -22,33 +25,47 @@ export type ModelRoutePolicyInput = {
   current: { provider: string | null; modelId: string | null; effort: string | null };
   freshTaskBoundary: boolean;
   hostBoundary: ModelRouteHostBoundary;
+  mappingVersion?: ModelRouteMappingVersion;
 };
 
 type Candidate = { provider: "openai-codex"; modelId: string; effort: string };
 
-const BAND_CANDIDATES: Record<CapabilityBand, Candidate[]> = {
+const LEGACY_BAND_CANDIDATES: Record<CapabilityBand, Candidate[]> = {
   low: [{ provider: "openai-codex", modelId: "gpt-5.6-luna", effort: "medium" }],
   medium: [{ provider: "openai-codex", modelId: "gpt-5.6-terra", effort: "medium" }],
   high: [{ provider: "openai-codex", modelId: "gpt-5.6-sol", effort: "high" }],
   ultra: [{ provider: "openai-codex", modelId: "gpt-5.6-sol", effort: "xhigh" }]
 };
+const BAND_CANDIDATES: Record<CapabilityBand, Candidate[]> = {
+  low: [{ provider: "openai-codex", modelId: "gpt-6-luna", effort: "medium" }, ...LEGACY_BAND_CANDIDATES.low],
+  medium: [{ provider: "openai-codex", modelId: "gpt-6-sol", effort: "medium" }, ...LEGACY_BAND_CANDIDATES.medium],
+  high: [{ provider: "openai-codex", modelId: "gpt-6-sol", effort: "high" }, ...LEGACY_BAND_CANDIDATES.high],
+  ultra: [{ provider: "openai-codex", modelId: "gpt-6-astra", effort: "xhigh" }, ...LEGACY_BAND_CANDIDATES.ultra]
+};
 const BAND_INDEX = new Map(CAPABILITY_BANDS.map((band, index) => [band, index]));
 
-function exactCandidate(catalog: AuthenticatedModelCatalog, band: CapabilityBand): { model: AuthenticatedModelCatalogEntry; effort: string } | undefined {
-  for (const candidate of BAND_CANDIDATES[band]) {
+function exactCandidate(catalog: AuthenticatedModelCatalog, band: CapabilityBand, mappingVersion: ModelRouteMappingVersion): { model: AuthenticatedModelCatalogEntry; effort: string; legacyFallback: boolean } | undefined {
+  const candidates = mappingVersion === LEGACY_OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION ? LEGACY_BAND_CANDIDATES[band] : BAND_CANDIDATES[band];
+  for (const [index, candidate] of candidates.entries()) {
     const model = catalog.models.find((entry) => entry.provider === candidate.provider
       && entry.modelId === candidate.modelId
       && (entry.supportedThinkingLevels === null || entry.supportedThinkingLevels.includes(candidate.effort)));
-    if (model) return { model, effort: candidate.effort };
+    if (model) return { model, effort: candidate.effort, legacyFallback: mappingVersion === OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION && index > 0 };
   }
   return undefined;
 }
 
-function currentBand(modelId: string | null): CapabilityBand | undefined {
-  return modelId === "gpt-5.6-luna" ? "low"
-    : modelId === "gpt-5.6-terra" ? "medium"
-      : modelId === "gpt-5.6-sol" ? "high"
-        : undefined;
+function currentBand(modelId: string | null, effort: string | null): CapabilityBand | undefined {
+  if (modelId === "gpt-6-luna" || modelId === "gpt-5.6-luna") return "low";
+  if (modelId === "gpt-6-astra") return "ultra";
+  if (modelId === "gpt-6-sol") {
+    if (effort === "medium") return "medium";
+    if (effort === "xhigh" || effort === "max") return "ultra";
+    return "high";
+  }
+  if (modelId === "gpt-5.6-terra") return "medium";
+  if (modelId === "gpt-5.6-sol") return "high";
+  return undefined;
 }
 
 function maxBand(left: CapabilityBand, right: CapabilityBand): CapabilityBand {
@@ -102,6 +119,7 @@ function downgradeSteps(current: CapabilityBand | undefined, target: CapabilityB
 }
 
 export function routeParentModel(input: ModelRoutePolicyInput): ModelRouteDecision {
+  const mappingVersion = input.mappingVersion ?? OPENAI_CODEX_MODEL_ROUTE_MAPPING_VERSION;
   const floor = safetyFloor(input.features);
   const desired = objectiveBand(floor.band, input.objective);
   const catalogDigest = authenticatedCatalogDigest(input.catalog);
@@ -114,7 +132,8 @@ export function routeParentModel(input: ModelRoutePolicyInput): ModelRouteDecisi
     currentModelId: input.current.modelId,
     currentEffort: input.current.effort,
     selectionSource: input.selectionSource,
-    catalogDigest
+    catalogDigest,
+    mappingVersion
   } as const;
   if (input.mode === "off") return createModelRouteDecision({
     ...common, capabilityBand: "abstain", fallbackBand: desired, provider: input.current.provider,
@@ -136,14 +155,15 @@ export function routeParentModel(input: ModelRoutePolicyInput): ModelRouteDecisi
     confidence: "low", disposition: "unavailable", reasonCodes: ["authenticated-catalog-unavailable", ...floor.reasons],
     downgradeSteps: 0, enforced: false
   });
-  const candidate = exactCandidate(input.catalog, desired);
+  const candidate = exactCandidate(input.catalog, desired, mappingVersion);
   if (!candidate) return createModelRouteDecision({
     ...common, capabilityBand: "abstain", fallbackBand: desired, provider: null, modelId: null, effort: null,
     confidence: "low", disposition: "unavailable", reasonCodes: ["preferred-model-or-effort-unavailable", "no-silent-substitution", ...floor.reasons],
     downgradeSteps: 0, enforced: false
   });
-  const reasons = [...floor.reasons, `objective-${input.objective}`, `candidate-${desired}`, "runtime-catalog-match"];
-  const steps = downgradeSteps(currentBand(input.current.modelId), desired);
+  const reasons = [...floor.reasons, `objective-${input.objective}`, `candidate-${desired}`, "runtime-catalog-match",
+    ...(candidate.legacyFallback ? ["legacy-model-fallback"] : [])];
+  const steps = downgradeSteps(currentBand(input.current.modelId, input.current.effort), desired);
   if (input.mode === "shadow") return createModelRouteDecision({
     ...common, capabilityBand: desired, fallbackBand: null, provider: candidate.model.provider, modelId: candidate.model.modelId,
     effort: candidate.effort, confidence: floor.band === "low" || floor.band === "ultra" ? "high" : "medium",
