@@ -88,9 +88,11 @@ case "$PRESET" in
     ;;
 esac
 
-node --input-type=module - "$SETTINGS_PATH" "$PRESET" "$DEFAULT_MODEL" "$DRY_RUN" <<'NODE'
+PIAGENT_SCOPE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" node --input-type=module - "$SETTINGS_PATH" "$PRESET" "$DEFAULT_MODEL" "$DRY_RUN" <<'NODE'
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+const { prepareClaudeModelAdditions } = await import(pathToFileURL(process.env.PIAGENT_SCOPE_ROOT + "/scripts/claude-model-additions.mjs"));
 
 const [settingsPath, preset, defaultModelInput, dryRunRaw] = process.argv.slice(2);
 const dryRun = dryRunRaw === "true";
@@ -115,6 +117,8 @@ const claudeModels = [
   "anthropic/claude-sonnet-4-5:high",
   "anthropic/claude-sonnet-4-6:max",
   "anthropic/claude-sonnet-5:xhigh",
+  "anthropic/claude-sonnet-5-5:high",
+  "anthropic/claude-opus-5-5:high",
   "anthropic/claude-opus-4-5:xhigh",
   "anthropic/claude-opus-4-6:max",
   "anthropic/claude-opus-4-7:xhigh",
@@ -141,21 +145,29 @@ function parseDefaultModel(input) {
 }
 
 const parsedDefault = parseDefaultModel(defaultModelInput);
-const settings = fs.existsSync(settingsPath)
-  ? JSON.parse(fs.readFileSync(settingsPath, "utf8"))
-  : {};
+const settingsBefore = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : null;
+const settings = settingsBefore === null ? {} : JSON.parse(settingsBefore);
 
 settings.defaultProvider = parsedDefault.provider;
 settings.defaultModel = parsedDefault.model;
 settings.defaultThinkingLevel = parsedDefault.thinking;
 settings.enabledModels = enabledModels;
 
+const catalogEdit = preset === "codex" ? null : prepareClaudeModelAdditions(path.join(path.dirname(settingsPath), "models.json"));
 const output = `${JSON.stringify(settings, null, 2)}\n`;
 if (dryRun) {
   process.stdout.write(output);
 } else {
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, output);
+  try { if (catalogEdit) catalogEdit.apply(); }
+  catch (error) {
+    if (fs.readFileSync(settingsPath, "utf8") === output) {
+      if (settingsBefore === null) fs.unlinkSync(settingsPath);
+      else fs.writeFileSync(settingsPath, settingsBefore);
+    }
+    throw error;
+  }
   console.log(`Configured Pi model scope: ${settingsPath}`);
   console.log(`  preset: ${preset}`);
   console.log(`  default: ${parsedDefault.provider}/${parsedDefault.model}:${parsedDefault.thinking}`);

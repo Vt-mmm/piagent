@@ -4,6 +4,9 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+- Added reviewed Sonnet 5.5 metadata to explicit Claude/full model-scope setup on Pi 0.87.1: native 1M context, 128K output, adaptive thinking, no unsupported off/minimal modes or temperature override. Existing custom endpoints and model entries are preserved. This does not establish account entitlement.
+- Included Sonnet 5.5 and Opus 5.5 in model selection presets. Agent Watch can supply the same model through a Studio key without changing personal authentication.
+
 ## v1.8.0 - 2026-09-23
 
 - Pinned Pi host and Pi AI to 0.87.1 so Codex-authenticated sessions and the WebUI can list GPT-6 Astra, Sol, and Luna. Pi's authenticated catalog remains the authority for availability and supported thinking levels.
