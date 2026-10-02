@@ -350,6 +350,27 @@ describe("install-global release channels", () => {
     assert.doesNotMatch(skipped.stdout, /\/mcp {2,}# inspect MCP servers/);
   });
 
+  // An unknown slash command reaches the model as a message and starts a paid
+  // turn, so a next-steps hint must name a command this install provides:
+  // /subagents-doctor comes from pi-subagents, and 1.9.0 retired /workflow.
+  it("advertises only commands the install provides", () => {
+    const common = ["--stable", "--dry-run", "--no-model-scope", "--no-mcp"];
+
+    const withSubagents = runInstaller([...common, "--with-subagents"]);
+    assert.equal(withSubagents.status, 0, withSubagents.stderr);
+    assert.match(withSubagents.stdout, /pi install npm:pi-subagents@/);
+    assert.match(withSubagents.stdout, /^ {2}\/subagents-doctor\b/m);
+
+    const withoutSubagents = runInstaller([...common, "--no-subagents"]);
+    assert.equal(withoutSubagents.status, 0, withoutSubagents.stderr);
+    assert.doesNotMatch(withoutSubagents.stdout, /pi-subagents/);
+    assert.doesNotMatch(withoutSubagents.stdout, /\/subagents-doctor/);
+
+    for (const result of [withSubagents, withoutSubagents]) {
+      assert.doesNotMatch(result.stdout, /\/workflow\b/);
+    }
+  });
+
   // setup only ever appended --with-mcp, relying on the installer defaulting MCP
   // off. Once the installer defaulted it on, saying nothing meant installing it,
   // so --no-mcp reached the installer as silence and the operator's explicit
