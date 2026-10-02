@@ -71,7 +71,7 @@ test('managed WebUI shows why a subagent failed on its step', {skip:process.plat
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  try{
   const authority={studio_instance_id:randomUUID(),dataset_epoch:randomUUID(),auth_generation:1},run=randomUUID();
-  const manifest={schema_version:2,credential_mode:'managed',thinking_levels:['low','medium','high'],authority,key_id:randomUUID(),models:[{id:'claude-opus-5-5',owned_by:'claude',provider_model_id:'claude-opus-5-5'}],harness:{configuration:{main:{model_ids:['claude-opus-5-5']}}}};
+  const manifest={schema_version:2,credential_mode:'managed',thinking_levels:['low','medium','high'],authority,key_id:randomUUID(),models:[{id:'claude-opus-5-5',owned_by:'claude',provider_model_id:'claude-opus-5-5'}],harness:{configuration:{main:{model_ids:['claude-opus-5-5']},research:{model_ids:['claude-opus-5-5']}}}};
   const grant={...authority,run_id:run,fence:1,model_id:'claude-opus-5-5',provider_model_id:'claude-opus-5-5',provider:'claude',effort:'high'};
   const broker=path.join(root,'broker');fs.writeFileSync(broker,`#!${process.execPath}\nimport readline from 'node:readline';let fence=0;const manifest=${JSON.stringify(manifest)},grant=${JSON.stringify(grant)},roles=${JSON.stringify(roles)};for await(const line of readline.createInterface({input:process.stdin})){const q=JSON.parse(line),role=q.role||'main';process.stdout.write(JSON.stringify({id:q.id,result:q.action==='config'?manifest:q.action==='close'?true:{...grant,fence:++fence,role,role_id:roles[role],token:'as_run_'+roles[role]+'_'+'x'.repeat(43)}})+'\\n');}`,{mode:0o700});
   const config={broker,profile_id:'a'.repeat(64),sdk_root:sdkRoot,origin:`http://127.0.0.1:${server.address().port}`};

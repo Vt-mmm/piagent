@@ -1,4 +1,4 @@
-export type ManagedFailure = { role: "main" | "research" | "review"; code: string; kind: string; requestId: string | null; local: boolean };
+export type ManagedFailure = { role: "main" | "scout" | "research" | "verify" | "review"; code: string; kind: string; requestId: string | null; local: boolean };
 export function failureKind(code: string): string;
 export function failureIsLocal(code: string): boolean;
 export function failureCode(raw: unknown): string;

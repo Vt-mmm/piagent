@@ -104,7 +104,7 @@ function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet'
     if (fail[action]) throw Error(fail[action]);
     if (action === 'start') { efforts.push(args.effort); runEffort = mainEffort ?? args.effort; }
     if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: key, user: { id: member }, revision,
-      models: [...new Set([...knows, helper])].map(name => MODELS[name]), harness: { configuration: { main: { model_ids: [MODELS[knows[0]].id] } } } };
+      models: [...new Set([...knows, helper])].map(name => MODELS[name]), harness: { configuration: { main: { model_ids: [MODELS[knows[0]].id] }, research: { model_ids: [MODELS[helper].id] } } } };
     if (['start', 'renew', 'child'].includes(action)) return grant(args.role ?? 'main');
     if (action === 'close') return true;
     throw Error('unexpected-broker-action');

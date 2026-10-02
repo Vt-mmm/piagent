@@ -125,6 +125,22 @@ export function reviewFindings(text) {
   }
   return null;
 }
+// The verify helper re-checks a result on its own: claims against the code and
+// primary sources, the repository's checks on the current code.
+export const VERIFY_PROMPT = 'You verify a result for the company coding assistant, independently of whoever produced it. For each claim or requirement in the brief: read the code it is about, run the repository checks that cover it with bash, and confirm external facts against primary sources (official documentation, the project\'s own repository) with web_search and web_fetch. Commands run offline and the project is read-only for them: a check that must write into the project or reach the network fails for that reason. Report such a claim as unverifiable and say why; do not work around the sandbox. Never mark a claim pass without evidence you saw. End your answer with one JSON object in a ```json block: {"verdicts":[{"claim":"what was checked","status":"pass|fail|unverifiable","evidence":"file:line, the command and its result, or the source URL"}],"summary":"one sentence"}. You cannot change files or delegate.';
+// The verifier's verdicts from its answer; null when it gave no valid JSON.
+export function verifyVerdicts(text) {
+  const blocks = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map(m => m[1]);
+  for (const raw of blocks.reverse()) {
+    try {
+      const value = JSON.parse(raw);
+      if (!Array.isArray(value?.verdicts)) continue;
+      return value.verdicts.filter(v => ['pass', 'fail', 'unverifiable'].includes(v?.status) && typeof v.claim === 'string' && v.claim.trim()).slice(0, 40)
+        .map(v => ({ status: v.status, claim: clip(v.claim, 500), evidence: clip(v.evidence, 500) }));
+    } catch { /* not this block */ }
+  }
+  return null;
+}
 const where = f => f.file ? ` ${f.file}${f.line ? ':' + f.line : ''}` : '';
 export const findingText = f => `[${f.severity}]${where(f)} — ${f.issue}${f.evidence ? `\n   Evidence: ${f.evidence}` : ''}`;
 

@@ -105,7 +105,7 @@ export interface AttachmentSummary {
   truncated: boolean;
 }
 export interface CompanyFailure {
-  role: "main" | "research" | "review";
+  role: "main" | "scout" | "research" | "verify" | "review";
   reasonCode: string;
   code: string;
   requestRef: string | null;

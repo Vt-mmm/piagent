@@ -191,7 +191,7 @@
       "additionalProperties": false,
       "required": ["role", "reasonCode", "code", "requestRef", "local"],
       "properties": {
-        "role": { "enum": ["main", "research", "review"] },
+        "role": { "enum": ["main", "scout", "research", "verify", "review"] },
         "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
         "code": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_:.-]{0,79}$" },
         "requestRef": { "anyOf": [{ "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }, { "type": "null" }] },

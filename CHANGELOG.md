@@ -10,6 +10,13 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 - `/subagents-doctor` is listed in those next steps only when the install includes pi-subagents, which provides it: `piagent-install` adds it only with `--with-subagents` or when it is already installed.
 - `piagent-setup` lists `/mcp` and `/subagents-doctor` in its next steps only when that run installed them (not with `--no-mcp`, `--no-subagents` or `--project-only`), and no longer lists the retired `/onboard` and `/onboard run`; its daily flow says to ask in plain language instead of `/workflow task`. `piagent-init` no longer lists `/onboard` either. A test checks that no install script prints a command 1.9.0 retired.
 
+### Managed team harness
+
+- Two more helpers when the company Harness enables them, beside research and review. **Scout** reads the project only (no web, no commands) and answers with `file:line` facts. **Verify** checks a result on its own: it runs the repository's checks and confirms claims against the code and primary sources, then answers pass, fail or unverifiable for each claim, with evidence. Its commands run offline, and the project is read-only for them.
+- A check that verify ran and passed counts toward the turn's process, the same as one the main agent ran.
+- The main agent is offered only the helpers its Harness enables, and the prompt says when to use each one. With scout enabled, research is meant for questions that need the web. A call to a helper that the Harness lacks fails at once (`managed-helper-not-configured`).
+- The dashboard counts running helpers against the number enabled, not against two.
+
 ## v1.9.0 - 2026-10-02
 
 Freeform sessions and the managed team harness. This release retires the task

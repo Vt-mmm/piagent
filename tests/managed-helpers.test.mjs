@@ -33,7 +33,7 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
     token:`as_run_${roleIDs[role]}_${'x'.repeat(43)}`, model_id:role==='main'?'main-model':'helper-model', provider:role==='main'?'codex':'claude', provider_model_id:role==='main'?'gpt-6-sol':'claude-opus-5-5', effort:'medium'});
   const broker = {async request(action, args={}) {
     calls.push({action, ...args});
-    if(action==='config') return {schema_version:2, credential_mode:'managed', authority, models, harness:{configuration:{main:{model_ids:['main-model']}}}};
+    if(action==='config') return {schema_version:2, credential_mode:'managed', authority, models, harness:{configuration:{main:{model_ids:['main-model']}, research:{model_ids:['helper-model']}, review:{model_ids:['helper-model']}}}};
     if(['start','renew','child'].includes(action)) return grant(args.role??'main');
     if(action==='close') return true;
     throw Error('unexpected-broker-action');
@@ -110,6 +110,113 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
     assert.deepEqual(calls.filter(c=>c.action==='close'&&c.role).map(c=>c.role).sort(),['research','review']);
   } finally {
     Object.values(gates).forEach(g=>g.release.resolve());
+    await prompt?.catch(()=>{}); await managed?.dispose();
+    await new Promise(resolve=>server.close(resolve)); fs.rmSync(root,{recursive:true,force:true});
+  }
+});
+
+// Scout and verify: each runs with its own tools, only when the Harness
+// enables it. Verify runs the repository's checks with the project read-only,
+// and a check that passed there counts for the run.
+test('scout and verify helpers run with their own tools and only when the Harness enables them', {skip: !supported, timeout: 120000}, async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-scout-verify-')));
+  const project = path.join(root, 'project'); fs.mkdirSync(project);
+  const git = args => execFileSync('/usr/bin/git', args, {cwd:project, encoding:'utf8'}).trim();
+  git(['init', '-q']);
+  fs.writeFileSync(path.join(project, 'AGENTS.md'), '# Fixture\n\n## Checks\n- `sh check.sh`\n');
+  // The check tries to write into the project: the verify sandbox refuses it.
+  fs.writeFileSync(path.join(project, 'check.sh'), 'sleep 3; if (echo x > written.txt) 2>/dev/null; then echo PROJECT-WRITABLE; else echo PROJECT-READ-ONLY; fi\n');
+  git(['add', '.']); git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'baseline']);
+  const roles = ['main', 'scout', 'verify'], roleIDs = Object.fromEntries(roles.map(role => [role, randomUUID()]));
+  const runID = randomUUID(), authority = {studio_instance_id:randomUUID(), dataset_epoch:randomUUID(), auth_generation:1};
+  const models = [{id:'main-model', provider_model_id:'gpt-6-sol', owned_by:'codex'}, {id:'helper-model', provider_model_id:'claude-opus-5-5', owned_by:'claude'}];
+  const fences = {}, calls = [], requests = [], mainEntered = deferred(), mainRelease = deferred();
+  let verifyStarts = 0;
+  const grant = role => ({...authority, run_id:runID, role_id:roleIDs[role], role, fence:fences[role]=(fences[role]??0)+1,
+    token:`as_run_${roleIDs[role]}_${'x'.repeat(43)}`, model_id:role==='main'?'main-model':'helper-model', provider:role==='main'?'codex':'claude', provider_model_id:role==='main'?'gpt-6-sol':'claude-opus-5-5', effort:'medium'});
+  const broker = {async request(action, args={}) {
+    calls.push({action, ...args});
+    if(action==='config') return {schema_version:2, credential_mode:'managed', authority, models, harness:{configuration:{main:{model_ids:['main-model']}, scout:{model_ids:['helper-model']}, verify:{model_ids:['helper-model']}}}};
+    if(['start','renew','child'].includes(action)) return grant(args.role??'main');
+    if(action==='close') return true;
+    throw Error('unexpected-broker-action');
+  }, async dispose() {}};
+  const server = http.createServer(async(req,res) => {
+    const chunks=[]; for await(const chunk of req) chunks.push(chunk);
+    const body=JSON.parse(Buffer.concat(chunks));
+    const role=Object.keys(roleIDs).find(role=>roleIDs[role]===req.headers['x-session-id']);
+    requests.push({role,body});
+    res.writeHead(200, {'Content-Type':'text/event-stream'});
+    const emit = event=>res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    if(role==='main') {
+      mainEntered.resolve(); await mainRelease.promise;
+      const response={id:'resp_fixture',object:'response',status:'in_progress',model:body.model,output:[]};
+      emit({type:'response.created',response});
+      emit({type:'response.completed',response:{...response,status:'completed',usage:{input_tokens:12,output_tokens:3,total_tokens:15}}});
+      return res.end();
+    }
+    emit({type:'message_start',message:{id:'msg_fixture',type:'message',role:'assistant',content:[],model:body.model,stop_reason:null,stop_sequence:null,usage:{input_tokens:12,output_tokens:0}}});
+    // Verify first runs the repository check, then answers with its verdicts.
+    if(role==='verify' && !body.messages.some(m=>JSON.stringify(m).includes('tool_result'))) {
+      // The second verify call: the main agent edits while the check runs.
+      if(++verifyStarts===2) setTimeout(()=>fs.writeFileSync(path.join(project,'edited.txt'),'main agent edit\n'),1500);
+      emit({type:'content_block_start',index:0,content_block:{type:'tool_use',id:'toolu_check',name:'bash',input:{}}});
+      emit({type:'content_block_delta',index:0,delta:{type:'input_json_delta',partial_json:JSON.stringify({command:'sh check.sh'})}});
+      emit({type:'content_block_stop',index:0});
+      emit({type:'message_delta',delta:{stop_reason:'tool_use',stop_sequence:null},usage:{output_tokens:3}});
+    } else {
+      const text = role==='verify' ? 'Checked.\n```json\n{"verdicts":[{"claim":"check passes","status":"pass","evidence":"sh check.sh"},{"claim":"docs","status":"unverifiable","evidence":"offline"}],"summary":"ok"}\n```' : 'Scout fixture result';
+      emit({type:'content_block_start',index:0,content_block:{type:'text',text:''}});
+      emit({type:'content_block_delta',index:0,delta:{type:'text_delta',text}});
+      emit({type:'content_block_stop',index:0});
+      emit({type:'message_delta',delta:{stop_reason:'end_turn',stop_sequence:null},usage:{output_tokens:3}});
+    }
+    emit({type:'message_stop'}); res.end();
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  let managed, prompt;
+  try {
+    managed=await ManagedSession.create({sdkRoot,cwd:project,origin:`http://127.0.0.1:${server.address().port}`,broker});
+    managed.session.setThinkingLevel('medium');
+    prompt=managed.session.prompt('Scout and verify this project');
+    await mainEntered.promise;
+    // The main agent is offered exactly the helpers the Harness enables.
+    const delegate=(requests.find(r=>r.role==='main').body.tools??[]).find(t=>t.name==='delegate');
+    assert.deepEqual(delegate.parameters.properties.role.enum,['scout','verify']);
+    assert.match(delegate.description,/scout:.*no web/); assert.doesNotMatch(delegate.description,/review:/);
+    assert.match(JSON.stringify(requests.find(r=>r.role==='main').body),/delegate role \\"scout\\"/);
+    await assert.rejects(managed.delegate({role:'research',task:'Look this up'}), /managed-helper-not-configured: the company Harness has no research subagent; use scout, verify/);
+    await assert.rejects(managed.delegate({role:'planner',task:'Plan'}), /managed-helper-unavailable/);
+    const scouted=await managed.delegate({role:'scout',task:'Where is the check declared?'});
+    assert.equal(content(scouted),'Scout fixture result');
+    const executableTools = body => (body.tools??[]).filter(t=>t.name!=='__pi_deferred_placeholder__').map(t=>t.name).sort();
+    // Scout reads the project only: no commands, no web.
+    assert.deepEqual(executableTools(requests.find(r=>r.role==='scout').body),['find','grep','ls','read']);
+    const verified=await managed.delegate({role:'verify',task:'Confirm the repository check passes'});
+    const verifyRequests=requests.filter(r=>r.role==='verify');
+    // Verify also runs commands and reads the web; it never writes or edits.
+    assert.deepEqual(executableTools(verifyRequests[0].body),['bash','find','grep','ls','read','web_fetch','web_search']);
+    // It is told the repository's checks.
+    assert.match(JSON.stringify(verifyRequests[0].body.messages),/Repository checks: `sh check.sh`/);
+    assert.match(JSON.stringify(verifyRequests.at(-1).body.messages),/PROJECT-READ-ONLY/);
+    assert.equal(fs.existsSync(path.join(project,'written.txt')),false);
+    assert.deepEqual(verified.details.verdicts,{pass:1,fail:0,unverifiable:1});
+    // Its passing check counts for the run, like one the main agent ran.
+    assert.equal(managed.run.checksRun,1); assert.equal(managed.run.lastCheck.ok,true);
+    // A check during which the code changed proves nothing about either version.
+    const lastCheck=managed.run.lastCheck;
+    await managed.delegate({role:'verify',task:'Confirm it again'});
+    assert.equal(fs.existsSync(path.join(project,'edited.txt')),true);
+    assert.equal(managed.run.checksRun,1); assert.equal(managed.run.lastCheck,lastCheck);
+    assert.equal(managed.session.sessionManager.getEntries().filter(e=>e.customType==='agent-watch-helpers').at(-1).data.maximum,2);
+    mainRelease.resolve(); await prompt;
+    const receipts=managed.session.sessionManager.getEntries().filter(e=>e.type==='custom_message'&&e.customType==='agent-watch-helper-receipt').map(e=>e.content);
+    assert.equal(receipts.length,3);
+    assert.match(receipts[0],/^Scout: \d+ tokens\.$/); assert.match(receipts[1],/^Verify: \d+ tokens · 1 pass, 1 unverifiable\.$/);
+    assert.deepEqual(calls.filter(c=>c.action==='child').map(c=>c.role),['scout','verify','verify']);
+    assert.deepEqual(calls.filter(c=>c.action==='close'&&c.role).map(c=>c.role),['scout','verify','verify']);
+  } finally {
+    mainRelease.resolve();
     await prompt?.catch(()=>{}); await managed?.dispose();
     await new Promise(resolve=>server.close(resolve)); fs.rmSync(root,{recursive:true,force:true});
   }

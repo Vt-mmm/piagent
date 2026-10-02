@@ -100,7 +100,7 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
 }
 // A company request fails with Studio's (or Agent Watch's) own code: who
 // failed, which kind of failure, and Studio's request id. Text is never shown.
-export type CompanyFailure = { role: "main" | "research" | "review"; reasonCode: string; code: string; requestRef: string | null; local: boolean };
+export type CompanyFailure = { role: "main" | "scout" | "research" | "verify" | "review"; reasonCode: string; code: string; requestRef: string | null; local: boolean };
 export function companyFailure(text: unknown): CompanyFailure | null {
   const parsed = parseFailure(text);
   if (!parsed || !/^[A-Za-z0-9][A-Za-z0-9_:.-]{0,79}$/.test(parsed.code)) return null;

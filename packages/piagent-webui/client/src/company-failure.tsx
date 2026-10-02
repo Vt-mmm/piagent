@@ -68,7 +68,9 @@ const CONTINUABLE = new Set(["company-quota", "company-provider-limit", "company
 export function failureContinuable(reason: string): boolean { return CONTINUABLE.has(reason) || !reason.startsWith("company-"); }
 
 // Who failed: a harness role, never a model name.
-export function failureRole(role: "main" | "research" | "review", locale: UiLocale): string {
-  return role === "main" ? "Main agent" : role === "research" ? localize(locale, "Subagent nghiên cứu", "Research subagent")
+export function failureRole(role: "main" | "scout" | "research" | "verify" | "review", locale: UiLocale): string {
+  return role === "main" ? "Main agent" : role === "scout" ? localize(locale, "Subagent khảo sát", "Scout subagent")
+    : role === "research" ? localize(locale, "Subagent nghiên cứu", "Research subagent")
+    : role === "verify" ? localize(locale, "Subagent xác minh", "Verify subagent")
     : localize(locale, "Subagent kiểm tra", "Review subagent");
 }

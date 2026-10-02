@@ -75,6 +75,7 @@ const CODES = {
   'managed-run-required': ['config-changed', 'no company run is active'],
   'managed-helper-unavailable': ['busy', 'this subagent is already running'],
   'managed-helper-used': ['tool', 'this subagent already ran for this message; each runs once per message'],
+  'managed-helper-not-configured': ['tool', 'the company Harness does not enable this subagent'],
   'managed-helper-limit': ['tool', 'this subagent already ran 8 times for this message'],
   helper_run_limit_reached: ['tool', 'this subagent already ran 8 times for this message'],
   'managed-helper-cancelled': ['tool', 'the subagent was stopped'],
@@ -89,7 +90,7 @@ const CODES = {
   'managed-request-failed': ['failed', 'the request could not be sent'],
   'studio-request-failed': ['failed', 'Studio answered with an error'],
 };
-const ROLES = { main: 'main agent', research: 'research subagent', review: 'review subagent' };
+const ROLES = { main: 'main agent', scout: 'scout subagent', research: 'research subagent', verify: 'verify subagent', review: 'review subagent' };
 const REQUEST = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/;
 const NETWORK = /fetch failed|econnrefused|econnreset|enotfound|ehostunreach|etimedout|socket hang up|network|connection error|terminated|timed? ?out|aborted due to timeout/i;
 
@@ -158,8 +159,8 @@ export function parseFailure(raw) {
   const text = String(raw ?? '');
   if (!text.trim()) return null;
   const code = failureCode(text);
-  const role = /^Agent Watch (main agent|research subagent|review subagent): /.exec(text)?.[1]?.split(' ')[0]
-    ?? /(research|review) subagent/.exec(text)?.[1] ?? 'main';
+  const role = /^Agent Watch (main agent|(?:scout|research|verify|review) subagent): /.exec(text)?.[1]?.split(' ')[0]
+    ?? /(scout|research|verify|review) subagent/.exec(text)?.[1] ?? 'main';
   const request = failureIsLocal(code) ? null : REQUEST.exec(text)?.[1] ?? null;
   return { role, code, kind: failureKind(code), requestId: request, local: failureIsLocal(code) };
 }

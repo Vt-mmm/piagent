@@ -96,7 +96,10 @@ export class ManagedToolBoundary {
   #tail = Promise.resolve();
   #children = new Set();
   #closed = false;
-  constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, node = process.execPath, identity, userHome: home, searchTools = true }) {
+  // readOnly: the project cannot be written. commands: bash is offered all
+  // the same (a helper that runs checks); it writes only to its temporary
+  // directory, and has no network.
+  constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, commands = false, node = process.execPath, identity, userHome: home, searchTools = true }) {
     if (process.platform !== 'darwin') throw new Error('managed-sandbox-unavailable');
     this.cwd = fs.realpathSync(cwd); this.sdkRoot = fs.realpathSync(sdkRoot);
     this.node = fs.realpathSync(node);
@@ -139,7 +142,7 @@ export class ManagedToolBoundary {
       identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) });
     if (searchTools) provisionSearchTools(this.home, userHome);
     else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
-    this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit', 'bash'].includes(name)) : [...TOOL_NAMES];
+    this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit'].includes(name) && (name !== 'bash' || commands)) : [...TOOL_NAMES];
   }
   tools(api) {
     const factories = { read: api.createReadToolDefinition, write: api.createWriteToolDefinition,
