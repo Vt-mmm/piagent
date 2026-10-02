@@ -1,4 +1,18 @@
 <section class="section">
+  <p class="section-kicker">v1.9.1 · 2026-10-03</p>
+  <h2 id="v1-9-1">Subagent khảo sát và xác minh, tìm web cho mọi vai</h2>
+  <p class="section-lead">Ở chế độ công ty, Harness của team bật thêm được hai subagent chạy model rẻ. Subagent khảo sát đọc code trước khi sửa. Subagent xác minh chạy lại check và đối chiếu kết luận với bằng chứng. Mọi vai, kể cả vai chạy model API key, tìm web qua search pool của team.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="scout-helper">Subagent khảo sát</h3><p>Chỉ đọc project, không lên web và không chạy lệnh. Kết quả trả về kèm file và dòng. Agent chính giao phần đọc rộng cho nó để giữ context cho việc sửa.</p></article>
+    <article class="card"><h3 id="verify-helper">Subagent xác minh</h3><p>Chạy check của repo trong sandbox chỉ-đọc, không có mạng, và đối chiếu từng yêu cầu với code và nguồn gốc. Mỗi yêu cầu được trả lời là đạt, không đạt hoặc không kiểm được, kèm bằng chứng. Check nó chạy qua được tính vào quy trình của lượt.</p></article>
+    <article class="card"><h3 id="search-pool">Tìm web qua search pool</h3><p><span class="inline-code">web_search</span> hỏi search pool của Studio trước: key tìm kiếm của team, rồi tới nguồn không cần key. Nhờ vậy vai chạy model API key cũng tìm được web.</p></article>
+    <article class="card"><h3 id="enabled-helpers">Chỉ subagent được bật</h3><p>Agent chính chỉ thấy các subagent mà Harness bật. Dashboard hiện số subagent đang chạy trên số được bật.</p></article>
+    <article class="card"><h3 id="installer-hints">Bộ cài gọn hơn</h3><p><span class="inline-code">piagent-install</span> và <span class="inline-code">piagent-setup</span> không còn gợi ý lệnh đã bỏ ở 1.9.0. Chúng chỉ nhắc <span class="inline-code">/mcp</span> và <span class="inline-code">/subagents-doctor</span> khi lần cài đó có cài chúng.</p></article>
+  </div>
+  <p>Đã chạy thật một lượt ở chế độ công ty qua Studio. Subagent khảo sát đọc repo trước khi sửa, subagent xác minh báo 6/6 yêu cầu đạt, review không có lỗi chặn, và mọi request đều được tính usage.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.9.0 · 2026-10-02</p>
   <h2 id="v1-9-0">Nói việc bằng lời, Harness của team lo phần kiểm tra</h2>
   <p class="section-lead">Bỏ task contract và các lệnh workflow: bạn giao việc như nói với đồng nghiệp, guard vẫn kiểm tra từng tool call. Chế độ công ty chạy qua Agent Studio và Agent Watch; Harness tự yêu cầu chạy check, cho subagent review và gửi lỗi chặn lại cho agent sửa. Xem <a href="/ecosystem">Hệ sinh thái</a>.</p>

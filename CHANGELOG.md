@@ -2,7 +2,11 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## v1.9.1 (unreleased)
+## v1.9.1 - 2026-10-03
+
+Two more company helpers (scout and verify) and web search for every company
+role through the team's search pool. The installer no longer advertises
+commands 1.9.0 retired.
 
 ### Install
 
@@ -17,6 +21,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 - The main agent is offered only the helpers its Harness enables, and the prompt says when to use each one. With scout enabled, research is meant for questions that need the web. A call to a helper that the Harness lacks fails at once (`managed-helper-not-configured`).
 - The dashboard counts running helpers against the number enabled, not against two.
 - Every company request names the client to Studio as `piagent/<version>` (model requests and web search), so Studio's reports show Piagent and its version instead of an unknown tool.
+- Company `web_search` asks Studio's search pool first, for every role: the team's search keys, then keyless providers. A Claude or Codex role falls back to its provider's own search tool when the pool is missing (an older Studio) or finds nothing. A role on an API-key vendor model (DeepSeek, MiMo and others), which has no search tool of its own, can now search. The pool request carries the run token and the role id, never a model or effort.
 
 ## v1.9.0 - 2026-10-02
 

@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -103,6 +103,20 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.9.1 · 2026-10-03</p>
+  <h2 id="v1-9-1">Scout and verify subagents, web search for every role</h2>
+  <p class="section-lead">In company mode the team's Harness can enable two more subagents on cheaper models. Scout reads the code before a change. Verify runs the checks again and compares conclusions with evidence. Every role, including roles on API-key models, searches the web through the team's search pool.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="scout-helper">Scout subagent</h3><p>It reads the project only: no web, no commands. Its answers come with file and line. The main agent hands broad reading to it and keeps its own context for the change.</p></article>
+    <article class="card"><h3 id="verify-helper">Verify subagent</h3><p>It runs the repository's checks in a read-only sandbox without network, and compares each requirement with the code and primary sources. Each requirement comes back as pass, fail or unverifiable, with evidence. A check it passes counts toward the turn's process.</p></article>
+    <article class="card"><h3 id="search-pool">Web search through the search pool</h3><p><span class="inline-code">web_search</span> asks Studio's search pool first: the team's search keys, then keyless providers. That way roles on API-key models can search too.</p></article>
+    <article class="card"><h3 id="enabled-helpers">Only enabled subagents</h3><p>The main agent sees only the subagents its Harness enables. The dashboard shows running subagents against the number enabled.</p></article>
+    <article class="card"><h3 id="installer-hints">Leaner installer hints</h3><p><span class="inline-code">piagent-install</span> and <span class="inline-code">piagent-setup</span> no longer suggest commands retired in 1.9.0. They mention <span class="inline-code">/mcp</span> and <span class="inline-code">/subagents-doctor</span> only when that run installed them.</p></article>
+  </div>
+  <p>One company-mode turn ran live through Studio. The scout read the repository before the change, verify reported 6 of 6 requirements passed, review found no blocking issue, and every request was metered.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.9.0 · 2026-10-02</p>
   <h2 id="v1-9-0">Ask in plain language; the team's Harness does the checking</h2>
