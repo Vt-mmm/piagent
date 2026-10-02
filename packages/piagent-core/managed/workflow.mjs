@@ -59,6 +59,14 @@ export function repositoryChecks(agentsFiles, cwd, top = cwd) {
 // A command that verifies code: a declared check, or a known test, type,
 // lint or build runner. Text tools that merely mention one do not count.
 const RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|lint|typecheck|type-check|check|build|verify)\b|\bnode\s+--test\b|\b(tsc|vitest|jest|eslint|biome|ruff|mypy|pyright|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest|mypy)\b|\bgo\s+(test|vet|build)\b|\bcargo\s+(test|check|clippy|build)\b|\bswift\s+(test|build)\b|\bxcodebuild\b.*\b(test|build)\b|\bmake\s+(test|check|lint)\b|\b(gradle|gradlew|mvn)\b.*\b(test|check|verify)\b|\bdotnet\s+(test|build)\b|\bdeno\s+(test|check|lint)\b/;
+// A command that only reads: each part starts with a reading tool and nothing
+// is written to a file. Anything else may change files.
+const READER = /^(ls|cat|head|tail|wc|grep|egrep|rg|find|fd|sed|awk|cut|sort|uniq|tr|echo|printf|pwd|which|stat|file|du|df|tree|jq|diff|cmp|basename|dirname|realpath|date|true|cd|git\s+(status|diff|log|show|branch|ls-files|rev-parse|blame))\b/;
+export function isReadOnlyCommand(command) {
+  const text = String(command ?? '').trim();
+  if (!text || />(?!>|\s*&\d|\s*\/dev\/null)|\btee\b|\bsed\s+(-[a-zA-Z]*i|--in-place)|\s-(delete|exec|execdir|fprint|ok)\b|\bxargs\b|\$\(|`/.test(text)) return false;
+  return text.split(/&&|\|\||;|\||\n/).every(part => !part.trim() || READER.test(part.trim()));
+}
 export function isCheckCommand(command, declared = []) {
   const text = String(command ?? '').replace(/\s+/g, ' ').trim();
   if (!text || /^(echo|printf|grep|rg|cat|sed|awk|head|tail|less|git|ls|find)\b/.test(text)) return false;
@@ -188,10 +196,10 @@ export class RunProcess {
     if (name === 'bash' && isCheckCommand(args?.command, this.checks.commands)) {
       this.checksRun += 1; if (!ok) this.checksFailed += 1;
       this.lastCheck = { ok, digest: await digestOf(), mutations: this.mutations };
-    // A command may change files, so it counts, unless there is no git
-    // repository to compare the code against: there most commands only read
-    // or check, and counting them reported code changes that never happened.
-    } else if (['write', 'edit'].includes(name) && ok || name === 'bash' && this.startDigest !== null) this.mutations += 1;
+    // A command may change files, so it counts. Without a git repository to
+    // compare the code against, one that only reads does not: counting every
+    // command reported code changes in turns that only read and checked.
+    } else if (['write', 'edit'].includes(name) && ok || name === 'bash' && (this.startDigest !== null || !isReadOnlyCommand(args?.command))) this.mutations += 1;
   }
   verifiedOn(digest) {
     const c = this.lastCheck;

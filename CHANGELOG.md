@@ -29,7 +29,7 @@ longer advertises commands 1.9.0 retired.
 - `auth.json` is blocked only at the project root and in dot folders, where credentials live (Composer, `.codex`). A translation file such as `src/locales/en/auth.json` is readable, so type checks of i18n projects pass.
 - Credential files (`.env*`, `credentials*`, `.npmrc`, `.netrc` and those `auth.json`) are hidden as well as unreadable. A tool that loads them when present (Vite, Vitest, Next) runs without them instead of failing with `EPERM`.
 - Committed templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.defaults`) are ordinary files.
-- In a folder that is not a git repository, only `write` and `edit` count as code changes. A turn that only read files and ran checks no longer reports "code changed".
+- In a folder that is not a git repository, a command that only reads (`ls`, `cat`, `grep`, `git status`…, with nothing written to a file) no longer counts as a code change, so a turn that only read files and ran checks no longer reports "code changed". A command that writes still counts.
 - End-to-end tests run through `run_with_network`. An approved command may start a local server and drive Playwright's Chromium against it, using:
   - listening on loopback;
   - the member's Playwright browsers;

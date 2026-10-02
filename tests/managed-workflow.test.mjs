@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { workflowPolicy, declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, normalizePlan, planText, planTool, reviewFindings, workflowPrompt, RunProcess } from '../packages/piagent-core/managed/workflow.mjs';
+import { workflowPolicy, declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, normalizePlan, planText, planTool, reviewFindings, workflowPrompt, RunProcess } from '../packages/piagent-core/managed/workflow.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 
 // The Harness workflow: a plan for multi-step work, the repository's checks
@@ -74,6 +74,25 @@ test('policy, checks and review findings are read conservatively', () => {
 });
 
 // A git project whose check passes once a.txt says "fixed".
+// Outside git a command counts as a code change unless it only reads: every
+// part starts with a reading tool and nothing is written to a file.
+test('outside git only commands that only read leave the code unchanged', async () => {
+  for (const command of ['ls -la', 'cat notes.txt', 'grep -rn foo src | head -20', 'sed -n 1,40p a.js', 'git status --short && git diff --stat', 'rg auth src 2>/dev/null', 'cat a 2>&1 | tail -5', 'cd src && ls'])
+    assert.equal(isReadOnlyCommand(command), true, command);
+  for (const command of ["printf 'x\\n' > a.txt", 'echo x >> log', 'sed -i s/a/b/ f', 'find . -name x -delete', 'cat a | tee b', 'npm install', 'node build.mjs', 'ls; rm -rf dist', 'echo $(touch x)', 'grep a f > out.txt', 'cat a 1>out', 'ls 2>err.txt', 'ls | xargs rm', ''])
+    assert.equal(isReadOnlyCommand(command), false, command);
+  const policy = { plan: 'off', verify: 'off', review: 'off', maxFixLoops: 0 }, run = () => new RunProcess(policy, { request: 'x', complex: false, checks: { commands: [] } });
+  const outside = run();
+  await outside.afterTool('bash', { command: 'cat notes.txt' }, true, async () => null);
+  assert.equal(outside.mutations, 0);
+  await outside.afterTool('bash', { command: "printf 'x' > a.txt" }, true, async () => null);
+  assert.equal(outside.mutations, 1);
+  // In a repository the code itself is compared, so every command counts.
+  const inside = run(); inside.startDigest = 'a'.repeat(64);
+  await inside.afterTool('bash', { command: 'cat notes.txt' }, true, async () => null);
+  assert.equal(inside.mutations, 1);
+});
+
 function project() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-workflow-')));
   fs.writeFileSync(path.join(base, 'a.txt'), 'start\n');
