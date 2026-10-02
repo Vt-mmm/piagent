@@ -4055,7 +4055,9 @@ describe("experiment loop tools", () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     const git = (...args) => execFileSync("git", ["-C", cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", ...args], { stdio: "ignore" });
-    git("init", "-q", "-b", "main");
+    // `createProject` already ran `git init`, and a second `git init -b` keeps
+    // git's default branch (master on CI runners): name the unborn branch here.
+    git("symbolic-ref", "HEAD", "refs/heads/main");
     fs.writeFileSync(path.join(cwd, ".gitignore"), ".env\n.pi/\n");
     git("add", "-A"); git("commit", "-qm", "init");
     const ctx = createContext(cwd, { sessionId: "session-experiment-loop", sessionName: "Experiment loop" });

@@ -4,19 +4,23 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { after, test } from 'node:test';
+import { after, test as nodeTest } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
 import { managedResourceLoader } from '../packages/piagent-core/managed/resource-loader.mjs';
 
-const sdkRoot=path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
-const api=await import(pathToFileURL(path.join(sdkRoot,'dist/index.js')).href);
+const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+// The boundary runs Pi's own tools in the macOS sandbox: without the installed
+// Pi SDK (CI runners) or off macOS there is nothing to exercise.
+const supported=process.platform==='darwin'&&fsSync.existsSync(path.join(sdkRoot,'dist/index.js'));
+const test=(name,options,fn)=>typeof options==='function'?nodeTest(name,{skip:!supported},options):nodeTest(name,{...options,skip:!supported||options.skip},fn);
+const api=supported?await import(pathToFileURL(path.join(sdkRoot,'dist/index.js')).href):null;
 const base=await fs.mkdtemp(path.join(os.tmpdir(),'managed-boundary-test-'));
 const cwd=path.join(base,'project'),secretRoot=path.join(base,'private');
 await fs.mkdir(cwd);await fs.mkdir(secretRoot);
 await fs.writeFile(path.join(secretRoot,'synthetic-key'),'FIXTURE-PRIVATE-VALUE');
-const boundary=new ManagedToolBoundary({cwd,sdkRoot,protectedRoots:[secretRoot]});
-after(async()=>{await boundary.dispose();await fs.rm(base,{recursive:true,force:true})});
+const boundary=supported?new ManagedToolBoundary({cwd,sdkRoot,protectedRoots:[secretRoot]}):null;
+after(async()=>{await boundary?.dispose();await fs.rm(base,{recursive:true,force:true})});
 const content=result=>result.content.filter(v=>v.type==='text').map(v=>v.text).join('\n');
 
 test('native file tools run under actual sandbox and preserve diff/offset semantics',async()=>{
