@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { describeFailure, failureCode, failureIsAdmissionRefusal, failureIsBriefRefusal, failureReason, unnamedFailureText } from '../runtime/managed-failure.mjs';
+import { CLIENT_AGENT } from './client-agent.mjs';
 
 // How long one request waits in line for a free company model account.
 const CAPACITY_WAIT_MS = 20 * 60_000;
@@ -45,7 +46,7 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             if (!route || grant.provider_model_id !== route.native || grant.provider !== route.provider || grant.model_id !== route.model_id || model.id !== 'agent-watch-auto') throw Error('managed-route-changed');
             const asked = Date.now();
             const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: grant.role_id, maxRetries: 0,
-              headers: { ...options?.headers, 'X-Session-Id': grant.role_id } });
+              headers: { ...options?.headers, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id } });
             // Whether Studio admitted the request is known at its first event
             // after "start": until then nothing is passed on, so a refused
             // request leaves no trace in the conversation.

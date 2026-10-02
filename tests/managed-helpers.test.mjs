@@ -42,7 +42,7 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
     const chunks=[]; for await(const chunk of req) chunks.push(chunk);
     const body=JSON.parse(Buffer.concat(chunks));
     const role=Object.keys(roleIDs).find(role=>roleIDs[role]===req.headers['x-session-id']);
-    requests.push({role,body}); gates[role].entered.resolve(); await gates[role].release.promise;
+    requests.push({role,body,agent:req.headers['user-agent']}); gates[role].entered.resolve(); await gates[role].release.promise;
     res.writeHead(200, {'Content-Type':'text/event-stream'});
     const emit = event=>res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     if(role==='main') {
@@ -100,6 +100,9 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
       assert.equal(managed.session.sessionManager.getEntries().filter(e=>e.type==='custom'&&e.customType==='agent-watch-review').at(-1).data.stale,true);
     }
     assert.equal(b.details.patchDigest,initial.digest);
+    // Studio names the tool from the User-Agent, on both providers' wires.
+    const version=JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url))).version;
+    assert.deepEqual([...new Set(requests.map(r=>r.agent))],[`piagent/${version}`]);
     assert.equal(git(['rev-parse','HEAD']),head); assert.equal(git(['diff','--cached','--name-only']),'');
     gates.main.release.resolve(); await prompt;
     const receipts=managed.session.sessionManager.getEntries().filter(e=>e.type==='custom_message'&&e.customType==='agent-watch-helper-receipt');

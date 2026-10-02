@@ -4,6 +4,8 @@
 // any other request. The request carries the grant's model and effort, which
 // Studio requires to match. A role on an API-key vendor model searches through
 // the company search pool instead (searchThroughPool).
+import { CLIENT_AGENT } from './client-agent.mjs';
+
 const INSTRUCTIONS = 'Search the web for the request. Answer concisely with the facts found and cite every source URL. Prefer official documentation and primary sources.';
 
 function sourceList(sources) {
@@ -78,7 +80,7 @@ export async function searchThroughStudio({ provider, origin, token, roleId, mod
         include: ['web_search_call.action.sources'], tool_choice: 'required', ...(effort ? { reasoning: { effort } } : {}) };
   const response = await fetchImpl(`${origin}${claude ? '/claude/v1/messages' : '/v1/responses'}`, {
     method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-Session-Id': roleId,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'text/event-stream', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': roleId,
       ...(claude ? { 'anthropic-version': '2023-06-01' } : {}) },
     body: JSON.stringify(body) });
   const text = await response.text();
@@ -101,7 +103,7 @@ export async function searchThroughPool({ origin, token, roleId, query, domains,
   const allowed = Array.isArray(domains) ? domains.filter((domain) => typeof domain === 'string' && /^[a-z0-9.-]{1,253}$/i.test(domain)).map((domain) => domain.toLowerCase()).slice(0, 20) : [];
   const response = await fetchImpl(`${origin}/v1/search`, {
     method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(150_000)]) : AbortSignal.timeout(150_000),
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Session-Id': roleId },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': roleId },
     body: JSON.stringify({ query: query.trim(), max_results: 5, ...(allowed.length ? { include_domains: allowed } : {}) }) });
   const text = await response.text();
   // A Studio without the search pool: say what the member can do instead.

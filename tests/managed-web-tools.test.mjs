@@ -73,6 +73,9 @@ test('a company turn can search the web through Studio and sees the project inst
     // The company search pool is asked first, with the run token and role.
     assert.equal(pool.length, 1);
     assert.deepEqual([pool[0].body.query, pool[0].headers['x-session-id'], /^Bearer as_run_/.test(pool[0].headers.authorization)], ['current Node.js LTS', roleID, true]);
+    // Every company request names Piagent and its version to Studio.
+    const agent = `piagent/${JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version}`;
+    assert.deepEqual([pool[0].headers['user-agent'], ...new Set(requests.map((r) => r.headers['user-agent']))], [agent, agent]);
     // The search itself: the provider's tool, the grant's model/effort and run token.
     assert.deepEqual(requests[1].body.tools, [{type: 'web_search'}]);
     assert.deepEqual([requests[1].path, requests[1].body.model, requests[1].body.reasoning], ['/v1/responses', 'gpt-6-sol', {effort: 'medium'}]);

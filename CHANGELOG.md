@@ -16,6 +16,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 - A check that verify ran and passed counts toward the turn's process, the same as one the main agent ran.
 - The main agent is offered only the helpers its Harness enables, and the prompt says when to use each one. With scout enabled, research is meant for questions that need the web. A call to a helper that the Harness lacks fails at once (`managed-helper-not-configured`).
 - The dashboard counts running helpers against the number enabled, not against two.
+- Every company request names the client to Studio as `piagent/<version>` (model requests and web search), so Studio's reports show Piagent and its version instead of an unknown tool.
 
 ## v1.9.0 - 2026-10-02
 
