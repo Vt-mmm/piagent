@@ -17,7 +17,7 @@ function literal(value) {
 }
 function inside(file, root) { return file === root || file.startsWith(root + path.sep); }
 
-export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], network = false }) {
+export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false }) {
   // Default-deny protects Keychain/SSH agent/Watch IPC and process inspection.
   // System libraries/toolchains are read-only. Writes stay in this project and
   // a fresh temporary directory. No network exception or unsandboxed fallback.
@@ -26,9 +26,25 @@ export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, de
   // as on any Mac: installer-based Python/JDKs, the Rosetta runtime (x86_64
   // tools on Apple Silicon) and the time zone database.
   const system = ['/Library/Frameworks', '/Library/Java', '/Library/Apple', '/private/var/db/oah', '/private/var/db/timezone'];
-  const readRoots = ['/System', '/usr', '/bin', '/sbin', '/Library/Developer', '/Applications/Xcode.app', '/opt/homebrew', ...system, ...developer, sdkRoot, runtimeRoot, cwd, temporary, ...repository, ...gitDirs, ...toolchains];
+  // An approved network command may also drive the member's Playwright
+  // browsers against a server it starts on this Mac (E2E tests).
+  const readRoots = ['/System', '/usr', '/bin', '/sbin', '/Library/Developer', '/Applications/Xcode.app', '/opt/homebrew', ...system, ...developer, sdkRoot, runtimeRoot, cwd, temporary, ...repository, ...gitDirs, ...toolchains, ...(network ? browsers : [])];
   const filters = readRoots.map(root => `(subpath ${literal(root)})`).join(' ');
   const writeRoots = [temporary, ...(!readOnly ? [cwd, ...gitDirs] : [])];
+  // Credential files are unreadable, unwritable and hidden: a stat fails, so a
+  // tool that loads them when present (Vite and Next read .env.local) carries
+  // on without them instead of failing on a file it was shown. auth.json holds
+  // credentials at a project's root (Composer) or in a dot folder (.codex,
+  // .composer); one deeper in the source (a translation file) is ordinary, and
+  // so are committed templates (.env.example, .env.sample…).
+  const projectRoots = [...new Set([cwd, ...repository])];
+  // An approved network command may also start a server and run Playwright's
+  // Chromium against it (E2E tests). The rule names loopback, but the sandbox
+  // cannot tell it from all interfaces (0.0.0.0): like the internet access the
+  // member approved, a server it starts is reachable while it runs. Chromium
+  // needs only its own rendezvous services (org.chromium.*) and the
+  // power-management client; other system services, Keychain among them,
+  // stay closed.
   // Signals reach only processes of this sandbox: a search stops ripgrep at
   // its limit and a cancelled command stops its children, while nothing
   // outside (Agent Watch, the member's apps) can be signalled.
@@ -43,10 +59,14 @@ export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, de
 (allow file-write* ${writeRoots.map(root => `(subpath ${literal(root)})`).join(' ')} (literal "/dev/null") (literal "/dev/tty"))
 ${network ? `(allow network-outbound (remote ip))
 (allow network-outbound (literal "/private/var/run/mDNSResponder"))
+(allow network-bind network-inbound (local ip "localhost:*"))
 (allow system-socket)
+(allow iokit-open (iokit-user-client-class "RootDomainUserClient"))
+(allow mach-register mach-lookup (global-name-regex #"^org\\.chromium\\."))
 (allow mach-lookup (global-name "com.apple.dnssd.service") (global-name "com.apple.trustd.agent") (global-name "com.apple.SystemConfiguration.configd"))` : ''}
 ${denied.map(root => `(deny file-read* file-write* (subpath ${literal(root)}))`).join('\n')}
-(deny file-read* file-write* (regex #"(^|/)(\\.env([./]|$)|auth\\.json$|credentials([./]|$)|\\.npmrc$|\\.netrc$)"))
+(deny file-read* file-read-metadata file-write* (require-all (require-any (regex #"(^|/)(\\.env([./]|$)|credentials([./]|$)|\\.npmrc$|\\.netrc$)") (regex #"/\\.[^/]+/auth\\.json$") ${projectRoots.map(root => `(literal ${literal(path.join(root, 'auth.json'))})`).join(' ')})
+  (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))
 `;
 }
 
@@ -54,11 +74,17 @@ ${denied.map(root => `(deny file-read* file-write* (subpath ${literal(root)}))`)
 // git identity this project gets on the user's machine (name and email only)
 // so commits work. Without network, package managers fail fast instead of
 // retrying for minutes.
-function toolEnvironment({ git, node, home, temporary, toolchains, developer, identity, scope }) {
+function toolEnvironment({ git, node, home, temporary, toolchains, developer, identity, scope, browsers }) {
   const PATH = [...new Set([path.dirname(node), ...toolchains.bins, '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', ...developer.bins, path.dirname(git), '/usr/bin', '/bin', '/usr/sbin', '/sbin'])].join(':');
-  const network = { ...toolchains.env, ...developer.env, PATH, HOME: home, TMPDIR: temporary, PIAGENT_TOOL_SCOPE: scope, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', RIPGREP_CONFIG_PATH: path.join(home, '.ripgreprc'),
+  const common = { ...toolchains.env, ...developer.env, PATH, HOME: home, TMPDIR: temporary, PIAGENT_TOOL_SCOPE: scope, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', RIPGREP_CONFIG_PATH: path.join(home, '.ripgreprc'),
     ...(identity ? { GIT_AUTHOR_NAME: identity.name, GIT_AUTHOR_EMAIL: identity.email, GIT_COMMITTER_NAME: identity.name, GIT_COMMITTER_EMAIL: identity.email } : {}) };
-  return { network, offline: { ...network, npm_config_fetch_retries: '0', npm_config_fetch_timeout: '5000', PIP_RETRIES: '0', PIP_TIMEOUT: '5' } };
+  // The sandbox home is empty: Playwright finds the member's browsers by path.
+  return { network: { ...common, ...(browsers ? { PLAYWRIGHT_BROWSERS_PATH: browsers } : {}) },
+    offline: { ...common, npm_config_fetch_retries: '0', npm_config_fetch_timeout: '5000', PIP_RETRIES: '0', PIP_TIMEOUT: '5' } };
+}
+// The browsers `npx playwright install` put in the member's cache.
+function playwrightBrowsers(userHome) {
+  try { const dir = fs.realpathSync(path.join(userHome, 'Library/Caches/ms-playwright')); return fs.statSync(dir).isDirectory() ? dir : null; } catch { return null; }
 }
 // Effective config for this project, as the user's own git would see it:
 // global and XDG files, includeIf (e.g. a work email for ~/work) and the
@@ -130,15 +156,15 @@ export class ManagedToolBoundary {
     // A repository above the home folder (a dotfiles repo) is never opened:
     // neither read as a monorepo nor writable through its git directory.
     const gitDirs = repo && (repo.top === this.cwd || allowedRoot(repo.top)) ? [...new Set([repo.gitDir, repo.commonDir])].filter(dir => !inside(dir, this.cwd) && allowedRoot(dir)) : [];
-    const toolchains = userToolchains(userHome, this.node), developer = developerTools();
+    const toolchains = userToolchains(userHome, this.node), developer = developerTools(), browsers = playwrightBrowsers(userHome);
     const base = { cwd: this.cwd, sdkRoot: this.sdkRoot, runtimeRoot: this.runtimeRoot, temporary: this.temporary, node: this.node,
-      denied: narrowed, readOnly, repository, gitDirs, toolchains: toolchains.roots, developer: developer.roots };
+      denied: narrowed, readOnly, repository, gitDirs, toolchains: toolchains.roots, developer: developer.roots, browsers: browsers ? [browsers] : [] };
     this.profile = managedSeatbelt(base);
     // Only for commands the user approved (run_with_network); credentials stay denied.
     this.networkProfile = readOnly ? null : managedSeatbelt({ ...base, network: true });
     // Every process a command starts carries this marker, also one it detaches.
     this.scope = randomUUID();
-    this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope,
+    this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers,
       identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) });
     if (searchTools) provisionSearchTools(this.home, userHome);
     else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
@@ -179,7 +205,10 @@ export class ManagedToolBoundary {
       };
       const abort = () => { failure = new Error('managed-tool-cancelled'); terminate(); };
       child.managedCancel = abort;
-      const deadline = setTimeout(() => { failure = new Error('managed-tool-timeout'); terminate(); }, name === 'bash' ? 600000 : 30000);
+      // A command stops at its own timeout (at most 30 minutes, for a build
+      // and end-to-end suite), else after 10 minutes; other tools after 30 s.
+      const seconds = Math.min(Math.max(Number(args?.timeout) || 600, 1), 1800);
+      const deadline = setTimeout(() => { failure = new Error('managed-tool-timeout'); terminate(); }, name === 'bash' ? seconds * 1000 + 5000 : 30000);
       deadline.unref();
       signal?.addEventListener('abort', abort, { once: true });
       child.stdin.on('error', () => {});

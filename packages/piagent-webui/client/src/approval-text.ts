@@ -18,7 +18,8 @@ const CONSEQUENCES: Record<string, [string, string]> = {
   "The command does not run; the agent is told you declined.": ["Lệnh không chạy; agent được báo là bạn đã từ chối.", ""],
   "Run this exact action once, after the guard checks its authority again.": ["Thực hiện đúng hành động này một lần, sau khi guard kiểm tra lại quyền.", ""],
   "The action does not run; nothing outside changes.": ["Hành động không chạy; không có gì bên ngoài bị thay đổi.", ""],
-  "Run this exact command once, with internet access.": ["Chạy đúng lệnh này một lần, có mạng.", ""] };
+  "Run this exact command once, with internet access.": ["Chạy đúng lệnh này một lần, có mạng.", ""],
+  "Run this exact command once, with internet access; a server it starts accepts connections while it runs.": ["Chạy đúng lệnh này một lần, có mạng; server mà lệnh mở nhận kết nối trong lúc chạy.", ""] };
 const known = (table: Record<string, [string, string]>, value: string, locale: UiLocale) => {
   const entry = table[value]; return entry ? localize(locale, entry[0], entry[1] || value) : null;
 };

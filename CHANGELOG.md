@@ -5,8 +5,9 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 ## v1.9.1 - 2026-10-03
 
 Two more company helpers (scout and verify) and web search for every company
-role through the team's search pool. The installer no longer advertises
-commands 1.9.0 retired.
+role through the team's search pool. The company sandbox now runs type
+checks, Vitest and end-to-end suites that it used to stop. The installer no
+longer advertises commands 1.9.0 retired.
 
 ### Install
 
@@ -22,6 +23,20 @@ commands 1.9.0 retired.
 - The dashboard counts running helpers against the number enabled, not against two.
 - Every company request names the client to Studio as `piagent/<version>` (model requests and web search), so Studio's reports show Piagent and its version instead of an unknown tool.
 - Company `web_search` asks Studio's search pool first, for every role: the team's search keys, then keyless providers. A Claude or Codex role falls back to its provider's own search tool when the pool is missing (an older Studio) or finds nothing. A role on an API-key vendor model (DeepSeek, MiMo and others), which has no search tool of its own, can now search. The pool request carries the run token and the role id, never a model or effort.
+
+### Company sandbox
+
+- `auth.json` is blocked only at the project root and in dot folders, where credentials live (Composer, `.codex`). A translation file such as `src/locales/en/auth.json` is readable, so type checks of i18n projects pass.
+- Credential files (`.env*`, `credentials*`, `.npmrc`, `.netrc` and those `auth.json`) are hidden as well as unreadable. A tool that loads them when present (Vite, Vitest, Next) runs without them instead of failing with `EPERM`.
+- Committed templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.defaults`) are ordinary files.
+- In a folder that is not a git repository, only `write` and `edit` count as code changes. A turn that only read files and ran checks no longer reports "code changed".
+- End-to-end tests run through `run_with_network`. An approved command may start a local server and drive Playwright's Chromium against it, using:
+  - listening on loopback;
+  - the member's Playwright browsers;
+  - Chromium's own rendezvous services.
+
+  Other system services, Keychain among them, stay closed. The sandbox cannot tell loopback from all interfaces, so the approval card says that a server the command starts accepts connections while it runs.
+- A command's own timeout, up to 30 minutes, now extends the 10-minute limit, so a build followed by an end-to-end suite fits.
 
 ## v1.9.0 - 2026-10-02
 

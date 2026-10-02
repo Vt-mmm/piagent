@@ -110,3 +110,44 @@ test('an approved network command reaches the system resolver and no other Unix 
   assert.equal(contacts, 0);
  } finally { await new Promise(r=>unix.close(r)); }
 });
+// Credential files are hidden as well as unreadable: a tool that loads one
+// when present (Vite and Next read .env.local) carries on without it instead
+// of failing on a file it was shown. auth.json is a credential at the project
+// root (Composer) or in a dot folder; one in the source (a translation file)
+// is ordinary, and so is a committed env template.
+test('credential files are hidden; a nested auth.json and env templates stay readable', async () => {
+ await fs.mkdir(path.join(cwd,'src/locales/en'),{recursive:true}); await fs.mkdir(path.join(cwd,'.composer'),{recursive:true});
+ const files = {'.env.local':'FIXTURE-ENV-SECRET','.env.example':'API_URL=','auth.json':'FIXTURE-ROOT-AUTH','.composer/auth.json':'FIXTURE-DOT-AUTH','src/locales/en/auth.json':'{"signIn":"Sign in"}'};
+ for (const [file,value] of Object.entries(files)) await fs.writeFile(path.join(cwd,file),value);
+ const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+ const code = `const fs=require('fs');for(const f of ${JSON.stringify(Object.keys(files))}){let s,r;try{fs.statSync(f);s='seen'}catch(e){s=e.code}try{r=fs.readFileSync(f,'utf8')}catch(e){r=e.code}console.log(f+' '+s+' '+r)}`;
+ try {
+  const out = content(await boundary.invoke('bash',{command:quote(process.execPath)+' -e '+quote(code),timeout:5}));
+  for (const line of ['.env.local EPERM EPERM','.env.example seen API_URL=','auth.json EPERM EPERM','.composer/auth.json EPERM EPERM','src/locales/en/auth.json seen {"signIn":"Sign in"}'])
+   assert.ok(out.split('\n').includes(line), `${line}\n${out}`);
+  assert.doesNotMatch(out,/FIXTURE-/);
+ } finally { for (const file of Object.keys(files)) await fs.rm(path.join(cwd,file),{force:true}); }
+});
+// An approved network command may start a server (a test server for an
+// end-to-end suite); a plain command cannot listen at all. The sandbox cannot
+// tell loopback from all interfaces, which the approval card says.
+test('only an approved network command may listen', async () => {
+ const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+ const listen = (host, network) => boundary.invoke('bash',{command:quote(process.execPath)+' -e '+quote(`const s=require('node:net').createServer();s.on('error',e=>{console.log('${host} '+e.code);process.exit(0)});s.listen(0,'${host}',()=>{console.log('${host} LISTEN');s.close()})`),timeout:5},undefined,undefined,undefined,{network}).then(content);
+ assert.match(await listen('127.0.0.1', true), /127\.0\.0\.1 LISTEN/);
+ assert.match(await listen('127.0.0.1', false), /127\.0\.0\.1 EPERM/);
+});
+// Playwright's Chromium against a server the command starts, only with
+// approval. Opt-in: needs a project with @playwright/test and its browser
+// installed (PIAGENT_TEST_PLAYWRIGHT_PROJECT=<that project>).
+const playwrightProject = process.env.PIAGENT_TEST_PLAYWRIGHT_PROJECT;
+test('an approved network command can drive Playwright\'s Chromium against a local server', { skip: !playwrightProject, timeout: 120000 }, async () => {
+ const probe = path.join(playwrightProject, '.piagent-sandbox-probe.mjs');
+ await fs.writeFile(probe, "import http from 'node:http';import {chromium} from '@playwright/test';const s=http.createServer((q,r)=>r.end('<h1 id=x>sandbox ok</h1>'));await new Promise(r=>s.listen(0,'127.0.0.1',r));try{const b=await chromium.launch();const p=await b.newPage();await p.goto('http://127.0.0.1:'+s.address().port+'/');console.log('PAGE '+await p.textContent('#x'));await b.close()}finally{s.close()}\n");
+ const project = new ManagedToolBoundary({ cwd: playwrightProject, sdkRoot });
+ try {
+  const run = network => project.invoke('bash',{command:'node .piagent-sandbox-probe.mjs 2>&1 | tail -3',timeout:90},undefined,undefined,undefined,{network}).then(content, error => String(error.message));
+  assert.match(await run(true), /PAGE sandbox ok/);
+  assert.doesNotMatch(await run(false), /PAGE sandbox ok/);
+ } finally { await project.dispose(); await fs.rm(probe, { force: true }); }
+});

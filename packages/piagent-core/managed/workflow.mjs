@@ -107,7 +107,7 @@ export function workflowPrompt(policy, checks) {
   }
   if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix.'
     : '- Review: before you finish a code change, ask the review helper (delegate role "review") to review the patch, then fix blocking findings.');
-  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\nIf a step cannot be done here (a check needs the network, a database or another service), say so plainly; do not try to install or start services to get around the sandbox.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.` : '';
+  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\nEnd-to-end tests that start a local server and a browser run through run_with_network, which the user approves. If a step cannot be done here (a check needs a database or another service), say so plainly; do not try to install or start services to get around the sandbox.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.` : '';
 }
 
 export const REVIEW_PROMPT = 'You review a patch for the company coding assistant. The patch snapshot below is immutable; read files to check the code around it. Report only problems that matter: incorrect behaviour, regressions, security issues, parts of the request that are missing, changed behaviour without tests. Do not report style or preferences. Classify each finding: blocking (must be fixed before the work is done), major, or minor. End your answer with one JSON object in a ```json block: {"findings":[{"severity":"blocking|major|minor","file":"path","line":1,"issue":"what is wrong","evidence":"why"}],"summary":"one sentence"}. Use an empty findings list when the patch is fine. You cannot change files or delegate.';
@@ -188,7 +188,10 @@ export class RunProcess {
     if (name === 'bash' && isCheckCommand(args?.command, this.checks.commands)) {
       this.checksRun += 1; if (!ok) this.checksFailed += 1;
       this.lastCheck = { ok, digest: await digestOf(), mutations: this.mutations };
-    } else if (['write', 'edit', 'bash'].includes(name) && (ok || name === 'bash')) this.mutations += 1;
+    // A command may change files, so it counts, unless there is no git
+    // repository to compare the code against: there most commands only read
+    // or check, and counting them reported code changes that never happened.
+    } else if (['write', 'edit'].includes(name) && ok || name === 'bash' && this.startDigest !== null) this.mutations += 1;
   }
   verifiedOn(digest) {
     const c = this.lastCheck;

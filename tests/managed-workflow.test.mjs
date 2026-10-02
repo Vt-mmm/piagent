@@ -420,4 +420,15 @@ test('a patch above the shell output limit is still reviewed; a review that cann
     assert.deepEqual([final.details.outcome, final.details.reviewUnavailable], ['review_unavailable', 'not_git']);
     assert.match(final.content, /review could not run \(not_git\)/);
   } finally { await managed2.dispose(); await server2.close(); fs.rmSync(plain, { recursive: true, force: true }); }
+  // Not a git repository and the agent only ran a command that reads: no code
+  // changed, so there is no process step and no "code changed" note.
+  const reader = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-plain-read-'))), quiet = broker({ plan: 'off', verify: 'require', review: 'require', max_fix_loops: 1 });
+  fs.writeFileSync(path.join(reader, 'notes.txt'), 'x\n');
+  const server4 = await studio({ roleOf: () => 'main', main: [{ tool: 'bash', input: { command: 'cat notes.txt' } }, 'Done.'], review: [] });
+  const managed4 = await ManagedSession.create({ sdkRoot, cwd: reader, origin: server4.origin, broker: quiet });
+  try {
+    await managed4.session.prompt('Show notes.txt');
+    assert.deepEqual(processNotes(managed4), []);
+    assert.deepEqual([runReport(quiet).changed, runReport(quiet).outcome], [false, 'no_change']);
+  } finally { await managed4.dispose(); await server4.close(); fs.rmSync(reader, { recursive: true, force: true }); }
 });

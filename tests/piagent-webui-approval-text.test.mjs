@@ -17,5 +17,6 @@ test("a push needing approval reads as plain Vietnamese, unknown text stays as w
   assert.equal(approvalScopeText({ requestedScope: "network-command-once" }, "vi"), "Đúng một lệnh, có mạng");
   assert.equal(approvalConsequenceText("The command does not run; the agent is told you declined.", "vi"), "Lệnh không chạy; agent được báo là bạn đã từ chối.");
   assert.equal(approvalConsequenceText("The command does not run; the agent is told you declined.", "en"), "The command does not run; the agent is told you declined.");
+  assert.equal(approvalConsequenceText("Run this exact command once, with internet access; a server it starts accepts connections while it runs.", "vi"), "Chạy đúng lệnh này một lần, có mạng; server mà lệnh mở nhận kết nối trong lúc chạy.");
   assert.equal(approvalConsequenceText("Something new.", "vi"), "Something new.");
 });
