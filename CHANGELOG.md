@@ -8,6 +8,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 - `piagent-install` no longer ends its next steps with `/workflow task Implement <task>`, a command 1.9.0 retired; typed in Pi, it would have reached the model as a message and started a paid turn. Work is requested in plain language.
 - `/subagents-doctor` is listed in those next steps only when the install includes pi-subagents, which provides it: `piagent-install` adds it only with `--with-subagents` or when it is already installed.
+- `piagent-setup` lists `/mcp` and `/subagents-doctor` in its next steps only when that run installed them (not with `--no-mcp`, `--no-subagents` or `--project-only`), and no longer lists the retired `/onboard` and `/onboard run`; its daily flow says to ask in plain language instead of `/workflow task`. `piagent-init` no longer lists `/onboard` either. A test checks that no install script prints a command 1.9.0 retired.
 
 ## v1.9.0 - 2026-10-02
 

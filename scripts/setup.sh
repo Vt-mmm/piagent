@@ -495,15 +495,19 @@ echo "  /login             # first time only"
 if [[ "$DO_PROJECT" == true ]]; then
   echo "  /model             # or Ctrl+L: select provider/model from Pi selector"
   echo "  /scoped-models     # optional: edit Ctrl+P model cycle scope"
-  echo "  /mcp               # inspect MCP servers; run /mcp setup for guided changes"
-  echo "  /subagents-doctor  # inspect subagent setup"
-  echo "  /onboard   # open onboarding menu/status"
-  echo "  /onboard run # first project-read snapshot before implementation"
-  echo "  /memory    # inspect project memory policy when needed"
+  # Only commands this run installed: Pi sends an unknown slash command to the
+  # model as a message, which starts a paid turn.
+  if [[ "$DO_GLOBAL" == true && "$WITH_MCP" == true ]]; then
+    echo "  /mcp               # inspect MCP servers; run /mcp setup for guided changes"
+  fi
+  if [[ "$DO_GLOBAL" == true && "$WITH_SUBAGENTS" == true ]]; then
+    echo "  /subagents-doctor  # inspect subagent setup"
+  fi
+  echo "  /memory            # inspect project memory policy when needed"
 fi
 echo
 echo "Daily flow after setup:"
 echo "  herdr    # optional"
 echo "  cd <project>"
 echo "  pi"
-echo "  /workflow task Implement <task>  # parent may auto-delegate scout/planner/reviewer"
+echo "  then say what you want in plain language, e.g. Implement <task>"

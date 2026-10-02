@@ -371,6 +371,42 @@ describe("install-global release channels", () => {
     }
   });
 
+  // setup's next steps listed /mcp and /subagents-doctor whatever it installed,
+  // and /onboard and /workflow after 1.9.0 retired them; typed in Pi, each of
+  // those reaches the model as a message and starts a paid turn.
+  it("setup advertises only commands this run installed", () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "pi-setup-project-"));
+    try {
+      const common = [project, "--dry-run", "--no-herdr", "--no-model-scope"];
+      const hints = (result) => result.stdout.slice(result.stdout.lastIndexOf("Next:"));
+
+      const full = runSetup([...common, "--with-mcp", "--with-subagents"]);
+      assert.equal(full.status, 0, full.stderr);
+      assert.match(hints(full), /^ {2}\/mcp\b/m);
+      assert.match(hints(full), /^ {2}\/subagents-doctor\b/m);
+
+      const bare = runSetup([...common, "--no-mcp", "--no-subagents"]);
+      assert.equal(bare.status, 0, bare.stderr);
+      assert.doesNotMatch(hints(bare), /\/mcp\b|\/subagents-doctor/);
+
+      // Project only: nothing was installed here, so nothing is promised.
+      const projectOnly = runSetup([...common, "--project-only"]);
+      assert.equal(projectOnly.status, 0, projectOnly.stderr);
+      assert.doesNotMatch(hints(projectOnly), /\/mcp\b|\/subagents-doctor/);
+
+      for (const result of [full, bare, projectOnly]) assert.doesNotMatch(hints(result), /\/(onboard|workflow)\b/);
+    } finally { fs.rmSync(project, { recursive: true, force: true }); }
+  });
+
+  it("no install script prints a command 1.9.0 retired", () => {
+    const retired = /(?<![\w-])\/(workflow|task|scout|fresh|onboard|commands|model-options)\b/;
+    for (const script of ["install-global.sh", "setup.sh", "init-project.sh"]) {
+      const printed = fs.readFileSync(path.join(repositoryRoot, "scripts", script), "utf8")
+        .split("\n").filter((line) => /^\s*echo\b/.test(line) && retired.test(line));
+      assert.deepEqual(printed, [], script);
+    }
+  });
+
   // setup only ever appended --with-mcp, relying on the installer defaulting MCP
   // off. Once the installer defaulted it on, saying nothing meant installing it,
   // so --no-mcp reached the installer as silence and the operator's explicit
