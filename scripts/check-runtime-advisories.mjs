@@ -4,9 +4,11 @@
 //
 // The rule is "no moderate, high, or critical advisory in the pinned Pi host
 // and add-on tree".
-// There is deliberately no advisory allowlist. A supported host release must
-// audit clean at these severities; changing that policy requires changing this
-// gate and its tests explicitly.
+// The only exceptions are listed in runtime-advisory-exceptions.json, each an
+// owner decision for one advisory at one package path in the tree, with a day
+// it stops applying. The same advisory anywhere else, any other advisory, and
+// an exception past its day all block. Its tests check every entry.
+import fs from "node:fs";
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -43,7 +45,11 @@ if (report.auditReportVersion !== 2) {
   process.exit(1);
 }
 
-const blocking = [];
+const { exceptions } = JSON.parse(fs.readFileSync(new URL("./runtime-advisory-exceptions.json", import.meta.url), "utf8"));
+// A test seam for the day exceptions are judged on; the gate uses today (UTC).
+const today = process.env.PIAGENT_ADVISORY_TODAY ?? new Date().toISOString().slice(0, 10);
+
+const blocking = [], accepted = [];
 for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})) {
   if (!["moderate", "high", "critical"].includes(vulnerability.severity)) continue;
   const ids = advisoryIdsFor(vulnerability);
@@ -51,13 +57,22 @@ for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})
     blocking.push({ name, severity: vulnerability.severity, id: "(no advisory id)" });
     continue;
   }
+  const nodes = Array.isArray(vulnerability.nodes) ? vulnerability.nodes : [];
   for (const id of ids) {
-    blocking.push({ name, severity: vulnerability.severity, id });
+    const exception = exceptions.find((entry) => entry.id === id && entry.package === name
+      && nodes.length > 0 && nodes.every((node) => node === entry.node));
+    if (exception && today <= exception.until) accepted.push({ name, severity: vulnerability.severity, id, exception });
+    else blocking.push({ name, severity: vulnerability.severity, id, expired: exception?.until });
   }
+}
+
+for (const entry of accepted) {
+  console.log(`ACCEPTED: ${entry.severity} advisory ${entry.id} in ${entry.name} at ${entry.exception.node} until ${entry.exception.until} (owner decision ${entry.exception.decided})`);
 }
 
 const failures = blocking.map(
   (entry) => `${entry.severity} advisory ${entry.id} in ${entry.name} blocks the supported runtime`
+    + (entry.expired ? ` (its exception ended ${entry.expired})` : "")
 );
 
 if (failures.length > 0) {
@@ -67,4 +82,6 @@ if (failures.length > 0) {
 }
 
 const counts = report.metadata?.vulnerabilities ?? {};
-console.log(`PASS: no moderate, high, or critical advisory (${counts.moderate ?? 0} moderate, ${counts.high ?? 0} high, ${counts.critical ?? 0} critical)`);
+console.log(accepted.length
+  ? `PASS: no unaccepted moderate, high, or critical advisory (${accepted.length} accepted, each until its end day)`
+  : `PASS: no moderate, high, or critical advisory (${counts.moderate ?? 0} moderate, ${counts.high ?? 0} high, ${counts.critical ?? 0} critical)`);

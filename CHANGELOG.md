@@ -28,6 +28,7 @@ guard checks every tool call.
 
 ### Security and fixes
 
+- The runtime dependency audit accepts three denial-of-service advisories in `brace-expansion` 5.0.9 (GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p) until 2026-10-31: every published Pi host, 1.0.0 included, pins that version through its npm-shrinkwrap, so no Piagent change can update it. The exceptions live in `scripts/runtime-advisory-exceptions.json`, apply only at the Pi host's own copy, print on every audit and end on their own; any other finding still blocks.
 - Redacted Agent Studio credentials (`as_live_`, `as_device_`, `as_run_`). Write/edit previews and runtime command output are redacted before they are split or truncated, the gateway stream no longer flushes half a credential on a long line, and the client live file label recognises Studio tokens.
 - A shell command can no longer create a new file in a shared source-checkout cache by spelling the path through an alias such as `/var` for `/private/var`.
 - WebUI approvals: an allowed decision is now consumed by the guard, so the decision request receives its receipt and the approval leaves the queue. Before, every decision without a task stayed pending and could fill the broker.

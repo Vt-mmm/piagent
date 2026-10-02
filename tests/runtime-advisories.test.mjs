@@ -27,9 +27,10 @@ function advisory(name, severity, id) {
   };
 }
 
-function run(input) {
+function run(input, today) {
   try {
-    const stdout = execFileSync(process.execPath, [scriptPath], { input, encoding: "utf8" });
+    const stdout = execFileSync(process.execPath, [scriptPath], { input, encoding: "utf8",
+      env: { ...process.env, ...(today ? { PIAGENT_ADVISORY_TODAY: today } : {}) } });
     return { code: 0, stdout, stderr: "" };
   } catch (error) {
     return { code: error.status ?? 1, stdout: error.stdout ?? "", stderr: error.stderr ?? "" };
@@ -37,12 +38,48 @@ function run(input) {
 }
 
 describe("runtime advisory policy", () => {
-  it("has no advisory allowlist and passes a clean supported runtime", () => {
-    assert.match(scriptSource, /deliberately no advisory allowlist/);
-    assert.doesNotMatch(scriptSource, /const ACCEPTED|reviewBy:/);
+  it("passes a clean supported runtime", () => {
     const result = run(report());
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /PASS/);
+    assert.match(result.stdout, /PASS: no moderate, high, or critical advisory/);
+  });
+
+  // Exceptions are owner decisions, never open-ended: each names one advisory,
+  // the one package path it may appear at, why, and an end at most 60 days
+  // after the decision. Adding one changes the gate as much as editing it.
+  it("lists only exceptions with one advisory, one path, a reason and an end within 60 days", () => {
+    const { version, exceptions } = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "scripts", "runtime-advisory-exceptions.json"), "utf8"));
+    assert.equal(version, 1);
+    assert.match(scriptSource, /runtime-advisory-exceptions\.json/);
+    for (const entry of exceptions) {
+      assert.deepEqual(Object.keys(entry).sort(), ["decided", "id", "node", "package", "reason", "until"], entry.id);
+      assert.match(entry.id, /^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$/);
+      assert.ok(entry.node.endsWith(`node_modules/${entry.package}`), entry.id);
+      assert.ok(entry.reason.length >= 40, entry.id);
+      const days = (Date.parse(entry.until) - Date.parse(entry.decided)) / 86_400_000;
+      assert.ok(days >= 0 && days <= 60, `${entry.id} lasts ${days} days`);
+    }
+  });
+
+  const pinned = "node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion";
+  const braceExpansion = (nodes, id = "GHSA-qhr7-859c-m2p7") => ({ "brace-expansion": { ...advisory("brace-expansion", "high", id)["brace-expansion"], nodes } });
+
+  it("accepts a listed advisory only at its path and only until its end day", () => {
+    const accepted = run(report({ vulnerabilities: braceExpansion([pinned]), counts: { high: 1, total: 1 } }), "2026-10-15");
+    assert.equal(accepted.code, 0, accepted.stderr);
+    assert.match(accepted.stdout, /ACCEPTED: high advisory GHSA-qhr7-859c-m2p7 in brace-expansion at .*pi-coding-agent.* until 2026-10-31/);
+
+    const elsewhere = run(report({ vulnerabilities: braceExpansion(["node_modules/brace-expansion"]), counts: { high: 1, total: 1 } }), "2026-10-15");
+    assert.equal(elsewhere.code, 1, "the same advisory at another path blocks");
+    const alsoElsewhere = run(report({ vulnerabilities: braceExpansion([pinned, "node_modules/brace-expansion"]), counts: { high: 1, total: 1 } }), "2026-10-15");
+    assert.equal(alsoElsewhere.code, 1, "an extra copy at another path blocks");
+
+    const expired = run(report({ vulnerabilities: braceExpansion([pinned]), counts: { high: 1, total: 1 } }), "2026-11-01");
+    assert.equal(expired.code, 1);
+    assert.match(expired.stderr, /GHSA-qhr7-859c-m2p7 .*exception ended 2026-10-31/);
+
+    const other = run(report({ vulnerabilities: braceExpansion([pinned], "GHSA-9999-8888-7777"), counts: { high: 1, total: 1 } }), "2026-10-15");
+    assert.equal(other.code, 1, "another advisory in the same package blocks");
   });
 
   it("fails on a high advisory", () => {

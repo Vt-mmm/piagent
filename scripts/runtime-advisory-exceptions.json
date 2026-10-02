@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "exceptions": [
+    {
+      "id": "GHSA-q2hr-2g5m-vwhr",
+      "package": "brace-expansion",
+      "node": "node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion",
+      "decided": "2026-10-02",
+      "until": "2026-10-31",
+      "reason": "Denial of service (CPU) through a crafted brace pattern in a glob; no data exposure. brace-expansion 5.0.9 is pinned by the npm-shrinkwrap of every published Pi host (0.87.1 to 1.0.0), so no Piagent change can update it; 5.0.12 fixes it. Remove when a Pi host carries brace-expansion >= 5.0.12."
+    },
+    {
+      "id": "GHSA-qhr7-859c-m2p7",
+      "package": "brace-expansion",
+      "node": "node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion",
+      "decided": "2026-10-02",
+      "until": "2026-10-31",
+      "reason": "Denial of service (stack exhaustion) through nested brace groups in a glob; no data exposure. Pinned by the Pi host's npm-shrinkwrap as above; fixed in 5.0.11."
+    },
+    {
+      "id": "GHSA-6j4f-fj2g-mc7p",
+      "package": "brace-expansion",
+      "node": "node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion",
+      "decided": "2026-10-02",
+      "until": "2026-10-31",
+      "reason": "Denial of service (stack exhaustion) in parseCommaParts; no data exposure. Pinned by the Pi host's npm-shrinkwrap as above; fixed in 5.0.10."
+    }
+  ]
+}
