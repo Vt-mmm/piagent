@@ -383,7 +383,9 @@ test('GPT-6.1 Sol, newer than the bundled Pi catalog, runs with its reviewed win
 
 test('an API-key vendor model (DeepSeek, then Grok) continues a Claude conversation over Chat Completions', { skip: !supported, timeout: 120000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
-  const server = await studio(), authority = authorityOf();
+  // The company search pool answers a vendor role's web search.
+  const server = await studio((req, res) => { if (req.url !== '/v1/search') return false; res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ provider: 'exa', answer: 'Pool answer', results: [{ title: 'Doc', url: 'https://docs.example/a', content: 'snippet' }], credits: 0, attempts: 1 })); return true; }), authority = authorityOf();
   let revision = 'r1', current = broker(authority, { main: 'sonnet', knows: ['sonnet', 'deepseek', 'grok'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current, bindingRevision: () => revision });
   try {
@@ -399,16 +401,43 @@ test('an API-key vendor model (DeepSeek, then Grok) continues a Claude conversat
     assert.deepEqual([chat.body.thinking?.type, chat.body.reasoning_effort], ['enabled', 'high']);
     assert.match(JSON.stringify(chat.body.messages), /first[\s\S]*Fixture answer[\s\S]*second/);
     assert.equal(chat.session, current.roles.main);
-    // Grok over Chat Completions: no thinking parameters; web search is Claude/Codex only.
+    // Grok over Chat Completions: no thinking parameters; its web search goes to the company pool.
     revision = 'r3'; current = broker(authority, { main: 'grok', knows: ['grok', 'sonnet', 'deepseek'], revision });
     await managed.session.prompt('third');
     const grok = server.requests[2];
     assert.deepEqual([grok.path, grok.body.model, grok.body.reasoning_effort, grok.body.reasoning], ['/openai/v1/chat/completions', 'grok-4.6', undefined, undefined]);
     assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
     const search = managed.webTools(managed.modelRuntime, 'main').find(tool => tool.name === 'web_search');
-    const renewals = current.calls.filter(call => call === 'renew').length;
-    await assert.rejects(search.execute('call', { query: 'x' }), /managed-web-search-unavailable/);
-    assert.equal(current.calls.filter(call => call === 'renew').length, renewals, 'no grant is asked for');
+    const found = await search.execute('call', { query: 'x' });
+    const asked = server.requests.at(-1);
+    assert.deepEqual([asked.path, asked.body, asked.session], ['/v1/search', { query: 'x', max_results: 5 }, current.roles.main], 'the pool gets the run token\'s role, no model or effort');
+    assert.match(found.content[0].text, /Pool answer[\s\S]*1\. Doc — https:\/\/docs\.example\/a\n   snippet/);
+    assert.equal(found.details.provider, 'exa');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a Claude role searches the company pool first and its own search tool when the pool has no answer', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
+  let pool = 'answer';
+  const server = await studio((req, res) => {
+    if (req.url !== '/v1/search') return false;
+    if (pool === 'missing') { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end('{"error":{"code":"not_found"}}'); return true; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ provider: 'tavily', answer: 'Pool answer', results: [{ title: 'Doc', url: 'https://docs.example/a', content: 'snippet' }], credits: 1, attempts: 1 })); return true;
+  }), authority = authorityOf();
+  const current = broker(authority, { main: 'sonnet', knows: ['sonnet'] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current });
+  try {
+    const search = managed.webTools(managed.modelRuntime, 'main').find(tool => tool.name === 'web_search');
+    const pooled = await search.execute('call', { query: 'react release' });
+    assert.equal(pooled.details.provider, 'tavily');
+    assert.match(pooled.content[0].text, /Pool answer/);
+    assert.deepEqual(server.requests.map(r => r.path), ['/v1/search'], 'the pool answered: no Claude search request');
+    pool = 'missing';
+    const hosted = await search.execute('call', { query: 'react release' });
+    assert.equal(hosted.details.provider, 'claude');
+    assert.deepEqual(server.requests.map(r => r.path), ['/v1/search', '/v1/search', '/claude/v1/messages'], 'an older Studio: the provider search tool answers');
+    assert.deepEqual(server.requests.at(-1).body.tools, [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 

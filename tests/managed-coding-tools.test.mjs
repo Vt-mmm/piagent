@@ -7,7 +7,7 @@ import {execFileSync} from 'node:child_process';
 import {test} from 'node:test';
 import {ManagedToolBoundary} from '../packages/piagent-core/managed/tool-boundary.mjs';
 import {fetchPublicPage, htmlToText, pinnedLookup, privateAddress} from '../packages/piagent-core/managed/web-fetch.mjs';
-import {searchResultText, searchThroughStudio} from '../packages/piagent-core/managed/web-search.mjs';
+import {searchResultText, searchThroughPool, searchThroughStudio} from '../packages/piagent-core/managed/web-search.mjs';
 import {projectInstructions} from '../packages/piagent-core/managed/resource-loader.mjs';
 import {fallbackFind, fallbackGrep, globToRegExp} from '../packages/piagent-core/managed/search-fallback.mjs';
 import net from 'node:net';
@@ -198,6 +198,33 @@ test('web search uses the provider search tool through Studio with the grant mod
     assert.deepEqual([seen[1].path, seen[1].version, seen[1].body.max_tokens, seen[1].body.output_config], ['/claude/v1/messages', '2023-06-01', 4096, {effort: 'high'}]);
     assert.match(searchResultText(claude), /React 20 shipped\.\n\nSources:\n1\. React blog — https:\/\/react\.dev\/blog/);
     await assert.rejects(searchThroughStudio({provider: 'codex', origin: `${origin}/refused#`, token: 't', roleId: 'r', model: 'm', effort: '', query: 'q'}), /web-search-failed: harness_model_unsupported/);
+  } finally { await new Promise((done) => studio.close(done)); }
+});
+
+test('a role on an API-key vendor model searches through the company search pool', async () => {
+  const seen = [];
+  const studio = http.createServer(async (req, res) => {
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    seen.push({path: req.url, auth: req.headers.authorization, session: req.headers['x-session-id'], body: JSON.parse(Buffer.concat(chunks))});
+    const reply = {'/v1/search': [200, {provider: 'tavily', answer: 'Node 24 is the active LTS.', credits: 1, attempts: 1,
+      results: [{title: 'Node.js releases', url: 'https://nodejs.org/en/about/previous-releases', content: 'Node 24 entered active LTS in October.'}, {title: 'bad', url: 'javascript:alert(1)', content: 'x'}]}],
+      '/old/v1/search': [404, {error: {code: 'not_found'}}], '/down/v1/search': [503, {error: {code: 'search_unavailable'}}], '/empty/v1/search': [200, {provider: 'exa', results: []}]}[req.url];
+    res.writeHead(reply[0], {'Content-Type': 'application/json'}); res.end(JSON.stringify(reply[1]));
+  });
+  await new Promise((done) => studio.listen(0, '127.0.0.1', done));
+  const origin = `http://127.0.0.1:${studio.address().port}`;
+  try {
+    const found = await searchThroughPool({origin, token: 'as_run_fixture', roleId: 'role-9', query: ' current Node LTS ', domains: ['NodeJS.org', 'bad domain']});
+    assert.equal(found.provider, 'tavily');
+    assert.deepEqual(found.sources, [{title: 'Node.js releases', url: 'https://nodejs.org/en/about/previous-releases', snippet: 'Node 24 entered active LTS in October.'}]);
+    assert.deepEqual([seen[0].path, seen[0].auth, seen[0].session], ['/v1/search', 'Bearer as_run_fixture', 'role-9']);
+    assert.deepEqual(seen[0].body, {query: 'current Node LTS', max_results: 5, include_domains: ['nodejs.org']}, 'no model or effort is sent');
+    assert.match(searchResultText(found), /Node 24 is the active LTS\.\n\nSources:\n1\. Node\.js releases — https:\/\/nodejs\.org\/en\/about\/previous-releases\n   Node 24 entered active LTS in October\./);
+    await assert.rejects(searchThroughPool({origin: `${origin}/old`, token: 't', roleId: 'r', query: 'q'}), /managed-web-search-unavailable/, 'a Studio without the pool keeps the old answer');
+    await assert.rejects(searchThroughPool({origin: `${origin}/down`, token: 't', roleId: 'r', query: 'q'}), /web-search-failed: search_unavailable/);
+    await assert.rejects(searchThroughPool({origin: `${origin}/empty`, token: 't', roleId: 'r', query: 'q'}), /web-search-empty/);
+    await assert.rejects(searchThroughPool({origin, token: 't', roleId: 'r', query: '  '}), /web-search-query-invalid/);
+    assert.equal(seen.length, 4, 'an invalid query never reaches Studio');
   } finally { await new Promise((done) => studio.close(done)); }
 });
 

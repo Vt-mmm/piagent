@@ -7,18 +7,22 @@ import {randomUUID} from 'node:crypto';
 import {test} from 'node:test';
 import {ManagedSession} from '../packages/piagent-core/managed/session.mjs';
 
-// One company turn where the model searches the web: the search is a separate
-// Studio request with the provider's search tool, the answer returns to the
-// model as a tool result, and the project's AGENTS.md is in the instructions.
+// One company turn where the model searches the web: the company search pool
+// is asked first; this Studio has none, so the search is a separate Studio
+// request with the provider's search tool. The answer returns to the model as
+// a tool result, and the project's AGENTS.md is in the instructions.
 const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
 
 test('a company turn can search the web through Studio and sees the project instructions', {skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 60000}, async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-web-tools-')));
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Shop\nUse pnpm for every package command.\n');
-  const requests = [];
+  const requests = [], pool = [];
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
-    const body = JSON.parse(Buffer.concat(chunks)); requests.push({path: req.url, body, headers: req.headers});
+    const body = JSON.parse(Buffer.concat(chunks));
+    // A Studio without the company search pool: the role's own search tool answers.
+    if (req.url === '/v1/search') { pool.push({body, headers: req.headers}); res.writeHead(404, {'Content-Type': 'application/json'}); res.end('{"error":{"code":"not_found"}}'); return; }
+    requests.push({path: req.url, body, headers: req.headers});
     res.writeHead(200, {'Content-Type': 'text/event-stream'});
     const emit = (event) => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     const response = {id: `resp_${requests.length}`, object: 'response', status: 'in_progress', model: body.model, output: []};
@@ -66,6 +70,9 @@ test('a company turn can search the web through Studio and sees the project inst
     const system = String(requests[0].body.input.find((message) => message.role === 'developer')?.content ?? '');
     assert.match(system, /<project_instructions path="[^"]*AGENTS\.md">\n# Shop\nUse pnpm for every package command\./);
     assert.match(system, /use web_search for current information/);
+    // The company search pool is asked first, with the run token and role.
+    assert.equal(pool.length, 1);
+    assert.deepEqual([pool[0].body.query, pool[0].headers['x-session-id'], /^Bearer as_run_/.test(pool[0].headers.authorization)], ['current Node.js LTS', roleID, true]);
     // The search itself: the provider's tool, the grant's model/effort and run token.
     assert.deepEqual(requests[1].body.tools, [{type: 'web_search'}]);
     assert.deepEqual([requests[1].path, requests[1].body.model, requests[1].body.reasoning], ['/v1/responses', 'gpt-6-sol', {effort: 'medium'}]);

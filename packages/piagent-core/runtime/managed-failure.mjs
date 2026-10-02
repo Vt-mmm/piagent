@@ -81,6 +81,7 @@ const CODES = {
   'managed-helper-failed': ['failed', 'the subagent ended without an answer'],
   'web-search-empty': ['tool', 'the search returned nothing'],
   'managed-web-search-unavailable': ['tool', 'web search runs only on a Claude or Codex model; use web_fetch with a known address'],
+  search_unavailable: ['tool', 'no web search provider answered right now; try again shortly or use web_fetch with a known address'],
   'managed-session-open-elsewhere': ['new-session', 'this conversation is running in the Piagent WebUI; continue it there or start a new one'],
   'managed-session-lease-unavailable': ['failed', 'Piagent could not record which process runs this conversation'],
   'managed-plan-required': ['tool', 'for a complex task the Harness asks for a checklist (update_plan) before the first file edit'],

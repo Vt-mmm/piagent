@@ -2,7 +2,8 @@
 // `web_search`, Claude `web_search_20250305`) through Studio with the current
 // run token, so queries stay with the company accounts and are metered like
 // any other request. The request carries the grant's model and effort, which
-// Studio requires to match.
+// Studio requires to match. A role on an API-key vendor model searches through
+// the company search pool instead (searchThroughPool).
 const INSTRUCTIONS = 'Search the web for the request. Answer concisely with the facts found and cite every source URL. Prefer official documentation and primary sources.';
 
 function sourceList(sources) {
@@ -91,6 +92,38 @@ export async function searchThroughStudio({ provider, origin, token, roleId, mod
   return result;
 }
 
+// Web search from the company search pool (Studio's /v1/search): the team's
+// pool keys first, then keyless providers. It takes no model or effort, so a
+// role on any model can search; Studio meters it per member.
+const POOL_ANSWER_CHARS = 4000, POOL_SNIPPET_CHARS = 500;
+export async function searchThroughPool({ origin, token, roleId, query, domains, signal, fetchImpl = fetch }) {
+  if (typeof query !== 'string' || !query.trim() || query.length > 2000) throw new Error('web-search-query-invalid');
+  const allowed = Array.isArray(domains) ? domains.filter((domain) => typeof domain === 'string' && /^[a-z0-9.-]{1,253}$/i.test(domain)).map((domain) => domain.toLowerCase()).slice(0, 20) : [];
+  const response = await fetchImpl(`${origin}/v1/search`, {
+    method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(150_000)]) : AbortSignal.timeout(150_000),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Session-Id': roleId },
+    body: JSON.stringify({ query: query.trim(), max_results: 5, ...(allowed.length ? { include_domains: allowed } : {}) }) });
+  const text = await response.text();
+  // A Studio without the search pool: say what the member can do instead.
+  if (response.status === 404) throw new Error('managed-web-search-unavailable');
+  if (!response.ok) {
+    let code = `http-${response.status}`;
+    try { code = JSON.parse(text)?.error?.code ?? code; } catch { /* not JSON */ }
+    throw new Error(`web-search-failed: ${String(code).slice(0, 80)}`);
+  }
+  let body;
+  try { body = JSON.parse(text); } catch { throw new Error('web-search-failed: invalid_response'); }
+  const results = Array.isArray(body?.results) ? body.results : [];
+  const sources = sourceList(results).map((source) => {
+    const hit = results.find((result) => result?.url === source.url);
+    const snippet = typeof hit?.content === 'string' ? hit.content.trim().slice(0, POOL_SNIPPET_CHARS) : '';
+    return snippet ? { ...source, snippet } : source;
+  });
+  const answer = typeof body?.answer === 'string' ? body.answer.trim().slice(0, POOL_ANSWER_CHARS) : '';
+  if (!answer && !sources.length) throw new Error('web-search-empty');
+  return { answer, sources, provider: typeof body?.provider === 'string' ? body.provider : 'pool' };
+}
+
 export function searchResultText({ answer, sources }) {
-  return [answer || 'No summary returned.', sources.length ? 'Sources:\n' + sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}`).join('\n') : ''].filter(Boolean).join('\n\n');
+  return [answer || 'No summary returned.', sources.length ? 'Sources:\n' + sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}${source.snippet ? '\n   ' + source.snippet.replace(/\s+/g, ' ') : ''}`).join('\n') : ''].filter(Boolean).join('\n\n');
 }
