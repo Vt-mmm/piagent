@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Policy enforcement layer, không phải OS sandbox · Pi Agent Platform Docs</title>
-    <meta name="description" content="Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc bằng chứng thiếu thì chặn, không đoán." />
+    <meta name="description" content="Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc quyền không đủ thì chặn, không đoán." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/security" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/security" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/security" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Policy enforcement layer, không phải OS sandbox · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc bằng chứng thiếu thì chặn, không đoán." />
+    <meta property="og:description" content="Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc quyền không đủ thì chặn, không đoán." />
     <meta property="og:url" content="https://piagent.io.vn/security" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/security" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/security" hreflang="en" lang="en">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/ecosystem">Hệ sinh thái</a>
             <a class="nav-link" href="/quickstart">Quickstart</a>
             <a class="nav-link" href="/whats-new">Có gì mới</a>
             <a class="nav-link" href="/scope">Phạm vi platform</a>
@@ -100,7 +101,7 @@
             </nav>
             <div class="page-head">
               <h1>Policy enforcement layer, không phải OS sandbox</h1>
-              <p>Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc bằng chứng thiếu thì chặn, không đoán.</p>
+              <p>Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc quyền không đủ thì chặn, không đoán.</p>
             </div>
 <section class="section">
 
@@ -126,8 +127,8 @@
       <p>Destructive hoặc external-provider action vẫn cần operator xác nhận rõ, kể cả khi full-access đang bật. Gate áp dụng cho direct tool, MCP proxy đã decode và các shell form như GitHub CLI write hoặc HTTP non-GET.</p>
     </article>
     <article class="card">
-      <h3 id="verify-evidence">Verify evidence</h3>
-      <p>Handoff hoàn tất cần bằng chứng verify từ bash result đã quan sát, không nhận câu trả lời “đã test” suông.</p>
+      <h3 id="verify-evidence">Check thật</h3>
+      <p>Ở chế độ công ty, Harness chỉ tính một check đã chạy thật và qua trên code cuối; câu “đã test” suông không đủ.</p>
     </article>
   </div>
 

@@ -27,6 +27,14 @@ describe("Piagent WebUI live conversation settlement", () => {
     });
   });
 
+  it("names the summary of a long conversation while it runs", () => {
+    const live = { ...running(), startedAt: "2026-08-24T14:00:00.000Z", lastEventAt: "2026-08-24T14:00:05.000Z",
+      activities: [{ toolCallRef: "tool_summary", toolLabel: "compaction", fileLabel: null, state: "running",
+        startedAt: "2026-08-24T14:00:05.000Z", finishedAt: null }] };
+    assert.equal(liveProgressStatus(live, "vi", Date.parse("2026-08-24T14:00:40.000Z")).label, "Piagent đang tóm tắt phần cũ của cuộc trò chuyện…");
+    assert.equal(liveProgressStatus(live, "en", Date.parse("2026-08-24T14:00:40.000Z")).label, "Piagent is summarising the older part of the conversation…");
+  });
+
   it("shows only the current file basename in chat progress and rejects unsafe labels", () => {
     const live = { ...running(), startedAt: "2026-08-24T14:00:00.000Z", lastEventAt: "2026-08-24T14:00:05.000Z",
       activities: [{ toolCallRef: "tool_read", toolLabel: "read", fileLabel: "use-auth-refresh.ts", state: "running",
@@ -36,6 +44,7 @@ describe("Piagent WebUI live conversation settlement", () => {
     });
     assert.equal(safeLiveFileLabel("/private/project/use-auth-refresh.ts"), "use-auth-refresh.ts");
     assert.equal(safeLiveFileLabel("sk-proj-abcdefghijklmnopqrstuvwxyz.ts"), null);
+    assert.equal(safeLiveFileLabel(["as", "live", "0f8b2c1e-1234-4abc-9def-0123456789ab", "Zq0Xy_9-AbCdEfGhIjKlMnOpQrStUvWxYz012345678.txt"].join("_")), null);
     assert.equal(safeLiveFileLabel("[REDACTED_SECRET].ts"), null);
     assert.equal(safeLiveFileLabel(".."), null);
   });

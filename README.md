@@ -2,7 +2,7 @@
 
 [Tiếng Việt](README.vi.md)
 
-Reusable Pi package for project onboarding, profile-based coding workflows, guarded tool usage, multi-agent orchestration, MCP setup, memory policy, and task verification.
+Reusable Pi package for freeform coding chat, guarded tools, project context and a managed main/research/review harness.
 
 Public docs: [piagent.io.vn](https://piagent.io.vn)
 
@@ -46,13 +46,11 @@ cd /path/to/project
 pi
 ```
 
-That is the daily flow. Pi onboards the project, selects an operating profile, uses the right tools, records task evidence, and hands off verified implementation work.
+Send the request directly in plain language. Since 1.9.0 there is no `/task` or `/workflow` step, no task contract and no projected token-saving threshold.
 
-Running several agents side by side — one implementing, one reviewing read-only, one verifying — start `herdr` from the project instead of `pi` and open a Pi pane per role. Herdr orchestrates terminals and sessions; it is not a security boundary, so every gate still lives in the Pi extension and OAuth is still a `/login` inside Pi. See [Herdr workflow](docs/herdr-workflow.md).
+For the local macOS team harness, import a managed key through Agent Watch and run `piagent studio` or `piagent studio --web`. Studio chooses the main/research/review routes; the member chooses thinking. Managed sessions have isolated tools and per-run authority. Personal sessions keep their own OAuth and model picker under `pi`.
 
-First run in a new project, type `/onboard` and choose the run action, or type `/onboard run`. It launches the bounded onboarding workflow, recommends a profile, explains the tradeoffs, asks before applying, then writes `.pi/piagent-profile.json`, its lock, `.pi/tech-stack.json`, `.pi/tech-context/*`, `.pi/project-context.md`, and `.pi/memory/*`.
-
-`/commands` lists everything else. For trusted local runs, `piagent-auto` wraps `pi --approve` and sets a permission profile for that run — it does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence. See the [command reference](docs/command-reference-vietnamese.md).
+See [local acceptance and remaining release gates](docs/managed-local-acceptance.md). Existing direct CLI keys remain compatible and do not gain managed harness enforcement.
 
 ## Uninstall
 
@@ -69,12 +67,11 @@ Removal targets what is registered in Pi's settings rather than what the current
 
 ## What it provides
 
-- Global Pi package with workflow prompts, runtime commands, skills, guard extensions, and piagent subagents.
-- Runtime command menu via `/commands`.
-- Workflow launcher via `/workflow` for task, scout, BE-to-FE, review, git, and onboarding work.
-- Runtime onboarding via `/onboard`; `/onboard run` launches the first-read onboarding workflow.
+- Global Pi package with runtime commands, skills, guard extensions, and piagent subagents.
+- Freeform turns: a request in plain language is the whole interface. Scouting, planning, review, commits and pull requests are ordinary requests.
+- Project onboarding on request: ask the agent to inspect the project read-only and record its context, and it writes `.pi/project-context.md`.
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
-- Runtime usage/session controls via `/usage` and `/fresh`, plus Pi native `/name` and `/session`.
+- Runtime usage controls via `/usage`, plus Pi native `/name`, `/new` and `/session`.
 - Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
 - Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, bounded current-turn source/test snapshots for automatic tasks, test impact, efficiency telemetry, and semantic compaction. Index storage is owner-only and securely purged when exclusion policy changes; manual packs remain advisory, while current-turn snapshots are freshness-checked and exact edits fail closed on a later mismatch.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
@@ -87,17 +84,14 @@ Removal targets what is registered in Pi's settings rather than what the current
   - `piagent_exec_policy_check`
   - `piagent_context_budget`
   - `piagent_tool_policy_check`
-  - `piagent_task_gate_check`
   - `piagent_usage_snapshot`
   - `piagent_context_preflight`
   - `piagent_orchestration_policy`
 - Context7-ready tech stack manifest and concise `.pi/tech-context/*` snapshots for selected profile roles.
-- Accident-brake guardrails for protected paths, destructive shell commands, task contracts, context manifests, observed verification evidence, and trace records.
-- Session-bound Task Contract v2: one Pi session per task, bounded retry history,
-  Git baseline-aware changed files, scope enforcement, all-command verification,
-  strict acceptance receipts, identity-bound journal checkpoints, and an
-  immutable terminal outcome. These are same-runtime operational records, not
-  independent attestation.
+- Accident-brake guardrails for protected and read-only paths, destructive shell commands, external-provider actions, large-file edits, and edits made against a stale read.
+- Task contracts and workflow commands were retired in 1.9.0: a session no longer
+  creates a contract, scope, acceptance receipt or final gate. Task records left
+  under `.pi/piagent-state/tasks` by earlier releases stay readable as history.
 - Adaptive context planning uses Pi-reported model/thinking/context facts to set
   a bounded context budget; cited repository-memory hints never replace current
   source reads. The parent model stays operator-pinned—there is no automatic
@@ -119,8 +113,8 @@ Removal targets what is registered in Pi's settings rather than what the current
   transactional-config, and exact temporal-billing invariants. It locks
   Piagent/`codex-cli` to Luna/medium and uses three repeats (42 paired sessions) with token, duration,
   full-suite, and zero-retry gates. A separate provider-free WebUI
-  parity gate proves the 10 workflow and 32 runtime-control paths before any
-  model quota is used.
+  parity gate proves the 31 runtime-control paths before any model quota is
+  used (workflow ingress was retired in 1.9.0).
 - The public `v1.6.0` production-v1 run
   `production-v1-20260824T040017Z-05b7cf`, on exact commit
   `3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511` with GPT-5.6 Luna Medium,
@@ -142,7 +136,7 @@ Project profiles can declare a runtime `permissionProfile`:
 | Profile | Use when | Guard behavior |
 |---|---|---|
 | `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls`, and piagent state tools; blocks shell, `write`/`edit`/`apply_patch`, and unknown tools. |
-| `workspace-write` | Normal implementation | Default profile. Keeps current protected-path, shell, capability, task, and verify gates. |
+| `workspace-write` | Normal implementation | Default profile. Keeps protected-path, read-only-path, shell and capability checks, and asks before destructive or external actions. |
 | `trusted-full-access` | Trusted local automation | Expands workspace tool/scope autonomy, but still enforces protected paths, secret redaction, capability lock integrity, and destructive/external confirmation. |
 
 For one run, set `PIAGENT_PERMISSION_PROFILE=read-only|workspace-write|trusted-full-access`, or use `piagent-auto --read-only`, `--workspace-write`, or `--full-access`.
@@ -162,7 +156,7 @@ Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write
 
 ## Parent-direct orchestration
 
-The parent model owns reasoning, implementation, and verification. Helpers are off by default. With explicit opt-in, runtime may dispatch one fresh read-only helper only when it proves two independent lanes and at least 30% projected net token saving after handoff and merge. Workers, retries, nested helpers, and parallel helpers remain disabled.
+The parent model owns reasoning, implementation, and verification. When helpers are enabled it may delegate up to two fresh read-only helpers, such as an independent research question or a review of its patch. Token-saving estimates are telemetry, not an admission requirement. Helpers never implement, inherit parent history, spawn nested helpers, or retry a deterministic failure.
 
 Inside Pi:
 
@@ -170,27 +164,14 @@ Inside Pi:
 /piagent-orchestration
 ```
 
-This shows the active mode, one-helper ceiling, review lenses, Field Guide path, writer policy, and dispatch/skip evidence without triggering a model follow-up.
+This shows the active mode, helper ceiling, review lenses, Field Guide path, writer policy, and dispatch/skip evidence without triggering a model follow-up.
 
-For bounded source work, runtime creates the session-bound contract before the
-model starts and injects its path scope plus concise verifier. Broad, high-risk,
-or ambiguous work falls back to one explicit `piagent_task_start`. A source task
-requires a Git working tree and a meaningful project verifier. Direct and shell
-writes are constrained to declared scope; final completion needs every planned
-verify command and changed-file evidence. Read-only scouts do not need a source
-verifier and must leave the working tree unchanged.
-
-The installed v1.8.0 policy treats incomplete acceptance proof as diagnostic:
-unproved criteria remain pending and completion carries no quality claim. Task
-contract, scope, current passing verification, and trace still gate completion.
-Select `acceptanceProofMode: "enforce"` in a reviewed package policy when every
-criterion must be proved before completion.
-
-Routine evidence is runtime-managed: successful targeted reads, actual changes,
-exact verifier results, current-tree digest, trace and final gate are recorded
-from Pi lifecycle hooks. Automatic bounded tasks carry no Piagent management
-schema or lifecycle calls. Context/status/evidence/gate tools are diagnostic or
-recovery surfaces, not a checklist for every task.
+Source work is freeform: the model reads, edits and runs the project's checks
+directly, with no contract, declared scope or final gate. The guard still
+enforces protected and read-only paths, the permission profile, the context
+budget for large files and stale read-to-edit snapshots, and asks before
+destructive or external actions. In the managed company harness the plan,
+check and review steps per turn are set by the team's Harness in Studio.
 
 ## Profiles
 
@@ -228,28 +209,24 @@ Commands and lock format: [Capability packs](docs/capability-packs.md).
 
 ## Main workflows
 
-Everything below is typed inside a Pi session. `/commands` lists the full set; [command reference](docs/command-reference-vietnamese.md) explains each one. The recommended team surface is grouped by namespace so people do not need to remember many one-off commands.
+Work is requested in plain language; the commands below are settings and read-only views typed inside a Pi session, and none of them starts a model turn. [Command reference](docs/command-reference-vietnamese.md) explains each one.
 
 | Command | Use when |
 |---|---|
-| `/workflow` | Open the workflow picker. |
-| `/workflow task <request>` | The requirement is clear enough to implement. |
-| `/workflow scout <request>` | Read-only investigation — payment, auth, data, or backend-contract mapping — before deciding whether to implement. |
-| `/workflow discuss <rough request>` | The requirement is not clear yet. |
-| `/workflow plan <goal>` | You want a plan before any edit. |
-| `/workflow review current diff` | Reviewing work already done. |
-| `/workflow commit <message>` | Governed local commit: inspect status and diff, stage only the intended files, run verification, commit. Never pushes. |
-| `/workflow pr <title>` | Governed pull request: confirms before any `git push` or GitHub write. Draft by default. |
-| `/workflow be-to-fe <request>` | Backend or spec is read-only and the implementation target is frontend. Pair with `/profile be-readonly-fe`. |
-| `/workflow platform-improve <request>` | Package-level work: setup, MCP, model scope, memory, runtime policy, prompts, skills, subagents. |
-| `/fresh <workflow> <request>` | The current session is already heavy. Opens a new governed session for any canonical workflow (`/fresh help` lists them) and replays the compact workflow prompt. |
-| `/piagent-inspector` | Open one read-only menu for task files and line diff, commands and failures, safety warnings, and context budget. A four-row panel is always shown beside Pi's native footer and can be hidden for the session with `toggle`. |
+| `/profile` | Show or apply the project profile; `/profile setup` selects the tech for each role. |
+| `/permission` | Show or switch the session permission profile. |
+| `/context` | Context Engine index, search, packs, test impact and compaction. |
+| `/usage` | Session, model, thinking and context usage; `/usage logs` shows compacted tool output. |
+| `/memory` | Explicit project memory. |
+| `/piagent-mcp` | MCP servers, scopes and approvals. |
+| `/piagent-status` | Profile, guard, runtime and authenticated model state. |
+| `/piagent-inspector` | One read-only menu for the session diff, commands and failures, safety warnings, and context budget. A four-row panel is always shown beside Pi's native footer and can be hidden for the session with `toggle`. |
 
-Short workflow aliases such as `/task`, `/scout`, `/be-to-fe`, `/commit`, and `/pr` still work for power users, but docs and onboarding teach `/workflow` as the default.
+The workflow commands (`/workflow`, `/task`, `/scout`, `/fresh`, `/onboard`, `/commands`, `/model-options`) were retired in 1.9.0. Say what you want instead — "scout the payment flow read-only, do not edit", "review the current diff", "commit these two files". For a heavy session, start a new one with Pi's `/new`.
 
-Git stays a capability rather than a `/git-*` namespace, so natural language works too. Broad staging — `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` — requires confirmation, so unrelated or private files are not swept into a commit silently.
+Git stays a capability rather than a `/git-*` namespace, so natural language works. `git push`, GitHub writes and publishing ask for confirmation first. Broad staging — `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` — requires confirmation, so unrelated or private files are not swept into a commit silently.
 
-Paste a screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The target must be inside the project or a directory listed in `additionalReadRoots`; protected paths, paths outside the resolved filesystem read scope, symlink escapes, and extension-only fake images are refused. The guard also collapses pasted mandatory-flow boilerplate, so there is no need to paste a checklist into every task.
+Paste a screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The target must be inside the project or a directory listed in `additionalReadRoots`; protected paths, paths outside the resolved filesystem read scope, symlink escapes, and extension-only fake images are refused. Pasted text reaches the model as typed; there is no checklist to paste.
 
 Web research and image understanding remain separate capabilities. The pinned `pi-web-access` integration uses the authenticated `openai-codex` route first when it is available and keeps its automatic search fallback; it never copies provider credentials into project or browser state. Images are passed as native image input to the selected session model rather than through a Piagent-owned OCR service. The dashboard reports both effective facts under **Settings → Providers & models**: `Codex Web Search` when that route is ready, and `Codex Vision` only when the current Codex model advertises image input.
 
@@ -259,7 +236,7 @@ A spec that lives outside the project — the one just downloaded to `~/Download
 
 ## Model selection
 
-Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Type `/model-options` for the current Piagent model/thinking guidance. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
+Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
 
 ## MCP setup
 
@@ -277,9 +254,9 @@ Keep provider keys in environment variables, never in committed config. Switchin
 
 ## Subagents
 
-`piagent-setup` installs the optional `pi-subagents` compatibility runtime with a clamped `safe` preset. Daily tasks stay parent-direct; builtin agents and workers are disabled, and explicit helper mode still requires the measured 30% gate. The inspector states dispatch/skip reasons and projected saving.
+`piagent-setup` installs the optional `pi-subagents` compatibility runtime with a clamped `safe` preset. Daily tasks stay parent-direct; builtin agents and workers are disabled, and helper mode allows up to two read-only helpers. The inspector states dispatch/skip reasons.
 
-`/subagents-doctor` runs a health check. See [Subagents and multi-agent](docs/subagents-and-multiagent.md) for the one read-only helper opt-in contract.
+`/subagents-doctor` runs a health check. See [Subagents and multi-agent](docs/subagents-and-multiagent.md) for the read-only helper opt-in contract.
 
 ## Repository layout
 
@@ -292,7 +269,7 @@ piagent/
 ├─ evals/                            governed evaluation scenarios
 ├─ packs/                            versioned capability manifests and recipes
 ├─ packages/
-│  ├─ piagent-core/                  Pi package: extensions, runtime, prompts, skills
+│  ├─ piagent-core/                  Pi package: extensions, runtime, skills, managed harness
 │  └─ piagent-webui/                 dashboard: contracts, client, server, gateway, ownership
 ├─ schemas/                          JSON schemas
 ├─ scripts/                          setup, doctor, verification helpers
@@ -356,8 +333,8 @@ This repository intentionally excludes:
 - [Subagent orchestration capabilities](docs/subagent-orchestration-capabilities.md)
 - [Context-window policy](docs/context-window-policy.md)
 - [Memory policy](docs/memory-policy.md)
-- [Task lifecycle tiếng Việt](docs/task-lifecycle-vietnamese.md)
-- [Task implementation contract](docs/task-implementation-contract.md)
+- [Task lifecycle tiếng Việt](docs/task-lifecycle-vietnamese.md) (historical, before 1.9.0)
+- [Task implementation contract](docs/task-implementation-contract.md) (historical, before 1.9.0)
 - [Runtime quality baseline](docs/runtime-quality-baseline.md)
 - [Usage observability](docs/usage-observability.md)
 - [Model options](docs/model-options.md)
@@ -369,7 +346,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.8.0` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.9.0` or a reviewed commit.
 
 Ready for:
 
@@ -379,7 +356,7 @@ Ready for:
 - read-only scouting and planning;
 - backend-readonly/frontend-write workflows;
 - bounded subagent scouting, planning, implementation, and review;
-- runtime checks for exec policy, context budget, context preflight, tool policy, task gate, and usage snapshot;
+- runtime checks for exec policy, context budget, context preflight, tool policy, and usage snapshot;
 - project-level quality/token/cost benchmarking.
 
 Application-level policy layer:
@@ -394,11 +371,9 @@ Application-level policy layer:
 - The ambiguous `source` field remains metadata for configured external providers and piagent tools, but is treated as a filesystem path for file-oriented tools and unknown/local tools; protected-path and read-scope checks then apply before execution.
 - Broad `grep`, `find`, and `ls` sweeps get result-filter backstops: protected file content lines or protected path metadata are redacted before the model sees output. Text tool results and JSON-like result details also pass through shared sensitive-data redaction; image, audio, and resource payloads are left intact.
 - The redaction release gate is a synthetic/internal benchmark for contextual recall, benign preservation, structured fields, and bounded large output. The public security threat model maps current assumptions, attack vectors, controls, and residual risks; it is not an independent audit. Stronger assurance still requires a broader OS/shell matrix, more parser fuzzing, continued symlink/path-traversal testing, third-party review, and an LTS/backport policy. Opaque entropy without a credential-bearing context and transformed output such as base64-encoded content remain outside the redaction guarantee.
-- Raw `bash` access to protected paths is blocked through shell operand extraction. The guard covers partial shell globs, bare filenames, canonical symbolic-link aliases, and attached input/output redirections. `.pi/piagent-state/**` and `.pi/piagent-profile.json` are self-protected; use `piagent_context` and piagent task tools instead.
+- Raw `bash` access to protected paths is blocked through shell operand extraction. The guard covers partial shell globs, bare filenames, canonical symbolic-link aliases, and attached input/output redirections. `.pi/piagent-state/**` and `.pi/piagent-profile.json` are self-protected; use `piagent_context` and the piagent tools instead.
 - External writes launched through guarded shell tools are confirmation-gated as well as direct provider tools. This includes GitHub CLI write actions and non-read-only `curl`/`wget` forms, including common execution wrappers; known read/list/GET forms remain non-interactive.
-- Verify evidence is accepted only when it matches an observed Pi bash tool result after task start. The observed ledger is persisted under `.pi/piagent-state/observed-bash.jsonl`, so parent agents can validate bash results produced by guarded subagent processes.
-- Observed command identity is retained as a SHA-256 hash while sensitive command text is redacted at both the in-memory and persisted evidence boundaries.
-- Passing final gates require an observed exit `0` command that exactly matches one of the task/profile `verifyCommands`; ad-hoc commands such as `true`, `echo ok`, or `npm test || true` are advisory only.
+- Observed bash results are persisted under `.pi/piagent-state/observed-bash.jsonl`, so parent agents can check results produced by guarded subagent processes. Command identity is kept as a SHA-256 hash while sensitive command text is redacted at both the in-memory and persisted boundaries.
 - Project memory files are private-by-default in generated projects; opt in to shared memory only after review/redaction.
 - It is not an OS sandbox or complete security boundary. It depends on the controlled tool paths and shell parsing that the platform observes, and it cannot stop another process with the same OS permissions from reading or writing outside the guard. For untrusted code, untrusted prompts, or adversarial workloads, run Pi inside an isolated container/VM with filesystem, process, network, and credential boundaries.
 - Release verification audits the small helper dependency tree separately from the exact Pi host and pinned optional add-ons at the high-severity gate. Upstream lower-severity findings are still reported and tracked; a green helper-only audit is not treated as proof that the deployed runtime tree is clean.

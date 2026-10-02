@@ -99,19 +99,49 @@
   "execPolicy": {
     "defaultMode": "enforce",
     "bannedPrefixSuggestions": [
-      ["python"],
-      ["python3"],
-      ["node"],
-      ["node", "-e"],
-      ["bash"],
-      ["bash", "-lc"],
-      ["sh"],
-      ["sh", "-c"],
-      ["zsh"],
-      ["zsh", "-lc"],
-      ["git"],
-      ["sudo"],
-      ["env"]
+      [
+        "python"
+      ],
+      [
+        "python3"
+      ],
+      [
+        "node"
+      ],
+      [
+        "node",
+        "-e"
+      ],
+      [
+        "bash"
+      ],
+      [
+        "bash",
+        "-lc"
+      ],
+      [
+        "sh"
+      ],
+      [
+        "sh",
+        "-c"
+      ],
+      [
+        "zsh"
+      ],
+      [
+        "zsh",
+        "-lc"
+      ],
+      [
+        "git"
+      ],
+      [
+        "sudo"
+      ],
+      [
+        "env"
+      ]
     ],
     "rules": [
       {
@@ -187,18 +217,42 @@
       "piagent_trace_record"
     ],
     "toolCapabilities": {
-      "bash": ["shell"],
-      "shell": ["shell"],
-      "exec": ["shell"],
-      "read": ["filesystem-readonly"],
-      "grep": ["filesystem-readonly"],
-      "find": ["filesystem-readonly"],
-      "ls": ["filesystem-readonly"],
-      "write": ["filesystem-write"],
-      "edit": ["filesystem-write"],
-      "apply_patch": ["filesystem-write"],
-      "browser": ["browser"],
-      "github": ["github"]
+      "bash": [
+        "shell"
+      ],
+      "shell": [
+        "shell"
+      ],
+      "exec": [
+        "shell"
+      ],
+      "read": [
+        "filesystem-readonly"
+      ],
+      "grep": [
+        "filesystem-readonly"
+      ],
+      "find": [
+        "filesystem-readonly"
+      ],
+      "ls": [
+        "filesystem-readonly"
+      ],
+      "write": [
+        "filesystem-write"
+      ],
+      "edit": [
+        "filesystem-write"
+      ],
+      "apply_patch": [
+        "filesystem-write"
+      ],
+      "browser": [
+        "browser"
+      ],
+      "github": [
+        "github"
+      ]
     }
   },
   "externalActionPolicy": {
@@ -273,7 +327,7 @@
   },
   "orchestrationPolicy": {
     "defaultMode": "solo-first",
-    "maxConcurrentSubagents": 1,
+    "maxConcurrentSubagents": 2,
     "defaultReviewLenses": [
       "correctness",
       "tests",

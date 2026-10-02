@@ -44,15 +44,10 @@ export function isWebUiWorkflowId(value: unknown): value is WebUiWorkflowId {
   return typeof value === "string" && (WORKFLOW_IDS as readonly string[]).includes(value);
 }
 
-/**
- * WebUI does not carry a second copy of workflow prompts. It sends the same
- * explicit command the terminal dispatcher accepts, and the Pi extension owns
- * task intake, policy, tool groups, and the eventual provider turn.
- */
-export function buildWebUiWorkflowCommand(workflow: WebUiWorkflowId | null, request: string): string {
-  const normalized = String(request ?? "").trim();
-  if (!normalized) throw new Error("workflow-request-empty");
-  if (normalized.includes("\0")) throw new Error("workflow-request-invalid");
-  if (!workflow) return normalized;
-  return `/workflow ${workflow} ${normalized}`;
+/** Legacy clients may still send a workflow field. It must never rewrite their message. */
+export function buildWebUiWorkflowCommand(_workflow: WebUiWorkflowId | null, request: string): string {
+  const text = String(request ?? "");
+  if (!text.trim()) throw new Error("workflow-request-empty");
+  if (text.includes("\0")) throw new Error("workflow-request-invalid");
+  return text;
 }

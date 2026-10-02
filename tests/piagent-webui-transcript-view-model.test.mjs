@@ -100,6 +100,23 @@ describe("Piagent WebUI transcript presentation", () => {
     assert.deepEqual(conversationTranscriptItems([user, progress, blocked]), [user]);
   });
 
+  it("shows a turn that failed without an answer until a retry answers it", () => {
+    const user = { messageRef: "message.user", parentMessageRef: null, role: "user", messageRequestId: "request.hello", toolCalls: [],
+      content: { text: "hello em" } };
+    const failed = (ref, reasonCode) => ({ messageRef: ref, parentMessageRef: user.messageRef, role: "assistant", toolCalls: [],
+      content: { state: "unavailable", text: null, reasonCode } });
+    const first = failed("message.fail.1", "provider-unavailable"), second = failed("message.fail.2", "provider-rate-limited");
+    const answer = { messageRef: "message.answer", parentMessageRef: user.messageRef, role: "assistant", toolCalls: [], content: { text: "Chào anh." } };
+    assert.deepEqual(conversationTranscriptItems([user, first]), [user, first]);
+    assert.deepEqual(conversationTranscriptItems([user, first, second]), [user, second], "Only the latest failure of a turn");
+    assert.deepEqual(conversationTranscriptItems([user, first, answer]), [user, answer], "A retry that answered hides the failure");
+    assert.deepEqual(conversationTranscriptItems([user, answer, first]), [user, answer], "A later failure never hides an answer");
+    // Aborts and in-progress placeholders are not failures to report.
+    assert.deepEqual(conversationTranscriptItems([user, failed("message.aborted", "assistant-message-aborted")]), [user]);
+    assert.equal(persistedLiveConversationHasFinal([user, first], "hello em", { messageRequestId: "request.hello" }), true, "A failure settles the live turn");
+    assert.equal(persistedConversationHasFinal([user, first], "hello em"), true);
+  });
+
   it("never renders a durable response before or without its user request", () => {
     const user = { messageRef: "message.user", parentMessageRef: null, role: "user", toolCalls: [], content: { text: "Implement it." } };
     const final = { messageRef: "message.final", parentMessageRef: user.messageRef, role: "assistant", toolCalls: [],

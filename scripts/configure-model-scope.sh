@@ -12,6 +12,8 @@ Options:
                                      Default model (default: openai-codex/gpt-6-sol:high)
   --settings <path>                  Pi settings file (default: ~/.pi/agent/settings.json)
   --dry-run                          Print resulting settings JSON without writing
+  --prune                            Only remove enabledModels patterns that match no model
+                                     Pi knows (Pi warns about each on every start); keep the rest
   -h, --help
 
 Purpose:
@@ -33,6 +35,7 @@ PRESET="full"
 DEFAULT_MODEL="openai-codex/gpt-6-sol:high"
 SETTINGS_PATH="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}/settings.json"
 DRY_RUN=false
+PRUNE=false
 
 # A flag whose value is missing swallows the next flag instead. `--settings
 # --dry-run` used to set the settings path to the string "--dry-run", leave
@@ -68,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true
       shift
       ;;
+    --prune)
+      PRUNE=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -79,6 +86,13 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$PRUNE" == true ]]; then
+  if [[ "$DRY_RUN" == true ]]; then
+    exec node "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model-scope-prune.mjs" --settings "$SETTINGS_PATH"
+  fi
+  exec node "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model-scope-prune.mjs" --settings "$SETTINGS_PATH" --fix
+fi
 
 case "$PRESET" in
   full|codex|claude) ;;
@@ -99,8 +113,6 @@ const dryRun = dryRunRaw === "true";
 
 const codexModels = [
   "openai-codex/gpt-5.3-codex-spark:minimal",
-  "openai-codex/gpt-5.4-mini:minimal",
-  "openai-codex/gpt-5.4:xhigh",
   "openai-codex/gpt-5.5:high",
   "openai-codex/gpt-5.6-luna:medium",
   "openai-codex/gpt-5.6-terra:high",

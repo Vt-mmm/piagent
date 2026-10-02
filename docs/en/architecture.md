@@ -37,6 +37,7 @@ The machine-readable rule is `architecture/layers.json`; `npm run architecture:c
 | Layer | Current location | Owns | Must not own |
 |---|---|---|---|
 | Composition | `packages/piagent-core/extensions/piagent-guard.ts` | Wiring, dependency construction, registration order | Feature algorithms, mutable state implementations, large formatters |
+| Managed harness | `packages/piagent-core/managed/` | Company sessions imported by Agent Watch: Studio grants, sandboxed tool worker, research/review helpers, web search/fetch | Personal OAuth, personal extensions, Studio policy decisions |
 | Runtime adapters | `packages/piagent-core/runtime/` | Pi lifecycle hooks, shared session state, command/tool registration, input routing | Reusable policy decisions |
 | Core services | `packages/piagent-core/extensions/` except the entrypoint | Policy, context, task lifecycle, state services | Pi command menus and UI text |
 | MCP integration | `packages/piagent-core/mcp/` | MCP config layers, readiness, approval, command actions | Task and context policy |
@@ -73,7 +74,14 @@ the WebUI absent. `npm run architecture:check` enforces every edge above.
 
 ## Adaptive durable runtime
 
-The current runtime has six operational/derived state layers:
+> Since 1.9.0 (task-contract retirement, 2026-09-30) a session creates no task
+> contract, journal entry, trajectory or recovery handoff, and the guard never
+> treats one as active. The first four layers below describe records written by
+> earlier releases; they stay readable for history and inspection. Freeform
+> turns keep the guard's path, permission, confirmation, context-budget and
+> stale-edit checks.
+
+The runtime defined six operational/derived state layers:
 
 | Layer | Source of truth | Derived state |
 |---|---|---|

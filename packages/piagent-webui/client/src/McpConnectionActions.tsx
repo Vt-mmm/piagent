@@ -28,7 +28,7 @@ export function mcpConnectionSubtitle(connection: Connection, locale: "vi" | "en
 
 function oauthFailure(reasonCode: string | null | undefined, connectionName: string, locale: "vi" | "en"): string {
   if (reasonCode === "mcp-oauth-client-not-approved" && connectionName.toLowerCase() === "figma") {
-    return localize(locale, "Figma Remote chưa cho phép Piagent đăng ký OAuth. Anh có thể dùng kết nối Figma Desktop bên dưới.",
+    return localize(locale, "Figma Remote chưa cho phép Piagent đăng ký OAuth. Có thể dùng kết nối Figma Desktop bên dưới.",
       "Figma Remote has not approved Piagent as an OAuth client. You can use the Figma Desktop connection below.");
   }
   if (reasonCode === "mcp-oauth-client-not-approved") return localize(locale, "Nhà cung cấp chưa cho phép client OAuth này.",

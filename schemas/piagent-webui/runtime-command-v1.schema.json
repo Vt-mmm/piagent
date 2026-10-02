@@ -9,9 +9,8 @@
   "$defs": {
     "action": {
       "enum": [
-        "runtime.status", "runtime.inspector", "runtime.commands", "runtime.fast-status", "runtime.fast-on", "runtime.fast-off", "orchestration.status",
+        "runtime.status", "runtime.inspector", "runtime.fast-status", "runtime.fast-on", "runtime.fast-off", "orchestration.status",
         "usage.live", "usage.history", "usage.logs", "usage.efficiency", "usage.preflight",
-        "onboarding.status", "onboarding.profile", "onboarding.tech",
         "profile.status", "profile.options", "profile.tech-options", "profile.apply", "profile.auto",
         "context.status", "context.rebuild", "context.search", "context.pack", "context.impact", "context.efficiency", "context.preflight", "context.compact",
         "memory.status",

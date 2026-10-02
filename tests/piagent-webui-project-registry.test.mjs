@@ -32,3 +32,15 @@ it("fails closed for root folders and corrupt durable registries", () => {
   fs.writeFileSync(registry.file, '{"version":"piagent-project-registry-v1","projects":[{"cwd":"/tmp/raw"}]}\n', { mode: 0o600 });
   assert.throws(() => registry.list(), /project-registry-content-invalid/);
 });
+
+// The new-conversation menu lists folders by name; two with the same name
+// (two clones of one repository) also show where each one is.
+it("tells same-name projects apart by their parent folders", async () => {
+  const { projectLocations } = await import("../packages/piagent-webui/gateway/session-inspection-registry.ts");
+  const home = process.env.HOME;
+  assert.deepEqual(projectLocations([`${home}/work/shop`, `${home}/work/clones/a/shop`, `${home}/work/clones/b/shop`]),
+    ["…/work/shop", "…/a/shop", "…/b/shop"]);
+  // Two last folders alike: as many as it takes.
+  assert.deepEqual(projectLocations(["/srv/a/x/y", "/srv/b/x/y"]), ["…/a/x/y", "…/b/x/y"]);
+  assert.deepEqual(projectLocations([home, `${home}/code`, "/tmp"]), ["~", "~/code", "/tmp"]);
+});

@@ -41,6 +41,79 @@ export type SessionRow = {
   unread: boolean;
   composerAvailable: boolean;
   needsAttention: boolean;
+  managedHelpers?: {
+    active: number | null;
+    maximum: 2;
+  };
+  /**
+   * @maxItems 7
+   */
+  managedThinkingLevels?:
+    | []
+    | ["off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"]
+    | [
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      ]
+    | [
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      ]
+    | [
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      ]
+    | [
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      ]
+    | [
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      ]
+    | [
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      ];
+  managedPlan?: {
+    /**
+     * @minItems 1
+     * @maxItems 30
+     */
+    steps: [
+      {
+        step: string;
+        status: "pending" | "in_progress" | "completed";
+      },
+      ...{
+        step: string;
+        status: "pending" | "in_progress" | "completed";
+      }[]
+    ];
+  };
+  managedProcess?: {
+    outcome:
+      "no_change" | "interrupted" | "blocking_open" | "unverified" | "review_unavailable" | "unreviewed" | "clean";
+    verified: boolean;
+    reviewed: boolean;
+    blockingOpen: number;
+    planSkipped?: true;
+  };
   modelLabel: string | null;
   thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "unknown";
   contextUsage: ContextUsage;

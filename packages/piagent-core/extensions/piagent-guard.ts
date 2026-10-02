@@ -1,4 +1,4 @@
-import { observedFocusedTestSummary, retainFocusedVerification, unresolvedFocusedVerification } from "./acceptance-focused-verification.js";
+import { unresolvedFocusedVerification } from "./acceptance-focused-verification.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,20 +10,21 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import {
-  evaluateExecPolicyCore, extractShellGlobCandidates, extractShellPathCandidates, findProtectedPathInCommand, unresolvedPathExpansions,
+  evaluateExecPolicyCore, findProtectedPathInCommand, unresolvedPathExpansions,
   globMatchesPath, matchesProtectedPath, normalizePathCandidate, matchesAnyPath
 } from "./policy-core.js";
 import {
   expandSimpleGlobAlternatives, findResolvedProtectedPathInCommand, normalizeRelative, protectedPatternExamples,
-  resolveRepositoryPathCandidate, shellGlobMatchesPath, shellGlobSegmentMatches, shellGlobTargetsProtectedPath,
+  resolveRepositoryPathCandidate, shellGlobTargetsProtectedPath,
   unresolvedExpansionReason
 } from "./shell-reach.ts";
-import { extractShellWritePathCandidates, shellHasFileWriteRedirection } from "./shell-write-targets.js";
-import { isProjectMutatingShellCommand, isReadOnlyTaskShellCommand } from "./readonly-inline-inspection.ts";
+import { grantedSourceCheckoutRootForPath, shellTouchesGrantedSourceCheckout } from "./source-checkout-paths.ts";
+import { experimentLoopDecision } from "./experiment-loop-policy.ts";
+import { extractShellWritePathCandidates } from "./shell-write-targets.js";
+import { isProjectMutatingShellCommand } from "./readonly-inline-inspection.ts";
 import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
 import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
 import {
-  DOCUMENT_EXTENSIONS,
   extractDocument,
   resolveDocumentPath,
   resolveDocumentRoots
@@ -58,7 +59,7 @@ import {
 import { resolveCapabilitySourceRoots } from "../capabilities/capability-sources.js";
 import {
   actionTextMatchesAny, actionTokens, classifyActionTokenSequence, classifyExplicitActionValues, classifyToolNameAction,
-  externalExecutableIndex, extractShellCommandInput, findShellExternalConfirmationReason, normalizeActionToken, normalizeShellCommandForPolicy
+  extractShellCommandInput, findShellExternalConfirmationReason, normalizeActionToken, normalizeShellCommandForPolicy
 } from "./guard-shell-analysis.ts";
 import {
   appendContextTelemetry, buildContextEfficiencyReport, buildContextIndexV2, buildContextPack, buildTestImpact, classifyContextTask,
@@ -69,31 +70,27 @@ import {
   effectiveProtectedPaths
 } from "./context-index-policy.js";
 import {
-  DEFAULT_MAX_TASK_ATTEMPTS, activeSessionTask, bindSessionTask, createTaskRunId, hasGitEvidenceRoot, listTaskContracts,
+  DEFAULT_MAX_TASK_ATTEMPTS, bindSessionTask, createTaskRunId, hasGitEvidenceRoot, listTaskContracts,
   priorTaskAttempts, repositoryFileManifest, repositoryFileManifestDetails, resolveTaskContract, safeTaskId, summarizeAttempt, taskContractValidationErrors, taskDigestMigrationArchiveStatus,
   workPlanDependencyError, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence, writeTaskContract
 } from "./task-state.js";
-import { classifyRecordedVerificationFailure, classifyVerificationFailure, latestObservedVerification, meaningfulVerificationCommands, recordedFailureForObservation, selectCompletionRecoveryClassification, selectVerificationPlan } from "./verification-intelligence.js";
+import { classifyVerificationFailure, meaningfulVerificationCommands, selectVerificationPlan } from "./verification-intelligence.js";
 import { executionBackendToolDecision } from "./execution-backend.js";
 import { replayTaskCheckpoints } from "./task-journal.js";
-import type { FailureClassification } from "./failure-types.ts";
-import { recordCompletionAudit, recordMutationCheckpoint, recordTaskProgressCheckpoints, recordTaskStartCheckpoint, recordVerificationCheckpoint } from "./task-runtime-audit.js";
+import { recordCompletionAudit, recordTaskProgressCheckpoints, recordTaskStartCheckpoint, recordVerificationCheckpoint } from "./task-runtime-audit.js";
 import {
   applyAcceptanceRecoveryProvenance, acceptanceBaselineGuidance, acceptanceProofGuidance, acceptanceSemanticConflicts,
-  buildAcceptanceReceipt, invalidateAcceptanceReceiptAfterMutation, refreshAcceptanceReceipt
+  buildAcceptanceReceipt, refreshAcceptanceReceipt
 } from "./acceptance-receipt.js";
 import { acceptanceLanguageAdapterForPath, isAcceptanceTestPath } from "./acceptance-language-adapters.js";
-import { allVerifyCommandsPassCurrentTree, changedSnapshotFiles, compactTaskDetails, mergeObservedTaskContext, passingVerifyCommandsForDigest, taskDeltaFilesFromSnapshot } from "./task-contract-view.js";
+import { allVerifyCommandsPassCurrentTree, compactTaskDetails, passingVerifyCommandsForDigest, taskDeltaFilesFromSnapshot } from "./task-contract-view.js";
 import { applyRuntimeLifecycleObservation, runtimeLifecycleMode, workingTreeEvidenceDigest } from "./task-lifecycle.js";
-import { completeTaskDigestRefresh } from "./task-digest-migration.js";
-import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeObservation, workingTreeSnapshotUsesCurrentAlgorithm } from "./working-tree-digest.js";
+import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeSnapshotUsesCurrentAlgorithm } from "./working-tree-digest.js";
 import { currentWorkspaceRevisionDigest } from "./workspace-revision.js";
-import { captureWorkspaceVerificationSnapshot } from "./workspace-verification-snapshot.js";
 import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
 import { hasDurableContextEvidence } from "./context-evidence.js";
 import { piApprovalBroker, type ApprovalActionDraft, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
-import { inspectTaskControlState } from "../runtime/inspection/task-control-journal.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
 import {
   TOOL_RESULT_CAPTURE_MAX_CHARS,
@@ -111,10 +108,7 @@ import {
 } from "../runtime/session/tool-result-compaction.ts";
 import { RuntimeSessionState } from "../runtime/session/runtime-state.ts";
 import type { ObservedTaskContext } from "../runtime/session/runtime-state.ts";
-import { reuseCurrentTreeExactVerifier } from "../runtime/verification/exact-verifier-reuse.ts";
-import { IndependentAcceptanceRuntime } from "../runtime/verification/independent-acceptance-runtime.ts";
 import { independentAcceptanceState } from "./acceptance-independent-registry.js";
-import { independentVerificationRecovery } from "../runtime/recovery/independent-verification-recovery.ts";
 import {
   PIAGENT_TOOL_GROUPS,
   PIAGENT_TOOL_NAMES,
@@ -138,7 +132,6 @@ import {
 import { readChatImage } from "../runtime/input/chat-images.ts";
 import { registerInputHook } from "../runtime/hooks/input-hook.ts";
 import { registerAgentStartHook } from "../runtime/hooks/agent-start-hook.ts";
-import { registerCompletionHook } from "../runtime/hooks/completion-hook.ts";
 import { registerSessionHooks } from "../runtime/hooks/session-hooks.ts";
 import { registerSessionStartHook } from "../runtime/hooks/session-start-hook.ts";
 import { registerToolCallHook } from "../runtime/hooks/tool-call-hook.ts";
@@ -156,49 +149,36 @@ import type { TaskFeatures } from "../runtime/solver/solver-types.ts";
 import { planRetrievalRoute } from "../runtime/context/retrieval-route-policy.ts";
 import { evaluateRuntimeSolver } from "../runtime/solver/runtime-features.ts";
 import { SolverShadowRuntime, solverModeFromEnvironment } from "../runtime/solver/solver-shadow.ts";
-import { observeTrajectorySync } from "../runtime/trajectory/trajectory-observability.ts";
 import { TrajectoryRuntime } from "../runtime/trajectory/trajectory-runtime.ts";
-import { PhaseToolRuntime, phaseToolModeFromEnvironment } from "../runtime/tools/phase-tool-runtime.ts";
 import { parseApplyPatchTargets, registerApplyPatchTool } from "../runtime/tools/apply-patch-tool.ts";
-import { authorityReplacementState, ensureTaskAuthorityResumePolicy } from "../runtime/policy/authority-resume-policy.ts";
 import { taskAuthorityDecision } from "../runtime/policy/task-authority-runtime.ts";
-import { applyProofCapabilityHandoff, selectRecoveryDecision } from "../runtime/recovery/recovery-policy.ts";
-import type { RecoveryDecision } from "../runtime/recovery/recovery-policy.ts";
 import { inspectTaskResumeState } from "../runtime/recovery/resume-state.ts";
-import { SemanticRepairRuntime } from "../runtime/recovery/semantic-repair-runtime.ts";
 import { defaultRolePolicy } from "../runtime/orchestration/role-policy.ts";
 import { helpersMode } from "../runtime/orchestration/helper-lifecycle.ts";
-import { evaluateDirectSubagentDispatch, recordDirectSubagentResult, reserveDirectSubagentDispatch, taskHelperUsageMode } from "../runtime/orchestration/subagent-tool-policy.ts";
+import { evaluateDirectSubagentDispatch } from "../runtime/orchestration/subagent-tool-policy.ts";
 import { buildLiveTaskStatus, formatLiveTaskStatus } from "../runtime/product/operator-projections.ts";
 import { buildTaskEfficiencyMetrics } from "../runtime/product/efficiency-metrics.ts";
-import { performanceReviewToolDecision, performanceReviewToolKind } from "../runtime/quality/performance-assurance.ts";
-import { expectedModelMutationProof } from "../runtime/quality/model-mutation-proof.ts";
 import { EditFreshnessGuard, editFreshnessModeFromEnvironment } from "../runtime/quality/edit-freshness-guard.ts";
-import { captureVerifierFileSnapshot } from "../runtime/inspection/verifier-snapshot-store.ts";
 import { finalGateConfig } from "./acceptance-diagnostic-policy.ts";
 import { fallbackBasePolicy } from "./fallback-base-policy.ts";
-import { prefixCompletions, registerPiagentTool, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
+import { prefixCompletions, registerPiagentTool as registerToolDefinition, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
+import { registerTaskEvidenceTools } from "../runtime/registration/task-evidence-tools.ts";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
 import { registerPiagentStatusCommand } from "../runtime/registration/runtime-model-status.ts";
 import { registerTaskPreflightCommand } from "../runtime/registration/task-preflight.ts";
 import { registerPolicyTools } from "../runtime/registration/policy-tools.ts";
 import { registerKnowledgeTools } from "../runtime/registration/knowledge-tools.ts";
 import { registerOnboardingTools } from "../runtime/registration/onboarding-tools.ts";
-import { registerTaskStartTool } from "../runtime/registration/task-start-tool.ts";
-import { registerTaskEvidenceTools } from "../runtime/registration/task-evidence-tools.ts";
-import { registerTaskCompletionTools } from "../runtime/registration/task-completion-tools.ts";
 import { registerPermissionCommands } from "../runtime/registration/permission-commands.ts";
 import { registerProfileCommands } from "../runtime/registration/profile-commands.ts";
 import { registerMemoryMcpCommands } from "../runtime/registration/memory-mcp-commands.ts";
 import { registerContextCommands } from "../runtime/registration/context-commands.ts";
 import { registerSessionCommands } from "../runtime/registration/session-commands.ts";
-import { registerWorkflowCommands } from "../runtime/registration/workflow-commands.ts";
 import { registerActivityInspector } from "../runtime/registration/activity-inspector-command.ts";
 export { readChatImage };
 import type { ActionClassification } from "./guard-shell-analysis.ts";
 import type {
   BasePolicy,
-  CommandRule,
   ContextBudgetConfig,
   ContextIndexCitation,
   ContextIndexEdge,
@@ -210,7 +190,6 @@ import type {
   ExternalActionPolicyConfig,
   MemorySettings,
   OrchestrationMode,
-  OrchestrationPolicySettings,
   OrchestrationRole,
   PermissionProfileMode,
   PermissionProfilesConfig,
@@ -218,7 +197,6 @@ import type {
   ProjectContextIndex,
   ProjectOnboardingSnapshot,
   ProjectProfile,
-  ProjectTechStackReference,
   ReferenceRepo,
   ResolvedOrchestrationPolicy,
   ResolvedPermissionProfile,
@@ -236,30 +214,6 @@ import type {
 const PIAGENT_TRACE_STATE_TYPE = "piagent-task-trace";
 const BOILERPLATE_COLLAPSE_CHARS = 300;
 const TRACE_MAX_BYTES = 8 * 1024 * 1024;
-type TaskStartParameters = {
-  taskId?: string;
-  summary: string;
-  riskLane: "tiny" | "normal" | "high-risk";
-  intakeMode?: "model" | "runtime";
-  changeMode?: "source-change" | "read-only";
-  mutationPolicy?: "required" | "allowed" | "forbidden";
-  verifyGroup?: string;
-  maxAttempts?: number;
-  expectedOutput: string;
-  acceptanceCriteria: string[];
-  scope: string[];
-  outOfScope?: string[];
-  reviewLenses?: ReviewLens[];
-  workPlan?: Array<{
-    id: string;
-    title: string;
-    role?: OrchestrationRole;
-    mode?: "read-only" | "single-writer" | "review";
-    status?: "pending" | "in-progress" | "done" | "skipped" | "failed";
-    dependsOn?: string[];
-    note?: string;
-  }>;
-};
 const ORCHESTRATION_MODES = ["solo-first", "bounded-subagents", "parallel-readonly"] as const;
 const REVIEW_LENSES = ["correctness", "tests", "scope", "security", "docs", "release", "package"] as const;
 const ORCHESTRATION_ROLES = ["parent", "piagent-scout", "piagent-planner", "piagent-worker", "piagent-reviewer", "piagent-oracle"] as const;
@@ -346,7 +300,7 @@ const DEFAULT_RUNTIME_POLICY: Required<RuntimePolicySettings> = {
 };
 const DEFAULT_ORCHESTRATION_POLICY: ResolvedOrchestrationPolicy = {
   defaultMode: "solo-first",
-  maxConcurrentSubagents: 1,
+  maxConcurrentSubagents: 2,
   defaultReviewLenses: ["correctness", "tests", "scope"],
   roleModelGuidance: {
     planner: "Use the strongest available model for decomposition, architecture, risk, and acceptance criteria.",
@@ -362,14 +316,13 @@ const DEFAULT_ORCHESTRATION_POLICY: ResolvedOrchestrationPolicy = {
     readBeforeTask: true
   },
   rules: [
-    "Default to the parent model working directly; a helper is an exceptional token optimization, not a reasoning phase.",
-    "Use at most one fresh read-only helper only when runtime evidence proves at least two independent lanes and at least 30% projected net token savings.",
-    "Never delegate implementation, inherit parent history, retry a deterministic helper failure, or run parallel helpers/writers.",
+    "Work directly on the request; delegate a useful independent research or patch review when enabled.",
+    "Use at most two fresh read-only helpers. Token-saving estimates are optional telemetry, not admission requirements.",
+    "Never delegate implementation, inherit parent history, spawn nested helpers, or retry a deterministic helper failure.",
     "Treat Field Guide memory as advisory; verify every durable fact against current repository files.",
     "Keep review lenses explicit so cheap review work catches drift before release."
   ]
 };
-const PERMISSION_PROFILE_MODES = ["read-only", "workspace-write", "trusted-full-access"] as const;
 const PERMISSION_PROFILE_ALIASES: Record<string, PermissionProfileMode> = {
   readonly: "read-only",
   "read_only": "read-only",
@@ -386,13 +339,19 @@ const PERMISSION_PROFILE_ALIASES: Record<string, PermissionProfileMode> = {
 };
 const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "find", "ls"]);
 const WRITE_TOOL_NAMES = new Set(["write", "edit"]);
-const SHELL_TOOL_NAMES = new Set(["bash", "shell", "exec"]);
+// run_experiment (an experiment-loop tool) runs `bash -c <command>` itself: same policy as bash.
+const SHELL_TOOL_NAMES = new Set(["bash", "shell", "exec", "run_experiment"]);
 const MAX_MCP_PROXY_ARGS_CHARS = 131_072;
 const SESSION_PERMISSION_OVERRIDES = new Map<string, PermissionProfileMode>();
 const DEFAULT_POLICY = fallbackBasePolicy(CONTEXT_INDEX_FILE, DEFAULT_ORCHESTRATION_POLICY);
 // Which platform supplies the adapters is fixed by where this file is installed,
 // so it is resolved once here rather than threaded through every profile load.
 const PLATFORM_ROOT = findPlatformRoot(path.dirname(fileURLToPath(import.meta.url)));
+// The skills Pi lists for the model are read where they are installed: this
+// package's and the user's. Reading them is allowed; writes stay in the project.
+const SKILL_READ_ROOTS = [path.join(PLATFORM_ROOT, "packages", "piagent-core", "skills"),
+  path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "skills")]
+  .flatMap((root) => { try { return [fs.realpathSync.native(root)]; } catch { return []; } });
 const UPDATE_CHECK_MODULE = fileURLToPath(new URL("./update-check.js", import.meta.url));
 // The installed version, read from the package this file ships in. A maintainer
 // working in the repository is not running a release and has nothing to update
@@ -1077,21 +1036,6 @@ function evaluatePathLikeToolAccess(
   return { block: false };
 }
 
-function grantedSourceCheckoutRootForPath(cwd: string, candidate: string, roots: string[]): string | undefined {
-  if (roots.length === 0) return undefined;
-  const absolute = path.resolve(cwd, normalizePathCandidate(candidate));
-  let canonical: string;
-  try {
-    canonical = fs.realpathSync.native(absolute);
-  } catch {
-    return undefined;
-  }
-  return roots.find((root) => {
-    const relative = path.relative(root, canonical);
-    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-  });
-}
-
 function stateRoot(cwd: string): string {
   return path.join(cwd, ".pi", "piagent-state");
 }
@@ -1359,7 +1303,7 @@ function resolveOrchestrationPolicy(profile: ProjectProfile, policy: BasePolicy)
   };
   return {
     defaultMode: normalizeOrchestrationMode(configured.defaultMode, defaultPolicy.defaultMode),
-    maxConcurrentSubagents: Math.min(1, boundedInteger(configured.maxConcurrentSubagents, defaultPolicy.maxConcurrentSubagents, 0, 1)),
+    maxConcurrentSubagents: Math.min(2, boundedInteger(configured.maxConcurrentSubagents, defaultPolicy.maxConcurrentSubagents, 0, 2)),
     defaultReviewLenses: normalizeReviewLenses(configured.defaultReviewLenses, defaultPolicy.defaultReviewLenses),
     roleModelGuidance,
     fieldGuide: {
@@ -1685,48 +1629,7 @@ function isTaskMutationTool(toolName: string, input: Record<string, unknown>): b
     .some((token) => tokens.has(token));
 }
 
-function shellTouchesGrantedSourceCheckout(cwd: string, command: string, roots: string[]): boolean {
-  if (roots.length === 0) return false;
-  for (const root of roots) {
-    const relative = path.relative(cwd, root).split(path.sep).join("/");
-    if (command.includes(root) || (relative && command.includes(relative))) return true;
-  }
-  return extractShellPathCandidates(command)
-    .some((candidate) => Boolean(grantedSourceCheckoutRootForPath(cwd, normalizeRelative(cwd, candidate) ?? candidate, roots)));
-}
 
-const EXPLICIT_SHELL_MUTATORS = new Set([
-  "apply_patch", "chmod", "chown", "cp", "dd", "install", "ln", "mkdir", "mv", "patch", "prename", "rename",
-  "rm", "rmdir", "rsync", "scp", "tee", "touch", "truncate"
-]);
-
-function opaqueShellMutationNeedsBoundedTarget(
-  command: string,
-  segments: Array<{ words: string[] }>
-): boolean {
-  if (segments.some((segment) => {
-    const words = segment.words.filter(Boolean);
-    const executable = path.basename(words[0] ?? "").toLowerCase();
-    if (EXPLICIT_SHELL_MUTATORS.has(executable)) return true;
-    if (executable === "find" && words.some((word) => ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"].includes(word))) return true;
-    if (executable === "sed" && words.some((word) => /^-[^-]*i/.test(word) || word === "--in-place" || word.startsWith("--in-place="))) return true;
-    if (executable === "git") {
-      return words.some((word) => ["apply", "checkout", "clean", "mv", "reset", "restore", "rm", "switch"].includes(word));
-    }
-    if (["npm", "pnpm", "yarn", "bun"].includes(executable)) {
-      return words.some((word) => ["add", "ci", "install", "link", "remove", "uninstall", "update", "upgrade"].includes(word));
-    }
-    return false;
-  })) return true;
-  // Interpreter and build commands are conservatively snapshotted after the
-  // call, but ordinary tests/checks must remain usable. Only an inline script
-  // with a recognizable write primitive is an opaque pre-call mutation.
-  return shellHasOpaqueWritePrimitive(command);
-}
-
-function shellHasOpaqueWritePrimitive(command: string): boolean {
-  return /\b(?:appendFile(?:Sync)?|copyFile(?:Sync)?|mkdir(?:Sync)?|rename(?:Sync)?|rm(?:Sync)?|rmdir(?:Sync)?|truncate(?:Sync)?|unlink(?:Sync)?|writeFile(?:Sync)?)\s*\(|\bopen\s*\([^\n)]*,\s*["'][wax+]/i.test(command);
-}
 
 function taskMutationTargets(cwd: string, toolName: string, input: Record<string, unknown>): string[] {
   if (!isTaskMutationTool(toolName, input) || SHELL_TOOL_NAMES.has(toolName)) return [];
@@ -1791,247 +1694,6 @@ function observedTaskContextFromToolResult(
     path: relative,
     reason: event.toolName === "read" ? "Runtime observed successful source read." : "Runtime observed successful document read."
   };
-}
-
-function recordObservedTaskChanges(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  event: { toolName: string; input?: unknown; isError?: boolean },
-  pendingContext: ObservedTaskContext[],
-  maxManifestFiles: number,
-  shellSnapshotBefore?: Record<string, string>,
-  eventTree?: ReturnType<typeof workingTreeObservation>
-): TaskContract | undefined {
-  if (event.isError) return;
-  const input = isPlainRecord(event.input) ? event.input : {};
-  if (!isTaskMutationTool(event.toolName, input)) return;
-  const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-  if (!task || task.trace.outcome !== "pending") return;
-
-  const targets = taskMutationTargets(ctx.cwd, event.toolName, input);
-  if (!eventTree) return;
-  const eventSnapshot = eventTree.snapshot as Record<string, string>;
-  const shellMutationObserved = SHELL_TOOL_NAMES.has(event.toolName) && shellSnapshotBefore !== undefined;
-  const shellChangedFiles = shellMutationObserved
-    ? changedSnapshotFiles(shellSnapshotBefore, eventSnapshot)
-    : [];
-  const nextObserved = uniqueStrings([...task.observedChangedFiles, ...shellChangedFiles, ...targets]).sort();
-  const added = nextObserved.filter((file) => !task.observedChangedFiles.includes(file));
-  const contextAdded = mergeObservedTaskContext(task, pendingContext, maxManifestFiles, redactText);
-  const mutationObserved = targets.length > 0 || shellChangedFiles.length > 0;
-  const lifecycle = mutationObserved
-    ? applyRuntimeLifecycleObservation(task, "mutation", nowIso())
-    : { changed: false, mode: runtimeLifecycleMode(task) };
-  const acceptanceInvalidation = mutationObserved
-    ? invalidateAcceptanceReceiptAfterMutation(task, nowIso())
-    : { task, changed: false };
-  task.acceptanceReceipt = acceptanceInvalidation.task.acceptanceReceipt;
-  if (added.length === 0 && contextAdded.length === 0 && !lifecycle.changed && !acceptanceInvalidation.changed) return;
-  task.observedChangedFiles = nextObserved;
-  const written = writeTask(ctx.cwd, task);
-  const trace = {
-    event: "task_changes_observed",
-    taskId: written.taskId,
-    taskRunId: written.taskRunId,
-    sessionId: written.sessionId,
-    toolName: event.toolName,
-    files: added,
-    contextFiles: contextAdded,
-    lifecycleMode: lifecycle.mode,
-    lifecycleAdvanced: lifecycle.changed
-  };
-  appendTrace(ctx.cwd, trace);
-  appendSessionTrace(pi, trace);
-  recordMutationCheckpoint(ctx, written, {
-    toolName: event.toolName,
-    files: added,
-    contextFiles: contextAdded,
-    lifecycleMode: lifecycle.mode
-  });
-  return written;
-}
-
-function recordObservedTaskVerification(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  observed: {
-    command?: string;
-    normalizedCommand?: string;
-    commandHash?: string;
-    exitCode?: number;
-    isError?: boolean;
-    recordedAt?: string;
-    outputText?: string;
-    toolCallId?: string;
-  },
-  pendingContext: ObservedTaskContext[],
-  maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>,
-  eventTree?: ReturnType<typeof captureWorkspaceVerificationSnapshot>,
-  readProtectedPaths: string[] = [], preWorkspaceRevisionDigest?: string, diagnosticFocused = false
-): TaskContract | undefined {
-  const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-  if (!task || task.trace.outcome !== "pending") return;
-  const command = String(observed.normalizedCommand ?? observed.command ?? "").trim();
-  const observedAtMs = Date.parse(observed.recordedAt ?? "");
-  const taskCreatedAtMs = Date.parse(task.createdAt);
-  const matchedProfileCommand = commandMatchesVerifyPlan(command, task.verifyCommands);
-  const focusedTest = diagnosticFocused && observedFocusedTestSummary(observed.outputText);
-  if (
-    !command
-    || !observed.commandHash
-    || (!matchedProfileCommand && !focusedTest)
-    || !Number.isFinite(observedAtMs)
-    || !Number.isFinite(taskCreatedAtMs)
-    || observedAtMs < taskCreatedAtMs
-  ) return;
-
-  if (!eventTree?.proofCapable) return;
-  const currentDigests = eventTree.snapshot as Record<string, string>;
-  const currentDigest = eventTree.digest;
-  const workspaceRevisionDigest = eventTree.workspaceRevisionDigest ?? undefined;
-  const preWorkingTreeDigest = shellSnapshotBefore && workingTreeSnapshotUsesCurrentAlgorithm(shellSnapshotBefore) ? workingTreeEvidenceDigest(shellSnapshotBefore) : undefined;
-  const exitCode = Number.isInteger(observed.exitCode) ? observed.exitCode as number : observed.isError ? 1 : 0;
-  const classification = classifyVerificationFailure(observed.outputText, exitCode);
-  const duplicate = task.verifyEvidence.some((evidence) => (
-    evidence.command.trim() === command
-    && evidence.exitCode === exitCode
-    && evidence.workingTreeDigest === currentDigest && evidence.observedAt === observed.recordedAt
-    && evidence.workspaceRevisionDigest === workspaceRevisionDigest && evidence.preWorkspaceRevisionDigest === preWorkspaceRevisionDigest
-  ));
-  const contextAdded = mergeObservedTaskContext(task, pendingContext, maxManifestFiles, redactText);
-  if (!duplicate) {
-    const evidenceRecordedAt = nowIso();
-    const observedAt = observed.recordedAt ?? evidenceRecordedAt;
-    task.verifyEvidence.push({
-      command: redactText(command),
-      exitCode,
-      summary: `Runtime observed ${matchedProfileCommand ? "configured" : "focused"} verifier exit ${exitCode} (${classification.category}${classification.retryable ? ", retryable" : ""}).`,
-      recordedAt: evidenceRecordedAt,
-      observed: true,
-      observedAt,
-      isError: observed.isError === true,
-      matchedProfileCommand,
-      preWorkingTreeDigest,
-      workingTreeDigest: currentDigest,
-      preWorkspaceRevisionDigest, workspaceRevisionDigest
-    });
-    task.verifyEvidence = diagnosticFocused ? retainFocusedVerification(task.verifyEvidence, currentDigest, workspaceRevisionDigest) : task.verifyEvidence.slice(-100);
-    try {
-      captureVerifierFileSnapshot({
-        projectRoot: ctx.cwd, taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId,
-        toolCallId: observed.toolCallId ?? "", commandHash: observed.commandHash, observedAt,
-        capturedAt: evidenceRecordedAt, exitCode, treeDigest: currentDigest, snapshot: currentDigests,
-        protectedPaths: readProtectedPaths
-      });
-    } catch (error) {
-      ctx.ui.notify(`Piagent could not persist verifier file snapshot: ${error instanceof Error ? error.message : String(error)}`, "warn");
-    }
-  }
-
-  const taskLocalDelta = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected;
-  const hasChanges = taskLocalDelta.length > 0;
-  const verificationCanSettleSourceTask = hasChanges || task.mutationPolicy === "allowed";
-  const allPassing = verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, currentDigest, workspaceRevisionDigest ?? null);
-  const lifecycle = verificationCanSettleSourceTask
-    ? applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso())
-    : { changed: false, mode: runtimeLifecycleMode(task) };
-  const acceptance = refreshAcceptanceReceipt(task, {
-    cwd: ctx.cwd, apiBaselineEvidence,
-    changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskLocalDelta),
-    currentWorkingTreeDigest: currentDigest
-  });
-  task.acceptanceReceipt = acceptance.task.acceptanceReceipt;
-  if (!task.workingTreeDigestMigration || (shellSnapshotBefore && changedSnapshotFiles(shellSnapshotBefore, currentDigests).length === 0)) Object.assign(task, completeTaskDigestRefresh(task, currentDigest, workspaceRevisionDigest ?? null));
-  if (duplicate && contextAdded.length === 0 && !lifecycle.changed) return task;
-
-  const written = writeTask(ctx.cwd, task);
-  const trace = {
-    event: "verify_observed",
-    taskId: written.taskId,
-    taskRunId: written.taskRunId,
-    sessionId: written.sessionId,
-    command: redactText(command),
-    exitCode,
-    workingTreeDigest: currentDigest,
-    contextFiles: contextAdded,
-    lifecycleMode: lifecycle.mode,
-    lifecycleAdvanced: lifecycle.changed,
-    allConfiguredVerifiersPassing: allPassing
-  };
-  appendTrace(ctx.cwd, trace);
-  appendSessionTrace(pi, trace);
-  recordVerificationCheckpoint(ctx, written, {
-    commandHash: observed.commandHash, observedAt: observed.recordedAt,
-    workingTreeDigest: currentDigest,
-    exitCode,
-    evidence: {
-      command: redactText(command),
-      exitCode,
-      category: classification.category,
-      retryable: classification.retryable,
-      failureClassification: classification,
-      preWorkingTreeDigest,
-      workingTreeDigest: currentDigest,
-      preWorkspaceRevisionDigest, workspaceRevisionDigest
-    }
-  });
-  return written;
-}
-
-function flushObservedTaskContext(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  pendingContext: ObservedTaskContext[],
-  maxManifestFiles: number,
-  event: string
-): TaskContract | undefined {
-  const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-  if (!task || task.trace.outcome !== "pending") return task;
-  const added = mergeObservedTaskContext(task, pendingContext, maxManifestFiles, redactText);
-  const lifecycle = (task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && hasDurableContextEvidence(task)
-    ? applyRuntimeLifecycleObservation(task, "context-complete", nowIso())
-    : { changed: false, mode: runtimeLifecycleMode(task) };
-  if (added.length === 0 && !lifecycle.changed) return task;
-  const written = writeTask(ctx.cwd, task);
-  const trace = {
-    event,
-    taskId: written.taskId,
-    taskRunId: written.taskRunId,
-    sessionId: written.sessionId,
-    files: added,
-    lifecycleMode: lifecycle.mode,
-    lifecycleAdvanced: lifecycle.changed
-  };
-  appendTrace(ctx.cwd, trace);
-  appendSessionTrace(pi, trace);
-  return written;
-}
-
-function completionTaskProjection(
-  cwd: string,
-  task: TaskContract,
-  finalFileDigests: Record<string, string> = workingTreeSnapshot(cwd) as Record<string, string>
-): TaskContract {
-  const changedFiles = taskChangedFileEvidence(cwd, task, finalFileDigests).expected;
-  const projected = {
-    ...task,
-    changedFiles,
-    finalWorkingTreeFiles: Object.keys(finalFileDigests).sort(),
-    finalFileDigests,
-    failedAt: undefined,
-    failureReason: undefined,
-    ruledOut: undefined,
-    trace: {
-      outcome: "completed" as const,
-      notes: "Runtime finalized from observed context, working-tree changes, current verification, and completed work-plan evidence.",
-      recordedAt: nowIso()
-    }
-  };
-  return refreshAcceptanceReceipt(projected, {
-    cwd, apiBaselineEvidence,
-    changedFiles: taskAcceptanceEvidenceFiles(cwd, projected, finalFileDigests, changedFiles),
-    currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
-  }).task as TaskContract;
 }
 
 function prepareToolInputForPolicy(
@@ -3456,14 +3118,6 @@ function taskAcceptanceEvidenceFiles(
   );
 }
 
-function exactReviewPathCoverage(expectedPaths: string[], reviewedPaths: string[] | undefined): boolean {
-  const expected = [...new Set(expectedPaths)].sort();
-  const reviewed = [...new Set(reviewedPaths ?? [])].sort();
-  return expected.length > 0
-    && expected.length === reviewed.length
-    && expected.every((file, index) => file === reviewed[index]);
-}
-
 function taskScopeIncludesPath(scope: string[], file: string): boolean {
   const normalizedFile = normalizePathCandidate(file);
   return scope.some((candidate) => {
@@ -3737,18 +3391,6 @@ function checkoutReferenceRepo(repoRef: string, forceUpdate = false): ReferenceR
   return { host, owner, repo, cloneUrl, checkoutPath, commit, fetched };
 }
 
-function sessionTaskReference(ctx: ExtensionContext): { taskId?: string; taskRunId?: string } | undefined {
-  const entries = ctx.sessionManager.getBranch();
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index] as unknown as { type?: string; customType?: string; data?: Record<string, unknown> };
-    if (entry.type !== "custom" || entry.customType !== PIAGENT_TRACE_STATE_TYPE || !entry.data) continue;
-    const taskId = typeof entry.data.taskId === "string" ? entry.data.taskId : undefined;
-    const taskRunId = typeof entry.data.taskRunId === "string" ? entry.data.taskRunId : undefined;
-    if (taskId || taskRunId) return { taskId, taskRunId };
-  }
-  return undefined;
-}
-
 function compactSessionTask(cwd: string, sessionId: string): TaskContract | undefined {
   return activeSessionTask(cwd, sessionId) as TaskContract | undefined;
 }
@@ -3763,6 +3405,25 @@ function environmentFeatureEnabled(name: string, fallback = true): boolean {
   return !["0", "false", "no", "off", "disabled"].includes(value);
 }
 
+// Kept registration modules also power historical inspection. Do not publish
+// their retired workflow controls to current agent sessions, and never put them
+// back on the active list through a tool group that still names them.
+const RETIRED_PIAGENT_TOOLS = new Set(["piagent_task_start", "piagent_task_progress", "piagent_task_gate_check", "piagent_context_record",
+  "piagent_verify_record", "piagent_trace_record", "piagent_memory_citation_record"]);
+function registerPiagentTool(...args: Parameters<typeof registerToolDefinition>): ReturnType<typeof registerToolDefinition> {
+  if (RETIRED_PIAGENT_TOOLS.has(args[1].name)) return;
+  return registerToolDefinition(...args);
+}
+
+/** Workflow records are historical data. They never authorize or gate a freeform turn. */
+function activeSessionTask(_cwd: string, _sessionId: string): TaskContract | undefined {
+  return undefined;
+}
+
+// The runtime hooks keep task callbacks for historical records and the
+// benchmark grader; a freeform session has no task, so they get nothing.
+const noTask = (..._args: unknown[]): undefined => undefined;
+
 export default function piagentGuard(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const policy = loadPolicy(extensionDir);
@@ -3774,47 +3435,19 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const parentRoutingMode = parentRoutingModeFromEnvironment(process.env.PIAGENT_PARENT_ROUTING);
   const routingObjective = routingObjectiveFromEnvironment(process.env.PIAGENT_ROUTING_OBJECTIVE);
   const autoContextEnabled = environmentFeatureEnabled("PIAGENT_AUTO_CONTEXT");
-  const autoRecoveryEnabled = environmentFeatureEnabled("PIAGENT_AUTO_RECOVERY");
-  const independentVerificationConfigPath = process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG,
-    runtimeState = new RuntimeSessionState({ maxObservedContext: contextBudgetConfig(policy).maxManifestFiles });
-  const independentAcceptance = new IndependentAcceptanceRuntime({ state: runtimeState, installedRoot: PLATFORM_ROOT,
-    configPath: independentVerificationConfigPath,
-    writeTask,
-    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
-    authorizeSourceRead: (ctx, sourcePath) => {
-      if (!ctx.isProjectTrusted()) return false;
-      const profile = loadProfileFromContext(ctx), paths = effectiveProtectedPaths(policy, profile);
-      const capabilities = verifyProjectCapabilityState(extensionDir, ctx.cwd, true, { sessionId: ctx.sessionManager.getSessionId() });
-      if (!capabilities.ok) return false;
-      const permission = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
-      return !evaluatePathLikeToolAccess(ctx.cwd, "read", { path: sourcePath }, paths.writeProtectedPaths, paths.readProtectedPaths,
-        paths.readOnlyPaths, permission.mode === "trusted-full-access" ? undefined : capabilities.filesystemRead).block;
-    } });
+  const runtimeState = new RuntimeSessionState({ maxObservedContext: contextBudgetConfig(policy).maxManifestFiles });
   const editFreshnessGuard = new EditFreshnessGuard(editFreshnessModeFromEnvironment(process.env.PIAGENT_EDIT_FRESHNESS));
+  // Snapshots were keyed by the task run. A freeform turn has none since the
+  // task-contract retirement, so it uses one session-wide key; the guard itself
+  // is already per session.
+  const FREEFORM_EDIT_SCOPE = "freeform";
   const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext);
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
   const modelSelectionProvenance = new ModelSelectionProvenanceTracker();
   const serviceTierRuntime = new ServiceTierRuntime({ environmentValue: process.env.PIAGENT_FAST_MODE });
-  const trajectoryRuntime = new TrajectoryRuntime(), phaseToolRuntime = new PhaseToolRuntime(pi, dynamicToolsEnabled ? phaseToolModeFromEnvironment(process.env.PIAGENT_PHASE_TOOLS) : "off", telemetry, (ctx) => {
-    const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined; return task && authorityReplacementState(ctx.cwd, task).required ? "new-attempt-required" : task?.workingTreeDigestMigration?.status;
-  }, (ctx) => {
-    const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-    return !task ? undefined : taskAuthorityDecision(task, "CAP-09", "block").allowed ? "on" : taskAuthorityDecision(task, "CAP-09", "observe").allowed ? "shadow" : "off";
-  });
-  const semanticRepairRuntime = new SemanticRepairRuntime({
-    now: nowIso,
-    trace: (ctx, task, payload) => {
-      const trace = { ...payload, taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId };
-      appendTrace(ctx.cwd, trace); appendSessionTrace(pi, trace); telemetry(ctx, trace);
-    },
-    openRepair: (ctx, task, observedAt) => phaseToolRuntime.apply(ctx, trajectoryRuntime.sync(
-      ctx.cwd, ctx.sessionManager.getSessionId(), task,
-      { sourceHook: "tool-result", recoveryRequested: true, recoveryMutationAllowed: true, observedAt }
-    ))
-  });
-  let maybeStartAutomaticTask: (prompt: string, ctx: ExtensionContext) => Promise<{ started: boolean; text: string; task?: TaskContract } | undefined>;
+  const trajectoryRuntime = new TrajectoryRuntime();
 
   pi.on("model_select", (event, ctx) => {
     modelSelectionProvenance.observeModelSelection(ctx.sessionManager.getSessionId(), event.source);
@@ -3988,7 +3621,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         if (!PIAGENT_TOOL_NAMES.has(toolName)) selected.add(toolName);
       }
     }
-    const normalizedGroups = [...new Set<PiagentToolGroup>(groups)];
+    const normalizedGroups = [...new Set<PiagentToolGroup>(groups)].filter((group) => !["intake", "task", "recovery"].includes(group));
     for (const toolName of PIAGENT_TOOL_ORDER) {
       if (normalizedGroups.some((group) => PIAGENT_TOOL_GROUPS[group].includes(toolName as never))) {
         selected.add(toolName);
@@ -3996,7 +3629,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     const ordered = [
       ...preferApplyPatchBeforeWriters(current.filter((toolName) => selected.has(toolName) && !PIAGENT_TOOL_NAMES.has(toolName))),
-      ...PIAGENT_TOOL_ORDER.filter((toolName) => selected.has(toolName))
+      ...PIAGENT_TOOL_ORDER.filter((toolName) => selected.has(toolName) && !RETIRED_PIAGENT_TOOLS.has(toolName))
     ];
     const unchanged = ordered.length === current.length && ordered.every((toolName, index) => toolName === current[index]);
     if (!unchanged) pi.setActiveTools(ordered);
@@ -4008,80 +3641,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
       activeCount: ordered.length,
       piagentTools: ordered.filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName))
     });
-    phaseToolRuntime.reapply(ctx);
     return pi.getActiveTools();
   }
 
-  function recoveryDecisionForTask(
-    ctx: ExtensionContext,
-    task: TaskContract,
-    gate?: { missing: string[]; missingVerifyCommands: string[] },
-    currentTreeDigest?: string
-  ): RecoveryDecision {
-    const latestExactVerifier = latestObservedVerification(task.verifyEvidence.filter((evidence) => evidence.matchedProfileCommand === true));
-    const failed = latestExactVerifier && latestExactVerifier.exitCode !== 0 ? latestExactVerifier : undefined;
-    const summary = failed?.summary ?? gate?.missing.join("; ") ?? "unknown task recovery evidence";
-    let recordedClassification: FailureClassification | undefined;
-    try {
-      const replay = replayTaskCheckpoints(ctx.cwd, task.taskRunId, task);
-      if (replay.corruptions.length === 0 && failed) recordedClassification = recordedFailureForObservation(
-        replay.checkpoints, failed, currentTreeDigest, currentWorkspaceRevisionDigest(ctx.cwd)
-      ) as FailureClassification | undefined;
-    } catch {
-      // A missing/corrupt journal cannot grant recovery mutation; the fallback
-      // classifier remains fail-closed for unknown evidence.
-    }
-    const gateClassification = selectCompletionRecoveryClassification(
-      recordedClassification,
-      gate?.missing,
-      summary,
-      failed?.exitCode ?? 1
-    );
-    const independentRecovery = independentVerificationRecovery(ctx.cwd, task, currentTreeDigest ?? workingTreeEvidenceDigest(workingTreeSnapshot(ctx.cwd)));
-    const classification = gateClassification.category === "scope-protected-path"
-      ? gateClassification : independentRecovery?.classification ?? gateClassification;
-    const trajectory = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
-    // Task scope is a retrieval/review hint, not filesystem authority. Recovery
-    // may update a dependency or config file when repository evidence requires
-    // it; protected-path and approval policy still run on the exact call.
-    const dependencyMutationAuthorized = true;
-    const selected = selectRecoveryDecision({
-      featureEnabled: autoRecoveryEnabled && taskAuthorityDecision(task, "CAP-12", "model-turn").allowed,
-      task: {
-        taskId: task.taskId,
-        taskRunId: task.taskRunId,
-        attempt: task.attempt,
-        maxAttempts: task.maxAttempts,
-        changeMode: task.changeMode
-      },
-      classification,
-      currentPhase: trajectory.enforcementSafe ? trajectory.phase ?? "verify" : "handoff",
-      history: runtimeState.recoveryHistory(task.taskId),
-      proposedHypothesisRef: independentRecovery?.hypothesisRef ?? (classification.reasonCodes[0] ? `reason:${classification.reasonCodes[0]}` : null),
-      exactVerifierAvailable: (gate?.missingVerifyCommands.length ?? task.verifyCommands.length) > 0,
-      currentTreeMatchesEvidence: currentTreeDigest && latestExactVerifier?.workingTreeDigest
-        ? currentTreeDigest === latestExactVerifier.workingTreeDigest && latestExactVerifier.preWorkspaceRevisionDigest === currentWorkspaceRevisionDigest(ctx.cwd)
-          && latestExactVerifier.workspaceRevisionDigest === latestExactVerifier.preWorkspaceRevisionDigest
-        : true,
-      dependencyMutationAuthorized,
-      independentDisposition: independentRecovery?.independentDisposition
-    });
-    return applyProofCapabilityHandoff(selected, gate?.missing, Boolean(independentRecovery));
-  }
-
-  function trajectoryRecoveryOptions(ctx: ExtensionContext, task: TaskContract, options: any): any {
-    return {
-      ...options,
-      recoveryMutationAllowed: typeof options.recoveryMutationAllowed === "boolean"
-        ? options.recoveryMutationAllowed
-        : autoRecoveryEnabled && taskAuthorityDecision(task, "CAP-12", "model-turn").allowed
-          ? recoveryDecisionForTask(ctx, task).sourceMutationAllowed
-          : undefined
-    };
-  }
-
   const activityInspector = registerActivityInspector(pi, {
-    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    activeTask: noTask,
     readEvents: (cwd) => readContextTelemetry(cwd, { limit: 5_000 }) as any[],
     protectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfile(ctx.cwd)).readProtectedPaths,
     selectAction: selectRuntimeAction,
@@ -4098,10 +3662,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     loadProfile: loadProfileFromContext,
     projectProfileExists: (cwd) => fs.existsSync(projectProfilePath(cwd)),
     activateToolGroups,
-    taskReference: sessionTaskReference,
-    activeTask: (cwd, sessionId) => activeSessionTask(cwd, sessionId) as TaskContract | undefined,
-    resolveTask: (cwd, reference, sessionId) => resolveTaskContract(cwd, reference, sessionId) as TaskContract | undefined,
-    resolveTaskAny: (cwd, reference) => resolveTaskContract(cwd, reference, undefined) as TaskContract | undefined,
+    taskReference: noTask,
+    activeTask: noTask,
+    resolveTask: noTask,
+    resolveTaskAny: noTask,
     bindTask: bindSessionTask,
     writeTask,
     appendTrace,
@@ -4114,26 +3678,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     inspectResume: (cwd, task, sessionId) => inspectTaskResumeState(cwd, task, sessionId, undefined, {
       protectedPaths: effectiveProtectedPaths(policy, loadProfile(cwd)).readProtectedPaths
     }),
-    syncTrajectory: (ctx, task) => {
-      const snapshot = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
-      const resume = workingTreeSnapshotHasUnavailableEvidence(snapshot)
-        ? { openRepair: false }
-        : { openRepair: (taskAuthorityDecision(task, "CAP-13", "block").allowed
-          || taskAuthorityDecision(task, "CAP-12", "mutate").allowed) && semanticRepairRuntime.resume({
-            cwd: ctx.cwd,
-            task,
-            sessionId: ctx.sessionManager.getSessionId(),
-            currentDigest: workingTreeEvidenceDigest(snapshot)
-          }) };
-      return phaseToolRuntime.apply(ctx, trajectoryRuntime.sync(ctx.cwd, ctx.sessionManager.getSessionId(), task, trajectoryRecoveryOptions(ctx, task, {
-        sourceHook: "session-start",
-        recoveryRequested: resume.openRepair || undefined,
-        recoveryMutationAllowed: resume.openRepair || undefined
-      })));
-    },
+    syncTrajectory: noTask,
     telemetry,
     afterStart: async (ctx) => {
-      await independentAcceptance.activate(ctx);
       const serviceTier = serviceTierRuntime.restore(ctx);
       if (serviceTier.enabled && serviceTier.reasonCode === "provider-not-supported") {
         ctx.ui.notify("Piagent Fast mode is enabled, but the active provider is not OpenAI Codex; no service tier was changed.", "warning");
@@ -4147,15 +3694,14 @@ export default function piagentGuard(pi: ExtensionAPI) {
     state: runtimeState,
     maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
     telemetry,
-    activeTask: (cwd, sessionId) => activeSessionTask(cwd, sessionId) as TaskContract | undefined,
+    activeTask: noTask,
     writeTask,
     bindTask: bindSessionTask,
     appendTrace,
-    flushObservedTaskContext,
+    flushObservedTaskContext: noTask,
     onTurnEnd: activityInspector.refresh,
     onAgentSettled: activityInspector.refresh,
     beforeShutdown: async (ctx) => {
-      await independentAcceptance.clear(ctx);
       serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
       editFreshnessGuard.clear(ctx);
@@ -4163,13 +3709,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
     }
   });
-  registerTaskUsageHooks(pi, { activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined, telemetry });
-  pi.on("turn_end", (event, ctx) => independentAcceptance.observeTurnEnd(ctx, event.message));
+  registerTaskUsageHooks(pi, { activeTask: noTask, telemetry });
 
   registerInputHook(pi, {
     state: runtimeState,
     boilerplateCollapseChars: BOILERPLATE_COLLAPSE_CHARS,
-    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined, authorityPolicy: (ctx, task) => ensureTaskAuthorityResumePolicy(ctx.cwd, task, { authorityProfile: loadProfileFromContext(ctx).authorityProfile, environment: process.env }),
+    activeTask: noTask, authorityPolicy: noTask,
     readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
     imageAccess: (ctx) => {
       const projectTrusted = ctx.isProjectTrusted();
@@ -4195,12 +3740,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
     state: runtimeState,
     autoContextEnabled,
     contextDeltaShadowMode: contextBudgetConfig(policy).contextDeltaShadow,
-    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    activeTask: noTask,
     readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
     contextExcludePatterns: (ctx) => contextIndexExcludePatterns(policy, loadProfileFromContext(ctx)),
     promptPackKey,
     retrievalKey,
-    startAutomaticTask: (prompt, ctx) => maybeStartAutomaticTask(prompt, ctx),
+    startAutomaticTask: async () => undefined,
     runtimeSnapshot: runtimeSnapshotEnabled ? (ctx) => runtimeSnapshotCapture.capture(ctx, {
       effectiveThinkingLevel: String(pi.getThinkingLevel()),
       versions: runtimeVersions
@@ -4210,53 +3755,22 @@ export default function piagentGuard(pi: ExtensionAPI) {
       solverShadow, { request, ctx, profile: loadProfileFromContext(ctx), activeTask, runtimeSnapshot, effort: String(pi.getThinkingLevel()), protectedTarget }
     ),
     modelRoute: ({ ctx, features, runtimeSnapshot }) => evaluateModelRoute(ctx, features, runtimeSnapshot),
-    syncTrajectory: (ctx, task, options) => phaseToolRuntime.apply(ctx, trajectoryRuntime.sync(ctx.cwd, ctx.sessionManager.getSessionId(), task, trajectoryRecoveryOptions(ctx, task, options))),
+    syncTrajectory: noTask,
     telemetry
-  });
-
-  registerCompletionHook(pi, {
-    state: runtimeState,
-    prepareIndependentAcceptance: (ctx, task, response) => independentAcceptance.prepare(ctx, task, response),
-    deferIndependentCompletion: (ctx, task, response, finalizer) => independentAcceptance.deferCompletion(ctx, task, response, finalizer),
-    projectIndependentLifecycle: (ctx, task, candidate) => independentAcceptance.projectLifecycle(ctx, task, candidate),
-    nativeRefusalFallbackAllowed: () => !independentVerificationConfigPath,
-    maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
-    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
-    flushObservedTaskContext,
-    completionProjection: completionTaskProjection,
-    acceptanceEvidenceFiles: taskAcceptanceEvidenceFiles,
-    evaluateGate: (cwd, task, currentDigests, currentDigest) => {
-      const gate = evaluateTaskGate(cwd, task, policy, { currentDigests, currentWorkingTreeDigest: currentDigest });
-      const repairBlock = (taskAuthorityDecision(task, "CAP-13", "block").allowed
-        || taskAuthorityDecision(task, "CAP-12", "mutate").allowed)
-        ? semanticRepairRuntime.completionBlock(cwd, task.taskRunId)
-        : undefined;
-      return repairBlock ? { ...gate, decision: "fail", missing: [...new Set([...gate.missing, repairBlock])] } : gate;
-    },
-    writeTask,
-    activateBaseTools: (ctx) => activateToolGroups(ctx, []),
-    appendTrace,
-    appendSessionTrace,
-    telemetry,
-    semanticReviewAllowed: (task) => taskAuthorityDecision(task, "CAP-13", "model-turn").allowed,
-    finalGateMode: (ctx) => resolveRuntimePolicy(loadProfileFromContext(ctx)).finalGate,
-    verifierInstructions: verifierCommandInstructions,
-    recoveryDecision: (ctx, task, gate, currentDigest) => recoveryDecisionForTask(ctx, task, gate, currentDigest),
-    syncTrajectory: (ctx, task, options) => phaseToolRuntime.apply(ctx, trajectoryRuntime.sync(ctx.cwd, ctx.sessionManager.getSessionId(), task, trajectoryRecoveryOptions(ctx, task, options)))
   });
 
   registerToolResultHook(pi, {
     state: runtimeState,
-    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    activeTask: noTask,
     maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
-    flushObservedTaskContext,
+    flushObservedTaskContext: noTask,
     readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
     recordObservedBash: (observed) => bashResults.record(observed),
     observedBashLedgerPath,
     redactText,
     observedTaskContext: observedTaskContextFromToolResult,
-    recordObservedTaskChanges,
-    recordObservedTaskVerification: (...args) => recordObservedTaskVerification(...args, policy.finalGate?.acceptanceProofMode === "diagnostic"),
+    recordObservedTaskChanges: noTask,
+    recordObservedTaskVerification: noTask,
     extractLikelyPath: extractLikelyPathFromInput,
     mutationTargets: taskMutationTargets,
     isShellTool: (toolName) => SHELL_TOOL_NAMES.has(toolName),
@@ -4264,46 +3778,18 @@ export default function piagentGuard(pi: ExtensionAPI) {
     activity: recordActivity,
     now: nowIso,
     recordSubagentResult: (ctx, event, result) => {
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      const written = recordDirectSubagentResult(task, event, result, {
-        now: nowIso,
-        persist: (candidate) => writeTask(ctx.cwd, candidate),
-        trace: (payload) => appendTrace(ctx.cwd, payload),
-        sessionTrace: (payload) => appendSessionTrace(pi, payload)
-      });
-      telemetry(ctx, {
-        event: "helper_result_classified",
-        recordedAt: nowIso(),
-        taskRunId: written?.taskRunId,
-        toolCallId: event.toolCallId,
-        spawned: result.spawned,
-        failed: result.failed,
-        disposition: result.disposition,
-        reasonCode: result.reasonCode,
-        calls: result.calls,
-        tokens: result.tokens
-      });
+      telemetry(ctx, { event: "helper_result_classified", recordedAt: nowIso(), toolCallId: event.toolCallId, spawned: result.spawned, failed: result.failed,
+        disposition: result.disposition, reasonCode: result.reasonCode, calls: result.calls, tokens: result.tokens });
     },
     observeEditFreshness: (ctx, event, metadata) => {
-      if (!metadata.successful || !metadata.taskRunId) return;
+      if (!metadata.successful) return;
       const protectedPaths = effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths;
       const source = event.toolName === "read" ? "read" : ["edit", "write", "apply_patch"].includes(event.toolName) ? "mutation" : undefined;
       const candidates = source === "read" && metadata.targetPath ? [metadata.targetPath] : source === "mutation" ? metadata.mutationTargets : [];
       const safeTargets = candidates.filter((file) => !matchesProtectedPath(file, protectedPaths));
-      const observed = source ? editFreshnessGuard.observe(ctx, metadata.taskRunId, safeTargets, source, nowIso()) : [];
-      if (observed.length) telemetry(ctx, { event: "edit_freshness_snapshot_observed", taskRunId: metadata.taskRunId, source, paths: observed.map(redactText) });
+      const observed = source ? editFreshnessGuard.observe(ctx, FREEFORM_EDIT_SCOPE, safeTargets, source, nowIso()) : [];
+      if (observed.length) telemetry(ctx, { event: "edit_freshness_snapshot_observed", source, paths: observed.map(redactText) });
     },
-    completeSemanticRepair: (ctx, event, metadata) => {
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      return task && (taskAuthorityDecision(task, "CAP-13", "mutate").allowed
-        || taskAuthorityDecision(task, "CAP-12", "mutate").allowed)
-        ? semanticRepairRuntime.complete(ctx, task, event, metadata)
-        : undefined;
-    },
-    syncTrajectory: (ctx, contextObserved) => {
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      return task ? phaseToolRuntime.apply(ctx, trajectoryRuntime.sync(ctx.cwd, ctx.sessionManager.getSessionId(), task, trajectoryRecoveryOptions(ctx, task, { sourceHook: "tool-result", contextObserved }))) : undefined;
-    }
   });
 
   registerToolCallHook(pi, {
@@ -4313,257 +3799,40 @@ export default function piagentGuard(pi: ExtensionAPI) {
     activity: recordActivity,
     beforeAuthorize: (event, ctx) => {
       const toolInput = isPlainRecord(event.input) ? event.input : {};
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      const helperPreflight = evaluateDirectSubagentDispatch({
-        toolName: event.toolName,
-        toolInput,
-        cwd: ctx.cwd,
-        helpersMode: task ? taskHelperUsageMode(task) : helpersMode(),
-        taskPending: task?.trace.outcome === "pending",
-        dispatchAuthority: Boolean(task && taskAuthorityDecision(task, "CAP-14", "dispatch").allowed),
-        durableSubagentState: task?.orchestration?.subagents
-      });
+      const helperPreflight = evaluateDirectSubagentDispatch({ toolName: event.toolName, toolInput, cwd: ctx.cwd, helpersMode: helpersMode(),
+        taskPending: false, dispatchAuthority: false, durableSubagentState: undefined });
       if (helperPreflight.applicable && helperPreflight.dispatch && !helperPreflight.allowed) {
-        telemetry(ctx, {
-          event: "helper_dispatch_blocked",
-          recordedAt: nowIso(),
-          taskRunId: task?.taskRunId,
-          toolCallId: event.toolCallId,
-          reasonCode: helperPreflight.reasonCode,
-          role: helperPreflight.role,
-          requestCount: helperPreflight.requestCount
-        });
+        telemetry(ctx, { event: "helper_dispatch_blocked", recordedAt: nowIso(), toolCallId: event.toolCallId, reasonCode: helperPreflight.reasonCode,
+          role: helperPreflight.role, requestCount: helperPreflight.requestCount });
         return { block: true, reason: `Blocked ${event.toolName}: ${helperPreflight.reason} Do not retry this helper; continue in the parent.` };
-      }
-      const verifierReuse = reuseCurrentTreeExactVerifier({ cwd: ctx.cwd, task, toolName: event.toolName, toolInput, sessionEntries: ctx.sessionManager.getEntries() as unknown[],
-        getHostProjectVerificationDigest: (snapshot, command) => task ? runtimeState.projectVerification.currentDigest(ctx, task, snapshot, command) : null });
-      if (verifierReuse.reused) {
-        telemetry(ctx, { event: "verifier_evidence_reused", recordedAt: nowIso(), taskRunId: task?.taskRunId, toolCallId: event.toolCallId, reasonCode: verifierReuse.reasonCode, commandDigest: verifierReuse.commandDigest, workingTreeDigest: verifierReuse.workingTreeDigest }); return;
       }
       const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
       if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
-      if (task?.trace.outcome === "pending" && task.changeMode === "source-change" && (event.toolName === "edit" || targetInspection.exactLocalPatchExecutor)) {
-        const freshness = editFreshnessGuard.evaluate(ctx, task.taskRunId, targetInspection.targets);
+      if (event.toolName === "edit" || targetInspection.exactLocalPatchExecutor) {
+        const freshness = editFreshnessGuard.evaluate(ctx, FREEFORM_EDIT_SCOPE, targetInspection.targets);
         if (freshness.decision === "stale") {
-          telemetry(ctx, { event: "edit_freshness_stale", taskRunId: task.taskRunId, toolCallId: event.toolCallId, enforce: freshness.enforce, paths: freshness.stalePaths.map(redactText) });
+          telemetry(ctx, { event: "edit_freshness_stale", toolCallId: event.toolCallId, enforce: freshness.enforce, paths: freshness.stalePaths.map(redactText) });
           if (freshness.enforce) return { block: true, reason: `Blocked ${event.toolName}: the previously observed source snapshot is stale for ${freshness.stalePaths.map(redactText).join(", ")}. Reread the affected file once; no patch hunk was started.` };
         }
       }
-      if (!["edit", "write"].includes(event.toolName) && !targetInspection.exactLocalPatchExecutor) return;
-      if (!task || task.trace.outcome !== "pending" || task.changeMode !== "source-change") return;
-      const semanticRepairEnabled = taskAuthorityDecision(task, "CAP-13", "mutate").allowed;
-      const semanticRepairExactlyOff = !taskAuthorityDecision(task, "CAP-13", "observe").allowed;
-      const boundedRecoveryEnabled = autoRecoveryEnabled
-        && taskAuthorityDecision(task, "CAP-09", "block").allowed
-        && taskAuthorityDecision(task, "CAP-12", "mutate").allowed
-        && semanticRepairExactlyOff;
-      if (!semanticRepairEnabled && !boundedRecoveryEnabled) return;
-      const phase = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
-      if (!phase.enforcementSafe || !["verify", "review"].includes(String(phase.phase))) return;
-
-      const currentSnapshot = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
-      if (workingTreeSnapshotHasUnavailableEvidence(currentSnapshot)) return;
-      const currentDigest = workingTreeEvidenceDigest(currentSnapshot);
-      const expectedReviewPaths = taskDeltaFilesFromSnapshot(task, currentSnapshot);
-      const targets = targetInspection.targets;
-      const boundedTargetMutation = targets.length > 0;
-      const verifierCurrent = allVerifyCommandsPassCurrentTree(task, currentDigest, currentWorkspaceRevisionDigest(ctx.cwd));
-
-      if (phase.phase === "verify" && boundedTargetMutation && semanticRepairEnabled && semanticRepairRuntime.prepare({
-        ctx, task, event, currentDigest, currentDeltaPaths: expectedReviewPaths, targetPaths: targets,
-        verifierCurrent
-      })) return;
-
-      // A public verifier can pass before every explicit user criterion is
-      // covered. CAP-12 therefore reserves one exact structured call when the
-      // model catches its own omission in the same task/run/session. The call
-      // still traverses every normal authorization check; verify -> repair is
-      // committed only by the tool-result hook after a successful tree change.
-      if (phase.phase === "verify" && boundedRecoveryEnabled && verifierCurrent && boundedTargetMutation) {
-        const authoredFileDigests = runtimeState.successfulModelMutationDigests(
-          { taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId },
-          currentSnapshot
-        );
-        if (semanticRepairRuntime.prepareBoundedRecovery({
-          ctx,
-          task,
-          event,
-          currentDigest,
-          currentDeltaPaths: expectedReviewPaths,
-          observedChangedPaths: task.observedChangedFiles,
-          authoredFileDigests,
-          targetPaths: targets,
-          verifierCurrent
-        })) return;
-      }
-
-      if (!semanticRepairEnabled) return;
-
-      let checkpoint = runtimeState.performanceReviewCheckpoint(task.taskRunId);
-      const checkpointReady = checkpoint?.workingTreeDigest === currentDigest
-        && checkpoint.reviewSatisfied
-        && !checkpoint.invalidated
-        && exactReviewPathCoverage(expectedReviewPaths, checkpoint.expectedPaths)
-        && exactReviewPathCoverage(expectedReviewPaths, checkpoint.reviewedPaths);
-      const credit = runtimeState.performanceReviewCredit(task.taskRunId, currentDigest);
-      const creditReady = Boolean(credit && exactReviewPathCoverage(expectedReviewPaths, credit.reviewedPaths));
-      if (!checkpointReady && !creditReady) return;
-
-      if (!checkpointReady && creditReady && credit) {
-        runtimeState.rememberPerformanceReviewCheckpoint(task.taskRunId, currentDigest, 0, expectedReviewPaths, credit.reviewedPaths);
-        checkpoint = runtimeState.performanceReviewCheckpoint(task.taskRunId);
-      }
-
-      const reviewDecision = performanceReviewToolDecision({
-        toolName: event.toolName,
-        input: event.input,
-        checkpoint,
-        task,
-        currentWorkingTreeDigest: currentDigest,
-        targetPaths: targets
-      });
-      if (reviewDecision) {
-        runtimeState.denyPerformanceReviewTool(task.taskRunId);
-        return reviewDecision;
-      }
-
-      if (targets.length === 0) return;
-      const result = trajectoryRuntime.sync(ctx.cwd, ctx.sessionManager.getSessionId(), task, {
-        sourceHook: "tool-call",
-        recoveryRequested: true,
-        recoveryMutationAllowed: true,
-        observedAt: nowIso()
-      });
-      phaseToolRuntime.apply(ctx, result);
-      observeTrajectorySync(ctx, result, telemetry);
-      if (!result.enforcementSafe || result.state?.currentPhase !== "repair") {
-        return { block: true, reason: `Task ${task.taskId} could not enter an audited repair phase before review-driven mutation.` };
-      }
       return;
     },
-    reviewBudgetDecision: (event, ctx) => {
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      const checkpoint = task ? runtimeState.performanceReviewCheckpoint(task.taskRunId) : undefined;
-      if (!task || !checkpoint || !taskAuthorityDecision(task, "CAP-13", "mutate").allowed) return;
-      const currentDigest = workingTreeEvidenceDigest(workingTreeSnapshot(ctx.cwd) as Record<string, string>);
-      const phase = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
-      const toolInput = isPlainRecord(event.input) ? event.input : {};
-      const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
-      if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
-      const targets = targetInspection.targets;
-      if ((["edit", "write"].includes(event.toolName) || targetInspection.patchCarrier) && targets.length === 0) {
-        runtimeState.denyPerformanceReviewTool(task.taskRunId);
-        return { block: true, reason: `Task ${task.taskId} semantic repair requires an exact statically bounded target.` };
-      }
-      const reviewDecision = performanceReviewToolDecision({
-        toolName: event.toolName,
-        input: event.input,
-        checkpoint,
-        task,
-        currentWorkingTreeDigest: currentDigest,
-        currentPhase: phase.phase,
-        targetPaths: targets
-      });
-      if (reviewDecision) runtimeState.denyPerformanceReviewTool(task.taskRunId);
-      return reviewDecision;
-    },
-    beforeStart: (_event, ctx) => {
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      const control = task?.trace.outcome === "pending" ? inspectTaskControlState(ctx.cwd, task) : null;
-      if (control?.dispatchBlocked) return { block: true, reason: `Task lifecycle control blocks tool start while state is ${control.state}.` };
-    },
-    afterDecision: (_event, ctx, metadata) => {
-      if (metadata.allowed) return;
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      if (task) {
-        semanticRepairRuntime.reject({ cwd: ctx.cwd, taskRunId: task.taskRunId, toolCallId: metadata.toolCallId, recordedAt: nowIso() });
-      }
-    },
     afterAuthorized: (event, ctx, metadata) => {
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      const helperPreflight = evaluateDirectSubagentDispatch({
-        toolName: event.toolName,
-        toolInput: event.input,
-        cwd: ctx.cwd,
-        helpersMode: task ? taskHelperUsageMode(task) : helpersMode(),
-        taskPending: task?.trace.outcome === "pending",
-        dispatchAuthority: Boolean(task && taskAuthorityDecision(task, "CAP-14", "dispatch").allowed),
-        durableSubagentState: task?.orchestration?.subagents
-      });
+      const helperPreflight = evaluateDirectSubagentDispatch({ toolName: event.toolName, toolInput: event.input, cwd: ctx.cwd, helpersMode: helpersMode(),
+        taskPending: false, dispatchAuthority: false, durableSubagentState: undefined });
       if (helperPreflight.applicable && helperPreflight.dispatch && helperPreflight.allowed) {
-        const reserved = reserveDirectSubagentDispatch(task, metadata.toolCallId, {
-          now: nowIso,
-          persist: (candidate) => writeTask(ctx.cwd, candidate),
-          trace: (payload) => appendTrace(ctx.cwd, payload)
-        });
-        telemetry(ctx, {
-          event: "helper_dispatch_reserved",
-          recordedAt: nowIso(),
-          taskRunId: reserved?.taskRunId,
-          toolCallId: metadata.toolCallId,
-          role: helperPreflight.role,
-          requestCount: helperPreflight.requestCount
-        });
+        telemetry(ctx, { event: "helper_dispatch_reserved", recordedAt: nowIso(), toolCallId: metadata.toolCallId, role: helperPreflight.role,
+          requestCount: helperPreflight.requestCount });
       }
-      if (task?.trace.outcome === "pending") {
-        const snapshot = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
-        const currentDigest = workingTreeEvidenceDigest(snapshot);
-        const toolInput = isPlainRecord(event.input) ? event.input : {};
-        const targets = taskMutationTargets(ctx.cwd, event.toolName, toolInput);
-        const semanticPending = semanticRepairRuntime.pending(ctx.cwd, task.taskRunId, metadata.toolCallId);
-        const reservationTargets = semanticPending?.kind === "mutation" ? semanticPending.targetPaths : targets;
-        if ((["edit", "write", "apply_patch"].includes(event.toolName) || semanticPending?.kind === "mutation") && reservationTargets.length > 0) {
-          runtimeState.reserveAuthorizedModelMutation(
-            { taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId },
-            metadata.toolCallId,
-            snapshot,
-            reservationTargets,
-            ["edit", "write", "apply_patch"].includes(event.toolName)
-              ? expectedModelMutationProof(ctx.cwd, event.toolName, toolInput, reservationTargets)
-              : { expectedContentDigests: {}, preContentDigests: {}, fullContentPaths: [], replacePaths: [] }
-          );
-        }
-        const checkpoint = runtimeState.performanceReviewCheckpoint(task.taskRunId);
-        const kind = performanceReviewToolKind({ toolName: event.toolName, input: event.input, checkpoint, task });
-        if (checkpoint && kind) {
-          runtimeState.reservePerformanceReviewTool(task.taskRunId, {
-            toolCallId: metadata.toolCallId,
-            kind,
-            toolName: event.toolName,
-            workingTreeDigest: currentDigest,
-            workingTreeSnapshot: snapshot,
-            targetPaths: targets
-          });
-        }
-      }
-      return phaseToolRuntime.apply(ctx, trajectoryRuntime.syncOptionalToolCall(
-        ctx.cwd,
-        ctx.sessionManager.getSessionId(),
-        task,
-        event,
-        nowIso()
-      ));
+      return undefined;
     },
     authorize: async (event, ctx) => {
-    const preTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
     const preInput = isPlainRecord(event.input) ? event.input : {};
     const authorizationTargetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, preInput);
     if (authorizationTargetInspection.reason) {
       return { block: true, reason: `Blocked ${event.toolName}: ${authorizationTargetInspection.reason}.` };
     }
     const authorizationTargets = authorizationTargetInspection.targets;
-    const preSnapshot = preTask ? workingTreeSnapshot(ctx.cwd) as Record<string, string> : undefined;
-    const reservedFirstCall = Boolean(preTask && preSnapshot && !workingTreeSnapshotHasUnavailableEvidence(preSnapshot) && semanticRepairRuntime.reservedCallMatches({
-      cwd: ctx.cwd,
-      taskRunId: preTask.taskRunId,
-      sessionId: ctx.sessionManager.getSessionId(),
-      toolCallId: String(event.toolCallId),
-      toolName: event.toolName,
-      currentDigest: workingTreeEvidenceDigest(preSnapshot),
-      targetPaths: authorizationTargets
-    }));
-    const phaseDecision = reservedFirstCall || (preTask?.workingTreeDigestMigration?.status === "verification-refresh-required" && SHELL_TOOL_NAMES.has(event.toolName)) ? undefined : phaseToolRuntime.toolDecision(ctx, event.toolName);
-    if (phaseDecision) return phaseDecision;
     const projectTrusted = ctx.isProjectTrusted();
     const eventInput = isPlainRecord(event.input) ? event.input : {};
     const backendDecision = executionBackendToolDecision(isTaskMutationTool(event.toolName, eventInput));
@@ -4581,6 +3850,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (permissionDecision.block) {
       return { block: true, reason: permissionDecision.reason };
     }
+    const experimentDecision = experimentLoopDecision(ctx.cwd, event.toolName);
+    if (experimentDecision) return experimentDecision;
     const toolDecision = evaluateToolPolicy(event.toolName, profile, policy);
     if (toolDecision.decision === "block" && permissionProfile.mode !== "trusted-full-access") {
       return { block: true, reason: `Tool registry blocked ${event.toolName}: ${toolDecision.reason}` };
@@ -4608,23 +3879,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const toolInput = event.input && typeof event.input === "object"
       ? event.input as Record<string, unknown>
       : {};
-    const sessionTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-    const resumeBlock = sessionTask ? runtimeState.taskResumeBlock(sessionTask.taskRunId) : undefined;
-    if (resumeBlock && isTaskMutationTool(event.toolName, toolInput)) {
-      return { block: true, reason: `Task resume is blocked: ${resumeBlock}` };
-    }
-    const profileMode = profile.mode ?? "unprofiled";
-    const governedTaskProfile = !profileMode.startsWith("unprofiled") && !profileMode.includes("unreadable");
-    const taskContractRequired = governedTaskProfile
-      && runtime.finalGate === "enforce"
-      && finalGateConfig(policy, DEFAULT_POLICY).requireTaskContract;
-    if (sessionTask?.trace.outcome === "pending" && (sessionTask.changeMode === "read-only" || sessionTask.mutationPolicy === "forbidden")
-      && !SHELL_TOOL_NAMES.has(event.toolName) && isTaskMutationTool(event.toolName, toolInput)) {
-      return {
-        block: true,
-        reason: `Task ${sessionTask.taskId} ${sessionTask.changeMode === "read-only" ? "is read-only" : "forbids source mutation"}; ${event.toolName} cannot mutate project or external state in this task. Start a mutation-required source task for implementation.`
-      };
-    }
     const preparedInput = prepareToolInputForPolicy(event.toolName, toolInput, policy);
     if (preparedInput.reason) {
       return { block: true, reason: `Blocked ${event.toolName}: ${preparedInput.reason}.` };
@@ -4638,10 +3892,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     let shellProjectMutation = false;
     let shellMutationTargets: string[] = [];
-    let shellMutationTargetBounded = false;
-    let configuredVerifierShell = false;
-    let authorizedShellCommand = "";
-    let authorizedShellSegments: Array<{ words: string[] }> = [];
     let pendingHumanApproval: { prompt: string; title: string; action: Omit<ApprovalActionDraft, "treePrecondition"> } | null = null;
     if (SHELL_TOOL_NAMES.has(event.toolName)) {
       const shellInput = extractShellCommandInput(toolInput);
@@ -4650,8 +3900,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
       const command = normalizeShellCommandForPolicy(shellInput.command);
       const execDecision = evaluateExecPolicy(command, profile, policy);
-      authorizedShellCommand = command;
-      authorizedShellSegments = execDecision.segments;
       if (shellTouchesGrantedSourceCheckout(ctx.cwd, command, runtimeState.sourceCheckoutReadRoots(ctx))) {
         return {
           block: true,
@@ -4659,9 +3907,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         };
       }
       shellProjectMutation = isProjectMutatingShellCommand(command, execDecision.segments, ctx.cwd);
-      configuredVerifierShell = Boolean(sessionTask && commandMatchesVerifyPlan(command, sessionTask.verifyCommands));
       const shellWriteCandidates = extractShellWritePathCandidates(command);
-      shellMutationTargetBounded = shellWriteCandidates.length > 0;
       shellMutationTargets = shellWriteCandidates
         .map((candidate) => normalizeRelative(ctx.cwd, candidate))
         .filter((candidate): candidate is string => Boolean(
@@ -4671,15 +3917,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
           && !candidate.startsWith("../")
           && !candidate.startsWith(".pi/piagent-state/")
         ));
-      const mutationForbidden = sessionTask?.trace.outcome === "pending"
-        && (sessionTask.changeMode === "read-only" || sessionTask.mutationPolicy === "forbidden");
-      const exactForbiddenTaskVerifier = mutationForbidden && sessionTask.changeMode === "source-change" && configuredVerifierShell;
-      if (mutationForbidden && !exactForbiddenTaskVerifier && !isReadOnlyTaskShellCommand(command, execDecision.segments, ctx.cwd)) {
-        return {
-          block: true,
-          reason: `Task ${sessionTask.taskId} ${sessionTask.changeMode === "read-only" ? "is read-only; this shell command is not in the read-only inspection allowlist" : "forbids source mutation; this shell command is neither bounded inspection nor an exact configured verifier"}.`
-        };
-      }
       if (execDecision.mode !== "off" && execDecision.decision === "forbid") {
         return { block: true, reason: execDecision.reasons.join("; ") };
       }
@@ -4716,7 +3953,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         pendingHumanApproval = { prompt: `Command requires confirmation.\n\n${confirmationReasons.join("\n")}\n\nAllow?`, title: "Piagent exec policy confirmation",
           action: { kind: externalReason ? "external-provider-action" : "workspace-patch", preconditionClass: externalReason ? "runtime-only" : "workspace-tree", toolName: event.toolName, rawAction: { toolName: event.toolName, command, input: preparedInput.input },
             commandPreview: command, parameterPreview: preparedInput.confirmationSummary ?? "Shell command", targetPaths: shellMutationTargets, targetSummaries: confirmationReasons, provider: externalReason ? "shell-external" : null, urlOrigin: null,
-            requestedScope: "one-shell-command", reason: confirmationReasons.join("; "), riskClass: shellProjectMutation ? "high" : "medium", allowConsequence: "Run this exact command once after the guard rechecks the task and working tree.", denyConsequence: "Block this command and return the denial to the active Pi operation." } };
+            requestedScope: "one-shell-command", reason: confirmationReasons.join("; "), riskClass: shellProjectMutation ? "high" : "medium", allowConsequence: "Run this exact command once, after the guard checks the working tree again.", denyConsequence: "The command does not run; the agent is told you declined." } };
       }
     }
 
@@ -4750,7 +3987,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         forceScopeAware: authorizationTargetInspection.patchCarrier || Boolean(preparedInput.proxyToolName),
         forceWrite: authorizationTargetInspection.patchCarrier || preparedInput.proxyAction?.decision === "confirm",
         allowAmbiguousFilesystemContentFields: !usesKnownExternalProvider && !isPiagentTool(event.toolName),
-        sourceCheckoutReadRoots: runtimeState.sourceCheckoutReadRoots(ctx)
+        sourceCheckoutReadRoots: [...runtimeState.sourceCheckoutReadRoots(ctx), ...SKILL_READ_ROOTS]
       }
     );
     if (pathDecision.block) {
@@ -4772,82 +4009,19 @@ export default function piagentGuard(pi: ExtensionAPI) {
         pendingHumanApproval = { prompt: `External provider action requires confirmation.\n\nprovider: ${externalAction.provider}\naction: ${externalAction.action}\ntool: ${event.toolName}${inputSummary}\n\nAllow?`, title: "Piagent external action confirmation",
           action: { kind: "external-provider-action", preconditionClass: "runtime-only", toolName: event.toolName, rawAction: { toolName: event.toolName, input: preparedInput.input, provider: externalAction.provider, action: externalAction.action },
             commandPreview: null, parameterPreview: preparedInput.confirmationSummary ?? String(externalAction.action), targetPaths: [], targetSummaries: [], provider: String(externalAction.provider),
-            urlOrigin: null, requestedScope: "one-external-action", reason: `External provider action ${String(externalAction.action)} requires confirmation`, riskClass: "high", allowConsequence: "Release this exact provider action once after the guard rechecks runtime authority.", denyConsequence: "Block the provider action without changing external state." } };
+            urlOrigin: null, requestedScope: "one-external-action", reason: `External provider action ${String(externalAction.action)} requires confirmation`, riskClass: "high", allowConsequence: "Run this exact action once, after the guard checks its authority again.", denyConsequence: "The action does not run; nothing outside changes." } };
       }
     }
 
-    const mutationTargets = SHELL_TOOL_NAMES.has(event.toolName)
-      ? shellMutationTargets
-      : authorizationTargets;
-    const directProjectMutation = !SHELL_TOOL_NAMES.has(event.toolName) && (
-      WRITE_TOOL_NAMES.has(event.toolName)
-      || mutationTargets.length > 0
-      || preparedInput.proxyShellCarrier === true
-    );
-    const semanticOpaqueCarrier = normalizeActionToken(event.toolName) === "mcp"
-      || Boolean(mcpServerFromToolCall(event.toolName, toolInput, repositoryMcpGate(ctx.cwd).serverNames));
-    const semanticSnapshot = sessionTask ? workingTreeSnapshot(ctx.cwd) as Record<string, string> : undefined;
-    const semanticAuthorization = sessionTask && semanticSnapshot && (shellProjectMutation || directProjectMutation || SHELL_TOOL_NAMES.has(event.toolName) || semanticOpaqueCarrier)
-      ? semanticRepairRuntime.authorize({
-          cwd: ctx.cwd,
-          task: sessionTask,
-          sessionId: ctx.sessionManager.getSessionId(),
-          toolCallId: String(event.toolCallId),
-          toolName: event.toolName,
-          currentDigest: workingTreeSnapshotHasUnavailableEvidence(semanticSnapshot) ? "unavailable" : workingTreeEvidenceDigest(semanticSnapshot),
-          targetPaths: mutationTargets,
-          projectMutation: shellProjectMutation || directProjectMutation,
-          exactVerifier: configuredVerifierShell,
-          shellLike: SHELL_TOOL_NAMES.has(event.toolName),
-          opaqueCarrier: semanticOpaqueCarrier,
-          targetExtractionComplete: SHELL_TOOL_NAMES.has(event.toolName)
-            ? !shellHasOpaqueWritePrimitive(authorizedShellCommand)
-            : authorizationTargetInspection.patchCarrier
-              ? authorizationTargetInspection.exactLocalPatchExecutor
-              : !semanticOpaqueCarrier && preparedInput.proxyShellCarrier !== true,
-          recordedAt: nowIso()
-        })
-      : { handled: false, allowed: false, bypassPhase: false };
-    if (semanticAuthorization.handled && !semanticAuthorization.allowed) {
-      return { block: true, reason: semanticAuthorization.reason ?? "Semantic repair authorization failed closed." };
-    }
-    const phaseMutationDecision = semanticAuthorization.bypassPhase ? undefined : phaseToolRuntime.mutationDecision(ctx, {
-      projectMutation: shellProjectMutation || directProjectMutation, exactSourceVerifier: configuredVerifierShell,
-      verificationCarrier: SHELL_TOOL_NAMES.has(event.toolName)
-    });
-    if (phaseMutationDecision) return phaseMutationDecision;
-    if (pendingHumanApproval && !sessionTask) {
+    if (pendingHumanApproval) {
       const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null, action: { ...pendingHumanApproval.action, preconditionClass: "runtime-only", treePrecondition: null }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title), unavailableFallback: approvalUnavailableFallback(ctx) });
       if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };
+      // A WebUI allow is provisional until the guard consumes it here. Without
+      // this the decision request never got its receipt and the approval stayed
+      // pending, filling the broker until it stopped accepting WebUI decisions.
+      // With task contracts retired every approval takes this path.
+      if (!approval.consume()) return { block: true, reason: "Approval became stale before tool start; the action was blocked." };
       pendingHumanApproval = null;
-    }
-    if (sessionTask && sessionTask.trace.outcome !== "pending" && (shellProjectMutation || directProjectMutation)) {
-      return {
-        block: true,
-        reason: `Task ${sessionTask.taskId} is ${sessionTask.trace.outcome}; start a new attempt or a fresh task before further project mutations.`
-      };
-    }
-    if (!sessionTask && taskContractRequired && (shellProjectMutation || directProjectMutation)) {
-      return {
-        block: true,
-        // Naming the tool matters: this is the first wall a new operator hits,
-        // and "start the task first" does not say with what.
-        reason: "A session-bound Task Implementation Contract is required before project files can be mutated."
-          + " Call `piagent_task_start` once with explicit project-relative scope, then retry."
-      };
-    }
-    if (
-      sessionTask?.trace.outcome === "pending"
-      && sessionTask.changeMode === "source-change"
-      && shellProjectMutation
-      && opaqueShellMutationNeedsBoundedTarget(authorizedShellCommand, authorizedShellSegments)
-      && !shellMutationTargetBounded
-      && !configuredVerifierShell
-    ) {
-      return {
-        block: true,
-        reason: `Task ${sessionTask.taskId} cannot run an opaque shell mutation whose write target is not statically bounded. Use edit/write/apply_patch, an explicit project-local redirection, or the exact configured verifier.`
-      };
     }
     if (runtime.contextBudget !== "off" && (["write", "edit"].includes(event.toolName) || authorizationTargetInspection.patchCarrier)) {
       const budgetTargets = authorizationTargetInspection.patchCarrier
@@ -4862,25 +4036,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
     }
 
-    if (pendingHumanApproval) {
-      const currentTreeDigest = semanticSnapshot && !workingTreeSnapshotHasUnavailableEvidence(semanticSnapshot) ? workingTreeEvidenceDigest(semanticSnapshot) : null;
-      const treePrecondition = pendingHumanApproval.action.preconditionClass === "runtime-only" || !currentTreeDigest ? null
-        : { workspaceRevision: `workspace-rev.${crypto.createHash("sha256").update(currentTreeDigest).digest("hex")}`, indexRevision: null, preimageDigest: currentTreeDigest };
-      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: sessionTask ? { taskId: sessionTask.taskId, taskRunId: sessionTask.taskRunId } : null,
-        action: { ...pendingHumanApproval.action, treePrecondition }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title),
-        unavailableFallback: approvalUnavailableFallback(ctx),
-        recheck: () => !treePrecondition || (() => { const current = workingTreeSnapshot(ctx.cwd);
-          return !workingTreeSnapshotHasUnavailableEvidence(current) && workingTreeEvidenceDigest(current) === treePrecondition.preimageDigest; })() });
-      if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };
-      if (!approval.consume()) return { block: true, reason: "Approval became stale before tool start; the action was blocked." };
-    }
-    if (
-      sessionTask?.trace.outcome === "pending"
-      && sessionTask.changeMode === "source-change"
-      && (shellProjectMutation || configuredVerifierShell)
-    ) {
-      runtimeState.rememberShellMutationSnapshot(ctx, event.toolName, event.input, event.toolCallId);
-    }
     }
   });
   // Register only after authorization is live. The same-name override is intentional:
@@ -4901,8 +4056,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
     createTaskRunId, crypto, currentSessionName, defaultRolePolicy, defaultWorkPlan, digestJson,
     dynamicToolsEnabled, effectiveProtectedPaths, emitRuntimeMessage, ensureContextIndexV2, estimateContextTokens,
     evaluateExecPolicy, evaluateModelRoute, evaluateRetrievalRoute, evaluateRuntimeSolver, evaluateTaskGate, evaluateToolPolicy, execPolicyConfig,
-    prepareIndependentAcceptance: (ctx: ExtensionContext, task: TaskContract, response?: { origin: "assistant"; bytes: string }) =>
-      independentAcceptance.prepare(ctx, task, response),
     extensionDir, externalActionPolicyConfig, extractDocument, finalGateConfig, findMatchingObservedBashResult,
     formatContextPreflight, formatCount, formatLiveTaskStatus, formatPercent, formatTechOptionsText, formatTechSelectionSummary,
     formatToolResultCaptureStatus, formatUsageSnapshot, fs, hasGitEvidenceRoot, hasOperatorSessionName, helpersMode,
@@ -4919,7 +4072,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
     runtimeLifecycleMode, runtimeSnapshotCapture, runtimeSnapshotEnabled, runtimeState, runtimeVersions,
     safeTaskId, searchContextIndex, searchContextIndexV2, searchMemoryFiles, selectRuntimeAction,
     selectValueFromUi, selectVerificationPlan, semanticCompactionInstructions, sendWorkflowFollowUp, setPermissionOverrideForContext,
-    semanticRepairCompletionBlock: (cwd: string, taskRunId: string) => semanticRepairRuntime.completionBlock(cwd, taskRunId),
     freshRequestParts, shellArg, shortTaskLabel, solverShadow, summarizeAttempt, taskAcceptanceEvidenceFiles, taskChangedFileEvidence,
     techContextDirPath, techContextFilePath, techContextRelativePath, techOptionById, techStackPath,
     telemetry, toolRegistryConfig, trajectoryRuntime, uniqueStrings, usageExactCommands,
@@ -4931,9 +4083,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
   registerPolicyTools(pi, registrationDeps);
   registerKnowledgeTools(pi, registrationDeps);
   registerOnboardingTools(pi, registrationDeps);
-  maybeStartAutomaticTask = registerTaskStartTool(pi, registrationDeps);
-  registerTaskEvidenceTools(pi, registrationDeps);
-  registerTaskCompletionTools(pi, registrationDeps);
 
   function emitRuntimeMessage(
     ctx: ExtensionContext,
@@ -4987,14 +4136,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   registerPermissionCommands(pi, registrationDeps);
   registerFastModeCommand(pi, serviceTierRuntime);
-  const profileCommandApi = registerProfileCommands(pi, registrationDeps);
+  registerProfileCommands(pi, registrationDeps);
   registerMemoryMcpCommands(pi, registrationDeps);
   const contextCommandApi = registerContextCommands(pi, registrationDeps);
-  let workflowCommandApi: { startFreshWorkflow: (...args: any[]) => Promise<void> };
-  registerSessionCommands(pi, {
-    ...registrationDeps,
-    ...contextCommandApi,
-    startFreshWorkflow: (...args: any[]) => workflowCommandApi.startFreshWorkflow(...args)
-  });
-  workflowCommandApi = registerWorkflowCommands(pi, { ...registrationDeps, ...profileCommandApi, ...contextCommandApi });
+  // This module also carries tools that are not task controls (document read,
+  // external source checkout); the wrapper above drops the retired task tool it
+  // registers. The completion module holds only task-bound tools (memory
+  // citations need a task id), so it is no longer registered at all.
+  registerTaskEvidenceTools(pi, registrationDeps);
+  registerSessionCommands(pi, { ...registrationDeps, ...contextCommandApi });
 }

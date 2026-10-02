@@ -8,7 +8,7 @@ function features(request, overrides = {}) {
   return extractTaskFeatures({ request, profileMode: "node-typescript", projectShape: ["backend"], gitReady: true, verifierReady: true, dirtyTree: false, runtimeCapabilitiesKnown: true, contextPressure: 0.1, activeTaskState: "none", ...overrides });
 }
 
-describe("bounded Windsurf-style retrieval routing", () => {
+describe("bounded retrieval routing", () => {
   it("keeps explicit paths on one bounded local retrieval round", () => {
     const value = planRetrievalRoute({ features: features("Fix src/a.ts"), indexReady: true, observedConfidence: "medium", helpersMode: "recommend" });
     assert.equal(value.activation, "local-direct");

@@ -634,7 +634,7 @@ for (const rel of jsonFiles) {
 }
 
 const rootPkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-if (!rootPkg.pi || !rootPkg.pi.extensions || !rootPkg.pi.prompts || !rootPkg.pi.skills) {
+if (!rootPkg.pi || !rootPkg.pi.extensions || !rootPkg.pi.skills) {
   throw new Error("root package.json missing pi manifest");
 }
 if (!rootPkg.pi.subagents?.agents?.length) {
@@ -651,7 +651,7 @@ for (const [name, version] of Object.entries(expectedPeers)) {
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "packages/piagent-core/package.json"), "utf8"));
-if (!pkg.pi || !pkg.pi.extensions || !pkg.pi.prompts || !pkg.pi.skills) {
+if (!pkg.pi || !pkg.pi.extensions || !pkg.pi.skills) {
   throw new Error("packages/piagent-core/package.json missing pi manifest");
 }
 if (!pkg.pi.subagents?.agents?.length) {

@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.9.0`: phiên freeform — bỏ task contract và các command workflow (`/workflow`, `/fresh`, `/onboard`…); khung main/research/review cho tài khoản công ty; redact credential Studio; sửa duyệt trên WebUI.
 - `1.8.0`: Pi 0.87.1, thêm GPT-6 Astra/Sol/Luna vào catalog, WebUI và tier routing opt-in. Không chạy lại 108 phiên hay claim hiệu suất GPT-6.
 - `1.7.1`: Pi 0.86.1, chờ trong phiên đang mở, sửa context/usage và phục hồi; kết quả chạy lại 14 phiên lỗi được giữ riêng, không claim một full108 mới hay tiết kiệm token tổng thể.
 - `1.7.0`: chỉ có annotated tag; macOS tag CI chạm giới hạn 40 phút hai lần nên npm và GitHub Release không được publish. Được thay bằng `1.7.1`.
@@ -152,7 +153,7 @@ pi install /path/to/piagent
 2. Install the pinned terminal helper and matching Pi package.
 3. Login OAuth provider.
 4. Run `pi` in the target project.
-5. Run `/onboard`.
+5. Ask the agent to inspect the project read-only and record its project context.
 6. Choose/apply a profile inside Pi.
 
 Chi tiết: `docs/team-onboarding.md` và `docs/distribution-standard.md`.

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Workflow thay đổi thế nào sau update · Pi Agent Platform Docs</title>
-    <meta name="description" content="Workflow launcher cũ vẫn giữ nguyên. Runtime lifecycle và live inspector chạy tự động; command mới chỉ giúp quan sát preflight, diff, tiến độ, receipt, hiệu suất và orchestration policy." />
+    <meta name="description" content="Từ bản 1.9.0 không còn launcher workflow: nói việc cần làm bằng lời thường. Các command xem thêm chỉ để quan sát và không bao giờ mở lượt model." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/workflows" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/workflows" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/workflows" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Workflow thay đổi thế nào sau update · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Workflow launcher cũ vẫn giữ nguyên. Runtime lifecycle và live inspector chạy tự động; command mới chỉ giúp quan sát preflight, diff, tiến độ, receipt, hiệu suất và orchestration policy." />
+    <meta property="og:description" content="Từ bản 1.9.0 không còn launcher workflow: nói việc cần làm bằng lời thường. Các command xem thêm chỉ để quan sát và không bao giờ mở lượt model." />
     <meta property="og:url" content="https://piagent.io.vn/workflows" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/workflows" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/workflows" hreflang="en" lang="en">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/ecosystem">Hệ sinh thái</a>
             <a class="nav-link" href="/quickstart">Quickstart</a>
             <a class="nav-link" href="/whats-new">Có gì mới</a>
             <a class="nav-link" href="/scope">Phạm vi platform</a>
@@ -100,25 +101,24 @@
             </nav>
             <div class="page-head">
               <h1>Workflow thay đổi thế nào sau update</h1>
-              <p>Workflow launcher cũ vẫn giữ nguyên. Runtime lifecycle và live inspector chạy tự động; command mới chỉ giúp quan sát preflight, diff, tiến độ, receipt, hiệu suất và orchestration policy.</p>
+              <p>Từ bản 1.9.0 không còn launcher workflow: nói việc cần làm bằng lời thường. Các command xem thêm chỉ để quan sát và không bao giờ mở lượt model.</p>
             </div>
 <section class="section">
   <p class="section-kicker">Workflow impact</p>
   <h2 id="ket-luan">Không có command bắt buộc mới trong daily flow</h2>
-  <p class="section-lead">Người dùng vẫn giao việc bằng prompt tự nhiên hoặc <span class="inline-code">/workflow task</span>. Thay đổi chính nằm trong runtime: task state, trajectory, verifier evidence, recovery và completion gate được ghi nhận chặt hơn. Các command mới chỉ mở cửa sổ đọc những dữ liệu đó khi cần.</p>
+  <p class="section-lead">Từ bản 1.9.0, giao việc chỉ cần một yêu cầu bằng lời thường. <span class="inline-code">/workflow</span>, <span class="inline-code">/task</span>, <span class="inline-code">/fresh</span> và <span class="inline-code">/onboard</span> đã bỏ cùng task contract: session không còn ghi contract, work plan, completion gate hay receipt. Guard vẫn kiểm tra từng tool call.</p>
   <div class="callout ok-callout">
     <strong>Kết luận ngắn</strong>
-    <p>Luồng thao tác không dài thêm. Luồng kiểm soát phía sau an toàn hơn và fail closed khi thiếu bằng chứng. Không cần chạy đủ bốn command mới để một task hợp lệ.</p>
+    <p>Nói điều mình cần, kể cả agent có được sửa hay không ("chỉ đọc, không sửa", "lập plan trước", "implement rồi chạy test"). Các command xem thêm bên dưới là tùy chọn và không bao giờ mở lượt model.</p>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Thời điểm</th><th>Người dùng làm như trước</th><th>Runtime mới tự xử lý</th><th>Command xem thêm, không bắt buộc</th></tr></thead>
+      <thead><tr><th>Thời điểm</th><th>Người dùng làm</th><th>Runtime làm</th><th>Command xem thêm, không bắt buộc</th></tr></thead>
       <tbody>
-        <tr><td>Trước task</td><td>Gửi prompt hoặc <span class="inline-code">/workflow task &lt;request&gt;</span>.</td><td>Đọc profile/context, phân loại intent và risk, chụp runtime truth và solver recommendation.</td><td><span class="inline-code">/task-preflight [--json] &lt;intent&gt;</span></td></tr>
-        <tr><td>Đang làm</td><td>Tiếp tục trao đổi trong cùng task.</td><td>Ghi work plan, phase, changed files, tool/command result, checkpoint, helper và recovery event. Inspector tự cập nhật dưới footer.</td><td><span class="inline-code">/piagent-inspector</span> hoặc <span class="inline-code">/piagent-status</span></td></tr>
-        <tr><td>Verify và review</td><td>Dùng verify của project; gọi <span class="inline-code">/workflow review</span> khi cần review riêng.</td><td>Chỉ nhận exact verifier thành công và khớp working-tree identity hiện tại.</td><td><span class="inline-code">/piagent-status</span></td></tr>
-        <tr><td>Hoàn tất hoặc handoff</td><td>Nhận kết quả và remaining risk như trước.</td><td>Receipt chỉ approved khi trace, work plan, acceptance, changed-file integrity và hard gate cùng pass.</td><td><span class="inline-code">/piagent-status</span></td></tr>
-        <tr><td>Sau task</td><td>Không có bước bắt buộc mới.</td><td>Giữ telemetry có nguồn, không tự suy diễn chất lượng.</td><td><span class="inline-code">/usage efficiency</span></td></tr>
+        <tr><td>Trước khi làm</td><td>Gửi yêu cầu bằng lời thường.</td><td>Đọc profile và project context.</td><td><span class="inline-code">/task-preflight [--json] &lt;intent&gt;</span></td></tr>
+        <tr><td>Đang làm</td><td>Theo dõi hoặc trả lời câu hỏi xác nhận.</td><td>Kiểm tra từng tool call: protected path và read-only path, permission profile, context budget cho file lớn, edit trên bản đọc cũ, và xác nhận hành động destructive/external. Inspector tự cập nhật dưới footer.</td><td><span class="inline-code">/piagent-inspector</span> hoặc <span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Verify và review</td><td>Nhờ chạy check của project, hoặc review diff hiện tại.</td><td>Chạy lệnh như mọi tool call khác.</td><td><span class="inline-code">/piagent-inspector commands</span></td></tr>
+        <tr><td>Sau khi làm</td><td>Không có bước bắt buộc.</td><td>Giữ telemetry có nguồn, không tự suy diễn chất lượng.</td><td><span class="inline-code">/usage efficiency</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -126,22 +126,22 @@
 
 <section class="section">
   <p class="section-kicker">Command semantics</p>
-  <h2 id="command-anh-huong-gi">Command mới ảnh hưởng workflow đến đâu</h2>
+  <h2 id="command-anh-huong-gi">Command xem thêm ảnh hưởng workflow đến đâu</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Command</th><th>Đọc hoặc hiển thị</th><th>Không thực hiện</th></tr></thead>
       <tbody>
-        <tr><td><span class="inline-code">/task-preflight</span></td><td>Intent, risk, scope, runtime, route, phase/tool/helper policy, backend, approval và blocker.</td><td>Không tạo task, không advance phase, không gọi model và không cấp quyền implementation.</td></tr>
-        <tr><td><span class="inline-code">/piagent-status</span></td><td>Task Contract, trajectory, checkpoint, verifier, recovery, helper, resume và terminal receipt từ persisted evidence.</td><td>Không sửa file, không chạy lại verify, không retry và không biến state thiếu evidence thành success.</td></tr>
-        <tr><td><span class="inline-code">/piagent-inspector</span></td><td>Observed task files trên panel bốn dòng sát footer, exact baseline delta trong view <span class="inline-code">files</span>, tool hiện tại, command fail/block, safety warning và context budget. Không tham số sẽ mở menu.</td><td>Không sửa file, không chạy command, không đổi completion state và không ước lượng token theo từng built-in tool.</td></tr>
-        <tr><td><span class="inline-code">/usage efficiency</span></td><td>Context telemetry và task metrics có nguồn; fact không đo được giữ <span class="inline-code">null</span> hoặc unavailable.</td><td>Không chấm chất lượng con người/model và không quyết định completion gate.</td></tr>
-        <tr><td><span class="inline-code">/piagent-orchestration</span></td><td>Mode, helper mode, giới hạn subagent, review lenses, Field Guide và writer policy hiện hành.</td><td>Không đổi mode, không spawn helper và không bật parallel writer.</td></tr>
+        <tr><td><span class="inline-code">/task-preflight</span></td><td>Context và shadow route deterministic cho một intent.</td><td>Không tạo gì, không gọi model và không cấp quyền implementation.</td></tr>
+        <tr><td><span class="inline-code">/piagent-status</span></td><td>Profile, guard, runtime và trạng thái model đã xác thực.</td><td>Không sửa file, không chạy lại verify và không retry.</td></tr>
+        <tr><td><span class="inline-code">/piagent-inspector</span></td><td>File đã đổi trên panel bốn dòng sát footer, tool hiện tại, command fail/block, safety warning và context budget. Không tham số sẽ mở menu.</td><td>Không sửa file, không chạy command và không ước lượng token theo từng built-in tool.</td></tr>
+        <tr><td><span class="inline-code">/usage efficiency</span></td><td>Context telemetry có nguồn; fact không đo được giữ <span class="inline-code">null</span> hoặc unavailable.</td><td>Không chấm chất lượng con người/model.</td></tr>
+        <tr><td><span class="inline-code">/piagent-orchestration</span></td><td>Mode, helper mode, giới hạn helper, review lenses, Field Guide và writer policy hiện hành.</td><td>Không đổi mode, không spawn helper và không bật parallel writer.</td></tr>
       </tbody>
     </table>
   </div>
   <div class="callout">
     <strong>Chỉ opt-in mới đổi hành vi.</strong>
-    <p>Năm command trên là read-only. Hành vi chỉ đổi khi operator chủ động bật setting rollout như phase tools hoặc helper mode; parent routing, automatic worker và multi-writer vẫn không tự bật.</p>
+    <p>Năm command trên là read-only. Hành vi chỉ đổi khi operator chủ động bật setting như helper mode; parent routing, automatic worker và multi-writer vẫn không tự bật.</p>
   </div>
 </section>
 
@@ -150,14 +150,13 @@
   <h2 id="luong-mau">Một luồng đầy đủ có thể dùng như sau</h2>
   <div class="command-grid">
     <article class="command-card">
-      <header><span>Inspect → implement → review → receipt</span><button class="clip-btn" data-clip="/task-preflight --json Fix the failing checkout test&#10;/workflow task Fix the failing checkout test and verify.&#10;/piagent-inspector&#10;/workflow review current diff&#10;/piagent-status&#10;/usage efficiency">Lấy lệnh</button></header>
+      <header><span>Inspect → implement → review</span><button class="clip-btn" data-clip="/task-preflight --json Fix the failing checkout test&#10;Sửa test checkout đang fail rồi chạy test của project.&#10;/piagent-inspector&#10;Review diff hiện tại: correctness, test còn thiếu, scope drift. Chỉ đọc.&#10;/usage efficiency">Lấy lệnh</button></header>
       <pre><code>/task-preflight --json Fix the failing checkout test
-/workflow task Fix the failing checkout test and verify.
+Sửa test checkout đang fail rồi chạy test của project.
 /piagent-inspector
-/workflow review current diff
-/piagent-status
+Review diff hiện tại: correctness, test còn thiếu, scope drift. Chỉ đọc.
 /usage efficiency</code></pre>
-      <p>Chỉ dòng <span class="inline-code">/workflow task</span> khởi chạy implementation. Inspector mở menu để xem file/command/safety/context; preflight, inspector, status và efficiency đều tùy chọn. Review riêng dùng khi scope hoặc quy trình handoff yêu cầu.</p>
+      <p>Chỉ các dòng lời thường mới mở việc cho model. Preflight, inspector và efficiency là màn hình xem tùy chọn.</p>
     </article>
   </div>
 </section>
@@ -165,47 +164,47 @@
 <section class="section">
   <div class="callout ok-callout">
     <strong>Git trong Pi Agent</strong>
-    <p>Không có namespace <span class="inline-code">/git</span> riêng. Dùng <span class="inline-code">/workflow commit</span> để commit local đã review, dùng <span class="inline-code">/workflow pr</span> để chuẩn bị PR. Các hành động như <span class="inline-code">git push</span> hoặc stage rộng <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>
+    <p>Không có namespace <span class="inline-code">/git</span> và không có command workflow. Nhờ commit hoặc tạo PR bằng lời thường. <span class="inline-code">git push</span>, thao tác ghi lên GitHub và stage rộng như <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>
   </div>
 
   <div class="callout">
     <strong>Parent-direct orchestration</strong>
-    <p>Dùng <span class="inline-code">/piagent-orchestration</span> để xem trần một helper, lý do dispatch/skip, projected token saving, review lenses, Field Guide và writer policy. Helper mặc định off. Opt-in vẫn chỉ cho một helper read-only context fresh khi chứng minh hai lane độc lập và tiết kiệm từ 30%; worker và retry bị tắt.</p>
+    <p>Dùng <span class="inline-code">/piagent-orchestration</span> để xem trần helper, lý do dispatch/skip, review lenses, Field Guide và writer policy. Helper mặc định off. Khi opt-in, parent được dùng tối đa hai helper read-only context fresh; ước tính tiết kiệm token chỉ là telemetry, không phải điều kiện. Worker và retry bị tắt.</p>
   </div>
 
   <div class="command-grid">
     <article class="command-card">
-      <header><span>Implementation bounded</span><button class="clip-btn" data-clip="/workflow task Fix the failing checkout test and verify.">Lấy lệnh</button></header>
-      <pre><code>/workflow task Fix the failing checkout test and verify.</code></pre>
+      <header><span>Implementation</span><button class="clip-btn" data-clip="Sửa test checkout đang fail rồi chạy test của project.">Lấy lệnh</button></header>
+      <pre><code>Sửa test checkout đang fail rồi chạy test của project.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Read-only scout</span><button class="clip-btn" data-clip="/workflow scout Map the auth flow and risk areas.">Lấy lệnh</button></header>
-      <pre><code>/workflow scout Map the auth flow and risk areas.</code></pre>
+      <header><span>Read-only scout</span><button class="clip-btn" data-clip="Map luồng auth và các vùng rủi ro. Chỉ đọc, không sửa.">Lấy lệnh</button></header>
+      <pre><code>Map luồng auth và các vùng rủi ro. Chỉ đọc, không sửa.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Plan trước khi code</span><button class="clip-btn" data-clip="/workflow plan Add multi-tenant billing support.">Lấy lệnh</button></header>
-      <pre><code>/workflow plan Add multi-tenant billing support.</code></pre>
+      <header><span>Plan trước khi code</span><button class="clip-btn" data-clip="Lập plan hỗ trợ multi-tenant billing. Chưa sửa code.">Lấy lệnh</button></header>
+      <pre><code>Lập plan hỗ trợ multi-tenant billing. Chưa sửa code.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Review diff</span><button class="clip-btn" data-clip="/workflow review current diff">Lấy lệnh</button></header>
-      <pre><code>/workflow review current diff</code></pre>
+      <header><span>Review diff</span><button class="clip-btn" data-clip="Review diff hiện tại: correctness, test còn thiếu, scope drift. Chỉ đọc.">Lấy lệnh</button></header>
+      <pre><code>Review diff hiện tại: correctness, test còn thiếu, scope drift. Chỉ đọc.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Commit local có guard</span><button class="clip-btn" data-clip="/workflow commit &quot;feat: add guarded git workflow&quot;">Lấy lệnh</button></header>
-      <pre><code>/workflow commit "feat: add guarded git workflow"</code></pre>
+      <header><span>Commit local</span><button class="clip-btn" data-clip="Commit hai file docs với message &quot;docs: update onboarding notes&quot;. Không push.">Lấy lệnh</button></header>
+      <pre><code>Commit hai file docs với message "docs: update onboarding notes". Không push.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Chuẩn bị pull request</span><button class="clip-btn" data-clip="/workflow pr &quot;Prepare PR for guarded git workflow&quot;">Lấy lệnh</button></header>
-      <pre><code>/workflow pr "Prepare PR for guarded git workflow"</code></pre>
+      <header><span>Pull request</span><button class="clip-btn" data-clip="Tạo draft PR cho branch này, title &quot;Harden command docs&quot;.">Lấy lệnh</button></header>
+      <pre><code>Tạo draft PR cho branch này, title "Harden command docs".</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Backend spec sang frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe&#10;/workflow be-to-fe Implement frontend support for the new user status endpoint.">Lấy lệnh</button></header>
+      <header><span>Backend spec sang frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe&#10;Implement frontend support cho endpoint user status mới. Backend chỉ đọc.">Lấy lệnh</button></header>
       <pre><code>/profile be-readonly-fe
-/workflow be-to-fe Implement frontend support for the new user status endpoint.</code></pre>
+Implement frontend support cho endpoint user status mới. Backend chỉ đọc.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Cải thiện platform</span><button class="clip-btn" data-clip="/workflow platform-improve Harden command docs and run verification.">Lấy lệnh</button></header>
-      <pre><code>/workflow platform-improve Harden command docs and run verification.</code></pre>
+      <header><span>Onboard project</span><button class="clip-btn" data-clip="Đọc project này (chỉ đọc) và ghi lại project context.">Lấy lệnh</button></header>
+      <pre><code>Đọc project này (chỉ đọc) và ghi lại project context.</code></pre>
     </article>
   </div>
 </section>

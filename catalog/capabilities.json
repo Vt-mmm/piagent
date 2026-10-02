@@ -26,8 +26,8 @@
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
-          "byteSize": 7199,
-          "digest": "sha256:661350c9d639c9f6094e5606a32587f50550ab498edabe779ec30202bd3d353f",
+          "byteSize": 7631,
+          "digest": "sha256:e50361eda8ca41dc75afdff2ff21498499147b494ad4ed7b444a4a29279ba884",
           "id": "base-policy",
           "kind": "policies",
           "path": "packages/piagent-core/policies/base-policy.json"
@@ -75,15 +75,22 @@
           "path": "packs/engineering-base/recipes/bounded-change.json"
         },
         {
-          "byteSize": 1832,
-          "digest": "sha256:a1c21e7d1c3ab12fff8516bbac2922526e35b37a6852eaa9f5a7d98a102b830e",
+          "byteSize": 1423,
+          "digest": "sha256:b6b61c4fdd895d86e908be65d0be5e08eb615c105e2e4cec71aae3c680ea2c14",
           "id": "piagent-ops",
           "kind": "skills",
           "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
         },
         {
-          "byteSize": 2223,
-          "digest": "sha256:18f865d816c5a5cee50bf3b2b407c23a2e67e1e92d929001a0f24c04d0c20e03",
+          "byteSize": 5044,
+          "digest": "sha256:d3f8071a94338d02647e28914050d25e12d06a883d5a4bf1ec1dced6576dec08",
+          "id": "test-audit",
+          "kind": "skills",
+          "path": "packages/piagent-core/skills/test-audit/SKILL.md"
+        },
+        {
+          "byteSize": 2146,
+          "digest": "sha256:81625648bbd1fc798a276b0d49131a68dec0f097fa6b73557a339376cd5502ca",
           "id": "piagent-planner",
           "kind": "subagents",
           "path": "packages/piagent-core/subagents/piagent-planner.md"
@@ -112,7 +119,7 @@
       ],
       "dependencies": [],
       "description": "Core engineering workflow, policy, verification, and task coordination capabilities.",
-      "digest": "sha256:b9671f0c2da79012b8638c98459d5bbe9e444fd39fdabe17f54477ec18cc9fdf",
+      "digest": "sha256:2ed297c1fc283b477c44d4fe4787d670a2dade2283b27e579702d7d7be891d5d",
       "license": "MIT",
       "lifecycle": "experimental",
       "name": "engineering-base",

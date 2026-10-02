@@ -10,8 +10,10 @@ const task = JSON.parse(fs.readFileSync(new URL('../evals/fixtures/task-contract
 const cases = [
   {id:'image-attachment-unfrozen',text:'./fixture.png',pressure:0,want:'transform',image:true},
   {id:'ordinary-short-positive', text:'Inspect the current plan.', pressure:0, want:'continue'},
-  {id:'governed-boilerplate',text:'Mandatory flow piagent_context piagent_task_start output format\nPlan task: ```text\nInspect the current plan.\n```\n' + 'public fixture context '.repeat(40),pressure:0,want:'transform'},
-  {id:'known-workflow-high-pressure',text:'/scout Inspect the current plan.',pressure:95,want:'transform'}
+  // Task contracts and workflow commands are retired: pasted task boilerplate and
+  // slash-like text reach the model as the member wrote them, at any pressure.
+  {id:'governed-boilerplate',text:'Mandatory flow piagent_context piagent_task_start output format\nPlan task: ```text\nInspect the current plan.\n```\n' + 'public fixture context '.repeat(40),pressure:0,want:'continue'},
+  {id:'known-workflow-high-pressure',text:'/scout Inspect the current plan.',pressure:95,want:'continue'}
 ];
 for (const row of cases) test(row.id, async(t) => {
  const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'piagent-input-projection-'));

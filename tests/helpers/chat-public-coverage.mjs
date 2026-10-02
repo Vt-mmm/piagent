@@ -2,7 +2,8 @@ import { addPublicApiCoverage } from "./public-api-coverage.mjs";
 import assert from "node:assert/strict";
 import { data } from "./async-contract-cases.mjs";
 
-// Public examples from production-journey-chat-transport, grouped by the
+// Public examples from production-journey-chat-transport (retired with the task
+// contract on 2026-09-30; see HEAD 85f76db), grouped by the
 // original request clauses. No private grader or registered recipe is loaded.
 const message = (overrides = {}) => ({ eventId: "event-1", sequence: 1,
   kind: "message", messageId: "message-1", role: "user", text: "hello", confirmed: false, ...overrides });

@@ -7,8 +7,8 @@ Shared Pi package for reusable project workflows.
 - `extensions/piagent-guard.ts`: Pi extension composition root and registration order.
 - `runtime/`: Pi-facing session, usage, log-compaction, and workflow input adapters. New command/tool/hook modules belong here.
 - `extensions/*.js|ts`: legacy-location core services for policy, context, task lifecycle, state, and document intake; only `piagent-guard.ts` is loaded as an extension.
-- `prompts/*.md`: workflow aliases that intentionally launch an agent turn.
-- `skills/piagent-ops/SKILL.md`: operator-invoked reference for manual intake, recovery, and high-risk controls; routine runtime-managed tasks do not advertise or load it.
+- `prompts/*.md`: historical workflow prompt templates; Pi no longer loads them (retired in 1.9.0).
+- `skills/piagent-ops/SKILL.md`: operator-invoked reference for permission, risk, and blocked-call controls; ordinary work does not load it.
 - `skills/piagent-source-cache/`: local cache for user-provided external source repositories.
 - `subagents/*.md`: piagent roles for `pi-subagents`.
 - `benchmark/benchmark-core.js`: deterministic suite validation, evidence scoring, and paired usage comparison for `piagent-benchmark`; `benchmark-report.js` renders the human/HTML reports.
@@ -76,13 +76,11 @@ Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write
 - `piagent_exec_policy_check`
 - `piagent_context_budget`
 - `piagent_tool_policy_check`
-- `piagent_task_gate_check`
 - `piagent_usage_snapshot`
 - `piagent_context_preflight`
 - `piagent_memory_status`
 - `piagent_memory_note`
 - `piagent_memory_search`
-- `piagent_memory_citation_record`
 - `piagent_context_index_status`
 - `piagent_context_index_record`
 - `piagent_context_index_search`
@@ -92,40 +90,34 @@ Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write
 - `piagent_profile_tech_apply`
 - `piagent_profile_tech_context_record`
 - `piagent_project_onboarding_record`
-- `piagent_task_start`
-- `piagent_task_progress`
 - `piagent_source_checkout`
 - `piagent_document_read` — reads `.md`/`.txt`/`.csv`/`.json`/`.yaml`/`.pdf`/`.docx` from the project or a granted `additionalReadRoots` directory; read-only, and `protectedPaths` still wins
-- `piagent_context_record`
-- `piagent_verify_record` — records verify evidence only after matching an observed bash tool result after task start
-- `piagent_trace_record`
+- `piagent_wait`
 
-These tools are registered capabilities, not a per-task call sequence. Runtime
-starts bounded source tasks directly and exposes no Piagent management schema
-to the model. Broad, high-risk, or ambiguous intake activates
-`piagent_task_start`; lifecycle hooks still collect context, changes,
-current-tree verification, trace and final-gate evidence. Diagnostic/recovery
-groups load only when requested.
+These tools are registered capabilities, not a per-task call sequence. Since
+1.9.0 a turn is freeform: no task contract is created and the task, trace,
+verify, gate and memory-citation tools (`piagent_task_start`, `piagent_task_progress`,
+`piagent_task_gate_check`, `piagent_context_record`, `piagent_verify_record`,
+`piagent_trace_record`, `piagent_memory_citation_record`) are no longer published. Diagnostic groups load only
+when requested.
 
-## Runtime commands and workflow recipes
+## Runtime commands
 
-- `/commands`: runtime menu/help for terminal, Pi, MCP, model, memory, session, context, permission, and subagent commands.
-- `/workflow`: one launcher for task, scout, BE-to-FE, discuss, plan, review, commit, PR, platform-improve, and onboarding workflows.
+Work is requested in plain language. The commands below run without a model turn.
+
 - `/usage`: runtime usage namespace for live snapshot, history hint, preflight, compact, compact-log captures, and context efficiency.
 - Pi native `/name`: set the current session name for Agent Watch/report mapping; Piagent observes the native rename event and keeps `/setname` as a compatibility alias.
-- `/fresh`: open a fresh governed session for any canonical `/workflow` option; `/fresh help` lists the current catalog.
 - `/context`: runtime context namespace for index/rebuild/search/pack/test-impact/efficiency, task preflight, and semantic compact.
 - `/permission`: runtime permission namespace for status/read-only/workspace-write/full-access.
-- `/onboard`: runtime onboarding namespace; `run` launches the first-read onboarding workflow.
 - `/context-index`: legacy alias for `/context index/search`.
 - `/profile`: show a short profile status, list options, apply a profile directly, or run select-style profile/tech setup without a model follow-up. Short aliases include `fe`, `be`, `full`, and `be-fe`.
 - `/profile tech`: show/select/apply the project tech stack for the active profile; fullstack setup selects frontend, backend, and database tech.
 - `/memory` or `/memory-policy`: inspect project memory policy and explicit remember workflow.
-- `/model-options`: show model selector, scoped models, thinking levels, and benchmark discipline without a model follow-up.
 - `/logs`: short alias for `/usage logs`.
 - `/task-preflight`: legacy alias for `/context preflight`.
-- `/fresh-task`, `/fresh-scout`, `/fresh-be-to-fe`: legacy aliases for `/fresh ...`.
-- `/task`, `/scout`, `/be-to-fe`, `/platform-improve`, `/commit`, `/pr`, `/plan`, `/discuss`, `/review`: workflow aliases kept for power users; team docs should teach `/workflow ...` first.
+- `/piagent-status`, `/piagent-inspector`, `/piagent-orchestration`, `/piagent-mcp`, `/fast`: status, session inspector, helper policy, MCP governance and Codex Fast tier.
+
+Retired in 1.9.0: `/workflow`, `/fresh` (and `/fresh-*`), `/onboard`, `/commands`, `/model-options` and the prompt-template aliases (`/task`, `/scout`, `/be-to-fe`, `/platform-improve`, `/commit`, `/pr`, `/plan`, `/discuss`, `/review`). Project onboarding is a plain request; the agent records it with `piagent_project_onboarding_record`.
 
 ## Subagents
 

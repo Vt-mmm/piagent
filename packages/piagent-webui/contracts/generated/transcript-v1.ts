@@ -48,6 +48,16 @@ export type TranscriptItem = {
     | [AttachmentSummary, AttachmentSummary]
     | [AttachmentSummary, AttachmentSummary, AttachmentSummary]
     | [AttachmentSummary, AttachmentSummary, AttachmentSummary, AttachmentSummary];
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    totalTokens: number;
+  };
+  model?: string;
+  failure?: CompanyFailure;
+  process?: HarnessProcess;
   /**
    * @maxItems 64
    */
@@ -94,8 +104,415 @@ export interface AttachmentSummary {
   mimeType: string;
   truncated: boolean;
 }
+export interface CompanyFailure {
+  role: "main" | "research" | "review";
+  reasonCode: string;
+  code: string;
+  requestRef: string | null;
+  local: boolean;
+}
+export interface HarnessProcess {
+  phase: "plan" | "verify" | "review" | "final";
+  outcome?:
+    "no_change" | "interrupted" | "blocking_open" | "unverified" | "review_unavailable" | "unreviewed" | "clean";
+  loop?: number;
+  maxLoops?: number;
+  verified?: boolean;
+  reviewed?: boolean;
+  blockingOpen?: number;
+  planOpen?: number;
+  planSkipped?: true;
+  verifyPolicy?: "off" | "suggest" | "require";
+  reviewPolicy?: "off" | "suggest" | "require";
+  reviewUnavailable?: "too_large" | "not_git" | "limit" | "failed";
+  /**
+   * @maxItems 10
+   */
+  findings?:
+    | []
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ]
+    | [
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        },
+        {
+          severity: "blocking" | "major" | "minor";
+          file: string;
+          line: number | null;
+          issue: string;
+        }
+      ];
+}
 export interface ToolCall {
   toolCallRef: string;
   toolName: string;
   state: "requested" | "completed" | "failed" | "unknown";
+  summary?: {
+    kind:
+      | "read"
+      | "write"
+      | "edit"
+      | "command"
+      | "search"
+      | "list"
+      | "web-search"
+      | "web-fetch"
+      | "subagent"
+      | "network"
+      | "git"
+      | "plan"
+      | "other";
+    target: string | null;
+    detail: string | null;
+  };
+  change?: {
+    added: number;
+    removed: number;
+    preview: string;
+    truncated: boolean;
+  };
+  result?: {
+    text: string;
+    truncated: boolean;
+    isError: boolean;
+  };
+  failure?: CompanyFailure;
 }

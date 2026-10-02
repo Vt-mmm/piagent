@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/commands" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/commands" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
             <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
@@ -106,8 +107,8 @@
   <div class="grid cols-2">
     <article class="card">
       <h3 id="session-basics">Session basics</h3>
-      <div class="tag-list"><span class="tag">/login</span><span class="tag">/model</span><span class="tag">/commands</span><span class="tag">/piagent-status</span><span class="tag">/piagent-inspector</span><span class="tag">/piagent-orchestration</span><span class="tag">/usage</span><span class="tag">/usage efficiency</span><span class="tag">/task-preflight</span><span class="tag">/context preflight</span><span class="tag">/name</span><span class="tag">/fresh</span><span class="tag">/session</span></div>
-      <p>Set up a session, select a model, inspect profile, usage, or orchestration state, and decide whether a large task needs a fresh session.</p>
+      <div class="tag-list"><span class="tag">/login</span><span class="tag">/model</span><span class="tag">/piagent-status</span><span class="tag">/piagent-inspector</span><span class="tag">/piagent-orchestration</span><span class="tag">/usage</span><span class="tag">/usage efficiency</span><span class="tag">/task-preflight</span><span class="tag">/context preflight</span><span class="tag">/name</span><span class="tag">/new</span><span class="tag">/session</span></div>
+      <p>Set up a session, select a model, inspect profile, usage, or orchestration state, and decide whether large work needs a new session (<span class="inline-code">/new</span>).</p>
     </article>
     <article class="card">
       <h3 id="project-profile">Project profile</h3>
@@ -115,19 +116,19 @@
       <p>Apply a profile directly or use a deterministic selector for the profile and tech stack. Output stays compact and does not require model interpretation.</p>
     </article>
     <article class="card">
-      <h3 id="implementation-workflow">Implementation workflow</h3>
-      <div class="tag-list"><span class="tag">/workflow</span><span class="tag">/workflow task</span><span class="tag">/workflow plan</span><span class="tag">/workflow review</span><span class="tag">/workflow scout</span><span class="tag">/workflow discuss</span></div>
-      <p>Packages context loading, task contracts, implementation, verification evidence, and final handoff.</p>
+      <h3 id="implementation-workflow">Assigning work</h3>
+      <div class="tag-list"><span class="tag">plain language</span><span class="tag">read-only, do not edit</span><span class="tag">plan first</span><span class="tag">review the diff</span></div>
+      <p>Since 1.9.0 there is no <span class="inline-code">/workflow</span>, <span class="inline-code">/task</span> or task contract: say what you need in plain language; the guard checks every tool call.</p>
     </article>
     <article class="card">
       <h3 id="git-handoff">Git handoff</h3>
-      <div class="tag-list"><span class="tag">/workflow commit</span><span class="tag">/workflow pr</span><span class="tag">git status</span><span class="tag">git diff</span></div>
-      <p>There is no <span class="inline-code">/git</span> namespace. Commit and PR flows use workflow guards; pushes and broad staging such as <span class="inline-code">git add -A</span> require confirmation.</p>
+      <div class="tag-list"><span class="tag">commit in plain language</span><span class="tag">draft PR in plain language</span><span class="tag">git status</span><span class="tag">git diff</span></div>
+      <p>There is no <span class="inline-code">/git</span> namespace. Commits and PRs are ordinary requests; pushes, GitHub writes and broad staging such as <span class="inline-code">git add -A</span> require confirmation.</p>
     </article>
     <article class="card">
-      <h3 id="fresh-sessions">Fresh sessions</h3>
-      <div class="tag-list"><span class="tag">/fresh task</span><span class="tag">/fresh scout</span><span class="tag">/fresh be-to-fe</span></div>
-      <p>Start a clean workflow when the current context is heavy or belongs to a different task.</p>
+      <h3 id="fresh-sessions">New sessions</h3>
+      <div class="tag-list"><span class="tag">/new</span><span class="tag">/compact</span></div>
+      <p>Start a clean session when the current context is heavy or belongs to different work (<span class="inline-code">/fresh</span> was retired in 1.9.0).</p>
     </article>
     <article class="card">
       <h3 id="mcp">MCP</h3>
@@ -153,9 +154,9 @@
       <p>Inspect intent, risk, scope, runtime, solver route, phases, tool and helper recommendations, backend, approvals, and blockers before starting.</p>
     </article>
     <article class="command-card">
-      <header><span>Live task status</span><button class="clip-btn" data-clip="/piagent-status">Copy</button></header>
+      <header><span>Session status</span><button class="clip-btn" data-clip="/piagent-status">Copy</button></header>
       <pre><code>/piagent-status</code></pre>
-      <p>Read the Task Contract, checkpoints, verifier evidence, recovery, helpers, resume state, and terminal receipt. Approval requires the current-tree hard completion gate to pass.</p>
+      <p>The session's profile, guard, runtime and model. It changes no file, reruns no check and starts no model turn.</p>
     </article>
     <article class="command-card">
       <header><span>Activity, diff, and context</span><button class="clip-btn" data-clip="/piagent-inspector">Copy</button></header>
@@ -175,7 +176,24 @@
   </div>
   <div class="callout">
     <strong>Sourced diffs, no token estimates.</strong>
-    <p>The footer panel uses observed task files for fast updates; the <span class="inline-code">files</span> view computes the exact snapshot delta and marks <span class="inline-code">mixed-working-tree</span> when a task touches a file that was already dirty. Pi exposes model usage by turn and session, so per-built-in-tool tokens remain unavailable.</p>
+    <p>The footer panel uses the files observed in the session for fast updates; the <span class="inline-code">files</span> view computes the exact snapshot delta and marks <span class="inline-code">mixed-working-tree</span> when a turn touches a file that was already dirty. Pi exposes model usage by turn and session, so per-built-in-tool tokens remain unavailable.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Optional skills and packages</p>
+  <h2 id="skills-and-packages">Audit test quality, run experiment loops</h2>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Test audit</span><button class="clip-btn" data-clip="/skill:test-audit audit the tests of the billing module">Copy</button></header>
+      <pre><code>/skill:test-audit audit the tests of the billing module</code></pre>
+      <p>The <span class="inline-code">test-audit</span> skill ships with Piagent: it stops new tests that protect no behavior and finds duplicated tests, tests tied to the implementation, and code that exists only for tests. The agent uses it when writing or changing tests; run the command to sweep a whole area.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Experiment loop</span><button class="clip-btn" data-clip="git switch -c experiment/test-speed">Copy</button></header>
+      <pre><code>git switch -c experiment/test-speed</code></pre>
+      <p>If you add a package with an automatic experiment loop (<span class="inline-code">run_experiment</span>, <span class="inline-code">log_experiment</span>): the guard checks each experiment command like any shell command, and lets the loop run only on an <span class="inline-code">experiment/</span> branch or a worktree of its own, started with nothing uncommitted, because every dropped idea erases all uncommitted changes.</p>
+    </article>
   </div>
 </section>
             <nav class="pager" aria-label="Adjacent pages">

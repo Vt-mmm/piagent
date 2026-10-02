@@ -1,7 +1,9 @@
+// /commands and /onboard were retired with the task contract on 2026-09-30. Their
+// actions are gone too: a command Pi no longer registers would reach the model
+// as an ordinary message, so these read-only buttons would have started a turn.
 export const WEBUI_RUNTIME_ACTION_IDS = [
-  "runtime.status", "runtime.inspector", "runtime.commands", "runtime.fast-status", "runtime.fast-on", "runtime.fast-off", "orchestration.status",
+  "runtime.status", "runtime.inspector", "runtime.fast-status", "runtime.fast-on", "runtime.fast-off", "orchestration.status",
   "usage.live", "usage.history", "usage.logs", "usage.efficiency", "usage.preflight",
-  "onboarding.status", "onboarding.profile", "onboarding.tech",
   "profile.status", "profile.options", "profile.tech-options", "profile.apply", "profile.auto",
   "context.status", "context.rebuild", "context.search", "context.pack", "context.impact", "context.efficiency", "context.preflight", "context.compact",
   "memory.status",
@@ -26,13 +28,12 @@ const action = (id: WebUiRuntimeActionId, category: WebUiRuntimeAction["category
 });
 
 export const WEBUI_RUNTIME_ACTIONS: readonly WebUiRuntimeAction[] = [
-  action("runtime.status", "runtime"), action("runtime.inspector", "runtime"), action("runtime.commands", "runtime"),
+  action("runtime.status", "runtime"), action("runtime.inspector", "runtime"),
   action("runtime.fast-status", "runtime"), action("runtime.fast-on", "runtime", "session-setting"),
   action("runtime.fast-off", "runtime", "session-setting"),
   action("orchestration.status", "runtime"),
   action("usage.live", "usage"), action("usage.history", "usage"), action("usage.logs", "usage"),
   action("usage.efficiency", "usage"), action("usage.preflight", "usage", "read-only", "optional-text"),
-  action("onboarding.status", "onboarding"), action("onboarding.profile", "onboarding"), action("onboarding.tech", "onboarding"),
   action("profile.status", "profile"), action("profile.options", "profile"),
   action("profile.tech-options", "profile", "read-only", "optional-text"),
   action("profile.apply", "profile", "workspace-write", "profile"), action("profile.auto", "profile", "workspace-write"),
@@ -72,12 +73,11 @@ export function buildWebUiRuntimeCommand(input: {
   const argument = normalizedArgument(spec, input.argument);
   const suffix = argument ? ` ${argument}` : "";
   const commands: Record<WebUiRuntimeActionId, string> = {
-    "runtime.status": "/piagent-status", "runtime.inspector": "/piagent-inspector", "runtime.commands": "/commands",
+    "runtime.status": "/piagent-status", "runtime.inspector": "/piagent-inspector",
     "runtime.fast-status": "/fast status", "runtime.fast-on": "/fast on", "runtime.fast-off": "/fast off",
     "orchestration.status": "/piagent-orchestration",
     "usage.live": "/usage live", "usage.history": "/usage history", "usage.logs": "/usage logs",
     "usage.efficiency": "/usage efficiency", "usage.preflight": `/usage preflight${suffix}`,
-    "onboarding.status": "/onboard status", "onboarding.profile": "/onboard profile", "onboarding.tech": "/onboard tech",
     "profile.status": "/profile", "profile.options": "/profile list", "profile.tech-options": `/profile tech options${suffix}`,
     "profile.apply": `/profile ${argument}`, "profile.auto": "/profile auto",
     "context.status": "/context index", "context.rebuild": "/context rebuild", "context.search": `/context search${suffix}`,

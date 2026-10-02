@@ -33,11 +33,11 @@
     },
     {
       "path": "scripts/phase-tools-evaluation.mjs",
-      "sha256": "5c72c265181ac44975569482278bf2b1fb859c74440263c84626197257069e0b"
+      "sha256": "73c6e1d840abbcdd9f16dda08b028b8e92634b5c6db266bd64eb9161e14d1480"
     },
     {
       "path": "tests/phase-tools-evaluation.test.mjs",
-      "sha256": "7f264447903ef795834d7f0867add1ad38adf8336d092e1a4506dc977f414e6f"
+      "sha256": "39997fa171876cbeed2641cb2ff569530809296582cbdddcdbfe36e1cd95f673"
     },
     {
       "path": "evals/fs5-pilot-protocol.v1.json",

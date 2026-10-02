@@ -4,7 +4,6 @@ export type PiagentWebUITypedRuntimeCommandAndReceiptV1 = Command | Receipt;
 export type Action =
   | "runtime.status"
   | "runtime.inspector"
-  | "runtime.commands"
   | "runtime.fast-status"
   | "runtime.fast-on"
   | "runtime.fast-off"
@@ -14,9 +13,6 @@ export type Action =
   | "usage.logs"
   | "usage.efficiency"
   | "usage.preflight"
-  | "onboarding.status"
-  | "onboarding.profile"
-  | "onboarding.tech"
   | "profile.status"
   | "profile.options"
   | "profile.tech-options"

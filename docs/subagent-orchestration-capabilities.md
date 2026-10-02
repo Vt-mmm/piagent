@@ -67,7 +67,7 @@ Core decisions:
 Daily implementation:
 
 ```text
-/workflow task Implement <task>.
+Implement <task>.
 ```
 
 The parent performs review, research, planning, implementation, and verification directly. A helper dispatch must expose its runtime estimate and fresh read-only contract; otherwise the telemetry outcome is `skip`.

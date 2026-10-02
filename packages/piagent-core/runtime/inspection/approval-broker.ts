@@ -210,7 +210,15 @@ export class PiApprovalBroker {
   #action(binding: Binding, draft: ApprovalActionDraft, cwd: string): Record<string, unknown> {
     const command = draft.commandPreview === null || draft.commandPreview === undefined ? null : safe(draft.commandPreview, 4_000);
     const parameter = safe(draft.parameterPreview ?? "No additional parameters", 4_000);
-    const targetPaths = (draft.targetPaths ?? []).slice(0, 32).map((item) => safe(item, 500)).filter((item) => item.text).map((item) => item.text);
+    // Shown to the member: a path inside the project is written relative to it
+    // ("." is the project folder itself), so the card does not repeat the
+    // home directory; a path outside the project stays absolute.
+    const shown = (item: string) => {
+      if (!path.isAbsolute(item)) return item;
+      const relative = path.relative(cwd, item);
+      return relative === "" ? "." : !relative.startsWith("..") && !path.isAbsolute(relative) ? relative : item;
+    };
+    const targetPaths = (draft.targetPaths ?? []).slice(0, 32).map((item) => safe(shown(item), 500)).filter((item) => item.text).map((item) => item.text);
     const targetSummaries = (draft.targetSummaries ?? []).slice(0, 32).map((item) => safe(item, 500)).filter((item) => item.text).map((item) => item.text);
     const removed = [command, parameter].filter((item) => item?.redacted).length;
     const truncated = Boolean(command?.truncated || parameter.truncated || (draft.targetPaths?.length ?? 0) > 32 || (draft.targetSummaries?.length ?? 0) > 32);

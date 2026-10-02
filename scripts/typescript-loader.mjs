@@ -5,6 +5,12 @@ import { stripTypeScriptTypes } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// This runs on Node's loader thread, where a launcher's warning filter does
+// not apply: hide only the experimental notice for type stripping, which
+// members cannot act on (`piagent studio` from Agent Watch runs plain node).
+process.removeAllListeners("warning");
+process.on("warning", (warning) => { if (warning.name !== "ExperimentalWarning") process.stderr.write(`${warning.name}: ${warning.message}\n`); });
+
 const BENCHMARK_BOOTSTRAP_METADATA = "PIAGENT_BENCHMARK_BOOTSTRAP_METADATA";
 const RUNTIME_DEPENDENCY_KEYS = [
   "schemaVersion", "node", "platform", "packages", "resolutionRoot", "resolutionTree", "isolation", "digest"

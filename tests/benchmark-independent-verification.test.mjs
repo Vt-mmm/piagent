@@ -13,7 +13,6 @@ import { installedContractVerifierDigest, openHostContractConfiguration } from "
 import { IndependentAcceptanceRuntime } from "../packages/piagent-core/runtime/verification/independent-acceptance-runtime.ts";
 import { OPERATOR_REQUEST_MAX_CHARS, operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { redactSensitiveText } from "../packages/piagent-core/extensions/redaction-core.js";
-import { registerWorkflowCommands } from "../packages/piagent-core/runtime/registration/workflow-commands.ts";
 import { boundedOperatorRequest } from "../packages/piagent-core/runtime/registration/operator-request-intake.ts";
 import { buildWebUiWorkflowCommand } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { extractTaskRequest, looksLikeGovernedBoilerplate } from "../packages/piagent-core/runtime/workflows/input-routing.ts";
@@ -52,24 +51,12 @@ function fixture(t) {
   return { directory, projectRoot, suiteRoot, installedRoot, authority, file, catalog, plan, scenarios, options, save, load, prepare };
 }
 
-async function dispatchedJourneyRequest(workflow, request) {
-  const commands = new Map(), sent = [];
-  registerWorkflowCommands({}, {
-    registerRuntimeCommand(_pi, name, definition) { commands.set(name, definition); },
-    // Match the actual guard parser. Splitting and rejoining tokens would erase
-    // newlines and silently change the operator-request digest in this test.
-    commandArgs(raw) {
-      const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(String(raw ?? "").trim());
-      const action = (match?.[1] ?? "").toLowerCase(), rest = match?.[2] ?? "";
-      return { action, rest, tokens: rest.split(/\s+/).filter(Boolean) };
-    },
-    sendWorkflowFollowUp(value) { sent.push(value); }
-  });
-  const ingress = buildWebUiWorkflowCommand(workflow ?? null, request);
-  if (workflow) await commands.get("workflow").handler(ingress.slice("/workflow ".length), { ui: { notify() {} } });
-  else sent.push(ingress);
-  assert.equal(sent.length, 1, "capture the real namespace dispatcher without a provider or authority write");
-  const dispatched = sent[0];
+// The /workflow dispatcher was retired with the task contract on 2026-09-30, so
+// a journey turn is delivered as typed. The cases that bound plans to workflow
+// dispatch were retired with it (see HEAD 85f76db).
+async function dispatchedJourneyRequest(request) {
+  const ingress = buildWebUiWorkflowCommand(null, request);
+  const dispatched = ingress;
   // Independently follow before_agent_start and task-start persistence, rather
   // than calling the benchmark projection that these regressions verify.
   const query = looksLikeGovernedBoilerplate(dispatched) ? extractTaskRequest(dispatched) : dispatched.trim();
@@ -163,36 +150,10 @@ test("journey approval follows the actual turn prompts and detects post-preview 
   assert.throws(() => f.prepare(loaded, { directory: path.join(f.directory, "other") }), /changed/);
 });
 
-for (const workflow of ["task", "scout", "platform-improve", "review"]) {
-  test(`catalog workflow binding accepts the actual ${workflow} dispatch with multiline whitespace`, async (t) => {
-    const f = fixture(t), request = "  Inspect `src/value.js`.\n\nPreserve  double spaces and\ttabs.\nRun the configured checks.\n  ";
-    setJourneyRequest(f, workflow, request);
-    const observed = await dispatchedJourneyRequest(workflow, request);
-    assert.equal(observed.dispatched, `/${workflow} ${request.trim()}`);
-    assert.equal(observed.persisted, observed.dispatched);
-    f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
-    assert.equal(f.load().identity.scenarios[0].requests[0].operatorRequestDigest, f.plan.operatorRequestDigest);
-    assert.equal(fs.existsSync(f.authority), false);
-  });
-
-  test(`catalog workflow binding rejects raw and wrong-workflow hashes for ${workflow}`, async (t) => {
-    const f = fixture(t), request = "Inspect src/value.js and report its behavior.";
-    setJourneyRequest(f, workflow, request);
-    const observed = await dispatchedJourneyRequest(workflow, request);
-    const other = await dispatchedJourneyRequest(workflow === "task" ? "scout" : "task", request);
-    for (const wrong of [request, other.persisted]) {
-      assert.notEqual(operatorRequestDigest(wrong), operatorRequestDigest(observed.persisted));
-      f.plan.operatorRequestDigest = operatorRequestDigest(wrong); f.save();
-      assert.throws(() => f.load(), "only the actual dispatched request may bind the plan");
-    }
-    assert.equal(fs.existsSync(f.authority), false);
-  });
-}
-
 test("catalog workflow binding keeps a simple no-workflow journey request unchanged", async (t) => {
   const f = fixture(t), request = "  Preserve the number.\n";
   setJourneyRequest(f, null, request);
-  const observed = await dispatchedJourneyRequest(null, request);
+  const observed = await dispatchedJourneyRequest(request);
   assert.equal(observed.persisted, request.trim());
   f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
   assert.doesNotThrow(() => f.load());
@@ -216,27 +177,11 @@ for (const workflow of ["", "missing-workflow"]) test(`catalog workflow binding 
   assert.equal(fs.existsSync(f.authority), false);
 });
 
-test("catalog workflow binding uses the generated onboarding request, not a direct-command guess", async (t) => {
-  const f = fixture(t), request = "Inspect src/value.js and the repository conventions.";
-  setJourneyRequest(f, "onboard", request);
-  const observed = await dispatchedJourneyRequest("onboard", request);
-  assert.match(observed.dispatched, /^Run the Pi Agent Platform first-read onboarding workflow/);
-  assert.ok(observed.dispatched.includes(`Optional focus: ${request}`));
-  assert.notEqual(observed.persisted, `/onboard ${request}`);
-  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
-  assert.doesNotThrow(() => f.load());
-  for (const wrong of [request, `/onboard ${request}`]) {
-    f.plan.operatorRequestDigest = operatorRequestDigest(wrong); f.save();
-    assert.throws(() => f.load());
-  }
-  assert.equal(fs.existsSync(f.authority), false);
-});
-
-for (const workflow of [null, "task"]) test(`catalog workflow binding ${workflow ? "follows explicit-workflow governed extraction" : "refuses unprojected raw governed boilerplate"}`, async (t) => {
+for (const workflow of [null]) test(`catalog workflow binding ${workflow ? "follows explicit-workflow governed extraction" : "refuses unprojected raw governed boilerplate"}`, async (t) => {
   const f = fixture(t), inner = "Fix src/value.js.\nPreserve  spacing and verify the change.";
   const request = `Mandatory flow:\npiagent_context\npiagent_task_start\nOutput format:\nRequest:\n\`\`\`text\n${inner}\n\`\`\`\n`;
   setJourneyRequest(f, workflow, request);
-  const observed = await dispatchedJourneyRequest(workflow, request);
+  const observed = await dispatchedJourneyRequest(request);
   assert.equal(looksLikeGovernedBoilerplate(observed.dispatched), true);
   assert.equal(observed.persisted, inner);
   f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
@@ -250,11 +195,11 @@ for (const workflow of [null, "task"]) test(`catalog workflow binding ${workflow
   assert.equal(fs.existsSync(f.authority), false);
 });
 
-test("catalog workflow binding uses the redacted persisted request identity", async (t) => {
+test("catalog binding uses the redacted persisted request identity", async (t) => {
   const f = fixture(t), token = `sk-proj-${"A".repeat(24)}`;
   const request = `Fix src/value.js. Synthetic test credential: ${token}.`;
-  setJourneyRequest(f, "task", request);
-  const observed = await dispatchedJourneyRequest("task", request);
+  setJourneyRequest(f, null, request);
+  const observed = await dispatchedJourneyRequest(request);
   assert.ok(observed.query.includes(token));
   assert.ok(observed.persisted.includes("[REDACTED_SECRET]"));
   assert.equal(observed.persisted.includes(token), false);
@@ -264,30 +209,6 @@ test("catalog workflow binding uses the redacted persisted request identity", as
     f.plan.operatorRequestDigest = operatorRequestDigest(wrong); f.save();
     assert.throws(() => f.load());
   }
-  assert.equal(fs.existsSync(f.authority), false);
-});
-
-test("catalog workflow binding preserves requests exactly at the Unicode persistence limit", async (t) => {
-  const f = fixture(t), request = "🧩".repeat(OPERATOR_REQUEST_MAX_CHARS - "/task ".length);
-  setJourneyRequest(f, "task", request);
-  const observed = await dispatchedJourneyRequest("task", request);
-  assert.equal(Array.from(observed.query).length, OPERATOR_REQUEST_MAX_CHARS);
-  assert.ok(observed.query.length > OPERATOR_REQUEST_MAX_CHARS, "the limit is code points, not UTF-16 units");
-  assert.equal(observed.persisted, observed.query);
-  // This is prospective storage-bound identity, not proof that automatic task
-  // admission accepts a request of this size or that a workflow has executed.
-  f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
-  assert.doesNotThrow(() => f.load());
-  assert.equal(fs.existsSync(f.authority), false);
-});
-
-test("catalog workflow binding refuses a request that cannot receive a persisted identity", async (t) => {
-  const f = fixture(t), request = "x".repeat(OPERATOR_REQUEST_MAX_CHARS);
-  setJourneyRequest(f, "task", request);
-  const observed = await dispatchedJourneyRequest("task", request);
-  assert.equal(observed.persisted, undefined, "the workflow prefix pushes the actual request over the bound");
-  f.plan.operatorRequestDigest = operatorRequestDigest(request); f.save();
-  assert.throws(() => f.load(), "do not authorize an undelivered raw request when persisted request identity is unavailable");
   assert.equal(fs.existsSync(f.authority), false);
 });
 
@@ -325,13 +246,13 @@ test("catalog workflow binding refuses raw input at the UTF-16 freshening thresh
   assert.equal(fs.existsSync(f.authority), false);
 });
 
-test("catalog workflow binding refuses different raw turns that redact to the same identity", async (t) => {
+test("catalog binding refuses different raw turns that redact to the same identity", async (t) => {
   const f = fixture(t), first = `Fix src/value.js. Synthetic credential: sk-proj-${"A".repeat(24)}.`,
     second = `Fix src/value.js. Synthetic credential: sk-proj-${"B".repeat(24)}.`;
-  setJourneyRequest(f, "task", first);
+  setJourneyRequest(f, null, first);
   fs.writeFileSync(path.join(f.suiteRoot, "second-request.md"), second);
-  f.scenarios[0].userJourney.turns.push({ id: "second", prompt: "second-request.md", workflow: "task" });
-  const a = await dispatchedJourneyRequest("task", first), b = await dispatchedJourneyRequest("task", second);
+  f.scenarios[0].userJourney.turns.push({ id: "second", prompt: "second-request.md" });
+  const a = await dispatchedJourneyRequest(first), b = await dispatchedJourneyRequest(second);
   assert.notEqual(a.dispatched, b.dispatched);
   assert.equal(a.persisted, b.persisted);
   f.plan.operatorRequestDigest = operatorRequestDigest(a.persisted); f.save();
@@ -339,12 +260,12 @@ test("catalog workflow binding refuses different raw turns that redact to the sa
   assert.equal(fs.existsSync(f.authority), false);
 });
 
-test("catalog workflow binding allows identical repeated turn inputs", async (t) => {
+test("catalog binding allows identical repeated turn inputs", async (t) => {
   const f = fixture(t), request = "Fix src/value.js.\nPreserve  whitespace and run the checks.";
-  setJourneyRequest(f, "task", request);
+  setJourneyRequest(f, null, request);
   fs.writeFileSync(path.join(f.suiteRoot, "repeat-request.md"), request);
-  f.scenarios[0].userJourney.turns.push({ id: "repeat", prompt: "repeat-request.md", workflow: "task" });
-  const observed = await dispatchedJourneyRequest("task", request);
+  f.scenarios[0].userJourney.turns.push({ id: "repeat", prompt: "repeat-request.md" });
+  const observed = await dispatchedJourneyRequest(request);
   f.plan.operatorRequestDigest = operatorRequestDigest(observed.persisted); f.save();
   const loaded = f.load();
   assert.equal(loaded.identity.scenarios[0].requests.length, 1, "repeated identical input does not create a second authority identity");

@@ -19,16 +19,14 @@ Không có cơ sở để kết luận toàn bộ lõi Piagent đã lỗi thời
 
 ## 2. Cơ sở nghiên cứu và giới hạn
 
-Đã đối chiếu 10 hệ coding agent: Pi, Codex, Claude Code, Cursor, Aider, mini-SWE-agent, OpenHands SDK, Gemini CLI, OpenCode và Cline. Tám repo công khai được ghim commit; đọc các đoạn triển khai liên quan trong 13 file nguồn và một changelog. Claude Code và Cursor được nghiên cứu qua bài kỹ thuật của tác giả, không coi đó là audit mã nguồn lõi. Bốn bài nghiên cứu được dùng ở mức abstract/phạm vi kết luận để kiểm tra giả định, không coi là tái lập thí nghiệm.
-
-Danh mục nguồn, mức đọc, SHA và đối chiếu với Piagent nằm trong [bản nghiên cứu](piagent-core-reasoning-research-2026-09-06.md) và [manifest nguồn](piagent-core-research-sources-2026-09-06.json). Các phần thiết kế bên dưới là tổng hợp đề xuất cho Piagent; kết quả của tác giả khác không phải bằng chứng Piagent sẽ đạt mức tiết kiệm tương tự.
+Đã đối chiếu Pi, tài liệu kỹ thuật của các nhà cung cấp model mà Piagent hỗ trợ và một số mẫu thiết kế coding agent phổ biến. Bốn bài nghiên cứu được dùng ở mức abstract/phạm vi kết luận để kiểm tra giả định, không coi là tái lập thí nghiệm. Các phần thiết kế bên dưới là tổng hợp đề xuất cho Piagent; kết quả công bố ở nơi khác không phải bằng chứng Piagent sẽ đạt mức tiết kiệm tương tự.
 
 Các nguồn thay đổi quyết định thiết kế rõ nhất:
 
 - Codex giải thích tác động của prefix/tool order lên cache và cách quản lý lịch sử. Piagent cần dùng telemetry ở payload thực tế cùng usage, thay vì suy từ độ dài prompt. [OpenAI, agent loop](https://openai.com/index/unrolling-the-codex-agent-loop/)
 - Anthropic ghi nhận thay đổi effort, mất reasoning khi resume và chỉ dẫn giảm verbosity có thể làm giảm chất lượng. Không mặc định hạ effort, cắt lịch sử hoặc ép trả lời ngắn để đạt chỉ tiêu token. [Postmortem 23/04/2026](https://www.anthropic.com/engineering/april-23-postmortem)
-- Cursor mô tả lấy context theo nhu cầu và đánh giá thêm bằng công việc thực tế. Piagent cần nguồn chi tiết có thể đọc lại và ghi nhận phần sửa phải làm lại sau bàn giao. [Dynamic context](https://cursor.com/blog/dynamic-context-discovery), [harness improvement](https://cursor.com/blog/continually-improving-agent-harness)
-- Aider cho thấy định dạng sửa code là một biến riêng; mini-SWE-agent cho thấy lõi đơn giản vẫn là đối chứng đáng xem xét. Không giả định thêm orchestration luôn tốt hơn. [Aider edit formats](https://aider.chat/docs/more/edit-formats.html), [mini-SWE-agent](https://mini-swe-agent.com/latest/)
+- Lấy context theo nhu cầu và đánh giá bằng công việc thực tế: Piagent cần nguồn chi tiết có thể đọc lại và ghi nhận phần sửa phải làm lại sau bàn giao.
+- Định dạng sửa code là một biến riêng, và một lõi đơn giản (chỉ shell, lịch sử tuyến tính) vẫn là đối chứng đáng xem xét. Không giả định thêm orchestration luôn tốt hơn.
 
 ## 3. Điểm xuất phát phải giữ nguyên
 

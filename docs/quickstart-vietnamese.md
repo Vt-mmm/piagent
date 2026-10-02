@@ -67,18 +67,22 @@ Sau khi login và chọn model intended cho project understanding:
 ```text
 /model          # hoặc Ctrl+L để chọn model bằng selector của Pi
 /scoped-models  # optional, chỉnh danh sách Ctrl+P cycle
-/commands
 /mcp            # kiểm tra MCP adapter/server
 /subagents-doctor  # health check subagent setup
-/onboard
-/onboard run
+/profile setup
 /context index
 /memory
 ```
 
+Rồi nhờ agent onboard bằng lời thường (từ bản 1.9.0 không còn `/onboard`):
+
+```text
+Đọc project này (chỉ đọc) và ghi lại project context.
+```
+
 `Ctrl+L` mở model selector, `Ctrl+P` đổi model trong scope, `Shift+Tab` đổi mức thinking. `piagent-setup` đã config sẵn `enabledModels`, MCP baseline preset `core`, và subagents preset `safe` — muốn xem hoặc đổi thì có [model-options.md](model-options.md), [mcp-and-tools.md](mcp-and-tools.md), [subagents-and-multiagent.md](subagents-and-multiagent.md).
 
-`/onboard` yêu cầu model đọc qua project theo phạm vi có kiểm soát, rồi ghi:
+Profile/tech (`/profile setup`) và lượt onboard này ghi:
 
 ```text
 .pi/piagent-profile.json
@@ -100,7 +104,7 @@ Nếu chưa có profile/tech stack, dùng select-style flow để tránh agent t
 
 `web-frontend` chọn FE + database optional; `backend-api` chọn BE + database optional; `fullstack` chọn frontend, backend và database. Nếu Pi host chưa có native select, command sẽ trả card ngắn và lệnh deterministic `/profile tech apply ...`.
 
-`.pi/project-context.md` là snapshot context cho task sau. `.pi/context-index.json` là bản đồ node/edge/citation compact để tìm đúng điểm vào repo; vẫn phải đọc source hiện tại trước khi sửa. Không đọc/ghi raw file index trong task thường ngày; dùng `/context`, `/onboard run` hoặc `piagent_context_index_record` để runtime sanitize dữ liệu advisory. Nếu snapshot còn `Generated: not yet` hoặc `/context index` báo pending/stale, agent phải dừng trước task lớn và yêu cầu chạy `/onboard run`.
+`.pi/project-context.md` là snapshot context cho task sau. `.pi/context-index.json` là bản đồ node/edge/citation compact để tìm đúng điểm vào repo; vẫn phải đọc source hiện tại trước khi sửa. Không đọc/ghi raw file index trong task thường ngày; dùng `/context`, lượt onboard hoặc `piagent_context_index_record` để runtime sanitize dữ liệu advisory. Nếu snapshot còn `Generated: not yet` hoặc `/context index` báo pending/stale, nên nhờ agent onboard lại trước task lớn.
 
 `/memory` kiểm tra chính sách memory của project. `/memory-policy` vẫn là alias. Mặc định memory là explicit-only: chỉ ghi khi user yêu cầu rõ “remember this”, không tự học transcript nền.
 
@@ -124,40 +128,35 @@ cd <project>
 pi --name "ABC-123 Short task name"
 ```
 
-Rồi mô tả việc cần làm bằng tiếng Việt hoặc tiếng Anh. Nếu quên đặt tên lúc mở Pi, gõ `/name ABC-123 Short task name` hoặc alias ngắn `/setname ABC-123 Short task name` trước khi làm tiếp; Agent Watch sẽ dùng tên session này trong report. Không cần paste checklist — input guard tự collapse boilerplate, và `/workflow task` tự cân nhắc gọi scout/planner/reviewer khi task đủ lớn.
+Rồi mô tả việc cần làm bằng tiếng Việt hoặc tiếng Anh. Nếu quên đặt tên lúc mở Pi, gõ `/name ABC-123 Short task name` hoặc alias ngắn `/setname ABC-123 Short task name` trước khi làm tiếp; Agent Watch sẽ dùng tên session này trong report. Không cần paste checklist hay gõ `/task`/`/workflow` (đã bỏ từ bản 1.9.0): guard tự áp policy cho từng tool call. Muốn chỉ đọc thì nói rõ "chỉ đọc, không sửa", hoặc đổi session sang `/permission read-only`.
 
-Mỗi Pi session chỉ dùng cho một task. Retry hoặc task mới mở session mới; resume
-thì quay lại đúng session cũ theo name/id. Source task yêu cầu project là Git
-working tree và profile có verify command thật. `/workflow scout` vẫn chạy ở
-read-only mode khi chỉ cần nghiên cứu và không sửa source.
+Nên mở session mới cho việc mới; resume thì quay lại đúng session cũ theo name/id.
 
 Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở mỗi pane một vai: implement, review read-only, verify, notes. Herdr chỉ điều phối terminal/session, không phải security boundary — gate vẫn nằm ở Pi extension và OAuth vẫn `/login` trong Pi. Chi tiết: [herdr-workflow.md](herdr-workflow.md).
 
 | Gõ | Khi nào |
 |---|---|
-| `/workflow` | Mở menu chọn task/scout/review/git/onboard. |
-| `/workflow discuss <ý tưởng>` | Requirement chưa rõ, muốn hỏi lại trước. |
-| `/workflow task <việc>` | Đã rõ, làm luôn. |
-| `/workflow scout <việc>` | Chỉ đọc, không sửa — map payment/auth/BE contract. |
-| `/workflow plan <mục tiêu>` | Muốn có plan trước khi đụng code. |
-| `/workflow review current diff` | Review việc vừa làm. |
+| `<việc cần làm>` | Đã rõ, làm luôn — nói bằng lời thường. |
+| `<việc> … chỉ đọc, không sửa` | Scout/audit, map payment/auth/BE contract. |
+| `Chưa sửa, lập plan cho <mục tiêu>` | Muốn có plan trước khi đụng code. |
+| `Review diff hiện tại` | Review việc vừa làm. |
 | `/name <task/session name>` | Đặt/đổi tên session để resume và report dễ đối chiếu. |
 | `/usage logs` | Xem các capture khi test/build output quá dài và Pi chỉ hiện preview. |
-| `/task-preflight` | Xem intent/risk/scope/model/route/approval trước task, không gọi model. |
-| `/piagent-status` | Xem phase/checkpoint/verifier/recovery/helper/receipt từ state đã quan sát. |
+| `/task-preflight <việc>` | Xem context và shadow route deterministic trước khi giao việc, không gọi model. |
+| `/piagent-status` | Xem profile, guard, runtime và model đã xác thực. |
 | `/usage efficiency` | Xem context efficiency và task metrics có nguồn; giá trị không đo được là `null`. |
-| `/workflow be-to-fe <việc>` | Backend read-only, làm FE. |
-| `/workflow commit <message>` | Commit local có kiểm soát, không push. |
-| `/workflow pr <title>` | Tạo PR, hỏi xác nhận trước khi push. |
-| `/fresh <workflow> <việc>` | Session đang nặng hoặc tràn context; nhận mọi workflow canonical, xem bằng `/fresh help`. |
+| `/profile be-readonly-fe` rồi nói việc | Backend read-only, làm FE. |
+| `Commit <các file> với message …` | Commit local; không push. |
+| `Tạo draft PR …` | Tạo PR; guard hỏi xác nhận trước khi push. |
+| `/new` | Session đang nặng hoặc tràn context: mở session mới rồi nói lại việc. |
 
-`/commands` liệt kê hết. Các alias cũ như `/task`, `/scout`, `/be-to-fe`, `/fresh-task`, `/context-index`, `/logs` vẫn chạy nhưng không còn là đường onboard chính. Giải thích từng lệnh: [command-reference-vietnamese.md](command-reference-vietnamese.md). Các workflow ép shape rõ (`/parallel-review`, `/review-loop`, `/parallel-research`, `/parallel-context-build`): [subagents-and-multiagent.md](subagents-and-multiagent.md). Runtime gate tools và cách agent tự dùng chúng: [operator-manual-vietnamese.md](operator-manual-vietnamese.md).
+Gõ `/` trong Pi để xem command hiện có. Alias `/context-index`, `/logs` vẫn chạy. Giải thích từng lệnh: [command-reference-vietnamese.md](command-reference-vietnamese.md). Các workflow ép shape rõ (`/parallel-review`, `/review-loop`, `/parallel-research`, `/parallel-context-build`): [subagents-and-multiagent.md](subagents-and-multiagent.md). Runtime gate tools và cách agent tự dùng chúng: [operator-manual-vietnamese.md](operator-manual-vietnamese.md).
 
 ## Việc user vẫn phải làm thủ công
 
 - Login OAuth lần đầu trong browser.
 - Chọn provider/model intended cho project.
-- Chạy `/onboard run` lần đầu để tạo `.pi/project-context.md` và `.pi/context-index.json`.
+- Nhờ agent onboard lần đầu để tạo `.pi/project-context.md` và `.pi/context-index.json`.
 - Chạy `/memory` nếu muốn kiểm tra hoặc dùng project memory.
 - Approve project trust nếu Pi hỏi. Sau khi hiểu rõ repo, có thể dùng `piagent-auto` hoặc Pi native `--approve` cho từng lần chạy.
 - Approve khi extension guard hỏi destructive/high-risk action.

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Step by step cho thành viên mới · Pi Agent Platform Docs</title>
-    <meta name="description" content="Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff." />
+    <meta name="description" content="Hai lệnh để cài, mở repo, chọn profile và quyền, rồi giao việc bằng lời thường; guard kiểm tra từng tool call." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/quickstart" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/quickstart" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/quickstart" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Step by step cho thành viên mới · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff." />
+    <meta property="og:description" content="Hai lệnh để cài, mở repo, chọn profile và quyền, rồi giao việc bằng lời thường; guard kiểm tra từng tool call." />
     <meta property="og:url" content="https://piagent.io.vn/quickstart" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/quickstart" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/quickstart" hreflang="en" lang="en">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/ecosystem">Hệ sinh thái</a>
             <a class="nav-link current" href="/quickstart" aria-current="page">Quickstart</a>
             <a class="nav-link" href="/whats-new">Có gì mới</a>
             <a class="nav-link" href="/scope">Phạm vi platform</a>
@@ -100,7 +101,7 @@
             </nav>
             <div class="page-head">
               <h1>Step by step cho thành viên mới</h1>
-              <p>Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff.</p>
+              <p>Hai lệnh để cài, mở repo, chọn profile và quyền, rồi giao việc bằng lời thường; guard kiểm tra từng tool call.</p>
             </div>
 <section class="section">
 
@@ -169,12 +170,11 @@ pi</code></pre>
 
     <article class="step">
       <div>
-        <h3 id="onboard-context">Onboard context</h3>
-        <p>Chạy một lần ở repo mới để ghi context, verify matrix và protected areas vào <span class="inline-code">.pi/</span>. <span class="inline-code">/onboard</span> mở menu/status; <span class="inline-code">run</span> mới launch workflow đọc project.</p>
+        <h3 id="onboard-context">Cho agent đọc project</h3>
+        <p>Ở repo mới, nhờ agent đọc project (chỉ đọc) và ghi lại project context vào <span class="inline-code">.pi/</span>. Không cần lệnh riêng: nói bằng lời thường.</p>
         <div class="command-card">
-          <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard&#10;/onboard run">Lấy lệnh</button></header>
-          <pre><code>/onboard
-/onboard run</code></pre>
+          <header><span>Đọc project</span><button class="clip-btn" data-clip="Đọc project này (chỉ đọc) và ghi lại project context.">Lấy lệnh</button></header>
+          <pre><code>Đọc project này (chỉ đọc) và ghi lại project context.</code></pre>
         </div>
       </div>
     </article>
@@ -206,20 +206,19 @@ pi</code></pre>
     <article class="step">
       <div>
         <h3 id="chay-workflow">Chạy workflow</h3>
-        <p>Dùng command đúng mục tiêu để agent không phải diễn giải quá dài. Task nào nặng context thì dùng fresh session.</p>
+        <p>Nói rõ việc và ý định (sửa, chỉ đọc, lập plan) bằng lời thường. Việc nào nặng context thì mở session mới bằng <span class="inline-code">/new</span>.</p>
         <div class="command-card">
-          <header><span>Workflow</span><button class="clip-btn" data-clip="/workflow task Implement the requested bounded change.&#10;/workflow review current diff&#10;/fresh task Implement the requested bounded change.">Lấy lệnh</button></header>
-          <pre><code>/workflow task Implement the requested bounded change.
-/workflow review current diff
-/fresh task Implement the requested bounded change.</code></pre>
+          <header><span>Giao việc</span><button class="clip-btn" data-clip="Implement thay đổi được yêu cầu rồi chạy test của project.&#10;Review diff hiện tại. Chỉ đọc.">Lấy lệnh</button></header>
+          <pre><code>Implement thay đổi được yêu cầu rồi chạy test của project.
+Review diff hiện tại. Chỉ đọc.</code></pre>
         </div>
       </div>
     </article>
 
     <article class="step">
       <div>
-        <h3 id="verify-truoc-khi-handoff">Verify trước khi handoff</h3>
-        <p>Final gate chỉ tin kết quả command đã chạy thật, exit 0, và khớp verify plan. Sau khi pin hoặc nâng version, chạy doctor trên project:</p>
+        <h3 id="verify-truoc-khi-handoff">Kiểm tra trước khi giao</h3>
+        <p>Nhờ agent chạy check của project (test, type check, build) và đọc kết quả thật; ở chế độ công ty, Harness tự yêu cầu việc này. Sau khi pin hoặc nâng version, chạy doctor trên project:</p>
         <div class="command-card">
           <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor">Lấy lệnh</button></header>
           <pre><code>piagent-doctor</code></pre>
@@ -248,9 +247,9 @@ piagent-uninstall --apply</code></pre>
   </div>
 </section>
             <nav class="pager" aria-label="Trang kế tiếp">
-              <a class="pager-prev" href="/">
+              <a class="pager-prev" href="/ecosystem">
                 <span class="pager-label">Trước</span>
-                <span class="pager-title">Overview</span>
+                <span class="pager-title">Hệ sinh thái</span>
               </a>
               <a class="pager-next" href="/whats-new">
                 <span class="pager-label">Tiếp</span>

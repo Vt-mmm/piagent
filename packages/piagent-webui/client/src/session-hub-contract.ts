@@ -9,6 +9,10 @@ type GatewayCursor = { gatewayInstanceRef: string; sequence: number };
 
 export const GATEWAY_CURSOR_KEY = "piagent-gateway-event-cursor-v1";
 export const COMMAND_RESPONSE_TIMEOUT_MS = 30_000;
+// A message no Gateway took within this window is refused when it arrives
+// (the command has expired), so a send left unconfirmed this long cannot run
+// any more: the page says it was not sent and the member may send it again.
+export const SEND_ADMISSION_WINDOW_MS = 120_000;
 export const CANONICAL_RESYNC_CLOSE_CODE = 4_001;
 
 export type SessionSendResult = { state: "confirmed" | "observed" | "unconfirmed"; receipt: Receipt | null };
@@ -19,7 +23,7 @@ export type SessionHubCreateOptions = {
   modelRef: string | null;
   thinkingLevel: string;
   message: string;
-  workflow: Workflow;
+  workflow?: Workflow;
   permissionMode: PermissionMode | null;
   messageRequestId?: string;
   deferInitialMessage?: boolean;

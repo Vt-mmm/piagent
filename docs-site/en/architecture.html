@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/architecture" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/architecture" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
             <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
@@ -125,7 +126,7 @@
   </div>
   <div class="grid cols-3">
     <article class="card"><h3>Context planner</h3><p><span class="inline-code">runtime/context/adaptive-planner.ts</span> chooses budget, retrieval lane, code inclusion, and a plan receipt from phase, context pressure, model capability, and thinking level.</p></article>
-    <article class="card"><h3>Task journal</h3><p><span class="inline-code">extensions/task-journal.js</span> records start, progress, mutation, verifier, and completion checkpoints. Resume trusts the task contract first; retention compaction preserves hash anchors.</p></article>
+    <article class="card"><h3>Earlier task history</h3><p><span class="inline-code">extensions/task-journal.js</span> still reads checkpoints of tasks created before 1.9.0 for review; new sessions no longer write tasks.</p></article>
     <article class="card"><h3>Repository memory</h3><p><span class="inline-code">extensions/repository-memory.js</span> stores only cited, expiring facts and rejects raw prompts, outputs, OAuth material, API keys, and secrets. Hints use only unused context-plan budget.</p></article>
     <article class="card"><h3>Model capability</h3><p><span class="inline-code">runtime/model/capabilities.ts</span> reads model family, context window, and thinking level as budget signals without switching providers or requiring API keys.</p></article>
     <article class="card"><h3>Verification intelligence</h3><p><span class="inline-code">extensions/verification-intelligence.js</span> classifies failures and chooses a targeted verifier from task scope; mixed frontend/backend scope uses the full source verifier.</p></article>

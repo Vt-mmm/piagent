@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { ApprovalRequest } from "../../contracts/generated/approval-v1.ts";
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import { decideApproval, readApproval, readSessionApproval } from "./api.ts";
-import { compactRef, label } from "./view-model.ts";
+import { approvalConsequenceText, approvalKindText, approvalReasonText, approvalScopeText } from "./approval-text.ts";
+import { label } from "./view-model.ts";
 import { createApprovalDecision } from "./approval-command.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
@@ -22,20 +23,17 @@ function Card({ state, setState, refreshSnapshot, locale }: { state: LoadState; 
     catch { setState({ request, error: localize(locale, "Yêu cầu đã hết hạn, thay đổi hoặc được trả lời ở terminal. Hãy tải trạng thái mới.", "The request expired, changed, or was answered in the terminal. Refresh status.") }); }
   };
   return <article className={`approval-card risk-${action.riskClass}`} aria-labelledby={`approval-${request.approvalRef}`}>
-    <header><div><p className="section-kicker">{localize(locale, "Cần anh phê duyệt", "Approval required")}</p><h2 id={`approval-${request.approvalRef}`}>{action.toolName}</h2></div>
+    <header><div><p className="section-kicker">{localize(locale, "Cần phê duyệt", "Approval required")}</p><h2 id={`approval-${request.approvalRef}`}>{action.toolName}</h2></div>
       <span className="approval-risk">{label(action.riskClass, locale)}</span></header>
-    <p className="approval-reason">{action.reason}</p>
+    <p className="approval-reason">{approvalReasonText(action.reason, locale)}</p>
     {action.commandPreview && <pre className="approval-preview"><code>{action.commandPreview}</code></pre>}
-    {!action.commandPreview && action.parameterPreview && <p className="approval-preview">{action.parameterPreview}</p>}
+    {!action.commandPreview && action.parameterPreview && action.parameterPreview !== "No additional parameters" && <p className="approval-preview">{action.parameterPreview}</p>}
     <dl className="approval-facts">
-      <div><dt>{localize(locale, "Hành động", "Action")}</dt><dd>{label(action.kind, locale)}</dd></div><div><dt>{localize(locale, "Phạm vi", "Scope")}</dt><dd>{label(action.requestedScope, locale)}</dd></div>
+      <div><dt>{localize(locale, "Hành động", "Action")}</dt><dd>{approvalKindText(action, locale)}</dd></div><div><dt>{localize(locale, "Phạm vi", "Scope")}</dt><dd>{approvalScopeText(action, locale)}</dd></div>
       <div><dt>{localize(locale, "Thư mục", "Directory")}</dt><dd>{action.cwdDisplay ?? localize(locale, "Đã ẩn", "Hidden")}</dd></div><div><dt>{localize(locale, "Hết hạn", "Expires")}</dt><dd>{remaining}s</dd></div>
-      <div><dt>Task</dt><dd>{compactRef(request.identity.taskId)} · {compactRef(request.identity.taskRunId)}</dd></div>
-      <div><dt>Tool call</dt><dd>{compactRef(request.identity.toolCallId)}</dd></div>
     </dl>
-    {action.targetPaths.length > 0 && <div className="approval-targets"><strong>{localize(locale, "Đích tác động", "Targets")}</strong><ul>{action.targetPaths.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-    {action.providerRef && <p className="approval-targets"><strong>Provider:</strong> {compactRef(action.providerRef)}</p>}
-    <div className="approval-consequences"><p><strong>{localize(locale, "Nếu cho phép:", "If allowed:")}</strong> {action.consequences.allow}</p><p><strong>{localize(locale, "Nếu từ chối:", "If denied:")}</strong> {action.consequences.deny}</p></div>
+    {action.targetPaths.length > 0 && <div className="approval-targets"><strong>{localize(locale, "Đích tác động", "Targets")}</strong><ul>{action.targetPaths.map((item) => <li key={item}>{item === "." ? localize(locale, "Cả thư mục project", "The whole project folder") : item}</li>)}</ul></div>}
+    <div className="approval-consequences"><p><strong>{localize(locale, "Nếu cho phép:", "If allowed:")}</strong> {approvalConsequenceText(action.consequences.allow, locale)}</p><p><strong>{localize(locale, "Nếu từ chối:", "If denied:")}</strong> {approvalConsequenceText(action.consequences.deny, locale)}</p></div>
     {state.error && <p className="form-error" role="alert">{state.error}</p>}
     <footer><button type="button" className="secondary-action" disabled={Boolean(state.deciding)} onClick={() => void submit("deny")}>{localize(locale, "Từ chối", "Deny")}</button>
       <button type="button" className="danger-action" disabled={Boolean(state.deciding)} onClick={() => void submit("allow")}>

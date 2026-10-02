@@ -160,3 +160,12 @@ test("external-provider request has schema-valid provider evidence without raw c
   assert.equal(JSON.stringify(item.request).includes("sk-proj-abcdefghijklmnopqrstuvwxyz123456"), false);
   assert.match(item.request.action.providerRef, /^provider\./); current.terminal.resolve(false); await item.promise;
 });
+
+// The card shows a path inside the project relative to it ("." is the project
+// folder), so the member's home directory is not repeated; outside stays absolute.
+test("approval targets inside the project are shown relative to it", async () => {
+  const current = setup();
+  const item = await pending(current, { ...shellAction, targetPaths: ["/repo", "/repo/src/a.ts", "src/b.ts", "/etc/hosts"] });
+  assert.deepEqual(item.request.action.targetPaths, [".", "src/a.ts", "src/b.ts", "/etc/hosts"]);
+  current.broker.cancelForOperation?.("/repo", "raw-session", null, "test-done");
+});

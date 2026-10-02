@@ -15,6 +15,15 @@ const TOKEN_PATTERNS = [
   // carried the credential through unredacted. Every other provider here is
   // recognised by the shape of its token; npm was the gap.
   /\bnpm_[A-Za-z0-9]{30,}\b/g,
+  // Agent Studio's own credentials -- the member's API key (as_live_), the
+  // Agent Watch device token (as_device_) and a run's token (as_run_), each
+  // as_<kind>_<uuid>_<43 base64url characters> -- were recognised only behind
+  // a header or a key name, so `echo $KEY` or an error that quoted the token
+  // reached the WebUI as is. The full shape is required: Studio shows a key by
+  // its prefix (as_live_ and eight hex digits), which identifies, not unlocks.
+  // A word boundary is not enough on the left: `TOKEN_as_live_...` and the `n`
+  // of an escaped newline in JSON (`\\nas_live_...`) touch the token.
+  /(?:(?<![A-Za-z0-9])|(?<=\\[nrt]))as_(?:live|device|run)_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_[A-Za-z0-9_-]{43,}/g,
   /\bAIza[0-9A-Za-z_-]{20,}\b/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g
 ];

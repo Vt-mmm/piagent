@@ -115,51 +115,33 @@ describe("canonical workflow catalog parity", () => {
     for (const id of WORKFLOW_IDS) assert.ok(help.includes(`/workflow ${id} `));
   });
 
-  it("keeps browser workflow inventory on the Gateway's canonical WebUI projection", () => {
-    const source = fs.readFileSync(path.join(repositoryRoot,
-      "packages/piagent-webui/client/src/NewSessionPage.tsx"), "utf8");
-    assert.match(source, /const workflows = options\?\.workflows \?\? \[\];/);
-    assert.doesNotMatch(source, /piagent-core/);
-    assert.doesNotMatch(source, /FALLBACK_WORKFLOWS|\{ id: "task", changeMode:/,
-      "the client must not maintain a second workflow catalog");
-    const apiSource = fs.readFileSync(path.join(repositoryRoot,
-      "packages/piagent-webui/client/src/api.ts"), "utf8");
-    assert.match(apiSource, /\n  workflows: Array<\{ id: Workflow; label: string;/,
-      "the browser contract must require the Gateway's workflow projection");
-
-    const composerSource = fs.readFileSync(path.join(repositoryRoot,
-      "packages/piagent-webui/client/src/SessionHubApp.tsx"), "utf8");
-    assert.match(composerSource, /setWorkflowOptions\(value\.workflows \?\? \[\]\)/);
-    assert.match(composerSource, /\{workflowOptions\.map\(\(option\) => <MenuItem/);
-    assert.doesNotMatch(composerSource, /piagent-core/);
-    assert.doesNotMatch(composerSource, /<MenuItem value="(?:task|scout|be-to-fe|platform-improve)">/,
-      "the in-session composer must not maintain a third workflow catalog");
-
-    const gatewaySource = fs.readFileSync(path.join(repositoryRoot,
-      "packages/piagent-webui/gateway/session-inspection-registry.ts"), "utf8");
-    assert.match(gatewaySource, /profiles, workflows: WEBUI_WORKFLOW_OPTIONS/,
-      "the Gateway must project the canonical catalog into browser-safe session options");
+  // Workflow commands are retired: the browser offers no workflow picker, the
+  // Gateway projects none, and no client file keeps its own workflow catalog.
+  it("offers no workflow picker in the browser and keeps no client workflow catalog", () => {
+    const read = (file) => fs.readFileSync(path.join(repositoryRoot, file), "utf8");
+    assert.match(read("packages/piagent-webui/gateway/session-inspection-registry.ts"), /workflows: \[\]/,
+      "the Gateway projects no workflow options");
+    for (const file of ["packages/piagent-webui/client/src/NewSessionPage.tsx", "packages/piagent-webui/client/src/SessionHubApp.tsx"]) {
+      const source = read(file);
+      assert.doesNotMatch(source, /workflowOptions\.map|FALLBACK_WORKFLOWS|<MenuItem value="(?:task|scout|be-to-fe|platform-improve)">/, file);
+      assert.doesNotMatch(source, /piagent-core/, file);
+    }
   });
 
-  it("routes every canonical workflow and namespaced alias without semantic fallback", () => {
+
+  // A legacy client may still send a workflow with its message; the message is
+  // sent exactly as written, never turned into a workflow command.
+  it("never rewrites a message because a legacy client named a workflow", () => {
     for (const option of WORKFLOW_OPTIONS) {
       const request = `exercise ${option.id} behavior`;
-      const terminal = `/workflow ${option.id} ${request}`;
-      assert.equal(workflowIdFromInput(terminal), option.id);
-      assert.equal(workflowIdFromInput(`/${option.id} ${request}`), option.id);
-      assert.equal(extractTaskRequest(terminal), request);
-      assert.equal(chooseFreshWorkflow(terminal, request), option.id);
-      assert.equal(isPiagentWorkflowInput(terminal), true);
-      assert.equal(buildWebUiWorkflowCommand(option.id, request), terminal);
-      assert.equal(buildFreshCommand(repositoryRoot, option.id, terminal, "start clean"), `/fresh ${option.id} ${request}`);
-      for (const alias of option.aliases) {
-        assert.equal(workflowIdFromInput(`/workflow ${alias} ${request}`), option.id);
-        assert.equal(extractTaskRequest(`/workflow ${alias} ${request}`), request);
-      }
+      assert.equal(buildWebUiWorkflowCommand(option.id, request), request);
+      assert.equal(buildWebUiWorkflowCommand(option.id, `  ${request}\n`), `  ${request}\n`, "whitespace is the member's");
     }
-    assert.equal(workflowIdFromInput("/workflow unknown request"), null);
-    assert.equal(isPiagentWorkflowInput("/workflow unknown request"), false);
+    assert.equal(buildWebUiWorkflowCommand(null, "/scout inspect auth"), "/scout inspect auth");
+    assert.throws(() => buildWebUiWorkflowCommand("task", "   "), /workflow-request-empty/);
+    assert.throws(() => buildWebUiWorkflowCommand("task", "a\0b"), /workflow-request-invalid/);
   });
+
 
   it("preserves all workflows through context preflight and its tool schema", () => {
     const snapshot = { cwd: repositoryRoot, mode: "interactive", model: "test", thinkingLevel: "medium",
@@ -193,23 +175,6 @@ describe("canonical workflow catalog parity", () => {
     assert.deepEqual(schema?.properties?.workflow?.enum, [...WORKFLOW_IDS]);
   });
 
-  it("preserves all workflows through the legacy session fresh ingress", async () => {
-    const harness = sessionCommandHarness();
-    const session = harness.commands.get("piagent-session");
-    assert.ok(session);
-    for (const workflow of WORKFLOW_IDS) {
-      await session.handler(`fresh ${workflow} request for ${workflow}`, {});
-    }
-    assert.deepEqual(harness.fresh, WORKFLOW_IDS.map((workflow) => ({ workflow, request: `request for ${workflow}` })));
-
-    await session.handler("new audit inspect policy", {});
-    await session.handler("fresh investigate token accounting", {});
-    assert.deepEqual(harness.fresh.slice(-2), [
-      { workflow: "scout", request: "inspect policy" },
-      { workflow: "task", request: "investigate token accounting" }
-    ]);
-  });
-
   it("lets each message choose a different workflow in one session", async () => {
     const harness = commandHarness();
     const workflow = harness.commands.get("workflow");
@@ -237,46 +202,7 @@ describe("canonical workflow catalog parity", () => {
     ]);
   });
 
-  it("resolves help and fresh-session commands from the same catalog", async () => {
-    const harness = commandHarness();
-    await harness.commands.get("commands").handler("overview", harness.ctx);
-    assert.match(harness.messages.at(-1).content, /\/fast/);
-    await harness.commands.get("commands").handler("fast", harness.ctx);
-    assert.match(harness.messages.at(-1).content, /\/fast status/);
-    assert.match(harness.messages.at(-1).content, /zero-model-turn/);
-
-    await harness.commands.get("workflow").handler("help", harness.ctx);
-    assert.equal(harness.messages.at(-1).customType, "piagent-workflow-help");
-    for (const id of WORKFLOW_IDS) assert.ok(harness.messages.at(-1).content.includes(`/workflow ${id} `));
-
-    const fresh = harness.commands.get("fresh");
-    const completions = await fresh.getArgumentCompletions("");
-    assert.deepEqual(completions.map((item) => item.value), [...WORKFLOW_IDS, "help"]);
-    await fresh.handler("help", harness.ctx);
-    for (const id of WORKFLOW_IDS) assert.ok(harness.messages.at(-1).content.includes(`/fresh ${id} `));
-    assert.equal(buildFreshCommand(repositoryRoot, "onboard", "/workflow onboard", "start clean"), "/fresh onboard");
-    assert.deepEqual(FRESH_COMMAND_ACTIONS, [...WORKFLOW_IDS, "help"]);
-    for (const id of WORKFLOW_IDS) assert.equal(FRESH_COMMAND_HELP.some((line) => line.startsWith(`/fresh ${id} `)), true);
-
-    const sessionHarness = sessionCommandHarness();
-    await sessionHarness.commands.get("piagent-session").handler("", {});
-    assert.deepEqual(sessionHarness.menus[0].filter((option) => option.value.startsWith("fresh"))
-      .map((option) => option.value), ["fresh"]);
-
-    const freshCapabilityDocs = [
-      "README.md",
-      "packages/piagent-core/README.md",
-      "docs/command-reference-vietnamese.md",
-      "docs/operator-manual-vietnamese.md",
-      "docs/quickstart-vietnamese.md",
-      "docs/usage-observability.md",
-      "docs/context-window-policy.md"
-    ];
-    for (const relative of freshCapabilityDocs) {
-      const source = fs.readFileSync(path.join(repositoryRoot, relative), "utf8");
-      assert.match(source, /\/fresh help/, `${relative} must point to catalog-derived help`);
-      assert.doesNotMatch(source, /\/fresh task\|scout\|be-to-fe/,
-        `${relative} must not describe the three legacy fresh workflows as the full capability`);
-    }
-  });
+  // /commands, /workflow and /fresh were retired with the task contract on
+  // 2026-09-30; their help/fresh catalog test lives at 85f76db. The guard
+  // registration test asserts none of them is published.
 });

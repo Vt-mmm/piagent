@@ -113,19 +113,6 @@ async function startSession(piagentGuard, cwd, options = {}) {
   return { ctx, harness, notices: ctx.ui.notices, toolCall: harness.handlers.get("tool_call") };
 }
 
-async function startSourceTask(session, taskId, scope = ["src/**"]) {
-  const result = await session.harness.tools.get("piagent_task_start").execute(`start-${taskId}`, {
-    taskId,
-    summary: `Verify global update compatibility for ${taskId}`,
-    riskLane: "normal",
-    expectedOutput: "The updated platform preserves the reviewed project policy.",
-    acceptanceCriteria: ["The project keeps its prior capability grants"],
-    scope
-  }, undefined, undefined, session.ctx);
-  assert.equal(result.isError, undefined, result.content?.[0]?.text);
-  return result;
-}
-
 function noticeMatching(notices, pattern) {
   return notices.find((notice) => pattern.test(notice.message));
 }
@@ -176,7 +163,7 @@ describe("global platform update", () => {
       fs.appendFileSync(path.join(root, "packages", "piagent-core", "extensions", "policy-core.js"), "\n// release change\n");
     });
     const session = await startSession(after.piagentGuard, cwd);
-    await startSourceTask(session, "UPDATE-COMPAT-1");
+    // Writes no longer need a task (task contracts are retired); the update rules below are unchanged.
     const write = await callToolCall(session.toolCall, session.ctx, "write", { path: "src/index.ts", content: "export const value = 2;\n" });
 
     assert.notEqual(write.block, true);
@@ -214,7 +201,7 @@ describe("global platform update", () => {
       });
     });
     const session = await startSession(after.piagentGuard, cwd);
-    await startSourceTask(session, "UPDATE-COMPAT-2", ["src/**", "infra/secrets/**"]);
+    // Writes no longer need a task (task contracts are retired); the update rules below are unchanged.
     const blocked = await callToolCall(session.toolCall, session.ctx, "write", { path: "infra/secrets/keys.json", content: "{}\n" });
     const allowed = await callToolCall(session.toolCall, session.ctx, "write", { path: "src/index.ts", content: "export const value = 2;\n" });
 
@@ -254,7 +241,7 @@ describe("global platform update", () => {
       fs.appendFileSync(path.join(root, "packages", "piagent-core", "prompts", "task.md"), "\nAlways state what you did not verify.\n");
     });
     const session = await startSession(after.piagentGuard, cwd);
-    await startSourceTask(session, "UPDATE-COMPAT-3");
+    // Writes no longer need a task (task contracts are retired); the update rules below are unchanged.
     const write = await callToolCall(session.toolCall, session.ctx, "write", { path: "src/index.ts", content: "export const value = 2;\n" });
 
     assert.notEqual(write.block, true);

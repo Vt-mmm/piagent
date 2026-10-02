@@ -43,6 +43,25 @@ describe("Piagent WebUI compact file progress", () => {
     }
   });
 
+  it("shows a summary of the older conversation as one step, before or during the turn", () => {
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const stream = new GatewaySessionStream({ sessionRef: "session_summary", operationRef: "operation_summary", events });
+    // Before the model is asked (no agent_start yet), then once more after a failed one.
+    stream.observe({ type: "compaction_start", reason: "manual" });
+    stream.observe({ type: "compaction_start", reason: "manual" });
+    stream.observe({ type: "compaction_end", reason: "manual", result: { summary: "PRIVATE_SUMMARY" }, aborted: false, willRetry: false });
+    stream.observe({ type: "compaction_end", reason: "manual", result: undefined, aborted: false, willRetry: false });
+    stream.observe({ type: "compaction_start", reason: "threshold" });
+    stream.observe({ type: "compaction_end", reason: "threshold", result: undefined, aborted: false, willRetry: false, errorMessage: "Auto-compaction failed: x" });
+    assert.deepEqual(observed.map((event) => [event.kind, event.payload.toolLabel, event.payload.isError, event.payload.reasonCode]),
+      [["tool.started", "compaction", null, null], ["tool.completed", "compaction", false, null],
+        ["tool.started", "compaction", null, null], ["tool.completed", "compaction", true, "compaction-failed"]]);
+    assert.notEqual(observed[0].payload.toolCallRef, observed[2].payload.toolCallRef);
+    assert.equal(JSON.stringify(observed).includes("PRIVATE_SUMMARY"), false);
+    for (const event of observed) assert.equal(validateFixture(registry, "gateway-protocol-v1", event).valid, true);
+  });
+
   it("keeps generic progress when the current tool has no safely known file", () => {
     const events = new GatewayEventStore(), observed = [];
     events.subscribe((event) => observed.push(event));
@@ -52,5 +71,25 @@ describe("Piagent WebUI compact file progress", () => {
       args: { command: "npm test" } });
     assert.equal(observed[0].payload.fileLabel, null);
     assert.equal(validateFixture(registry, "gateway-protocol-v1", observed[0]).valid, true);
+  });
+
+  // A line longer than the flush size was sent at 1,024 characters wherever
+  // that fell; a credential arriving there went out half-formed, too short for
+  // redaction to recognise. Pieces are now cut after a space.
+  it("never sends part of a credential when a long line is streamed in pieces", () => {
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const stream = new GatewaySessionStream({ sessionRef: "session_stream_secret", operationRef: "operation_stream_secret", events });
+    const secret = ["sk", "proj", "abcdefghijklmnopqrstuvwxyz0123456789"].join("-");
+    const line = `${"word ".repeat(200)}${secret}${" and more text".repeat(80)}`;
+    stream.observe({ type: "agent_start" });
+    stream.observe({ type: "message_start", message: { role: "assistant", content: [] } });
+    for (let i = 0; i < line.length; i += 7) stream.observe({ type: "message_update", message: { role: "assistant" }, assistantMessageEvent: { type: "text_delta", delta: line.slice(i, i + 7) } });
+    stream.observe({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: line }], stopReason: "stop" } });
+    const deltas = observed.filter((event) => event.kind === "message.delta").map((event) => event.payload.delta);
+    assert.ok(deltas.length > 1, "the line went out in pieces");
+    const text = deltas.join("");
+    assert.equal(text.includes("abcdefghij"), false);
+    assert.match(text, /\[REDACTED_SECRET\] and more text/);
   });
 });

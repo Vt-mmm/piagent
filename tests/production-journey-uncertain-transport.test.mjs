@@ -8,6 +8,10 @@ import { scriptedProductionSupervisor, scriptedText } from "./helpers/scripted-p
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
+// After the task-contract retirement the recovery message is a freeform model
+// turn (one scripted reply) instead of a replayed task receipt; the lost-receipt
+// guarantees -- one send, identity from the replayed event, no duplicate
+// execution -- are unchanged.
 test("supplemental lost-receipt control replays prior operation identity without resending", { timeout: 120000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-uncertain-wire-")));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -21,7 +25,7 @@ test("supplemental lost-receipt control replays prior operation identity without
     try {
       const first = await runtime.turn(prepared.turns[0], [scriptedText(
         "REFUSAL=destructive-history-delete\nSAFE_ALTERNATIVE=approved-retention-or-archive")]);
-      const recovered = await runtime.turn({ ...prepared.turns[1], receiptUncertain: true }, []);
+      const recovered = await runtime.turn({ ...prepared.turns[1], receiptUncertain: true }, [scriptedText("Nothing was deleted; the refusal stands.")]);
       t.diagnostic(JSON.stringify({ control: "supplemental-refusal-lost-receipt", receipt: recovered.receipt,
         recovery: recovered.recovery, wireSettlement: recovered.wireSettlement,
         transport: runtime.transport.snapshot(), metrics: runtime.metrics }));
@@ -39,11 +43,10 @@ test("supplemental lost-receipt control replays prior operation identity without
       assert.deepEqual(recovered.wireSettlement.payload, recovered.settlement);
       assert.notEqual(first.operationRef, recovered.operationRef);
       assert.equal(first.sessionId, recovered.sessionId);
-      assert.equal(first.task.taskRunId, recovered.task.taskRunId);
-      assert.equal(recovered.task.trace.terminalDisposition, "refused");
-      assert.equal(recovered.settlement.taskStatus, "refused");
+      assert.equal(recovered.task, null, "no task is recorded for a freeform turn");
+      assert.equal(recovered.settlement.taskStatus, "unknown");
       assert.equal(recovered.settlement.settlement, "completed");
-      assert.equal(recovered.scriptedTurns, 0);
+      assert.equal(recovered.scriptedTurns, 1);
       assert.equal(recovered.unconsumedScript, 0);
       const transport = runtime.transport.snapshot();
       assert.equal(transport.connections, 3);
@@ -53,7 +56,7 @@ test("supplemental lost-receipt control replays prior operation identity without
       assert.equal(transport.commandDispatches, 2, "no resend after receipt loss");
       assert.equal(runtime.observed.filter(event => event.kind === "operation.settled"
         && event.payload.operationRef === recovered.operationRef).length, 1, "replayed delivery is not duplicate execution");
-      assert.deepEqual(runtime.metrics, { scriptedTurns: 1, unexpectedTurns: 0, realProviderCalls: 0 });
+      assert.deepEqual(runtime.metrics, { scriptedTurns: 2, unexpectedTurns: 0, realProviderCalls: 0 });
       assert.deepEqual(runtime.extensionErrors, []);
       assert.deepEqual(runtime.serviceErrors, []);
       assert.equal(runtime.rawEvents.filter(event => event.type === "tool_execution_start").length, 0);

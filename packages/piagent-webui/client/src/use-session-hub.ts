@@ -3,16 +3,17 @@ import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/genera
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
 import { readSessionCatalog, readSessionLiveState } from "./api.ts";
+import { coalescedRefresh } from "./coalesced-refresh.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
   liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, conversationAfterRejectedSend, pendingUserConversation, terminalOperationActivity,
   type LiveActivity, type LiveConversation,
   type TerminalOperationActivity } from "./live-state-view-model.ts";
-import { GatewayCommandTransportError, gatewayCommandMayHaveEffect, sessionSendDisposition,
+import { GatewayCommandTransportError, gatewayCommandMayHaveEffect, requestUntilAnswered, sessionSendDisposition,
   type OperationObservation } from "./session-send-state.ts";
 import { conversationAfterObservedSend, observeSessionSendEffect } from "./session-send-observation.ts";
-import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSOR_KEY, opaque,
+import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSOR_KEY, opaque, SEND_ADMISSION_WINDOW_MS,
   parseGatewayCursor, persistGatewayCursor, revisionStale, SessionSendRejectedError,
   type SessionHub, type SessionHubCreateOptions, type SessionHubSendAttachment,
   type SessionSendResult } from "./session-hub-contract.ts";
@@ -110,7 +111,7 @@ export function useSessionHub(): SessionHub {
     const submit = (snapshot: Catalog) => {
       if (!snapshot.catalogRevision) throw new Error("catalog-unavailable");
       const now = new Date();
-      return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+      return requestUntilAnswered(request, { schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
         commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.create", requestedAt: now.toISOString(),
         expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: null,
         expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: null,
@@ -172,7 +173,7 @@ export function useSessionHub(): SessionHub {
         requestedAt = now.toISOString();
         return { schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
           commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.send", requestedAt: now.toISOString(),
-          expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
+          expiresAt: new Date(now.getTime() + SEND_ADMISSION_WINDOW_MS).toISOString(), sessionRef: session.sessionRef,
           expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision,
           payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null, attachmentRefs,
             ...(attachment?.workflow ? { workflow: attachment.workflow } : {}) } };
@@ -306,6 +307,7 @@ export function useSessionHub(): SessionHub {
 
   useEffect(() => {
     let stopped = false, reconnectTimer: number | undefined, attempt = 0, canonicalResync = false;
+    const eventRefresh = coalescedRefresh(() => refresh()), refreshSoon = eventRefresh.request;
     const clientRef = (() => {
       try {
         const stored = window.localStorage.getItem("piagent-gateway-client-ref");
@@ -453,7 +455,7 @@ export function useSessionHub(): SessionHub {
           if (terminal) setTerminalActivities((current) => ({ ...current,
             [payload.sessionRef]: mergeTerminalOperationActivities(current[payload.sessionRef] ?? [], [terminal]) }));
         }
-        if (["catalog.changed", "session.changed", "runtime.changed", "message.completed", "operation.settled"].includes(String(frame.kind))) void refresh();
+        if (["catalog.changed", "session.changed", "runtime.changed", "message.completed", "operation.settled"].includes(String(frame.kind))) refreshSoon();
       });
       socket.addEventListener("close", () => {
         window.clearTimeout(helloTimeout);
@@ -485,7 +487,7 @@ export function useSessionHub(): SessionHub {
     })();
     const visible = () => { if (!stopped && document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", visible);
-    return () => { stopped = true; if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    return () => { stopped = true; if (reconnectTimer) window.clearTimeout(reconnectTimer); eventRefresh.stop();
       for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout);
         pending.reject(new GatewayCommandTransportError("gateway-client-unmounted", true)); }
       pendingRef.current.clear(); socketRef.current?.close(1000, "client-unmount");

@@ -665,3 +665,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .status-dot, .activity-state, .progress-track span, .context-meter span { forced-color-adjust: none; background: Highlight; }
   .file-row[data-selected="true"], .source-tabs button[aria-selected="true"] { outline: 2px solid Highlight; }
 }
+
+@keyframes piagent-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }

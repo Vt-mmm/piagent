@@ -19,12 +19,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
-npm install -g --ignore-scripts @piagent/platform@1.8.0
+npm install -g --ignore-scripts @piagent/platform@1.9.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.8.0`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.9.0`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -100,7 +100,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
-npm install -g --ignore-scripts @piagent/platform@1.8.0
+npm install -g --ignore-scripts @piagent/platform@1.9.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -205,21 +205,23 @@ Gợi ý:
 Sau `/login` và `/model`, chạy:
 
 ```text
-/commands
 /mcp
 /subagents-doctor
-/onboard
-/onboard run
+/profile setup
 /memory
 ```
 
-`/onboard` mở menu/status runtime. `/onboard run` sẽ:
+Từ bản 1.9.0 không còn `/onboard`. Nhờ agent onboard bằng lời thường:
+
+```text
+Đọc project này (chỉ đọc) và ghi lại project context.
+```
+
+Agent sẽ:
 
 1. đọc repo theo context budget;
-2. detect profile phù hợp;
-3. mở select-style profile/tech setup;
-4. hỏi user trước khi apply nếu workflow chạy qua tool write;
-5. ghi project profile, tech stack và context.
+2. đề xuất profile phù hợp (`/profile setup` để chọn profile/tech bằng select);
+3. ghi `.pi/project-context.md` và `.pi/context-index.json` bằng tool onboarding của Piagent.
 
 File chính được tạo/cập nhật:
 
@@ -235,7 +237,7 @@ File chính được tạo/cập nhật:
 .pi/memory/MEMORY.md
 ```
 
-Nếu `.pi/project-context.md` còn `Generated: not yet`, hoặc `/context index` báo index đang pending/stale, không nên chạy `/workflow task` implementation lớn. Chạy lại `/onboard run` trước.
+Nếu `.pi/project-context.md` còn `Generated: not yet`, hoặc `/context index` báo index đang pending/stale, nên nhờ agent onboard lại trước khi giao việc implement lớn.
 
 ### Đổi profile sau này
 
@@ -283,7 +285,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.8.0 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.9.0 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -306,45 +308,41 @@ bash /path/to/piagent/scripts/configure-subagents.sh --preset safe
 
 ## 4. Daily task workflow
 
+Từ bản 1.9.0, mọi việc được yêu cầu bằng lời thường; không còn `/workflow`,
+`/task`, `/scout`, `/fresh` và không có task contract. Nói rõ ý định (chỉ đọc,
+chỉ lập kế hoạch, hay cho sửa) ngay trong câu yêu cầu.
+
 ### Requirement chưa rõ
 
 ```text
-/workflow discuss Cải tiến workflow onboarding cho team mới. Chưa implement, chỉ hỏi phần thiếu và đề xuất plan.
+Cải tiến onboarding cho team mới. Chưa implement, chỉ hỏi phần còn thiếu và đề xuất plan.
 ```
 
 ### Cần plan trước
 
 ```text
-/workflow plan Implement header sale menu hover stabilization. Include scope, files, verify commands, and risks.
+Lập plan cho header sale menu hover stabilization: scope, file, lệnh verify và rủi ro. Chưa sửa code.
 ```
 
 ### Task rõ, cho implement
 
 ```text
-/workflow task Implement header sale menu hover stabilization. Add component tests and run relevant verify.
+Implement header sale menu hover stabilization. Thêm component test và chạy verify liên quan.
 ```
 
 ### Scout/audit read-only
 
 ```text
-/workflow scout Scout payment FE mapping vs BE contract. Backend read-only. Do not edit source.
+Scout payment FE mapping vs BE contract. Backend read-only. Không sửa source.
 ```
 
-Use `/workflow scout` cho payment/auth/data/contract mapping khi mục tiêu là chốt evidence trước, chưa sửa code.
+Dùng yêu cầu scout cho payment/auth/data/contract mapping khi mục tiêu là chốt evidence trước, chưa sửa code. Muốn chắc chắn không có lệnh ghi nào chạy, đổi session sang `/permission read-only`.
 
 ### Task mới khi session đã nặng
 
-Nếu `/usage` cho thấy context cao, hoặc Pi báo context overflow, dùng fresh workflow. Đây là ba ví dụ thường dùng; `/fresh help` liệt kê đầy đủ catalog canonical:
-
-```text
-/fresh scout Scout payment FE mapping vs BE contract. Backend read-only. Do not edit source.
-/fresh task Implement <bounded task>.
-/fresh be-to-fe Implement FE support for <BE contract>. Backend read-only.
-```
-
-Các command này tự mở session mới và replay prompt workflow ngắn. Anh không cần tự chạy `pi --name ...` rồi paste lại.
-
-Input guard của platform cũng tự collapse prompt có full `Mandatory flow` boilerplate. Quy tắc vận hành: user chỉ mô tả task; checklist nằm trong platform prompt/piagent tools.
+Nếu `/usage` cho thấy context cao, hoặc Pi báo context overflow, mở session mới
+bằng `/new` (hoặc `/compact`) rồi nói lại yêu cầu. Không cần paste checklist:
+guard tự áp policy cho từng tool call.
 
 ### Gửi ảnh/screenshot trong chat
 
@@ -361,7 +359,7 @@ lưu screenshot vào `~/Documents/team-screenshots` rồi thêm folder đó vào
 Sau đó để nguyên path trong prompt:
 
 ```text
-/workflow scout Scout UI issue from screenshot ~/Documents/team-screenshots/screenshot.png
+Scout lỗi UI trong ảnh ~/Documents/team-screenshots/screenshot.png. Chỉ đọc.
 ```
 
 Piagent guard sẽ xử lý trước khi model nhận input:
@@ -385,19 +383,19 @@ prompt.
 
 ```text
 /profile be-readonly-fe
-/workflow be-to-fe Implement frontend support from backend endpoint/spec <name>. Backend is read-only.
+Implement frontend support from backend endpoint/spec <name>. Backend is read-only.
 ```
 
 ### Cải tiến platform
 
 ```text
-/workflow platform-improve Improve MCP setup docs and subagent command guidance for team usage.
+Improve MCP setup docs and subagent command guidance for team usage.
 ```
 
 ### Review trước final
 
 ```text
-/workflow review current diff
+Review diff hiện tại: correctness, test còn thiếu, scope drift. Chỉ đọc.
 ```
 
 ### Commit và pull request
@@ -405,11 +403,11 @@ prompt.
 Git trong Pi Agent là capability + guard, không có namespace `/git-*`. Khi muốn gom việc hiện tại:
 
 ```text
-/workflow commit docs: update onboarding notes
-/workflow pr Add guarded git workflow
+Commit các file docs vừa sửa với message "docs: update onboarding notes". Không push.
+Tạo draft PR cho branch này, title "Add guarded git notes".
 ```
 
-`/workflow commit` inspect status/diff, stage đúng scope, verify phù hợp, rồi commit local; không push. `/workflow pr` inspect branch/diff/commit rồi hỏi xác nhận trước khi `git push` hoặc tạo/cập nhật GitHub PR. Alias `/commit` và `/pr` vẫn chạy cho power user. Các lệnh stage rộng như `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` cũng phải qua confirmation.
+Guard hỏi xác nhận trước khi `git push` hoặc tạo/cập nhật GitHub PR. Các lệnh stage rộng như `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` cũng phải qua confirmation.
 
 ### Preflight, live status và receipt
 
@@ -429,14 +427,9 @@ Read-only/plan/review không bao giờ hiện implementation authorization. Dòn
 `host execution is not a sandbox` là boundary thật: Piagent policy giảm lỗi thao
 tác nhưng không cô lập code khỏi account của operator.
 
-`/piagent-status` đọc Task Contract, checkpoint, trajectory, verifier, recovery,
-helper và resume state đã lưu, không hỏi model nhớ lại. Khi terminal, JSON detail
-có completion receipt: outcome, acceptance, changed-tree identity, exact verify,
-review/helper/recovery, remaining risk và handoff. Receipt chỉ gọi là complete
-khi hard completion gate trên working tree hiện tại pass, trace terminal là
-`completed`, và mọi acceptance criterion đều satisfied. Thiếu gate evidence phải
-fail closed thay vì suy đoán từ state cũ; evidence cùng runtime không được
-gọi là independent audit. Tắt từng lớp bằng `PIAGENT_SOLVER_MODE=off`,
+`/piagent-status` đọc state đã lưu (profile, guard, runtime, model), không hỏi
+model nhớ lại. Từ bản 1.9.0 session không còn Task Contract, checkpoint hay
+completion receipt; bản ghi task của các bản trước chỉ còn để xem lịch sử. Tắt từng lớp bằng `PIAGENT_SOLVER_MODE=off`,
 `PIAGENT_PHASE_TOOLS=off`, `PIAGENT_AUTO_RECOVERY=off`, hoặc
 `PIAGENT_HELPERS_MODE=off`. Hai lớp semantic có kill switch độc lập:
 `PIAGENT_ACCEPTANCE_ASSURANCE=off` tắt assurance và semantic repair phụ thuộc,
@@ -447,12 +440,11 @@ giữ để có thể tạo attempt mới có provenance rõ ràng.
 `/piagent-inspector` là một namespace read-only, không sinh thêm command rời.
 Gõ không tham số để chọn `summary`, `files`, `commands`, `security`, `context`
 hoặc `toggle`. Panel bốn dòng tự hiện sát phía trên footer native từ lúc mở session:
-phase và việc hiện tại; task file/test, `+/-`, command pass/fail/block, safety và
+việc hiện tại; file/test đã đổi, `+/-`, command pass/fail/block, safety và
 context budget. Nó dùng extension-status API nên không thay footer native của
-Pi và không thêm bước bắt buộc vào workflow. Dòng status dùng file task đã quan
-sát để phản hồi nhanh; view `files` tính exact snapshot delta. Task đụng file dirty từ trước được
-đánh dấu mixed baseline; token theo từng built-in tool luôn unavailable vì Pi
-chỉ cung cấp usage exact theo response/turn.
+Pi và không thêm bước bắt buộc nào. Dòng status dùng working-tree status; token
+theo từng built-in tool luôn unavailable vì Pi chỉ cung cấp usage exact theo
+response/turn.
 
 Known unsupported/unpromoted surfaces của candidate hiện tại: parent routing
 đã có `off|shadow|recommend|auto`, nhưng extension `auto` fail-closed về
@@ -478,59 +470,42 @@ piagent-route --prompt-file /path/to/task.txt --execute --yes -- --approve
 Lệnh này dùng authenticated `pi --list-models`, không đọc credential store,
 không ghi raw task vào route sidecar, giữ hard pin, và từ chối task bị blocked.
 
-## 5. Control flow của một task chuẩn
+## 5. Control flow của một lượt sửa code
 
-Một source-changing task nên đi qua:
+Từ bản 1.9.0 một yêu cầu sửa code đi qua:
 
 ```text
-intake
-  -> session name + profile/context
-  -> session-bound task contract v2
-  -> runtime-observed context manifest
-  -> implementation
-  -> baseline-aware changed files
-  -> every exact verify command
-  -> current-tree verify evidence from tool_result
-  -> completion hook: trace + final gate
-  -> immutable outcome / retry handoff
+yêu cầu bằng lời thường
+  -> profile/context của project
+  -> agent đọc file đích và test gần nhất
+  -> sửa bằng read/edit/write/apply_patch/bash
+     (guard kiểm tra từng tool call: protected path, read-only path, quyền,
+      context budget, edit trên bản đọc cũ, xác nhận destructive/external)
+  -> chạy lệnh check của project
+  -> báo file đã đổi, kết quả verify, rủi ro còn lại
 ```
 
-Trong task nhỏ và rõ scope, runtime tạo contract trước model turn đầu tiên nên
-model không gọi management tool nào. Task rộng, high-risk hoặc scope mơ hồ mới
-fallback về một `piagent_task_start`. Các tool còn lại bên dưới là bề mặt
-operator/diagnostics/recovery, không phải checklist phải gọi mỗi task.
+Không còn task contract, scope khai báo, work plan, completion gate hay receipt.
+Trong khung công ty (`piagent studio`), các bước plan/check/review mỗi lượt do
+Harness của team trong Studio quy định; xem [nghiệm thu local](managed-local-acceptance.md).
 
-Các Piagent tools:
+Các Piagent tools còn lại là bề mặt operator/diagnostics, không phải checklist phải gọi mỗi lượt:
 
 | Tool | Vai trò |
 |---|---|
 | `piagent_context` | Đọc active profile, required context, verify commands, MCP/memory settings. |
 | `piagent_context_index_status/search/record` | Kiểm tra/tìm/ghi context index advisory có citation. |
-| `piagent_task_start` | Fallback intake cho task rộng/high-risk/mơ hồ; scope chỉ nhận project-relative path/glob. |
-| `piagent_task_progress` | Chuyển step trong work plan và ghi failure/ruled-out evidence. |
-| `piagent_context_record` | Recovery: bổ sung context manifest khi observer không đủ. |
 | `piagent_exec_policy_check` | Diagnostics: giải thích shell-policy verdict; runtime vẫn check mọi call. |
 | `piagent_context_budget` | Diagnostics: xem budget của file/context lớn. |
 | `piagent_tool_policy_check` | Diagnostics: xem capability verdict của tool/MCP. |
-| `piagent_verify_record` | Recovery: đối chiếu verify với bash result thật sau task start. |
-| `piagent_trace_record` | Recovery/high-risk: ghi outcome hoặc blocker thủ công. |
-| `piagent_task_gate_check` | Diagnostics/recovery: xem missing final proof. |
+| `piagent_document_read` | Đọc tài liệu ngoài project trong `additionalReadRoots` (chỉ đọc). |
+| `piagent_source_checkout` | Chuẩn bị repo ngoài để đọc (read-only cho session). |
+| `piagent_project_onboarding_record` | Ghi `.pi/project-context.md` sau khi agent đọc project. |
 | `piagent_usage_snapshot` | Snapshot session/model/context. |
 
-Done đúng nghĩa:
-
-- task contract v2 gắn đúng session hiện tại;
-- có context manifest;
-- mọi verify command đã chạy thật và khớp `task.verifyCommands`;
-- changed files khác baseline, có evidence và nằm trong scope;
-- work plan không còn step pending/in-progress/failed;
-- trace outcome rõ;
-- final gate pass hoặc ghi rõ blocked/partial.
-
-Source task yêu cầu Git working tree và meaningful verifier ngay từ lúc start.
-Một session chỉ dùng cho một task. Retry mở session mới với cùng `taskId`; runtime
-giữ previous attempt evidence và từ chối vượt `maxAttempts`. Contract đã terminal
-không thể sửa thêm context/verify/trace để viết lại lịch sử.
+Các tool `piagent_task_start`, `piagent_task_progress`, `piagent_context_record`,
+`piagent_verify_record`, `piagent_trace_record` và `piagent_task_gate_check` đã bỏ
+từ bản 1.9.0.
 
 ## 6. Guardrails cần hiểu
 
@@ -798,10 +773,9 @@ pi --continue
 
 Nếu `--continue` không đúng phiên cần làm, mở selector bằng `pi --resume`, chọn theo session name đã đặt. Khi resume đúng session cũ, tên session vẫn là tên đã set; nếu cần chỉnh lại cho khớp task nội bộ thì chạy `/name <new name>` ngay trước khi làm tiếp.
 
-Task Contract v2 map bằng `sessionId` và Pi custom trace, không dựa riêng vào tên.
-Đổi tên sau khi task bắt đầu sẽ cập nhật contract để Agent Watch/report dùng tên
-mới. Không fork/reuse một session terminal cho task khác; retry hoặc task mới mở
-session mới để usage/prompt/change evidence không bị trộn.
+Agent Watch/report map session bằng `sessionId` và Pi custom trace, không dựa
+riêng vào tên; đổi tên bằng `/name` sẽ được ghi nhận. Nên mở session mới cho việc
+mới để usage/prompt/change evidence không bị trộn.
 
 ### Khi nào nên resume, continue, fork
 
@@ -944,7 +918,7 @@ Default safe config:
 
 ### Auto-delegation
 
-Với `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, `/workflow review`, parent agent tự suy luận và implement. Helper mặc định tắt. Khi operator bật rõ, runtime chỉ được dispatch một helper read-only, context fresh, nếu có ít nhất hai lane độc lập và projected net token saving từ 30% sau handoff/merge. Worker, retry, nested và parallel helper đều tắt. Alias cũ như `/task` giữ cùng policy.
+Với mọi yêu cầu (implement, plan, review…), parent agent tự suy luận và implement. Helper mặc định tắt. Khi operator bật rõ, runtime được dispatch tối đa hai helper read-only, context fresh (không inherit history, handoff tối đa 2.048 token). Ước tính tiết kiệm token chỉ là telemetry. Worker, retry và nested helper đều tắt.
 
 Kiểm tra nhanh policy:
 
@@ -957,9 +931,10 @@ Không cần tự gọi `/run` cho task bình thường. Chỉ dùng `/run` khi 
 Helper chỉ đủ điều kiện khi đồng thời:
 
 - operator đã opt-in;
-- có ít nhất hai workstream độc lập và helper không phụ thuộc output tiếp theo của parent;
-- context chuyển giao fresh, tối đa 2.048 token và không inherit history;
-- tổng token parent + helper + handoff + merge được dự báo thấp hơn solo ít nhất 30%.
+- tổng số helper của phiên chưa quá 2 và helper chỉ đọc;
+- context chuyển giao fresh, tối đa 2.048 token và không inherit history.
+
+Dự báo tiết kiệm token vẫn được ghi để theo dõi nhưng không còn là điều kiện (bounded-delegation-v2).
 
 Không nên spawn khi:
 
@@ -1024,8 +999,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.8.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.8.0` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.9.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.9.0` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -1072,17 +1047,13 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `/model` / `Ctrl+L` | Chọn model. |
 | `Ctrl+P` | Cycle scoped models. |
 | `Shift+Tab` | Cycle thinking level. |
-| `/commands` | Menu/help command runtime theo topic. |
-| `/piagent-inspector` | Menu read-only cho task diff/file test/line, command, safety và context; `toggle` ẩn/hiện panel bốn dòng trong session. |
-| `/workflow` | Menu task/scout/review/git/onboard workflow. |
+| `/piagent-inspector` | Menu read-only cho diff/file test/line, command, safety và context; `toggle` ẩn/hiện panel bốn dòng trong session. |
 | `/permission` | Menu permission status/read-only/workspace-write/full-access. |
 | `/permission status` | Xem permission profile hiện tại. |
 | `/permission read-only` | Chuyển session sang read-only. |
 | `/permission workspace-write` | Chuyển session sang write chuẩn. |
 | `/permission full-access` | Bật trusted full-access cho session hiện tại. |
 | `/permission full-access <task>` | Bật trusted full-access rồi gửi `<task>` cho agent làm tiếp. |
-| `/onboard` | Menu/status onboarding runtime. |
-| `/onboard run` | Onboard/read project lần đầu. |
 | `/context` | Menu context index/search/preflight/compact. |
 | `/context index` | Xem compact context index, không gọi model follow-up. |
 | `/context search <keyword>` | Tìm node/edge/citation trong context index. |
@@ -1100,25 +1071,13 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `/usage` | Snapshot context/session. |
 | `/usage logs` | Xem capture output dài đã compact. |
 | `/name` | Đặt/đổi tên session theo task để report dễ map. |
-| `/fresh` | Mở session mới cho mọi workflow canonical khi phiên hiện tại nặng; xem lựa chọn bằng `/fresh help`. |
+| `/new` | Pi native: mở session mới khi phiên hiện tại nặng. |
 | `/name <name>` | Đổi tên session cho resume/report. |
 | `/session` | Pi native session stats/info. |
 | `/mcp` / `/mcp tools` | Check MCP. |
 | `/subagents-doctor` | Check subagent setup. |
 | `/subagents-fleet` | Follow child sessions. |
 | `/subagent-cost` | Check subagent token/cost. |
-| `/workflow discuss <request>` | Làm rõ, không sửa. |
-| `/workflow plan <goal>` | Lập plan. |
-| `/workflow scout <request>` | Scout/audit read-only. |
-| `/fresh scout <request>` | Tự mở session mới rồi chạy scout workflow. |
-| `/fresh task <request>` | Tự mở session mới rồi chạy task workflow. |
-| `/fresh be-to-fe <request>` | Tự mở session mới rồi chạy BE-to-FE workflow. |
-| `/workflow task <request>` | Implement task. |
-| `/workflow be-to-fe <request>` | BE read-only, FE implementation. |
-| `/workflow platform-improve <request>` | Cải tiến platform. |
-| `/workflow review [scope]` | Review diff/source. |
-| `/workflow commit [message/scope]` | Commit local qua workflow có guard. |
-| `/workflow pr [title/request]` | Chuẩn bị PR, hỏi trước khi push/GitHub write. |
 
 ## 12. Troubleshooting
 
@@ -1137,7 +1096,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.8.0
+npm install -g --ignore-scripts @piagent/platform@1.9.0
 command -v piagent-install
 ```
 
@@ -1222,21 +1181,17 @@ pi --session <session-id>
 pi --session /absolute/path/to/session.jsonl
 ```
 
-### Verify evidence không được nhận
+### Lệnh/tool bị chặn
 
-Nguyên nhân thường gặp:
+Guard luôn ghi lý do khi chặn. Nguyên nhân thường gặp:
 
-- agent ghi `piagent_verify_record` nhưng chưa chạy bash verify thật;
-- command string không exact-match `task.verifyCommands`;
-- verify chạy trước `task.createdAt`;
-- verify chạy ở cwd khác;
-- subagent chạy nhưng parent chưa thấy persisted ledger đúng cwd.
+- đụng protected path (`.env`, `auth.json`, `.pi/piagent-state/**`…) hoặc read-only path của profile;
+- permission `read-only` (chặn ghi và shell) — đổi bằng `/permission`;
+- file quá lớn so với context budget;
+- file đã đổi từ lần đọc trước (`previously observed source snapshot is stale`) — đọc lại file một lần rồi sửa;
+- lệnh destructive/external cần xác nhận mà người vận hành chưa đồng ý.
 
-Fix:
-
-```text
-Run the exact verify command from task.verifyCommands in the project cwd, then record verify evidence again.
-```
+Xem chi tiết bằng `/piagent-inspector security`, hoặc giải thích một lệnh shell trước khi chạy bằng `piagent-explain "<lệnh>"` từ terminal.
 
 ## 13. Không commit
 

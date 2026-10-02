@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>How workflows change after the update · Pi Agent Platform Docs</title>
-    <meta name="description" content="Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy." />
+    <meta name="description" content="Since 1.9.0 there are no workflow launchers: say what you need in plain language. The optional inspection commands only observe and never start a model turn." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/en/workflows" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/workflows" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/workflows" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="How workflows change after the update · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy." />
+    <meta property="og:description" content="Since 1.9.0 there are no workflow launchers: say what you need in plain language. The optional inspection commands only observe and never start a model turn." />
     <meta property="og:url" content="https://piagent.io.vn/en/workflows" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/workflows" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/workflows" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
             <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
@@ -100,25 +101,24 @@
             </nav>
             <div class="page-head">
               <h1>How workflows change after the update</h1>
-              <p>Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy.</p>
+              <p>Since 1.9.0 there are no workflow launchers: say what you need in plain language. The optional inspection commands only observe and never start a model turn.</p>
             </div>
 <section class="section">
   <p class="section-kicker">Workflow impact</p>
   <h2 id="conclusion">No new command is mandatory in the daily flow</h2>
-  <p class="section-lead">Users still assign work with a natural-language request or <span class="inline-code">/workflow task</span>. The main change is inside the runtime: task state, trajectories, verifier evidence, recovery, and completion gates are recorded more strictly. The new commands only expose that data when needed.</p>
+  <p class="section-lead">Since 1.9.0 work is assigned with a plain-language request and nothing else. <span class="inline-code">/workflow</span>, <span class="inline-code">/task</span>, <span class="inline-code">/fresh</span> and <span class="inline-code">/onboard</span> were retired together with the task contract: a session no longer records a contract, work plan, completion gate or receipt. The guard still checks every tool call.</p>
   <div class="callout ok-callout">
     <strong>Short answer</strong>
-    <p>The interaction flow is not longer. The control flow behind it is safer and fails closed when evidence is missing. A valid task does not require all four new commands.</p>
+    <p>Say what you want, including whether the agent may edit ("read-only, do not edit", "plan first", "implement and run the tests"). The inspection commands below are optional and never start a model turn.</p>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Moment</th><th>User action stays the same</th><th>New automatic runtime behavior</th><th>Optional inspection command</th></tr></thead>
+      <thead><tr><th>Moment</th><th>What the user does</th><th>What the runtime does</th><th>Optional inspection command</th></tr></thead>
       <tbody>
-        <tr><td>Before a task</td><td>Send a request or <span class="inline-code">/workflow task &lt;request&gt;</span>.</td><td>Loads profile and context, classifies intent and risk, captures runtime truth, and computes a solver recommendation.</td><td><span class="inline-code">/task-preflight [--json] &lt;intent&gt;</span></td></tr>
-        <tr><td>During work</td><td>Continue the task normally.</td><td>Records the work plan, phase, changed files, tool and command results, checkpoints, helpers, and recovery events. The inspector updates below the footer.</td><td><span class="inline-code">/piagent-inspector</span> or <span class="inline-code">/piagent-status</span></td></tr>
-        <tr><td>Verify and review</td><td>Use project verification; call <span class="inline-code">/workflow review</span> when a separate review is useful.</td><td>Accepts only successful exact verifiers bound to the current working-tree identity.</td><td><span class="inline-code">/piagent-status</span></td></tr>
-        <tr><td>Completion or handoff</td><td>Receive the outcome and remaining risks as before.</td><td>Approves a receipt only when trace, work plan, acceptance, changed-file integrity, and the hard gate all pass.</td><td><span class="inline-code">/piagent-status</span></td></tr>
-        <tr><td>After a task</td><td>No new required step.</td><td>Keeps sourced telemetry without inferring quality.</td><td><span class="inline-code">/usage efficiency</span></td></tr>
+        <tr><td>Before the work</td><td>Send the request in plain language.</td><td>Loads the profile and project context.</td><td><span class="inline-code">/task-preflight [--json] &lt;intent&gt;</span></td></tr>
+        <tr><td>During the work</td><td>Follow along or answer a confirmation.</td><td>Checks each tool call: protected and read-only paths, permission profile, context budget for large files, edits against a stale read, and confirmation for destructive or external actions. The inspector updates below the footer.</td><td><span class="inline-code">/piagent-inspector</span> or <span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Verify and review</td><td>Ask for the project's checks, or for a review of the current diff.</td><td>Runs the commands like any other tool call.</td><td><span class="inline-code">/piagent-inspector commands</span></td></tr>
+        <tr><td>After the work</td><td>No required step.</td><td>Keeps sourced telemetry without inferring quality.</td><td><span class="inline-code">/usage efficiency</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -126,22 +126,22 @@
 
 <section class="section">
   <p class="section-kicker">Command semantics</p>
-  <h2 id="command-effects">How far the new commands affect a workflow</h2>
+  <h2 id="command-effects">How far the inspection commands affect a workflow</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Command</th><th>Reads or displays</th><th>Does not perform</th></tr></thead>
       <tbody>
-        <tr><td><span class="inline-code">/task-preflight</span></td><td>Intent, risk, scope, runtime, route, phase/tool/helper policy, backend, approval, and blockers.</td><td>Does not create a task, advance a phase, call a model, or grant implementation authority.</td></tr>
-        <tr><td><span class="inline-code">/piagent-status</span></td><td>Task Contract, trajectory, checkpoint, verifier, recovery, helper, resume, and terminal receipt from persisted evidence.</td><td>Does not edit files, rerun verification, retry work, or turn missing evidence into success.</td></tr>
-        <tr><td><span class="inline-code">/piagent-inspector</span></td><td>Observed task files in the four-row footer panel, exact baseline delta in the <span class="inline-code">files</span> view, current tool, command failures and blocks, safety warnings, and context budget. No argument opens the menu.</td><td>Does not edit files, execute commands, change completion state, or estimate tokens for each built-in tool.</td></tr>
-        <tr><td><span class="inline-code">/usage efficiency</span></td><td>Sourced context telemetry and task metrics; unavailable facts remain <span class="inline-code">null</span> or unavailable.</td><td>Does not grade a person or model and does not decide the completion gate.</td></tr>
-        <tr><td><span class="inline-code">/piagent-orchestration</span></td><td>Current mode, helper mode, subagent limit, review lenses, Field Guide, and writer policy.</td><td>Does not change mode, spawn a helper, or enable parallel writers.</td></tr>
+        <tr><td><span class="inline-code">/task-preflight</span></td><td>Context and the deterministic shadow route for an intent.</td><td>Does not create anything, call a model, or grant implementation authority.</td></tr>
+        <tr><td><span class="inline-code">/piagent-status</span></td><td>Profile, guard, runtime and authenticated model state.</td><td>Does not edit files, rerun verification or retry work.</td></tr>
+        <tr><td><span class="inline-code">/piagent-inspector</span></td><td>Changed files in the four-row footer panel, current tool, command failures and blocks, safety warnings, and context budget. No argument opens the menu.</td><td>Does not edit files, execute commands, or estimate tokens for each built-in tool.</td></tr>
+        <tr><td><span class="inline-code">/usage efficiency</span></td><td>Sourced context telemetry; unavailable facts remain <span class="inline-code">null</span> or unavailable.</td><td>Does not grade a person or model.</td></tr>
+        <tr><td><span class="inline-code">/piagent-orchestration</span></td><td>Current mode, helper mode, helper limit, review lenses, Field Guide, and writer policy.</td><td>Does not change mode, spawn a helper, or enable parallel writers.</td></tr>
       </tbody>
     </table>
   </div>
   <div class="callout">
     <strong>Only explicit opt-in changes behavior.</strong>
-    <p>These five commands are read-only. Behavior changes only when an operator deliberately enables a rollout setting such as phase tools or helper mode; parent routing, automatic workers, and multiple writers do not turn on automatically.</p>
+    <p>These five commands are read-only. Behavior changes only when an operator deliberately enables a setting such as helper mode; parent routing, automatic workers, and multiple writers do not turn on automatically.</p>
   </div>
 </section>
 
@@ -150,14 +150,13 @@
   <h2 id="example-flow">A complete flow can look like this</h2>
   <div class="command-grid">
     <article class="command-card">
-      <header><span>Inspect → implement → review → receipt</span><button class="clip-btn" data-clip="/task-preflight --json Fix the failing checkout test&#10;/workflow task Fix the failing checkout test and verify.&#10;/piagent-inspector&#10;/workflow review current diff&#10;/piagent-status&#10;/usage efficiency">Copy</button></header>
+      <header><span>Inspect → implement → review</span><button class="clip-btn" data-clip="/task-preflight --json Fix the failing checkout test&#10;Fix the failing checkout test and run the project tests.&#10;/piagent-inspector&#10;Review the current diff: correctness, missing tests, scope drift. Read-only.&#10;/usage efficiency">Copy</button></header>
       <pre><code>/task-preflight --json Fix the failing checkout test
-/workflow task Fix the failing checkout test and verify.
+Fix the failing checkout test and run the project tests.
 /piagent-inspector
-/workflow review current diff
-/piagent-status
+Review the current diff: correctness, missing tests, scope drift. Read-only.
 /usage efficiency</code></pre>
-      <p>Only <span class="inline-code">/workflow task</span> starts implementation. The inspector opens a menu for files, commands, safety, and context; preflight, inspector, status, and efficiency are optional. Use a separate review when the scope or handoff policy calls for one.</p>
+      <p>Only the plain-language lines start model work. Preflight, inspector and efficiency are optional views.</p>
     </article>
   </div>
 </section>
@@ -165,22 +164,22 @@
 <section class="section">
   <div class="callout ok-callout">
     <strong>Git in Pi Agent</strong>
-    <p>There is no separate <span class="inline-code">/git</span> namespace. Use <span class="inline-code">/workflow commit</span> for a reviewed local commit and <span class="inline-code">/workflow pr</span> to prepare a pull request. Actions such as <span class="inline-code">git push</span> or broad staging with <span class="inline-code">git add -A</span> still require operator confirmation.</p>
+    <p>There is no <span class="inline-code">/git</span> namespace and no workflow command. Ask for a commit or a pull request in plain language. <span class="inline-code">git push</span>, GitHub writes and broad staging such as <span class="inline-code">git add -A</span> still require operator confirmation.</p>
   </div>
   <div class="callout">
     <strong>Parent-direct orchestration</strong>
-    <p>Use <span class="inline-code">/piagent-orchestration</span> to inspect the one-helper ceiling, dispatch/skip reason, projected token saving, review lenses, Field Guide, and writer policy. Helpers default to off. Explicit opt-in still permits only one fresh read-only helper when two independent lanes and at least 30% projected net saving are proven; workers and retries stay disabled.</p>
+    <p>Use <span class="inline-code">/piagent-orchestration</span> to inspect the helper ceiling, dispatch/skip reason, review lenses, Field Guide, and writer policy. Helpers default to off. With explicit opt-in the parent may use up to two fresh read-only helpers; token-saving estimates are telemetry, not a gate. Workers and retries stay disabled.</p>
   </div>
   <div class="command-grid">
-    <article class="command-card"><header><span>Bounded implementation</span><button class="clip-btn" data-clip="/workflow task Fix the failing checkout test and verify.">Copy</button></header><pre><code>/workflow task Fix the failing checkout test and verify.</code></pre></article>
-    <article class="command-card"><header><span>Read-only scout</span><button class="clip-btn" data-clip="/workflow scout Map the auth flow and risk areas.">Copy</button></header><pre><code>/workflow scout Map the auth flow and risk areas.</code></pre></article>
-    <article class="command-card"><header><span>Plan before coding</span><button class="clip-btn" data-clip="/workflow plan Add multi-tenant billing support.">Copy</button></header><pre><code>/workflow plan Add multi-tenant billing support.</code></pre></article>
-    <article class="command-card"><header><span>Review a diff</span><button class="clip-btn" data-clip="/workflow review current diff">Copy</button></header><pre><code>/workflow review current diff</code></pre></article>
-    <article class="command-card"><header><span>Guarded local commit</span><button class="clip-btn" data-clip="/workflow commit &quot;feat: add guarded git workflow&quot;">Copy</button></header><pre><code>/workflow commit "feat: add guarded git workflow"</code></pre></article>
-    <article class="command-card"><header><span>Prepare a pull request</span><button class="clip-btn" data-clip="/workflow pr &quot;Prepare PR for guarded git workflow&quot;">Copy</button></header><pre><code>/workflow pr "Prepare PR for guarded git workflow"</code></pre></article>
-    <article class="command-card"><header><span>Backend spec to frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe&#10;/workflow be-to-fe Implement frontend support for the new user status endpoint.">Copy</button></header><pre><code>/profile be-readonly-fe
-/workflow be-to-fe Implement frontend support for the new user status endpoint.</code></pre></article>
-    <article class="command-card"><header><span>Improve the platform</span><button class="clip-btn" data-clip="/workflow platform-improve Harden command docs and run verification.">Copy</button></header><pre><code>/workflow platform-improve Harden command docs and run verification.</code></pre></article>
+    <article class="command-card"><header><span>Implementation</span><button class="clip-btn" data-clip="Fix the failing checkout test and run the project tests.">Copy</button></header><pre><code>Fix the failing checkout test and run the project tests.</code></pre></article>
+    <article class="command-card"><header><span>Read-only scout</span><button class="clip-btn" data-clip="Map the auth flow and risk areas. Read-only, do not edit.">Copy</button></header><pre><code>Map the auth flow and risk areas. Read-only, do not edit.</code></pre></article>
+    <article class="command-card"><header><span>Plan before coding</span><button class="clip-btn" data-clip="Plan multi-tenant billing support. Do not edit code yet.">Copy</button></header><pre><code>Plan multi-tenant billing support. Do not edit code yet.</code></pre></article>
+    <article class="command-card"><header><span>Review a diff</span><button class="clip-btn" data-clip="Review the current diff: correctness, missing tests, scope drift. Read-only.">Copy</button></header><pre><code>Review the current diff: correctness, missing tests, scope drift. Read-only.</code></pre></article>
+    <article class="command-card"><header><span>Local commit</span><button class="clip-btn" data-clip="Commit the two docs files with message &quot;docs: update onboarding notes&quot;. Do not push.">Copy</button></header><pre><code>Commit the two docs files with message "docs: update onboarding notes". Do not push.</code></pre></article>
+    <article class="command-card"><header><span>Pull request</span><button class="clip-btn" data-clip="Open a draft pull request for this branch titled &quot;Harden command docs&quot;.">Copy</button></header><pre><code>Open a draft pull request for this branch titled "Harden command docs".</code></pre></article>
+    <article class="command-card"><header><span>Backend spec to frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe&#10;Implement frontend support for the new user status endpoint. Backend is read-only.">Copy</button></header><pre><code>/profile be-readonly-fe
+Implement frontend support for the new user status endpoint. Backend is read-only.</code></pre></article>
+    <article class="command-card"><header><span>Onboard a project</span><button class="clip-btn" data-clip="Inspect this project read-only and record its project context.">Copy</button></header><pre><code>Inspect this project read-only and record its project context.</code></pre></article>
   </div>
 </section>
             <nav class="pager" aria-label="Adjacent pages">

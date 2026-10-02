@@ -5,6 +5,7 @@ import { contextIndexV2Status } from "../../extensions/context-engine.js";
 import { resolveExecutionBackend } from "../../extensions/execution-backend.js";
 import type { ProjectProfile, TaskContract } from "../../extensions/guard-types.js";
 import { pruneCaptureFiles } from "../../extensions/state-retention.js";
+import { ensureStateRootIgnored } from "../../extensions/local-state-path.js";
 import { migrateTaskState, readSessionTaskBinding } from "../../extensions/task-state.js";
 import {
   pruneTaskJournal
@@ -71,6 +72,7 @@ type SessionStartHookDependencies = {
 
 export function registerSessionStartHook(pi: ExtensionAPI, dependencies: SessionStartHookDependencies): void {
   pi.on("session_start", async (_event, ctx) => {
+    ensureStateRootIgnored(ctx.cwd);
     dependencies.activateToolGroups(ctx, []);
     const projectTrusted = ctx.isProjectTrusted();
     const explicitProfile = Boolean(process.env.PIAGENT_PROFILE?.trim());

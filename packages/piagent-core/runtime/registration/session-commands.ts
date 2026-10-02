@@ -1,9 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { WORKFLOW_IDS, resolveWorkflowId } from "../workflows/webui-workflow.ts";
 
 type ExtensionContext = any;
 type TaskContract = any;
-const WORKFLOW_USAGE = WORKFLOW_IDS.join("|");
 
 export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
@@ -13,7 +11,7 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
     evaluateRuntimeSolver, evaluateModelRoute, evaluateRetrievalRoute, formatCount, formatPercent, formatToolResultCaptureStatus, formatUsageSnapshot, helpersMode,
     loadProfileFromContext, matchesProtectedPath, policy, readRecentToolResultCaptures, redactText, resolveRuntimePolicy,
     registerTaskPreflightCommand, runtimeSnapshotCapture, runtimeSnapshotEnabled, runtimeVersions, selectRuntimeAction,
-    shellArg, solverShadow, startFreshWorkflow, trajectoryRuntime, usageExactCommands
+    shellArg, solverShadow, trajectoryRuntime, usageExactCommands
   } = deps;
   function emitUsageSnapshot(ctx: ExtensionContext): void {
     const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
@@ -91,8 +89,8 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
         "namespace: /usage",
         "live: /usage live",
         "history: /usage history",
-        `preflight: /usage preflight [${WORKFLOW_USAGE}]`,
-        `compact: /usage compact [${WORKFLOW_USAGE}]`,
+        `preflight: /usage preflight [<request>]`,
+        `compact: /usage compact [<request>]`,
         "logs: /usage logs",
         "efficiency: /usage efficiency",
         "native exact session: /session",
@@ -208,9 +206,9 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
         "session helpers:",
         "current: /usage live or Pi native /session",
         "name: Pi native /name <task/session name>",
-        `fresh: /fresh ${WORKFLOW_USAGE} <request>`,
+        "new: Pi native /new",
         "resume: Pi native /resume or /session",
-        "legacy: /piagent-session | /setname | /fresh-task | /fresh-scout | /fresh-be-to-fe"
+        "session: /piagent-session | /setname"
       ].join("\n"));
       return;
     }
@@ -231,22 +229,9 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
       return;
     }
     if (["fresh", "new"].includes(action)) {
-      const next = commandArgs(rest);
-      const workflow = resolveWorkflowId(next.action);
-      const request = workflow ? next.rest : [next.action, next.rest].filter(Boolean).join(" ");
-      await startFreshWorkflow(workflow ?? "task", request, ctx);
-      return;
-    }
-    if (["fresh-task", "task"].includes(action)) {
-      await startFreshWorkflow("task", rest, ctx);
-      return;
-    }
-    if (["fresh-scout", "scout"].includes(action)) {
-      await startFreshWorkflow("scout", rest, ctx);
-      return;
-    }
-    if (["fresh-be-to-fe", "be-to-fe"].includes(action)) {
-      await startFreshWorkflow("be-to-fe", rest, ctx);
+      await ctx.newSession({ withSession: async (nextCtx) => {
+        if (rest.trim()) await nextCtx.sendUserMessage(rest);
+      }});
       return;
     }
     if (action === "help") {
@@ -254,7 +239,7 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
         "session helpers:",
         "/usage live",
         "Pi native: /name ABC-123 Short task name",
-        "/fresh task Implement <request>",
+        "Pi native: /new",
         "native: /session | /resume"
       ].join("\n"));
       return;
@@ -301,7 +286,7 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
   });
 
   pi.registerCommand("piagent-session", {
-    description: "Legacy session helper namespace; prefer /usage, Pi native /name, and /fresh",
+    description: "Legacy session helper namespace; prefer /usage and Pi native /name or /new",
     getArgumentCompletions: (prefix: string) => {
       const actions = ["current", "name", "resume", "fresh", "usage", "help"];
       const typed = String(prefix ?? "").trim().toLowerCase();
@@ -336,7 +321,7 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
       const approvals = feature ? [feature.externalAction ? "external-action" : "", feature.destructiveAction ? "destructive-action" : "", feature.permissionExpansion ? "permission-expansion" : ""].filter(Boolean) : [];
       const modelRoute = feature ? await evaluateModelRoute?.(ctx, feature, snapshot) : undefined;
       const retrievalRoute = feature ? await evaluateRetrievalRoute?.(ctx, feature) : undefined;
-      return { runtime: snapshot, modelRoute: modelRoute?.status === "ok" ? modelRoute.decision : null, retrievalRoute: retrievalRoute ?? null, scope: task?.scope ?? [], protectedPaths: effectiveProtectedPaths(policy, profile).readProtectedPaths, activeToolGroups: pi.getActiveTools(), helperMode: helpersMode(), helperBudget: "1-readonly-total/0-retries/0-writers", executionBackend: "host", executionBoundary: "host execution is not a sandbox", approvals, blockers: feature?.protectedTarget ? ["protected-target"] : [], controlMode: evaluation.status === "ok" && evaluation.decision.mode === "shadow" ? "shadow" : resolveRuntimePolicy(profile).finalGate === "enforce" ? "enforce" : "assist" };
+      return { runtime: snapshot, modelRoute: modelRoute?.status === "ok" ? modelRoute.decision : null, retrievalRoute: retrievalRoute ?? null, scope: task?.scope ?? [], protectedPaths: effectiveProtectedPaths(policy, profile).readProtectedPaths, activeToolGroups: pi.getActiveTools(), helperMode: helpersMode(), helperBudget: "2-readonly-total/0-retries/0-writers", executionBackend: "host", executionBoundary: "host execution is not a sandbox", approvals, blockers: feature?.protectedTarget ? ["protected-target"] : [], controlMode: evaluation.status === "ok" && evaluation.decision.mode === "shadow" ? "shadow" : resolveRuntimePolicy(profile).finalGate === "enforce" ? "enforce" : "assist" };
     }
   });
 

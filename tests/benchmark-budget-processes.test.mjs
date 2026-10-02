@@ -143,7 +143,9 @@ test("registry rejects late admission after core close and invalid timing bounds
 });
 
 test("parent kills a registered detached provider even when its event loop ignores TERM", { skip: process.platform === "win32", timeout: 5000 }, async (t) => {
-  const child = spawn(process.execPath, ["-e", "process.on('SIGTERM',()=>{});process.stdout.write('ready\\n');setTimeout(()=>{while(true){}},0)"], {
+  // Deaf to TERM and busy; it ends itself once orphaned, so a test run killed
+  // before its cleanup does not leave a core spinning.
+  const child = spawn(process.execPath, ["-e", "process.on('SIGTERM',()=>{});const parent=process.ppid;process.stdout.write('ready\\n');setTimeout(()=>{while(true){if(process.ppid!==parent)process.exit(0)}},0)"], {
     detached: true, stdio: ["ignore", "pipe", "pipe"]
   });
   t.after(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* Already reaped. */ } });

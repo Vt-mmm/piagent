@@ -446,7 +446,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
           content: [
             `mode: ${orchestration.defaultMode}`,
             `helpersMode: ${helpersMode()}`,
-            `helpers: max ${orchestration.maxConcurrentSubagents} fresh read-only total; requires >=30% projected net token saving`,
+            `helpers: max ${orchestration.maxConcurrentSubagents} fresh read-only total; no token-saving threshold`,
             `lenses: ${orchestration.defaultReviewLenses.join(", ")}`,
             `fieldGuide: ${orchestration.fieldGuide.enabled ? `${fieldGuidePath} (${fieldGuideExists ? "exists" : "missing"})` : "off"}`,
             "writer: parent only; helper workers and retries are disabled"

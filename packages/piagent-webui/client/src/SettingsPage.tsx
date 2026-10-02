@@ -134,7 +134,7 @@ function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetMod
   const activeModel = options?.models.find((value) => value.modelRef === activeModelRef);
   const modelValue = activeModel ? activeModelRef : "";
   const modelDisplay = observedModel?.displayName ?? session?.modelLabel ?? "—";
-  const thinkingLevels = activeModel?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+  const thinkingLevels = session?.managedThinkingLevels ?? activeModel?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
   const change = async (run: (() => Promise<unknown>) | undefined) => { if (!run) return; setChanging(true); setChangeError(null);
     try { await run(); } catch { setChangeError(localize(locale, "Chưa thể áp dụng thay đổi", "Could not apply this change")); }
     finally { setChanging(false); } };
@@ -225,7 +225,7 @@ function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?:
       {index < choices.length - 1 && <Divider />}</Box>)}</Paper>
     {error && <Typography role="status" color="error" variant="caption" sx={{ mt: 1 }}>{error}</Typography>}
     <ActionConfirmationDialog open={pendingPermission !== null} title={localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần anh xác nhận riêng.",
+      description={localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
       cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={localize(locale, "Bật toàn quyền", "Enable full access")}
       onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); void apply("trusted-full-access"); }} />

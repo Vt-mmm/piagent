@@ -81,7 +81,7 @@ describe("piagent explain", () => {
       assert.equal(result.value.decision, "indeterminate", command);
       assert.equal(result.value.confidence, "runtime-required", command);
       assert.equal(result.value.staticDecision, "allow", command);
-      assert.ok(result.value.remainingGates.includes("task-contract"), command);
+      assert.equal(result.value.remainingGates.includes("task-contract"), false, command);
       assert.ok(result.value.remainingGates.includes("permission-profile"), command);
     }
   });
@@ -104,10 +104,10 @@ describe("piagent explain", () => {
     }
   });
 
-  it("does not imply that task scope overrides protected-path policy", () => {
+  it("does not imply that a request or scope overrides protected-path policy", () => {
     const cwd = fixture();
     const result = explainExpectingExit("cat .env", cwd);
-    assert.match(result.value.remedy, /task scope alone does not override/i);
+    assert.match(result.value.remedy, /no request or scope overrides it/i);
   });
 
   it("lists the boundary in effect without being asked about a command", () => {

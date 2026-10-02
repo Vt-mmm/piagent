@@ -16,7 +16,7 @@ Chọn provider theo danh sách Pi hiển thị. Sau đó kiểm tra:
 
 ```text
 /model
-/model-options
+/piagent-status
 ```
 
 Hoặc:

@@ -1,0 +1,144 @@
+<section class="section">
+  <p class="section-kicker">Toàn cảnh</p>
+  <h2 id="toan-canh">Một dashboard, hai cách dùng model</h2>
+  <p class="section-lead">Piagent chạy trên máy từng thành viên. Ở chế độ cá nhân, nó dùng tài khoản model của chính bạn. Ở chế độ công ty, nó đi qua Agent Watch trên máy bạn và Agent Studio của công ty: công ty giữ key, chọn model và đặt quy trình kiểm tra cho cả team.</p>
+  <figure class="diagram">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" role="img" aria-labelledby="eco-title eco-desc" class="eco-diagram">
+  <title id="eco-title">Hệ sinh thái Piagent</title>
+  <desc id="eco-desc">Máy của thành viên chạy Piagent (Terminal và Dashboard) với guard kiểm tra mọi tool call. Chế độ cá nhân gọi thẳng model bằng tài khoản riêng. Chế độ công ty đi qua Agent Watch giữ key trong Keychain và Agent Studio của công ty, nơi chọn model và Harness cho từng lượt.</desc>
+  <defs>
+    <marker id="eco-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8be9c8"/></marker>
+    <marker id="eco-arrow-lime" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d8ff7a"/></marker>
+  </defs>
+  <style>
+    .eco-box { fill: #101114; stroke: #2c2f37; stroke-width: 1.5; }
+    .eco-zone { fill: rgba(255,255,255,0.015); stroke: #24262d; stroke-width: 1.2; stroke-dasharray: 6 6; }
+    .eco-h { fill: #f4f4ef; font: 600 17px "Be Vietnam Pro", system-ui, sans-serif; }
+    .eco-t { fill: #a4a6ad; font: 400 13.5px "Be Vietnam Pro", system-ui, sans-serif; }
+    .eco-k { fill: #71747d; font: 600 12px "Be Vietnam Pro", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+    .eco-chip { fill: rgba(216,255,122,0.08); stroke: rgba(216,255,122,0.35); }
+    .eco-chip-t { fill: #d8ff7a; font: 600 12.5px "JetBrains Mono", ui-monospace, monospace; }
+    .eco-line { stroke: #8be9c8; stroke-width: 1.8; fill: none; }
+    .eco-line-lime { stroke: #d8ff7a; stroke-width: 1.8; fill: none; stroke-dasharray: 7 6; }
+    .eco-label { fill: #8be9c8; font: 500 12.5px "Be Vietnam Pro", system-ui, sans-serif; }
+    .eco-label-lime { fill: #d8ff7a; font: 500 12.5px "Be Vietnam Pro", system-ui, sans-serif; }
+  </style>
+  <rect class="eco-zone" x="16" y="16" width="420" height="528" rx="22"/>
+  <text class="eco-k" x="40" y="48">Máy của thành viên</text>
+  <rect class="eco-box" x="40" y="68" width="372" height="96" rx="16"/>
+  <text class="eco-h" x="62" y="102">Piagent · Terminal và Dashboard</text>
+  <text class="eco-t" x="62" y="128">Nói việc bằng lời thường; cùng một lịch sử</text>
+  <text class="eco-t" x="62" y="148">trong Terminal (pi) và trình duyệt.</text>
+  <rect class="eco-box" x="40" y="184" width="372" height="116" rx="16"/>
+  <text class="eco-h" x="62" y="218">Guard</text>
+  <text class="eco-t" x="62" y="244">Kiểm tra mọi tool call: file bảo vệ, profile</text>
+  <text class="eco-t" x="62" y="264">quyền, file quá lớn, sửa trên bản đã cũ;</text>
+  <text class="eco-t" x="62" y="284">push, publish, lệnh có mạng chờ bạn duyệt.</text>
+  <rect class="eco-box" x="40" y="320" width="372" height="96" rx="16"/>
+  <text class="eco-h" x="62" y="354">Sandbox của chế độ công ty</text>
+  <text class="eco-t" x="62" y="380">Lệnh chạy không mạng, không đọc Keychain,</text>
+  <text class="eco-t" x="62" y="400">.env hay SSH key; mạng chỉ mở theo lần duyệt.</text>
+  <rect class="eco-chip" x="40" y="440" width="176" height="34" rx="17"/>
+  <text class="eco-chip-t" x="58" y="462">piagent dashboard</text>
+  <rect class="eco-chip" x="226" y="440" width="186" height="34" rx="17"/>
+  <text class="eco-chip-t" x="244" y="462">piagent studio --web</text>
+  <rect class="eco-chip" x="40" y="486" width="76" height="34" rx="17"/>
+  <text class="eco-chip-t" x="64" y="508">pi</text>
+  <rect class="eco-chip" x="126" y="486" width="186" height="34" rx="17"/>
+  <text class="eco-chip-t" x="144" y="508">piagent-doctor</text>
+  <rect class="eco-box" x="500" y="68" width="250" height="96" rx="18"/>
+  <text class="eco-h" x="522" y="102">Model cá nhân</text>
+  <text class="eco-t" x="522" y="128">Đăng nhập bằng tài khoản</text>
+  <text class="eco-t" x="522" y="148">riêng: Codex, Claude, Copilot…</text>
+  <rect class="eco-box" x="500" y="184" width="250" height="232" rx="18"/>
+  <text class="eco-k" x="522" y="216">Ứng dụng macOS</text>
+  <text class="eco-h" x="522" y="244">Agent Watch</text>
+  <text class="eco-t" x="522" y="272">Giữ key công ty trong</text>
+  <text class="eco-t" x="522" y="292">Keychain; nhập cấu hình</text>
+  <text class="eco-t" x="522" y="312">cho Piagent; cấp quyền</text>
+  <text class="eco-t" x="522" y="332">ngắn hạn cho từng lượt.</text>
+  <text class="eco-t" x="522" y="364">Model không bao giờ thấy</text>
+  <text class="eco-t" x="522" y="384">key.</text>
+  <rect class="eco-zone" x="800" y="16" width="304" height="528" rx="22"/>
+  <text class="eco-k" x="824" y="48">Máy chủ công ty</text>
+  <rect class="eco-box" x="824" y="68" width="256" height="300" rx="18"/>
+  <text class="eco-h" x="846" y="102">Agent Studio</text>
+  <text class="eco-t" x="846" y="132">Thành viên, key, ngân sách</text>
+  <text class="eco-t" x="846" y="152">và usage theo ngày.</text>
+  <text class="eco-t" x="846" y="186">Harness của team:</text>
+  <text class="eco-label-lime" x="846" y="210">kế hoạch · check · review</text>
+  <text class="eco-t" x="846" y="244">Chọn model cho từng vai:</text>
+  <text class="eco-label-lime" x="846" y="268">main · research · review</text>
+  <text class="eco-t" x="846" y="302">Mỗi vai một model riêng,</text>
+  <text class="eco-t" x="846" y="322">thinking theo Harness.</text>
+  <rect class="eco-box" x="824" y="392" width="256" height="128" rx="18"/>
+  <text class="eco-h" x="846" y="426">Model của công ty</text>
+  <text class="eco-t" x="846" y="454">Claude, GPT, DeepSeek, Kimi,</text>
+  <text class="eco-t" x="846" y="474">GLM, Qwen… qua key công ty;</text>
+  <text class="eco-t" x="846" y="494">key chỉ nằm trên máy chủ.</text>
+  <path class="eco-line" d="M412 300 L 500 300" marker-end="url(#eco-arrow)"/>
+  <text class="eco-label" x="424" y="290">công ty</text>
+  <path class="eco-line" d="M750 300 C 790 300, 790 220, 824 220" marker-end="url(#eco-arrow)"/>
+  <text class="eco-label" x="748" y="348">lượt có hạn</text>
+  <path class="eco-line" d="M952 368 L952 392" marker-end="url(#eco-arrow)"/>
+  <path class="eco-line-lime" d="M412 116 L 500 116" marker-end="url(#eco-arrow-lime)"/>
+  <text class="eco-label-lime" x="420" y="106">cá nhân</text>
+</svg>
+    <figcaption class="diagram-hint">Vuốt ngang để xem hết sơ đồ.</figcaption>
+  </figure>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Thành phần</p>
+  <h2 id="thanh-phan">Mỗi phần làm một việc</h2>
+  <div class="grid cols-2">
+    <article class="card">
+      <h3 id="piagent">Piagent</h3>
+      <p>Coding agent trong Terminal (<span class="inline-code">pi</span>) và trên trình duyệt (<span class="inline-code">piagent dashboard</span>). Hai nơi dùng chung lịch sử: bắt đầu ở Terminal, xem tiếp trên trình duyệt.</p>
+    </article>
+    <article class="card">
+      <h3 id="guard">Guard</h3>
+      <p>Kiểm tra từng tool call trước khi chạy: file bảo vệ như <span class="inline-code">.env</span>, profile quyền, file quá lớn, sửa trên bản đã cũ. Push, publish và lệnh có mạng chờ bạn duyệt đúng một lần.</p>
+    </article>
+    <article class="card">
+      <h3 id="agent-watch">Agent Watch</h3>
+      <p>Ứng dụng macOS giữ key công ty trong Keychain và nhập cấu hình cho Piagent. Mỗi lượt nhận quyền ngắn hạn; model và các lệnh không bao giờ đọc được key.</p>
+    </article>
+    <article class="card">
+      <h3 id="agent-studio">Agent Studio</h3>
+      <p>Máy chủ của công ty: thành viên, key, ngân sách, usage theo ngày và Harness của team. Studio chọn model cho từng vai (main, research, review) và mức suy luận.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Một lượt ở chế độ công ty</p>
+  <h2 id="mot-luot">Từ tin nhắn tới "Check đã qua · Review không có lỗi chặn"</h2>
+  <div class="steps">
+    <article class="step"><div><h3>Bạn nhắn việc cần làm</h3><p>Viết như nói với đồng nghiệp, chọn model <span class="inline-code">agent-watch-auto</span> trong nhóm Công ty.</p></div></article>
+    <article class="step"><div><h3>Studio cấp một lượt</h3><p>Agent Watch xin quyền ngắn hạn; Studio chọn model cho agent chính theo Harness của team.</p></div></article>
+    <article class="step"><div><h3>Agent làm trong sandbox</h3><p>Đọc, sửa và chạy lệnh trong project, không có mạng. Cần mạng thì xin bạn duyệt đúng một lệnh.</p></div></article>
+    <article class="step"><div><h3>Harness kiểm tra</h3><p>Chưa có check nào qua trên code cuối thì yêu cầu chạy; rồi một subagent review bản sửa. Lỗi chặn được gửi lại cho agent, tối đa số vòng team đặt.</p></div></article>
+    <article class="step"><div><h3>Kết quả ghi dưới câu trả lời</h3><p>Ví dụ "Check đã qua trên code cuối · Review không có lỗi chặn". Bạn có thể Dừng bất cứ lúc nào và Tiếp tục sau.</p></div></article>
+  </div>
+  <figure class="shot">
+    <img src="/assets/shots/company-review-running.jpg" alt="Đang review: thanh trên ghi Subagent 1/2, nút Dừng vẫn còn" loading="lazy" width="1600" height="1000">
+    <figcaption>Lúc review đang chạy: thanh trên ghi Subagent 1/2, cột Workspace ghi 1/2 đang chạy, nút Dừng vẫn hoạt động.</figcaption>
+  </figure>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Chọn chế độ</p>
+  <h2 id="chon-che-do">Khi nào dùng cá nhân, khi nào dùng công ty</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Cá nhân</th><th>Công ty</th></tr></thead>
+    <tbody>
+      <tr><td>Model</td><td>Tài khoản bạn đăng nhập (Codex, Claude, Copilot…)</td><td>Model công ty chọn trong Studio, theo vai</td></tr>
+      <tr><td>Key</td><td>Do Pi quản lý trên máy bạn</td><td>Nằm trên máy chủ và trong Keychain, không vào project</td></tr>
+      <tr><td>Kiểm tra</td><td>Guard; bạn quyết định khi nào chạy test</td><td>Guard, sandbox, và Harness tự yêu cầu check, review</td></tr>
+      <tr><td>Mạng khi chạy lệnh</td><td>Như trên máy bạn; push và publish chờ duyệt</td><td>Tắt; mở cho đúng một lệnh khi bạn duyệt</td></tr>
+      <tr><td>Chi phí</td><td>Theo gói của bạn</td><td>Theo ngân sách công ty, xem usage trong Studio</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok-callout"><strong>Bắt đầu</strong><p>Cá nhân: cài theo <a href="/quickstart">Quickstart</a> rồi chạy <span class="inline-code">piagent dashboard</span>. Công ty: mở Agent Watch, tab Studio, kết nối key và nhập cấu hình cho Piagent; model <span class="inline-code">agent-watch-auto</span> sẽ có trong nhóm Công ty.</p></div>
+</section>

@@ -91,6 +91,14 @@
         "unread": { "type": "boolean" },
         "composerAvailable": { "type": "boolean" },
         "needsAttention": { "type": "boolean" },
+        "managedHelpers": { "type": "object", "additionalProperties": false, "required": ["active", "maximum"], "properties": {"active": {"type": ["integer", "null"], "minimum": 0, "maximum": 2}, "maximum": {"const": 2}} },
+        "managedThinkingLevels": {"type": "array", "uniqueItems": true, "maxItems": 7, "items": {"enum": ["off","minimal","low","medium","high","xhigh","max"]}},
+        "managedPlan": { "type": "object", "additionalProperties": false, "required": ["steps"], "properties": {
+          "steps": { "type": "array", "minItems": 1, "maxItems": 30, "items": { "type": "object", "additionalProperties": false, "required": ["step", "status"], "properties": {
+            "step": { "type": "string", "minLength": 1, "maxLength": 200 }, "status": { "enum": ["pending", "in_progress", "completed"] } } } } } },
+        "managedProcess": { "type": "object", "additionalProperties": false, "required": ["outcome", "verified", "reviewed", "blockingOpen"], "properties": {
+          "outcome": { "enum": ["no_change", "interrupted", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
+          "verified": { "type": "boolean" }, "reviewed": { "type": "boolean" }, "blockingOpen": { "type": "integer", "minimum": 0, "maximum": 1000 }, "planSkipped": { "const": true } } },
         "modelLabel": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
         "thinkingLevel": { "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max", "unknown"] },
         "contextUsage": { "$ref": "#/$defs/contextUsage" },

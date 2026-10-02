@@ -9,6 +9,8 @@ describe("sensitive text redaction", () => {
   const joined = (...parts) => parts.join("");
   const dashJoined = (...parts) => parts.join("-");
   const underscoreJoined = (...parts) => parts.join("_");
+  const studioTail = "Zq0Xy_9-AbCdEfGhIjKlMnOpQrStUvWxYz012345678";
+  const studio = (kind) => underscoreJoined("as", kind, "0f8b2c1e-1234-4abc-9def-0123456789ab", studioTail);
   const leakedSecrets = [
     ["AWS secret access key", joined("AWS_SECRET_ACCESS_KEY=", "wJalrXUtnFEMI/", "K7MDENG/bPxRfiCYEXAMPLEKEY")],
     ["AWS secret access key with whitespace separator", joined("aws_secret_access_key ", "wJalrXUtnFEMI/", "K7MDENG/bPxRfiCYEXAMPLEKEY")],
@@ -28,7 +30,13 @@ describe("sensitive text redaction", () => {
     // npm credential actually appears went through untouched.
     ["npm automation token", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789")],
     ["npmrc auth line", joined("//registry.npmjs.org/:_authToken=", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789"))],
-    ["failing publish log", joined("npm ERR! Incorrect or missing password for ", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789"))]
+    ["failing publish log", joined("npm ERR! Incorrect or missing password for ", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789"))],
+    // Agent Studio's credentials were caught only behind a header or a key name.
+    ["Studio API key echoed", joined("echo ", studio("live"))],
+    ["Studio device token in an error", joined("request failed for ", studio("device"), ": unauthorized")],
+    ["Studio run token in a URL and JSON", joined("https://studio.example/runs/", studio("run"), "/close {\"t\":\"", studio("run"), "\"}")],
+    ["Studio key after an escaped newline in JSON", JSON.stringify(joined("line one\n", studio("live")))],
+    ["Studio key glued to a variable name", joined("export STUDIO_TOKEN_", studio("live"))]
   ];
 
   for (const [name, text] of leakedSecrets) {
@@ -43,6 +51,7 @@ describe("sensitive text redaction", () => {
         underscoreJoined("sk", "live", ""),
         dashJoined("xoxb", ""),
         joined("AI", "za"),
+        studioTail.slice(5, 20),
         "eyJhbGci",
         "abcdefghijklmnopqrstuvwxyz1234567890",
         "PRIVATE KEY",
@@ -97,6 +106,12 @@ describe("sensitive text redaction", () => {
 
   // Name-based exclusions do the work that length was mistakenly credited with:
   // these read as configuration whatever their value is.
+  it("keeps the Studio key prefix and names that only start like a Studio token", () => {
+    for (const plain of [joined("Key ", underscoreJoined("as", "live", "0f8b2c1e"), " (shown by Studio)"), "run has_run_tests and as_device_list", "as_live_ is the prefix of a Studio key"]) {
+      assert.deepEqual(redactSensitiveText(plain), { text: plain, redacted: false });
+    }
+  });
+
   it("keeps values whose key only resembles a secret name", () => {
     for (const text of ["passwordPolicy=minimum-length", "semanticTokenType=namespace-declaration", "NODE_ENV=production"]) {
       assert.equal(redactSensitiveText(text).redacted, false, text);

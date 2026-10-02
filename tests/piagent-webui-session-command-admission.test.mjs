@@ -57,7 +57,7 @@ describe("Piagent durable session command admission", () => {
         return "permission-changed";
       },
       async send(sessionRef, payload) {
-        sends += 1; assert.equal(sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(payload.message, "/workflow scout Build safely.");
+        sends += 1; assert.equal(sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(payload.message, "Build safely.");
         return { resultCode: "started", operationRef: "operation_create_01" };
       }
     };
@@ -75,13 +75,89 @@ describe("Piagent durable session command admission", () => {
     assert.equal(receipt.sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(receipt.operationRef, "operation_create_01");
     const replay = await controller.execute(command);
     assert.equal(replay.deduplicated, true); assert.equal(replay.sessionRef, receipt.sessionRef);
+    // The catalog changed (a conversation was created) since the page read it:
+    // a new conversation does not depend on the others and is still created.
     const after = await catalog();
+    assert.notEqual(after.catalogRevision, before.catalogRevision);
     const deferredCommand = { ...command, commandId: "command_create_deferred_0001", idempotencyKey: "idempotency_create_deferred_1234567890",
-      expectedCatalogRevision: after.catalogRevision, payload: { ...command.payload, deferInitialMessage: true } };
+      expectedCatalogRevision: before.catalogRevision, payload: { ...command.payload, deferInitialMessage: true } };
     const deferred = await controller.execute(deferredCommand);
     assert.equal(validateFixture(registry, "session-command-v1", deferred).valid, true);
     assert.equal(deferred.phase, "settled"); assert.equal(deferred.resultCode, "created"); assert.equal(deferred.operationRef, null);
     assert.equal(creates, 2); assert.equal(sends, 1); assert.equal(permissionChanges, 2);
+  });
+
+  // A running turn writes its conversation after every step, so the revision
+  // the page read is outdated within a second; Stop names the operation instead.
+  it("stops the running operation whatever revision the page read, and only that operation", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-session-abort-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 43), info = { path: path.join(root, "running.jsonl"), id: "raw-running", cwd: path.join(root, "project"),
+      name: "Running", created: new Date("2026-08-14T09:00:00.000Z"), modified: new Date("2026-08-14T09:00:01.000Z"),
+      messageCount: 2, firstMessage: "Fix it.", allMessagesText: "Fix it." };
+    const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_abort_test", key, listSessions: async () => [info] });
+    const aborted = [];
+    const runtimes = { async abort(sessionRef, operationRef, clearQueued) {
+      if (operationRef !== "operation_running") throw new Error("session-operation-conflict");
+      aborted.push([sessionRef, operationRef, clearQueued]);
+    } };
+    const controller = new SessionCommandController({ catalog, runtimes, store: new SessionCommandStore(root, key), events: new GatewayEventStore(),
+      now: () => new Date("2026-08-14T09:06:00.000Z") });
+    const seen = await catalog(), row = seen.sessions[0];
+    // Two more steps were written after the page read the conversation.
+    info.modified = new Date("2026-08-14T09:05:30.000Z"); info.messageCount = 4;
+    assert.notEqual((await catalog()).sessions[0].sessionRevision, row.sessionRevision);
+    const stop = (suffix, operationRef) => ({ ...command(row, seen.catalogRevision, "session.abort", suffix), payload: { operationRef, clearQueued: true } });
+    const receipt = await controller.execute(stop("abort_running_01", "operation_running"));
+    assert.equal(validateFixture(registry, "session-command-v1", receipt).valid, true);
+    assert.equal(receipt.phase, "settled"); assert.equal(receipt.resultCode, "aborted");
+    assert.deepEqual(aborted, [[row.sessionRef, "operation_running", true]]);
+    const other = await controller.execute(stop("abort_other_001", "operation_finished"));
+    assert.notEqual(other.phase, "settled"); assert.equal(aborted.length, 1);
+  });
+
+  // The page stops waiting for an unconfirmed send once its command has
+  // expired: a send that arrives after that is refused before admission, so
+  // it can never run behind the member's back.
+  it("refuses a send that arrives after its command expired, without running or journaling it", async (t) => {
+    const value = fixture(t), before = await value.catalog(), row = before.sessions[0];
+    let sends = 0; value.runtimes.send = async () => { sends += 1; return { resultCode: "started", operationRef: "operation_late_0001" }; };
+    const late = { ...command(row, before.catalogRevision, "session.send", "late_send_0001"), requestedAt: "2026-08-14T09:01:00.000Z",
+      expiresAt: "2026-08-14T09:03:00.000Z", payload: { delivery: "new-operation", message: "too late", messageRequestId: "message_late_0001",
+        expectedOperationRef: null, attachmentRefs: [] } };
+    const receipt = await value.controller.execute(late);
+    assert.equal(validateFixture(registry, "session-command-v1", receipt).valid, true);
+    assert.deepEqual([receipt.phase, receipt.resultCode, receipt.error?.code], ["rejected", "expired", "session-command-expired"]);
+    assert.equal(sends, 0);
+    assert.equal(value.store.lookup(late).state, "none", "nothing journaled");
+  });
+
+  // The page stopped waiting for a slow create and sent the same command again:
+  // it waits behind the create and gets its receipt; one conversation exists.
+  it("answers a create sent again while the first is still running with the same receipt, creating once", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-session-create-again-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 47), createdInfo = { path: path.join(root, "slow.jsonl"), id: "raw-slow", cwd: path.join(root, "project"),
+      name: "Slow", created: new Date("2026-08-14T09:05:01.000Z"), modified: new Date("2026-08-14T09:05:02.000Z"), messageCount: 1,
+      firstMessage: "Build slowly.", allMessagesText: "Build slowly." };
+    let sessions = [], creates = 0, sends = 0;
+    const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_create_again", key, listSessions: async () => sessions });
+    const runtimes = {
+      async create() { creates += 1; await new Promise((resolve) => setTimeout(resolve, 150)); sessions = [createdInfo]; return sessionRefForPath(key, createdInfo.path); },
+      async send() { sends += 1; return { resultCode: "started", operationRef: "operation_slow_0001" }; }
+    };
+    const before = await catalog(), controller = new SessionCommandController({ catalog, runtimes,
+      store: new SessionCommandStore(root, key), events: new GatewayEventStore(), now: () => new Date("2026-08-14T09:06:00.000Z") });
+    const create = { schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+      commandId: "command_create_slow_01", idempotencyKey: "idempotency_create_slow_1234567890", action: "session.create",
+      requestedAt: "2026-08-14T09:05:00.000Z", expiresAt: "2026-08-14T09:10:00.000Z", sessionRef: null,
+      expectedCatalogRevision: before.catalogRevision, expectedSessionRevision: null,
+      payload: { projectRef: "project_slow_01", placeRef: "project_slow_01", modelRef: null, thinkingLevel: "high",
+        message: "Build slowly.", messageRequestId: "message_slow_01" } };
+    const [first, again] = await Promise.all([controller.execute(create), controller.execute(create)]);
+    assert.deepEqual([first.phase, first.resultCode], ["settled", "started"]);
+    assert.deepEqual([again.phase, again.sessionRef, again.deduplicated], ["settled", first.sessionRef, true]);
+    assert.deepEqual([creates, sends], [1, 1]);
   });
 
   it("keeps a created session identity when effective options mismatch and returns v1-compatible uncertainty", async (t) => {
@@ -179,9 +255,10 @@ describe("Piagent durable session command admission", () => {
     assert.equal(fs.statSync(value.store.directory).mode & 0o777, 0o700);
     assert.equal(fs.statSync(value.store.file).mode & 0o777, 0o600);
 
-    const stale = await value.controller.execute(command(row, before.catalogRevision, "session.release", "stale_release_01"));
+    // Stale because this conversation changed (it is now held), whatever the catalog says.
+    const stale = await value.controller.execute(command(row, "catalog_revision_from_another_tab", "session.release", "stale_release_01"));
     assert.equal(stale.phase, "rejected"); assert.equal(stale.resultCode, "stale-revision"); assert.equal(value.counts().disposed, 0);
-    const owned = await value.catalog(), release = command(owned.sessions[0], owned.catalogRevision, "session.release", "release_0001");
+    const owned = await value.catalog(), release = command(owned.sessions[0], before.catalogRevision, "session.release", "release_0001");
     const released = await value.controller.execute(release);
     assert.equal(validateFixture(registry, "session-command-v1", released).valid, true);
     assert.equal(released.resultCode, "released"); assert.equal(value.counts().disposed, 1);
@@ -334,7 +411,7 @@ describe("Piagent durable session command admission", () => {
     assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/);
     assert.equal(promptText, null, "the durable receipt must precede expensive prompt hooks");
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(promptText, "/workflow review Continue this session.");
+    assert.equal(promptText, "Continue this session.");
     const streamed = events.replay(0).events;
     for (const event of streamed) assert.equal(validateFixture(registry, "gateway-protocol-v1", event).valid, true);
     assert.equal(streamed.some((event) => event.kind === "message.delta"), true);
@@ -359,7 +436,7 @@ describe("Piagent durable session command admission", () => {
     assert.equal(abortedSettlement.payload.reasonCode, "operation-aborted");
     assert.equal(validateFixture(registry, "gateway-protocol-v1", abortedSettlement).valid, true);
 
-    // A workflow is an envelope for one dispatch, not session state. The next
+    // A legacy workflow field does not rewrite the current or next message. The next
     // unrelated request is sent verbatim unless the operator chooses another
     // workflow for that message.
     const afterAbort = await catalog(), afterAbortRow = afterAbort.sessions[0];

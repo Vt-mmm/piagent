@@ -102,7 +102,8 @@ describe("project state migration", () => {
     assert.deepEqual(preview.wouldRewrite, ["AGENTS.md"]);
     run(root, "--apply");
     const agents = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
-    assert.match(agents, /piagent_task_start` exactly once/);
+    assert.match(agents, /Read the narrow target and nearest test/);
+    assert.doesNotMatch(agents, /piagent_task_start/);
     assert.match(agents, /Keep this team-specific preface/);
     assert.match(agents, /Never replace this line/);
     assert.doesNotMatch(agents, /Old managed checklist/);

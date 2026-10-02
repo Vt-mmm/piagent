@@ -1199,7 +1199,7 @@ export function evaluateExecPolicyCore(command, options) {
     for (const pattern of policy.blockedCommandPatterns ?? []) {
       if (!legacyPatternMatchesSegment(pattern, words)) continue;
       matches.push(`forbid:legacy:${pattern}`);
-      reasons.push(`Blocked by legacy policy pattern: ${pattern}`);
+      reasons.push(`Blocked: the command runs ${pattern}, which the project policy forbids`);
     }
 
     const nested = extractNestedCommands(braceText, words);
@@ -1242,7 +1242,7 @@ export function evaluateExecPolicyCore(command, options) {
   };
   for (const pattern of policy.requireConfirmationPatterns ?? []) {
     if (segments.some((entry) => confirmationPatternMatches(pattern, entry.words))) {
-      reasons.push(`Confirmation required by legacy policy pattern: ${pattern}`);
+      reasons.push(`Confirmation required: the command runs ${pattern}`);
       break;
     }
   }

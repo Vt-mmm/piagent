@@ -1,88 +1,53 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ErrorOutlineRounded from "@mui/icons-material/ErrorOutlineRounded";
 import HistoryRounded from "@mui/icons-material/HistoryRounded";
-import ImageOutlined from "@mui/icons-material/ImageOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 import type { ApprovalSummary } from "../../contracts/generated/snapshot-v1.ts";
-import type { AttachmentSummary, PiagentWebUIBoundedTranscriptProjectionV1, TranscriptItem } from "../../contracts/generated/transcript-v1.ts";
-import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
+import type { PiagentWebUIBoundedTranscriptProjectionV1 } from "../../contracts/generated/transcript-v1.ts";
 import { ApprovalRequestList } from "./ApprovalPanel.tsx";
 import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
-import { attachmentDetail } from "./attachment-intake.ts";
 import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
-import { conversationTranscriptItems, durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
+import { liveTokensPerSecond, timelineTurns } from "./timeline-view-model.ts";
+import { LIVE_FAILURES, LiveTurnView, TimelineTurnView } from "./TimelineTurn.tsx";
+import { durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
   persistedLiveConversationMatches, persistedLiveUserExists, successfulAssistantText } from "./transcript-view-model.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 
-const MarkdownMessage = lazy(async () => ({ default: (await import("./MarkdownMessage.tsx")).MarkdownMessage }));
-
-function AssistantText({ children }: { children: string }) {
-  return <Suspense fallback={<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.75 }}>{children}</Typography>}>
-    <MarkdownMessage>{children}</MarkdownMessage>
-  </Suspense>;
-}
-
-function AttachmentCards({ attachments, locale }: { attachments: readonly (AttachmentSummary | Attachment)[]; locale: UiLocale }) {
-  if (!attachments.length) return null;
-  return <Stack spacing={.75} sx={{ mb: 1 }} aria-label={localize(locale, "File đã gửi", "Sent files")}>{attachments.map((attachment, index) => {
-    const live = "sourceBytes" in attachment;
-    const detail = live ? attachmentDetail(attachment, locale) : `${attachment.kind === "document"
-      ? localize(locale, "Tài liệu", "Document") : attachment.kind === "image" ? localize(locale, "Ảnh", "Image") : "File"}${attachment.truncated
-        ? ` · ${localize(locale, "đã cắt bớt", "truncated")}` : ""}`;
-    return <Paper key={`${attachment.displayName}:${index}`} variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1.1,
-      minWidth: 220, maxWidth: 440, px: 1.2, py: 1, borderRadius: 2, bgcolor: "background.paper" }}>
-      {attachment.kind === "image" ? <ImageOutlined color="action" /> : <DescriptionOutlined color="action" />}
-      <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>{attachment.displayName}</Typography>
-        <Typography variant="caption" color="text.secondary">{detail}</Typography></Box>
-    </Paper>;
-  })}</Stack>;
-}
-
-function TranscriptMessage({ item, locale }: { item: TranscriptItem; locale: UiLocale }) {
-  const text = item.role === "assistant" ? successfulAssistantText(item.content.text ?? "") : item.content.text;
-  if (item.role === "user") return <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 3, px: 2, py: 1.4 }}>
-    <AttachmentCards attachments={item.attachments ?? []} locale={locale} />
-    {text && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}>{text}</Typography>}
-    {(item.content.redacted || item.content.truncated) && <Typography variant="caption" color="text.secondary">
-      {item.content.redacted ? localize(locale, "Đã ẩn dữ liệu nhạy cảm", "Sensitive data hidden") : localize(locale, "Nội dung đã rút gọn", "Content truncated")}
-    </Typography>}
-  </Box>;
-  if (!text) return null;
-  return <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}><Box className="brand-mark" aria-hidden="true">π</Box>
-    <Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>{item.role === "custom"
-      ? localize(locale, "Biên nhận Piagent", "Piagent receipt") : "Piagent"}</Typography>
-      {text && <Box sx={{ mt: .6 }}><AssistantText>{text}</AssistantText></Box>}
-      {(item.content.redacted || item.content.truncated) && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .8 }}>
-        {item.content.redacted ? localize(locale, "Đã ẩn dữ liệu nhạy cảm", "Sensitive data hidden") : localize(locale, "Nội dung đã rút gọn", "Content truncated")}
-      </Typography>}
-    </Box>
-  </Box>;
+// Tokens per second of the answer being streamed, estimated from its text.
+function useLiveRate(text: string): number | null {
+  const started = useRef<{ at: number; from: number } | null>(null), [rate, setRate] = useState<number | null>(null);
+  useEffect(() => {
+    if (!text) { started.current = null; setRate(null); return; }
+    started.current ??= { at: Date.now(), from: text.length };
+    setRate(liveTokensPerSecond(text.length - started.current.from, Date.now() - started.current.at));
+  }, [text]);
+  return rate;
 }
 
 function RunningStatus({ live, locale, onOpenActivity }: { live: LiveConversation; locale: UiLocale; onOpenActivity?: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 10_000); return () => window.clearInterval(timer); }, []);
-  const status = liveProgressStatus(live, locale, now);
+  const status = liveProgressStatus(live, locale, now), rate = useLiveRate(live.assistant ?? "");
   return <Stack direction="row" spacing={1.25} role="status" aria-live="polite" sx={{ alignItems: "center", color: "text.secondary", py: .75 }}>
     <CircularProgress size={19} thickness={4} />
     <Box sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 600 }}>{status.label}</Typography>
-      <Typography variant="caption" color="text.disabled">{status.detail}</Typography></Box>
+      <Typography variant="caption" color="text.disabled">{status.detail}{rate !== null && ` · ≈ ${rate} tok/s`}</Typography></Box>
     {onOpenActivity && <Button size="small" variant="text" onClick={onOpenActivity} sx={{ ml: "auto !important" }}>
       {localize(locale, "Xem Activity", "View Activity")}</Button>}
   </Stack>;
 }
 
-export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity }: { sessionRef: string; sessionRevision: string;
-  live?: LiveConversation; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void }) {
+// `onContinue` (given while the conversation is idle and can take a message)
+// sends "tiếp tục" for the last turn when it failed or has no answer.
+export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity, onContinue }: { sessionRef: string; sessionRevision: string;
+  live?: LiveConversation; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void; onContinue?: () => void }) {
   const [transcript, setTranscript] = useState<PiagentWebUIBoundedTranscriptProjectionV1>();
   const [loading, setLoading] = useState(true), [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState(false), [syncedOperation, setSyncedOperation] = useState<string | null>(null);
@@ -109,7 +74,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     // need without turning progress into a transcript refresh loop.
   }, [refreshIdentity.key]);
   const items = transcript?.state === "ready" ? transcript.items : [];
-  const visibleItems = useMemo(() => conversationTranscriptItems(items), [items]);
+  const turns = useMemo(() => timelineTurns(items), [items]);
   const durableFinalVisible = useMemo(() => Boolean(live?.user && persistedLiveConversationHasFinal(items, live.user,
     { operationRef: live.operationRef, messageRequestId: live.messageRequestId,
       startedAt: live.startedAt })), [items, live?.user, live?.operationRef, live?.messageRequestId, live?.startedAt]);
@@ -125,25 +90,21 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
       setTranscript((current) => current ? { ...current, items: mergeOlderTranscriptPage(current.items, older.items), page: older.page } : older);
     } catch { setError(true); } finally { setLoadingOlder(false); }
   };
-  return <Stack spacing={2.5}>
+  const liveAnswer = live ? successfulAssistantText(live.assistant || "") : null;
+  return <Stack spacing={3}>
     {transcript?.page.hasOlder && <Box sx={{ textAlign: "center" }}><Button size="small" variant="text" startIcon={loadingOlder
       ? <CircularProgress size={14} /> : <HistoryRounded />} disabled={loadingOlder} onClick={() => void loadOlder()}>
       {localize(locale, "Tải tin cũ hơn", "Load older messages")}</Button></Box>}
     {loading && !transcript && <Box sx={{ py: 5, textAlign: "center" }}><CircularProgress size={22} /></Box>}
     {error && !transcript && <Alert severity="warning" icon={<ErrorOutlineRounded />}>
-      {localize(locale, "Chưa tải được lịch sử session. Anh vẫn có thể thử lại bằng nút làm mới.", "Session history could not be loaded. You can retry with Refresh.")}
+      {localize(locale, "Chưa tải được lịch sử cuộc trò chuyện. Thử lại bằng nút làm mới.", "Session history could not be loaded. You can retry with Refresh.")}
     </Alert>}
-    {visibleItems.map((item) => <TranscriptMessage key={item.messageRef} item={item} locale={locale} />)}
+    {turns.map((turn, index) => <TimelineTurnView key={turn.key} turn={turn} locale={locale}
+      onContinue={index === turns.length - 1 && !liveVisible && !(approvals?.pending.length) ? onContinue : undefined} />)}
     <ApprovalRequestList sessionRef={sessionRef} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
-    {liveVisible && live && <>
-      {live.user && !liveUserDuplicated && <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 3, px: 2, py: 1.4 }}>
-        <AttachmentCards attachments={live.attachments} locale={locale} />
-        <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}>{live.user}</Typography></Box>}
-      {!live.complete && !live.error && <RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} />}
-      {live.complete && !live.error && successfulAssistantText(live.assistant || "") && <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
-        <Box className="brand-mark" aria-hidden="true">π</Box><Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>Piagent</Typography>
-          <Box sx={{ mt: .6 }}><AssistantText>{successfulAssistantText(live.assistant || "")!}</AssistantText></Box></Box>
-      </Box>}
-    </>}
+    {liveVisible && live && <LiveTurnView user={live.user && !liveUserDuplicated ? live.user : null} attachments={live.attachments}
+      activities={live.activities} assistant={live.error ? null : liveAnswer} running={!live.complete && !live.error}
+      failure={live.complete && live.error && LIVE_FAILURES.has(live.error) ? live.error : null} locale={locale}
+      status={<RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} />} />}
   </Stack>;
 }

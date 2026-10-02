@@ -2,11 +2,16 @@ import fs from "node:fs";
 import net from "node:net";
 
 const MAX_MESSAGE_BYTES = 4_096;
+// The folder list grows with every project the company runtime has seen.
+const MAX_RESPONSE_BYTES: Partial<Record<string, number>> = { "project.paths": 1_048_576 };
 
-export type GatewayControlRequest = { action: "health" | "issue-launch-url" | "stop" };
+// The project actions exist for the personal dashboard's company relay: it
+// maps its projects to the company Gateway's opaque refs by folder.
+export type GatewayControlRequest = { action: "health" | "issue-launch-url" | "stop" | "project.paths" } | { action: "project.register"; cwd: string };
 export type GatewayControlResponse = { ok: true; value: unknown } | { ok: false; error: string };
 
 export async function requestGatewayControl(socketPath: string, request: GatewayControlRequest, timeoutMs = 1_500): Promise<GatewayControlResponse> {
+  const limit = MAX_RESPONSE_BYTES[request.action] ?? MAX_MESSAGE_BYTES;
   return await new Promise((resolve, reject) => {
     const socket = net.createConnection({ path: socketPath });
     let body = "", settled = false;
@@ -16,7 +21,7 @@ export async function requestGatewayControl(socketPath: string, request: Gateway
     socket.once("connect", () => socket.write(`${JSON.stringify(request)}\n`));
     socket.on("data", (chunk) => {
       body += chunk;
-      if (Buffer.byteLength(body) > MAX_MESSAGE_BYTES) return finish(() => reject(new Error("gateway-control-response-limit")));
+      if (Buffer.byteLength(body) > limit) return finish(() => reject(new Error("gateway-control-response-limit")));
       const newline = body.indexOf("\n");
       if (newline < 0) return;
       finish(() => {
@@ -63,9 +68,11 @@ export async function startGatewayControlSocket(options: {
       void (async () => {
         let request: GatewayControlRequest;
         try {
-          const parsed = JSON.parse(body.slice(0, newline)) as Partial<GatewayControlRequest>;
-          if (!parsed || !["health", "issue-launch-url", "stop"].includes(String(parsed.action))
-            || Object.keys(parsed).some((key) => key !== "action")) throw new Error("invalid");
+          const parsed = JSON.parse(body.slice(0, newline)) as Record<string, unknown>;
+          const register = parsed?.action === "project.register";
+          if (!parsed || !["health", "issue-launch-url", "stop", "project.paths", "project.register"].includes(String(parsed.action))
+            || Object.keys(parsed).some((key) => key !== "action" && !(register && key === "cwd"))
+            || register && (typeof parsed.cwd !== "string" || !parsed.cwd.startsWith("/") || parsed.cwd.length > 4096)) throw new Error("invalid");
           request = parsed as GatewayControlRequest;
         } catch { socket.end(`${JSON.stringify({ ok: false, error: "invalid-request" })}\n`); return; }
         try { socket.end(`${JSON.stringify(await options.handle(request))}\n`); }

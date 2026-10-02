@@ -8,6 +8,12 @@
       ]
     },
     {
+      "name": "managed",
+      "roots": [
+        "packages/piagent-core/managed"
+      ]
+    },
+    {
       "name": "runtime",
       "roots": [
         "packages/piagent-core/runtime"
@@ -167,7 +173,8 @@
       "webui-shared",
       "runtime",
       "core",
-      "security"
+      "security",
+      "managed"
     ],
     "webui-ownership": [
       "webui-ownership"
@@ -195,7 +202,12 @@
       "webui-gateway",
       "webui-ownership",
       "webui-server",
-      "webui-shared"
+      "webui-shared",
+      "managed"
+    ],
+    "managed": [
+      "managed",
+      "runtime"
     ]
   },
   "lineBudgets": {
@@ -215,7 +227,8 @@
       "webui-ownership": 500,
       "webui-shared": 200,
       "webui-build": 500,
-      "entrypoints": 800
+      "entrypoints": 800,
+      "managed": 500
     },
     "files": {
       "packages/piagent-core/extensions/piagent-guard.ts": 5000,

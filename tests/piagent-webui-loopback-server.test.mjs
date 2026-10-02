@@ -210,6 +210,42 @@ describe("Piagent WebUI loopback server", () => {
     assert.equal(accepted.status, 200); assert.deepEqual(JSON.parse(accepted.body).project, project); assert.equal(imports, 1);
   });
 
+  it("answers null company status, not a failed load, on a gateway without company sessions", async () => {
+    const server = await start();
+    assert.equal((await request(server.origin, "/api/v1/managed")).status, 401);
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    const status = await request(server.origin, "/api/v1/managed", { headers: { Cookie: cookie, Origin: server.origin } });
+    assert.deepEqual([status.status, JSON.parse(status.body)], [200, null]);
+  });
+
+  it("connects the company runtime and relays company session reads only behind browser authority", async () => {
+    let connects = 0;
+    const reads = [];
+    const server = await start({ readCompanyStatus: () => ({ schemaVersion: 1, available: true, state: "ready", reasonCode: null, model: "agent-watch-auto" }),
+      executeCompanyConnect: async () => { connects += 1; return { schemaVersion: 1, available: true, state: "ready", reasonCode: null, model: "agent-watch-auto" }; },
+      readSessionModel: () => { throw new Error("local read for a company session"); },
+      relaySessionRead: async (sessionRef, path) => { reads.push([sessionRef, path]); return sessionRef === "company_session" ? { status: 200, value: { relayed: path } } : null; } });
+    assert.equal((await request(server.origin, "/api/v1/managed")).status, 401);
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    assert.equal(JSON.parse((await request(server.origin, "/api/v1/managed", { headers: { Cookie: cookie, Origin: server.origin } })).body).state, "ready");
+    const connect = (body, extra = {}) => request(server.origin, "/api/v1/managed/connect", { method: "POST", headers: { ...headers, ...extra }, body: JSON.stringify(body) });
+    assert.equal((await connect({ action: "managed.connect" }, { "X-Piagent-CSRF": "wrong" })).status, 403);
+    assert.equal((await connect({ action: "managed.connect" }, { Origin: "http://127.0.0.1:1" })).status, 403);
+    assert.equal((await connect({ action: "managed.connect", projectRef: "x" })).status, 400);
+    assert.equal((await connect({ action: "managed.connect" })).status, 200);
+    assert.equal(connects, 1);
+    assert.equal((await request(server.origin, "/api/v1/sessions/company_session/inspection/transcript?limit=5")).status, 401);
+    const relayed = await request(server.origin, "/api/v1/sessions/company_session/inspection/transcript?limit=5", { headers: { Cookie: cookie, Origin: server.origin } });
+    assert.equal(relayed.status, 200);
+    assert.deepEqual(JSON.parse(relayed.body), { relayed: "/transcript?limit=5" });
+    assert.deepEqual(reads, [["company_session", "/transcript?limit=5"]]);
+  });
+
   it("keeps provider OAuth catalog and jobs authenticated and mutations CSRF-bound", async () => {
     const forwarded = [];
     const catalog = { schemaVersion: 1, version: "piagent-provider-auth-catalog-v1", providers: [] };
@@ -359,6 +395,21 @@ describe("Piagent WebUI loopback server", () => {
     })).status, 403);
     assert.equal((await request(attacked.origin, "/api/v1/bootstrap", { method: "POST",
       headers: { Origin: attacked.origin, "Content-Type": "application/json" }, body: invalid })).status, 429);
+  });
+
+  it("lets an authenticated browser session read more than an unauthenticated client per minute", async () => {
+    // Found live: busy conversations refetch lists on every event and hit 429.
+    const server = await start();
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const headers = { Cookie: exchange.headers["set-cookie"][0].split(";", 1)[0], Origin: server.origin };
+    for (let attempt = 0; attempt < 300; attempt += 1)
+      assert.notEqual((await request(server.origin, "/api/v1/session-catalog", { headers })).status, 429, `read ${attempt}`);
+    let limited = false;
+    for (let attempt = 0; attempt < 130 && !limited; attempt += 1)
+      limited = (await request(server.origin, "/api/v1/session-catalog", { headers: { Origin: server.origin } })).status === 429;
+    assert.equal(limited, true, "unauthenticated clients keep the stricter limit");
   });
 
   it("rate-limits controls per authenticated browser session instead of locking every localhost client", async () => {

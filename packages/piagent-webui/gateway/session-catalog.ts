@@ -47,7 +47,7 @@ function catalogRef(key: Buffer, namespace: string, value: string): string {
 }
 
 export type SessionOwnerProjection = Pick<SessionRow, "state" | "liveState" | "composerAvailable" | "needsAttention" | "owner" | "reasonCode">;
-export type SessionOptionProjection = Pick<SessionRow, "modelLabel" | "thinkingLevel">;
+export type SessionOptionProjection = Pick<SessionRow, "modelLabel" | "thinkingLevel" | "managedHelpers" | "managedThinkingLevels" | "managedPlan" | "managedProcess">;
 
 function display(value: unknown, maximum: number, fallback: string): string {
   const clean = redactSensitiveText(String(value ?? "")).text
@@ -80,7 +80,10 @@ export function projectedSessionTitle(info: Pick<PiSessionInfo, "name" | "firstM
   const normalizedName = suppliedName.toLowerCase();
   const genericName = !suppliedName || normalizedName === projectLabel.toLowerCase()
     || ["working", "pi agent platform", "new conversation"].includes(normalizedName);
-  const source = generatedName ? suppliedName || first : genericName ? first || suppliedName : suppliedName;
+  // The guard names every unnamed session `pi:<project>` at start. That is the
+  // project, not the conversation: like any generic name it yields to the first
+  // message, otherwise every chat in a folder reads as the folder name.
+  const source = generatedName || genericName ? first || suppliedName : suppliedName;
   const internal = INTERNAL_FRESH_TRANSITION.test(source) || INTERNAL_FRESH_TRANSITION.test(first)
     || /\.pi\/task-inbox\//i.test(source);
   const cleaned = display(source, 500, "")
@@ -120,6 +123,11 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
     unread: metadata?.unread ?? false,
     composerAvailable: metadata?.archived ? false : ownership?.composerAvailable ?? false,
     needsAttention: metadata?.archived ? false : ownership?.needsAttention ?? false,
+    ...(sessionOptions?.managedHelpers ? {managedHelpers:{...sessionOptions.managedHelpers,
+      active: ownership?.liveState === 'idle' ? 0 : ownership?.liveState === 'running' || ownership?.liveState === 'waiting-approval' ? sessionOptions.managedHelpers.active : null}} : {}),
+    ...(sessionOptions?.managedThinkingLevels ? {managedThinkingLevels:sessionOptions.managedThinkingLevels} : {}),
+    ...(sessionOptions?.managedPlan ? {managedPlan:sessionOptions.managedPlan} : {}),
+    ...(sessionOptions?.managedProcess ? {managedProcess:sessionOptions.managedProcess} : {}),
     modelLabel: sessionOptions?.modelLabel ?? null,
     thinkingLevel: sessionOptions?.thinkingLevel ?? "unknown",
     contextUsage: { usedTokens: null, contextWindow: null, ratio: null, state: "unknown" },
@@ -128,7 +136,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
       ? { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "released" }
       : ownership?.owner ?? { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "unknown" },
     sessionRevision: revision(key, [info.path, info.modified.toISOString(), info.messageCount, info.name ?? null, metadata?.revision ?? null,
-      sessionOptions?.modelLabel ?? null, sessionOptions?.thinkingLevel ?? "unknown",
+      sessionOptions?.modelLabel ?? null, sessionOptions?.thinkingLevel ?? "unknown", sessionOptions?.managedHelpers, sessionOptions?.managedThinkingLevels, sessionOptions?.managedPlan, sessionOptions?.managedProcess,
       metadata?.archived ? "archived" : ownership ? [ownership.state, ownership.liveState, ownership.owner.kind,
         ownership.owner.ownerEpoch, ownership.owner.runtimeInstanceRef, ownership.reasonCode] : "offline"]),
     reasonCode: metadata?.archived ? metadataReason : ownership?.reasonCode ?? metadataReason

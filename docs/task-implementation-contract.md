@@ -1,6 +1,8 @@
 # Task Implementation Contract v2
 <!-- language: en -->
 
+> **Design record from before 1.9.0.** The task contract, workflow commands (`/workflow`, `/task`, `/fresh`, `/onboard`) and task/trace/verify tools described here were retired on 2026-09-30; sessions are freeform and the guard keeps its path, permission, confirmation, context-budget and stale-edit checks. Kept for reference. Current behavior: [README](../README.md).
+
 ## Muc tieu
 
 Contract la state machine cuc bo giup Pi chung minh mot task da doc gi, duoc sua

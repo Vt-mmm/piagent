@@ -52,7 +52,7 @@ describe("blocked tool calls say what to do next", () => {
   it("appends the remedy to the reason the operator actually sees", () => {
     const decision = withRemedy({ block: true, reason: "Command touches protected path: .env matches **/.env" });
     assert.match(decision.reason, /matches \*\*\/\.env → /);
-    assert.match(decision.reason, /piagent-context/);
+    assert.match(decision.reason, /can hold credentials; do not look for another way to read it/);
     assert.equal(decision.block, true);
   });
 

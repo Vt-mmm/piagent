@@ -15,18 +15,18 @@ function input(mode) { return { mode, objective: "Map independent source entry p
 describe("helper decision and lifecycle", () => {
   it("keeps helpers fully opt-in", () => { assert.equal(helpersMode(undefined), "off"); assert.equal(helpersMode("on"), "on"); });
   it("keeps off solo, recommend non-spawning, and on read-only dispatchable", () => { const lifecycle = new HelperLifecycleRuntime(); assert.equal(lifecycle.decide(input("off")).action, "solo"); assert.equal(lifecycle.decide(input("recommend")).action, "recommend"); assert.equal(lifecycle.decide(input("on")).action, "dispatch"); });
-  it("keeps the parent direct unless isolated independent work projects at least 30% net savings", () => {
+  it("allows useful review of parent output without savings or independence gates, retaining context bounds", () => {
     const lifecycle = new HelperLifecycleRuntime();
     const missing = lifecycle.decide({ ...input("on"), delegationEvidence: undefined });
-    assert.equal(missing.action, "solo"); assert.ok(missing.reasonCodes.includes("delegation-evidence-missing"));
+    assert.equal(missing.action, "dispatch"); assert.equal(missing.projectedSavingsRatio, null);
     const weak = lifecycle.decide({ ...input("on"), delegationEvidence: { ...delegationEvidence, estimatedTotalTokensWithHelper: 7_100 } });
-    assert.equal(weak.action, "solo"); assert.ok(weak.reasonCodes.includes("projected-token-savings-below-30pct"));
+    assert.equal(weak.action, "dispatch"); assert.equal(weak.projectedSavingsRatio, .29);
     const inherited = lifecycle.decide({ ...input("on"), delegationEvidence: { ...delegationEvidence, inheritedParentTokens: 40_000 } });
     assert.equal(inherited.action, "solo"); assert.ok(inherited.reasonCodes.includes("parent-history-inheritance-forbidden"));
     const dependent = lifecycle.decide({ ...input("on"), delegationEvidence: { ...delegationEvidence, canRunWithoutParentOutput: false } });
-    assert.equal(dependent.action, "solo"); assert.ok(dependent.reasonCodes.includes("helper-depends-on-parent-output"));
+    assert.equal(dependent.action, "dispatch");
     const oneLane = lifecycle.decide({ ...input("on"), delegationEvidence: { ...delegationEvidence, independentWorkstreams: ["helper:source-map"] } });
-    assert.equal(oneLane.action, "solo"); assert.ok(oneLane.reasonCodes.includes("independent-workstreams-not-proven"));
+    assert.equal(oneLane.action, "dispatch");
     const oversizedTransfer = lifecycle.decide({ ...input("on"), delegationEvidence: { ...delegationEvidence, transferTokens: 2_049 } });
     assert.equal(oversizedTransfer.action, "solo"); assert.ok(oversizedTransfer.reasonCodes.includes("helper-context-transfer-too-large"));
     const retry = lifecycle.decide({ ...input("on"), delegationEvidence: { ...delegationEvidence, retryOfDeterministicFailure: true } });
@@ -37,12 +37,12 @@ describe("helper decision and lifecycle", () => {
     const usage = await lifecycle.dispatch(root, lifecycle.decide(input("recommend")), async () => { calls += 1; return { status: "succeeded", calls: 1, tokens: 1, output: "must not run" }; });
     assert.equal(calls, 0); assert.equal(usage.helperUsed, false); assert.equal(usage.decision, "skip"); assert.equal(usage.disposition, "recommend");
   });
-  it("permits at most one automatic helper dispatch for a task run", async () => {
+  it("does not retry an already consumed helper role in a task run", async () => {
     const lifecycle = new HelperLifecycleRuntime(), root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-helper-auto-budget-"));
     const first = await lifecycle.dispatch(root, lifecycle.decide(input("on")), async () => ({ status: "succeeded", calls: 1, tokens: 1, output: "first" }));
     let secondCalls = 0;
     const second = await lifecycle.dispatch(root, lifecycle.decide({ ...input("on"), objective: "Map another source region" }), async () => { secondCalls += 1; return { status: "succeeded", calls: 1, tokens: 1, output: "second" }; });
-    assert.equal(first.disposition, "succeeded"); assert.equal(second.disposition, "helper-budget-exhausted"); assert.equal(secondCalls, 0);
+    assert.equal(first.disposition, "succeeded"); assert.equal(second.disposition, "scout-ceiling-reached"); assert.equal(secondCalls, 0);
   });
   it("dispatches through an injected provider adapter and stores digest-only receipt usage", async () => { const lifecycle = new HelperLifecycleRuntime(); const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-helper-life-")); const decision = lifecycle.decide(input("on")); const usage = await lifecycle.dispatch(root, decision, async (request) => { assert.equal(request.authority, "read-only"); assert.equal(request.contextTransfer.mode, "isolated-minimal"); assert.equal(request.contextTransfer.inheritParentHistory, false); assert.equal(request.contextTransfer.estimatedSeedTokens <= request.contextTransfer.maxSeedTokens, true); return { status: "succeeded", calls: 4, tokens: 900, output: "private detailed helper output" }; }); assert.equal(usage.helperUsed, true); assert.equal(usage.decision, "dispatch"); assert.equal(usage.projectedSavingsRatio, 0.35); assert.equal(usage.disposition, "succeeded"); assert.equal(JSON.stringify(usage).includes("private detailed helper output"), false); const receipt = buildAcceptanceReceipt({ summary: "Record bounded helper usage", expectedOutput: "Receipt identifies helper use without raw output", acceptanceCriteria: ["Helper usage is bounded"], changeMode: "source-change" }).receipt; const task = applyAcceptanceHelperUsage({ acceptanceReceipt: receipt }, { mode: "on", reasonCodes: usage.reasonCodes, helpers: [usage], recordedAt: "2026-08-08T00:00:00.000Z" }); assert.equal(task.acceptanceReceipt.helperUsage.used, true); assert.equal(task.acceptanceReceipt.helperUsage.decision, "dispatch"); assert.equal(task.acceptanceReceipt.helperUsage.projectedSavingsRatio, 0.35); assert.equal(task.acceptanceReceipt.helperUsage.helpers[0].role, "scout"); assert.deepEqual(acceptanceReceiptValidationErrors(task.acceptanceReceipt), []); });
   it("uses Oracle only for eligible high-risk uncertainty and reviewer only when useful", () => { assert.equal(selectHelperRole({ features: { ...features, riskLane: "high-risk" }, solver: { ...solver, helper: { needed: false, role: null } }, confidence: "low" }).role, "oracle"); assert.equal(selectHelperRole({ features, solver: { ...solver, helper: { needed: false, role: null } }, independentReviewUseful: true }).role, "reviewer"); assert.notEqual(selectHelperRole({ features: { ...features, riskLane: "high-risk" }, solver: { ...solver, helper: { needed: false, role: null } }, confidence: "high" }).role, "oracle"); });

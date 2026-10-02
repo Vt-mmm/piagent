@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Safer task flow with less manual coordination · Pi Agent Platform Docs</title>
-    <meta name="description" content="Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows." />
+    <title>1.9.0: ask in plain language, the team's Harness checks · Pi Agent Platform Docs</title>
+    <meta name="description" content="The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/en/whats-new" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/whats-new" />
     <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/whats-new" />
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/whats-new" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta property="og:title" content="Safer task flow with less manual coordination · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows." />
+    <meta property="og:title" content="1.9.0: ask in plain language, the team's Harness checks · Pi Agent Platform Docs" />
+    <meta property="og:description" content="The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards." />
     <meta property="og:url" content="https://piagent.io.vn/en/whats-new" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
             <a class="nav-link current" href="/en/whats-new" aria-current="page">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
@@ -99,9 +100,85 @@
               <span>What’s new</span>
             </nav>
             <div class="page-head">
-              <h1>Safer task flow with less manual coordination</h1>
-              <p>Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows.</p>
+              <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
+              <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.9.0 · 2026-10-02</p>
+  <h2 id="v1-9-0">Ask in plain language; the team's Harness does the checking</h2>
+  <p class="section-lead">The task contract and the workflow commands are gone: you ask as you would ask a colleague, and the guard still checks every tool call. Company mode runs through Agent Studio and Agent Watch; its Harness asks for checks, has a subagent review the change and sends blocking findings back to the agent. See <a href="/en/ecosystem">Ecosystem</a>.</p>
+
+  <div class="benchmark-metrics" aria-label="Release 1.9.0 verification figures">
+    <div class="benchmark-metric"><span>Live scenarios</span><strong>13/13</strong><small>9 personal, 4 company, on the final install</small></div>
+    <div class="benchmark-metric"><span>Automated tests</span><strong>5,800+</strong><small>unit, integration and security; 0 failures</small></div>
+    <div class="benchmark-metric"><span>Browser tests</span><strong>27/27</strong><small>dashboard and WebUI on Chromium</small></div>
+    <div class="benchmark-metric"><span>Smaller guard</span><strong>−854 lines</strong><small>code that only served the task contract (4993 → 4139)</small></div>
+  </div>
+
+  <figure class="shot">
+    <img src="/assets/shots/company-run-done.jpg" alt="A company-mode turn: the agent changes code and runs the tests; A check passed and Review found no blocking issue are written under the answer" loading="lazy" width="1600" height="1000">
+    <figcaption>A company-mode turn: the agent changes code and runs the tests, a subagent reviews the change, and the outcome is written right under the answer.</figcaption>
+  </figure>
+
+  <div class="grid cols-3">
+    <article class="card"><h3 id="freeform">Plain-language requests</h3><p>No more <span class="inline-code">/workflow</span>, <span class="inline-code">/fresh</span>, <span class="inline-code">/onboard</span> or task contract. The guard still blocks protected files and checks permission profiles, oversized files and stale edits, and asks you before a push or publish.</p></article>
+    <article class="card"><h3 id="harness">The team's Harness</h3><p>Studio decides whether each turn suggests or requires a plan, checks and a review. A separate subagent reviews; blocking findings go back to the agent within the team's fix rounds.</p></article>
+    <article class="card"><h3 id="network">Network on approval</h3><p>Company-mode commands run without network. To install a package the agent asks to run that one command with network; the card shows the exact command and you allow it once.</p></article>
+    <article class="card"><h3 id="stop">Stop and continue</h3><p>Stop works for the whole turn, including while the review runs. A stopped turn says it was stopped, not that the model failed; Continue picks up from the steps kept.</p></article>
+    <article class="card"><h3 id="reconnect">Reconnect company mode</h3><p>If the company runtime is not running (after a restart or an update), the conversation says so and offers Reconnect in place.</p></article>
+    <article class="card"><h3 id="local-state">Out of git</h3><p><span class="inline-code">.pi/piagent-state</span> gets its own <span class="inline-code">.gitignore</span>; run state no longer shows up in the project's <span class="inline-code">git status</span>.</p></article>
+    <article class="card"><h3 id="queue">Waiting in line when the company is busy</h3><p>When every company model account is busy, a request waits its turn (up to 20 minutes) instead of failing. The running turn shows a “Wait for a free company account” step; Stop still works.</p></article>
+    <article class="card"><h3 id="many-conversations">Many conversations at once</h3><p>Creating or sending in one conversation is no longer refused because another one just changed. Two folders with the same name (two clones) also show where each one is.</p></article>
+    <article class="card"><h3 id="model-scope">Clean up models that are gone</h3><p><span class="inline-code">piagent-doctor</span> lists configured models Pi no longer knows; <span class="inline-code">piagent-model-scope --prune</span> removes only those lines.</p></article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">From the dashboard</p>
+  <h2 id="v1-9-0-shots">What a member sees while working</h2>
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="/assets/shots/network-approval.jpg" alt="Approval card for one network command, showing the exact npm install command" loading="lazy" width="1600" height="1000">
+      <figcaption>Approving one network command: the card shows the exact command and what allow or deny does.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="/assets/shots/new-chat-models.jpg" alt="Choosing a model for a new conversation: Company and Personal groups" loading="lazy" width="1600" height="1000">
+      <figcaption>New conversation: a company model or a personal one, in the same dashboard.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="/assets/shots/company-review-running.jpg" alt="Review running: the header shows Subagent 1/2 and Stop is still available" loading="lazy" width="1600" height="1000">
+      <figcaption>Review running: the header shows Subagent 1/2 and Stop still works.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="/assets/shots/personal-edit-test.jpg" alt="A personal turn that edits code, with the diff inside the Edit card" loading="lazy" width="1600" height="1000">
+      <figcaption>Personal mode: every read, edit and command is a card, with the diff right there.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Verification</p>
+  <h2 id="v1-9-0-verification">Run for real, the way a member works</h2>
+  <p class="section-lead">Each scenario drives a real browser against the installed release, sends messages as a member would and checks the result on disk. Every experience bug found was fixed with a test and the scenario run again.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Scenario</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Company · strip Vietnamese accents from slugs, add tests</td><td>2 files changed, tests pass, "A check passed on the final code · Review found no blocking issue"</td></tr>
+      <tr><td>Company · press Stop while the review runs</td><td>"The turn stopped before its checks finished", no error shown</td></tr>
+      <tr><td>Company · install a package that needs network</td><td>The approval card shows the exact command; once allowed, the package is in <span class="inline-code">package.json</span></td></tr>
+      <tr><td>Company · send another message during a turn</td><td>Held, sent when the turn ends, and answered</td></tr>
+      <tr><td>Personal · edit, test, commit and push</td><td>Push waits for approval in the browser; stopping a long command leaves no process behind</td></tr>
+      <tr><td>Personal · read <span class="inline-code">.env</span></td><td>Blocked without revealing values; the agent explains how to open it yourself</td></tr>
+    </tbody>
+  </table></div>
+  <p>Benchmark and journey results of earlier releases were measured with task contracts; they are historical, and 1.9.0 has not been measured again.</p>
+</section>
+
+<div class="callout">
+  <strong>Earlier releases</strong>
+  <p>The notes below describe earlier releases as they shipped. Since 1.9.0 the task contract, trajectories, completion receipts and workflow commands mentioned below are gone.</p>
+</div>
+
 <section class="section">
   <p class="section-kicker">v1.8.0</p>
   <h2 id="v1-8-0">Astra, Sol, and Luna in Piagent</h2>
@@ -172,7 +249,7 @@
   <p class="section-kicker">Daily flow</p>
   <h2 id="usage-flow">The daily workflow does not break</h2>
   <div class="steps">
-    <article class="step"><div><h3>Assign work as before</h3><p>Use a natural-language request or <span class="inline-code">/workflow task &lt;request&gt;</span>. Manual preflight is optional.</p></div></article>
+    <article class="step"><div><h3>Assign work as before</h3><p>Use a natural-language request (<span class="inline-code">/workflow</span> was retired in 1.9.0). Manual preflight is optional.</p></div></article>
     <article class="step"><div><h3>The runtime records truth</h3><p>Task Contracts, context, changed files, trajectories, and checkpoints are updated from hooks and tool results rather than model memory.</p></div></article>
     <article class="step"><div><h3>Verify the exact working tree</h3><p>Only observed exact commands that exit successfully and match the current-tree digest count as passing evidence.</p></div></article>
     <article class="step"><div><h3>Bounded recovery or handoff</h3><p>Source repair and transient retries have ceilings. Unsafe cases return to handoff or the operator instead of continuing by guesswork.</p></div></article>

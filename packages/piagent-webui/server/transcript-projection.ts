@@ -5,9 +5,13 @@ import { looksLikeCompletionClaim } from "../../piagent-core/runtime/session/com
 import { isLightweightNonAuthorizingChangeLanguage } from "../../piagent-core/runtime/workflows/change-clarification.ts";
 import { workflowCommandPattern } from "../../piagent-core/runtime/workflows/webui-workflow.ts";
 import { hasVisibleText } from "../shared/text-visibility.ts";
+import { effectiveStopReason } from "./message-stop-reason.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE, webUiMessageCorrelationEntry,
   type WebUiMessageCorrelation } from "../shared/message-correlation.ts";
 import { terminalDeliveryPairs, type TerminalDeliveryPair, type TerminalDeliveryReceipt } from "./terminal-delivery-receipt.ts";
+import { parseFailure } from "../../piagent-core/runtime/managed-failure.mjs";
+import { modelLabel, summarizeToolCall, toolResultPreview, turnUsage, type ToolChange, type ToolResult, type ToolSummary,
+  type TurnUsage } from "./tool-call-summary.ts";
 
 const MAX_ENTRIES = 50_000;
 const MAX_ITEMS = 200;
@@ -28,7 +32,11 @@ type TranscriptAttachment = { displayName: string; kind: "file" | "image" | "doc
 type TranscriptItem = { messageRef: string; parentMessageRef: string | null; role: "user" | "assistant" | "tool-result" | "custom"; recordedAt: string;
   agentOperationId: string | null; messageRequestId?: string; turnIndex: number | null; content: TranscriptContent;
   attachments?: TranscriptAttachment[];
-  toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown" }> };
+  toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown";
+    summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess };
+type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
+type HarnessProcess = { phase: "plan" | "verify" | "review" | "final"; outcome?: string; loop?: number; maxLoops?: number; verified?: boolean; reviewed?: boolean;
+  blockingOpen?: number; planOpen?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; findings?: HarnessFinding[] };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
   revision: TranscriptRevision; eventCursor: string; state: "ready" | "unavailable"; items: TranscriptItem[];
   page: { beforeCursor: string | null; nextBeforeCursor: string | null; hasOlder: boolean; limit: number; truncated: boolean }; reasonCode: string | null };
@@ -44,6 +52,8 @@ export type TranscriptProjectionInput = {
   taskOutcome?: string | null;
   terminalDeliveryReceipt?: TerminalDeliveryReceipt;
   terminalDeliveryEntries?: unknown[];
+  // The session's project folder: tool paths are shown relative to it.
+  cwd?: string;
 };
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
@@ -88,8 +98,18 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
   // text the operator typed; the remaining recognized blocks become cards.
   return { text: attachments.length ? String(textParts[0]?.text ?? "") : messageText(message), attachments: attachments.slice(0, 4) };
 }
+// A company request fails with Studio's (or Agent Watch's) own code: who
+// failed, which kind of failure, and Studio's request id. Text is never shown.
+export type CompanyFailure = { role: "main" | "research" | "review"; reasonCode: string; code: string; requestRef: string | null; local: boolean };
+export function companyFailure(text: unknown): CompanyFailure | null {
+  const parsed = parseFailure(text);
+  if (!parsed || !/^[A-Za-z0-9][A-Za-z0-9_:.-]{0,79}$/.test(parsed.code)) return null;
+  return { role: parsed.role as CompanyFailure["role"], reasonCode: `company-${parsed.kind}`, code: parsed.code, requestRef: parsed.requestId, local: parsed.local };
+}
+const COMPANY = "agent_watch_managed";
 function assistantFailureReason(message: any): string | null {
   if (message?.role !== "assistant" || message?.stopReason !== "error") return null;
+  if (message.provider === COMPANY) return companyFailure(message.errorMessage)?.reasonCode ?? "company-failed";
   const detail = String(message?.errorMessage ?? "").toLowerCase();
   if (/(?:authentication|auth|token|credential).{0,48}expired|expired.{0,48}(?:authentication|auth|token|credential)/.test(detail)) {
     return "provider-auth-expired";
@@ -103,7 +123,7 @@ function assistantFailureReason(message: any): string | null {
 }
 function assistantUnavailableReason(message: any, text: string, projectedToolCalls: TranscriptItem["toolCalls"]): string | null {
   if (message?.role !== "assistant") return null;
-  const stopReason = String(message?.stopReason ?? "");
+  const stopReason = effectiveStopReason(message);
   if (stopReason === "error") return assistantFailureReason(message) ?? "provider-response-failed";
   if (stopReason === "aborted") return "assistant-message-aborted";
   if (stopReason === "length") return "assistant-output-incomplete";
@@ -140,6 +160,31 @@ function toolCalls(message: any, sessionRef: string, role: TranscriptItem["role"
   return values.slice(0, 64).map((item, index) => {
     return { toolCallRef: opaque("tool", [sessionRef, item.id ?? index]), toolName: safeToolName(item.name), state: item.state };
   });
+}
+// The harness's process notes ("agent-watch-process"): what it asked of the
+// agent before a code-changing turn ended, and how that turn ended.
+const PROCESS_OUTCOMES = ["no_change", "interrupted", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"];
+const POLICY_MODES = ["off", "suggest", "require"];
+function harnessProcess(details: any): HarnessProcess | null {
+  if (!["plan", "verify", "review", "final"].includes(details?.phase)) return null;
+  const loop = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 3;
+  const out: HarnessProcess = { phase: details.phase };
+  if (PROCESS_OUTCOMES.includes(details.outcome)) out.outcome = details.outcome;
+  if (loop(details.loop)) out.loop = details.loop;
+  if (loop(details.maxLoops)) out.maxLoops = details.maxLoops;
+  if (typeof details.verified === "boolean") out.verified = details.verified;
+  if (typeof details.reviewed === "boolean") out.reviewed = details.reviewed;
+  if (Number.isInteger(details.blockingOpen) && details.blockingOpen >= 0) out.blockingOpen = Math.min(details.blockingOpen, 1000);
+  if (Number.isInteger(details.planOpen) && details.planOpen >= 1 && details.planOpen <= 30) out.planOpen = details.planOpen;
+  if (details.planSkipped === true) out.planSkipped = true;
+  if (POLICY_MODES.includes(details.policy?.verify)) out.verifyPolicy = details.policy.verify;
+  if (POLICY_MODES.includes(details.policy?.review)) out.reviewPolicy = details.policy.review;
+  if (["too_large", "not_git", "limit", "failed"].includes(details.reviewUnavailable)) out.reviewUnavailable = details.reviewUnavailable;
+  if (Array.isArray(details.findings)) out.findings = details.findings
+    .filter((f: any) => ["blocking", "major", "minor"].includes(f?.severity) && typeof f.issue === "string" && f.issue.trim()).slice(0, 10)
+    .map((f: any) => ({ severity: f.severity, file: safeText(String(f.file ?? "")).full.slice(0, 300), line: Number.isSafeInteger(f.line) && f.line > 0 ? f.line : null,
+      issue: safeText(f.issue).full.slice(0, 500) }));
+  return out;
 }
 function role(message: any): TranscriptItem["role"] | null {
   return message?.role === "user" ? "user" : message?.role === "assistant" ? "assistant" : message?.role === "toolResult" ? "tool-result" : null;
@@ -196,6 +241,13 @@ function correlatedTranscriptItems(entries: unknown[], identity: TranscriptIdent
       // message. Invalid markers fail closed instead of leaking correlation
       // from an earlier admitted-but-undispatched operation into a later turn.
       pending = webUiMessageCorrelationEntry(entry);
+      continue;
+    }
+    if (entry?.type === "custom_message" && entry.customType === "agent-watch-process") {
+      const process = harnessProcess(entry.details);
+      const projected = process && item({ ...entry, type: "message", message: { role: "custom", content: entry.content } }, identity, true);
+      if (projected) values.push({ entry, item: { ...projected, process, ...(turn ? { agentOperationId: turn.operationRef, messageRequestId: turn.messageRequestId } : {}) },
+        cursor: opaque("transcript", [identity.sessionRef, entry.id]) });
       continue;
     }
     if (role(entry?.message) === "user") { turn = pending; pending = null; }
@@ -291,6 +343,37 @@ function boundedTurnPage(
   return { selected, start, compacted: false };
 }
 
+// The agent timeline: each tool call of a shown answer carries its summary,
+// an edit's diff and its result preview; answers carry usage and model.
+function timelineItems(selected: ProjectedTranscriptItem[], all: ProjectedTranscriptItem[], cwd?: string): TranscriptItem[] {
+  const results = new Map<string, any>();
+  for (const value of all) if (value.item.role === "tool-result" && value.item.toolCalls[0]) results.set(value.item.toolCalls[0].toolCallRef, value.entry?.message);
+  return selected.map((value) => {
+    if (value.item.role !== "assistant") return value.item;
+    const message = value.entry?.message;
+    const blocks = Array.isArray(message?.content) ? message.content.filter((part: any) => part?.type === "toolCall") : [];
+    const toolCalls = value.item.toolCalls.map((call, index) => {
+      const block = blocks[index], result = results.get(call.toolCallRef);
+      if (!block) return call;
+      const { summary, change } = summarizeToolCall(block.name, block.arguments, cwd);
+      // A helper's answer can carry its delegated prompt and artifacts: only
+      // its outcome is shown, never its text.
+      const shown = result && summary.kind !== "subagent" ? { result: toolResultPreview(result) } : {};
+      // A failed helper or company search says why (its code), not what it wrote.
+      const failed = result?.isError && message?.provider === COMPANY && ["subagent", "web-search"].includes(summary.kind)
+        ? companyFailure(toolResultPreview(result).text) : null;
+      return { ...call, summary, ...(change ? { change } : {}), ...shown, ...(failed ? { failure: failed } : {}),
+        ...(result ? { state: result.isError ? "failed" as const : "completed" as const } : {}) };
+    });
+    // A company turn is answered by a harness role; which model sits behind it
+    // is the harness's business and stays out of the browser.
+    const company = message?.provider === COMPANY;
+    const usage = turnUsage(message), model = company ? null : modelLabel(message);
+    const failure = company && effectiveStopReason(message) === "error" ? companyFailure(message.errorMessage) : null;
+    return { ...value.item, toolCalls, ...(usage ? { usage } : {}), ...(model ? { model } : {}), ...(failure ? { failure } : {}) };
+  });
+}
+
 function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit: number): TranscriptDocument {
   return { schemaVersion: 1, version: "piagent-webui-transcript-v1", generatedAt: input.generatedAt ?? new Date().toISOString(),
     identity: structuredClone(input.identity), revision: structuredClone(input.revision), eventCursor: input.eventCursor,
@@ -314,7 +397,7 @@ export function projectTranscript(input: TranscriptProjectionInput): TranscriptD
     if (cursorIndex < 0) return unavailable(input, "transcript-cursor-gap", limit);
     end = cursorIndex;
   }
-  const page = boundedTurnPage(projected, end, limit), selected = page.selected.map((value) => value.item), hasOlder = page.start > 0;
+  const page = boundedTurnPage(projected, end, limit), selected = timelineItems(page.selected, projected, input.cwd), hasOlder = page.start > 0;
   return { schemaVersion: 1, version: "piagent-webui-transcript-v1", generatedAt: input.generatedAt ?? new Date().toISOString(),
     identity: structuredClone(input.identity), revision: structuredClone(input.revision), eventCursor: input.eventCursor,
     state: "ready", items: selected, page: { beforeCursor: input.beforeCursor ?? null, nextBeforeCursor: hasOlder ? cursors[page.start] : null,

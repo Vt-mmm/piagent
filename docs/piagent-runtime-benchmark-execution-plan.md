@@ -1,6 +1,8 @@
 # Plan riêng: ổn định logic Piagent và hoàn tất benchmark 108 phiên
 <!-- language: vi; english-index: docs-site/content/en/benchmark.html -->
 
+> **Hồ sơ thiết kế trước bản 1.9.0.** Task contract, command workflow (`/workflow`, `/task`, `/fresh`, `/onboard`) và các tool task/trace/verify mô tả ở đây đã bỏ ngày 2026-09-30; session giờ là freeform và guard chỉ còn kiểm tra path, quyền, xác nhận, context budget và edit trên bản đọc cũ. Tài liệu được giữ để tra cứu lịch sử. Hành vi hiện tại: [README](../README.vi.md).
+
 > Plan ID: **PRB-108-2026-09-06** · Version: **1.16** · Ngày: **2026-09-06**
 >
 > Trạng thái: **IMPLEMENTING_A_V2_OFFLINE — Number N/R5/independent verification đã duyệt; chưa qualification/B/paid**.
@@ -224,7 +226,7 @@ Hai điểm quyết định là đề xuất quy trình, không phải hai appro
 - Không bật independent-verifier authority, cài verifier/image hoặc ký cấu hình thay operator.
 - Không giảm an toàn, tắt completion gate, xóa test đỏ hoặc đổi unsupported thành completed để đạt số phiên.
 - Không dùng 108 phiên trả phí làm integration test.
-- Không nâng dependency/model/provider, đổi sang Oh My Pi/OpenClaw/OpenClaude hoặc xây harness mới trong đợt này.
+- Không nâng dependency/model/provider, đổi sang một harness khác hoặc xây harness mới trong đợt này.
 - Không thêm private holdout, reviewer giả hoặc claim tổng quát. Waiver reviewer vẫn là waiver, `reviewed=false` phải giữ trung thực.
 - Không stash/reset/checkout/discard toàn bộ working tree, tạo worktree mới, push hoặc publish nếu chưa được yêu cầu cụ thể.
 - Workspace `/Users/vtamm/Documents/pi-company-platform` chỉ để đọc hướng dẫn; không triển khai ở đó.
@@ -233,14 +235,14 @@ Hai điểm quyết định là đề xuất quy trình, không phải hai appro
 
 Đã khảo sát ngày 06/09/2026; đây là đọc source/CI và release notes, chưa tự chạy toàn bộ test của các repo. Những cách làm sau là gợi ý thiết kế, không phải bằng chứng Piagent đã đạt.
 
-| Nguồn đã đọc | Áp dụng vào plan | Không sao chép |
+| Mẫu thiết kế | Áp dụng vào plan | Không sao chép |
 | --- | --- | --- |
-| [Oh My Pi release gate](https://github.com/can1357/oh-my-pi/blob/b2f25dbfe1e30197bae311cd8a0bccbc381f5c7b/.github/workflows/ci.yml#L476) | Chia nhóm kiểm thử, gom một release gate; đúng artifact và identity | Toàn bộ CI đa nền tảng, tính năng hoặc toolset mới |
-| [Oh My Pi session durability test](https://github.com/can1357/oh-my-pi/blob/b2f25dbfe1e30197bae311cd8a0bccbc381f5c7b/packages/coding-agent/test/session-manager-immediate-persist.test.ts#L86) | Kiểm tra trạng thái thực được lưu, không chỉ event ở bộ nhớ | Khẳng định ghi vào OS cache là bảo đảm chịu mọi mất điện |
-| [OpenClaw agent loop](https://github.com/openclaw/openclaw/blob/4b577944c8597c2d0c6406a1c214b412f68d0e8a/docs/concepts/agent-loop.md) | Owner terminal rõ; tách execution/persistence/delivery, wait timeout/run timeout, writer identity | Các fallback/retry làm thay đổi treatment 0 retry |
-| [OpenClaw testing](https://docs.openclaw.ai/help/testing) | Tách unit, integration, package, transport, live-provider; targeted trước full | Gọi mock là live proof hoặc coi phát hành thường xuyên là không có lỗi |
-| [OpenClaude loop-guard regressions](https://github.com/Gitlawb/openclaude/blob/0abfca30e5a2945678415f5328691584387720fb/src/query/toolFailureLoopGuard.test.ts#L140) | Phân biệt lỗi lặp, tiến bộ thật và user abort; test xuyên query loop | Thêm bộ đếm mới khi Piagent đã có budget và progress guard |
-| [OpenClaude release workflow](https://github.com/Gitlawb/openclaude/blob/0abfca30e5a2945678415f5328691584387720fb/.github/workflows/release.yml) | Test bản cài/đóng gói, không chỉ source tree | Publish hoặc cài global trong session này |
+| Release gate gom các nhóm kiểm thử | Chia nhóm kiểm thử, gom một release gate; đúng artifact và identity | Toàn bộ CI đa nền tảng, tính năng hoặc toolset mới |
+| Test độ bền phiên | Kiểm tra trạng thái thực được lưu, không chỉ event ở bộ nhớ | Khẳng định ghi vào OS cache là bảo đảm chịu mọi mất điện |
+| Vòng lặp agent có owner rõ | Owner terminal rõ; tách execution/persistence/delivery, wait timeout/run timeout, writer identity | Các fallback/retry làm thay đổi treatment 0 retry |
+| Phân tầng kiểm thử | Tách unit, integration, package, transport, live-provider; targeted trước full | Gọi mock là live proof hoặc coi phát hành thường xuyên là không có lỗi |
+| Chặn vòng lặp lỗi công cụ | Phân biệt lỗi lặp, tiến bộ thật và user abort; test xuyên query loop | Thêm bộ đếm mới khi Piagent đã có budget và progress guard |
+| Test bản đóng gói | Test bản cài/đóng gói, không chỉ source tree | Publish hoặc cài global trong session này |
 
 Không tiếp tục khảo sát hàng loạt harness khác trừ khi một failure cụ thể thiếu phương án và nguồn trên không giải quyết được.
 

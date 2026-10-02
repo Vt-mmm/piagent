@@ -810,6 +810,19 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(store.acquire(sessionRef, "gateway_after_terminal", "runtime_after_terminal").state, "gateway-owned");
   });
 
+  // `pi -p --no-session`: no file, so no Gateway or WebUI can open the session.
+  // Its input used to be dropped silently (empty answer, exit code 0).
+  it("lets an ephemeral terminal session send input, and only that session", (t) => {
+    const { root } = state(t), adapter = new TerminalSessionAdapter("runtime_terminal_ephemeral", path.join(root, "agent"));
+    const ctx = { sessionManager: { getSessionFile: () => undefined, getSessionId: () => "raw-ephemeral" } };
+    adapter.bind(ctx);
+    assert.equal(adapter.dispatchAllowed(ctx), true);
+    assert.equal(adapter.dispatchAllowed({ sessionManager: { getSessionFile: () => undefined, getSessionId: () => "raw-other" } }), false);
+    // Once the session is persisted, the lease rules apply again.
+    const file = path.join(root, "persisted.jsonl");
+    assert.equal(adapter.dispatchAllowed({ sessionManager: { getSessionFile: () => file, getSessionId: () => "raw-ephemeral" } }), false);
+  });
+
   it("lets a terminal adapter register and release one exact persisted Pi session", (t) => {
     const { root } = state(t), agentDir = path.join(root, "agent"), file = path.join(root, "terminal-session.jsonl");
     const adapter = new TerminalSessionAdapter("runtime_terminal_adapter", agentDir);
@@ -846,13 +859,21 @@ watchdog.start((reason) => process.stdout.write(reason));`;
 
     const liveRef = "session_live_recovery_owner", liveOwnerRef = `gateway_${process.pid}_live_recovery_owner`;
     const liveRuntimeRef = "runtime_live_recovery_owner";
-    const live = deadStore.acquire(liveRef, liveOwnerRef, liveRuntimeRef, new Date("2026-08-14T08:03:00.000Z"));
-    deadStore.requireRecovery(liveRef, live.ownerEpoch, liveOwnerRef, liveRuntimeRef, "session-runtime-open-failed",
-      new Date("2026-08-14T08:04:00.000Z"));
+    // This process took the lease just now and is running: it stays the owner.
+    const live = deadStore.acquire(liveRef, liveOwnerRef, liveRuntimeRef, new Date());
+    deadStore.requireRecovery(liveRef, live.ownerEpoch, liveOwnerRef, liveRuntimeRef, "session-runtime-open-failed", new Date());
     assert.throws(() => deadStore.releaseDeadOwnerForExplicitRecovery(liveRef), /session-owner-not-proven-dead/);
     assert.equal(deadStore.inspect(liveRef).state, "recovery-required");
     assert.throws(() => deadStore.acquire(liveRef, "gateway_replacement_must_not_open", "runtime_replacement_must_not_open"),
       /session-recovery-required/);
+
+    // After the machine restarted, the owner's process number belongs to
+    // something that started later (here: this test process, with a lease from
+    // weeks ago). That process cannot be the owner, so the lease is released.
+    const reusedRef = "session_owner_number_reused", reusedOwnerRef = `gateway_${process.pid}_before_the_restart`;
+    deadStore.acquire(reusedRef, reusedOwnerRef, "runtime_before_the_restart", new Date("2026-08-14T08:03:00.000Z"));
+    assert.equal(deadStore.inspect(reusedRef).state, "gateway-owned");
+    assert.equal(deadStore.releaseDeadOwnerForExplicitRecovery(reusedRef).state, "released");
   });
 
   it("acquires a recovery-required session after Dashboard restart when the prior Gateway is proven dead", async (t) => {

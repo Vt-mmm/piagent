@@ -13,6 +13,8 @@ export type GatewayDescriptor = {
   origin: string;
   controlSocket: string;
   profileRef: string;
+  // Installed Piagent version of this Gateway (absent before 1.9).
+  packageVersion?: string;
 };
 
 export type GatewayProfileState = {

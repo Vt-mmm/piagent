@@ -1,8 +1,8 @@
 <section class="hero">
-  <p class="eyebrow">Team operating docs</p>
-  <h1>Pi runtime được đóng gói như một nền tảng dùng lại cho nhiều dự án.</h1>
+  <p class="eyebrow">Piagent 1.9.0</p>
+  <h1>Coding agent cho cả team, kiểm tra từng bước.</h1>
   <p>
-    Tài liệu này gom phần cài đặt, profile, quyền chạy, MCP, bảo mật và workflow vào một nơi duy nhất. Mục tiêu là thành viên mới chỉ cần mở trang này, chọn đúng command, chạy đúng chế độ và biết ranh giới an toàn.
+    Một dashboard cho Terminal và trình duyệt. Dùng model bằng tài khoản của bạn, hoặc model của công ty qua Agent Watch và Agent Studio. Guard kiểm tra từng tool call; ở chế độ công ty, Harness của team tự yêu cầu chạy check, cho subagent review và báo kết quả ngay dưới câu trả lời.
   </p>
   <div class="owner-strip" aria-label="Thông tin dự án">
     <span class="owner-label">Project links</span>
@@ -12,14 +12,24 @@
   </div>
   <div class="hero-actions">
     <a class="button primary" href="/quickstart">Bắt đầu</a>
-    <a class="button" href="/whats-new">Có gì mới</a>
+    <a class="button" href="/ecosystem">Hệ sinh thái</a>
+    <a class="button" href="/whats-new">Có gì mới trong 1.9.0</a>
     <a class="button" href="/commands">Xem command</a>
-    <a class="button" href="/mcp">MCP</a>
   </div>
 </section>
 
 <section class="section">
-  <p class="section-kicker">Production V1 · bằng chứng public của v1.6.0</p>
+  <p class="section-kicker">Bản 1.9.0</p>
+  <h2 id="ban-1-9-0">Một lượt làm việc ở chế độ công ty</h2>
+  <p class="section-lead">Bạn nhắn việc cần làm. Agent đọc, sửa và chạy test trong sandbox; một subagent review bản sửa; dòng cuối ghi kết quả. Đã chạy thật 13/13 kịch bản trên bản cài cuối, 27/27 test trình duyệt.</p>
+  <figure class="shot">
+    <img src="/assets/shots/company-run-done.jpg" alt="Dashboard Piagent: một lượt ở chế độ công ty với các bước đọc, sửa, chạy test và dòng Check đã qua trên code cuối, Review không có lỗi chặn" width="1600" height="1000">
+    <figcaption>Dashboard Piagent ở chế độ công ty. Xem toàn cảnh ở <a href="/ecosystem">Hệ sinh thái</a> và mọi thay đổi ở <a href="/whats-new">Có gì mới</a>.</figcaption>
+  </figure>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Production V1 · bằng chứng lịch sử của v1.6.0</p>
   <h2 id="bang-chung">Đo được, không phải nói suông</h2>
   <p class="section-lead">Run gắn với release <code>production-v1-20260824T040017Z-05b7cf</code> đã đo 108 session bằng GPT-5.6 Luna Medium tại tag <code>v1.6.0</code>, đúng commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, với Piagent so với <code>codex-cli</code>.</p>
 
@@ -79,14 +89,19 @@ piagent-setup</code></pre>
   <h2 id="bat-dau-tu-dau">Bắt đầu từ đâu</h2>
   <div class="card-grid">
     <a class="doc-card" href="/whats-new">
-      <span class="card-kicker">Product update</span>
+      <span class="card-kicker">Bản 1.9.0</span>
       <h3>Có gì mới</h3>
-      <p>Runtime truth, task trajectory, recovery, helper policy và completion receipt fail-closed — phần nào tự chạy, phần nào cần opt-in.</p>
+      <p>Giao việc bằng lời thường, Harness của team, lệnh có mạng theo lần duyệt, nút Dừng suốt lượt và thẻ duyệt dễ đọc.</p>
+    </a>
+    <a class="doc-card" href="/ecosystem">
+      <span class="card-kicker">Get started</span>
+      <h3>Hệ sinh thái</h3>
+      <p>Piagent, Agent Watch và Agent Studio: phần nào chạy ở đâu, khi nào dùng chế độ cá nhân hay công ty.</p>
     </a>
     <a class="doc-card" href="/quickstart">
       <span class="card-kicker">Get started</span>
       <h3>Quickstart</h3>
-      <p>Cài, mở repo, onboard context, chọn profile và permission, chạy task đầu tiên, verify trước khi handoff.</p>
+      <p>Cài, mở repo, chọn profile và quyền, rồi giao việc đầu tiên bằng lời thường.</p>
     </a>
     <a class="doc-card" href="/scope">
       <span class="card-kicker">Get started</span>

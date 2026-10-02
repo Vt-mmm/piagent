@@ -65,12 +65,11 @@ pi</code></pre>
 
     <article class="step">
       <div>
-        <h3 id="onboard-context">Onboard context</h3>
-        <p>Chạy một lần ở repo mới để ghi context, verify matrix và protected areas vào <span class="inline-code">.pi/</span>. <span class="inline-code">/onboard</span> mở menu/status; <span class="inline-code">run</span> mới launch workflow đọc project.</p>
+        <h3 id="onboard-context">Cho agent đọc project</h3>
+        <p>Ở repo mới, nhờ agent đọc project (chỉ đọc) và ghi lại project context vào <span class="inline-code">.pi/</span>. Không cần lệnh riêng: nói bằng lời thường.</p>
         <div class="command-card">
-          <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard&#10;/onboard run">Lấy lệnh</button></header>
-          <pre><code>/onboard
-/onboard run</code></pre>
+          <header><span>Đọc project</span><button class="clip-btn" data-clip="Đọc project này (chỉ đọc) và ghi lại project context.">Lấy lệnh</button></header>
+          <pre><code>Đọc project này (chỉ đọc) và ghi lại project context.</code></pre>
         </div>
       </div>
     </article>
@@ -102,20 +101,19 @@ pi</code></pre>
     <article class="step">
       <div>
         <h3 id="chay-workflow">Chạy workflow</h3>
-        <p>Dùng command đúng mục tiêu để agent không phải diễn giải quá dài. Task nào nặng context thì dùng fresh session.</p>
+        <p>Nói rõ việc và ý định (sửa, chỉ đọc, lập plan) bằng lời thường. Việc nào nặng context thì mở session mới bằng <span class="inline-code">/new</span>.</p>
         <div class="command-card">
-          <header><span>Workflow</span><button class="clip-btn" data-clip="/workflow task Implement the requested bounded change.&#10;/workflow review current diff&#10;/fresh task Implement the requested bounded change.">Lấy lệnh</button></header>
-          <pre><code>/workflow task Implement the requested bounded change.
-/workflow review current diff
-/fresh task Implement the requested bounded change.</code></pre>
+          <header><span>Giao việc</span><button class="clip-btn" data-clip="Implement thay đổi được yêu cầu rồi chạy test của project.&#10;Review diff hiện tại. Chỉ đọc.">Lấy lệnh</button></header>
+          <pre><code>Implement thay đổi được yêu cầu rồi chạy test của project.
+Review diff hiện tại. Chỉ đọc.</code></pre>
         </div>
       </div>
     </article>
 
     <article class="step">
       <div>
-        <h3 id="verify-truoc-khi-handoff">Verify trước khi handoff</h3>
-        <p>Final gate chỉ tin kết quả command đã chạy thật, exit 0, và khớp verify plan. Sau khi pin hoặc nâng version, chạy doctor trên project:</p>
+        <h3 id="verify-truoc-khi-handoff">Kiểm tra trước khi giao</h3>
+        <p>Nhờ agent chạy check của project (test, type check, build) và đọc kết quả thật; ở chế độ công ty, Harness tự yêu cầu việc này. Sau khi pin hoặc nâng version, chạy doctor trên project:</p>
         <div class="command-card">
           <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor">Lấy lệnh</button></header>
           <pre><code>piagent-doctor</code></pre>

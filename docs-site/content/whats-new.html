@@ -1,4 +1,80 @@
 <section class="section">
+  <p class="section-kicker">v1.9.0 · 2026-10-02</p>
+  <h2 id="v1-9-0">Nói việc bằng lời, Harness của team lo phần kiểm tra</h2>
+  <p class="section-lead">Bỏ task contract và các lệnh workflow: bạn giao việc như nói với đồng nghiệp, guard vẫn kiểm tra từng tool call. Chế độ công ty chạy qua Agent Studio và Agent Watch; Harness tự yêu cầu chạy check, cho subagent review và gửi lỗi chặn lại cho agent sửa. Xem <a href="/ecosystem">Hệ sinh thái</a>.</p>
+
+  <div class="benchmark-metrics" aria-label="Số liệu kiểm chứng bản 1.9.0">
+    <div class="benchmark-metric"><span>Kịch bản chạy thật</span><strong>13/13</strong><small>9 cá nhân, 4 chế độ công ty, trên bản cài cuối</small></div>
+    <div class="benchmark-metric"><span>Test tự động</span><strong>5.800+</strong><small>unit, integration và security; 0 lỗi</small></div>
+    <div class="benchmark-metric"><span>Test trình duyệt</span><strong>27/27</strong><small>dashboard và WebUI trên Chromium</small></div>
+    <div class="benchmark-metric"><span>Guard gọn hơn</span><strong>−854 dòng</strong><small>code chỉ phục vụ task contract (4993 → 4139)</small></div>
+  </div>
+
+  <figure class="shot">
+    <img src="/assets/shots/company-run-done.jpg" alt="Một lượt ở chế độ công ty: agent sửa code và chạy test, kết quả Check đã qua và Review không có lỗi chặn ghi dưới câu trả lời" loading="lazy" width="1600" height="1000">
+    <figcaption>Một lượt ở chế độ công ty: agent sửa code và chạy test, một subagent review bản sửa, kết quả ghi ngay dưới câu trả lời.</figcaption>
+  </figure>
+
+  <div class="grid cols-3">
+    <article class="card"><h3 id="freeform">Giao việc bằng lời thường</h3><p>Không còn <span class="inline-code">/workflow</span>, <span class="inline-code">/fresh</span>, <span class="inline-code">/onboard</span> hay task contract. Guard vẫn chặn file bảo vệ, kiểm profile quyền, file quá lớn, sửa trên bản đã cũ, và hỏi bạn trước push hay publish.</p></article>
+    <article class="card"><h3 id="harness">Harness của team</h3><p>Studio quyết định mỗi lượt cần kế hoạch, check và review ở mức gợi ý hay bắt buộc. Review do một subagent riêng làm; lỗi chặn được gửi lại cho agent trong số vòng sửa team đặt.</p></article>
+    <article class="card"><h3 id="network">Mạng theo lần duyệt</h3><p>Lệnh ở chế độ công ty chạy không mạng. Khi cần cài package, agent xin chạy đúng một lệnh có mạng; thẻ duyệt ghi rõ câu lệnh và bạn cho phép một lần.</p></article>
+    <article class="card"><h3 id="stop">Dừng và tiếp tục</h3><p>Nút Dừng có hiệu lực suốt lượt, kể cả lúc review đang chạy. Lượt bị dừng ghi rõ là đã dừng, không báo lỗi model; bấm Tiếp tục để làm tiếp từ các bước đã giữ.</p></article>
+    <article class="card"><h3 id="reconnect">Kết nối lại chế độ công ty</h3><p>Nếu phần chạy của công ty đang tắt (máy vừa khởi động, vừa cập nhật), cuộc trò chuyện báo rõ và có nút Kết nối lại ngay tại chỗ.</p></article>
+    <article class="card"><h3 id="local-state">Không lẫn vào git</h3><p>Thư mục <span class="inline-code">.pi/piagent-state</span> tự có <span class="inline-code">.gitignore</span>; trạng thái chạy không còn hiện trong <span class="inline-code">git status</span> của project.</p></article>
+    <article class="card"><h3 id="queue">Xếp hàng khi công ty bận</h3><p>Khi mọi tài khoản model của công ty đang bận, yêu cầu tự chờ tới lượt (tối đa 20 phút) thay vì báo lỗi. Lượt đang chạy hiện bước “Chờ tài khoản công ty rảnh”; nút Dừng vẫn dùng được.</p></article>
+    <article class="card"><h3 id="many-conversations">Nhiều cuộc trò chuyện cùng lúc</h3><p>Tạo hay gửi trong một cuộc trò chuyện không còn bị từ chối chỉ vì cuộc khác vừa đổi. Hai thư mục trùng tên (hai bản clone) hiện thêm vị trí để chọn đúng.</p></article>
+    <article class="card"><h3 id="model-scope">Dọn model không còn</h3><p><span class="inline-code">piagent-doctor</span> chỉ ra model đã cấu hình mà Pi không còn biết; <span class="inline-code">piagent-model-scope --prune</span> chỉ xoá đúng các dòng đó.</p></article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Ảnh từ dashboard</p>
+  <h2 id="v1-9-0-anh">Những gì thành viên thấy khi làm việc</h2>
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="/assets/shots/network-approval.jpg" alt="Thẻ duyệt một lệnh có mạng, ghi đúng câu lệnh npm install sẽ chạy" loading="lazy" width="1600" height="1000">
+      <figcaption>Duyệt một lệnh có mạng: thẻ ghi đúng câu lệnh và điều xảy ra khi cho phép hay từ chối.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="/assets/shots/new-chat-models.jpg" alt="Chọn model khi mở cuộc trò chuyện mới: nhóm Công ty và nhóm Cá nhân" loading="lazy" width="1600" height="1000">
+      <figcaption>Cuộc trò chuyện mới: chọn model của công ty hoặc model cá nhân trong cùng một dashboard.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="/assets/shots/company-review-running.jpg" alt="Đang review: thanh trên ghi Subagent 1/2 và nút Dừng vẫn còn" loading="lazy" width="1600" height="1000">
+      <figcaption>Review đang chạy: thanh trên ghi Subagent 1/2, nút Dừng vẫn hoạt động.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="/assets/shots/personal-edit-test.jpg" alt="Một lượt cá nhân sửa code, diff hiện ngay trong thẻ Sửa" loading="lazy" width="1600" height="1000">
+      <figcaption>Chế độ cá nhân: mỗi bước đọc, sửa, chạy lệnh là một thẻ; diff mở ngay tại chỗ.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Kiểm chứng</p>
+  <h2 id="v1-9-0-kiem-chung">Chạy thật như một thành viên</h2>
+  <p class="section-lead">Mỗi kịch bản do script điều khiển trình duyệt thật trên bản đã cài, gửi tin nhắn như người dùng rồi kiểm tra kết quả trên đĩa. Lỗi trải nghiệm tìm thấy được sửa kèm test rồi chạy lại.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kịch bản</th><th>Kết quả</th></tr></thead>
+    <tbody>
+      <tr><td>Công ty · bỏ dấu tiếng Việt cho slug, thêm test</td><td>2 file đổi, test qua, "Check đã qua trên code cuối · Review không có lỗi chặn"</td></tr>
+      <tr><td>Công ty · bấm Dừng lúc review đang chạy</td><td>"Lượt bị dừng trước khi kiểm chứng xong", không báo lỗi</td></tr>
+      <tr><td>Công ty · cài package cần mạng</td><td>Thẻ duyệt ghi đúng lệnh; sau khi cho phép, package có trong <span class="inline-code">package.json</span></td></tr>
+      <tr><td>Công ty · nhắn thêm lúc lượt đang chạy</td><td>Tin được giữ, gửi khi lượt xong và được trả lời</td></tr>
+      <tr><td>Cá nhân · sửa code, chạy test, commit và push</td><td>Push chờ duyệt trên trình duyệt; dừng lệnh dài không để lại tiến trình</td></tr>
+      <tr><td>Cá nhân · đọc <span class="inline-code">.env</span></td><td>Bị chặn, không lộ giá trị; agent chỉ cách tự mở</td></tr>
+    </tbody>
+  </table></div>
+  <p>Kết quả benchmark và journey của các bản trước được đo khi còn task contract; chúng là số liệu lịch sử, bản 1.9.0 chưa đo lại.</p>
+</section>
+
+<div class="callout">
+  <strong>Các bản trước</strong>
+  <p>Phần dưới là ghi chú của các bản cũ, đúng với thời điểm phát hành. Từ bản 1.9.0, task contract, trajectory, completion receipt và các lệnh workflow nhắc tới bên dưới đã bỏ.</p>
+</div>
+
+<section class="section">
   <p class="section-kicker">v1.8.0</p>
   <h2 id="v1-8-0">Astra, Sol và Luna trong Piagent</h2>
   <p class="section-lead">Pi 0.87.1 đưa ba model GPT-6 vào danh sách đã đăng nhập. Phiên mới ưu tiên Sol High; tier routing vẫn là lựa chọn bật riêng.</p>
@@ -68,7 +144,7 @@
   <p class="section-kicker">Daily flow</p>
   <h2 id="luong-su-dung">Luồng dùng hằng ngày không bị phá</h2>
   <div class="steps">
-    <article class="step"><div><h3>Giao task như trước</h3><p>Dùng prompt tự nhiên hoặc <span class="inline-code">/workflow task &lt;request&gt;</span>. Không cần gọi preflight thủ công.</p></div></article>
+    <article class="step"><div><h3>Giao task như trước</h3><p>Dùng prompt tự nhiên (từ bản 1.9.0 <span class="inline-code">/workflow</span> đã bỏ). Không cần gọi preflight thủ công.</p></div></article>
     <article class="step"><div><h3>Runtime tự ghi nhận truth</h3><p>Task Contract, context, changed files, trajectory và checkpoint được cập nhật từ hook/tool result thay vì trí nhớ của model.</p></div></article>
     <article class="step"><div><h3>Verify đúng working tree</h3><p>Chỉ exact command đã quan sát, exit thành công và khớp current-tree digest mới được tính là passing evidence.</p></div></article>
     <article class="step"><div><h3>Recovery hoặc handoff có giới hạn</h3><p>Source repair và transient retry có ceiling. Trường hợp không an toàn chuyển sang handoff/operator thay vì tiếp tục đoán.</p></div></article>

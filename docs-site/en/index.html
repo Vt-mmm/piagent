@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pi Agent Platform Docs</title>
-    <meta name="description" content="Reusable infrastructure for multiple projects: installation, profiles, permissions, MCP, security, and workflows in one place." />
+    <meta name="description" content="A coding agent for the whole team: one dashboard for Terminal and the browser, personal or company models, and a guard that checks every tool call." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/en/" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Pi Agent Platform Docs" />
-    <meta property="og:description" content="Reusable infrastructure for multiple projects: installation, profiles, permissions, MCP, security, and workflows in one place." />
+    <meta property="og:description" content="A coding agent for the whole team: one dashboard for Terminal and the browser, personal or company models, and a guard that checks every tool call." />
     <meta property="og:url" content="https://piagent.io.vn/en/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link current" href="/en/" aria-current="page">Overview</a>
+            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
             <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
@@ -92,10 +93,10 @@
       <main>
         <div class="content-shell" data-article>
 <section class="hero">
-  <p class="eyebrow">Team operating docs</p>
-  <h1>A reusable Pi runtime for every project.</h1>
+  <p class="eyebrow">Piagent 1.9.0</p>
+  <h1>A coding agent for the whole team, checked at every step.</h1>
   <p>
-    These docs bring installation, profiles, permissions, MCP, security, and workflows into one place. A new team member can find the right command, choose a safe mode, and understand the operating boundary without rebuilding the process in a prompt.
+    One dashboard for Terminal and the browser. Use models with your own account, or the company's models through Agent Watch and Agent Studio. The guard checks every tool call; in company mode the team's Harness asks for checks, has a subagent review the change and reports the outcome right under the answer.
   </p>
   <div class="owner-strip" aria-label="Project information">
     <span class="owner-label">Project links</span>
@@ -105,14 +106,24 @@
   </div>
   <div class="hero-actions">
     <a class="button primary" href="/en/quickstart">Get started</a>
-    <a class="button" href="/en/whats-new">What’s new</a>
+    <a class="button" href="/en/ecosystem">Ecosystem</a>
+    <a class="button" href="/en/whats-new">What’s new in 1.9.0</a>
     <a class="button" href="/en/commands">View commands</a>
-    <a class="button" href="/en/mcp">MCP</a>
   </div>
 </section>
 
 <section class="section">
-  <p class="section-kicker">Production V1 · v1.6.0 public regression evidence</p>
+  <p class="section-kicker">Release 1.9.0</p>
+  <h2 id="release-1-9-0">One company-mode turn</h2>
+  <p class="section-lead">You write the request. The agent reads, edits and runs the tests in a sandbox; a subagent reviews the change; the last line states the outcome. 13 of 13 live scenarios pass on the final install, and 27 of 27 browser tests.</p>
+  <figure class="shot">
+    <img src="/assets/shots/company-run-done.jpg" alt="Piagent dashboard: a company-mode turn with read, edit and test steps and the line A check passed on the final code, Review found no blocking issue" width="1600" height="1000">
+    <figcaption>The Piagent dashboard in company mode. See the whole picture in <a href="/en/ecosystem">Ecosystem</a> and every change in <a href="/en/whats-new">What’s new</a>.</figcaption>
+  </figure>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Production V1 · historical evidence from v1.6.0</p>
   <h2 id="evidence">Measured, not asserted</h2>
   <p class="section-lead">Release-bound run <code>production-v1-20260824T040017Z-05b7cf</code> measured 108 sessions on GPT-5.6 Luna Medium at tag <code>v1.6.0</code>, exact commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, with Piagent compared against <code>codex-cli</code>.</p>
 
@@ -172,14 +183,19 @@ piagent-setup</code></pre>
   <h2 id="where-to-start">Where to start</h2>
   <div class="card-grid">
     <a class="doc-card" href="/en/whats-new">
-      <span class="card-kicker">Product update</span>
+      <span class="card-kicker">Release 1.9.0</span>
       <h3>What’s new</h3>
-      <p>Runtime truth, task trajectories, recovery, helper policy, and fail-closed completion receipts — including what runs automatically and what is opt-in.</p>
+      <p>Plain-language requests, the team's Harness, network commands on approval, Stop for the whole turn and clearer approval cards.</p>
+    </a>
+    <a class="doc-card" href="/en/ecosystem">
+      <span class="card-kicker">Get started</span>
+      <h3>Ecosystem</h3>
+      <p>Piagent, Agent Watch and Agent Studio: what runs where, and when to use personal or company mode.</p>
     </a>
     <a class="doc-card" href="/en/quickstart">
       <span class="card-kicker">Get started</span>
       <h3>Quickstart</h3>
-      <p>Install, open a repository, onboard context, choose a profile and permission mode, run the first task, and verify before handoff.</p>
+      <p>Install, open a repository, choose its profile and permissions, then make the first request in plain language.</p>
     </a>
     <a class="doc-card" href="/en/scope">
       <span class="card-kicker">Get started</span>
@@ -232,9 +248,9 @@ piagent-setup</code></pre>
   </div>
 </section>
             <nav class="pager" aria-label="Adjacent pages">
-              <a class="pager-next" href="/en/quickstart">
+              <a class="pager-next" href="/en/ecosystem">
                 <span class="pager-label">Next</span>
-                <span class="pager-title">Quickstart</span>
+                <span class="pager-title">Ecosystem</span>
               </a>
             </nav>
 

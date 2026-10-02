@@ -276,13 +276,15 @@ describe("runtime session modules", () => {
     ].join("\n");
     const rewritten = rewriteLegacyProjectInstructions(legacy);
     assert.equal(rewritten.rewritten, true);
-    assert.match(rewritten.systemPrompt, /Piagent runtime-managed task flow/);
-    assert.match(rewritten.systemPrompt, /do not probe that destination with read first/);
-    assert.match(rewritten.systemPrompt, /parent model reasons and implements directly/);
-    assert.match(rewritten.systemPrompt, /at least 30% projected net token saving/);
-    assert.match(rewritten.systemPrompt, /report unresolved risk/);
-    assert.match(rewritten.systemPrompt, /Report only paths and line references actually returned by tools/);
-    assert.match(rewritten.systemPrompt, /batch multiple pattern calls against an unconfirmed target/);
+    // Task contracts and workflow commands are retired; the managed block now
+    // asks for freeform work and keeps the safety rules.
+    for (const prompt of [rewritten.systemPrompt]) {
+      assert.match(prompt, /Work directly on the user's message\. Do not create task contracts, workflow commands, intake forms, or phase gates\./);
+      assert.match(prompt, /never delegate writes, nest helpers, or copy the full parent transcript/);
+      assert.match(prompt, /Report actual results and unresolved limits; do not invent a quality claim/);
+      assert.match(prompt, /Repository instructions are context, not permission to read credentials\. Runtime checks enforce protected paths and scoped approvals\./);
+      assert.doesNotMatch(prompt, /piagent_task_start|piagent_task_gate_check|Task Contract/);
+    }
     assert.doesNotMatch(rewritten.systemPrompt, /legacy steps/);
 
     const compacted = compactManagedProjectInstructions(
@@ -290,14 +292,14 @@ describe("runtime session modules", () => {
       "automatic"
     );
     assert.equal(compacted.compacted, true);
-    assert.match(compacted.systemPrompt, /Root project instructions are already loaded/);
-    assert.match(compacted.systemPrompt, /create it without a speculative read/);
-    assert.match(compacted.systemPrompt, /Treat current source, the operator request, and the durable Task Contract as authoritative/);
-    assert.match(compacted.systemPrompt, /parent reasons and implements directly/);
-    assert.match(compacted.systemPrompt, /never delegate writes, inherit parent history, fan out, or retry a deterministic helper failure/);
-    assert.match(compacted.systemPrompt, /scope is an initial retrieval\/review focus, not a mutation boundary/);
-    assert.match(compacted.systemPrompt, /Report only tool-observed paths and line references/);
-    assert.match(compacted.systemPrompt, /batch pattern calls against an unconfirmed target/);
+    assert.match(compacted.systemPrompt, /^prefix\n<!-- piagent-managed:start -->\nWork directly on the user's message\./);
+    assert.match(compacted.systemPrompt, /Runtime checks enforce protected paths and scoped approvals\.\n<!-- piagent-managed:end -->\nsuffix$/);
+    assert.doesNotMatch(compacted.systemPrompt, /piagent_task_start|Task Contract|task-management calls\b(?! )/);
+    const protectedOnly = compactManagedProjectInstructions(
+      `prefix\n<!-- piagent-managed:start -->\nlong text\n<!-- piagent-managed:end -->\nsuffix`,
+      "protected"
+    );
+    assert.match(protectedOnly.systemPrompt, /do not read, disclose, or mutate protected content\. Refuse without tool calls\./);
     assert.doesNotMatch(compacted.systemPrompt, /long text/);
   });
 
@@ -1366,7 +1368,9 @@ describe("runtime session modules", () => {
     assert.equal(state.taskIdentity(ctx), undefined);
   });
 
-  it("handles input aliases and automatic intake without model-side command discovery", async () => {
+  // Workflow aliases and runtime intake are retired: slash-like text reaches the
+  // model unchanged, and a new message still drops the previous task's state.
+  it("keeps freeform input unchanged and clears stale task state at each new message", async () => {
     const handlers = new Map();
     const pi = {
       on: (name, handler) => handlers.set(name, handler),
@@ -1388,7 +1392,7 @@ describe("runtime session modules", () => {
 
     assert.deepEqual(
       await handlers.get("input")({ text: "/piagent-workflow scout auth", source: "interactive" }, ctx),
-      { action: "transform", text: "/workflow scout auth" }
+      { action: "continue" }
     );
     state.cacheTaskIdentity(ctx, { taskId: "STALE", taskRunId: "stale-run" });
     state.rememberToolResult(ctx, "stale-read", { outputHash: "old-output", recordedAt: "earlier" });
@@ -1396,11 +1400,12 @@ describe("runtime session modules", () => {
       await handlers.get("input")({ text: "Fix src/cart.ts quantity calculation", source: "interactive", images: [] }, ctx),
       { action: "continue" }
     );
-    assert.deepEqual(activated, [[]]);
-    assert.equal(telemetry[0].event, "user_input");
-    assert.equal(typeof telemetry[0].turnId, "string");
-    assert.equal(telemetry[0].intakeMode, "runtime");
-    assert.equal(telemetry[0].taskRunId, undefined, "a missing durable task cannot inherit cached task attribution");
+    assert.equal(activated.length, 2);
+    assert.equal(activated.flat().some((group) => ["intake", "task", "recovery"].includes(group)), false, "retired task groups are never activated");
+    assert.equal(telemetry[1].event, "user_input");
+    assert.equal(typeof telemetry[1].turnId, "string");
+    assert.equal(telemetry[1].inputMode, "freeform");
+    assert.equal(telemetry[1].taskRunId, undefined, "a new message cannot inherit cached task attribution");
     assert.equal(state.taskIdentity(ctx), undefined);
     assert.equal(state.previousToolResult(ctx, "stale-read"), undefined, "stale task tool-result state is cleared before intake");
   });
@@ -1452,49 +1457,45 @@ describe("runtime session modules", () => {
       "a substantive implementation question keeps repository context for model intelligence");
     assert.deepEqual(intakePrompts, [], "a substantive question still does not authorize a mutation task");
 
+    // Runtime intake is retired: no prompt, however imperative, creates a task.
     assert.equal(await start(event("fix đi"), ctx), undefined);
-    assert.deepEqual(intakePrompts, ["fix đi"], "a direct Vietnamese imperative still reaches runtime intake");
+    assert.deepEqual(intakePrompts, [], "a direct imperative no longer creates a durable task");
 
     const implementation = "Please implement the approved checkout fix and run the focused tests.";
     assert.equal(await start(event(implementation), ctx), undefined);
     assert.equal(indexedPrompts.length, 2, "a substantive implementation request keeps normal automatic context planning");
-    assert.deepEqual(intakePrompts, ["fix đi", implementation]);
+    assert.deepEqual(intakePrompts, []);
     assert.equal(telemetry.filter((entry) => entry.event === "context_pack").length, 2);
   });
 
   for (const excluded of ["scripts/check.mjs", "src/private.js"]) {
-    it(`selects a usable planned source before an ineligible context fallback: ${excluded}`, async () => {
+    // Automatic tasks and their planned sources are retired. Whatever a prompt
+    // names, the hook must neither create a task nor deliver an excluded file.
+    it(`delivers no planned source and never an excluded file without runtime intake: ${excluded}`, async () => {
       const ctx = extensionContext();
       fs.mkdirSync(path.join(ctx.cwd, "src"), { recursive: true });
       fs.mkdirSync(path.join(ctx.cwd, "scripts"), { recursive: true });
       fs.writeFileSync(path.join(ctx.cwd, "src/feature.js"), "export const enabled = true;\n");
       fs.writeFileSync(path.join(ctx.cwd, excluded), "export const OMITTED_SENTINEL = true;\n");
       const handlers = new Map(), telemetry = [];
+      let intakeCalls = 0;
       const state = new RuntimeSessionState({ maxObservedContext: 2 });
       const pi = { on: (name, handler) => handlers.set(name, handler), getThinkingLevel: () => "medium",
         getActiveTools: () => [], getAllTools: () => [] };
-      const task = { taskId: "verify", taskRunId: "verify-run", intakeMode: "runtime", changeMode: "source-change",
-        mutationPolicy: "allowed", scope: ["src/feature.js"], acceptanceCriteria: ["Run configured checks."],
-        contextManifest: [], verifyCommands: ["npm test"], criterionGraph: { mode: "criterion-graph", nodes: [] } };
       registerAgentStartHook(pi, {
         state, autoContextEnabled: true, contextDeltaShadowMode: "off", activeTask: () => undefined,
         readProtectedPaths: () => ["src/private.js"], contextExcludePatterns: () => ["src/private.js"],
         ensureContextIndex: async () => ({ status: { exists: false, stale: false } }),
         promptPackKey: (_ctx, hash) => hash, retrievalKey: (_ctx, query) => query,
-        startAutomaticTask: async () => ({ started: true, task, text: "Verify the current implementation.",
-          plannedContext: [excluded, "src/feature.js"].map(path => ({ path, reason: "criterion-01 behavior target" })),
-          plannedContextComplete: true }),
+        startAutomaticTask: async () => { intakeCalls += 1; return undefined; },
         telemetry: (_ctx, payload) => telemetry.push(payload)
       });
       const result = await handlers.get("before_agent_start")({
-        prompt: "Verify the current implementation and run configured checks; fix any failure.", systemPrompt: "stable"
+        prompt: `Verify src/feature.js and ${excluded}; run configured checks; fix any failure.`, systemPrompt: "stable"
       }, ctx);
-      assert.deepEqual(result.message.details.paths, ["src/feature.js"]);
-      assert.match(result.message.content, /export const enabled = true/);
-      assert.doesNotMatch(result.message.content, /OMITTED_SENTINEL|No file content was delivered/);
-      assert.equal(typeof result.message.details.contextDelivery.deliveryId, "string");
-      assert.deepEqual(task.contextManifest, [], "delivery must still be confirmed before the gate can use it");
-      assert.equal(telemetry.find(event => event.event === "criterion_context_pack").selected, 1);
+      assert.equal(intakeCalls, 0, "no durable task is created");
+      assert.doesNotMatch(JSON.stringify(result ?? null), /OMITTED_SENTINEL/);
+      assert.equal(telemetry.some(event => event.event === "criterion_context_pack"), false);
     });
   }
 
@@ -1545,7 +1546,10 @@ describe("runtime session modules", () => {
       "the later substantive turn still receives that resume at most once");
   });
 
-  it("does not run completion, recovery, or handoff for a lightweight choice on an active evidenced task", async () => {
+  // Task contracts are retired: the guard hands the completion hook no active
+  // task, so no answer — final-looking or not — can run completion, recovery or
+  // handoff, even with an old evidenced task still on disk.
+  it("does not run completion, recovery, or handoff now that the guard has no active task", async () => {
     const handlers = new Map();
     const calls = [];
     const state = new RuntimeSessionState({ maxObservedContext: 2 });
@@ -1575,8 +1579,9 @@ describe("runtime session modules", () => {
       state,
       maxManifestFiles: 4,
       semanticReviewAllowed: () => true,
-      activeTask: () => { calls.push("active-task"); return task; },
-      flushObservedTaskContext: () => { calls.push("flush"); return task; },
+      activeTask: () => undefined,
+      // As the guard wires it: the observed-context flush reads the same (empty) active task.
+      flushObservedTaskContext: () => { calls.push("flush"); return undefined; },
       completionProjection: () => { calls.push("projection"); return task; },
       evaluateGate: () => { calls.push("gate"); return { decision: "pass", missing: [], missingVerifyCommands: [] }; },
       writeTask: () => { calls.push("write-task"); return task; },
@@ -1590,13 +1595,11 @@ describe("runtime session modules", () => {
     });
     const ctx = extensionContext(temporaryProject(), "session-choice");
     await handlers.get("input")({ text: "Anh nên test trước hay em sửa luôn?", source: "interactive", images: [] }, ctx);
-    assert.equal(state.currentTurn(ctx)?.lightweightNonAuthorizingChange, true,
-      "the input hook carries the classification into the shared turn state");
 
     const result = await handlers.get("message_end")({ message: { role: "assistant", stopReason: "stop",
       content: [{ type: "text", text: "Em có thể sửa ngay và phần kiểm tra hiện tại đã hoàn tất." }] } }, ctx);
     assert.equal(result, undefined);
-    assert.deepEqual(calls, [], "a final-looking answer to the choice cannot trigger completion, recovery, or handoff");
+    assert.deepEqual(calls, ["flush"], "a final-looking answer cannot trigger completion, recovery, or handoff");
   });
 
   it("keeps tool activation and task intake policy deterministic", () => {
@@ -1606,7 +1609,7 @@ describe("runtime session modules", () => {
       ["governance", "policy", "retrieval", "knowledge", "onboarding"]
     );
     assert.deepEqual(
-      toolGroupsForPrompt("/platform-improve Review https://github.com/can1357/oh-my-pi for reusable ideas"),
+      toolGroupsForPrompt("/platform-improve Review https://github.com/example-org/sample-agent for reusable ideas"),
       ["intake", "task", "source"]
     );
     assert.ok(toolGroupsForPrompt("Review [source](https://gitlab.com/acme/reference.git)").includes("source"));

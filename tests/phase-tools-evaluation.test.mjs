@@ -14,10 +14,16 @@ it("reproduces the P3 trajectory and phase-schema gate", () => {
     execFileSync(process.execPath, ["scripts/phase-tools-evaluation.mjs", "--output", output], { cwd: repoRoot, stdio: "pipe" });
     const report = JSON.parse(fs.readFileSync(output, "utf8"));
     assert.equal(report.gatePassed, true);
-    assert.equal(report.registeredPiagentTools, 33);
+    // 33 before the task-contract retirement removed seven task-bound tools
+    // (task, trace, verify, context-record and memory-citation).
+    assert.equal(report.registeredPiagentTools, 26);
+    assert.equal(report.checks.find((check) => check.id === "retired-evidence-tools-absent")?.passed, true);
     assert.equal(report.evaluatedTurns, 17);
-    assert.ok(report.schemaReduction >= 0.2, "the historical counterfactual remains reproducible but is not a provider-schema claim");
-    assert.equal(report.schemaReductionSemantics, "counterfactual-intended-surface-only");
+    // The historical P2 counterfactual compared against task tools that no longer
+    // exist; the report must say the baseline is gone rather than print a ratio.
+    assert.equal(report.schemaReduction, null);
+    assert.equal(report.schemaReductionPercent, null);
+    assert.equal(report.schemaReductionSemantics, "counterfactual-baseline-retired");
     assert.deepEqual(report.runtimeContract.strict.providerSchema, {
       initialCount: report.runtimeContract.strict.providerSchema.initialCount,
       finalCount: report.runtimeContract.strict.providerSchema.initialCount,

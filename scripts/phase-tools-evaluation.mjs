@@ -106,13 +106,16 @@ for (const [name, tool] of tools) {
 }
 const duplicateDescriptions = [...descriptions.values()].filter((names) => names.length > 1);
 const replay = lanes.map(replayLane);
+// The task contract was retired on 2026-09-30: these evidence tools are no longer
+// registered, so no phase may offer them and the runtime keeps only its hooks.
+const p2BaselineRetired = lanes.every((lane) => lane.p2.every((name) => !tools.has(name)));
 const runtimeOwnedEvidenceTools = ["piagent_context_record", "piagent_verify_record", "piagent_task_gate_check", "piagent_trace_record"];
 const checks = [
   { id: "read-only-no-direct-mutator", passed: phaseRows.filter((row) => row.lane === "read-only").every((row) => row.piagentTools.every((tool) => !PIAGENT_MUTATION_CAPABLE_TOOLS.has(tool)) && row.requiredHostTools.every((tool) => !["edit", "write", "apply_patch"].includes(tool))) },
   { id: "review-carrier-checked-shell-retained", passed: phaseRows.filter((row) => row.phase === "review").every((row) => row.piagentTools.every((tool) => !PIAGENT_MUTATION_CAPABLE_TOOLS.has(tool)) && row.requiredHostTools.includes("bash") && row.requiredHostTools.every((tool) => !["edit", "write", "apply_patch"].includes(tool))) },
   { id: "verify-surface-complete", passed: phaseRows.filter((row) => row.phase === "verify").every((row) => row.requiredHostTools.includes("bash") && runtimeOwnedEvidenceTools.every((tool) => !row.piagentTools.includes(tool))) },
   { id: "handoff-surface-complete", passed: phaseRows.filter((row) => row.phase === "handoff").every((row) => row.requiredHostTools.includes("read") && runtimeOwnedEvidenceTools.every((tool) => !row.piagentTools.includes(tool))) },
-  { id: "runtime-evidence-surface-complete", passed: runtimeOwnedEvidenceTools.every((tool) => tools.has(tool)) && ["tool_result", "message_end"].every((hook) => hooks.has(hook)) },
+  { id: "retired-evidence-tools-absent", passed: runtimeOwnedEvidenceTools.every((tool) => !tools.has(tool)) && ["tool_result", "message_end"].every((hook) => hooks.has(hook)) },
   { id: "high-risk-review-retained", passed: lanes.find((lane) => lane.id === "high-risk").phases.includes("review") },
   { id: "duplicate-descriptions-zero", passed: duplicateDescriptions.length === 0 },
   { id: "trajectory-replay-100-percent", passed: replay.every((item) => item.deterministic && item.finalPhase === "terminal") }
@@ -202,9 +205,11 @@ const report = {
   evaluatedTurns: phaseRows.length,
   p2WeightedSchemaBytes: p2WeightedBytes,
   phaseWeightedSchemaBytes: phaseWeightedBytes,
-  schemaReduction: Number(reduction.toFixed(4)),
-  schemaReductionPercent: Number((reduction * 100).toFixed(2)),
-  schemaReductionSemantics: "counterfactual-intended-surface-only",
+  // Every P2 baseline tool was retired with the task contract, so there is no
+  // baseline left to compare against; null says so instead of a meaningless ratio.
+  schemaReduction: p2BaselineRetired ? null : Number(reduction.toFixed(4)),
+  schemaReductionPercent: p2BaselineRetired ? null : Number((reduction * 100).toFixed(2)),
+  schemaReductionSemantics: p2BaselineRetired ? "counterfactual-baseline-retired" : "counterfactual-intended-surface-only",
   runtimeContract: { strict: strictContract, shadow: shadowContract },
   duplicateDescriptions,
   missingToolEvents: checks.filter((check) => !check.passed && check.id.includes("surface")).length,

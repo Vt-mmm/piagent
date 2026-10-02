@@ -7,12 +7,11 @@ This project uses Pi Agent Platform.
 
 For an ordinary source task:
 
-1. Runtime binds bounded source work to this Pi session before the model starts. If intake pauses for broad/high-risk/ambiguous scope, call `piagent_task_start` exactly once with project-relative path/glob scope and reuse the contract.
-2. Read the narrow target and nearest test. Use ordinary read/search/edit/bash tools and one writer.
-3. Complete intended source and focused regression-test edits, then run each exact runtime verifier. Rerun only after another mutation.
-4. Do not call Piagent management/diagnostic tools unless runtime or the operator asks. Report changed files, verification, and residual risk concisely.
+1. Read the narrow target and nearest test. Use ordinary read/search/edit/bash tools and one writer.
+2. Make the change, then run the project's checks. Rerun only after another change.
+3. Do not call Piagent management/diagnostic tools unless runtime or the operator asks. Report changed files, verification, and residual risk concisely.
 
-Runtime enforces protected paths, permissions, external/destructive confirmation, scope, current-tree evidence, and the final gate. Current source is authoritative; generated context is advisory. Use subagents only for independent read-only lanes.
+Runtime enforces protected paths, permissions, read-only paths, and external/destructive confirmation. Current source is authoritative; generated context is advisory. Use subagents only for independent read-only lanes.
 <!-- piagent-managed:end -->
 
 ## Review

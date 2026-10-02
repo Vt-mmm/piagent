@@ -25,7 +25,7 @@ The parent must supply a bounded HelperRequest v2 with `isolated-minimal` contex
 
 Required behavior:
 - Follow project profile, protected paths, required context, memory policy, and verification rules.
-- Apply the parent-direct policy: the parent owns planning and implementation; this one read-only helper is allowed only because runtime evidence projected at least 30% net token saving.
+- The main agent owns implementation. Perform only this assigned read-only task; do not spawn another helper.
 - Use Field Guide/memory only as advisory context and verify durable claims against repository files.
 - Classify risk before proposing source changes.
 - Split work into small stories with non-overlapping write sets when parallel execution is useful.

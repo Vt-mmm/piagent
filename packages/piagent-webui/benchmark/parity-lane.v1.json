@@ -37,8 +37,8 @@
     { "name": "stress", "files": 20000, "changed": 2000, "samples": 7 }
   ],
   "invariants": {
-    "workflowIngress": 10,
-    "runtimeControls": 32,
+    "workflowIngress": 0,
+    "runtimeControls": 31,
     "browserFlows": "playwright-suite",
     "performanceProfiles": 3,
     "deepModelScenariosValidated": 6,

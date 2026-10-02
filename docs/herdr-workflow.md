@@ -51,11 +51,10 @@ Lần đầu trong project, mở pane Pi rồi chạy:
 ```text
 /login
 <select provider/model>
-/onboard
-/onboard run
+/profile setup
 ```
 
-Sau khi `.pi/project-context.md` đã được ghi, mới chạy `/workflow task` cho implementation.
+rồi nhờ agent: "Đọc project này (chỉ đọc) và ghi lại project context." Sau khi `.pi/project-context.md` đã được ghi, mới giao việc implementation.
 
 Pane đề xuất:
 

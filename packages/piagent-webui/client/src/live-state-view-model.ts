@@ -155,6 +155,8 @@ export function reconcileSessionLiveState(current: Readonly<Record<string, LiveC
 
 function liveToolPhase(toolLabel: string, locale: "vi" | "en"): string {
   const tool = toolLabel.toLowerCase();
+  if (tool === "compaction") return locale === "vi" ? "tóm tắt phần cũ của cuộc trò chuyện" : "summarising the older part of the conversation";
+  if (tool === "capacity-wait") return locale === "vi" ? "chờ tài khoản công ty rảnh" : "waiting for a free company account";
   if (/(subagent|scout|delegate|agent)/.test(tool)) return locale === "vi" ? "phối hợp agent hỗ trợ" : "coordinating a helper agent";
   if (/(bash|exec|shell|command|terminal)/.test(tool)) return locale === "vi" ? "chạy lệnh" : "running a command";
   if (/(read|grep|find|list|glob|search_file)/.test(tool)) return locale === "vi" ? "đọc mã nguồn" : "reading source";
@@ -164,7 +166,8 @@ function liveToolPhase(toolLabel: string, locale: "vi" | "en"): string {
   return locale === "vi" ? "chạy công cụ" : "running a tool";
 }
 
-const SENSITIVE_FILE_LABEL = /(?:sk-(?:proj|live|test|svcacct)-[A-Za-z0-9_-]{8,}|(?:api[_-]?key|password|secret|token)=)/i;
+// Also Agent Studio credentials (as_live_/as_device_/as_run_ followed by a uuid).
+const SENSITIVE_FILE_LABEL = /(?:sk-(?:proj|live|test|svcacct)-[A-Za-z0-9_-]{8,}|as_(?:live|device|run)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_|(?:api[_-]?key|password|secret|token)=)/i;
 export function safeLiveFileLabel(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const basename = (value.replace(/\\/g, "/").split("/").at(-1) ?? "").trim();

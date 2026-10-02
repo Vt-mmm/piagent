@@ -1,10 +1,10 @@
 {
   "name": "@piagent/core",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "type": "module",
   "private": true,
   "license": "MIT",
-  "description": "Pi agent package: guard extension, prompts, skills, and policy defaults.",
+  "description": "Pi agent package: guard extension, skills, and policy defaults.",
   "homepage": "https://piagent.io.vn",
   "repository": {
     "type": "git",
@@ -22,9 +22,6 @@
     ],
     "skills": [
       "skills"
-    ],
-    "prompts": [
-      "prompts"
     ],
     "subagents": {
       "agents": [

@@ -13,10 +13,16 @@ async function captureSession(response: Response): Promise<boolean> {
 
 export function browserCsrfToken(): string | null { return csrfToken; }
 
+// A launcher (Agent Watch's WebUI button) names the project it opened for.
+let launchProject: string | null = null;
+export function launchProjectRef(): string | null { return launchProject; }
+
 async function performBootstrap(): Promise<BootstrapState> {
   const parameters = new URLSearchParams(window.location.hash.slice(1));
-  const capability = parameters.get("bootstrap");
+  const capability = parameters.get("bootstrap"), project = parameters.get("project");
+  if (project && /^[A-Za-z0-9_-]{1,120}$/.test(project)) launchProject = project;
   if (!capability) {
+    if (project) window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     try {
       const response = await fetch("/api/v1/browser-session", { credentials: "same-origin", headers: { Accept: "application/json" } });
       return await captureSession(response) ? "existing-session" : "failed";

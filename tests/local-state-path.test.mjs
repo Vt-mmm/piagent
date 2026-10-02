@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import { appendContextTelemetry } from "../packages/piagent-core/extensions/context-engine.js";
-import { resolveLocalStatePath } from "../packages/piagent-core/extensions/local-state-path.js";
+import { ensurePrivateStateDirectory, ensureStateRootIgnored, resolveLocalStatePath } from "../packages/piagent-core/extensions/local-state-path.js";
+import { execFileSync } from "node:child_process";
 import { appendJsonlBounded, pruneCaptureFiles } from "../packages/piagent-core/extensions/state-retention.js";
 import { taskStateMigrationStatus, writeTaskContract } from "../packages/piagent-core/extensions/task-state.js";
 
@@ -57,4 +58,18 @@ test("allows local state when the project root itself is reached through a symli
   const actual = path.join(project, ".pi", "piagent-state", "events.jsonl");
   assert.equal(fs.existsSync(actual), true);
   assert.equal(JSON.parse(fs.readFileSync(actual, "utf8")).event, "test");
+});
+
+// A project that never ran setup has no .pi/.gitignore; its runtime state
+// showed in git status and went into `git add -A` commits.
+test("keeps runtime state out of git without overwriting an existing ignore file", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-state-ignore-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init", "-q", root]);
+  ensurePrivateStateDirectory(root, path.join(root, ".pi", "piagent-state", "context-engine"));
+  fs.writeFileSync(path.join(root, ".pi", "piagent-state", "context-engine", "events.jsonl"), "{}\n");
+  assert.equal(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8" }), "");
+  fs.writeFileSync(path.join(root, ".pi", "piagent-state", ".gitignore"), "operator rule\n");
+  ensureStateRootIgnored(root);
+  assert.equal(fs.readFileSync(path.join(root, ".pi", "piagent-state", ".gitignore"), "utf8"), "operator rule\n");
 });

@@ -7,10 +7,10 @@ const root = path.resolve(import.meta.dirname, "..");
 const surfaces = ["README.md", "docs", "docs-site/content", "scripts/build-docs-site.mjs",
   "packages/piagent-core/README.md", "packages/piagent-core/prompts", "packages/piagent-core/mcp",
   "packages/piagent-core/extensions", "packages/piagent-core/runtime", "templates/project/AGENTS.md"];
-// Explicit reviewed research records, never a marker supplied by arbitrary docs.
-const researchRecords = new Set(["docs/piagent-core-improvement-plan.md",
-  "docs/piagent-core-reasoning-research-2026-09-06.md", "docs/piagent-core-research-sources-2026-09-06.json"]);
 const sourceNames = ["Codex CLI", "Claude CLI", "Claude Code"];
+// Other agent products and projects. Public text describes a technique in its
+// own words and names none of them; whole words only ("declined" is not one).
+const otherAgents = /\b(?:Aider|SWE-agent|OpenHands|Oh My Pi|oh-my-pi|OpenClaw|OpenClaude|LangGraph|LangChain|Windsurf|Cline|Roo Code|Kilo Code|autoresearch)\b/g;
 const prohibited = ["platform-migration", "codex-migration", "codex-parity", "benchmark-parity",
   "harness-migration", "agent-stuff", "mitsuhiko", "claude mcp", "codex mcp",
   "Codex-inspired", "Codex-grade", "Pi vs Codex", "vs Claude", "reference repo",
@@ -18,9 +18,8 @@ const prohibited = ["platform-migration", "codex-migration", "codex-parity", "be
 const escaped = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function publicWordingViolations(file, text) {
-  const terms = researchRecords.has(file) ? prohibited : [...prohibited, ...sourceNames];
-  const pattern = new RegExp(terms.map(escaped).join("|"), "gi");
-  return [...text.matchAll(pattern)].map(match => ({ file,
+  const pattern = new RegExp([...prohibited, ...sourceNames].map(escaped).join("|"), "gi");
+  return [...text.matchAll(pattern), ...text.matchAll(otherAgents)].sort((a, b) => a.index - b.index).map(match => ({ file,
     line: text.slice(0, match.index).split("\n").length, keyword: match[0] }));
 }
 

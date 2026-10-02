@@ -580,11 +580,9 @@ operator diagnostics or recovery tools.
 | `piagent_exec_policy_check` | Explain the shell-policy verdict already enforced by the hook. |
 | `piagent_context_budget` | Diagnose candidate context files against hard caps. |
 | `piagent_tool_policy_check` | Diagnose tool capability registration. |
-| `piagent_task_gate_check` | Diagnose missing final proof during recovery. |
 | `piagent_memory_status` | Project memory policy/files/rules. |
 | `piagent_memory_search` | Keyword search `.pi/memory` markdown. |
 | `piagent_memory_note` | Append explicit durable memory note. |
-| `piagent_memory_citation_record` | Record memory evidence in task contract. |
 | `piagent_context_index_status` | Inspect the compact advisory project context index. |
 | `piagent_context_index_search` | Search context-index nodes before broad re-scouting. |
 | `piagent_context_index_record` | Record cited project/profile/tech/task context after onboarding or approved handoff. |
@@ -593,11 +591,11 @@ operator diagnostics or recovery tools.
 | `piagent_profile_tech_options` | Return select-style tech options for a profile family. |
 | `piagent_profile_tech_apply` | Apply profile + selected role tech stack and Context7 placeholders. |
 | `piagent_profile_tech_context_record` | Record a concise Context7 evidence snapshot for a selected tech. |
-| `piagent_task_start` | Create Task Implementation Contract. |
-| `piagent_task_progress` | Complete the normal review step or explicit custom/high-risk checkpoints. |
-| `piagent_context_record` | Recovery fallback for context manifest evidence. |
-| `piagent_verify_record` | Recovery fallback for an exact observed Pi bash result bound to the current tree. |
-| `piagent_trace_record` | Recovery/high-risk fallback for handoff or blocker state. |
+| `piagent_document_read` | Read a document from the project or a granted `additionalReadRoots` directory (read-only). |
+| `piagent_source_checkout` | Prepare an external Git repository for read-only inspection in this session. |
+| `piagent_project_onboarding_record` | Record `.pi/project-context.md` after the agent has read the project. |
+
+Retired in 1.9.0 with the task contract: `piagent_task_start`, `piagent_task_progress`, `piagent_task_gate_check`, `piagent_context_record`, `piagent_verify_record`, `piagent_trace_record` and `piagent_memory_citation_record`.
 
 ## Core capabilities
 

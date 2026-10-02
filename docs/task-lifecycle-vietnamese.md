@@ -1,6 +1,8 @@
 # Vong doi task trong Pi Agent Platform
 <!-- language: vi; english-index: docs-site/content/en/runtime.html -->
 
+> **Hồ sơ thiết kế trước bản 1.9.0.** Task contract, command workflow (`/workflow`, `/task`, `/fresh`, `/onboard`) và các tool task/trace/verify mô tả ở đây đã bỏ ngày 2026-09-30; session giờ là freeform và guard chỉ còn kiểm tra path, quyền, xác nhận, context budget và edit trên bản đọc cũ. Tài liệu được giữ để tra cứu lịch sử. Hành vi hiện tại: [README](../README.vi.md).
+
 ## Muc tieu
 
 Tu `v1.2.11`, mot source task duoc quan ly theo chuoi khép kín:

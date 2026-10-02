@@ -9,6 +9,10 @@ import { scriptedProductionSupervisor, scriptedText } from "./helpers/scripted-p
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
+// Since the 2026-09-30 task-contract retirement the refusal is an ordinary
+// freeform turn: no task records it, and the message sent after the reconnect
+// is a new model turn rather than a replayed receipt. The transport guarantees
+// below are unchanged.
 test("production refusal traverses authenticated HTTP and WebSocket reconnect without duplicate execution", { timeout: 120000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-refusal-wire-")));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -31,7 +35,7 @@ test("production refusal traverses authenticated HTTP and WebSocket reconnect wi
       }
       const first = await runtime.turn(prepared.turns[0], [scriptedText(
         "REFUSAL=destructive-history-delete\nSAFE_ALTERNATIVE=approved-retention-or-archive")]);
-      const recovered = await runtime.turn(prepared.turns[1], []);
+      const recovered = await runtime.turn(prepared.turns[1], [scriptedText("Nothing was deleted; the refusal stands.")]);
       const snapshot = runtime.transport.snapshot();
       t.diagnostic(JSON.stringify({ scenario: "destructive-history-refusal", transport: snapshot,
         outcomes: [first, recovered].map(item => ({ turn: item.turnId, settlement: item.settlement,
@@ -47,20 +51,19 @@ test("production refusal traverses authenticated HTTP and WebSocket reconnect wi
       assert.equal(first.command.payload.permissionMode, "workspace-write", "match the production benchmark create command");
       assert.equal(recovered.transport.connections, 2);
       assert.equal(first.sessionId, recovered.sessionId);
-      assert.equal(first.task.taskRunId, recovered.task.taskRunId);
+      assert.equal(first.settlement.sessionRef, recovered.settlement.sessionRef);
       assert.notEqual(first.settlement.operationRef, recovered.settlement.operationRef);
       assert.equal(first.scriptedTurns, 1);
-      assert.equal(recovered.scriptedTurns, 0);
+      assert.equal(recovered.scriptedTurns, 1);
       for (const observation of [first, recovered]) {
         assert.deepEqual(observation.wireSettlement.payload, observation.settlement);
-        assert.equal(observation.settlement.taskStatus, "refused");
-        assert.equal(observation.task.trace.terminalDisposition, "refused");
-        assert.equal(observation.task.trace.outcome, "blocked");
+        assert.equal(observation.task, null, "no task is recorded for a freeform turn");
+        assert.equal(observation.settlement.settlement, "completed");
+        assert.equal(observation.settlement.taskStatus, "unknown");
+        assert.equal(observation.settlement.reasonCode, null);
         assert.equal(runtime.observed.filter(event => event.kind === "operation.settled"
           && event.payload.operationRef === observation.settlement.operationRef).length, 1);
       }
-      assert.equal(recovered.settlement.settlement, "completed");
-      assert.equal(recovered.settlement.reasonCode, null);
       const wireCatalog = await runtime.transport.readCatalog(Date.now() + 5000);
       const httpCatalog = await runtime.transport.readHttp("/api/v1/session-catalog", Date.now() + 5000);
       assert.equal(wireCatalog.sessions.length, 1);
@@ -70,7 +73,7 @@ test("production refusal traverses authenticated HTTP and WebSocket reconnect wi
       assert.deepEqual(live.operations, []);
       assert.deepEqual(runtime.extensionErrors, []);
       assert.deepEqual(runtime.serviceErrors, []);
-      assert.deepEqual(runtime.metrics, { scriptedTurns: 1, unexpectedTurns: 0, realProviderCalls: 0 });
+      assert.deepEqual(runtime.metrics, { scriptedTurns: 2, unexpectedTurns: 0, realProviderCalls: 0 });
       assert.equal(runtime.rawEvents.filter(event => event.type === "tool_execution_start").length, 0);
       assert.equal(gitStatus(), before);
     } finally { await runtime.close(); }

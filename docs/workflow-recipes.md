@@ -3,7 +3,7 @@
 
 ## Mục tiêu
 
-Các recipe này biến những bài toán lặp lại thành workflow có tên rõ, dùng được cho project khác mà không phụ thuộc một project nội bộ cụ thể.
+Các recipe này biến những bài toán lặp lại thành cách yêu cầu rõ ràng, dùng được cho project khác mà không phụ thuộc một project nội bộ cụ thể. Từ bản 1.9.0 không còn `/workflow` hay `/onboard`: mỗi recipe là một yêu cầu bằng lời thường.
 
 ## Recipe 1 — Platform improvement
 
@@ -12,10 +12,10 @@ Dùng khi muốn cải tiến setup, prompt, MCP, model scope, memory, runtime p
 Lệnh trong Pi:
 
 ```text
-/onboard
-/onboard run
-/workflow platform-improve Improve <target behavior> in <platform area>.
+Improve <target behavior> in <platform area>.
 ```
+
+Nếu project chưa onboard, nhờ agent "đọc project (chỉ đọc) và ghi lại project context" trước.
 
 Input tối thiểu:
 
@@ -60,9 +60,7 @@ Setup project generic:
 Lệnh trong Pi:
 
 ```text
-/onboard
-/onboard run
-/workflow be-to-fe Implement FE from BE spec: <endpoint/spec/change>
+Implement FE from BE spec: <endpoint/spec/change>. Backend is read-only.
 ```
 
 Input tối thiểu:
@@ -115,8 +113,6 @@ Rule:
 Dùng khi muốn giảm scout lại giữa các session mà không bật auto memory.
 
 ```text
-/onboard
-/onboard run
 /context index
 /context search auth
 ```
@@ -126,4 +122,4 @@ Rule:
 1. Context index là advisory map, không phải source of truth.
 2. Node/edge phải ngắn và có citation tới file/doc/task đã verify.
 3. Không lưu raw transcript, secret, token, session, hoặc source excerpt dài.
-4. Nếu index stale so với profile/tech/onboarding snapshot, chạy lại `/onboard run` hoặc record lại bằng `piagent_context_index_record`.
+4. Nếu index stale so với profile/tech/onboarding snapshot, nhờ agent onboard lại hoặc record lại bằng `piagent_context_index_record`.

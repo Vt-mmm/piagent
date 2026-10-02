@@ -37,6 +37,7 @@ Rule máy đọc nằm tại `architecture/layers.json`; chạy `npm run archite
 | Layer | Vị trí hiện tại | Ownership | Không được chứa |
 |---|---|---|---|
 | Composition | `packages/piagent-core/extensions/piagent-guard.ts` | Wiring, dependency construction, thứ tự registration | Feature algorithm, mutable state implementation, formatter lớn |
+| Managed harness | `packages/piagent-core/managed/` | Phiên công ty do Agent Watch nhập: grant Studio, tool worker trong sandbox, helper research/review, web search/fetch | OAuth cá nhân, extension cá nhân, quyết định chính sách của Studio |
 | Runtime adapters | `packages/piagent-core/runtime/` | Pi lifecycle hook, shared session state, command/tool registration, input routing | Policy decision dùng lại |
 | Core services | `packages/piagent-core/extensions/` trừ entrypoint | Policy, context, task lifecycle, state service | Pi command menu và UI text |
 | MCP integration | `packages/piagent-core/mcp/` | MCP config layer, readiness, approval, command action | Task và context policy |
@@ -73,7 +74,14 @@ Folder `extensions/` vẫn chứa một số service module do lịch sử. Tên
 
 ## Adaptive durable runtime
 
-Runtime hiện tại có sáu lớp state operational/derived:
+> Từ bản 1.9.0 (bỏ task contract ngày 2026-09-30), session không còn tạo task
+> contract, journal, trajectory hay recovery handoff, và guard không coi bản ghi
+> nào là đang hoạt động. Bốn lớp đầu trong bảng dưới mô tả bản ghi do các bản
+> trước tạo; chúng vẫn đọc được để xem lịch sử và kiểm tra. Lượt freeform vẫn giữ
+> các kiểm tra của guard về path, quyền, xác nhận, context budget và edit trên bản
+> đọc cũ.
+
+Runtime đã định nghĩa sáu lớp state operational/derived:
 
 | Layer | Source of truth | Derived state |
 |---|---|---|

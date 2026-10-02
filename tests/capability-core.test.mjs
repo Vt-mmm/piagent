@@ -286,7 +286,8 @@ describe("capability catalog and profile lock", () => {
         .map((entry) => entry.path)
         .filter((entry) => entry.startsWith("packages/piagent-core/runtime/"))
         .sort(),
-      filesBelow(repositoryRoot, "packages/piagent-core/runtime"),
+      // Type declarations (.d.ts/.d.mts) are erased and never run.
+      filesBelow(repositoryRoot, "packages/piagent-core/runtime").filter((file) => !/\.d\.[cm]?ts$/.test(file)),
       "every executable runtime module must be pinned by the profile lock"
     );
   });

@@ -10,7 +10,7 @@ export const OWNED_WORK_BUDGET_VERSION = "owned-work-budget-v1" as const;
 // Keep the complete ceiling shape for persisted/operator projections, but clamp
 // every caller to one read-only helper and zero retries/writers below.
 export type OwnedWorkCeilings = Readonly<{ maxConcurrentHelpers: number; maxTotalHelpers: number; maxScoutPasses: number; maxPlannerPasses: number; maxReviewPasses: number; maxOracleCalls: number; maxRepairPasses: number; maxWriters: number }>;
-export const ABSOLUTE_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ maxConcurrentHelpers: 1, maxTotalHelpers: 1, maxScoutPasses: 1, maxPlannerPasses: 1, maxReviewPasses: 1, maxOracleCalls: 1, maxRepairPasses: 0, maxWriters: 0 });
+export const ABSOLUTE_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ maxConcurrentHelpers: 2, maxTotalHelpers: 2, maxScoutPasses: 1, maxPlannerPasses: 1, maxReviewPasses: 1, maxOracleCalls: 1, maxRepairPasses: 0, maxWriters: 0 });
 export const DEFAULT_OWNED_WORK_CEILINGS: OwnedWorkCeilings = ABSOLUTE_OWNED_WORK_CEILINGS;
 export const AUTOMATIC_OWNED_WORK_CEILINGS: OwnedWorkCeilings = ABSOLUTE_OWNED_WORK_CEILINGS;
 const LOCK_WAIT_MS = 5;

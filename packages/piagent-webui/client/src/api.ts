@@ -51,7 +51,7 @@ export type SessionCreationOptions = {
   schemaVersion: 1;
   version: "piagent-session-creation-options-v1";
   generatedAt: string;
-  projects: Array<{ projectRef: string; placeRef: string; label: string }>;
+  projects: Array<{ projectRef: string; placeRef: string; label: string; hint?: string }>;
   models: Array<{ modelRef: string; provider: string; modelId: string; displayName: string; reasoning: boolean; imageInput: boolean | null; thinkingLevels: string[] }>;
   defaultModelRef?: string | null;
   defaultThinkingLevel?: string | null;
@@ -115,6 +115,26 @@ export async function importProjectFolder(signal?: AbortSignal): Promise<{ schem
   const response = await fetch("/api/v1/projects/import", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
     body: JSON.stringify({ action: "project.import" }) });
+  if (!response.ok) throw new WebUiRequestError(response.status);
+  return await response.json();
+}
+
+export type CompanyStatus = { schemaVersion: 1; available: boolean; state: "unconfigured" | "connecting" | "ready" | "unavailable";
+  reasonCode: string | null; model: "agent-watch-auto" };
+
+// Personal dashboard only; a gateway without company sessions answers null
+// (404 from an older gateway means the same).
+export async function readCompanyStatus(signal?: AbortSignal): Promise<CompanyStatus | null> {
+  try { return await readJson<CompanyStatus>("/api/v1/managed", signal); }
+  catch (error) { if (error instanceof WebUiRequestError && error.status === 404) return null; throw error; }
+}
+
+// Starts or reconnects the company runtime; macOS may ask for Keychain access.
+export async function connectCompany(signal?: AbortSignal): Promise<CompanyStatus> {
+  const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
+  const response = await fetch("/api/v1/managed/connect", { method: "POST", credentials: "same-origin", signal,
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
+    body: JSON.stringify({ action: "managed.connect" }) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json();
 }

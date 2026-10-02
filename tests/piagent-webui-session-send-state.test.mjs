@@ -60,3 +60,24 @@ describe("Piagent WebUI session send state", () => {
     assert.equal(sessionSendDisposition(receipt("rejected", "unavailable"), observed), "observed");
   });
 });
+
+// A create that outlives one answer: the same command is sent again (the
+// Gateway answers it with the first create's receipt); other failures stop.
+it("a command that timed out is sent again, the same command, a bounded number of times", async () => {
+  const { requestUntilAnswered, GatewayCommandTransportError } = await import("../packages/piagent-webui/client/src/session-send-state.ts");
+  const command = { commandId: "command_once" }, seen = [];
+  let timeouts = 2;
+  const answer = await requestUntilAnswered(async (value) => {
+    seen.push(value);
+    if (timeouts-- > 0) throw new GatewayCommandTransportError("gateway-command-response-timeout", true);
+    return { phase: "settled" };
+  }, command);
+  assert.deepEqual([answer.phase, seen.length, seen.every((value) => value === command)], ["settled", 3, true]);
+  let calls = 0;
+  await assert.rejects(requestUntilAnswered(async () => { calls += 1; throw new GatewayCommandTransportError("gateway-command-response-timeout", true); }, command),
+    /gateway-command-response-timeout/);
+  assert.equal(calls, 4);
+  calls = 0;
+  await assert.rejects(requestUntilAnswered(async () => { calls += 1; throw new GatewayCommandTransportError("gateway-not-connected", false); }, command), /gateway-not-connected/);
+  assert.equal(calls, 1);
+});

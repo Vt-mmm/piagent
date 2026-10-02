@@ -4,6 +4,7 @@ import { redactSensitiveText } from "../../piagent-core/extensions/redaction-cor
 import { classifyToolFailure, handledToolFailure } from "../../piagent-core/runtime/inspection/tool-failure-classification.ts";
 import type { RuntimeEventDraft, RuntimeEventRevision } from "../../piagent-core/runtime/inspection/runtime-event-store.ts";
 import type { BridgeIdentity, BridgeSnapshot } from "./same-session-bridge.ts";
+import { effectiveStopReason } from "../server/message-stop-reason.ts";
 
 const MAX_STREAM_BUFFER = 65_536;
 const MAX_DELTA = 16_384;
@@ -79,7 +80,8 @@ function imageCount(message: any): number {
   return Array.isArray(message?.content) ? Math.min(32, message.content.filter((item: any) => item?.type === "image").length) : 0;
 }
 function stopReason(message: any): "pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred" | null {
-  return ["pending", "stop", "length", "toolUse", "error", "aborted", "deferred"].includes(message?.stopReason) ? message.stopReason : null;
+  const reason = effectiveStopReason(message) as any;
+  return ["pending", "stop", "length", "toolUse", "error", "aborted", "deferred"].includes(reason) ? reason : null;
 }
 function usage(message: any) {
   const value = message?.usage;

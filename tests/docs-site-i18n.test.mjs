@@ -23,15 +23,18 @@ describe("bilingual docs site", () => {
     const viPages = pagesFor(LOCALES.vi);
     const enPages = pagesFor(LOCALES.en);
 
-    assert.equal(viPages.length, 18);
+    assert.equal(viPages.length, 19);
     assert.equal(enPages.length, viPages.length);
     assert.equal(outputs.length, viPages.length * 2);
     assert.deepEqual(enPages.map((page) => page.slug), viPages.map((page) => page.slug));
     assert.equal(hrefFor(viPages[0], LOCALES.vi), "/");
     assert.equal(hrefFor(enPages[0], LOCALES.en), "/en/");
-    assert.equal(hrefFor(enPages[1], LOCALES.en), "/en/quickstart");
-    assert.equal(hrefFor(viPages[2], LOCALES.vi), "/whats-new");
-    assert.equal(hrefFor(enPages[2], LOCALES.en), "/en/whats-new");
+    // The ecosystem page comes right after the overview: what runs where, before installing.
+    assert.equal(hrefFor(viPages[1], LOCALES.vi), "/ecosystem");
+    assert.equal(hrefFor(enPages[1], LOCALES.en), "/en/ecosystem");
+    assert.equal(hrefFor(enPages[2], LOCALES.en), "/en/quickstart");
+    assert.equal(hrefFor(viPages[3], LOCALES.vi), "/whats-new");
+    assert.equal(hrefFor(enPages[3], LOCALES.en), "/en/whats-new");
   });
 
   it("emits language-specific canonical, alternates, controls, and copy labels", () => {

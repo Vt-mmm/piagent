@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { SessionOwnerProjection } from "./session-catalog.ts";
-import type { SessionLeaseSnapshot } from "./session-lease-store.ts";
+import { terminalOwnerGone, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 
 type ActiveOwnership = {
   lease: SessionLeaseSnapshot;
@@ -31,6 +31,13 @@ export function projectSessionRuntimeOwnership(options: {
     state: "recovery-required", liveState: "uncertain", composerAvailable: false, needsAttention: true,
     owner: { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "unknown" },
     reasonCode: lease.reasonCode ?? "session-lease-unavailable"
+  };
+  if (lease.state === "terminal-owned" && terminalOwnerGone(lease)) return {
+    state: "recovery-required", liveState: "uncertain", composerAvailable: false, needsAttention: true,
+    owner: { kind: "terminal", ownerEpoch: lease.ownerEpoch!,
+      gatewayInstanceRef: `terminal_${createHmac("sha256", key).update(lease.gatewayInstanceRef!).digest("base64url").slice(0, 43)}`,
+      runtimeInstanceRef: lease.runtimeInstanceRef!, continuity: "uncertain" },
+    reasonCode: "terminal-owner-process-exited"
   };
   if (lease.state === "terminal-owned") return {
     state: "terminal-owned", liveState: "uncertain", composerAvailable: false, needsAttention: false,

@@ -29,10 +29,10 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
     promptSnippet: "Load diagnostic or recovery Piagent tools only when the runtime requests them.",
     promptGuidelines: [
       "Do not call this for an ordinary implementation task; runtime evidence collection needs no extra tools.",
-      "When recovery is necessary, load only the smallest group that resolves the reported missing evidence."
+      "When a diagnostic is necessary, load only the smallest group that answers it."
     ],
     parameters: Type.Object({
-      groups: Type.Array(StringEnum(["intake", "governance", "task", "waiting", "recovery", "policy", "retrieval", "source", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
+      groups: Type.Array(StringEnum(["governance", "waiting", "policy", "retrieval", "source", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const groups = [...new Set(params.groups)] as PiagentToolGroup[];

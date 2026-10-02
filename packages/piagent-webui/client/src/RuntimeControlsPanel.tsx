@@ -101,11 +101,11 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
               "Piagent will stop forcing Fast on the next model turn; host/provider tier configuration still applies."))}>{localize(locale, "Tắt Fast", "Disable Fast")}</Button></ControlButtons>
       </ControlGroup>
 
-      <ControlGroup icon={<PersonSearchRounded color="primary" />} title={localize(locale, "Onboarding & profile", "Onboarding & profile")}
-        detail={localize(locale, "Kiểm tra project và áp dụng profile dùng chung có kiểm soát.", "Inspect the project and apply a controlled reusable profile.")}>
-        <ControlButtons><Button {...small} onClick={() => void run("onboarding.status")}>Onboard status</Button>
-          <Button {...small} onClick={() => void run("onboarding.profile")}>Profile check</Button><Button {...small} onClick={() => void run("onboarding.tech")}>Tech check</Button>
-          <Button {...small} onClick={() => void run("profile.status")}>{localize(locale, "Profile hiện tại", "Current profile")}</Button></ControlButtons>
+      <ControlGroup icon={<PersonSearchRounded color="primary" />} title={localize(locale, "Profile", "Profile")}
+        detail={localize(locale, "Xem và áp dụng profile dùng chung có kiểm soát. Muốn onboard project, hãy nhờ agent trong chat.", "View and apply a controlled reusable profile. To onboard the project, ask the agent in chat.")}>
+        <ControlButtons><Button {...small} onClick={() => void run("profile.status")}>{localize(locale, "Profile hiện tại", "Current profile")}</Button>
+          <Button {...small} onClick={() => void run("profile.options")}>{localize(locale, "Danh sách profile", "Profile options")}</Button>
+          <Button {...small} onClick={() => void run("profile.tech-options")}>{localize(locale, "Tech theo vai trò", "Tech options")}</Button></ControlButtons>
         <Stack direction={{ xs: "column", sm: "row" }} sx={{ mt: 1, gap: .75 }}><Select size="small" fullWidth displayEmpty value={profile}
           onChange={(event) => setProfile(event.target.value)} disabled={disabled} renderValue={(value) => value
             ? profileOptions.find((item) => item.id === value)?.displayName ?? value : localize(locale, "Chọn profile…", "Select profile…") }>

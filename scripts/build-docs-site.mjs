@@ -55,19 +55,25 @@ const NAV = [
         href: "/",
         nav: "Overview",
         title: "Pi Agent Platform",
-        lead: "Nền tảng dùng lại cho nhiều dự án: cài đặt, profile, quyền chạy, MCP, bảo mật và workflow trong một tài liệu."
+        lead: "Coding agent cho cả team: một dashboard cho Terminal và trình duyệt, model cá nhân hoặc của công ty, guard kiểm tra mọi tool call."
+      },
+      {
+        slug: "ecosystem",
+        nav: "Hệ sinh thái",
+        title: "Piagent, Agent Watch và Agent Studio",
+        lead: "Một dashboard, hai cách dùng model: tài khoản của bạn, hoặc model của công ty qua Agent Watch và Agent Studio, với Harness tự kiểm tra từng lượt."
       },
       {
         slug: "quickstart",
         nav: "Quickstart",
         title: "Step by step cho thành viên mới",
-        lead: "Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff."
+        lead: "Hai lệnh để cài, mở repo, chọn profile và quyền, rồi giao việc bằng lời thường; guard kiểm tra từng tool call."
       },
       {
         slug: "whats-new",
         nav: "Có gì mới",
-        title: "Luồng task an toàn hơn, ít thao tác tay hơn",
-        lead: "Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ."
+        title: "Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra",
+        lead: "Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn."
       },
       {
         slug: "scope",
@@ -102,7 +108,7 @@ const NAV = [
         slug: "workflows",
         nav: "Workflows",
         title: "Workflow thay đổi thế nào sau update",
-        lead: "Workflow launcher cũ vẫn giữ nguyên. Runtime lifecycle và live inspector chạy tự động; command mới chỉ giúp quan sát preflight, diff, tiến độ, receipt, hiệu suất và orchestration policy."
+        lead: "Từ bản 1.9.0 không còn launcher workflow: nói việc cần làm bằng lời thường. Các command xem thêm chỉ để quan sát và không bao giờ mở lượt model."
       }
     ]
   },
@@ -142,7 +148,7 @@ const NAV = [
         slug: "security",
         nav: "Security model",
         title: "Policy enforcement layer, không phải OS sandbox",
-        lead: "Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc bằng chứng thiếu thì chặn, không đoán."
+        lead: "Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc quyền không đủ thì chặn, không đoán."
       },
       {
         slug: "architecture",
@@ -182,17 +188,22 @@ const EN_PAGE_COPY = {
   index: {
     nav: "Overview",
     title: "Pi Agent Platform",
-    lead: "Reusable infrastructure for multiple projects: installation, profiles, permissions, MCP, security, and workflows in one place."
+    lead: "A coding agent for the whole team: one dashboard for Terminal and the browser, personal or company models, and a guard that checks every tool call."
+  },
+  ecosystem: {
+    nav: "Ecosystem",
+    title: "Piagent, Agent Watch and Agent Studio",
+    lead: "One dashboard, two ways to use models: your own account, or the company's models through Agent Watch and Agent Studio, with a Harness that checks every turn."
   },
   quickstart: {
     nav: "Quickstart",
     title: "Step by step for new team members",
-    lead: "Install with two commands, open a repository, select its profile and permission mode, run a task, and verify real evidence before handoff."
+    lead: "Install with two commands, open a repository, choose its profile and permissions, then ask in plain language; the guard checks every tool call."
   },
   "whats-new": {
     nav: "What’s new",
-    title: "Safer task flow with less manual coordination",
-    lead: "Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows."
+    title: "1.9.0: ask in plain language, the team's Harness checks",
+    lead: "The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards."
   },
   scope: {
     nav: "Platform scope",
@@ -217,7 +228,7 @@ const EN_PAGE_COPY = {
   workflows: {
     nav: "Workflows",
     title: "How workflows change after the update",
-    lead: "Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy."
+    lead: "Since 1.9.0 there are no workflow launchers: say what you need in plain language. The optional inspection commands only observe and never start a model turn."
   },
   mcp: {
     nav: "MCP overview",
@@ -242,7 +253,7 @@ const EN_PAGE_COPY = {
   security: {
     nav: "Security model",
     title: "Policy enforcement, not an OS sandbox",
-    lead: "Controlled tool surfaces fail closed when profiles, integrity locks, permissions, or verification evidence are invalid."
+    lead: "Controlled tool surfaces fail closed when profiles, integrity locks or permissions are invalid."
   },
   architecture: {
     nav: "Architecture",

@@ -119,12 +119,12 @@ pi --thinking medium
 | `openai-codex/gpt-6-sol` | balanced coding | công việc hằng ngày; mặc định phiên mới ở `high` effort, tier medium ở `medium` |
 | `openai-codex/gpt-6-astra` | frontier | task rộng, mơ hồ, nhiều bước; tier ultra ở `xhigh` |
 | `openai-codex/gpt-5.3-codex-spark` | fast scout | hỏi nhanh, thao tác nhỏ, chi phí thấp |
-| `openai-codex/gpt-5.4-mini` | fast/cheap | scout nhẹ, docs, simple fix |
-| `openai-codex/gpt-5.4` | balanced | task bình thường |
 | `openai-codex/gpt-5.5` | balanced/hard | model thế hệ trước vẫn được hỗ trợ khi có trong authenticated catalog |
 | `openai-codex/gpt-5.6-luna` | legacy fallback low | dùng khi GPT-6 Luna chưa có trong authenticated catalog |
 | `openai-codex/gpt-5.6-terra` | legacy fallback medium | dùng khi GPT-6 Sol chưa có trong authenticated catalog |
 | `openai-codex/gpt-5.6-sol` | legacy fallback high/ultra | giữ phiên cũ và benchmark lịch sử; dùng khi GPT-6 Sol/Astra chưa có |
+
+`gpt-5.4` và `gpt-5.4-mini` không còn trong catalog Codex đã đăng nhập (kiểm tra ngày 2026-10-01) nên đã bỏ khỏi preset; settings cũ còn ghi chúng chỉ sinh cảnh báo `No models match pattern` khi mở Pi. `piagent-doctor` liệt kê những mẫu không còn khớp model nào Pi biết; `piagent-model-scope --prune` chỉ xoá đúng những mẫu đó và giữ nguyên phần còn lại (thêm `--dry-run` để xem trước). Mẫu của provider chỉ đang đăng xuất vẫn được giữ.
 
 Pi 0.87.1 khai báo cả ba GPT-6 model trên đường `openai-codex` và `openai`. Catalog Codex của Pi hiện khai báo cửa sổ context 272.000 token; tài liệu API công bố 1,05 triệu token. Hãy dùng giới hạn do host/provider của phiên thực tế cung cấp, không lấy giới hạn API để giả định cho đăng nhập Codex. Astra không hỗ trợ thinking `off`; Sol và Luna có hỗ trợ. Router chỉ chọn model/effort khớp đúng catalog đã đăng nhập, ghi `legacy-model-fallback` khi phải chọn 5.6, và vẫn giữ nguyên model người dùng pin rõ ràng.
 

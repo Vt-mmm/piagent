@@ -37,7 +37,7 @@ type ModelRuntime = {
   getAvailableSnapshot(): readonly Record<string, unknown>[];
 };
 
-type ProjectSource = { list(): Array<{ projectRef: string; placeRef: string; label: string }> };
+type ProjectSource = { list(): Array<{ projectRef: string; placeRef: string; label: string }>; resolve?(projectRef: string): string | null };
 
 const CACHE_LIMIT = 32;
 const PUBLIC_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$/;
@@ -55,6 +55,18 @@ function inspectionRuntimeRef(gatewayInstanceRef: string, sessionRef: string): s
 
 function safeRead<T>(read: () => T, fallback: T): T {
   try { return read(); } catch { return fallback; }
+}
+
+// Parent folders as a member reads them: under the home folder with "~", and
+// the last two of their folders, or as many as it takes to tell them apart.
+export function projectLocations(parents: readonly string[]): string[] {
+  const home = process.env.HOME ?? "";
+  const parts = parents.map((parent) => (home && (parent === home || parent.startsWith(`${home}/`)) ? `~${parent.slice(home.length)}` : parent)
+    .split("/").filter(Boolean));
+  const longest = Math.max(1, ...parts.map((list) => list.length));
+  let take = Math.min(2, longest);
+  while (take < longest && new Set(parts.map((list) => list.slice(-take).join("/"))).size < parts.length) take += 1;
+  return parts.map((list) => (list.length > take ? `…/${list.slice(-take).join("/")}` : list[0] === "~" ? list.join("/") : `/${list.join("/")}`));
 }
 
 function safeName(value: unknown): string {
@@ -184,15 +196,26 @@ export class SessionInspectionRegistry {
 
   async creationOptions(): Promise<unknown> {
     const sessions = (await this.#listSessions()).filter(isUserConversationSession);
-    const projects = new Map<string, { projectRef: string; placeRef: string; label: string }>();
+    const projects = new Map<string, { projectRef: string; placeRef: string; label: string; hint?: string }>(), folders = new Map<string, string>();
     for (const info of sessions) {
       if (!info.cwd) continue;
       const projectRef = projectRefForCwd(this.#key, info.cwd);
       if (!projects.has(projectRef)) projects.set(projectRef, { projectRef, placeRef: projectRef,
         label: safeName(path.basename(info.cwd) || "Project") });
+      folders.set(projectRef, info.cwd);
     }
     for (const project of safeRead(() => this.#projects?.list() ?? [], [])) {
-      if (!projects.has(project.projectRef)) projects.set(project.projectRef, project);
+      if (!projects.has(project.projectRef)) projects.set(project.projectRef, { ...project });
+      const cwd = safeRead(() => this.#projects?.resolve?.(project.projectRef) ?? null, null);
+      if (cwd && !folders.has(project.projectRef)) folders.set(project.projectRef, cwd);
+    }
+    // Two folders with the same name are told apart by where they are.
+    const byLabel = new Map<string, Array<{ projectRef: string; hint?: string }>>();
+    for (const project of projects.values()) byLabel.set(project.label, [...(byLabel.get(project.label) ?? []), project]);
+    for (const group of byLabel.values()) {
+      if (group.length < 2) continue;
+      const hints = projectLocations(group.map((project) => path.dirname(folders.get(project.projectRef) ?? "")));
+      group.forEach((project, index) => { if (folders.has(project.projectRef)) project.hint = safeName(hints[index]); });
     }
     const availableModels = (this.#models?.getAvailableSnapshot() ?? []).slice(0, 300);
     const profiles = safeRead(() => fs.readdirSync(path.join(this.#packageRoot, "adapters")).flatMap((entry) => {
@@ -211,7 +234,7 @@ export class SessionInspectionRegistry {
       if (!provider || !modelId || typeof value.reasoning !== "boolean") return [];
       const mapping = value.thinkingLevelMap && typeof value.thinkingLevelMap === "object"
         ? value.thinkingLevelMap as Record<string, unknown> : {};
-      const thinkingLevels = value.reasoning ? ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+      const thinkingLevels = provider === "agent_watch_managed" && Array.isArray(value.managedThinkingLevels) ? value.managedThinkingLevels.filter((v): v is string => typeof v === "string") : value.reasoning ? ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         .filter((level) => mapping[level] !== null && !(["xhigh", "max"].includes(level) && mapping[level] === undefined)) : ["off"];
       const inputs = Array.isArray(value.input) ? value.input.filter((item): item is string => typeof item === "string") : null;
       return [{ modelRef: webUiModelRef(provider, modelId), provider, modelId, displayName: safeName(value.name ?? modelId),
@@ -219,12 +242,13 @@ export class SessionInspectionRegistry {
     });
     // Only offer a default present in the authenticated host catalog. Retain
     // the previous Sol baseline for accounts that have not received GPT-6 yet.
-    const defaultModel = ["gpt-6-sol", "gpt-5.6-sol"].map((id) => models.find((value) => value.provider === "openai-codex" && value.modelId === id)).find(Boolean);
+    const managed = models.length === 1 && models[0].provider === 'agent_watch_managed';
+    const defaultModel = managed ? models[0] : ["gpt-6-sol", "gpt-5.6-sol"].map((id) => models.find((value) => value.provider === "openai-codex" && value.modelId === id)).find(Boolean);
     return { schemaVersion: 1, version: "piagent-session-creation-options-v1", generatedAt: new Date().toISOString(),
       projects: [...projects.values()].slice(0, 200), models,
-      defaultModelRef: defaultModel?.modelRef ?? null, defaultThinkingLevel: defaultModel ? "high" : null,
-      profiles, workflows: WEBUI_WORKFLOW_OPTIONS,
-      runtimeActions: WEBUI_RUNTIME_ACTIONS,
+      defaultModelRef: defaultModel?.modelRef ?? null, defaultThinkingLevel: defaultModel ? (defaultModel.thinkingLevels.includes("high") ? "high" : defaultModel.thinkingLevels[0] ?? null) : null,
+      profiles: managed ? [] : profiles, workflows: [],
+      runtimeActions: managed ? [] : WEBUI_RUNTIME_ACTIONS,
       webSearch: inspectWebSearchCapability({ agentDir: this.#agentDir, models: availableModels }),
       projectImport: nativeProjectPickerAvailable() ? { status: "available", reasonCode: null }
         : { status: "unavailable", reasonCode: "native-project-picker-unavailable" },
@@ -241,8 +265,15 @@ export class SessionInspectionRegistry {
     try { manager = this.#openLiveSession?.(sessionRef) ?? this.#host.SessionManager.open(info.path); }
     catch { throw new ReadModelNotFound(); }
     const context = safeRead(() => manager.buildSessionContext(), { model: null, thinkingLevel: "unknown", messages: [] });
-    const model = context.model ? this.#models?.getModel(context.model.provider, context.model.modelId) : undefined;
     const entries = safeRead(() => manager.getBranch(), []);
+    const catalogModel = context.model ? this.#models?.getModel(context.model.provider, context.model.modelId) : undefined;
+    const managedModel = context.model?.provider === 'agent_watch_managed'
+      ? (entries as Array<{type?: string; customType?: string; data?: Record<string, unknown>}>).filter(entry => entry.type === 'custom' && entry.customType === 'agent-watch-model').at(-1)?.data
+      : undefined;
+    const model = managedModel?.provider === 'agent_watch_managed' && managedModel.id === 'agent-watch-auto'
+      && Number.isInteger(managedModel.contextWindow) && Number(managedModel.contextWindow) > 0
+      && Number.isInteger(managedModel.maxTokens) && Number(managedModel.maxTokens) > 0
+      ? {...catalogModel, ...managedModel} as typeof catalogModel : catalogModel;
     const contextUsage = safeRead(() => persistedContextUsage(this.#host, entries, context.messages, model), undefined);
     const eventStore = {
       retention: () => ({ eventRetentionCount: 0, eventRetentionSeconds: 0 }),

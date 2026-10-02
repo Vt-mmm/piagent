@@ -417,20 +417,20 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
     if (!lifecycle.toolAllowed(String(event.toolName ?? ""), ctx)) return { block: true,
     reason: "Piagent lifecycle control blocks tool work while the task is paused, stopping, or terminal. A terminal task may only start its successor." }; });
   pi.on("tool_result", (_event, ctx) => publishPersisted(ctx));
+  // An input refused here never reaches the model. Without a UI (`pi -p`, json
+  // or rpc mode) a notification is not shown, so the reason goes to stderr:
+  // the member must never get an empty answer and exit code 0 instead.
+  const refuseInput = (ctx: ExtensionContext, message: string, level: "error" | "warning") => {
+    if (ctx.hasUI) { try { ctx.ui.notify(message, level); } catch { /* optional UI */ } }
+    else { process.stderr.write(`${message}\n`); process.exitCode = 1; }
+    return { action: "handled" } as const;
+  };
   pi.on("input", (event, ctx) => {
     if (!isGatewayRuntimeContext(ctx) && !terminalAdapter?.dispatchAllowed(ctx)) {
-      try { ctx.ui.notify(`Piagent cannot prove this terminal owns the session (${terminalAdapter?.reasonCode() ?? "terminal-session-adapter-unavailable"}).`, "error"); }
-      catch { /* optional UI */ }
-      return { action: "handled" } as const;
+      return refuseInput(ctx, `Piagent cannot prove this terminal owns the session (${terminalAdapter?.reasonCode() ?? "terminal-session-adapter-unavailable"}).`, "error");
     }
-    if (!lifecycle.inputAllowed(ctx)) {
-      try { ctx.ui.notify("Piagent task is paused or stopping. Resume it before sending new work.", "warning"); } catch { /* optional UI */ }
-      return { action: "handled" } as const;
-    }
-    if (bridge.sessionOptionMutationActive(ctx)) {
-      try { ctx.ui.notify("Piagent WebUI is finishing a model/thinking change; retry this input after it settles.", "warning"); } catch { /* optional UI */ }
-      return { action: "handled" } as const;
-    }
+    if (!lifecycle.inputAllowed(ctx)) return refuseInput(ctx, "Piagent task is paused or stopping. Resume it before sending new work.", "warning");
+    if (bridge.sessionOptionMutationActive(ctx)) return refuseInput(ctx, "Piagent WebUI is finishing a model/thinking change; retry this input after it settles.", "warning");
     bridgeSoft(() => bridge.observeInput(event, ctx)); return undefined;
   });
   pi.on("agent_start", (_event, ctx) => {

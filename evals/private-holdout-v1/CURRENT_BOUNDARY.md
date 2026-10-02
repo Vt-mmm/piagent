@@ -51,3 +51,20 @@ assurance receipt and independent custody attestation may cross that boundary.
 `ready: true` still grants no provider execution, generalization or release
 claim. Independent custody and the remaining exact-candidate release gates
 remain separate requirements.
+
+## Owner decision for 1.9.0 (2026-10-01)
+
+1.9.0 is released for internal use and makes no private-holdout,
+generalization or benchmark-superiority claim. No custody receipt is
+required for it, and none is issued: its release evidence is the public
+offline gate (`scripts/verify-local.sh --offline`), the live scenario runs
+recorded in `docs/managed-local-acceptance.md`, and team use.
+
+The inventory is regenerated with `--write` after the 1.9.0 source changes.
+That keeps `--check` current; it is not custody evidence, and the earlier
+receipts stay historical.
+
+A later release that claims a result on private holdout tasks needs the full
+process above: an independent custodian (not a Piagent author), a frozen
+exact candidate, the v2 exposure file and a new custody receipt. The owner
+cannot self-attest it.

@@ -1,0 +1,10 @@
+export type ManagedFailure = { role: "main" | "research" | "review"; code: string; kind: string; requestId: string | null; local: boolean };
+export function failureKind(code: string): string;
+export function failureIsLocal(code: string): boolean;
+export function failureCode(raw: unknown): string;
+export function describeFailure(role: string, raw: unknown): string;
+export function parseFailure(raw: unknown): ManagedFailure | null;
+export function failureIsAdmissionRefusal(code: string): boolean;
+export function failureReason(code: string): string;
+export function unnamedFailureText(raw: unknown): string | null;
+export function failureIsBriefRefusal(code: string): boolean;

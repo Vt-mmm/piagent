@@ -148,7 +148,10 @@ test("legacy v1 completion state is quarantined and cannot emit an uncertain-sen
   }
 });
 
-test("interactive recovery re-emits the durable terminal receipt without clearing state or starting a turn", async () => {
+// Task contracts are retired: a terminal task recorded before is history and
+// no longer answers for the member. "Continue" after an uncertain send is an
+// ordinary freeform turn; the old task's boundary is cleared, nothing is replayed.
+test("interactive recovery after the retirement is a freeform turn: no receipt is re-emitted for an old task", async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-uncertain-send-"));
   try {
     const completed = {
@@ -174,7 +177,7 @@ test("interactive recovery re-emits the durable terminal receipt without clearin
     };
     registerInputHook(pi, {
       state: {
-        beginTurn() { beganTurns += 1; return { turnId: "unexpected" }; },
+        beginTurn() { beganTurns += 1; return { turnId: "freeform-turn" }; },
         clearTaskBoundary() { clearedBoundaries += 1; },
         taskIdentity() { return { taskRunId: completed.taskRunId }; }
       },
@@ -189,16 +192,15 @@ test("interactive recovery re-emits the durable terminal receipt without clearin
 
     const result = await handlers.get("input")({ text: RECOVERY_PROMPT, source: "interactive", images: [] }, {
       cwd,
-      ui: { notify() {} }
+      ui: { notify() {} },
+      sessionManager: { getSessionId: () => completed.sessionId }
     });
-    assert.deepEqual(result, { action: "handled" });
-    assert.equal(beganTurns, 0);
-    assert.equal(clearedBoundaries, 0);
-    assert.equal(messages.length, 1);
-    assert.equal(messages[0].options.triggerTurn, false);
-    assert.equal(messages[0].message.details.taskRunId, completed.taskRunId);
-    assert.equal(messages[0].message.details.replayed, false);
-    assert.equal(telemetry.at(-1).event, "uncertain_send_terminal_receipt_reemitted");
+    assert.deepEqual(result, { action: "continue" });
+    assert.equal(beganTurns, 1);
+    assert.equal(clearedBoundaries, 1, "the old task's boundary is cleared, not continued");
+    assert.equal(messages.length, 0, "no receipt is re-emitted");
+    assert.equal(telemetry.at(-1).event, "user_input");
+    assert.equal(telemetry.at(-1).inputMode, "freeform");
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }

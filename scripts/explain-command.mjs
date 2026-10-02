@@ -67,19 +67,18 @@ function parseArgs(argv) {
 // What the operator should do next. The guard states 74 refusals and only three
 // of them say this, which is why a denial so often ends the conversation.
 const REMEDY = {
-  "protected-path": "Use an approved context projection if one is available. Direct access requires the operator to change the protected-path policy; task scope alone does not override it.",
+  "protected-path": "This path is protected because it can hold credentials. Open it yourself or share the non-secret part; only the operator can change the protected-path policy, and no request or scope overrides it.",
   "protected-glob": "Name the file you mean instead of a pattern; a pattern is refused when any name it can match is protected.",
   "resolved-protected": "The path resolves to a protected file through a link or a parent directory. Use the real path you intend.",
   "unresolved": "Write the path out, or put the expansion in its own argument, so the guard can see what is being opened.",
   "exec-policy": "This is refused by an exec-policy rule, not by a path. Change the command, or ask the operator to run it.",
-  "runtime-required": "Run the command through the current Pi session. Only that runtime owns the Task Contract, scope, permission, lifecycle, approval, and budget facts needed for a final decision."
+  "runtime-required": "Run the command through the current Pi session. Only that runtime owns the permission, approval, and budget facts needed for a final decision."
 };
 
+// Task contracts, task scope and task lifecycle control were retired on
+// 2026-09-30; the live guard no longer applies them.
 const RUNTIME_GATES = [
-  "task-contract",
-  "task-scope",
   "permission-profile",
-  "lifecycle-control",
   "approval-state",
   "context-budget"
 ];
@@ -144,7 +143,7 @@ function explain(command, protectedPaths, policy, cwd) {
     staticDecision,
     reason: staticDecision === "confirm"
       ? `Static preflight requires confirmation (${exec.reasons.join("; ")}), but the live runtime may still block it.`
-      : "Static preflight found no refusal. A final decision requires live session and task state.",
+      : "Static preflight found no refusal. A final decision requires live session state.",
     remainingGates: RUNTIME_GATES,
     steps, exec
   };

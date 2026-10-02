@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Pi Agent Platform là reusable Pi harness dành cho project onboarding, workflow theo profile, guarded tool usage, MCP, multi-agent orchestration, memory policy, Context Engine và task verification.
+Pi Agent Platform cung cấp chat trực tiếp, công cụ có kiểm soát quyền, ngữ cảnh dự án và khung main/research/review cho tài khoản công ty.
 
 Tài liệu public: [piagent.io.vn](https://piagent.io.vn)
 
@@ -22,50 +22,17 @@ cd /path/to/project
 pi
 ```
 
-Trong session Pi đầu tiên của project, chạy `/onboard`. Hằng ngày, dùng `/workflow` để chọn luồng và `/usage` để xem session, model, thinking và token.
+Nhập yêu cầu bằng lời thường trong Pi hoặc WebUI. Từ bản 1.9.0 không còn bước `/task` hay `/workflow`, không còn task contract và không còn ngưỡng tiết kiệm token.
 
-## Nguyên tắc vận hành
+## Agent Watch Auto trên macOS
 
-- Mỗi task dùng một session có tên rõ ràng.
-- Slash command chỉ chạy handler đã đăng ký; agent không phải scout lại command.
-- Prompt hướng dẫn model, còn policy quan trọng được enforce tại runtime.
-- Permission `read-only` chỉ cho phép kiểm tra; shell và các tool ghi `write`/`edit`/`apply_patch` đều bị chặn.
-- MCP config không chứa token hoặc OAuth credential.
-- Task source-changing cần scope, verify evidence và final gate.
-- Local state nằm trong `.pi/piagent-state/`, có owner-only permission và bounded retention.
-- Project-specific business logic nằm trong project profile hoặc adapter, không đưa vào core.
+Admin cấu hình model cho main, khảo sát và review trong Studio. Thành viên nhập URL/key ở Watch, chọn Piagent rồi Import. Mở **Piagent công ty** từ Watch hoặc chạy `piagent studio`; thêm `--web` để mở dashboard. Người dùng chọn mức suy luận; context theo model thực tế. Phiên cá nhân tiếp tục dùng `pi` và chọn model/OAuth riêng.
 
-Task Contract v2 hiện gắn task/session/run identity với current-tree verification,
-acceptance receipt giữ nguyên tiêu chí chưa được chứng minh, hash-chained journal checkpoint, retry có giới hạn và
-terminal outcome bất biến. Đây là operational record do cùng runtime tạo ra,
-không phải independent attestation.
+Key công ty cần loại **Piagent công ty**. Key CLI trực tiếp cũ giữ nguyên; Studio có nút tạo key đi kèm dùng chung hạn mức. Không đổi tài khoản công ty sang cá nhân trong cùng hội thoại.
 
-Policy cài sẵn của v1.8.0 dùng chế độ diagnostic cho acceptance proof: tiêu chí
-chưa được chứng minh vẫn ở trạng thái pending và khi hoàn tất sẽ ghi rõ không có
-khẳng định chất lượng. Task contract, scope, bước verify đang pass và trace vẫn
-chặn hoàn tất nếu thiếu. Khi cần chứng minh mọi tiêu chí trước khi hoàn tất,
-chọn `acceptanceProofMode: "enforce"` trong package policy đã được review.
+Main có tối đa hai trợ lý chỉ đọc; không sinh nhánh con tiếp. Review gắn với bản chụp patch và báo hết hiệu lực khi code đổi. UI hiển thị token từng trợ lý. Bản macOS managed dùng công cụ cách ly và quyền ngắn hạn theo lượt; chế độ cá nhân vẫn là thực thi trên host.
 
-Adaptive Context Planner dùng model, thinking và context usage do Pi báo để đặt
-budget có giới hạn; repository-memory hint luôn có citation và không thay thế
-việc đọc source hiện tại. Parent model vẫn do operator pin: baseline ổn định này
-chưa ship solver hoặc automatic parent routing. Host execution là mặc định; nếu
-yêu cầu isolation backend chưa có adapter, mutation bị block thay vì âm thầm
-fallback về host.
-
-## Điều phối parent-direct
-
-Parent model tự sở hữu suy luận, implementation và verification. Helper mặc định
-tắt. Khi operator chủ động bật, runtime chỉ được dispatch tối đa một helper
-read-only dùng context fresh nếu chứng minh có hai lane độc lập và tổng token dự
-kiến sau handoff/merge giảm ít nhất 30%. Worker, retry, nested helper và parallel
-helper đều bị tắt.
-
-Trong Pi, `/piagent-orchestration` hiển thị mode hiện tại, trần một helper,
-review lens, writer policy và bằng chứng dispatch/skip mà không tạo model turn.
-`piagent-setup` chỉ cài `pi-subagents` như runtime tương thích tùy chọn với preset
-`safe` đã bị clamp; `/subagents-doctor` dùng để kiểm tra health. Chi tiết nằm tại
-[Subagents và multi-agent](docs/subagents-and-multiagent.md).
+Bản local này chưa phải bản phát hành có Developer ID. [Trạng thái nghiệm thu](docs/managed-local-acceptance.md) phân biệt test nội bộ, gọi provider thật và phần còn thiếu.
 
 ## Web search và vision
 
@@ -87,27 +54,36 @@ trực tiếp vẫn nằm trong workspace của project thay vì bị nhét vào
 tiếp tục áp protected path, redaction, session binding và attachment ref dùng một
 lần.
 
-Session Hub cũng đưa các workflow Terminal lên UI: task, scout, BE → FE,
-discuss, plan, review, commit, PR, onboard và platform-improve. Màn hình New chat
-hiển thị preflight workflow/change mode/quyền trước khi gửi. Trong **Cài đặt →
-Điều khiển project**, operator có thể xem runtime/usage, onboarding/profile,
-Context Engine, memory và MCP governance mà không cần nhớ slash command. WebUI
-gửi đúng command vào Pi runtime; thao tác read-only được kiểm tra là 0 model
-token, còn thao tác ghi hoặc semantic compact bắt buộc xác nhận rõ ràng.
+Màn hình New chat gửi đúng nội dung người dùng nhập; WebUI không còn bộ chọn
+workflow. Trong **Cài đặt → Điều khiển project**, operator có thể xem
+runtime/usage, profile, Context Engine, memory và MCP governance mà không cần nhớ
+slash command. WebUI gửi đúng command vào Pi runtime; thao tác read-only được
+kiểm tra là 0 model token, còn thao tác ghi hoặc semantic compact bắt buộc xác
+nhận rõ ràng. Muốn onboard project, hãy nhờ agent trong chat đọc project (chỉ
+đọc) và ghi lại context.
 
 ## Command chính
 
+Công việc được yêu cầu bằng lời thường; các command dưới đây là thiết lập và màn
+hình chỉ đọc, không command nào mở lượt model.
+
 | Command | Mục đích |
 |---|---|
-| `/workflow` | Chọn workflow task, scout, plan, review, commit, PR hoặc onboarding |
-| `/profile` | Xem hoặc đổi project profile |
+| `/profile` | Xem hoặc đổi project profile; `/profile setup` chọn tech cho từng vai trò |
 | `/permission` | Đổi permission mode trong session |
 | `/context` | Xem Context Engine, index, retrieval và telemetry |
 | `/usage` | Xem session, model, thinking và context usage |
 | `/piagent-inspector` | Mở menu read-only để xem task diff, command fail/block, safety warning và context budget; panel bốn dòng tự hiện sát footer native, `toggle` để ẩn trong session |
 | Pi native `/name` | Đặt tên session; Piagent nhận rename event để map Agent Watch/report |
 | `/memory` | Xem hoặc cập nhật explicit project memory |
-| `/onboard` | Khởi tạo project profile và context |
+| `/piagent-mcp` | Xem và quản lý MCP server, scope và phê duyệt |
+| `/piagent-status` | Xem profile, guard, runtime và trạng thái model đã xác thực |
+
+Các command workflow (`/workflow`, `/task`, `/scout`, `/fresh`, `/onboard`,
+`/commands`, `/model-options`) đã bỏ từ bản 1.9.0. Hãy nói điều mình cần, ví dụ
+"scout luồng thanh toán, chỉ đọc, không sửa", "review diff hiện tại", "commit hai
+file này". Session đã nặng thì mở session mới bằng `/new` của Pi. `git push`,
+thao tác ghi lên GitHub và publish đều hỏi xác nhận trước.
 
 ## Architecture
 
@@ -115,7 +91,7 @@ Code được quản lý theo các layer:
 
 1. Composition root đăng ký Pi extension.
 2. Runtime adapter xử lý Pi hook, command, tool và session UI.
-3. Core service xử lý policy, task, context và state.
+3. Core service xử lý policy, context và state (bản ghi task cũ chỉ còn để đọc lịch sử).
 4. Integration quản lý MCP, capability và security primitive.
 5. CLI trong `scripts/` chỉ parse argument và gọi use case.
 
@@ -144,7 +120,7 @@ piagent/
 ├─ evals/                             kịch bản đánh giá có governance
 ├─ packs/                             capability manifest và recipe có version
 ├─ packages/
-│  ├─ piagent-core/                   Pi package: extension, runtime, prompt, skill
+│  ├─ piagent-core/                   Pi package: extension, runtime, skill, managed harness
 │  └─ piagent-webui/                  dashboard: contract, client, server, gateway, ownership
 ├─ schemas/                           JSON schema
 ├─ scripts/                           setup, doctor và helper kiểm tra
@@ -162,9 +138,6 @@ khi không mở dashboard. Cả hai sơ đồ layer đều được kiểm tra b
 Adaptive model routing cho fresh task dùng `piagent-route --prompt "<task>" --json`.
 Chỉ `--execute --yes` mới mở provider-backed Pi process; `/model`/CLI pin luôn
 được giữ và extension không đổi model giữa conversation.
-
-Khi session đã nặng, `/fresh <workflow> <request>` mở session mới cho bất kỳ
-workflow canonical nào và replay prompt gọn; `/fresh help` liệt kê catalog hiện hành.
 
 ## Verification
 
@@ -202,7 +175,7 @@ Xem [bằng chứng benchmark](https://piagent.io.vn/benchmark) và
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.8.0`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.9.0`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

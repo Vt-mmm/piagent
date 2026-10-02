@@ -51,6 +51,82 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.match(value.items[1].toolCalls[0].toolCallRef, /^tool\./);
   });
 
+  it("gives the agent timeline each tool call's target, diff and redacted result without paths outside the project", () => {
+    const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz", cwd = "/work/shop";
+    const call = (id, name, args) => ({ type: "toolCall", id, name, arguments: args });
+    const value = project([
+      entry("entry_1", "user", [{ type: "text", text: "Add a discount" }]),
+      entry("entry_2", "assistant", [call("c1", "read", { path: `${cwd}/src/cart.js`, offset: 10, limit: 20 }),
+        call("c2", "edit", { path: `${cwd}/src/cart.js`, edits: [{ oldText: "a\nb\nold\nc", newText: "a\nb\nnew one\nnew two\nc" }] }),
+        call("c3", "bash", { command: `cd ${cwd} && npm test` }), call("c4", "read", { path: "/etc/private/hosts" }),
+        call("c5", "delegate", { role: "research", task: "Find the LTS" }), call("c6", "web_fetch", { url: "https://example.com/" })],
+      { stopReason: "toolUse", model: "claude-sonnet-5-5", usage: { input: 1200, output: 80, cacheRead: 300, cacheWrite: 0, totalTokens: 1580 } }),
+      entry("entry_3", "toolResult", [{ type: "text", text: `ok 3 tests\ntoken=${secret}` }], { toolCallId: "c3", toolName: "bash", isError: false }),
+      entry("entry_4", "toolResult", [{ type: "text", text: "Task: You are a delegated subagent" }], { toolCallId: "c5", toolName: "delegate", isError: false }),
+      entry("entry_5", "assistant", [{ type: "text", text: "Done." }], { stopReason: "stop", usage: { input: 1500, output: 10, totalTokens: 1510 } })
+    ], { cwd });
+    expectValid(value);
+    const calls = value.items[1].toolCalls, encoded = JSON.stringify(value);
+    assert.deepEqual(calls.map((item) => [item.summary.kind, item.summary.target]), [["read", "src/cart.js"], ["edit", "src/cart.js"],
+      ["command", "cd . && npm test"], ["read", "hosts"], ["subagent", "research"], ["web-fetch", "https://example.com/"]]);
+    assert.equal(calls[0].summary.detail, "10–29");
+    assert.deepEqual([calls[1].change.added, calls[1].change.removed], [2, 1]);
+    assert.match(calls[1].change.preview, /-old\n\+new one\n\+new two/);
+    assert.match(calls[2].result.text, /ok 3 tests/);
+    assert.equal(calls[2].state, "completed");
+    assert.equal(calls[4].result, undefined, "a helper's answer is never shown");
+    assert.equal(encoded.includes(secret), false);
+    assert.equal(encoded.includes("/etc/private"), false);
+    assert.equal(encoded.includes("delegated subagent"), false);
+    assert.equal(encoded.includes(cwd), false);
+    assert.deepEqual(value.items[1].usage, { inputTokens: 1200, outputTokens: 80, cacheReadTokens: 300, cacheWriteTokens: 0, totalTokens: 1580 });
+    assert.equal(value.items[1].model, "claude-sonnet-5-5");
+  });
+
+  it("reports a company failure by harness role, kind, code and Studio request, without the model behind it", () => {
+    const request = "c17783c2-e134-4715-be3f-b03d9b57efe2", company = { provider: "agent_watch_managed", model: "claude-sonnet-5-5" };
+    const call = (id, name, args) => ({ type: "toolCall", id, name, arguments: args });
+    const value = project([
+      entry("entry_1", "user", [{ type: "text", text: "Research and answer" }]),
+      entry("entry_2", "assistant", [call("c1", "delegate", { role: "research", task: "Find the docs" }), call("c2", "web_search", { query: "node lts" })],
+        { ...company, stopReason: "toolUse", usage: { input: 100, output: 10, totalTokens: 110 } }),
+      entry("entry_3", "toolResult", [{ type: "text", text: `managed-helper-failed: Agent Watch research subagent: this key's token quota is used up [token_quota_exhausted] (request ${request})` }],
+        { toolCallId: "c1", toolName: "delegate", isError: true }),
+      entry("entry_4", "toolResult", [{ type: "text", text: "web-search-failed: upstream_rate_limited" }], { toolCallId: "c2", toolName: "web_search", isError: true }),
+      // Written by this release, and Studio's raw answer as older releases stored it.
+      entry("entry_5", "assistant", [], { ...company, stopReason: "error",
+        errorMessage: `Agent Watch main agent: Studio's live-test request ceiling is used up; an administrator has to raise it [live_trial_limit_reached] (request ${request})` }),
+      entry("entry_6", "user", [{ type: "text", text: "Again" }]),
+      entry("entry_7", "assistant", [], { ...company, stopReason: "error", errorMessage: `429 {"error":{"code":"upstream_rate_limited","message":"upstream_rate_limited","request_id":"${request}"}}` }),
+      entry("entry_8", "user", [{ type: "text", text: "Offline" }]),
+      entry("entry_9", "assistant", [], { ...company, stopReason: "error", errorMessage: "Agent Watch main agent: Agent Watch could not reach Studio [managed-broker:offline]" })
+    ]);
+    expectValid(value);
+    const [helper, search] = value.items[1].toolCalls, encoded = JSON.stringify(value);
+    assert.deepEqual(helper.failure, { role: "research", reasonCode: "company-quota", code: "token_quota_exhausted", requestRef: request, local: false });
+    assert.deepEqual([helper.state, helper.result], ["failed", undefined]);
+    assert.deepEqual([search.failure.role, search.failure.reasonCode, search.failure.code], ["main", "company-provider-limit", "upstream_rate_limited"]);
+    const failures = value.items.filter((item) => item.failure && item.role === "assistant" && item.toolCalls.length === 0);
+    assert.deepEqual(failures.map((item) => [item.content.reasonCode, item.failure.code, item.failure.requestRef, item.failure.local]), [
+      ["company-trial-limit", "live_trial_limit_reached", request, false], ["company-provider-limit", "upstream_rate_limited", request, false],
+      ["company-unreachable", "managed-broker:offline", null, true]]);
+    assert.equal(value.items.some((item) => item.model), false);
+    assert.equal(encoded.includes("sonnet"), false);
+    assert.equal(encoded.includes("live-test request ceiling"), false, "failure text stays on the server; the browser has its own copy");
+  });
+
+  it("names a multi-line command by its first line and keeps the redacted script for the step body", () => {
+    const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz", cwd = "/work/shop";
+    const script = `cat >> ${cwd}/src/cart.js <<'EOF'\nexport const key = "${secret}";\nEOF\nnpm test`;
+    const value = project([entry("entry_1", "user", [{ type: "text", text: "Go" }]),
+      entry("entry_2", "assistant", [{ type: "toolCall", id: "c1", name: "bash", arguments: { command: script } }], { stopReason: "toolUse" })], { cwd });
+    expectValid(value);
+    const summary = value.items[1].toolCalls[0].summary;
+    assert.equal(summary.target, "cat >> ./src/cart.js <<'EOF' …");
+    assert.match(summary.detail, /^cat >> \.\/src\/cart\.js <<'EOF'\n[^\n]*\nEOF\nnpm test$/);
+    assert.equal(JSON.stringify(value).includes(secret), false);
+  });
+
   it("keeps tool output out of transcript and points users to bounded activity previews", () => {
     const value = project([entry("entry_3", "toolResult", [{ type: "text", text: "TOP SECRET full tool output" }],
       { toolCallId: "call_1", toolName: "bash", isError: true })]);
@@ -143,6 +219,19 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.equal(JSON.stringify(value).includes("Interim."), false);
     assert.equal(JSON.stringify(value).includes("Draft."), false);
     assert.equal(JSON.stringify(value).includes("Unclassified assistant draft"), false);
+  });
+
+  // Codex ends a turn the member stopped with stopReason "error" and the
+  // AbortError text; the WebUI said "the model returned an error" for a Stop.
+  it("treats an AbortError ending as a stop, not as a model failure", () => {
+    const value = project([
+      entry("entry_1", "assistant", [], { stopReason: "error", errorMessage: "This operation was aborted" }),
+      entry("entry_2", "assistant", [], { stopReason: "error", errorMessage: "Request was aborted" }),
+      entry("entry_3", "assistant", [], { stopReason: "error", errorMessage: "fetch failed: socket hang up" })
+    ]);
+    expectValid(value);
+    assert.deepEqual(value.items.map((item) => item.content.reasonCode),
+      ["assistant-message-aborted", "assistant-message-aborted", "provider-unavailable"]);
   });
 
   it("withholds a final-looking latest response while the durable task remains pending", () => {

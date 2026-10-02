@@ -4,7 +4,8 @@ import { data } from "./async-contract-cases.mjs";
 const returned = (id, args, value) => ({ id, args: args.map(data), invocation: { kind: "call" }, expected: { outcome: "return", value: data(value) } });
 const rejected = (id, args) => ({ id, args: args.map(data), invocation: { kind: "call" }, expected: { outcome: "throw", errorClass: "TypeError" } });
 
-// Reviewed public witnesses already used by production-journey-source and
+// Reviewed public witnesses already used by production-journey-source (retired
+// with the task contract on 2026-09-30; see HEAD 85f76db) and
 // A-v2 Number calibration. Expected large results are explicit, not computed
 // with the implementation expression under test.
 export function paginationCoveredContracts(criteria) {

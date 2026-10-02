@@ -100,7 +100,6 @@ Mode hiện tại:
 | `piagent_memory_status` | Xem memory config/files/rules. |
 | `piagent_memory_note` | Ghi durable note khi user explicit ask. Có redaction cho token/key/connection-string phổ biến. |
 | `piagent_memory_search` | Keyword-search memory markdown. |
-| `piagent_memory_citation_record` | Ghi memory file đã ảnh hưởng task contract. |
 | `piagent_context_index_status` | Kiểm tra `.pi/context-index.json` có tồn tại/fresh/có citation không. |
 | `piagent_context_index_search` | Tìm node/edge/citation trong context index trước khi scout rộng. |
 | `piagent_context_index_record` | Ghi compact context graph sau onboarding hoặc approved handoff; không ghi transcript thô. |
@@ -111,10 +110,11 @@ Mode hiện tại:
 
 ```text
 /login
-/onboard
-/onboard run
+/profile setup
 /memory
 ```
+
+Rồi nhờ agent onboard project bằng lời thường (từ bản 1.9.0 không còn `/onboard`).
 
 `/memory-policy` vẫn là alias để xem cùng runtime status.
 

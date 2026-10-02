@@ -1,3 +1,4 @@
+import { projectApprovalState } from "./approval-projection.ts";
 import { randomBytes } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
@@ -193,14 +194,6 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
           : { status: "unavailable", version: null, reason: { code: lifecycle.actions.resume ? "agent-not-idle" : `control-state-${lifecycle.state}`,
             message: "Resume & Continue requires a paused task and an idle Pi session." } };
       }
-      const approval = this.#input.approvalProjection?.();
-      if (approval?.revision) {
-        value.snapshot.revision.approvalRevision = approval.revision;
-        value.snapshot.approvals = structuredClone(approval.summary);
-        value.snapshot.session.approvalState = (approval.summary as any).state;
-        value.snapshot.capabilities.capabilities.approve = { status: "available", version: 1, reason: null,
-          decisions: ["allow", "deny"], arbitration: "first-valid-cas" };
-      }
       if (control.identity.taskId && control.identity.taskRunId && control.revisions.taskRevision && value.snapshot.revision.workspaceRevision
         && !sourceIdentityAligned) {
         value.snapshot.capabilities.capabilities.reviewActions = { status: "unavailable", version: null,
@@ -225,6 +218,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
         } };
       }
     }
+    projectApprovalState(value.snapshot, this.#input.approvalProjection?.());
     if (sourceIdentityAligned) {
       const binding = sourceBinding(value.snapshot);
       for (const document of Object.values(value.sourceViews)) {
@@ -289,7 +283,8 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       eventCursor: snapshot.revision.eventCursor, entries: this.#input.sessionEntries?.() ?? [], beforeCursor, limit,
       terminalDeliveryReceipt: readTerminalDeliveryReceipt(this.#input.cwd, activeTask),
       terminalDeliveryEntries: terminalDeliverySessionEntries(this.#input.sessionFile?.(), this.#input.sessionId),
-      generatedAt: snapshot.generatedAt, taskOutcome: typeof activeTask?.trace?.outcome === "string" ? activeTask.trace.outcome : null });
+      generatedAt: snapshot.generatedAt, taskOutcome: typeof activeTask?.trace?.outcome === "string" ? activeTask.trace.outcome : null,
+      cwd: this.#input.cwd });
   }
   async queue(): Promise<unknown> {
     if (!this.#input.queueProjection) throw new ReadModelNotFound();

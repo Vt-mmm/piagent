@@ -43,13 +43,13 @@ function harness(runtimeResult = { outputs: [{ customType: "piagent-status", con
 }
 
 describe("WebUI runtime command parity", () => {
-  it("maps all ten WebUI workflow choices to the exact Terminal workflow ingress", () => {
+  it("preserves prompts from all legacy WebUI workflow clients without dispatching a workflow", () => {
     assert.equal(WEBUI_WORKFLOW_IDS.length, 10);
     for (const workflow of WEBUI_WORKFLOW_IDS) {
-      assert.equal(buildWebUiWorkflowCommand(workflow, "deep logic request"), `/workflow ${workflow} deep logic request`);
+      assert.equal(buildWebUiWorkflowCommand(workflow, "deep logic request"), "deep logic request");
     }
     const multiline = "Inspect the boundary.\n\nConstraints:\n- preserve paragraphs\n- preserve lists";
-    assert.equal(buildWebUiWorkflowCommand("scout", multiline), `/workflow scout ${multiline}`);
+    assert.equal(buildWebUiWorkflowCommand("scout", multiline), multiline);
     assert.equal(buildWebUiWorkflowCommand(null, "plain request"), "plain request");
   });
 
@@ -97,6 +97,18 @@ describe("WebUI runtime command parity", () => {
       customType: "piagent-service-tier-receipt", content: "fastMode: fast", details: { ...exact, injected: true } }); } };
     const rejected = await executeHostRuntimeCommand(invalidSession, "/fast on");
     assert.equal(rejected.outputs[0].details, undefined);
+  });
+
+  // The output was cut at 12,000 characters before redaction, so a credential
+  // across that point went out as a fragment no pattern recognises.
+  it("never shows the front of a credential that the output limit cuts through", async () => {
+    const secret = ["sk", "proj", "abcdefghijklmnopqrstuvwxyz0123456789"].join("-");
+    for (const at of [11_970, 11_985, 11_995]) {
+      const session = { messages: [], async prompt() { this.messages.push({ role: "custom", customType: "runtime-output", content: `${"x".repeat(at)} ${secret} tail` }); } };
+      const { outputs } = await executeHostRuntimeCommand(session, "/status");
+      assert.equal(outputs[0].content.includes("abcdefghij"), false, `cut near ${at}`);
+      assert.equal(outputs[0].redacted, true);
+    }
   });
 
   it("dispatches Fast session controls as zero-turn commands and fails visible if a model turn starts", async () => {

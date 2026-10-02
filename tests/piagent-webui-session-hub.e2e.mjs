@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 
 import { GatewayProtocolService } from "../packages/piagent-webui/gateway/gateway-protocol-service.ts";
 import { SessionAttachmentRegistry } from "../packages/piagent-webui/gateway/session-attachment-registry.ts";
+import { COMPANY_MODEL_REF } from "../packages/piagent-webui/gateway/company-relay.ts";
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
 import { WEBUI_WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
@@ -21,6 +22,10 @@ let nextCreateUncertain = false, nextSendRejected = false, nextSendUnconfirmed =
 let liveStateUnavailable = false, liveStateReadCount = 0;
 let attachments, lastSendPayload = null, dispatchedContent = null;
 let lastCreatePayload = null;
+let processTranscript = [];
+let companyState = "unavailable", companyConnects = 0, transcriptUnavailable = false;
+const companyModel = { modelRef: COMPANY_MODEL_REF, provider: "agent_watch_managed", modelId: "agent-watch-auto",
+  displayName: "agent-watch-auto", reasoning: true, imageInput: true, thinkingLevels: ["low", "medium", "high"] };
 const observedSessionActions = [];
 const observedRuntimeActions = [];
 const inspectionSnapshot = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/snapshot-v1.valid.json"), "utf8"));
@@ -194,7 +199,7 @@ test.beforeAll(async () => {
       text: "# Ke hoach quy ba\n\nMuc tieu la **tang truong**.\n", sizeBytes: 4096,
       truncated: false, redacted: false, reasonCode: null }),
     activity: () => inspectionSnapshot.activity,
-    transcript: () => ({ ...transcriptFixture, items: [
+    transcript: () => transcriptUnavailable ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
       { ...transcriptFixture.items[0], messageRef: "message_history_user", content: { ...transcriptFixture.items[0].content,
         text: "Open the persisted release checklist", textChars: 36 } },
       { ...transcriptFixture.items[0], messageRef: "message_history_assistant", parentMessageRef: "message_history_user", role: "assistant",
@@ -216,7 +221,7 @@ test.beforeAll(async () => {
         agentOperationId: "operation_browser_send_01",
         recordedAt: "2026-08-14T05:00:01.000Z", content: { ...transcriptFixture.items[0].content,
           text: "A streamed Gateway reply.", textChars: 25 }, toolCalls: [] }
-    ] : []) }),
+    ] : []).concat(processTranscript) }),
     logPreview: () => ({ state: "unavailable", preview: null, truncated: false, reasonCode: "no-log" })
   };
   server = await startLoopbackServer({
@@ -233,7 +238,7 @@ test.beforeAll(async () => {
     readSessionCreationOptions: () => ({ schemaVersion: 1, version: "piagent-session-creation-options-v1",
       generatedAt: new Date().toISOString(), projects: [{ projectRef: "project_session_release_prep",
         placeRef: "project_session_release_prep", label: "pi-company-platform" }],
-      models: [{ modelRef: "model_openai_codex_sol", provider: "openai-codex", modelId: "gpt-5.6-sol",
+      models: [...(companyState === "ready" ? [companyModel] : []), { modelRef: "model_openai_codex_sol", provider: "openai-codex", modelId: "gpt-5.6-sol",
         displayName: "GPT-5.6 Sol", reasoning: true, imageInput: true, thinkingLevels: ["off", "medium", "high", "xhigh"] },
       { modelRef: "model_fixture_reasoning", provider: "fixture", modelId: "reasoning",
         displayName: "Fixture Reasoning", reasoning: true, imageInput: true, thinkingLevels: ["off", "medium", "high"] }],
@@ -243,6 +248,10 @@ test.beforeAll(async () => {
       webSearch: { state: "configured", route: "codex-first", provider: "openai-codex", fallbackProvider: "exa",
         integration: { name: "pi-web-access", version: "0.17.0" }, reasonCode: null },
       projectImport: { status: "available", reasonCode: null }, reasonCode: null }),
+    readCompanyStatus: () => ({ schemaVersion: 1, version: "piagent-company-status-v1", model: "agent-watch-auto", available: true, state: companyState,
+      reasonCode: companyState === "ready" ? null : "managed-keychain-approval-required" }),
+    executeCompanyConnect: () => { companyConnects += 1; companyState = "ready";
+      return { schemaVersion: 1, version: "piagent-company-status-v1", model: "agent-watch-auto", available: true, state: "ready", reasonCode: null }; },
     executeProjectImport: () => ({ schemaVersion: 1, version: "piagent-project-import-result-v1", importedAt: new Date().toISOString(),
       project: { projectRef: "project_imported_browser", placeRef: "project_imported_browser", label: "imported-project" } }),
     readSessionModel: () => inspectionProvider,
@@ -443,10 +452,10 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await expect(page.getByText("Phiên đăng nhập model đã hết hạn. Mở Cài đặt → Nhà cung cấp & model để kết nối lại.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Đã đọc file/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
-  await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
-  await page.getByRole("button", { name: /pi-company-platform/ }).click();
+  await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
+  await page.getByRole("main").getByRole("button", { name: /pi-company-platform/ }).click();
   await page.getByRole("menuitem", { name: "Thêm một hoặc nhiều folder" }).click();
-  await expect(page.getByRole("button", { name: /imported-project/ })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: /imported-project/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Model: GPT-5.6 Sol" })).toContainText("GPT-5.6 Sol · mặc định");
   await page.getByRole("button", { name: "Model: GPT-5.6 Sol" }).click();
   await page.getByRole("menuitem", { name: /Fixture Reasoning/ }).click();
@@ -500,8 +509,7 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("button", { name: "Source Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Mở Source Changes" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("combobox", { name: "Workflow cho tin nhắn này" }).click();
-  await page.getByRole("option", { name: "Review", exact: true }).click();
+  // Workflows are retired: messages are freeform (no workflow picker).
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Continue from the browser");
   await page.getByRole("button", { name: "Gửi" }).click();
   await expect(page.locator("p").filter({ hasText: /^Continue from the browser$/ })).toBeVisible();
@@ -509,10 +517,8 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await expect(page.getByText(/use-auth-refresh\.ts · (Tiến trình vừa cập nhật|Cập nhật \d+ giây trước)/)).toBeVisible();
   await expect(page.getByRole("button", { name: /Đang đọc file/ })).toHaveCount(0);
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toBeVisible();
-  assert.equal(lastSendPayload?.workflow, "review");
   await page.waitForTimeout(250);
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toHaveCount(1);
-  await expect(page.getByRole("combobox", { name: "Workflow cho tin nhắn này" })).toHaveText(/Tự do · không workflow/);
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Start a different piece of work in this session");
   await page.getByRole("button", { name: "Gửi" }).click();
   await expect(page.locator("p").filter({ hasText: /^Start a different piece of work in this session$/ })).toBeVisible();
@@ -603,10 +609,8 @@ test("resyncs and retries a new chat or send once when its revision changes befo
     await page.goto(server.issueLaunchUrl());
     await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
-    await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
     await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
-    await page.getByRole("button", { name: "Thực hiện task", exact: true }).click();
-    await page.getByRole("menuitem", { name: /Khảo sát chỉ đọc/ }).click();
     await page.getByRole("button", { name: "Quyền theo profile", exact: true }).click();
     await page.getByRole("menuitem", { name: "Chỉ đọc", exact: true }).click();
 
@@ -625,7 +629,7 @@ test("resyncs and retries a new chat or send once when its revision changes befo
     await expect(page.getByText("session-revision-stale", { exact: true })).toHaveCount(0);
     assert.equal(sessionCreateAttempts - attemptsBefore, 2);
     assert.equal(sessionCreateEffects - effectsBefore, 1);
-    assert.equal(lastCreatePayload?.workflow, "scout");
+    assert.equal(Object.hasOwn(lastCreatePayload ?? {}, "workflow"), false);
     assert.equal(lastCreatePayload?.permissionMode, "read-only");
     assert.equal(lastSendPayload?.attachmentRefs?.length, 1);
     assert.match((dispatchedContent ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n"),
@@ -633,6 +637,9 @@ test("resyncs and retries a new chat or send once when its revision changes befo
 
     const created = catalog.sessions.find((item) => item.title === "Browser retry session");
     assert.ok(created);
+    // Live events refresh the lists in coalesced batches (150 ms); let them
+    // settle so this tab still holds the old revision when it sends.
+    await page.waitForTimeout(600);
     created.sessionRevision = "revision_session_changed_before_send";
     catalog.catalogRevision = "revision_catalog_changed_before_send";
     await page.getByPlaceholder("Nhắn cho Piagent…").fill("Send after a concurrent session update");
@@ -641,8 +648,8 @@ test("resyncs and retries a new chat or send once when its revision changes befo
     await expect(page.getByText("session-revision-stale", { exact: true })).toHaveCount(0);
     // One initial send carries the staged file. The next message first goes
     // stale and is retried once, so the total is three attempts / two effects.
-    assert.equal(sessionSendAttempts - sendAttemptsBefore, 3);
-    assert.equal(sessionSendEffects - sendEffectsBefore, 2);
+    await expect.poll(() => sessionSendAttempts - sendAttemptsBefore).toBe(3);
+    await expect.poll(() => sessionSendEffects - sendEffectsBefore).toBe(2);
   } finally {
     catalog.catalogRevision = originalRevision; catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions);
     Object.assign(catalog.page, originalPage);
@@ -655,7 +662,7 @@ test("opens a known created session instead of exposing an internal uncertainty 
     await page.goto(server.issueLaunchUrl());
     await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
-    await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
     await page.getByPlaceholder("Nhắn cho Piagent…").fill("Recover a created session without a duplicate run");
     nextCreateUncertain = true;
     await page.getByRole("button", { name: "Gửi" }).click();
@@ -772,7 +779,7 @@ test("drops a document onto the new chat composer and carries it into the create
   await page.goto(server.issueLaunchUrl());
   await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
-  await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
 
   const dropped = docx("Ke hoach onboarding.", "Ban giao ngay 30/09.");
   const dataTransfer = await page.evaluateHandle(([base64, name, type]) => {
@@ -802,4 +809,159 @@ test("drops a document onto the new chat composer and carries it into the create
   assert.match(text, /Ke hoach onboarding\./);
   assert.match(text, /Ban giao ngay 30\/09\./);
   assert.equal(text.includes("word/document.xml"), false);
+});
+
+test("chooses the company model in the dashboard and creates the session through the same command", async ({ page }) => {
+  const createsBefore = sessionCreateAttempts; lastCreatePayload = null;
+  await page.goto(server.issueLaunchUrl());
+  await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+  await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
+  await page.getByRole("button", { name: /^Model:/ }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByText("Công ty", { exact: true })).toBeVisible();
+  await expect(menu.getByText("Cá nhân", { exact: true })).toBeVisible();
+  // Not connected yet: the entry says why and connects on selection.
+  await expect(menu.getByText("macOS chưa cho Agent Watch đọc key. Chọn “Luôn cho phép” khi được hỏi rồi kết nối lại.")).toBeVisible();
+  await menu.getByRole("menuitem", { name: /agent-watch-auto/ }).click();
+  await expect(page.getByRole("button", { name: "Model: Công ty · agent-watch-auto" })).toBeVisible();
+  assert.equal(companyConnects, 1);
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+  await expect(page.getByText("Model và quyền theo Harness công ty; thinking chọn ở đây.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Quyền theo profile" })).toHaveCount(0);
+  await page.getByPlaceholder("Nhắn cho Piagent…").fill("Rà soát module thanh toán");
+  await page.getByRole("button", { name: "Gửi", exact: true }).click();
+  await expect.poll(() => sessionCreateAttempts).toBe(createsBefore + 1);
+  assert.equal(lastCreatePayload?.modelRef, COMPANY_MODEL_REF);
+  assert.equal(lastCreatePayload?.message, "Rà soát module thanh toán");
+  assert.equal(lastCreatePayload?.permissionMode, undefined);
+});
+
+test("shows the agent's plan, each time the harness sent the agent back, and how the turn ended", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
+  Object.assign(target, { modelLabel: "agent-watch-auto", sessionRevision: "revision_session_source_review_process",
+    managedPlan: { steps: [{ step: "Đọc cart.js và test hiện có", status: "completed" }, { step: "Sửa cách tính tổng khi giỏ hàng có mã giảm giá áp dụng cho nhiều sản phẩm cùng lúc", status: "in_progress" }, { step: "Chạy npm test", status: "pending" }] },
+    managedProcess: { outcome: "blocking_open", verified: true, reviewed: true, blockingOpen: 1 } });
+  const base = transcriptFixture.items[0], text = (value) => ({ ...base.content, text: value, textChars: value.length });
+  processTranscript = [
+    { ...base, messageRef: "message_process_user", role: "user", recordedAt: "2026-08-14T06:00:00.000Z", content: text("Sửa tổng tiền giỏ hàng"), toolCalls: [] },
+    { ...base, messageRef: "message_process_done", parentMessageRef: "message_process_user", role: "assistant", recordedAt: "2026-08-14T06:00:01.000Z", content: text("Đã sửa."), toolCalls: [] },
+    { ...base, messageRef: "message_process_verify", parentMessageRef: "message_process_user", role: "custom", recordedAt: "2026-08-14T06:00:02.000Z", content: text("Harness process check"), toolCalls: [],
+      process: { phase: "verify", loop: 1, maxLoops: 2 } },
+    { ...base, messageRef: "message_process_review", parentMessageRef: "message_process_user", role: "custom", recordedAt: "2026-08-14T06:00:03.000Z", content: text("Harness review"), toolCalls: [],
+      process: { phase: "review", loop: 2, maxLoops: 2, findings: [{ severity: "blocking", file: "packages/shop/src/very/long/path/to/cart-total-calculation.js", line: 3, issue: "Giảm giá bị trừ hai lần khi giỏ có nhiều sản phẩm cùng mã" }] } },
+    { ...base, messageRef: "message_process_answer", parentMessageRef: "message_process_user", role: "assistant", recordedAt: "2026-08-14T06:00:04.000Z", content: text("Đã sửa phần lớn, còn một lỗi chưa xử lý."), toolCalls: [] },
+    { ...base, messageRef: "message_process_final", parentMessageRef: "message_process_user", role: "custom", recordedAt: "2026-08-14T06:00:05.000Z", content: text("Process status"), toolCalls: [],
+      process: { phase: "final", outcome: "blocking_open", verified: true, reviewed: true, blockingOpen: 1, verifyPolicy: "require", reviewPolicy: "require" } }];
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+      await page.goto(server.issueLaunchUrl());
+      if (width < 1200) { await page.getByRole("button", { name: "Mở điều hướng" }).click({ force: true }); }
+      await page.getByText("Review source changes", { exact: true }).filter({ visible: true }).click();
+      await expect(page.getByText("Harness: chưa có lệnh check nào chạy qua trên code hiện tại, yêu cầu agent chạy check (vòng 1/2)")).toBeVisible();
+      await expect(page.getByText("Harness: review tìm thấy 1 lỗi chặn, gửi lại cho agent sửa (vòng 2/2)")).toBeVisible();
+      await expect(page.getByText("Giảm giá bị trừ hai lần", { exact: false })).toBeVisible();
+      await expect(page.getByRole("status", { name: "Tiến trình của lượt" })).toHaveText("Check đã qua trên code cuối · Còn 1 lỗi chặn chưa sửa");
+      if (width < 1200) await page.getByRole("button", { name: "Khung Workspace" }).click();
+      const plan = page.getByRole("list", { name: "Kế hoạch của agent" }).filter({ visible: true });
+      await expect(plan.getByRole("listitem")).toHaveCount(3);
+      await expect(page.getByText("Kế hoạch · 1/3").filter({ visible: true })).toBeVisible();
+      await expect(page.getByText("Lượt sửa code gần nhất: Check đã qua trên code cuối · Còn 1 lỗi chặn chưa sửa").filter({ visible: true })).toBeVisible();
+      assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth));
+      await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/harness-process-${width}.png`) });
+      await page.close();
+    }
+  } finally {
+    processTranscript = [];
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
+});
+
+test("keeps many conversations readable: running first, filter by kind, folding groups that show their newest five", async ({ browser }) => {
+  const added = Array.from({ length: 8 }, (_, index) => session(`session_many_${index}`, `Kịch bản ${index + 1}`, "harness-edge-cases",
+    `2026-08-14T04:${String(50 - index).padStart(2, "0")}:00.000Z`, { modelLabel: "agent-watch-auto", projectRef: "project_harness_cases",
+      ...(index === 0 ? { liveState: "running", state: "owned" } : {}),
+      ...(index === 2 ? { managedProcess: { outcome: "blocking_open", verified: true, reviewed: true, blockingOpen: 1 } } : {}),
+      ...(index === 3 ? { managedProcess: { outcome: "clean", verified: true, reviewed: true, blockingOpen: 0 } } : {}) }));
+  catalog.sessions.push(...added);
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const sidebar = page.getByRole("complementary").or(page.locator("nav")).first();
+    await expect(page.getByRole("button", { name: "Công ty · 8" })).toBeVisible();
+    const running = page.getByRole("region", { name: "Đang chạy hoặc cần chú ý" });
+    await expect(running.getByText("Kịch bản 1")).toBeVisible(); await expect(running.getByText("harness-edge-cases", { exact: false })).toBeVisible();
+    const group = page.getByRole("region", { name: "harness-edge-cases" });
+    await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(5);
+    await expect(group.getByText("Còn lỗi chặn", { exact: false })).toBeVisible(); await expect(group.getByText("Đủ bước", { exact: false })).toBeVisible();
+    await group.getByRole("button", { name: "Xem thêm 3" }).click(); await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(8);
+    await group.getByRole("button", { name: "Thu gọn" }).click(); await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(5);
+    // A folded group stays folded after a reload.
+    await group.getByRole("button", { name: /harness-edge-cases/ }).click(); await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(0);
+    await page.reload(); await expect(page.getByRole("region", { name: "harness-edge-cases" }).getByText(/^Kịch bản \d$/)).toHaveCount(0);
+    await page.getByRole("region", { name: "harness-edge-cases" }).getByRole("button", { name: /harness-edge-cases/ }).click();
+    // Company only: personal conversations leave the list.
+    await page.getByRole("button", { name: "Công ty · 8" }).click();
+    await expect(page.getByText("Review source changes", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Cá nhân/ }).click(); await expect(page.getByRole("region", { name: "harness-edge-cases" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Tất cả" }).click();
+    await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/sidebar-organized.png") });
+    void sidebar;
+  } finally {
+    await page.close();
+    catalog.sessions.splice(catalog.sessions.length - added.length, added.length);
+  }
+});
+
+test("a conversation running in the company Terminal is followed, not continued, from the WebUI", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
+  Object.assign(target, { modelLabel: "agent-watch-auto", state: "terminal-owned", liveState: "uncertain", composerAvailable: false, reasonCode: "terminal-owner-active",
+    sessionRevision: "revision_session_source_review_terminal" });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const running = page.getByRole("region", { name: "Đang chạy hoặc cần chú ý" });
+    await expect(running.getByText("Đang chạy ở nơi khác", { exact: false })).toBeVisible();
+    await running.getByText("Review source changes", { exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "đang chạy trong Terminal hoặc một tiến trình Piagent khác" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tiếp tục" })).toHaveCount(0);
+    await expect(page.getByPlaceholder("Nhắn cho Piagent…")).toBeDisabled();
+  } finally {
+    await page.close();
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
+});
+
+test("a company conversation opened while company mode is off says so and reconnects in place", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target }, connectsBefore = companyConnects;
+  Object.assign(target, { modelLabel: "agent-watch-auto", composerAvailable: false, sessionRevision: "revision_session_source_review_company_off" });
+  companyState = "unavailable";
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "vi-VN" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    // The conversation read before stays its own: a failed read of the next one shows no history, never the previous one's.
+    await page.getByText("Release preparation", { exact: true }).first().click();
+    await expect(page.getByText("Open the persisted release checklist").first()).toBeVisible();
+    transcriptUnavailable = true;
+    await page.getByText("Review source changes", { exact: true }).first().click();
+    await expect(page.getByText("Chưa tải được lịch sử cuộc trò chuyện", { exact: false })).toBeVisible();
+    await expect(page.getByText("Open the persisted release checklist")).toHaveCount(0);
+    transcriptUnavailable = false;
+    const notice = page.getByRole("status").filter({ hasText: "Chế độ công ty đang tắt" });
+    await expect(notice).toBeVisible();
+    await expect(notice.getByText("macOS chưa cho Agent Watch đọc key", { exact: false })).toBeVisible();
+    await notice.getByRole("button", { name: "Kết nối lại" }).click();
+    await expect.poll(() => companyConnects).toBe(connectsBefore + 1);
+    await expect(notice).toHaveCount(0);
+    // Once connected the conversation is read again.
+    await expect(page.getByText("Open the persisted release checklist").first()).toBeVisible();
+  } finally {
+    transcriptUnavailable = false;
+    await page.close();
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
 });

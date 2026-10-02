@@ -15,9 +15,9 @@ Repo này phải chạy được cho nhiều project/domain khác nhau. Vì vậ
 
 | Use case | Package source |
 |---|---|
-| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.8.0` |
+| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.9.0` |
 | Personal/sandbox dev | `git:github.com/Vt-mmm/piagent` |
-| Registry distribution | `npm:@piagent/platform@1.8.0` |
+| Registry distribution | `npm:@piagent/platform@1.9.0` |
 | Enterprise npm (fork under another scope) | `npm:@your-scope/platform@x.y.z` |
 | Local platform dev | `/path/to/piagent` |
 
@@ -54,7 +54,7 @@ Root `package.json` có `pi` manifest trỏ tới:
 Do đó team có thể:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.8.0
+pi install git:github.com/Vt-mmm/piagent@v1.9.0
 ```
 
 Không cần biết internal folder `packages/piagent-core`. Source không pin chỉ dành cho personal/sandbox như bảng channel ở trên.
@@ -66,12 +66,12 @@ Team nên install global package một lần:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
-npm install -g --ignore-scripts @piagent/platform@1.8.0
+npm install -g --ignore-scripts @piagent/platform@1.9.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-`pi install git:github.com/Vt-mmm/piagent@v1.8.0` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts @piagent/platform@1.8.0`.
+`pi install git:github.com/Vt-mmm/piagent@v1.9.0` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts @piagent/platform@1.9.0`.
 
 Support matrix hiện tại: macOS Apple Silicon + Bash và Linux x64 + Bash đã được verify; macOS Intel + Bash và Linux ARM64 + Bash là supported target cần chạy smoke trước rollout; native Windows chưa phải target rollout team; WSL2 experimental. Chi tiết và version runtime nằm trong [release/install policy](release-install-policy.md).
 
@@ -82,7 +82,7 @@ cd /path/to/project
 pi
 ```
 
-Project profile được chọn trong Pi bằng `/onboard` hoặc `/profile`, không bắt buộc chạy bash init. `/onboard` là menu runtime; dùng `/onboard run` khi muốn model đọc project lần đầu và ghi snapshot.
+Project profile được chọn trong Pi bằng `/profile`, không bắt buộc chạy bash init. Muốn model đọc project lần đầu và ghi snapshot, nhờ agent bằng lời thường (từ bản 1.9.0 không còn `/onboard`).
 
 Sau setup, bước first-run trong Pi là:
 
@@ -91,28 +91,25 @@ Sau setup, bước first-run trong Pi là:
 <select provider/model>
 /mcp
 /subagents-doctor
-/onboard
-/onboard run
+/profile setup
 /context index
 /memory
 ```
 
-`/onboard run` ghi `.pi/project-context.md`; đây là snapshot context dùng chung cho các task sau.
+rồi nhờ agent: "Đọc project này (chỉ đọc) và ghi lại project context." Lượt onboard ghi `.pi/project-context.md`; đây là snapshot context dùng chung cho các task sau.
 Nó cũng ghi `.pi/context-index.json`; đây là compact advisory map có citation để agent tìm đúng điểm vào repo mà không scout rộng lại.
 
-Command hằng ngày nên dạy theo namespace mới:
+Hằng ngày, việc được yêu cầu bằng lời thường; các command cần dạy là thiết lập và màn hình chỉ đọc:
 
 ```text
-/commands
-/workflow task <request>
-/workflow scout <read-only request>
 /name <task/session name>
-/fresh task <request>
 /context preflight
 /usage
+/permission
+/piagent-inspector
 ```
 
-Các alias cũ như `/task`, `/scout`, `/context index`, `/fresh-task` vẫn chạy để không gãy session cũ, nhưng không dùng làm đường onboard chính cho team mới.
+`/workflow`, `/task`, `/scout`, `/fresh`, `/onboard` và `/commands` đã bỏ từ bản 1.9.0. Session nặng thì mở session mới bằng `/new` của Pi.
 
 ## Optional preseed setup
 
@@ -121,7 +118,7 @@ Nếu muốn commit sẵn `.pi/piagent-profile.json` vào repo hoặc bootstrap 
 ```bash
 bash scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/piagent@v1.8.0 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.9.0 \
   --mcp-preset core \
   --subagents-preset safe
 ```

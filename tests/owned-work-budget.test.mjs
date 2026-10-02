@@ -9,12 +9,13 @@ import { ABSOLUTE_OWNED_WORK_CEILINGS, AUTOMATIC_OWNED_WORK_CEILINGS, DEFAULT_OW
 function cwd() { return fs.mkdtempSync(path.join(os.tmpdir(), "piagent-helper-budget-")); }
 function request(role, objective, run = "run-1") { const policy = defaultRolePolicy(role, ["src/**"]); if (role === "worker") policy.writeScope = ["src/**"]; return createHelperRequest({ policy, objective, taskId: "task-1", taskRunId: run, sessionId: "private", parentReadScope: ["src/**"], parentWriteScope: ["src/**"], parentAllowedTools: ["read", "grep", "find", "ls", "bash", "edit", "write", "apply_patch", "contact_supervisor"], requestedWriteScope: role === "worker" ? ["src/**"] : [], singleWriterOwnership: role === "worker" ? "writer-lease-1" : null }); }
 describe("Piagent-owned helper budget", () => {
-  it("deduplicates one request and blocks every additional helper or writer", () => { const root = cwd(), controller = new OwnedWorkBudgetController(); const scout = request("scout", "Map source"); const first = controller.reserve(root, scout); assert.equal(first.decision, "reserved"); assert.equal(controller.reserve(root, scout).decision, "duplicate"); assert.equal(controller.reserve(root, request("scout", "Map other source")).decision, "blocked"); assert.equal(controller.reserve(root, request("worker", "Implement bounded source", "run-worker")).decision, "blocked"); });
+  it("deduplicates one request and blocks another pass of the same role or a writer", () => { const root = cwd(), controller = new OwnedWorkBudgetController(); const scout = request("scout", "Map source"); const first = controller.reserve(root, scout); assert.equal(first.decision, "reserved"); assert.equal(controller.reserve(root, scout).decision, "duplicate"); assert.equal(controller.reserve(root, request("scout", "Map other source")).decision, "blocked"); assert.equal(controller.reserve(root, request("worker", "Implement bounded source", "run-worker")).decision, "blocked"); });
   it("cannot be loosened by caller-provided ceilings", () => {
     const root = cwd(), controller = new OwnedWorkBudgetController();
     const roomy = { ...DEFAULT_OWNED_WORK_CEILINGS, maxScoutPasses: 99, maxConcurrentHelpers: 99, maxTotalHelpers: 99, maxWriters: 99 };
     assert.equal(controller.reserve(root, request("scout", "Map source", "run-ceilings"), undefined, roomy).decision, "reserved");
-    assert.equal(controller.reserve(root, request("planner", "Plan source", "run-ceilings"), undefined, roomy).decision, "blocked");
+    assert.equal(controller.reserve(root, request("planner", "Plan source", "run-ceilings"), undefined, roomy).decision, "reserved");
+    assert.equal(controller.reserve(root, request("reviewer", "Third helper", "run-ceilings"), undefined, roomy).decision, "blocked");
     assert.equal(controller.reserve(root, request("worker", "Write source", "run-writer"), undefined, roomy).decision, "blocked");
   });
 
@@ -22,16 +23,16 @@ describe("Piagent-owned helper budget", () => {
     for (const field of ["maxScoutPasses", "maxPlannerPasses", "maxReviewPasses", "maxOracleCalls"]) assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS[field], 1, field);
     assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS.maxWriters, 0);
     assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS.maxRepairPasses, 0);
-    assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS.maxConcurrentHelpers, 1);
-    assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS.maxTotalHelpers, 1);
+    assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS.maxConcurrentHelpers, 2);
+    assert.equal(AUTOMATIC_OWNED_WORK_CEILINGS.maxTotalHelpers, 2);
     const root = cwd(), controller = new OwnedWorkBudgetController();
     assert.equal(controller.reserve(root, request("scout", "one", "run-auto"), undefined, AUTOMATIC_OWNED_WORK_CEILINGS).decision, "reserved");
-    assert.equal(controller.reserve(root, request("planner", "two", "run-auto"), undefined, AUTOMATIC_OWNED_WORK_CEILINGS).decision, "blocked");
+    assert.equal(controller.reserve(root, request("planner", "two", "run-auto"), undefined, AUTOMATIC_OWNED_WORK_CEILINGS).decision, "reserved");
   });
 
-  it("publishes the same one-helper hard cap for default and automatic modes", () => { assert.strictEqual(DEFAULT_OWNED_WORK_CEILINGS, ABSOLUTE_OWNED_WORK_CEILINGS); assert.strictEqual(AUTOMATIC_OWNED_WORK_CEILINGS, ABSOLUTE_OWNED_WORK_CEILINGS); });
+  it("publishes the same two-helper hard cap for default and automatic modes", () => { assert.strictEqual(DEFAULT_OWNED_WORK_CEILINGS, ABSOLUTE_OWNED_WORK_CEILINGS); assert.strictEqual(AUTOMATIC_OWNED_WORK_CEILINGS, ABSOLUTE_OWNED_WORK_CEILINGS); });
 
-  it("recovers expired reservations without granting a retry", () => { const root = cwd(), controller = new OwnedWorkBudgetController(); const scout = request("scout", "Map source", "run-orphan"); controller.reserve(root, scout, "2026-08-08T00:00:00.000Z"); const result = controller.reserve(root, request("planner", "Plan source", "run-orphan"), "2026-08-08T01:00:00.000Z"); assert.equal(result.recoveredOrphans, 1); assert.equal(result.decision, "blocked"); assert.equal(controller.snapshot(root, scout).reservations.filter((item) => item.status === "active").length, 0); });
+  it("recovers expired reservations without granting a retry", () => { const root = cwd(), controller = new OwnedWorkBudgetController(); const scout = request("scout", "Map source", "run-orphan"); controller.reserve(root, scout, "2026-08-08T00:00:00.000Z"); const result = controller.reserve(root, request("scout", "Retry source", "run-orphan"), "2026-08-08T01:00:00.000Z"); assert.equal(result.recoveredOrphans, 1); assert.equal(result.decision, "blocked"); assert.equal(controller.snapshot(root, scout).reservations.filter((item) => item.status === "active").length, 0); });
   it("cancels active helpers at parent terminal and ignores late release", () => { const root = cwd(), controller = new OwnedWorkBudgetController(); const scout = request("scout", "Map source", "run-terminal"); const reserved = controller.reserve(root, scout); controller.markParentTerminal(root, scout); controller.release(root, scout, reserved.reservationId, "succeeded", { output: "late raw output" }); const state = controller.snapshot(root, scout); assert.equal(state.terminal, true); assert.equal(state.reservations[0].status, "cancelled"); assert.equal(JSON.stringify(state).includes("late raw output"), false); assert.equal(controller.reserve(root, request("planner", "late", "run-terminal")).decision, "blocked"); });
   it("serializes concurrent read-only reservations across processes without deadlock", async () => {
     const root = cwd();
@@ -55,9 +56,9 @@ describe("Piagent-owned helper budget", () => {
     } finally {
       clearTimeout(timeout);
     }
-    assert.deepEqual(results.map((item) => item.decision).sort(), ["blocked", "reserved"]);
+    assert.deepEqual(results.map((item) => item.decision).sort(), ["reserved", "reserved"]);
     const state = new OwnedWorkBudgetController().snapshot(root, request("scout", "Map source", "concurrent-run"));
-    assert.equal(state.reservations.filter((item) => item.status === "active").length, 1);
+    assert.equal(state.reservations.filter((item) => item.status === "active").length, 2);
   });
   it("recovers a stale owner lock left by an interrupted process", () => {
     const root = cwd();

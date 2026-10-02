@@ -1,0 +1,116 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import http from 'node:http';
+import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { test } from 'node:test';
+import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
+
+const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
+const deferred = () => { let resolve; const promise = new Promise(r => resolve = r); return {promise, resolve}; };
+const content = result => result.content.filter(x => x.type === 'text').map(x => x.text).join('\n');
+
+// Real native SDK streams and actual Seatbelt workers; only provider and
+// broker authority are fixtures. No user config, Keychain or live inference.
+for (const changeDuringReview of [true, false]) test(`mixed-provider helpers invalidate changes ${changeDuringReview ? 'during' : 'after'} review`, {skip: !supported, timeout: 120000}, async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-helpers-')));
+  const project = path.join(root, 'project'); fs.mkdirSync(project);
+  const git = args => execFileSync('/usr/bin/git', args, {cwd:project, encoding:'utf8'}).trim();
+  git(['init', '-q']); fs.writeFileSync(path.join(project, 'source.txt'), 'before\n');
+  git(['add', '.']); git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'baseline']);
+  const head = git(['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(project, 'source.txt'), 'after\n');
+  fs.writeFileSync(path.join(project, 'new.txt'), 'untracked fixture\n');
+  const gates = Object.fromEntries(['main', 'research', 'review'].map(role => [role, {entered:deferred(), release:deferred()}]));
+  const roleIDs = Object.fromEntries(Object.keys(gates).map(role => [role, randomUUID()]));
+  const runID = randomUUID(), authority = {studio_instance_id:randomUUID(), dataset_epoch:randomUUID(), auth_generation:1};
+  const models = [{id:'main-model', provider_model_id:'gpt-6-sol', owned_by:'codex'}, {id:'helper-model', provider_model_id:'claude-opus-5-5', owned_by:'claude'}];
+  const fences = {}, calls = [], requests = [];
+  const grant = role => ({...authority, run_id:runID, role_id:roleIDs[role], role, fence:fences[role]=(fences[role]??0)+1,
+    token:`as_run_${roleIDs[role]}_${'x'.repeat(43)}`, model_id:role==='main'?'main-model':'helper-model', provider:role==='main'?'codex':'claude', provider_model_id:role==='main'?'gpt-6-sol':'claude-opus-5-5', effort:'medium'});
+  const broker = {async request(action, args={}) {
+    calls.push({action, ...args});
+    if(action==='config') return {schema_version:2, credential_mode:'managed', authority, models, harness:{configuration:{main:{model_ids:['main-model']}}}};
+    if(['start','renew','child'].includes(action)) return grant(args.role??'main');
+    if(action==='close') return true;
+    throw Error('unexpected-broker-action');
+  }, async dispose() {}};
+  const server = http.createServer(async(req,res) => {
+    const chunks=[]; for await(const chunk of req) chunks.push(chunk);
+    const body=JSON.parse(Buffer.concat(chunks));
+    const role=Object.keys(roleIDs).find(role=>roleIDs[role]===req.headers['x-session-id']);
+    requests.push({role,body}); gates[role].entered.resolve(); await gates[role].release.promise;
+    res.writeHead(200, {'Content-Type':'text/event-stream'});
+    const emit = event=>res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    if(role==='main') {
+      const response={id:'resp_fixture',object:'response',status:'in_progress',model:body.model,output:[]};
+      emit({type:'response.created',response});
+      emit({type:'response.completed',response:{...response,status:'completed',usage:{input_tokens:12,output_tokens:3,total_tokens:15}}});
+    } else {
+      emit({type:'message_start',message:{id:'msg_fixture',type:'message',role:'assistant',content:[],model:body.model,stop_reason:null,stop_sequence:null,usage:{input_tokens:12,output_tokens:0}}});
+      emit({type:'content_block_start',index:0,content_block:{type:'text',text:''}});
+      emit({type:'content_block_delta',index:0,delta:{type:'text_delta',text:'Helper fixture result'}});
+      emit({type:'content_block_stop',index:0});
+      emit({type:'message_delta',delta:{stop_reason:'end_turn',stop_sequence:null},usage:{output_tokens:3}});
+      emit({type:'message_stop'});
+    }
+    res.end();
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  let managed, prompt;
+  try {
+    managed=await ManagedSession.create({sdkRoot,cwd:project,origin:`http://127.0.0.1:${server.address().port}`,broker});
+    managed.session.setThinkingLevel('medium');
+    const initial=await managed.patchSnapshot();
+    const patch=JSON.parse(initial.patch);
+    assert.match(patch.patch, /\+after/); assert.equal(patch.untracked[0].path,'new.txt');
+    // New text files reach the reviewer as text.
+    assert.deepEqual([patch.untracked[0].encoding,patch.untracked[0].contents],['utf8','untracked fixture\n']);
+    prompt=managed.session.prompt('Review and research this change');
+    await gates.main.entered.promise;
+    const research=managed.delegate({role:'research',task:'Read source.txt and report context'});
+    const review=managed.delegate({role:'review',task:'Review the supplied patch'});
+    await Promise.all([gates.research.entered.promise,gates.review.entered.promise]);
+    await assert.rejects(managed.delegate({role:'research',task:'Duplicate'}), /unavailable/);
+    assert.equal(managed.helpers.size,2);
+    assert.equal(managed.session.sessionManager.getEntries().filter(e=>e.customType==='agent-watch-helpers').at(-1).data.active,2);
+    const researchWire=requests.find(r=>r.role==='research').body;
+    // The native adapter inserts a non-executable cache placeholder.
+    const executableTools = body => (body.tools??[]).filter(t=>t.name!=='__pi_deferred_placeholder__').map(t=>t.name).sort();
+    // Research helpers read the project and the web; they never write or run commands.
+    assert.deepEqual(executableTools(researchWire),['find','grep','ls','read','web_fetch','web_search']);
+    // Reviewers read the code around the patch; they never write, run commands or use the web.
+    assert.deepEqual(executableTools(requests.find(r=>r.role==='review').body),['find','grep','ls','read']);
+    assert.match(JSON.stringify(requests.find(r=>r.role==='review').body),new RegExp(initial.digest));
+    if (changeDuringReview) fs.writeFileSync(path.join(project,'source.txt'),'changed during review\n');
+    gates.research.release.resolve(); gates.review.release.resolve();
+    const [a,b]=await Promise.all([research,review]);
+    assert.equal(managed.session.sessionManager.getEntries().filter(e=>e.customType==='agent-watch-helpers').at(-1).data.active,0);
+    assert.equal(a.details.runID,runID); assert.equal(a.details.tokens,15);
+    assert.equal(b.details.runID,runID); assert.equal(b.details.tokens,15);
+    assert.equal(b.details.stale,changeDuringReview);
+    if (changeDuringReview) assert.match(content(b),/Review is stale/);
+    else {
+      assert.equal(managed.review.stale, false);
+      await managed.session.executeBash("printf 'later change\\n' > source.txt");
+      assert.equal(managed.review.stale, true);
+      assert.equal(managed.session.sessionManager.getEntries().filter(e=>e.type==='custom'&&e.customType==='agent-watch-review').at(-1).data.stale,true);
+    }
+    assert.equal(b.details.patchDigest,initial.digest);
+    assert.equal(git(['rev-parse','HEAD']),head); assert.equal(git(['diff','--cached','--name-only']),'');
+    gates.main.release.resolve(); await prompt;
+    const receipts=managed.session.sessionManager.getEntries().filter(e=>e.type==='custom_message'&&e.customType==='agent-watch-helper-receipt');
+    assert.equal(receipts.length,2);
+    assert.match(JSON.stringify(receipts), /15 tokens/);
+    if (!changeDuringReview) assert.match(JSON.stringify(managed.session.messages), /code changed after review/);
+    assert.equal(calls.filter(c=>c.action==='child').length,2);
+    assert.deepEqual(calls.filter(c=>c.action==='close'&&c.role).map(c=>c.role).sort(),['research','review']);
+  } finally {
+    Object.values(gates).forEach(g=>g.release.resolve());
+    await prompt?.catch(()=>{}); await managed?.dispose();
+    await new Promise(resolve=>server.close(resolve)); fs.rmSync(root,{recursive:true,force:true});
+  }
+});

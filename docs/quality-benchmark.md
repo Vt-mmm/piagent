@@ -1,6 +1,8 @@
 # Quality benchmark guide
 <!-- language: vi; english-index: docs-site/content/en/benchmark.html -->
 
+> **Lưu ý bản 1.9.0.** Các suite và số liệu dưới đây được đo trên Piagent có task contract và command workflow (đến 1.8.x). Hai cơ chế này đã bỏ ngày 2026-09-30; journey/benchmark dựa vào bản ghi task là hồ sơ lịch sử cho tới khi được đo lại trên lượt freeform.
+
 ## Chạy và chấm tự động bằng một lệnh
 
 Từ terminal, chạy:

@@ -52,7 +52,7 @@ import type { AgentStartHookDependencies } from "./agent-start-types.ts";
 export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStartHookDependencies): void {
   pi.on("before_agent_start", async (event, ctx) => {
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
-    const query = agentStartTaskRequest(event.prompt);
+    const query = event.prompt;
     const signal = classifyContextTask(query);
     const uncertainSendContinuation = isUncertainSendContinuation(query);
     // A mutation clarification still goes to the provider unchanged and never
@@ -68,7 +68,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       && signal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const sessionTask = dependencies.activeTask(ctx);
     const activeTask = sessionTask?.trace.outcome === "pending" ? sessionTask : undefined;
-    const runtimeIntakeMode = !activeTask ? automaticTaskIntakeMode(query, readProtectedPaths) : undefined;
+    const runtimeIntakeMode = undefined;
     const runtimeIntake = Boolean(runtimeIntakeMode);
     const compactMode = protectedOnlyTarget
       ? "protected"
@@ -154,7 +154,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
         : undefined;
       const durableResume = activeTask && resumed ? buildTaskResumeContext(activeTask, resumed) : undefined;
       const selectedContext = contextMessage ?? durableResume;
-      const intake = nonAuthorizingClarification ? undefined : await dependencies.startAutomaticTask(query, ctx);
+      const intake: Awaited<ReturnType<AgentStartHookDependencies["startAutomaticTask"]>> = undefined;
       if (intake?.task) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, intake.task, { sourceHook: "agent-start", recommendationRef }), dependencies.telemetry);
       if (!selectedContext && !intake) return systemPromptUpdate;
       const discoveryItems = selectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(selectedContext.details.selectedItems)

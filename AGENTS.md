@@ -29,3 +29,10 @@ This repository builds reusable Pi agent infrastructure for multiple projects an
 - Avoid hidden magic in prompts. If behavior must be enforced, put it in extension/tool-call guard.
 - Source code and identifiers: English.
 - Human-facing long-form docs may be Vietnamese; reusable workflow prompts and command names stay English.
+
+## Checks
+```
+npm run typecheck
+npm test
+```
+Run the test files that cover a change first (`node --test tests/<name>.test.mjs`); `npm test` runs everything.

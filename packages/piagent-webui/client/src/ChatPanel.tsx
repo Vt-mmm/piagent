@@ -116,7 +116,7 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
         setDraft(""); setAttachments([]); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
         setSendState(receipt.resultCode === "dispatch-observed" ? localize(locale, "Đã gửi vào Pi session", "Sent to the Pi session") : localize(locale, "Pi đã nhận yêu cầu", "Pi received the request"));
       } else if (receipt.resultCode === "held") { setDraft(""); setSendState(localize(locale, "Đã giữ trong hàng đợi", "Held in the queue")); }
-      else if (receipt.resultCode === "resumed-not-dispatched") setSendState(localize(locale, "Task đã mở lại nhưng tin nhắn chưa được gửi; nội dung vẫn được giữ để anh kiểm tra.", "The task resumed but the message was not sent; the content remains for review."));
+      else if (receipt.resultCode === "resumed-not-dispatched") setSendState(localize(locale, "Task đã mở lại nhưng tin nhắn chưa được gửi; nội dung vẫn được giữ để kiểm tra lại.", "The task resumed but the message was not sent; the content remains for review."));
       else setSendState(`${localize(locale, "Chưa gửi", "Not sent")} · ${label(receipt.resultCode, locale)}`);
       await settleControl();
     } catch { setSendState(localize(locale, "Không thể gửi; trạng thái Pi có thể đã thay đổi.", "Unable to send; Pi state may have changed.")); }

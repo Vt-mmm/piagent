@@ -289,45 +289,45 @@ describe("adaptive context governor", () => {
   });
 
   it("distinguishes full retrieval arguments while counting only exact canonical repeats", () => {
-    const messages = [user("Review oh-my-pi using bounded source retrieval")];
+    const messages = [user("Review sample-agent using bounded source retrieval")];
     for (let index = 0; index < 32; index += 1) {
       messages.push(...toolRound(
         `fetch-${index}`,
         "fetch_content",
-        { url: `https://api.github.com/repos/can1357/oh-my-pi/contents/source-${index}` },
+        { url: `https://api.github.com/repos/example-org/sample-agent/contents/source-${index}` },
         `fetch-${index}`
       ));
     }
     messages.push(...toolRound(
       "fetch-repeat",
       "fetch_content",
-      { url: "https://api.github.com/repos/can1357/oh-my-pi/contents/source-0" },
+      { url: "https://api.github.com/repos/example-org/sample-agent/contents/source-0" },
       "fetch-repeat"
     ));
     for (let index = 0; index < 45; index += 1) {
       messages.push(...toolRound(
         `search-content-${index}`,
         "get_search_content",
-        { responseId: "oh-my-pi-review", urlIndex: index % 9, offset: index * 1_000, limit: 1_000 },
+        { responseId: "sample-agent-review", urlIndex: index % 9, offset: index * 1_000, limit: 1_000 },
         `search-content-${index}`
       ));
     }
     messages.push(...toolRound(
       "search-content-repeat",
       "get_search_content",
-      { limit: 1_000, offset: 0, urlIndex: 0, responseId: "oh-my-pi-review" },
+      { limit: 1_000, offset: 0, urlIndex: 0, responseId: "sample-agent-review" },
       "search-content-repeat"
     ));
     messages.push(...toolRound(
       "web-search-1",
       "web_search",
-      { queries: ["oh-my-pi hashline"], numResults: 8 },
+      { queries: ["sample-agent hashline"], numResults: 8 },
       "web-search-1"
     ));
     messages.push(...toolRound(
       "web-search-2",
       "web_search",
-      { queries: ["oh-my-pi advisor"], numResults: 8 },
+      { queries: ["sample-agent advisor"], numResults: 8 },
       "web-search-2"
     ));
     messages.push(...toolRound(
@@ -350,12 +350,12 @@ describe("adaptive context governor", () => {
     assert.equal(residency.duplicateResults, 2);
     assert.ok(residency.lowValueTokenShare > 0);
     assert.equal(observations.every((item) => item.kind === "read"), true);
-    assert.equal(observations[0].target, "https://api.github.com/repos/can1357/oh-my-pi/contents/source-0");
+    assert.equal(observations[0].target, "https://api.github.com/repos/example-org/sample-agent/contents/source-0");
     assert.equal(
       observations.find((item) => item.name === "get_search_content")?.target,
-      "responseId=oh-my-pi-review urlIndex=0 offset=0 limit=1000"
+      "responseId=sample-agent-review urlIndex=0 offset=0 limit=1000"
     );
-    assert.equal(observations.find((item) => item.name === "web_search")?.target, "oh-my-pi hashline");
+    assert.equal(observations.find((item) => item.name === "web_search")?.target, "sample-agent hashline");
   });
 
   it("enforces headroom before a 272k-class expensive provider prompt", () => {

@@ -10,6 +10,20 @@ export class GatewayCommandTransportError extends Error {
   }
 }
 
+// Creating can take longer than one command's answer (the first session after
+// the Gateway started, a company runtime opening). The Gateway runs creates one
+// at a time and keeps each receipt under its key, so the same command sent
+// again waits behind the create and returns its receipt; it never creates a
+// second conversation. Four answers' time at most.
+export async function requestUntilAnswered<T>(request: (command: unknown) => Promise<T>, command: unknown, attempts = 4): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try { return await request(command); }
+    catch (error) {
+      if (attempt >= attempts || !(error instanceof GatewayCommandTransportError) || error.message !== "gateway-command-response-timeout") throw error;
+    }
+  }
+}
+
 export function gatewayCommandMayHaveEffect(error: unknown, commandSubmitted: boolean): boolean {
   return error instanceof GatewayCommandTransportError ? error.effectMayHaveOccurred : commandSubmitted;
 }

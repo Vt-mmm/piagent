@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
-import AccountTreeRounded from "@mui/icons-material/AccountTreeRounded";
 import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
 import CancelRounded from "@mui/icons-material/CancelRounded";
+import BusinessRounded from "@mui/icons-material/BusinessRounded";
 import ExpandMoreRounded from "@mui/icons-material/ExpandMoreRounded";
 import FolderOpenOutlined from "@mui/icons-material/FolderOpenOutlined";
 import ModelTrainingOutlined from "@mui/icons-material/ModelTrainingOutlined";
@@ -19,6 +19,7 @@ import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import ListSubheader from "@mui/material/ListSubheader";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
@@ -27,28 +28,29 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import type { PermissionMode, Workflow } from "../../contracts/generated/session-command-v1.ts";
-import { importProjectFolder, readSessionCreationOptions, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
+import { companyReason } from "./CompanyReconnect.tsx";
+import { connectCompany, importProjectFolder, readCompanyStatus, readSessionCreationOptions, type CompanyStatus, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
 import { dragCarriesFiles, formatSize, MAX_ATTACHMENTS, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { label } from "./view-model.ts";
-import { localize, useUiPreferences } from "./ui-preferences.tsx";
-import { workflowLabel } from "./workflow-view-model.ts";
+import { localize, type UiLocale, useUiPreferences } from "./ui-preferences.tsx";
 
 type CreateValue = { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; permissionMode: PermissionMode | null;
-  workflow: Workflow; message: string; files: readonly File[] };
-type MenuKind = "project" | "model" | "thinking" | "workflow" | "permission" | null;
-
-function workflowCopy(value: Workflow, locale: "vi" | "en"): [string, string] {
-  return [workflowLabel(value, locale), value];
-}
-
+  workflow?: Workflow; message: string; files: readonly File[] };
+type MenuKind = "project" | "model" | "thinking" | "permission" | null;
+// Company sessions run in the company runtime behind this dashboard; while it
+// is not connected the entry explains why and offers to connect.
+const COMPANY_PROVIDER = "agent_watch_managed";
 export function NewSessionPage({ active, defaultProjectRef, busy, error, onCancel, onCreate }: { active: boolean;
   defaultProjectRef?: string; busy: boolean; error: string | null; onCancel(): void; onCreate(value: CreateValue): void }) {
   const { locale } = useUiPreferences();
   const [options, setOptions] = useState<SessionCreationOptions>();
+  // undefined while loading; null on the company runtime's own page (no relay).
+  const [companyStatus, setCompanyStatus] = useState<CompanyStatus | null | undefined>(undefined), [connecting, setConnecting] = useState(false);
+  const managed = companyStatus === null && options?.models.length === 1 && options.models[0].provider === 'agent_watch_managed';
   const [failed, setFailed] = useState(false), [projectRef, setProjectRef] = useState(""), [modelRef, setModelRef] = useState("");
-  const [thinking, setThinking] = useState("high"), [workflow, setWorkflow] = useState<Workflow>("task");
+  const [thinking, setThinking] = useState("high");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode | null>(null), [message, setMessage] = useState("");
   const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
@@ -68,8 +70,11 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       setOptions(value);
       setProjectRef(value.projects.some((project) => project.projectRef === defaultProjectRef)
         ? defaultProjectRef! : value.projects[0]?.projectRef ?? "");
-      setModelRef(value.defaultModelRef ?? ""); setThinking(value.defaultThinkingLevel ?? "high"); setWorkflow("task"); setPermissionMode(null);
+      setModelRef(value.defaultModelRef ?? ""); setThinking(value.defaultThinkingLevel ?? "high"); setPermissionMode(null);
     }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
+    setCompanyStatus(undefined);
+    void readCompanyStatus(controller.signal).then((value) => { if (!controller.signal.aborted) setCompanyStatus(value); })
+      .catch(() => { if (!controller.signal.aborted) setCompanyStatus(null); });
     return () => controller.abort();
   }, [active, defaultProjectRef]);
   useEffect(() => {
@@ -82,8 +87,20 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   }, [active]);
   const project = options?.projects.find((value) => value.projectRef === projectRef);
   const model = options?.models.find((value) => value.modelRef === modelRef);
+  const company = !managed && model?.provider === COMPANY_PROVIDER;
+  const companyModels = managed ? [] : options?.models.filter((value) => value.provider === COMPANY_PROVIDER) ?? [];
+  const personalModels = managed ? options?.models ?? [] : options?.models.filter((value) => value.provider !== COMPANY_PROVIDER) ?? [];
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const status = await connectCompany().catch(() => null);
+      const next = await readSessionCreationOptions();
+      setOptions(next); setCompanyStatus(status ?? await readCompanyStatus().catch(() => null));
+      const entry = next.models.find((value) => value.provider === COMPANY_PROVIDER);
+      if (entry) { setModelRef(entry.modelRef); closeMenu(); }
+    } catch { setFailed(true); } finally { setConnecting(false); }
+  };
   const defaultModel = options?.models.find((value) => value.modelRef === options.defaultModelRef);
-  const workflows = options?.workflows ?? [];
   const thinkingLevels = useMemo(() => model?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"], [model]);
   useEffect(() => {
     if (!thinkingLevels.includes(thinking)) setThinking(thinkingLevels.includes("high") ? "high" : thinkingLevels[0] ?? "off");
@@ -115,13 +132,13 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   };
   const canAttach = !busy && !failed && files.length < MAX_ATTACHMENTS;
   const submit = () => project && message.trim() && onCreate({ projectRef, placeRef: project.placeRef, modelRef: modelRef || null,
-    thinkingLevel: thinking, permissionMode, workflow, message: message.trim(), files });
+    thinkingLevel: thinking, permissionMode, message, files });
 
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
     <Box sx={{ p: { xs: 1.5, sm: 2 } }}><IconButton aria-label={localize(locale, "Quay lại", "Back")} onClick={onCancel}><ArrowBackRounded /></IconButton></Box>
     <Stack sx={{ flex: 1, alignItems: "center", justifyContent: "center", px: 2, pb: { xs: 5, md: 12 } }} spacing={4}>
       <Typography component="h1" sx={{ fontSize: { xs: "2rem", md: "2.45rem" }, fontWeight: 500, letterSpacing: "-.035em", textAlign: "center" }}>
-        {localize(locale, "Anh muốn làm gì?", "What should we work on?")}
+        {localize(locale, "Hôm nay làm gì?", "What should we work on?")}
       </Typography>
       <Box sx={{ position: "relative", width: "100%", maxWidth: 820, border: 1, borderColor: dragging ? "primary.main" : "divider",
         borderStyle: dragging ? "dashed" : "solid", borderRadius: 3.5, bgcolor: "background.paper",
@@ -166,12 +183,10 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
                 {localize(locale, "Tùy chọn cho tin nhắn đầu tiên", "Options for the first message")}
               </Typography>
               <Stack direction="row" sx={{ alignItems: "center", gap: .75, flexWrap: "wrap" }}>
-                <Button size="small" color="inherit" startIcon={<AccountTreeRounded />} endIcon={<ExpandMoreRounded />} onClick={openMenu("workflow")}>
-                  {workflowCopy(workflow, locale)[0]}</Button>
                 <Button size="small" color="inherit" startIcon={<TuneRounded />} endIcon={<ExpandMoreRounded />} onClick={openMenu("thinking")}>
                   {label(thinking, locale)}</Button>
-                <Button size="small" color="inherit" startIcon={<SecurityRounded />} endIcon={<ExpandMoreRounded />} onClick={openMenu("permission")}>
-                  {permissionMode ? label(permissionMode, locale) : localize(locale, "Quyền theo profile", "Profile access")}</Button>
+                {!managed && !company && <Button size="small" color="inherit" startIcon={<SecurityRounded />} endIcon={<ExpandMoreRounded />} onClick={openMenu("permission")}>
+                  {permissionMode ? label(permissionMode, locale) : localize(locale, "Quyền theo profile", "Profile access")}</Button>}
                 <Button component="label" size="small" color="inherit" startIcon={<AttachFileRounded />} disabled={!canAttach}
                   aria-label={`${localize(locale, "Thêm file", "Add files")} (${files.length}/${MAX_ATTACHMENTS})`}>
                   {localize(locale, "Đính kèm", "Attach")}
@@ -179,11 +194,10 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
                     onChange={(event) => { selectFiles(event.target.files); event.currentTarget.value = ""; }} />
                 </Button>
               </Stack>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75 }}>
-                {localize(locale,
-                  `Workflow “${workflowCopy(workflow, locale)[0]}” chỉ áp dụng cho tin nhắn đầu tiên. Trong session này anh vẫn có thể gửi việc khác hoặc chọn workflow khác ở từng tin nhắn.`,
-                  `“${workflowCopy(workflow, locale)[0]}” applies only to the first message. You can send different work or choose another workflow for any later message in this session.`)}
-              </Typography>
+              {company && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75 }}>
+                {localize(locale, "Model và quyền theo Harness công ty; thinking chọn ở đây.", "Models and access follow the company Harness; choose thinking here.")}
+              </Typography>}
+
             </Box>
           </Collapse>
           <Stack direction="row" sx={{ mt: 1, alignItems: "center", gap: .65, flexWrap: "nowrap", minWidth: 0 }}>
@@ -199,11 +213,11 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
               sx={{ minWidth: 0, maxWidth: { xs: 118, sm: 250 }, px: { xs: .75, sm: 1 }, "& .MuiButton-startIcon": { display: { xs: "none", sm: "inherit" } } }}>
               <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {project?.label ?? localize(locale, "Chọn project", "Choose project")}</Box></Button>
-            <Button size="small" color="inherit" startIcon={<ModelTrainingOutlined />} endIcon={<ExpandMoreRounded />} onClick={openMenu("model")}
-              aria-label={`${localize(locale, "Model", "Model")}: ${model?.displayName ?? defaultModel?.displayName ?? localize(locale, "Mặc định của Pi", "Pi default")}`}
+            <Button size="small" color="inherit" startIcon={company ? <BusinessRounded /> : <ModelTrainingOutlined />} endIcon={<ExpandMoreRounded />} onClick={openMenu("model")}
+              aria-label={`${localize(locale, "Model", "Model")}: ${company ? localize(locale, "Công ty · agent-watch-auto", "Company · agent-watch-auto") : model?.displayName ?? defaultModel?.displayName ?? localize(locale, "Mặc định của Pi", "Pi default")}`}
               sx={{ minWidth: 0, maxWidth: { xs: 142, sm: 250 }, px: { xs: .75, sm: 1 }, "& .MuiButton-startIcon": { display: { xs: "none", sm: "inherit" } } }}>
               <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {model ? `${model.displayName}${model.modelRef === options?.defaultModelRef ? localize(locale, " · mặc định", " · default") : ""}`
+                {company ? localize(locale, "Công ty · agent-watch-auto", "Company · agent-watch-auto") : model ? `${model.displayName}${model.modelRef === options?.defaultModelRef ? localize(locale, " · mặc định", " · default") : ""}`
                   : defaultModel?.displayName ?? localize(locale, "Mặc định của Pi", "Pi default")}</Box></Button>
             <Box sx={{ flex: 1, minWidth: 0 }} />
             <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={busy || failed || !project || !message.trim()} onClick={submit}
@@ -218,24 +232,28 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
     <Menu anchorEl={anchor} open={menu === "project"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 310, maxHeight: 380 } } }}>
       {(options?.projects ?? []).map((value) => <MenuItem key={value.projectRef} selected={projectRef === value.projectRef}
         onClick={() => { setProjectRef(value.projectRef); closeMenu(); }}><ListItemIcon><ServiceIcon name="folder" size={26} /></ListItemIcon>
-        <ListItemText primary={value.label} /></MenuItem>)}
+        <ListItemText primary={value.label} secondary={value.hint} slotProps={{ secondary: { noWrap: true, title: value.hint } }} /></MenuItem>)}
       <Divider /><MenuItem disabled={importing || options?.projectImport?.status !== "available"} onClick={() => void importFolder()}>
         <ListItemIcon><AddRounded /></ListItemIcon><ListItemText primary={importing ? localize(locale, "Đang chọn…", "Choosing…")
           : localize(locale, "Thêm một hoặc nhiều folder", "Add one or more folders")} /></MenuItem>
     </Menu>
     <Menu anchorEl={anchor} open={menu === "model"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 360, maxHeight: 440 } } }}>
+      {!managed && (companyModels.length > 0 || companyStatus?.available) && [
+        <ListSubheader key="company-heading">{localize(locale, "Công ty", "Company")}</ListSubheader>,
+        ...(companyModels.length ? companyModels.map((value) => <MenuItem key={value.modelRef} selected={modelRef === value.modelRef}
+          onClick={() => { setModelRef(value.modelRef); closeMenu(); }}><ListItemIcon><BusinessRounded /></ListItemIcon>
+          <ListItemText primary="agent-watch-auto" secondary={localize(locale, "Harness công ty · Studio quản lý model", "Company Harness · models managed by Studio")} /></MenuItem>)
+          : [<MenuItem key="company-connect" disabled={connecting} onClick={() => void connect()}><ListItemIcon>{connecting
+            ? <CircularProgress size={20} /> : <BusinessRounded />}</ListItemIcon>
+            <ListItemText primary="agent-watch-auto" secondary={connecting ? localize(locale, "Đang kết nối…", "Connecting…") : companyReason(companyStatus, locale)}
+              slotProps={{ secondary: { sx: { whiteSpace: "normal" } } }} /></MenuItem>]),
+        <ListSubheader key="personal-heading">{localize(locale, "Cá nhân", "Personal")}</ListSubheader>]}
       {!options?.defaultModelRef && <MenuItem selected={!modelRef} onClick={() => { setModelRef(""); closeMenu(); }}>
         <ListItemIcon><ModelTrainingOutlined /></ListItemIcon><ListItemText primary={localize(locale, "Model mặc định của Pi", "Pi default model")} /></MenuItem>}
-      {(options?.models ?? []).map((value) => <MenuItem key={value.modelRef} selected={modelRef === value.modelRef}
+      {personalModels.map((value) => <MenuItem key={value.modelRef} selected={modelRef === value.modelRef}
         onClick={() => { setModelRef(value.modelRef); closeMenu(); }}><ListItemIcon><ServiceIcon name={value.provider} size={26} /></ListItemIcon>
         <ListItemText primary={value.displayName} secondary={value.modelRef === options?.defaultModelRef
           ? localize(locale, `Mặc định · ${value.provider} · High`, `Default · ${value.provider} · High`) : value.provider} /></MenuItem>)}
-    </Menu>
-    <Menu anchorEl={anchor} open={menu === "workflow"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 360, maxHeight: 470 } } }}>
-      {workflows.map((value) => <MenuItem key={value.id} selected={workflow === value.id}
-        onClick={() => { setWorkflow(value.id); closeMenu(); }}><ListItemIcon><AccountTreeRounded /></ListItemIcon>
-        <ListItemText primary={workflowCopy(value.id, locale)[0]} secondary={`${label(value.changeMode, locale)} · ${localize(locale,
-          "chỉ cho tin nhắn này", "this message only")}`} /></MenuItem>)}
     </Menu>
     <Menu anchorEl={anchor} open={menu === "thinking"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 250, maxHeight: 400 } } }}>
       {thinkingLevels.map((value) => <MenuItem value={value} key={value} selected={thinking === value}

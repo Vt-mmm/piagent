@@ -5,7 +5,7 @@
 
 Không nhồi toàn bộ repo vào context. Agent phải load đúng lớp context theo task.
 
-Lần đầu gắn project vào platform, chạy `/onboard run` sau login/model selection để tạo `.pi/project-context.md`, `.pi/context-index.json` và local Context Engine index. Các task sau dùng index như bản đồ nhỏ để tìm đúng vùng cần đọc, rồi vẫn verify bằng files task-specific hiện tại.
+Lần đầu gắn project vào platform, nhờ agent onboard project (lời thường) sau login/model selection để tạo `.pi/project-context.md`, `.pi/context-index.json` và local Context Engine index. Các task sau dùng index như bản đồ nhỏ để tìm đúng vùng cần đọc, rồi vẫn verify bằng files task-specific hiện tại.
 
 ## Context order
 
@@ -38,9 +38,9 @@ Trước task lớn/risk cao trong Pi TUI:
 
 Với task/phase tiếp theo trong cùng phiên hiển thị, runtime tự tạo working set
 gọn trước mỗi provider call; người dùng không phải mở session mới chỉ để đổi từ
-scout sang plan, implement hay verify. `/fresh <workflow>` vẫn là đường phục hồi
-tường minh cho mọi workflow canonical khi preflight xác định input quá lớn hoặc
-working set không thể rút gọn an toàn; `/fresh help` liệt kê catalog hiện hành.
+scout sang plan, implement hay verify. Khi preflight xác định input quá lớn hoặc
+working set không thể rút gọn an toàn, mở session mới bằng `/new` của Pi
+(`/fresh` đã bỏ từ bản 1.9.0).
 
 ## Context manifest
 
@@ -113,7 +113,7 @@ working set, không phải giới hạn năng lực hay context window của mod
 - Dùng `/context search` hoặc `piagent_context_index_search` để tìm điểm vào repo, nhưng không dùng index thay thế việc đọc source thật.
 - Dùng `/context rebuild` sau structural changes; incremental refresh tái sử dụng file không đổi.
 - Context pack low-confidence chỉ được mở rộng bằng một bounded finder pass, không loop scout vô hạn.
-- Không raw-read hoặc raw-edit `.pi/context-index.json` trong task thường ngày. Runtime coi index là advisory state, sanitize khi đọc qua tool/command, và ghi qua `/onboard run` hoặc `piagent_context_index_record`.
+- Không raw-read hoặc raw-edit `.pi/context-index.json` trong task thường ngày. Runtime coi index là advisory state, sanitize khi đọc qua tool/command, và ghi qua lượt onboard hoặc `piagent_context_index_record`.
 - File context vượt hard cap phải được summarize hoặc đọc targeted slices, không inject full.
 - Nếu input quá dài thật, lưu intake vào file project/local gitignored rồi reference file; không dán toàn bộ spec vào một turn.
 - Nếu input chứa local screenshot/image path, để input guard attach thành `[image1]` thay vì đọc ảnh như text context. Ảnh lớn hơn giới hạn chat nên dùng Pi `read` để resize.

@@ -40,6 +40,18 @@ export function assistantTextPresentation(text: string): { text: string; complet
   return { text: separator < 0 ? "" : text.slice(separator + 2).trimStart(), completionGate: state };
 }
 
+// Reasons the Gateway projects for an assistant turn that ended without an
+// answer (transcript-projection.ts). Shown only while that turn has no answer.
+const TURN_FAILURES = new Set(["provider-auth-expired", "provider-auth-required", "provider-rate-limited",
+  "provider-unavailable", "provider-response-failed", "assistant-output-incomplete"]);
+
+// Company sessions report Studio's own failure kinds as company-<kind>.
+export function assistantFailureReason(item: TranscriptItem): string | null {
+  const reason = item.content.reasonCode;
+  return item.role === "assistant" && item.toolCalls.length === 0 && item.content.state === "unavailable"
+    && reason && (TURN_FAILURES.has(reason) || reason.startsWith("company-")) ? reason : null;
+}
+
 export function successfulAssistantText(text: string): string | null {
   const presentation = assistantTextPresentation(text);
   return presentation.completionGate === null && hasVisibleText(presentation.text) ? presentation.text : null;
@@ -102,7 +114,7 @@ export function persistedLiveConversationHasFinal(items: readonly TranscriptItem
     if (candidate?.role === "user") return false;
     if ((candidate?.role !== "assistant" && candidate?.role !== "custom") || candidate.toolCalls.length > 0) continue;
     if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
-    if (successfulAssistantText(candidate.content.text ?? "")) return true;
+    if (successfulAssistantText(candidate.content.text ?? "") || assistantFailureReason(candidate)) return true;
   }
   return false;
 }
@@ -145,7 +157,7 @@ export function persistedConversationHasFinal(items: readonly TranscriptItem[], 
     if (candidate?.role === "user") return false;
     if ((candidate?.role !== "assistant" && candidate?.role !== "custom") || candidate.toolCalls.length > 0) continue;
     if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
-    if (successfulAssistantText(candidate.content.text ?? "")) return true;
+    if (successfulAssistantText(candidate.content.text ?? "") || assistantFailureReason(candidate)) return true;
   }
   return false;
 }
@@ -155,9 +167,12 @@ export function conversationTranscriptItems(items: readonly TranscriptItem[]): T
   const assistantIndexes = new Map<string, number>();
   const precedingUsers = new Set<string>();
   let currentUserRef: string | null = null;
+  // A failed turn shows its latest failure until an answer arrives (a retry).
+  let answered = false, failure: TranscriptItem | null = null;
   for (const item of items) {
     if (item.role === "user") {
-      assistantIndexes.clear(); precedingUsers.add(item.messageRef); currentUserRef = item.messageRef; visible.push(item); continue;
+      assistantIndexes.clear(); precedingUsers.add(item.messageRef); currentUserRef = item.messageRef; visible.push(item);
+      answered = false; failure = null; continue;
     }
     if (item.role !== "assistant" && item.role !== "custom") continue;
     // A bounded page may begin inside a tool-heavy turn. Never display a
@@ -166,8 +181,15 @@ export function conversationTranscriptItems(items: readonly TranscriptItem[]): T
     // Assistant prose attached to a tool request is progress, not a terminal
     // response. Its command/result belongs in Activity.
     if (item.toolCalls.length > 0) continue;
+    if (assistantFailureReason(item)) {
+      if (answered) continue;
+      if (failure) visible[visible.indexOf(failure)] = item; else visible.push(item);
+      failure = item; continue;
+    }
     const text = successfulAssistantText(item.content.text ?? "");
     if (!text) continue;
+    answered = true;
+    if (failure) { visible.splice(visible.indexOf(failure), 1); failure = null; }
     const key = `${item.role}:${text.trim()}`;
     const previous = assistantIndexes.get(key);
     if (previous === undefined) {

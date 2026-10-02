@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { hasVisibleText } from "../shared/text-visibility.ts";
 import type { TerminalDeliveryReceipt } from "../server/terminal-delivery-receipt.ts";
+import { effectiveStopReason } from "../server/message-stop-reason.ts";
 import { GatewayEventStore, type GatewayTaskStatus } from "./gateway-events.ts";
 import { SessionOperationLifecycle, type SessionOperationObservation,
   type SessionOperationPhase, type SessionOperationRetryPolicyOptions } from "./session-operation-lifecycle.ts";
@@ -103,7 +104,7 @@ function messageText(message: any): string {
     .map((item: any) => item.text).join("\n");
 }
 function assistantSettlement(message: any): Settlement {
-  const stopReason = String(message?.stopReason ?? "");
+  const stopReason = effectiveStopReason(message);
   if (stopReason === "aborted") return { outcome: "aborted", reasonCode: "operation-aborted" };
   if (stopReason === "error") return { outcome: "error", reasonCode: "assistant-response-failed" };
   if (stopReason === "length") return { outcome: "error", reasonCode: "assistant-output-incomplete" };
@@ -159,6 +160,8 @@ export class GatewaySessionStream {
   readonly #commitTerminalDeliveryReceipt: ((message: unknown) => TerminalDeliveryReceipt | undefined) | undefined;
   #terminalDeliveryMessage: unknown;
   #receiptOnly = true;
+  #compactionRef: string | null = null;
+  readonly #capacityRefs = new Map<string, string>();
 
   get runtimeRestartRequired(): boolean { return this.#runtimeRestartRequired; }
   get lifecycleTerminationReasonCode(): string | null { return this.#lifecycleTerminationReasonCode; }
@@ -204,7 +207,17 @@ export class GatewaySessionStream {
   }
 
   observe(event: any): SessionOperationObservation {
+    // A company subagent started or ended while the main agent was quiet: its
+    // count in the catalog row ("Subagent 1/2") changed, and no agent event says so.
+    if (event?.type === "managed_helpers") this.#events.publish("catalog.changed", { reasonCode: "managed-helpers-changed" });
     const wasStarted = this.#lifecycle.started, wasSettled = this.#lifecycle.hostSettled;
+    // Summarising the older part of a long conversation can take a minute,
+    // right before the model is asked or after it answered: shown as a step
+    // of the running turn, not as silence.
+    if (event?.type === "compaction_start" || event?.type === "compaction_end") this.#compaction(event);
+    // A company request waiting in line for a free model account: a step of
+    // the running turn until Studio admits it, it gives up or Stop ends it.
+    if (event?.type === "managed_capacity_wait") this.#capacityWait(event);
     const observation = this.#lifecycle.observe(event);
     if (!observation.accepted) return observation;
     if (event?.type === "agent_start" || event?.message?.role === "assistant" || event?.assistantMessageEvent
@@ -255,6 +268,38 @@ export class GatewaySessionStream {
     return observation;
   }
 
+  #compaction(event: any): void {
+    if (event.type === "compaction_start") {
+      if (this.#compactionRef) return;
+      this.#compactionRef = ref("tool");
+      this.#events.publish("tool.started", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
+        toolCallRef: this.#compactionRef, toolLabel: "compaction", fileLabel: null, isError: null, reasonCode: null });
+      return;
+    }
+    if (!this.#compactionRef) return;
+    const failed = typeof event.errorMessage === "string" && event.errorMessage.length > 0;
+    this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
+      toolCallRef: this.#compactionRef, toolLabel: "compaction", fileLabel: null, isError: failed, reasonCode: failed ? "compaction-failed" : null });
+    this.#compactionRef = null;
+  }
+
+  #capacityWait(event: any): void {
+    const id = typeof event.id === "string" ? event.id : null;
+    if (!id) return;
+    if (event.state === "start" && !this.#capacityRefs.has(id)) {
+      const toolCallRef = ref("tool"); this.#capacityRefs.set(id, toolCallRef);
+      this.#events.publish("tool.started", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
+        toolCallRef, toolLabel: "capacity-wait", fileLabel: null, isError: null, reasonCode: null });
+      return;
+    }
+    const toolCallRef = this.#capacityRefs.get(id);
+    if (event.state !== "end" || !toolCallRef) return;
+    this.#capacityRefs.delete(id);
+    const failed = event.outcome === "gave-up";
+    this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
+      toolCallRef, toolLabel: "capacity-wait", fileLabel: null, isError: failed, reasonCode: failed ? "capacity-wait-expired" : null });
+  }
+
   #settleActiveTools(reasonCode: string): void {
     for (const [toolCallId, toolCallRef] of this.#toolRefs) {
       this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
@@ -262,6 +307,11 @@ export class GatewaySessionStream {
         isError: true, reasonCode });
     }
     this.#toolRefs.clear(); this.#toolLabels.clear(); this.#toolFileLabels.clear();
+    for (const toolCallRef of this.#capacityRefs.values()) {
+      this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
+        toolLabel: "capacity-wait", fileLabel: null, isError: false, reasonCode: null });
+    }
+    this.#capacityRefs.clear();
   }
 
   #flush(final: boolean): void {
@@ -270,7 +320,13 @@ export class GatewaySessionStream {
       return;
     }
     let take = final ? this.#buffer.length : this.#buffer.lastIndexOf("\n") + 1;
-    if (take <= 0 && this.#buffer.length >= 1_024) take = this.#buffer.length;
+    // A long line goes out in pieces cut after a space. Credentials hold no
+    // space, so one still arriving is never sent half-formed (redaction knows
+    // a token only by its whole shape); a blob without any space is sent at 16 KiB.
+    if (take <= 0 && this.#buffer.length >= 1_024) {
+      const space = this.#buffer.search(/\s\S*$/);
+      take = space >= 0 ? space + 1 : this.#buffer.length >= 16_384 ? this.#buffer.length : 0;
+    }
     if (take <= 0) return;
     const candidate = this.#buffer.slice(0, take), privateStart = candidate.search(PRIVATE_BEGIN);
     if (privateStart >= 0 && !PRIVATE_END.test(candidate.slice(privateStart))) {

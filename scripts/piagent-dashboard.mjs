@@ -10,6 +10,7 @@ import { installedPiHostRoot } from "../packages/piagent-webui/gateway/pi-host.t
 import { gatewayProfileState, profileRef, readGatewayDescriptor, readOrCreateCatalogKey,
   removeGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
+import { agentWatchCompanyConnector } from "../packages/piagent-webui/gateway/managed-launch.ts";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -168,7 +169,9 @@ async function ensureStarted() {
 }
 
 async function serve() {
-  const gateway = await startPiagentGateway({ packageRoot, expectedPiVersion, agentDir });
+  // Company sessions come from the Agent Watch binding in this Pi folder.
+  const piAgentDir = path.resolve(agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"));
+  const gateway = await startPiagentGateway({ packageRoot, expectedPiVersion, agentDir, company: agentWatchCompanyConnector(piAgentDir) });
   const shutdown = () => { void gateway.close(); };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);

@@ -1,6 +1,8 @@
 # Solo-first orchestration policy
 <!-- language: vi; english-index: docs-site/content/en/workflows.html -->
 
+> **Hồ sơ thiết kế trước bản 1.9.0.** Task contract, command workflow (`/workflow`, `/task`, `/fresh`, `/onboard`) và các tool task/trace/verify mô tả ở đây đã bỏ ngày 2026-09-30; session giờ là freeform và guard chỉ còn kiểm tra path, quyền, xác nhận, context budget và edit trên bản đọc cũ. Tài liệu được giữ để tra cứu lịch sử. Hành vi hiện tại: [README](../README.vi.md).
+
 Mục tiêu: parent model tự làm trọn task với đầy đủ năng lực. Helper không còn là phase mặc định để scout/plan/review; nó chỉ là một tối ưu token ngoại lệ. Piagent chỉ cho tối đa **một helper read-only, context fresh** khi runtime chứng minh có ít nhất hai lane độc lập và tổng token dự kiến sau handoff/merge giảm tối thiểu **30%**. Alias cũ như `/task` giữ cùng policy.
 
 Kiểm tra policy hiện tại trong Pi:

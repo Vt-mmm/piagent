@@ -1,10 +1,11 @@
+import { sessionApprovalAuthority } from "./session-approval-authority.ts";
 import { closeSessionRuntimes } from "./session-runtime-close.ts";
-import { createHmac, randomBytes } from "node:crypto";
-import { webUiModelRef, webUiTaskRevision } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
+import { randomBytes } from "node:crypto";
+import { webUiModelRef } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
 import { activeSessionTask } from "../../piagent-core/extensions/task-state.js";
 import { createSessionOperationSettlement } from "./session-operation-settlement.ts";
 import { inspectTaskControlState } from "../../piagent-core/runtime/inspection/task-control-journal.ts";
-import { piApprovalBroker, type ApprovalAuthority, type ApprovalBrokerEvent } from "../../piagent-core/runtime/inspection/approval-broker.ts";
+import { piApprovalBroker, type ApprovalBrokerEvent } from "../../piagent-core/runtime/inspection/approval-broker.ts";
 import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type SessionOwnerProjection, type PiSessionInfo } from "./session-catalog.ts";
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
@@ -27,9 +28,10 @@ export type CurrentOperationProjection = { operationRef: string; state: "running
 export class SessionRuntimeSupervisor {
   readonly #gatewayInstanceRef: string; readonly #key: Buffer;
   readonly #leases: SessionLeaseStore; readonly #listSessions: () => Promise<PiSessionInfo[]>;
-  readonly #runtimeFactory: RuntimeFactory; readonly #events: GatewayEventStore;
+  readonly #runtimeFactory: RuntimeFactory; readonly #events: GatewayEventStore; readonly #settledOwners = new Set<string>();
   readonly #host: any | null; readonly #operationDeadlinePolicy: SessionOperationDeadlinePolicy;
   readonly #resolveProject: ((projectRef: string) => string | null) | null;
+  readonly #sessionDirectory?: string;
   readonly #settleOperation: ReturnType<typeof createSessionOperationSettlement>;
   readonly #active = new Map<string, ActiveRuntime>(); readonly #opening = new Map<string, Promise<SessionLeaseSnapshot>>();
   readonly #created = new Map<string, PiSessionInfo>(); #closed = false; #closing: Promise<void> | null = null; #readProjection: ((sessionRef: string) => Promise<Projection>) | null = null;
@@ -44,6 +46,7 @@ export class SessionRuntimeSupervisor {
     packageRoot?: string;
     modelRuntime?: any;
     scopedBrokerRouter?: ScopedBrokerRouter;
+    sessionDirectory?: string;
     events?: GatewayEventStore;
     operationWatchdog?: SessionOperationWatchdogOptions;
     resolveProject?(projectRef: string): string | null;
@@ -57,6 +60,7 @@ export class SessionRuntimeSupervisor {
     this.#host = options.host ?? null;
     this.#operationDeadlinePolicy = sessionOperationDeadlinePolicy(options.operationWatchdog);
     this.#resolveProject = options.resolveProject ?? null;
+    this.#sessionDirectory = options.sessionDirectory;
     this.#settleOperation = createSessionOperationSettlement(options);
     if (options.runtimeFactory) this.#runtimeFactory = options.runtimeFactory;
     else {
@@ -85,7 +89,7 @@ export class SessionRuntimeSupervisor {
     const candidates = [...new Set([...sessions.filter((info) => projectRefForCwd(this.#key, info.cwd) === projectRef).map((info) => info.cwd),
       ...(imported ? [imported] : [])])];
     if (candidates.length !== 1 || !candidates[0]) throw new Error(candidates.length ? "session-project-ambiguous" : "session-project-not-found");
-    const manager = this.#host.SessionManager.create(candidates[0]);
+    const manager = this.#host.SessionManager.create(candidates[0], this.#sessionDirectory);
     const sessionFile = manager.getSessionFile();
     if (!sessionFile || typeof manager.getSessionId?.() !== "string") throw new Error("session-create-unavailable");
     const createdAt = new Date();
@@ -198,8 +202,16 @@ export class SessionRuntimeSupervisor {
     return result;
   }
   ownership(sessionRef: string): SessionOwnerProjection {
-    return projectSessionRuntimeOwnership({ lease: this.#leases.inspect(sessionRef), active: this.#active.get(sessionRef),
-      gatewayInstanceRef: this.#gatewayInstanceRef, key: this.#key });
+    let lease = this.#leases.inspect(sessionRef);
+    // An owner that no longer exists (the Gateway was killed, the machine went
+    // down) holds nothing: the conversation is offline again and takes the
+    // next message without an explicit restart. Asked once per lease state.
+    if (lease.revision && lease.gatewayInstanceRef && lease.gatewayInstanceRef !== this.#gatewayInstanceRef && !this.#active.has(sessionRef)
+      && ["gateway-owned", "terminal-owned", "recovery-required"].includes(lease.state) && !this.#settledOwners.has(lease.revision)) {
+      this.#settledOwners.add(lease.revision);
+      try { lease = this.#leases.releaseDeadOwnerForExplicitRecovery(sessionRef); } catch { /* alive or unprovable: stays authoritative */ }
+    }
+    return projectSessionRuntimeOwnership({ lease, active: this.#active.get(sessionRef), gatewayInstanceRef: this.#gatewayInstanceRef, key: this.#key });
   }
   async send(sessionRef: string, payload: { delivery: "new-operation" | "follow-up" | "steer"; message: string;
     expectedOperationRef: string | null; messageRequestId?: string; images?: unknown[] }, sessionRevision: string, options: { deferDispatch?: boolean } = {}):
@@ -298,26 +310,7 @@ export class SessionRuntimeSupervisor {
     await boundedResult(Promise.resolve().then(() => active.runtime.dispose()), this.#operationDeadlinePolicy.terminationTimeoutMs);
   }
   #bindApproval(sessionRef: string, active: ActiveRuntime): void {
-    const authority = (): ApprovalAuthority => {
-      if (!active.operationRef || active.lease.state !== "gateway-owned" || !active.lease.revision) return null;
-      const task = activeSessionTask(active.info.cwd, active.info.id);
-      const synthetic = (namespace: string) => `${namespace}_${createHmac("sha256", this.#key)
-        .update(`${sessionRef}\0${namespace}`).digest("base64url").slice(0, 43)}`;
-      const control = task ? inspectTaskControlState(active.info.cwd, task) : null;
-      return {
-        identity: {
-          projectRef: projectRefForCwd(this.#key, active.info.cwd), runtimeInstanceId: active.lease.runtimeInstanceRef!, sessionRef,
-          taskId: task?.taskId ?? synthetic("task"), taskRunId: task?.taskRunId ?? synthetic("task_run"),
-          agentOperationId: active.operationRef
-        },
-        revisions: {
-          runtimeRevision: active.lease.revision,
-          taskRevision: task ? webUiTaskRevision(task) : synthetic("task_rev"),
-          controlRevision: control?.controlRevision ?? synthetic("control_rev")
-        },
-        taskState: control?.state === "terminal" ? "terminal" : "active"
-      };
-    };
+    const authority = () => sessionApprovalAuthority(this.#key, sessionRef, active);
     active.unbindApproval = piApprovalBroker.bind({ cwd: active.info.cwd, rawSessionId: active.info.id,
       runtimeInstanceId: active.lease.runtimeInstanceRef!, authority });
     active.unsubscribeApproval = piApprovalBroker.subscribe(active.info.cwd, active.info.id, (event: ApprovalBrokerEvent) => {

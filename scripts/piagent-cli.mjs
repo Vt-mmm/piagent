@@ -36,7 +36,10 @@ let script = scriptByCommand[invokedAs];
 
 if (invokedAs === "piagent") {
   const subcommand = forwardedArgs[0];
-  if (subcommand === "dashboard") {
+  if (subcommand === "studio") {
+    script = "scripts/piagent-studio.mjs";
+    forwardedArgs = forwardedArgs.slice(1);
+  } else if (subcommand === "dashboard") {
     script = "scripts/piagent-dashboard.mjs";
     forwardedArgs = forwardedArgs.slice(1);
   } else if (subcommand === "explain") {
@@ -56,6 +59,7 @@ if (invokedAs === "piagent") {
     console.log("");
     console.log("Commands:");
     console.log("  dashboard   Open and manage the local session hub");
+    console.log("  studio      Open the managed company agent imported by Agent Watch");
     console.log("  explain     Say why the guard would allow or block a shell command");
     console.log("  approve-verification  Preview or approve an independent verification plan");
     console.log("  select-verification   Preview reusable contracts for exact task criteria");
@@ -87,6 +91,51 @@ function benchmarkSourceRoot() {
   process.exit(1);
 }
 
+// The Pi host this member runs: the `pi` found on PATH, as its package root.
+function piHost() {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!path.isAbsolute(dir)) continue;
+    let root;
+    try { root = path.dirname(fs.realpathSync(path.join(dir, "pi"))); } catch { continue; }
+    for (let depth = 0; depth < 4; depth += 1, root = path.dirname(root)) {
+      try { if (JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).name === "@earendil-works/pi-coding-agent") return root; } catch { /* keep walking up */ }
+    }
+  }
+  return null;
+}
+
+// Agent Watch binds the company runtime to the Piagent this member actually
+// runs (nvm, Volta, Homebrew, a custom npm prefix…): record the installed
+// entrypoint, the Node running it and the Pi host. Source checkouts never
+// register, and a failure here never blocks the command. Asking for help or the
+// version changes nothing in the operator's agent directory.
+function recordRuntime() {
+  try {
+    if (forwardedArgs.some((value) => ["--help", "-h", "--version", "-v"].includes(value))) return;
+    if (!packageRoot.split(path.sep).includes("node_modules")) return;
+    // An install under the OS temporary directory (a packaging test, a scratch
+    // prefix) is about to disappear; recording it would point Agent Watch at
+    // an entrypoint that no longer exists.
+    const osTemp = fs.realpathSync.native(os.tmpdir()), installRoot = fs.realpathSync.native(packageRoot);
+    if (installRoot === osTemp || installRoot.startsWith(`${osTemp}${path.sep}`)) return;
+    const agentDir = path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
+    if (!fs.statSync(agentDir).isDirectory()) return;
+    const body = `${JSON.stringify({
+      schema_version: 1,
+      version: JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version,
+      entrypoint: fs.realpathSync(path.join(packageRoot, "scripts", "piagent-studio.mjs")),
+      node: fs.realpathSync(process.execPath),
+      pi_sdk_root: piHost()
+    }, null, 2)}\n`;
+    const file = path.join(agentDir, "piagent-runtime.json");
+    try { if (fs.readFileSync(file, "utf8") === body) return; } catch { /* first run */ }
+    const temporary = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, body, { mode: 0o600 });
+    fs.renameSync(temporary, file);
+  } catch { /* optional: Agent Watch falls back to known install locations */ }
+}
+recordRuntime();
+
 const sourceRoot = invokedAs === "piagent-benchmark" ? benchmarkSourceRoot() : packageRoot;
 const target = path.join(sourceRoot, script);
 const runner = target.endsWith(".mjs") ? process.execPath : "bash";
@@ -95,7 +144,7 @@ const runnerArgs = target.endsWith(".mjs")
   : [target];
 const child = spawn(runner, [...runnerArgs, ...forwardedArgs], {
   cwd: process.cwd(),
-  env: process.env,
+  env: script === "scripts/piagent-studio.mjs" ? { PATH: "/usr/bin:/bin", HOME: os.homedir(), TERM: process.env.TERM || "xterm-256color", LANG: "en_US.UTF-8" } : process.env,
   stdio: "inherit"
 });
 

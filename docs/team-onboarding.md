@@ -10,7 +10,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
-npm install -g --ignore-scripts @piagent/platform@1.8.0
+npm install -g --ignore-scripts @piagent/platform@1.9.0
 piagent-install --stable
 cd /path/to/project
 pi
@@ -18,10 +18,11 @@ pi
 <select provider/model>
 /mcp
 /subagents-doctor
-/onboard
-/onboard run
+/profile setup
 /memory
 ```
+
+Rồi nhờ agent: "Đọc project này (chỉ đọc) và ghi lại project context." (từ bản 1.9.0 không còn `/onboard`).
 
 ## Prerequisites
 
@@ -44,7 +45,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
-npm install -g --ignore-scripts @piagent/platform@1.8.0
+npm install -g --ignore-scripts @piagent/platform@1.9.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -80,7 +81,7 @@ Khi cần kiểm tra một project sau rollout, chạy riêng:
 piagent-update --version X.Y.Z --project /path/to/project
 ```
 
-`--project` là bước phụ: tự migrate layout cũ, Task Contract và managed block
+`--project` là bước phụ: tự migrate layout cũ, bản ghi task cũ và managed block
 trong `AGENTS.md` nếu có rồi chạy doctor strict-share. Text riêng của project
 ngoài managed block được giữ nguyên. Nếu chỉ update global, runtime mới vẫn thay
 checklist template cũ trong system prompt ở memory nên task dùng logic mới ngay;
@@ -171,9 +172,10 @@ Rồi chạy:
 ```text
 /mcp
 /subagents-doctor
-/onboard
-/onboard run
+/profile setup
 ```
+
+rồi nhờ agent trong chat: "Đọc project này (chỉ đọc) và ghi lại project context."
 
 Output chính:
 
@@ -201,7 +203,7 @@ Nếu project chưa có profile/tech stack, dùng select-style flow để tránh
 
 `fullstack` bắt chọn frontend, backend và database. Nếu native select chưa có trong Pi host, command trả card compact kèm lệnh deterministic `/profile tech apply ...`.
 
-Nếu `.pi/project-context.md` còn `Generated: not yet`, không nên chạy `/workflow task` implementation.
+Nếu `.pi/project-context.md` còn `Generated: not yet`, nên nhờ agent onboard trước khi giao việc implement.
 
 Memory mặc định là project-scoped và explicit-only. Chạy `/memory` để xem files/rules. `/memory-policy` vẫn là alias. Agent chỉ ghi durable memory khi user yêu cầu rõ ràng.
 
@@ -263,13 +265,13 @@ Project init tạo:
 
 Hai file memory ở trên là local/private mặc định theo `.pi/.gitignore`; chỉ commit nếu team opt-in sau review.
 
-Với luồng FE/BE tách repo nhưng để chung một folder làm việc, mở Pi tại folder cha và chọn `be-readonly-fe` cho chính folder cha đó. Ví dụ `Working/v-nexus-frontend/` và `Working/v-nexus-backend/` là hai Git repo riêng; `Working/.pi/piagent-profile.json` là profile của phiên Pi. Khi start task, scope ghi nên nằm trong FE repo:
+Với luồng FE/BE tách repo nhưng để chung một folder làm việc, mở Pi tại folder cha và chọn `be-readonly-fe` cho chính folder cha đó. Ví dụ `Working/v-nexus-frontend/` và `Working/v-nexus-backend/` là hai Git repo riêng; `Working/.pi/piagent-profile.json` là profile của phiên Pi. Nói rõ phạm vi ghi trong yêu cầu; profile `be-readonly-fe` chặn ghi vào BE:
 
 ```text
-/workflow be-to-fe Scout BE changes read-only and create the FE remediation plan. Scope: v-nexus-frontend/plans/**, v-nexus-frontend/**. Backend repo is read-only.
+Scout BE changes read-only and create the FE remediation plan in v-nexus-frontend/plans/. Backend repo is read-only.
 ```
 
-Plan/report có thể ghi vào `v-nexus-frontend/plans/**` nếu muốn đi cùng FE repo, hoặc `Working/plans/**` nếu muốn lưu ở workspace cha. File ngoài repo con được theo dõi bằng bounded file-digest evidence, còn FE/BE repo con vẫn dùng Git evidence.
+Plan/report có thể ghi vào `v-nexus-frontend/plans/**` nếu muốn đi cùng FE repo, hoặc `Working/plans/**` nếu muốn lưu ở workspace cha.
 
 ## Bước 4 — run trong Herdr
 
@@ -295,92 +297,59 @@ piagent-auto --read-only -p "Scout module mapping. Do not edit source."
 
 Lệnh này wrap `pi --approve`; nó không bypass piagent guard.
 
-## Bước 5 — task workflow
+## Bước 5 — giao việc hằng ngày
+
+Từ bản 1.9.0, mọi việc được yêu cầu bằng lời thường; `/workflow`, `/task`,
+`/scout`, `/discuss`, `/fresh` đã bỏ và session không tạo task contract.
 
 Requirement chưa rõ:
 
 ```text
-/workflow discuss Tạo plan cho feature X. Chưa implement.
+Tạo plan cho feature X. Chưa implement, hỏi lại phần còn thiếu.
 ```
 
 Task rõ:
 
 ```text
-/workflow task Implement feature X. Follow project profile, protected paths, required context, exec policy, context budget, tool policy, verify, trace, and task gate.
+Implement feature X. Chạy test của project sau khi sửa.
 ```
 
 Scout/audit read-only:
 
 ```text
-/workflow scout Scout payment FE mapping vs BE contract. Backend read-only. Do not edit source.
+Scout payment FE mapping vs BE contract. Backend read-only. Không sửa source.
 ```
 
-Session nặng hoặc context overflow:
+Session nặng hoặc context overflow: mở session mới bằng `/new` rồi nói lại việc.
 
-```text
-/fresh scout <read-only scout>
-/fresh task <bounded task>
-/fresh be-to-fe <BE-readonly/FE request>
-```
+Không paste checklist hằng ngày. Guard áp protected path, quyền, context budget
+và xác nhận destructive/external cho từng tool call.
 
-Không paste full mandatory flow hằng ngày. Platform prompts/tools đã chứa checklist; input guard sẽ tự collapse boilerplate nếu paste nhầm.
-
-Alias cũ `/discuss`, `/task`, `/scout`, `/fresh-*` vẫn chạy cho power user, nhưng tài liệu onboard team dùng `/workflow`, `/name`, `/fresh`, và `/usage` để dễ nhớ hơn.
-
-Runtime gate tools:
+Runtime diagnostic tools (agent chỉ dùng khi cần giải thích một lần chặn):
 
 ```text
 piagent_exec_policy_check
 piagent_context_budget
 piagent_tool_policy_check
-piagent_task_gate_check
 ```
 
 Task cải tiến platform:
 
 ```text
-/workflow platform-improve Improve onboarding, model scope, MCP setup, and verification docs for team usage.
+Improve onboarding, model scope, MCP setup, and verification docs for team usage.
 ```
 
 Task BE spec lên FE:
 
 ```text
-/workflow be-to-fe Implement FE from BE contract <endpoint/spec>. Backend is read-only.
-```
-
-Project memory:
-
-```text
-/memory
-Remember: this repo uses pnpm, never npm.
-```
-
-External source repo:
-
-```text
-Use piagent_source_checkout for github.com/org/repo, inspect only relevant files, then summarize applicable patterns.
-```
-
-## Doctor
-
-Chạy trên platform:
-
-```bash
-bash scripts/verify-local.sh
-```
-
-Chạy trên project:
-
-```bash
-bash /path/to/piagent/scripts/profile-doctor.sh /path/to/project
-bash /path/to/piagent/scripts/team-doctor.sh /path/to/project --strict-share
-piagent-benchmark --dry-run
+/profile be-readonly-fe
+Implement FE from BE contract <endpoint/spec>. Backend is read-only.
 ```
 
 Maintainer chạy `piagent-benchmark` khi cần đo release/model bằng automatic paired
 suite. Lệnh dùng model quota và sẽ hỏi xác nhận trước khi bắt đầu.
 
-Nếu doctor cảnh báo `project onboarding snapshot is still pending`, mở Pi trong project và chạy `/onboard run`.
+Nếu doctor cảnh báo `project onboarding snapshot is still pending`, mở Pi trong project và nhờ agent onboard project.
 
 ## Không commit
 

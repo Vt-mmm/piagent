@@ -152,6 +152,52 @@
         }
       ]
     },
+    "harnessProcess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase"],
+      "properties": {
+        "phase": { "enum": ["plan", "verify", "review", "final"] },
+        "outcome": { "enum": ["no_change", "interrupted", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
+        "loop": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "maxLoops": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "verified": { "type": "boolean" },
+        "reviewed": { "type": "boolean" },
+        "blockingOpen": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "planOpen": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "planSkipped": { "const": true },
+        "verifyPolicy": { "enum": ["off", "suggest", "require"] },
+        "reviewPolicy": { "enum": ["off", "suggest", "require"] },
+        "reviewUnavailable": { "enum": ["too_large", "not_git", "limit", "failed"] },
+        "findings": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["severity", "file", "line", "issue"],
+            "properties": {
+              "severity": { "enum": ["blocking", "major", "minor"] },
+              "file": { "type": "string", "maxLength": 300 },
+              "line": { "type": ["integer", "null"], "minimum": 1 },
+              "issue": { "type": "string", "maxLength": 500 }
+            }
+          }
+        }
+      }
+    },
+    "companyFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "reasonCode", "code", "requestRef", "local"],
+      "properties": {
+        "role": { "enum": ["main", "research", "review"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+        "code": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_:.-]{0,79}$" },
+        "requestRef": { "anyOf": [{ "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }, { "type": "null" }] },
+        "local": { "type": "boolean" }
+      }
+    },
     "toolCall": {
       "type": "object",
       "additionalProperties": false,
@@ -164,7 +210,39 @@
           "maxLength": 80,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,79}$"
         },
-        "state": { "enum": ["requested", "completed", "failed", "unknown"] }
+        "state": { "enum": ["requested", "completed", "failed", "unknown"] },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "target", "detail"],
+          "properties": {
+            "kind": { "enum": ["read", "write", "edit", "command", "search", "list", "web-search", "web-fetch", "subagent", "network", "git", "plan", "other"] },
+            "target": { "anyOf": [{ "type": "string", "maxLength": 400 }, { "type": "null" }] },
+            "detail": { "anyOf": [{ "type": "string", "maxLength": 400 }, { "type": "null" }] }
+          }
+        },
+        "change": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["added", "removed", "preview", "truncated"],
+          "properties": {
+            "added": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "removed": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "preview": { "type": "string", "maxLength": 6000 },
+            "truncated": { "type": "boolean" }
+          }
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "truncated", "isError"],
+          "properties": {
+            "text": { "type": "string", "maxLength": 4000 },
+            "truncated": { "type": "boolean" },
+            "isError": { "type": "boolean" }
+          }
+        },
+        "failure": { "$ref": "#/$defs/companyFailure" }
       }
     },
     "transcriptItem": {
@@ -195,6 +273,21 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/attachmentSummary" }
         },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "totalTokens"],
+          "properties": {
+            "inputTokens": { "type": "integer", "minimum": 0, "maximum": 10000000000 },
+            "outputTokens": { "type": "integer", "minimum": 0, "maximum": 10000000000 },
+            "cacheReadTokens": { "type": "integer", "minimum": 0, "maximum": 10000000000 },
+            "cacheWriteTokens": { "type": "integer", "minimum": 0, "maximum": 10000000000 },
+            "totalTokens": { "type": "integer", "minimum": 0, "maximum": 10000000000 }
+          }
+        },
+        "model": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9._:@/-]{1,120}$" },
+        "failure": { "$ref": "#/$defs/companyFailure" },
+        "process": { "$ref": "#/$defs/harnessProcess" },
         "toolCalls": {
           "type": "array",
           "maxItems": 64,

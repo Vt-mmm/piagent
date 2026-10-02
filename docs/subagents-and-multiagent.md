@@ -1,7 +1,13 @@
 # Subagents và multi-agent workflow
 <!-- language: vi; english-index: docs-site/content/en/workflows.html -->
 
-## Kết luận
+## Bản harness local hiện tại
+
+Company runtime dùng hai vai trò nghiên cứu/review do Studio cấp, token theo lượt và tool worker cách ly. Main không phải chứng minh tiết kiệm 30% hoặc hai nhánh độc lập; reviewer có thể kiểm tra patch main vừa tạo. Member chỉ import trong Watch rồi dùng Auto. Cấu hình các package cá nhân bên dưới không cấp quyền chạy trong company runtime.
+
+Phần dưới mô tả tích hợp package cá nhân của bản 1.8.0 trước khi đơn giản hóa; những đoạn về workflow/task contract và ngưỡng 30% đã được thay thế trong bản local. Xem [bằng chứng local](managed-local-acceptance.md).
+
+## Tài liệu package cá nhân trước đây
 
 Pi core không có subagents built-in. Theo design của Pi, subagents là extension/package. Platform này dùng `pi-subagents` làm subagent runtime vì nó hỗ trợ:
 
@@ -149,11 +155,7 @@ Giải nghĩa nhanh:
 | `/parallel` | Chạy nhiều agent độc lập | Tốt cho read-only scout/review/test-gap analysis. |
 | `/chain` | Chạy tuần tự | Output agent trước làm input agent sau qua `{previous}`. |
 
-Nếu cần bản tổng hợp cho team mới:
-
-```text
-/commands subagents
-```
+Nếu cần bản tổng hợp cho team mới, xem [command reference](command-reference-vietnamese.md#command-subagent).
 
 ## Gọi subagent tự nhiên
 
@@ -169,10 +171,10 @@ Run a review loop on this change until reviewers stop finding fixes worth doing,
 Run parallel research: external docs, local code context, and practical tradeoffs.
 ```
 
-Với workflow platform, còn có thể chỉ gọi:
+Với workflow platform, còn có thể chỉ nói:
 
 ```text
-/workflow task Implement <task lớn>.
+Implement <task lớn>.
 ```
 
 Parent agent sẽ tự quyết định:

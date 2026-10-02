@@ -40,18 +40,18 @@ test("narrow scout does not force full context or a persisted task contract", ()
   assert.doesNotMatch(scout, /detail=full/);
 });
 
+// The prompts above are no longer loaded by Pi (the package dropped pi.prompts
+// with the 2026-09-30 task-contract retirement); the project template and the
+// skill still are, so they must not teach a tool that is gone.
 test("project and skill instructions keep routine tool choreography bounded", () => {
   const projectInstructions = fs.readFileSync(path.join(root, "templates", "project", "AGENTS.md"), "utf8");
   const skill = fs.readFileSync(path.join(root, "packages", "piagent-core", "skills", "piagent-ops", "SKILL.md"), "utf8");
   assert.match(skill, /^disable-model-invocation: true$/m);
-  assert.match(skill, /Routine bounded source tasks .* must not load this file/i);
+  assert.match(skill, /Ordinary work needs nothing from it/);
   for (const instructions of [projectInstructions, skill]) {
-    assert.match(instructions, /piagent_task_start` exactly once/);
-    assert.match(instructions, /runtime/i);
-    assert.doesNotMatch(instructions, /piagent_(?:context_record|verify_record|trace_record|task_gate_check|context_preflight|exec_policy_check|tool_policy_check|context_budget)/);
-    assert.ok(
-      instructions.indexOf("piagent_task_start` exactly once") < instructions.search(/(?:Read|Inspect) the narrow target/),
-      "project and skill intake must precede exploratory reads"
-    );
+    assert.match(instructions, /(?:Read|Inspect) the narrow target/);
+    assert.match(instructions, /protected paths/i);
+    assert.doesNotMatch(instructions, /piagent_(?:task_start|task_progress|context_record|verify_record|trace_record|task_gate_check|context_preflight|exec_policy_check|tool_policy_check|context_budget)/);
+    assert.doesNotMatch(instructions, /task contract is required|\/workflow|\/onboard/i);
   }
 });

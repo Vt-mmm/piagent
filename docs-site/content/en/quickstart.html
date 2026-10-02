@@ -47,12 +47,11 @@ pi</code></pre>
 
     <article class="step">
       <div>
-        <h3 id="onboard-context">Onboard context</h3>
-        <p>Run this once in a new repository to record project context, verification matrices, and protected areas under <span class="inline-code">.pi/</span>. <span class="inline-code">/onboard</span> opens the menu and status; <span class="inline-code">run</span> launches the project-reading workflow.</p>
+        <h3 id="onboard-context">Let the agent read the project</h3>
+        <p>In a new repository, ask the agent to read the project (read-only) and record its project context under <span class="inline-code">.pi/</span>. No separate command: plain language is enough.</p>
         <div class="command-card">
-          <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard&#10;/onboard run">Copy</button></header>
-          <pre><code>/onboard
-/onboard run</code></pre>
+          <header><span>Read the project</span><button class="clip-btn" data-clip="Inspect this project read-only and record its project context.">Copy</button></header>
+          <pre><code>Inspect this project read-only and record its project context.</code></pre>
         </div>
       </div>
     </article>
@@ -84,20 +83,19 @@ pi</code></pre>
     <article class="step">
       <div>
         <h3 id="run-workflow">Run a workflow</h3>
-        <p>Use the command that matches the intent so the agent does not spend context rediscovering the process. Start a fresh session for context-heavy work.</p>
+        <p>State the work and the intent (edit, read-only, plan first) in plain language. Start a new session with <span class="inline-code">/new</span> for context-heavy work.</p>
         <div class="command-card">
-          <header><span>Workflow</span><button class="clip-btn" data-clip="/workflow task Implement the requested bounded change.&#10;/workflow review current diff&#10;/fresh task Implement the requested bounded change.">Copy</button></header>
-          <pre><code>/workflow task Implement the requested bounded change.
-/workflow review current diff
-/fresh task Implement the requested bounded change.</code></pre>
+          <header><span>Assign work</span><button class="clip-btn" data-clip="Implement the requested change and run the project tests.&#10;Review the current diff. Read-only.">Copy</button></header>
+          <pre><code>Implement the requested change and run the project tests.
+Review the current diff. Read-only.</code></pre>
         </div>
       </div>
     </article>
 
     <article class="step">
       <div>
-        <h3 id="verify-before-handoff">Verify before handoff</h3>
-        <p>The final gate trusts only commands that actually ran, exited successfully, and matched the verification plan. After pinning or upgrading a version, run doctor in the project:</p>
+        <h3 id="verify-before-handoff">Check before you hand over</h3>
+        <p>Ask the agent to run the project's checks (tests, type check, build) and read the real output; in company mode the Harness asks for this itself. After pinning or upgrading a version, run doctor in the project:</p>
         <div class="command-card">
           <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor">Copy</button></header>
           <pre><code>piagent-doctor</code></pre>

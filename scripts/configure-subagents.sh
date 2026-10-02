@@ -27,7 +27,7 @@ After installing/configuring:
   pi
   /subagents-doctor
   /subagents-models
-  # Piagent stays parent-direct unless runtime evidence proves >=30% net token saving.
+  # Piagent delegates useful bounded read-only work without a token-saving threshold.
 USAGE
 }
 

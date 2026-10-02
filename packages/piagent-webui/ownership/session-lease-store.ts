@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -45,9 +46,28 @@ function gatewayOwnerPid(value: string | null): number | null {
   return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
 }
 
+// A terminal owner whose process is gone left its lease behind (crash, closed
+// window): it is not running anything any more.
+export function terminalOwnerGone(snapshot: Pick<SessionLeaseSnapshot, "state" | "gatewayInstanceRef">): boolean {
+  if (snapshot.state !== "terminal-owned") return false;
+  const pid = terminalOwnerPid(snapshot.gatewayInstanceRef);
+  return pid !== null && !processAlive(pid);
+}
+
 function processAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; }
   catch (error) { return !(error && typeof error === "object" && "code" in error && error.code === "ESRCH"); }
+}
+
+// After a restart of the machine the owner's process number may belong to
+// something else. A process that started after the lease was taken cannot be
+// its owner.
+function startedAfter(pid: number, since: string): boolean {
+  try {
+    const started = Date.parse(execFileSync("/bin/ps", ["-o", "lstart=", "-p", String(pid)],
+      { encoding: "utf8", timeout: 2000, env: { ...process.env, LC_ALL: "C" } }).trim());
+    return Number.isFinite(started) && started > Date.parse(since) + 2000;
+  } catch { return false; }
 }
 
 function exactTimestamp(value: unknown): value is string {
@@ -242,7 +262,8 @@ export class SessionLeaseStore {
       const pid = terminalOwner ? terminalOwnerPid(current.gatewayInstanceRef)
         : current.state === "gateway-owned" || current.state === "recovery-required"
           ? gatewayOwnerPid(current.gatewayInstanceRef) : null;
-      if (!pid || processAlive(pid)) throw new Error("session-owner-not-proven-dead");
+      const since = this.#read(sessionRef).filter((record) => record.event === "acquired" && record.ownerEpoch === current.ownerEpoch).at(-1)?.recordedAt;
+      if (!pid || (processAlive(pid) && !(since && startedAfter(pid, since)))) throw new Error("session-owner-not-proven-dead");
       this.#append(sessionRef, { recordedAt: now.toISOString(), sessionRef, event: "recovery-required", ownerEpoch: current.ownerEpoch!,
         gatewayInstanceRef: current.gatewayInstanceRef!, runtimeInstanceRef: current.runtimeInstanceRef!, reasonCode: "owner-process-exited" });
       this.#append(sessionRef, { recordedAt: now.toISOString(), sessionRef, event: "released", ownerEpoch: current.ownerEpoch!,

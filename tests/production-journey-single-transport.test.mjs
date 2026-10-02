@@ -9,14 +9,16 @@ import { prepareProductionJourneyWorkspace, withJourneyEnvironment } from "./hel
 import { scriptedProductionSupervisor, scriptedText, scriptedTool } from "./helpers/scripted-production-supervisor.mjs";
 import { productionV3ReferenceSolution } from "./helpers/production-v3-reference-solutions.mjs";
 import { resolveProjectProfileDocument } from "../packages/piagent-core/capabilities/project-profile.js";
-import { allConfiguredVerifierEvidenceCurrent, selectVerificationPlan } from "../packages/piagent-core/extensions/verification-intelligence.js";
-import { captureWorkspaceVerificationSnapshot } from "../packages/piagent-core/extensions/workspace-verification-snapshot.js";
+import { selectVerificationPlan } from "../packages/piagent-core/extensions/verification-intelligence.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const sha = value => createHash("sha256").update(value).digest("hex");
 const textContent = content => (content ?? []).filter(item => item.type === "text").map(item => item.text).join("\n");
 // Witnesses are authored from the unchanged public requests, not private oracle
 // or registered recipe data. They run as real project tests, not fabricated proof.
+// Since the 2026-09-30 task-contract retirement these turns are freeform: no
+// task records verifier evidence or gates completion, so each journey is judged
+// by the real configured verification it ran and by the transport settlement.
 const cases = [
   { id: "unicode-search", profile: "web-frontend", lifecycle: "cold-start", mutant: "case-sensitive",
     mutate: source => source.replace(".toLowerCase()", ""),
@@ -98,20 +100,18 @@ for (const specification of cases) for (const variant of ["reference", specifica
             : "Configured verification failed on the requested behavior. The task remains incomplete; no successful completion is claimed.")];
         const result = await runtime.turn(turn, script);
         const verifications = runtime.rawEvents.filter(event => event.type === "tool_execution_end" && /^single-verify-/.test(event.toolCallId));
-        const snapshot = captureWorkspaceVerificationSnapshot(prepared.workspace);
-        const currentVerification = Boolean(result.task && allConfiguredVerifierEvidenceCurrent(result.task, snapshot.digest, snapshot.workspaceRevisionDigest));
         t.diagnostic(JSON.stringify({ stage: "default-journey-coverage", scenario: specification.id, variant, turn: turn.id,
           promptSha256: sha(turn.message), sourceSha256: sha(source), testSha256: sha(specification.publicTests),
           settlement: result.settlement, wireSettlement: result.wireSettlement, transport: result.transport,
-          task: result.task && { taskRunId: result.task.taskRunId, sessionId: result.task.sessionId, outcome: result.task.trace.outcome,
-            verifyCommands: result.task.verifyCommands, verifyEvidence: result.task.verifyEvidence,
-            acceptanceCriteria: result.task.acceptanceCriteria, criteria: result.task.acceptanceReceipt?.criteria },
           verifications: verifications.map(event => ({ id: event.toolCallId, isError: event.isError, output: textContent(event.result?.content) })),
-          currentVerification, scriptedTurns: result.scriptedTurns, unconsumedScript: result.unconsumedScript,
+          scriptedTurns: result.scriptedTurns, unconsumedScript: result.unconsumedScript,
           metrics: runtime.metrics, extensionErrors: runtime.extensionErrors, serviceErrors: runtime.serviceErrors }));
         assert.deepEqual(runtime.extensionErrors, []); assert.deepEqual(runtime.serviceErrors, []);
         assert.equal(runtime.metrics.realProviderCalls, 0); assert.equal(result.unconsumedScript, 0);
-        assert.ok(runtime.metrics.unexpectedTurns <= 1);
+        assert.equal(runtime.metrics.unexpectedTurns, 0, "no runtime gate adds a continuation turn to a freeform request");
+        assert.equal(result.task, null, "no task is recorded for a freeform turn");
+        assert.equal(result.settlement.settlement, "completed");
+        assert.equal(result.settlement.taskStatus, "unknown");
         assert.equal(result.command.payload.message, turn.message);
         assert.deepEqual(result.wireSettlement.payload, result.settlement);
         assert.equal(result.settlement.sessionRef, result.receipt.sessionRef);
@@ -130,18 +130,10 @@ for (const specification of cases) for (const variant of ["reference", specifica
         assert.equal(fs.readFileSync(path.join(prepared.workspace, testPath), "utf8"), specification.publicTests);
         if (variant === "reference") {
           assert.ok(verifications.every(event => event.isError === false), "reference must pass actual configured verification");
-          assert.equal(currentVerification, true);
-          assert.equal(result.task.trace.outcome, "completed", "a correct sufficiently evidenced default task must complete");
-          assert.equal(result.settlement.taskStatus, "completed");
-          assert.equal(result.settlement.settlement, "completed");
-          assert.equal(runtime.metrics.unexpectedTurns, 0);
         } else {
           const failed = verifications.filter(event => event.isError === true);
           assert.ok(failed.length, "wrong implementation must fail actual configured verification");
           assert.match(failed.map(event => textContent(event.result?.content)).join("\n"), /ERR_ASSERTION/);
-          assert.equal(currentVerification, false);
-          assert.notEqual(result.task.trace.outcome, "completed");
-          assert.notEqual(result.settlement.taskStatus, "completed");
         }
       } finally { await runtime.close(); }
     });
@@ -165,8 +157,7 @@ test("actual protected-env refusal completes its declared HTTP/WebSocket turn wi
       const result = await runtime.turn(turn, [scriptedText(refusal)]);
       t.diagnostic(JSON.stringify({ stage: "default-journey-coverage", scenario: "protected-env-refusal", variant: "correct-refusal", turn: turn.id,
         promptSha256: sha(turn.message), settlement: result.settlement, wireSettlement: result.wireSettlement,
-        task: { taskRunId: result.task?.taskRunId, sessionId: result.sessionId, outcome: result.task?.trace.outcome,
-          terminalDisposition: result.task?.trace.terminalDisposition }, transport: result.transport,
+        sessionId: result.sessionId, transport: result.transport,
         scriptedTurns: result.scriptedTurns, unconsumedScript: result.unconsumedScript, metrics: runtime.metrics }));
       assert.equal(result.command.payload.message, turn.message);
       assert.deepEqual(result.wireSettlement.payload, result.settlement);
@@ -174,9 +165,8 @@ test("actual protected-env refusal completes its declared HTTP/WebSocket turn wi
       assert.equal(result.settlement.operationRef, result.receipt.operationRef);
       assert.equal(result.settlement.messageRequestId, result.command.payload.messageRequestId);
       assert.equal(result.settlement.settlement, "completed");
-      assert.equal(result.settlement.taskStatus, "refused");
-      assert.equal(result.task.trace.terminalDisposition, "refused");
-      assert.equal(result.task.trace.outcome, "blocked");
+      assert.equal(result.settlement.taskStatus, "unknown");
+      assert.equal(result.task, null, "no task is recorded for a freeform turn");
       assert.equal(result.unconsumedScript, 0);
       assert.equal(result.transport.connections, 1); assert.equal(result.transport.commandDispatches, 1);
       assert.equal(result.transport.unauthenticatedCatalogStatus, 401);

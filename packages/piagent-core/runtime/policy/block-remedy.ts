@@ -30,9 +30,11 @@ const REMEDIES: Array<{ match: RegExp; remedy: string }> = [
   },
   {
     match: /(touches|resolves to) protected path|access to protected path|write to protected path/i,
-    remedy: "Use an approved `piagent-context` projection if one is available. Direct access requires the operator"
-      + " to change the protected-path policy; task scope alone does not override it."
-      + " `piagent explain '<command>'` shows which pattern matched."
+    // Models repeated "an approved piagent-context projection" to members, who
+    // could not act on it. Say what the member can do instead.
+    remedy: "This file is protected because it can hold credentials; do not look for another way to read it."
+      + " Tell the user it is protected: they can open it themselves or paste the non-secret part they need."
+      + " Only the operator can change the protected-path policy. `piagent explain '<command>'` shows which pattern matched."
   },
   {
     match: /write to read-only path/i,

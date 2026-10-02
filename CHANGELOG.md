@@ -4,8 +4,98 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.9.0 - 2026-10-02
+
+Freeform sessions and the managed team harness. This release retires the task
+contract and the workflow commands; work is requested in plain language and the
+guard checks every tool call.
+
+### Freeform sessions
+
+- Retired the task contract: a session no longer creates a contract, declared scope, work plan, acceptance receipt, completion gate or recovery handoff, and no write waits for one. Task records written by earlier releases under `.pi/piagent-state/tasks` stay readable as history.
+- Retired `/workflow`, `/fresh` (and `/fresh-*`), `/onboard`, `/onboard-project`, `/commands`, `/piagent-commands`, `/model-options`, `/profiles`, `/profile-tech` and the prompt-template aliases (`/task`, `/scout`, `/be-to-fe`, `/plan`, `/discuss`, `/review`, `/commit`, `/pr`, `/platform-improve`). Pi no longer loads `packages/piagent-core/prompts`. Project onboarding is a plain request recorded with `piagent_project_onboarding_record`.
+- Retired the task-bound tools `piagent_task_start`, `piagent_task_progress`, `piagent_task_gate_check`, `piagent_context_record`, `piagent_verify_record`, `piagent_trace_record` and `piagent_memory_citation_record`; a tool group never re-activates them. `piagent_document_read` and `piagent_source_checkout` remain.
+- The input hook passes text through unchanged: pasted checklists are no longer collapsed and long prompts are not stored in a task inbox.
+- Delegation allows up to two fresh read-only helpers; token-saving estimates are telemetry, not an admission gate (bounded-delegation-v2).
+- Kept for freeform turns: protected and read-only paths, permission profiles, the context budget for large files, confirmation for destructive and external-provider actions, and the stale read-to-edit check, which was keyed to the task run and now uses the session.
+
+### Managed team harness
+
+- Added the managed harness for company sessions imported by Agent Watch (`piagent studio`, `--web`): Studio chooses the main, research and review routes; tools run in a sandboxed worker with per-run authority.
+- Per-turn process from the team's Harness in Studio: plan, checks and review, each `suggest` or `require`, with bounded fix loops. A plan guard refuses edits (including shell edits) until a plan exists and reports `planSkipped` after three refused answers; invented tool names are counted.
+- Process report v2 (`plan_skipped`, `unknown_tools`) is negotiated: Studio lists `process_versions`, Agent Watch advertises `process-v2`.
+- Detached processes are stopped at turn end; stopping during a helper reports `aborted`/`managed-helper-cancelled` instead of a send failure.
+
+### Security and fixes
+
+- Redacted Agent Studio credentials (`as_live_`, `as_device_`, `as_run_`). Write/edit previews and runtime command output are redacted before they are split or truncated, the gateway stream no longer flushes half a credential on a long line, and the client live file label recognises Studio tokens.
+- A shell command can no longer create a new file in a shared source-checkout cache by spelling the path through an alias such as `/var` for `/private/var`.
+- WebUI approvals: an allowed decision is now consumed by the guard, so the decision request receives its receipt and the approval leaves the queue. Before, every decision without a task stayed pending and could fill the broker.
+- Removed the WebUI runtime actions that still sent `/commands` and `/onboard ...`; with those commands gone they would have reached the model as a message and started a paid turn. A test now ties every WebUI runtime action to a registered command.
+- `piagent-explain` no longer lists task-contract, task-scope or lifecycle gates.
+- The sandbox allows signals within the same sandbox, which fixes `grep` EPERM, timeouts and orphaned cancelled commands.
+- The dashboard relay no longer freezes when `project.paths` exceeds the default control response limit.
+
+### Dashboard and company mode, from live runs
+
+- A company turn now settles once, after its harness rounds (the check request, the review, the fixes). Before, the dashboard treated the turn as finished at the first answer: Stop disappeared, the later rounds were not streamed, and for a moment the turn read "no answer yet, press Continue".
+- `run_with_network` works: the network sandbox now allows the system resolver socket, so an approved command can resolve host names. Before, every approved network command failed with `ENOTFOUND`. When an approved command still cannot reach the network, the agent is told the network is unreachable instead of being pointed back to `run_with_network`.
+- The header and the Workspace panel show a review subagent while it runs ("Subagent 1/2"); its start and end now refresh the conversation.
+- A company conversation opened while company mode is not running (after a restart, a crash or an update) says so and offers Reconnect in place. Reading still never starts company mode, since starting may ask for Keychain access.
+- A conversation whose history cannot be read no longer shows the previous conversation's messages under its title.
+- Approval cards: the network approval shows the exact command; task, tool-call and provider references are gone; paths inside the project are shown relative to it (the project folder reads "The whole project folder"); known reasons and consequences are shown in Vietnamese. The exec-policy reason now reads "Confirmation required: the command runs git push" instead of naming a "legacy policy pattern".
+- An `apply_patch` step is shown as an edit of its files with the patch's diff, like `edit`, in the history and while it runs.
+
+### Many members at once, from a 20-developer run
+
+- A company request that Studio refuses because every company model account that can serve the conversation is busy (`session_account_busy_retry_later`, `session_account_not_ready_retry_later`, `concurrency_limit`, `account_capacity_unavailable`, `request_rate_limit`) now waits in line and is asked again, for up to 20 minutes. These refusals come before any model is asked, so nothing is sent twice; a failure after admission is still never replayed. The wait is a step of the running turn in the dashboard ("Wait for a free company account") and the working line in the Terminal; Stop ends it. Before, the turn failed after Studio's 30-second wait.
+- Dashboard commands are outdated only when their own conversation changed. Before, any change to any conversation made every other command stale, so with several conversations running a new conversation could fail with `session-revision-stale`. A failure to create a conversation is now shown as a sentence instead of a code. Stop no longer fails while the agent works through quick steps: a running turn changes its conversation after every step, so Stop is bound to the operation it names, not to the page's last read; if Stop still fails, the dashboard says so instead of doing nothing.
+- A company request refused before the model did any work because the account's sign-in was being renewed (`upstream_auth_required`, `execution_precondition_failed`) is asked again up to three times, 3, 6 and 9 s apart; an account that really has to sign in again still says so.
+- Opening a company conversation, starting a run and granting a subagent ask Studio again when it is too busy to answer in time (`serverUnavailable`), as does a request Studio could not check in time (`operation_unavailable`). Under load, most company conversations opened from the dashboard used to fail to open, and most required reviews ended as "review could not run". A review that still cannot run keeps its reason as a code in the conversation file.
+- The dashboard stays fast with many conversations: listing them read every session file in full on every catalog (863 conversations: about 4 s each time, far more under load, so pages waited 30–40 s and timed out). Unchanged files now keep what was read before and only changed ones are read again, by Pi itself (44 ms instead of about 4 s).
+- A member's session can read the skills Pi lists for it where they are installed (the package's and the user's); the guard used to refuse that read as "outside the project". Writes there stay refused.
+- A new conversation whose creation takes longer than the dashboard's 30-second answer (the first one after the Gateway starts, a company runtime opening) is no longer reported as "could not be created" while it is created and runs: the page sends the same command again, which waits behind the create and returns its receipt, for up to two minutes; if it still has no answer it says the conversation may exist. Before, a member who believed the message was lost sent it again and two runs edited the same project.
+- A dashboard message that stays unconfirmed is released after two minutes: its command now expires then, so it can no longer run, and the draft is kept to send again. Before, the composer stayed locked until the page was reloaded.
+- Company sessions recover after the Mac sleeps: a run grant that lapsed under a request (Studio's clock catches up at once after a sleep, and grants last two minutes) is renewed and the request asked again, and an Agent Watch helper killed by a request that outlived the sleep is replaced when the next turn starts. Before, every company conversation failed with `invalid_run_grant` or "the Agent Watch helper stopped" until it was reopened.
+- A request the model's provider declines under its usage policy (seen when a member asked to print an `.env` file encoded in base64) is reported as such, with its own dashboard copy ("ask in a different way"), instead of "the request could not be sent".
+- An answer stream that ended with nothing in it ("stream ended without a stop reason") is reported as "the model returned no response" (`upstream_incomplete`) instead of "the request could not be sent"; it is not sent again, and "tiếp tục" continues. A company failure no code names keeps its own words, redacted, in the conversation file (not shown) so it can be told apart later.
+- Two project folders with the same name (two clones of one repository) show where each one is in the new-conversation menu.
+- `piagent-doctor` lists `enabledModels` patterns that match no model Pi knows (Pi warns about each on every start), and `piagent-model-scope --prune` removes only those; patterns of a provider that is only signed out are kept.
+- Public text names no other agent product or project; the wording check enforces it across docs, the docs site and the core package.
+
+### Experiment loops and test audits
+
+- The guard covers experiment-loop tools that an optional Pi package can add. `run_experiment` runs its command through `bash -c` itself, so the guard checks that command like `bash` (protected paths, the exec policy, confirmations, read-only profiles). `log_experiment` commits every change when an idea is kept and erases every uncommitted change otherwise, outside the guard, so `init_experiment` and `log_experiment` run only on an `experiment/` branch or a linked worktree, and `init_experiment` only with nothing uncommitted outside `.auto/`. A loop config that moves the commands to another folder is refused. The dashboard shows an experiment run as the command it runs.
+- New packaged skill `test-audit` (`/skill:test-audit`, also chosen by the model when it writes or changes tests): decide whether a new test earns its place, and find tests that cost more than they protect, with a read-only review table before any edit.
+
+### Guard cleanup
+
+- Removed the guard code that only ran with a task contract: the completion hook, task change and verification recording, the task-bound branches of tool authorization (read-only task rules, opaque-shell rule, semantic repair, phase decisions, performance review), and the phase-tool, semantic-repair and independent-acceptance runtimes it created. The guard went from 4993 to 4139 lines; protected and read-only paths, permission profiles, the context budget, the stale-edit check and confirmations are unchanged.
+- Reopening a session that ran a task before 1.9.0 no longer resumes, re-binds or warns about that task; its records stay as history.
+
+### Models
+
 - Added reviewed Sonnet 5.5 metadata to explicit Claude/full model-scope setup on Pi 0.87.1: native 1M context, 128K output, adaptive thinking, no unsupported off/minimal modes or temperature override. Existing custom endpoints and model entries are preserved. This does not establish account entitlement.
 - Included Sonnet 5.5 and Opus 5.5 in model selection presets. Agent Watch can supply the same model through a Studio key without changing personal authentication.
+
+### Tests and evidence
+
+- Retired the test suites that only exercised the task contract (task lifecycle, acceptance gating, workflow dispatch and the scripted production journeys that asserted task records); they remain at commit 85f76db. Security assertions that used a task as setup were rewritten to run without one, and the reconnect, lost-receipt and single-turn HTTP/WebSocket journeys now run as freeform turns.
+- The historical P3 phase-tool counterfactual reports `counterfactual-baseline-retired` instead of a ratio, because its baseline tools no longer exist.
+- Benchmark and journey results published for earlier releases were measured with task contracts and are historical.
+- Live verification on the installed release: 9 personal dashboard scenarios and 4 company scenarios (plan, checks and review; Stop during the review; a network install after approval; a message sent during a turn) pass; 27/27 browser tests.
+- A busy test fixture that ignores SIGTERM now exits when its test runner is killed, instead of spinning a CPU core.
+- Docs site: an Ecosystem page (Piagent, Agent Watch, Agent Studio), a 1.9.0 What's new with dashboard screenshots, and pages that still described the task contract updated. The screenshots are served by the site and not shipped in the npm package.
+
+### Install and update
+
+```sh
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
+npm install -g --ignore-scripts @piagent/platform@1.9.0
+piagent-install --stable
+piagent-doctor --offline
+```
+
 
 ## v1.8.0 - 2026-09-23
 
@@ -699,7 +789,7 @@ Four documents restated something the code already knew, and each had drifted. T
   and fail-closed shadow/recommend/auto modes. `piagent-route` provides the only
   explicit prelaunch enforcement path; extension auto does not mutate the Pi
   user default or switch models mid-conversation.
-- Added a bounded Windsurf-style retrieval route (read-only grep/find/read, up
+- Added a bounded retrieval route (read-only grep/find/read, up
   to eight parallel searches and four rounds, recommendation-only), a 240-case
   offline routing gate, and a resume-locked 144-session static-versus-adaptive
   protocol dry-run. No authenticated benchmark is implied by these local gates.

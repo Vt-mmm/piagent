@@ -1,13 +1,13 @@
 {
   "name": "@piagent/platform",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "type": "module",
-  "description": "Guardrails for AI coding agents: blocks secret reads, destructive commands, and unapproved MCP servers before the tool call runs. Ships project profiles, capability locks, a context engine, and task verification.",
+  "description": "Guardrails and managed team harness for AI coding agents, with isolated tools, scoped approvals, and a local dashboard.",
   "homepage": "https://piagent.io.vn",
   "repository": {
     "type": "git",
@@ -50,6 +50,7 @@
     "!docs/decisions/",
     "!docs/readiness-assessment.md",
     "docs-site/",
+    "!docs-site/assets/shots/",
     "evals/",
     "packs/",
     "packages/piagent-core/",
@@ -98,9 +99,6 @@
     "skills": [
       "packages/piagent-core/skills"
     ],
-    "prompts": [
-      "packages/piagent-core/prompts"
-    ],
     "subagents": {
       "agents": [
         "packages/piagent-core/subagents"
@@ -115,7 +113,10 @@
       "packages/piagent-core/extensions/acceptance-executor/package-lock.json",
       "scripts/benchmark-runner-core.mjs",
       "scripts/register-typescript-loader.mjs",
-      "scripts/typescript-loader.mjs"
+      "scripts/typescript-loader.mjs",
+      "scripts/piagent-studio.mjs",
+      "packages/piagent-core/managed/tool-worker.mjs",
+      "packages/piagent-core/managed/review-snapshot-worker.mjs"
     ]
   },
   "peerDependencies": {
@@ -152,7 +153,7 @@
   ],
   "scripts": {
     "verify": "bash scripts/verify-local.sh",
-    "test": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+    "test": "PIAGENT_NO_UPDATE_CHECK=1 node --test --test-force-exit tests/*.test.mjs",
     "test:webui:e2e": "playwright test --config playwright.webui.config.mjs",
     "test:policy": "node --test tests/policy-core.test.mjs",
     "test:golden": "node --test tests/golden-enforcement.test.mjs",

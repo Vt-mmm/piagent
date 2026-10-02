@@ -42,7 +42,7 @@ function ComposerControl({ title, label: controlLabel, icon, active, badge, onCl
   const shared = { border: 1, borderColor: active ? "primary.main" : "divider", bgcolor: active ? "action.selected" : "transparent",
     color: active ? "primary.main" : "text.secondary", borderRadius: 2, "&:hover": { bgcolor: "action.hover", color: "text.primary" } };
   const button = controlLabel ? <Button size="small" aria-label={title} onClick={onClick} startIcon={icon} sx={{ ...shared, minHeight: 34,
-    maxWidth: 260, px: 1.15, "& .MuiButton-startIcon": { mr: .65 }, "& .MuiButton-startIcon svg": { fontSize: 17 } }}>
+    minWidth: {xs:34,md:64}, maxWidth: 260, px: {xs:.75,md:1.15}, "& .MuiButton-startIcon": { mr: {xs:0,md:.65}, ml:0 }, "& .MuiButton-startIcon svg": { fontSize: 17 } }}>
     <Box component="span" sx={{ display: { xs: "none", md: "inline" }, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{controlLabel}</Box>
   </Button> : <IconButton size="small" aria-label={title} onClick={onClick} sx={{ ...shared, width: 34, height: 34 }}>{icon}</IconButton>;
   return <Tooltip title={title} arrow>{!badge ? button : <Badge badgeContent={badge} color="primary" max={9999}
@@ -79,8 +79,9 @@ export function SessionComposerControls({ session, snapshot, connections, locale
     : session.contextUsage.ratio === null ? null : session.contextUsage.ratio * 100;
   const contextPercent = contextPercentValue === null || contextPercentValue === undefined ? "—" : `${Math.round(contextPercentValue)}%`;
   const activeModelRef = snapshot?.session.model.state === "known" && snapshot.session.model.value ? snapshot.session.model.value.modelRef : "";
-  const activeModel = options?.models.find((model) => model.modelRef === activeModelRef);
-  const thinkingLevels = useMemo(() => activeModel?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"], [activeModel]);
+  const activeModel = options?.models.find((model) => model.modelRef === activeModelRef) ?? (options?.models.length===1 ? options.models[0] : undefined);
+  const managed = session.modelLabel === 'agent-watch-auto' || options?.models.length === 1 && options.models[0].provider === 'agent_watch_managed';
+  const thinkingLevels = useMemo(() => session.managedThinkingLevels ?? activeModel?.thinkingLevels ?? (managed ? [] : ["off", "minimal", "low", "medium", "high", "xhigh", "max"]), [activeModel, session.managedThinkingLevels, managed]);
   const changeModel = async (modelRef: string) => { if (!modelRef || !onSetModel) return; setOptionBusy(true); setOptionError(null);
     try { await onSetModel(modelRef); } catch { setOptionError(localize(locale, "Chưa thể đổi model lúc này", "Could not change the model right now")); }
     finally { setOptionBusy(false); } };
@@ -102,12 +103,16 @@ export function SessionComposerControls({ session, snapshot, connections, locale
     : panel === "connections" ? localize(locale, "MCP & kết nối", "MCP & connections") : panel === "permission" ? localize(locale, "Quyền", "Access")
       : localize(locale, "Source Changes", "Source Changes");
   return <>
-    <Box sx={{ display: "flex", gap: .65, mb: placement === "composer" ? .8 : 0, px: .1, flexWrap: "wrap", alignItems: "center",
+    <Box sx={{ display: "flex", gap: .65, mb: placement === "composer" ? .8 : 0, px: .1, flexWrap: placement === "header" ? "nowrap" : "wrap", flexShrink:0, alignItems: "center",
       justifyContent: placement === "header" ? "flex-end" : "flex-start" }}>
+      {placement === "header" && managed && <Typography variant="caption" color="text.secondary" title={localize(locale,
+        "Subagent đang chạy trong phiên này; Studio giới hạn tổng số theo thành viên.", "Subagents running in this session; Studio caps the total per member.")}
+        sx={{ whiteSpace: "nowrap", display: { xs: "none", sm: "block" }, mr: .5 }}>{localize(locale, "Subagent", "Subagents")} {session.managedHelpers?.active ?? 0}/{session.managedHelpers?.maximum ?? 2}</Typography>}
       {placement === "header" && <ComposerControl active={panel === "model"} onClick={open("model")} icon={<ModelTrainingOutlined fontSize="small" />}
-        label={`${session.modelLabel ?? localize(locale, "Model session", "Session model")} · ${label(session.thinkingLevel, locale)}`}
-        title={localize(locale, "Đổi model và mức suy luận", "Change model and thinking level")} />}
-      {placement === "header" && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
+        label={`${(managed ? "agent-watch-auto" : session.modelLabel) ?? localize(locale, "Model session", "Session model")} · ${
+          session.thinkingLevel === "unknown" || thinkingLevels.length > 0 && !thinkingLevels.includes(session.thinkingLevel) ? "—" : label(session.thinkingLevel, locale)}`}
+        title={managed ? 'agent-watch-auto · Thinking' : localize(locale, "Đổi model và mức suy luận", "Change model and thinking level")} />}
+      {placement === "header" && !managed && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
         label={permissionValue ? label(permissionValue, locale) : localize(locale, "Quyền", "Access")}
         title={localize(locale, "Đổi quyền truy cập", "Change access level")} />}
       {placement === "composer" && <ComposerControl active={panel === "context"} onClick={open("context")} icon={<DataUsageRounded fontSize="small" />}
@@ -125,10 +130,10 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         mt: placement === "header" ? 1 : 0 } } }}>
       <Typography sx={{ px: .5, pb: 1, fontWeight: 600 }}>{panelTitle}</Typography><Divider />
       {panel === "model" && <Stack sx={{ px: .5, pt: 1 }} spacing={1.25}>
-        <Box><Typography variant="caption" color="text.secondary">Model</Typography><Select fullWidth size="small" value={activeModelRef}
+        {managed ? <Box><Typography>agent-watch-auto</Typography><Stat name="Context" value={contextWindow ? new Intl.NumberFormat().format(contextWindow) : '—'} /></Box> : <Box><Typography variant="caption" color="text.secondary">Model</Typography><Select fullWidth size="small" value={activeModelRef}
           disabled={!canSetModel || optionBusy || session.liveState === "running"} onChange={(event) => void changeModel(event.target.value)} sx={{ mt: .5 }}>
-          {(options?.models ?? []).map((model) => <MenuItem key={model.modelRef} value={model.modelRef}>{model.displayName}</MenuItem>)}</Select></Box>
-        <Box><Typography variant="caption" color="text.secondary">Thinking</Typography><Select fullWidth size="small" value={session.thinkingLevel === "unknown" ? "off" : session.thinkingLevel}
+          {(options?.models ?? []).map((model) => <MenuItem key={model.modelRef} value={model.modelRef}>{model.displayName}</MenuItem>)}</Select></Box>}
+        <Box><Typography variant="caption" color="text.secondary">Thinking</Typography><Select fullWidth size="small" inputProps={{"aria-label":"Thinking"}} value={session.thinkingLevel === "unknown" ? "" : session.thinkingLevel}
           disabled={!canSetThinking || optionBusy || session.liveState === "running"} onChange={(event) => void changeThinking(event.target.value)} sx={{ mt: .5 }}>
           {thinkingLevels.map((value) => <MenuItem key={value} value={value}>{label(value, locale)}</MenuItem>)}</Select></Box>
         {optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}
@@ -154,7 +159,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
           {localize(locale, "Mở Source Changes", "Open Source Changes")}</Button></Box>}
     </Popover>
     <ActionConfirmationDialog open={pendingPermission !== null} title={localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần anh xác nhận riêng.",
+      description={localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
       cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={localize(locale, "Bật toàn quyền", "Enable full access")}
       onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); void applyPermission("trusted-full-access"); }} />

@@ -139,8 +139,14 @@ export class SessionCommandController {
     const now = this.#now().getTime();
     if (Date.parse(command.requestedAt) > now + 30_000) return this.#rejected(command, current, row, "invalid-command", "requested-at-in-future");
     if (now > Date.parse(command.expiresAt)) return this.#rejected(command, current, row, "expired", "session-command-expired");
-    const stale = command.expectedCatalogRevision !== current.catalogRevision || (command.action === "session.create"
-      ? command.expectedSessionRevision !== null : !row || command.expectedSessionRevision !== row.sessionRevision);
+    // A command is outdated when its own conversation changed, not when another
+    // one did: with many conversations running the catalog changes every few
+    // seconds, and a new conversation depends on none of them.
+    // Stop names the exact operation, and the runtime refuses any other one: a
+    // running turn changes its conversation after every step, so Stop is not
+    // bound to the revision the page last read.
+    const stale = command.action === "session.create" ? command.expectedSessionRevision !== null
+      : command.action === "session.abort" ? !row : !row || command.expectedSessionRevision !== row.sessionRevision;
     if (stale) {
       return this.#rejected(command, current, row, "stale-revision", "session-revision-stale");
     }

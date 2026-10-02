@@ -75,6 +75,25 @@ describe("Piagent Gateway session metadata overlay", () => {
     assert.equal(catalog.sessions[0].title, "Refine the Source Changes review flow");
   });
 
+  // The guard names every unnamed session `pi:<project>` when it starts, so a
+  // chat opened in the WebUI was renamed to its folder and every row in that
+  // folder read the same. A name the operator chose still wins.
+  it("titles a guard-named session by its first message, not by the project", async () => {
+    const key = Buffer.alloc(32, 12), base = { cwd: "/private/shop-cart", created: new Date("2026-10-01T07:00:00.000Z"),
+      modified: new Date("2026-10-01T07:01:00.000Z"), messageCount: 2, allMessagesText: "x" };
+    const catalog = await buildSessionCatalog({ gatewayInstanceRef: "gateway_title_test", key, listSessions: async () => [
+      { ...base, path: "/private/a.jsonl", id: "a", name: "pi:shop-cart", firstMessage: "Fix the VND format" },
+      { ...base, path: "/private/b.jsonl", id: "b", name: "pi:Shop Cart Platform", firstMessage: "Add a discount rule" },
+      { ...base, path: "/private/c.jsonl", id: "c", name: "ABC-123 Checkout", firstMessage: "Fix checkout" },
+      { ...base, path: "/private/d.jsonl", id: "d", name: "pi:shop-cart", firstMessage: "(no messages)" }
+    ] });
+    const titles = Object.fromEntries(catalog.sessions.map((session) => [session.preview, session.title]));
+    assert.equal(titles["Fix the VND format"], "Fix the VND format");
+    assert.equal(titles["Add a discount rule"], "Add a discount rule");
+    assert.equal(titles["Fix checkout"], "ABC-123 Checkout");
+    assert.equal(catalog.sessions.some((session) => session.title === "shop-cart"), true, "an empty chat keeps the project name");
+  });
+
   it("keeps fresh-session routing commands out of titles and previews", async () => {
     const key = Buffer.alloc(32, 13), infos = WORKFLOW_IDS.map((workflow, index) => {
       const command = `/fresh ${workflow} Read task intake from .pi/task-inbox/2026-08-17-${workflow}.md. `

@@ -2,62 +2,26 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { parse } from "@babel/parser";
 import { productionV3ReferenceSolution } from "./production-v3-reference-solutions.mjs";
 import { scriptedText, scriptedTool } from "./scripted-production-supervisor.mjs";
 import { resolveProjectProfileDocument } from "../../packages/piagent-core/capabilities/project-profile.js";
 import { selectVerificationPlan } from "../../packages/piagent-core/extensions/verification-intelligence.js";
 
-// Reuse the already reviewed PUBLIC journey witnesses. Parse only literal
-// constants; never execute the test modules or read a benchmark oracle.
-const groups = ["backend", "cache-time", "data-recovery", "node", "platform", "single"];
-const singles = [
-  ["chat-transport", "reconnect-chat-event-order", "publicTests"],
-  ["schema-transport", "schema-migration", "publicTests"],
-  ["source", "pagination-boundary", "paginationTests"],
-  ["stale-search-transport", "stale-search-response", "publicTests"],
-  ["workflow-transport", "workflow-switch-same-session", "publicTests"]
-];
+// Reuse the already reviewed PUBLIC journey witnesses. They were parsed from the
+// production journey test files, which were retired with the task contract on
+// 2026-09-30; the literal constants now live in a fixture taken from 85f76db.
+// Never read a benchmark oracle here.
 const sha = value => createHash("sha256").update(value).digest("hex");
 export function loadProductionPublicWitnesses(repositoryRoot) {
+  const file = "tests/fixtures/production-public-witnesses.v1.json";
+  const fixture = JSON.parse(fs.readFileSync(path.join(repositoryRoot, file), "utf8"));
+  assert.equal(fixture.kind, "production-public-witnesses-v1");
   const witnesses = new Map();
-  for (const [suffix, scenarioId, variable] of [
-    ...groups.map(name => [`${name}-transport`, null, null]), ...singles
-  ]) {
-    const file = `tests/production-journey-${suffix}.test.mjs`;
-    const bytes = fs.readFileSync(path.join(repositoryRoot, file));
-    const declarations = new Map(parse(bytes.toString(), { sourceType: "module" }).program.body
-      .filter(node => node.type === "VariableDeclaration" && node.kind === "const")
-      .flatMap(node => node.declarations).filter(node => node.id.type === "Identifier")
-      .map(node => [node.id.name, node.init]));
-    const literal = (node, depth = 0) => {
-      assert.ok(node && depth < 8, "bounded public witness constant required");
-      if (node.type === "StringLiteral") return node.value;
-      if (node.type === "Identifier") return literal(declarations.get(node.name), depth + 1);
-      if (node.type === "BinaryExpression" && node.operator === "+") return literal(node.left, depth + 1) + literal(node.right, depth + 1);
-      if (node.type === "TemplateLiteral" && node.expressions.length === 0) return node.quasis[0].value.cooked;
-      if (node.type === "TaggedTemplateExpression" && node.tag.type === "MemberExpression"
-        && !node.tag.computed && node.tag.object.name === "String" && node.tag.property.name === "raw"
-        && node.quasi.expressions.length === 0) return node.quasi.quasis[0].value.raw;
-      throw new Error(`Unsupported public witness constant in ${file}`);
-    };
-    const add = (id, node) => {
-      assert.ok(!witnesses.has(id), `duplicate public witness: ${id}`);
-      const tests = literal(node);
-      assert.equal(typeof tests, "string"); assert.ok(tests.length > 0);
-      witnesses.set(id, { tests, file, sourceSha256: sha(bytes), witnessSha256: sha(tests) });
-    };
-    if (scenarioId) add(scenarioId, declarations.get(variable));
-    else for (const node of declarations.values()) {
-      if (node?.type !== "ArrayExpression") continue;
-      for (const item of node.elements) {
-        if (item?.type !== "ObjectExpression") continue;
-        const properties = new Map(item.properties.filter(p => p.type === "ObjectProperty" && !p.computed)
-          .map(p => [p.key.name ?? p.key.value, p.value]));
-        const tests = properties.get("tests") ?? properties.get("publicTests");
-        if (properties.get("id")?.type === "StringLiteral" && tests) add(properties.get("id").value, tests);
-      }
-    }
+  for (const item of fixture.witnesses) {
+    assert.ok(!witnesses.has(item.id), `duplicate public witness: ${item.id}`);
+    assert.equal(typeof item.tests, "string"); assert.ok(item.tests.length > 0);
+    assert.equal(sha(item.tests), item.witnessSha256, `public witness ${item.id} changed`);
+    witnesses.set(item.id, { tests: item.tests, file: item.sourceFile, sourceSha256: item.sourceSha256, witnessSha256: item.witnessSha256 });
   }
   assert.equal(witnesses.size, 23);
   return witnesses;

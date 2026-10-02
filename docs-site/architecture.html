@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.8.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/architecture" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/architecture" hreflang="en" lang="en">EN</a>
@@ -59,6 +59,7 @@
           <div class="nav-group">
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/ecosystem">Hệ sinh thái</a>
             <a class="nav-link" href="/quickstart">Quickstart</a>
             <a class="nav-link" href="/whats-new">Có gì mới</a>
             <a class="nav-link" href="/scope">Phạm vi platform</a>
@@ -147,8 +148,8 @@
       <p><span class="inline-code">runtime/context/adaptive-planner.ts</span> chọn budget, retrieval lane, code inclusion và plan receipt theo phase, context pressure, model capability và thinking level.</p>
     </article>
     <article class="card">
-      <h3>Task journal</h3>
-      <p><span class="inline-code">extensions/task-journal.js</span> ghi checkpoint cho start, progress, mutation, verifier và completion. Resume tin task contract trước; retention compaction giữ hash anchor.</p>
+      <h3>Lịch sử task cũ</h3>
+      <p><span class="inline-code">extensions/task-journal.js</span> vẫn đọc checkpoint của các task tạo trước bản 1.9.0 để xem lại; session mới không ghi task nữa.</p>
     </article>
     <article class="card">
       <h3>Repository memory</h3>

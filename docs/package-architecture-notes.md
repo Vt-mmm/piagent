@@ -92,13 +92,13 @@ Manifest data never executes code. Invalid paths, symbolic links, dependency cyc
 
 | Capability | Implementation |
 |---|---|
-| Project onboarding | `/onboard run` + `piagent_project_onboarding_record` |
+| Project onboarding | plain request + `piagent_project_onboarding_record` |
 | Project context index | `/context` + `piagent_context_index_*` |
 | Profile switching | `/profile` + `piagent_profile_options` / `piagent_profile_apply` |
 | Explicit memory | `/memory` + `piagent_memory_*` |
-| Task lifecycle | `/workflow task` + task/context/verify/trace tools |
-| Platform workflow | `/workflow platform-improve` |
-| Backend-readonly to frontend | `/workflow be-to-fe` |
+| Task lifecycle | retired in 1.9.0; turns are freeform |
+| Platform workflow | plain request |
+| Backend-readonly to frontend | `/profile be-readonly-fe` + plain request |
 | Source cache | `piagent-source-cache` + `piagent_source_checkout` |
 | Subagent roles | `piagent-scout`, `piagent-planner`, `piagent-worker`, `piagent-reviewer`, `piagent-oracle` |
 | Quality benchmark | `scripts/benchmark-runner.mjs` + `benchmark/benchmark-core.js`; legacy recorder: `scripts/quality-benchmark.sh` |

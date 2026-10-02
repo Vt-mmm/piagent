@@ -13,6 +13,9 @@ const MAX_BOOTSTRAP_BODY_BYTES = 4_096;
 const MAX_CONTROL_BODY_BYTES = 70_000;
 const MAX_ATTACHMENT_BODY_BYTES = 11_250_000;
 const REQUESTS_PER_MINUTE = 120;
+// An authenticated browser session refreshes its lists on every live event;
+// several busy conversations exceed 120 reads a minute in normal use.
+const SESSION_REQUESTS_PER_MINUTE = 600;
 const BOOTSTRAP_FAILURES_PER_MINUTE = 8;
 const CONTROLS_PER_MINUTE = 60;
 const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
@@ -69,6 +72,10 @@ export async function startLoopbackServer(options: {
   readProviderAuthJob?: (jobRef: string) => unknown | Promise<unknown>;
   executeProviderAuth?: (command: unknown) => unknown | Promise<unknown>;
   executeProjectImport?: () => unknown | Promise<unknown>;
+  readCompanyStatus?: () => unknown | Promise<unknown>;
+  executeCompanyConnect?: () => unknown | Promise<unknown>;
+  // Reads of a company session, answered by the company Gateway; null: local.
+  relaySessionRead?: (sessionRef: string, path: string) => Promise<{ status: number; value: unknown } | null>;
   gatewayProtocol?: GatewayProtocolHandler;
   readModel?: WebUiReadModelProvider;
   executeControl?: (command: unknown) => unknown | Promise<unknown>;
@@ -113,7 +120,7 @@ export async function startLoopbackServer(options: {
     if (now - rate.windowStart >= 60_000) Object.assign(rate, { windowStart: now, requests: 0, bootstrapFailures: 0 });
     rate.requests += 1; rates.set(rateKey, rate);
     while (rates.size > 128) rates.delete(rates.keys().next().value as string);
-    if (rate.requests > REQUESTS_PER_MINUTE) return errorResponse(response, 429, "rate-limit");
+    if (rate.requests > (browserSession ? SESSION_REQUESTS_PER_MINUTE : REQUESTS_PER_MINUTE)) return errorResponse(response, 429, "rate-limit");
     let url: URL;
     try { url = new URL(request.url ?? "/", origin); }
     catch { return errorResponse(response, 400, "invalid-url"); }
@@ -174,6 +181,33 @@ export async function startLoopbackServer(options: {
         const code = error instanceof Error ? error.message : "project-import-unavailable";
         return errorResponse(response, code === "project-import-cancelled" ? 409 : code.includes("invalid") ? 400 : 503, code);
       }
+    }
+
+    // A gateway without company sessions (the company WebUI itself, or a
+    // dashboard with no relay) answers null: no company section, no failed load.
+    if (request.method === "GET" && url.pathname === "/api/v1/managed") {
+      if (!auth.authenticate(request)) return errorResponse(response, 401, "authentication-required");
+      if (url.search) return errorResponse(response, 400, "invalid-managed-query");
+      if (!options.readCompanyStatus) return jsonResponse(response, 200, null);
+      try { return jsonResponse(response, 200, await options.readCompanyStatus()); }
+      catch { return errorResponse(response, 503, "managed-status-unavailable"); }
+    }
+
+    // Starts (or reconnects to) the company Gateway; macOS may ask for Keychain access.
+    if (request.method === "POST" && url.pathname === "/api/v1/managed/connect" && options.executeCompanyConnect) {
+      if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
+      if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
+      let command: Record<string, unknown>;
+      try { command = JSON.parse((await requestBody(request, MAX_BOOTSTRAP_BODY_BYTES)).toString("utf8")); }
+      catch (error) { return errorResponse(response, (error as Error).message === "body-limit" ? 413 : 400, "invalid-managed-connect"); }
+      if (!command || typeof command !== "object" || Array.isArray(command) || Object.keys(command).length !== 1 || command.action !== "managed.connect") {
+        return errorResponse(response, 400, "invalid-managed-connect");
+      }
+      try { return jsonResponse(response, 200, await options.executeCompanyConnect()); }
+      catch { return errorResponse(response, 503, "managed-connect-failed"); }
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/provider-auth" && options.executeProviderAuth) {
@@ -353,6 +387,8 @@ export async function startLoopbackServer(options: {
         return errorResponse(response, 400, "invalid-session-inspection-ref");
       }
       try {
+        const relayed = await options.relaySessionRead?.(sessionRef, inspectionPath + url.search);
+        if (relayed) return jsonResponse(response, relayed.status, relayed.value);
         if (inspectionPath === "/connections") {
           if (url.search || !options.readSessionConnections) return errorResponse(response, 404, "inspection-route-not-found");
           const value = await options.readSessionConnections(sessionRef);

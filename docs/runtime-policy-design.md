@@ -1,6 +1,8 @@
 # Runtime policy design
 <!-- language: en -->
 
+> **Design record from before 1.9.0.** The task contract, workflow commands (`/workflow`, `/task`, `/fresh`, `/onboard`) and task/trace/verify tools described here were retired on 2026-09-30; sessions are freeform and the guard keeps its path, permission, confirmation, context-budget and stale-edit checks. Kept for reference. Current behavior: [README](../README.md).
+
 ## Mục tiêu
 
 Runtime policy là lớp kiểm soát cách agent đọc context, gọi tool, sửa source, chạy verify, và kết thúc task. Tài liệu này mô tả thiết kế trung lập của Pi Agent Platform, không phụ thuộc vào một project cụ thể.

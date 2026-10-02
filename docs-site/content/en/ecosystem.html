@@ -1,0 +1,144 @@
+<section class="section">
+  <p class="section-kicker">The whole picture</p>
+  <h2 id="overview">One dashboard, two ways to use models</h2>
+  <p class="section-lead">Piagent runs on each member's machine. In personal mode it uses your own model account. In company mode it goes through Agent Watch on your Mac and the company's Agent Studio: the company holds the keys, chooses the models and sets the checks for the whole team.</p>
+  <figure class="diagram">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" role="img" aria-labelledby="eco-title eco-desc" class="eco-diagram">
+  <title id="eco-title">The Piagent ecosystem</title>
+  <desc id="eco-desc">Each member's machine runs Piagent (Terminal and Dashboard) with a guard that checks every tool call. Personal mode calls models with the member's own account. Company mode goes through Agent Watch, which keeps the key in Keychain, and the company's Agent Studio, which picks the models and the Harness for every turn.</desc>
+  <defs>
+    <marker id="eco-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8be9c8"/></marker>
+    <marker id="eco-arrow-lime" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d8ff7a"/></marker>
+  </defs>
+  <style>
+    .eco-box { fill: #101114; stroke: #2c2f37; stroke-width: 1.5; }
+    .eco-zone { fill: rgba(255,255,255,0.015); stroke: #24262d; stroke-width: 1.2; stroke-dasharray: 6 6; }
+    .eco-h { fill: #f4f4ef; font: 600 17px "Be Vietnam Pro", system-ui, sans-serif; }
+    .eco-t { fill: #a4a6ad; font: 400 13.5px "Be Vietnam Pro", system-ui, sans-serif; }
+    .eco-k { fill: #71747d; font: 600 12px "Be Vietnam Pro", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+    .eco-chip { fill: rgba(216,255,122,0.08); stroke: rgba(216,255,122,0.35); }
+    .eco-chip-t { fill: #d8ff7a; font: 600 12.5px "JetBrains Mono", ui-monospace, monospace; }
+    .eco-line { stroke: #8be9c8; stroke-width: 1.8; fill: none; }
+    .eco-line-lime { stroke: #d8ff7a; stroke-width: 1.8; fill: none; stroke-dasharray: 7 6; }
+    .eco-label { fill: #8be9c8; font: 500 12.5px "Be Vietnam Pro", system-ui, sans-serif; }
+    .eco-label-lime { fill: #d8ff7a; font: 500 12.5px "Be Vietnam Pro", system-ui, sans-serif; }
+  </style>
+  <rect class="eco-zone" x="16" y="16" width="420" height="528" rx="22"/>
+  <text class="eco-k" x="40" y="48">Member's machine</text>
+  <rect class="eco-box" x="40" y="68" width="372" height="96" rx="16"/>
+  <text class="eco-h" x="62" y="102">Piagent · Terminal and Dashboard</text>
+  <text class="eco-t" x="62" y="128">Ask in plain language; one history</text>
+  <text class="eco-t" x="62" y="148">in Terminal (pi) and the browser.</text>
+  <rect class="eco-box" x="40" y="184" width="372" height="116" rx="16"/>
+  <text class="eco-h" x="62" y="218">Guard</text>
+  <text class="eco-t" x="62" y="244">Checks every tool call: protected files,</text>
+  <text class="eco-t" x="62" y="264">permissions, oversized files, stale edits;</text>
+  <text class="eco-t" x="62" y="284">push, publish, network wait for approval.</text>
+  <rect class="eco-box" x="40" y="320" width="372" height="96" rx="16"/>
+  <text class="eco-h" x="62" y="354">Company-mode sandbox</text>
+  <text class="eco-t" x="62" y="380">Commands run without network, Keychain,</text>
+  <text class="eco-t" x="62" y="400">.env or SSH keys; network per approval.</text>
+  <rect class="eco-chip" x="40" y="440" width="176" height="34" rx="17"/>
+  <text class="eco-chip-t" x="58" y="462">piagent dashboard</text>
+  <rect class="eco-chip" x="226" y="440" width="186" height="34" rx="17"/>
+  <text class="eco-chip-t" x="244" y="462">piagent studio --web</text>
+  <rect class="eco-chip" x="40" y="486" width="76" height="34" rx="17"/>
+  <text class="eco-chip-t" x="64" y="508">pi</text>
+  <rect class="eco-chip" x="126" y="486" width="186" height="34" rx="17"/>
+  <text class="eco-chip-t" x="144" y="508">piagent-doctor</text>
+  <rect class="eco-box" x="500" y="68" width="250" height="96" rx="18"/>
+  <text class="eco-h" x="522" y="102">Personal models</text>
+  <text class="eco-t" x="522" y="128">Signed in with your own</text>
+  <text class="eco-t" x="522" y="148">account: Codex, Claude, Copilot…</text>
+  <rect class="eco-box" x="500" y="184" width="250" height="232" rx="18"/>
+  <text class="eco-k" x="522" y="216">macOS app</text>
+  <text class="eco-h" x="522" y="244">Agent Watch</text>
+  <text class="eco-t" x="522" y="272">Keeps the company key in</text>
+  <text class="eco-t" x="522" y="292">Keychain; imports the</text>
+  <text class="eco-t" x="522" y="312">configuration for Piagent;</text>
+  <text class="eco-t" x="522" y="332">short-lived authority per turn.</text>
+  <text class="eco-t" x="522" y="364">The model never sees</text>
+  <text class="eco-t" x="522" y="384">the key.</text>
+  <rect class="eco-zone" x="800" y="16" width="304" height="528" rx="22"/>
+  <text class="eco-k" x="824" y="48">Company server</text>
+  <rect class="eco-box" x="824" y="68" width="256" height="300" rx="18"/>
+  <text class="eco-h" x="846" y="102">Agent Studio</text>
+  <text class="eco-t" x="846" y="132">Members, keys, budgets</text>
+  <text class="eco-t" x="846" y="152">and daily usage.</text>
+  <text class="eco-t" x="846" y="186">The team's Harness:</text>
+  <text class="eco-label-lime" x="846" y="210">plan · checks · review</text>
+  <text class="eco-t" x="846" y="244">A model for each role:</text>
+  <text class="eco-label-lime" x="846" y="268">main · research · review</text>
+  <text class="eco-t" x="846" y="302">Each role its own model,</text>
+  <text class="eco-t" x="846" y="322">reasoning set by the Harness.</text>
+  <rect class="eco-box" x="824" y="392" width="256" height="128" rx="18"/>
+  <text class="eco-h" x="846" y="426">Company models</text>
+  <text class="eco-t" x="846" y="454">Claude, GPT, DeepSeek, Kimi,</text>
+  <text class="eco-t" x="846" y="474">GLM, Qwen… on company keys;</text>
+  <text class="eco-t" x="846" y="494">keys stay on the server.</text>
+  <path class="eco-line" d="M412 300 L 500 300" marker-end="url(#eco-arrow)"/>
+  <text class="eco-label" x="424" y="290">company</text>
+  <path class="eco-line" d="M750 300 C 790 300, 790 220, 824 220" marker-end="url(#eco-arrow)"/>
+  <text class="eco-label" x="748" y="348">one turn</text>
+  <path class="eco-line" d="M952 368 L952 392" marker-end="url(#eco-arrow)"/>
+  <path class="eco-line-lime" d="M412 116 L 500 116" marker-end="url(#eco-arrow-lime)"/>
+  <text class="eco-label-lime" x="420" y="106">personal</text>
+</svg>
+    <figcaption class="diagram-hint">Swipe sideways to see the whole diagram.</figcaption>
+  </figure>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Parts</p>
+  <h2 id="parts">Each part does one job</h2>
+  <div class="grid cols-2">
+    <article class="card">
+      <h3 id="piagent">Piagent</h3>
+      <p>The coding agent in Terminal (<span class="inline-code">pi</span>) and in the browser (<span class="inline-code">piagent dashboard</span>). Both share one history: start in Terminal, follow it in the browser.</p>
+    </article>
+    <article class="card">
+      <h3 id="guard">Guard</h3>
+      <p>Checks every tool call before it runs: protected files such as <span class="inline-code">.env</span>, permission profiles, oversized files, edits on a stale read. Push, publish and network commands wait for your one-time approval.</p>
+    </article>
+    <article class="card">
+      <h3 id="agent-watch">Agent Watch</h3>
+      <p>A macOS app that keeps the company key in Keychain and imports the configuration for Piagent. Each turn gets short-lived authority; the model and its commands never read the key.</p>
+    </article>
+    <article class="card">
+      <h3 id="agent-studio">Agent Studio</h3>
+      <p>The company server: members, keys, budgets, daily usage and the team's Harness. Studio picks the model for each role (main, research, review) and the reasoning level.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">One company turn</p>
+  <h2 id="one-turn">From a message to "A check passed · Review found no blocking issue"</h2>
+  <div class="steps">
+    <article class="step"><div><h3>You write the request</h3><p>In plain language, with <span class="inline-code">agent-watch-auto</span> from the Company group.</p></div></article>
+    <article class="step"><div><h3>Studio grants one run</h3><p>Agent Watch asks for short-lived authority; Studio picks the main agent's model from the team's Harness.</p></div></article>
+    <article class="step"><div><h3>The agent works in a sandbox</h3><p>It reads, edits and runs commands in the project without network. When a command needs the internet it asks you to approve that one command.</p></div></article>
+    <article class="step"><div><h3>The Harness checks</h3><p>If no check passed on the final code it asks for one; then a subagent reviews the change. Blocking findings go back to the agent, up to the rounds the team set.</p></div></article>
+    <article class="step"><div><h3>The outcome sits under the answer</h3><p>For example "A check passed on the final code · Review found no blocking issue". Stop at any time and Continue later.</p></div></article>
+  </div>
+  <figure class="shot">
+    <img src="/assets/shots/company-review-running.jpg" alt="During the review: the header shows Subagent 1/2 and Stop is still available" loading="lazy" width="1600" height="1000">
+    <figcaption>While the review runs: the header shows Subagent 1/2, the Workspace column shows 1/2 running, and Stop still works.</figcaption>
+  </figure>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Choosing a mode</p>
+  <h2 id="choose">When to use personal, when to use company</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Personal</th><th>Company</th></tr></thead>
+    <tbody>
+      <tr><td>Models</td><td>The account you signed in with (Codex, Claude, Copilot…)</td><td>Chosen by the company in Studio, per role</td></tr>
+      <tr><td>Keys</td><td>Managed by Pi on your machine</td><td>On the server and in Keychain, never in the project</td></tr>
+      <tr><td>Checks</td><td>The guard; you decide when to run tests</td><td>The guard, the sandbox, and the Harness asking for checks and a review</td></tr>
+      <tr><td>Network for commands</td><td>As on your machine; push and publish wait for approval</td><td>Off; opened for one command when you approve it</td></tr>
+      <tr><td>Cost</td><td>Your plan</td><td>The company budget, with usage in Studio</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok-callout"><strong>Getting started</strong><p>Personal: install with the <a href="/en/quickstart">Quickstart</a>, then run <span class="inline-code">piagent dashboard</span>. Company: open Agent Watch, the Studio tab, connect the key and import the configuration for Piagent; <span class="inline-code">agent-watch-auto</span> then appears in the Company group.</p></div>
+</section>

@@ -45,6 +45,10 @@
         {
           "id": "piagent-ops",
           "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
+        },
+        {
+          "id": "test-audit",
+          "path": "packages/piagent-core/skills/test-audit/SKILL.md"
         }
       ],
       "subagents": [

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { addPublicApiCoverage } from "./public-api-coverage.mjs";
 import { data } from "./async-contract-cases.mjs";
 
-// Finite, reviewed public witnesses from production-journey-backend-transport.
+// Finite, reviewed public witnesses from production-journey-backend-transport
+// (that journey was retired with the task contract on 2026-09-30; see HEAD 85f76db).
 // The expected outputs are independent constants. No registered grader/oracle
 // or implementation-derived answer is used by these approved host contracts.
 const result = (id,args,value) => ({id,args:args.map(data),invocation:{kind:"call"},observeArgs:true,

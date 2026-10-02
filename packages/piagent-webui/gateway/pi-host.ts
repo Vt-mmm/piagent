@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
@@ -27,10 +28,27 @@ export function installedPiHostRoot(): string {
   } catch {
     // The operator installation is normally global.
   }
-  const executable = execFileSync("which", ["pi"], { encoding: "utf8", timeout: 2_000 }).trim();
-  const found = packageRootFrom(fs.realpathSync(executable));
-  if (!found) throw new Error("pi-host-unavailable");
-  return found;
+  try {
+    const executable = execFileSync("which", ["pi"], { encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const found = packageRootFrom(fs.realpathSync(executable));
+    if (found) return found;
+  } catch {
+    // A launcher with a short PATH (Agent Watch, launchd) cannot see `pi`.
+  }
+  // Then the host the installed CLI recorded, and the usual global prefixes.
+  const home = os.homedir(), hostPackage = path.join("lib", "node_modules", "@earendil-works", "pi-coding-agent");
+  let recorded: string | null = null;
+  try {
+    const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
+    recorded = JSON.parse(fs.readFileSync(path.join(agentDir, "piagent-runtime.json"), "utf8")).pi_sdk_root ?? null;
+  } catch { /* no record yet */ }
+  for (const candidate of [recorded, path.join(home, ".pi", "npm-global", hostPackage), path.join(home, ".local", hostPackage),
+    path.join("/opt/homebrew", hostPackage), path.join("/usr/local", hostPackage)]) {
+    if (!candidate) continue;
+    const found = packageRootFrom(path.join(candidate, "package.json"));
+    if (found) return found;
+  }
+  throw new Error("pi-host-unavailable");
 }
 
 export async function loadPinnedPiHost(expectedVersion: string): Promise<any> {

@@ -67,6 +67,9 @@ const strictShare = strictShareRaw === "true";
 const offline = offlineRaw === "true";
 const errors = [];
 const warnings = [];
+const { piagentInstallations } = await import(pathToFileURL(path.join(platformRoot, "scripts/piagent-installations.mjs")).href);
+const installations = piagentInstallations();
+if(installations.length>1) warnings.push("Multiple Piagent installations detected. Use the pinned Watch launcher; other PATHs may run an older build: "+installations.map(i=>`${i.version} [${i.fingerprint}] ${i.root}`).join("; "));
 const { verifyCapabilityLock } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "capability-core.js")).href);
 
 function exists(rel) {
@@ -185,7 +188,7 @@ for (const rel of [
 const rootPackage = readJson(path.join(platformRoot, "package.json"));
 if (!rootPackage.pi?.extensions?.length) errors.push("root package.json missing pi.extensions");
 if (!rootPackage.pi?.skills?.length) errors.push("root package.json missing pi.skills");
-if (!rootPackage.pi?.prompts?.length) errors.push("root package.json missing pi.prompts");
+// Prompt templates are optional: freeform chat does not require workflow prompts.
 if (!rootPackage.pi?.subagents?.agents?.length) errors.push("root package.json missing pi.subagents.agents");
 
 if (!commandExists("pi")) warnings.push("pi is not on PATH");
@@ -295,6 +298,20 @@ try {
   }
 } catch (error) {
   warnings.push(`MCP readiness check could not run: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+// A pattern in enabledModels that matches no model Pi knows makes Pi print a
+// warning on every start; it never matches again by itself.
+try {
+  const prune = await import(pathToFileURL(path.join(platformRoot, "scripts", "model-scope-prune.mjs")).href);
+  const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "", ".pi", "agent");
+  const settings = readJsonIfPresent(path.join(agentDir, "settings.json"));
+  const patterns = Array.isArray(settings?.enabledModels) ? settings.enabledModels.filter((item) => typeof item === "string") : [];
+  const piRoot = patterns.length ? prune.piPackageRoot() : null;
+  const stale = piRoot ? await prune.stalePatterns(patterns, await prune.knownModels(piRoot, agentDir), piRoot) : [];
+  if (stale.length) warnings.push(`Pi enabledModels has ${stale.length} pattern(s) that match no model Pi knows (${stale.join(", ")}); Pi warns about them on every start. Run \`piagent-model-scope --prune\` to remove only these`);
+} catch (error) {
+  warnings.push(`model scope check could not run: ${error instanceof Error ? error.message : String(error)}`);
 }
 
 const subagentConfigPath = path.join(process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "", ".pi", "agent"), "extensions", "subagent", "config.json");
@@ -541,6 +558,8 @@ const report = {
   },
   rootPiManifest: rootPackage.pi,
   warnings,
+  installations,
+  nodeExecutable: process.execPath,
   errors
 };
 

@@ -23,6 +23,9 @@ export class TerminalSessionAdapter {
   readonly #leases: SessionLeaseStore;
   readonly #key: Buffer;
   #binding: Binding | null = null;
+  // A session that is never written to disk (`pi --no-session`): no Gateway
+  // or WebUI can open it, so there is no other writer to exclude.
+  #ephemeralSessionId: string | null = null;
   #reasonCode: string | null = "terminal-session-not-bound";
 
   constructor(runtimeInstanceRef: string, agentDir?: string) {
@@ -34,8 +37,9 @@ export class TerminalSessionAdapter {
 
   bind(ctx: ExtensionContext): void {
     const file = ctx.sessionManager.getSessionFile();
-    if (!file) { this.#reasonCode = "terminal-session-not-persisted"; throw new Error(this.#reasonCode); }
     const rawSessionId = ctx.sessionManager.getSessionId();
+    if (!file) { this.release(); this.#ephemeralSessionId = rawSessionId; this.#reasonCode = null; return; }
+    this.#ephemeralSessionId = null;
     const sessionRef = sessionRefForPath(this.#key, file);
     if (this.#binding?.rawSessionId === rawSessionId && this.#binding.sessionRef === sessionRef
       && this.#leases.inspect(sessionRef).ownerEpoch === this.#binding.lease.ownerEpoch) {
@@ -48,6 +52,7 @@ export class TerminalSessionAdapter {
   }
 
   dispatchAllowed(ctx: ExtensionContext): boolean {
+    if (this.#ephemeralSessionId !== null) return this.#ephemeralSessionId === ctx.sessionManager.getSessionId() && !ctx.sessionManager.getSessionFile();
     const binding = this.#binding;
     if (!binding || binding.rawSessionId !== ctx.sessionManager.getSessionId()) return false;
     const current = this.#leases.inspect(binding.sessionRef);

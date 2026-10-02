@@ -278,10 +278,10 @@ Xem `contextUsage.percent`:
 - `< 50%`: bình thường.
 - `50–70%`: bắt đầu tránh đọc file lớn không cần thiết.
 - `70–82%`: chạy `/context compact` trước task dài tiếp theo.
-- `> 82%`: dùng `/fresh <workflow>` cho work mới; `/fresh help` liệt kê mọi workflow canonical.
+- `> 82%`: mở session mới bằng `/new` cho work mới (`/fresh` đã bỏ từ bản 1.9.0).
 - Sau compaction, `contextUsage.tokens` có thể là `null` cho đến khi có assistant response mới.
 
-Nếu user paste full mandatory-flow boilerplate, platform input guard sẽ collapse về workflow command ngắn. Nếu prompt quá dài thật, platform có thể lưu intake vào `.pi/task-inbox/` local gitignored rồi replay bằng fresh workflow command.
+Từ bản 1.9.0 input hook là freeform: nội dung user dán vào được gửi nguyên văn, không còn collapse boilerplate hay lưu intake vào `.pi/task-inbox/`. Prompt quá dài thì nên tách việc hoặc mở session mới bằng `/new`.
 
 Tool output dài cũng bị compact theo cùng triết lý: chat giữ preview, audit/report giữ capture local. Nếu verify fail và preview chưa đủ, chạy lại command targeted hơn thay vì đổ full log vào session.
 
