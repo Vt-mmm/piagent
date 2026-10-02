@@ -24,6 +24,7 @@ import { GatewayProtocolService } from "./gateway-protocol-service.ts";
 import { SessionLeaseStore } from "./session-lease-store.ts";
 import { SessionRuntimeSupervisor } from "./session-runtime-supervisor.ts";
 import { cachedSessionLister } from "./session-list-cache.ts";
+import { cachedSessionFacts } from "./session-file-facts.ts";
 import { buildSessionLiveState } from "./session-live-state.ts";
 import { SessionCommandStore } from "./session-command-store.ts";
 import { SessionCommandController } from "./session-command-controller.ts";
@@ -180,6 +181,12 @@ export async function startPiagentGateway(options: {
       scopedBrokerRouter: options.scopedBrokerRouter,
       resolveProject: (projectRef) => projects.resolve(projectRef)
     });
+    const sessionFacts = (manager: { buildSessionContext(): any; getBranch(): any[] }) => {
+      const context = manager.buildSessionContext();
+      return { model: context.model ? { provider: String(context.model.provider), modelId: String(context.model.modelId) } : null,
+        thinkingLevel: context.thinkingLevel, managed: managedProjection(context, manager.getBranch()) };
+    };
+    const fileFacts = cachedSessionFacts((file) => sessionFacts(host.SessionManager.open(file)));
     const readCatalog = () => buildSessionCatalog({
       gatewayInstanceRef,
       key,
@@ -190,13 +197,13 @@ export async function startPiagentGateway(options: {
         try {
           // A session running here may not have flushed its model and thinking
           // entries yet; its live manager has them, the file does not.
-          const manager = runtimes!.liveSessionManager(sessionRefForPath(key, info.path)) ?? host.SessionManager.open(info.path);
-          const context = manager.buildSessionContext();
-          const model = context.model ? inspectionModels.getModel(context.model.provider, context.model.modelId) : null;
-          const thinking = ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(context.thinkingLevel))
-            ? context.thinkingLevel : "unknown";
-          return { modelLabel: model ? safeModelLabel(model.name ?? model.id ?? context.model?.modelId) : null,
-            thinkingLevel: thinking, ...managedProjection(context,manager.getBranch()) };
+          const live = runtimes!.liveSessionManager(sessionRefForPath(key, info.path));
+          const facts = live ? sessionFacts(live) : fileFacts(info.path);
+          const model = facts.model ? inspectionModels.getModel(facts.model.provider, facts.model.modelId) : null;
+          const thinking = ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(facts.thinkingLevel))
+            ? facts.thinkingLevel : "unknown";
+          return { modelLabel: model ? safeModelLabel(model.name ?? model.id ?? facts.model?.modelId) : null,
+            thinkingLevel: thinking, ...facts.managed };
         } catch { return { modelLabel: null, thinkingLevel: "unknown" }; }
       }
     });

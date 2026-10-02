@@ -55,11 +55,13 @@ function controlSocket(home: string, profile: string): string {
   return gatewayProfileState(path.join(root, storedSlot(root, profile) ?? profile)).controlSocket;
 }
 
-async function running(socket: string): Promise<{ packageVersion?: unknown } | null> {
+// "busy": the Gateway took the connection but has not answered yet. It is
+// alive; starting another beside it would leave two on the same store.
+async function running(socket: string): Promise<{ packageVersion?: unknown } | "busy" | null> {
   try {
     const reply = await requestGatewayControl(socket, { action: "health" });
     return reply.ok ? (reply.value && typeof reply.value === "object" ? reply.value : {}) : null;
-  } catch { return null; }
+  } catch (error) { return error instanceof Error && error.message === "gateway-control-timeout" ? "busy" : null; }
 }
 
 // Same foreground step as Agent Watch: macOS may ask once to let this build of
@@ -82,7 +84,7 @@ export async function attachCompanyGateway(agentDir = DEFAULT_AGENT_DIR, home = 
   if (!pinned || !sameRelease(pinned)) return null;
   const socket = controlSocket(home, pinned.profile);
   const health = await running(socket);
-  return health && current(health) ? socket : null;
+  return health && health !== "busy" && current(health) ? socket : null;
 }
 
 let inFlight: Promise<string> | null = null;
@@ -98,7 +100,10 @@ async function start(agentDir: string, home: string, timeoutMs: number): Promise
   if (!pinned) throw new Error("managed-config-missing");
   if (!sameRelease(pinned)) throw new Error("managed-launch-version-mismatch");
   const socket = controlSocket(home, pinned.profile);
-  const health = await running(socket);
+  let health = await running(socket);
+  for (const started = Date.now(); health === "busy"; health = await running(socket)) {
+    if (Date.now() - started > timeoutMs) throw new Error("managed-launch-busy");
+  }
   if (health && current(health)) return socket;
   if (health) {
     // A company Gateway from before the update: stop it (its transcripts stay

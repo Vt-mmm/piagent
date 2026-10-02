@@ -112,15 +112,35 @@ async function control(action, timeoutMs = 1_500) {
   return await requestGatewayControl(state.controlSocket, { action }, timeoutMs);
 }
 
-async function currentLaunchUrl() {
+async function currentLaunchUrl(timeoutMs) {
   try {
-    const response = await control("issue-launch-url");
+    const response = await control("issue-launch-url", timeoutMs);
     if (response.ok && response.value && typeof response.value === "object"
       && typeof response.value.launchUrl === "string") return response.value.launchUrl;
   } catch {
     // Gateway is not ready yet.
   }
   return null;
+}
+
+// A Gateway that is alive but busy answers late. Starting another one beside
+// it left two Gateways on the same conversations, the first unreachable and
+// still serving its pages, so the running one is waited for instead.
+async function waitForRunningGateway(timeoutMs = 30_000) {
+  const running = readGatewayDescriptor(gatewayProfileState(agentDir));
+  if (!running || !processAlive(running.pid)) return null;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && processAlive(running.pid)) {
+    try {
+      const response = await control("issue-launch-url", 5_000);
+      if (response.ok && typeof response.value?.launchUrl === "string") return response.value.launchUrl;
+    } catch (error) {
+      // Nothing listens on its socket: the process is not a Gateway anymore.
+      if (!(error instanceof Error) || error.message !== "gateway-control-timeout") return null;
+    }
+  }
+  if (!processAlive(running.pid)) return null;
+  throw new Error("gateway-busy\nThe Gateway is running but did not answer within 30s. Try again, or run `piagent dashboard restart`.");
 }
 
 async function waitForGatewayStopped(previous, timeoutMs = 8_000) {
@@ -135,7 +155,7 @@ async function waitForGatewayStopped(previous, timeoutMs = 8_000) {
 }
 
 async function ensureStarted() {
-  const existing = await currentLaunchUrl();
+  const existing = await currentLaunchUrl() ?? await waitForRunningGateway();
   if (existing) return existing;
   const effectiveAgentDir = path.resolve(agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"));
   const state = gatewayProfileState(effectiveAgentDir);

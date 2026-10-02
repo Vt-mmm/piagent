@@ -123,7 +123,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:a19f240ea328cda8a7b87c8b6aad6a6bc8a5f60a8ba4fbc98fcc75af1dbd0e7a",
+    "packageDigest": "sha256:858419d30695c364ec1ea3d364f6e96e3700b8afa867a9936ce10c56042cb201",
     "packageSource": "../",
     "packageVersion": "1.9.0",
     "runtimeFiles": [
@@ -2533,8 +2533,8 @@
         "path": "packages/piagent-webui/gateway/company-relay.ts"
       },
       {
-        "byteSize": 5088,
-        "digest": "sha256:3f671a985aef3deb1a046b34a3bada69b09437f8ed454b5980dbf763a25683e9",
+        "byteSize": 6286,
+        "digest": "sha256:51b1d2bda392234631f475feb24abd80e292302fe4b894f283cd686666e152e1",
         "path": "packages/piagent-webui/gateway/control-socket.ts"
       },
       {
@@ -2553,8 +2553,8 @@
         "path": "packages/piagent-webui/gateway/gateway-protocol-service.ts"
       },
       {
-        "byteSize": 19343,
-        "digest": "sha256:60bbabb6808fa7da4ccf1d89efb6a533d3e8b524f711bfaeda516080605ba90c",
+        "byteSize": 19822,
+        "digest": "sha256:8b755ef5c58847e03aff26ad05dc33d4c3e1c5bd3542f49f2f3b5f2603fc5ca1",
         "path": "packages/piagent-webui/gateway/gateway-service.ts"
       },
       {
@@ -2568,8 +2568,8 @@
         "path": "packages/piagent-webui/gateway/managed-gateway.mjs"
       },
       {
-        "byteSize": 8217,
-        "digest": "sha256:7229380be1fff4d151a91ad8f6fc5404c98c44aead1a36013349ac620f80e31f",
+        "byteSize": 8655,
+        "digest": "sha256:f38252916310b9a9e5d7da7c2abfb29c43a374bad3751a8d92a55bf6dc69a472",
         "path": "packages/piagent-webui/gateway/managed-launch.ts"
       },
       {
@@ -2651,6 +2651,11 @@
         "byteSize": 2104,
         "digest": "sha256:fbce238f11613d01e688591c7da725157e93e2e037676a89bdc4481cbfcc7fd7",
         "path": "packages/piagent-webui/gateway/session-effective-options.ts"
+      },
+      {
+        "byteSize": 1273,
+        "digest": "sha256:36e9e8138fb98d19449463397107f1fa7cb2a37eb6878650eca8fbeff6a3172b",
+        "path": "packages/piagent-webui/gateway/session-file-facts.ts"
       },
       {
         "byteSize": 20249,
@@ -3113,8 +3118,8 @@
         "path": "scripts/piagent-cli.mjs"
       },
       {
-        "byteSize": 12115,
-        "digest": "sha256:fab9c46a0f05435020af214442485fc378ad21353e6d2ea0c78627695485c088",
+        "byteSize": 13263,
+        "digest": "sha256:e456e28fc81b736f16c522deeb3f405110e230e57116403166d94e0fd4eb0b61",
         "path": "scripts/piagent-dashboard.mjs"
       },
       {

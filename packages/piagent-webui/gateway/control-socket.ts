@@ -38,16 +38,23 @@ async function removeStaleSocket(socketPath: string): Promise<void> {
   try { before = fs.lstatSync(socketPath); }
   catch { return; }
   if (!before.isSocket() || before.isSymbolicLink()) throw new Error("gateway-control-path-invalid");
+  // Only a socket nobody listens on is stale. A Gateway that accepted the
+  // connection but answers late is alive and busy (a large catalog, a loaded
+  // machine): taking its socket left it running unreachable, still serving its
+  // pages and holding its conversations beside a second Gateway.
   try {
-    const live = await requestGatewayControl(socketPath, { action: "health" }, 500);
-    if (live.ok) throw new Error("gateway-already-running");
+    await requestGatewayControl(socketPath, { action: "health" }, 500);
+    throw new Error("gateway-already-running");
   } catch (error) {
-    if (error instanceof Error && error.message === "gateway-already-running") throw error;
+    if (error instanceof Error && (error.message === "gateway-already-running" || error.message === "gateway-control-timeout"
+      || error.message.startsWith("gateway-control-response"))) throw new Error("gateway-already-running");
   }
   const after = fs.lstatSync(socketPath);
   if (!after.isSocket() || after.dev !== before.dev || after.ino !== before.ino) throw new Error("gateway-control-path-race");
   fs.unlinkSync(socketPath);
 }
+
+let bindings = 0;
 
 export async function startGatewayControlSocket(options: {
   socketPath: string;
@@ -81,19 +88,32 @@ export async function startGatewayControlSocket(options: {
     });
     socket.once("error", () => { socket.destroy(); });
   });
+  // Closing a server removes the path it was bound to, whoever holds that path
+  // by then: a Gateway that exited after another had taken the path removed the
+  // running Gateway's socket, which could no longer be stopped or asked for a
+  // URL. The socket is bound under a name of its own and linked into place;
+  // the link fails if another Gateway holds the path.
+  const bound = `${options.socketPath}.${process.pid}-${++bindings}`;
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(options.socketPath, resolve);
+    server.listen(bound, resolve);
   });
-  fs.chmodSync(options.socketPath, 0o600);
+  try {
+    fs.chmodSync(bound, 0o600);
+    fs.linkSync(bound, options.socketPath);
+  } catch (error) {
+    server.close();
+    throw error && typeof error === "object" && "code" in error && error.code === "EEXIST" ? new Error("gateway-already-running") : error;
+  } finally { fs.rmSync(bound, { force: true }); }
   const identity = fs.lstatSync(options.socketPath);
+  let closed: Promise<void> | null = null;
   return {
-    close: async () => {
+    close: () => closed ??= (async () => {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       try {
         const current = fs.lstatSync(options.socketPath);
         if (current.isSocket() && current.dev === identity.dev && current.ino === identity.ino) fs.unlinkSync(options.socketPath);
       } catch { /* already removed */ }
-    }
+    })()
   };
 }
