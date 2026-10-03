@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.9.3 · 2026-10-03</p>
+  <h2 id="v1-9-3">Typing Vietnamese never sends by mistake, and subagents read leaner pages</h2>
+  <p class="section-lead">An Enter that commits accented text only finishes the word and does not send. Two quick Enters create one conversation and send one message. Subagents read less of each web page, so a news question uses far fewer tokens.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="ime-enter">Enter while composing</h3><p>With Telex, VNI or any other input method, an Enter that commits text no longer sends or creates a conversation. Shift+Enter is still a new line.</p></article>
+    <article class="card"><h3 id="send-once">Sent exactly once</h3><p>Pressing Enter twice, or Enter and then the send button, before the page updates still creates one conversation and sends one message.</p></article>
+    <article class="card"><h3 id="fetch-cap">Leaner page reads for subagents</h3><p>A subagent reads at most 20,000 characters of a page, 12,000 by default. The main agent still reads up to 100,000.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.9.2 · 2026-10-03</p>
   <h2 id="v1-9-2">Web work goes to the research subagent, and the chat stays put</h2>
   <p class="section-lead">In company mode with a research subagent, everything on the web runs on that subagent's cheaper model. The main agent receives its summary with sources. Sending a message in a long conversation no longer pulls the page to the top.</p>

@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.9.3 · 2026-10-03</p>
+  <h2 id="v1-9-3">Gõ tiếng Việt không gửi nhầm, subagent đọc trang gọn hơn</h2>
+  <p class="section-lead">Phím Enter dùng để chốt chữ khi gõ dấu chỉ chốt chữ, không gửi tin. Bấm Enter hai lần liên tiếp cũng chỉ tạo một cuộc trò chuyện và gửi một tin. Subagent đọc mỗi trang web ít hơn, nên một câu hỏi tin tức tốn ít token hơn hẳn.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="ime-enter">Enter khi gõ dấu</h3><p>Với bộ gõ Telex, VNI hay các bộ gõ khác, Enter dùng để chốt chữ không còn gửi tin hay tạo cuộc trò chuyện. Shift+Enter vẫn xuống dòng.</p></article>
+    <article class="card"><h3 id="send-once">Gửi đúng một lần</h3><p>Bấm Enter hai lần, hoặc Enter rồi bấm nút gửi, trước khi trang kịp cập nhật vẫn chỉ tạo một cuộc trò chuyện và gửi một tin.</p></article>
+    <article class="card"><h3 id="fetch-cap">Subagent đọc trang gọn hơn</h3><p>Subagent đọc tối đa 20.000 ký tự mỗi trang, mặc định 12.000. Main agent vẫn đọc được tới 100.000 ký tự.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.9.2 · 2026-10-03</p>
   <h2 id="v1-9-2">Việc trên web để subagent nghiên cứu làm, khung chat không giật</h2>
   <p class="section-lead">Ở chế độ công ty có subagent nghiên cứu, mọi việc trên web do subagent này làm trên model rẻ hơn. Main agent chỉ nhận bản tóm tắt kèm nguồn. Gửi tin nhắn trong cuộc trò chuyện dài không còn kéo trang lên đầu.</p>

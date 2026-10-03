@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.9.2 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.9.3 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -103,6 +103,17 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.9.3 · 2026-10-03</p>
+  <h2 id="v1-9-3">Gõ tiếng Việt không gửi nhầm, subagent đọc trang gọn hơn</h2>
+  <p class="section-lead">Phím Enter dùng để chốt chữ khi gõ dấu chỉ chốt chữ, không gửi tin. Bấm Enter hai lần liên tiếp cũng chỉ tạo một cuộc trò chuyện và gửi một tin. Subagent đọc mỗi trang web ít hơn, nên một câu hỏi tin tức tốn ít token hơn hẳn.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="ime-enter">Enter khi gõ dấu</h3><p>Với bộ gõ Telex, VNI hay các bộ gõ khác, Enter dùng để chốt chữ không còn gửi tin hay tạo cuộc trò chuyện. Shift+Enter vẫn xuống dòng.</p></article>
+    <article class="card"><h3 id="send-once">Gửi đúng một lần</h3><p>Bấm Enter hai lần, hoặc Enter rồi bấm nút gửi, trước khi trang kịp cập nhật vẫn chỉ tạo một cuộc trò chuyện và gửi một tin.</p></article>
+    <article class="card"><h3 id="fetch-cap">Subagent đọc trang gọn hơn</h3><p>Subagent đọc tối đa 20.000 ký tự mỗi trang, mặc định 12.000. Main agent vẫn đọc được tới 100.000 ký tự.</p></article>
+  </div>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.9.2 · 2026-10-03</p>
   <h2 id="v1-9-2">Việc trên web để subagent nghiên cứu làm, khung chat không giật</h2>
