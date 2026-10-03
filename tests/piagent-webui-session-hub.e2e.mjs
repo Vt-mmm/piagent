@@ -23,7 +23,7 @@ let liveStateUnavailable = false, liveStateReadCount = 0;
 let attachments, lastSendPayload = null, dispatchedContent = null;
 let lastCreatePayload = null;
 let processTranscript = [];
-let companyState = "unavailable", companyConnects = 0, transcriptUnavailable = false;
+let companyState = "unavailable", companyConnects = 0, transcriptUnavailable = false, transcriptReads = 0;
 const companyModel = { modelRef: COMPANY_MODEL_REF, provider: "agent_watch_managed", modelId: "agent-watch-auto",
   displayName: "agent-watch-auto", reasoning: true, imageInput: true, thinkingLevels: ["low", "medium", "high"] };
 const observedSessionActions = [];
@@ -199,7 +199,7 @@ test.beforeAll(async () => {
       text: "# Ke hoach quy ba\n\nMuc tieu la **tang truong**.\n", sizeBytes: 4096,
       truncated: false, redacted: false, reasonCode: null }),
     activity: () => inspectionSnapshot.activity,
-    transcript: () => transcriptUnavailable ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
+    transcript: () => (transcriptReads += 1, transcriptUnavailable) ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
       { ...transcriptFixture.items[0], messageRef: "message_history_user", content: { ...transcriptFixture.items[0].content,
         text: "Open the persisted release checklist", textChars: 36 } },
       { ...transcriptFixture.items[0], messageRef: "message_history_assistant", parentMessageRef: "message_history_user", role: "assistant",
@@ -960,6 +960,49 @@ test("a company conversation opened while company mode is off says so and reconn
     await expect(page.getByText("Open the persisted release checklist").first()).toBeVisible();
   } finally {
     transcriptUnavailable = false;
+    await page.close();
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
+});
+
+// A company conversation that cannot take a message while company mode runs
+// (a turn just started) shows no reconnect banner and does not read its
+// history again: before, the banner's first "ready" reloaded the whole
+// transcript, the page lost its height and jumped to the top.
+test("a running company conversation keeps its history and scroll position", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
+  Object.assign(target, { modelLabel: "agent-watch-auto", composerAvailable: true, sessionRevision: "revision_session_source_review_company_ready" });
+  companyState = "ready";
+  const page = await browser.newPage({ viewport: { width: 1440, height: 500 }, locale: "vi-VN" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await page.getByText("Review source changes", { exact: true }).first().click();
+    await expect(page.getByText("Open the persisted release checklist").first()).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const bottom = await page.evaluate(() => window.scrollY);
+    expect(bottom).toBeGreaterThan(0);
+    // Every frame from here on: is the history on the page, and where is it scrolled?
+    await page.evaluate(() => {
+      window.__frames = [];
+      const tick = () => { window.__frames.push({ history: document.body.innerText.includes("Open the persisted release checklist"), y: window.scrollY });
+        if (window.__frames.length < 2_000) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    });
+    // A turn starts: the conversation cannot take another message for now.
+    Object.assign(target, { composerAvailable: false, sessionRevision: "revision_session_source_review_company_busy" });
+    catalog.catalogRevision = "revision_catalog_company_turn_started";
+    protocol.events.publish("catalog.changed", { catalogRevision: catalog.catalogRevision });
+    await expect(page.getByPlaceholder("Nhắn cho Piagent…")).toBeDisabled();
+    // The banner polls the company status every 5 s: wait past one poll.
+    await page.waitForTimeout(6_000);
+    await expect(page.getByRole("status").filter({ hasText: "Chế độ công ty đang tắt" })).toHaveCount(0);
+    const frames = await page.evaluate(() => window.__frames);
+    expect(frames.length).toBeGreaterThan(100);
+    expect(frames.filter((frame) => !frame.history).length, "frames without the history").toBe(0);
+    expect(Math.min(...frames.map((frame) => frame.y)), "lowest scroll position").toBe(bottom);
+  } finally {
+    companyState = "unavailable";
     await page.close();
     for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
     Object.assign(target, saved);

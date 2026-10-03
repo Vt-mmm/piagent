@@ -126,6 +126,9 @@ export async function searchThroughPool({ origin, token, roleId, query, domains,
   return { answer, sources, provider: typeof body?.provider === 'string' ? body.provider : 'pool' };
 }
 
-export function searchResultText({ answer, sources }) {
-  return [answer || 'No summary returned.', sources.length ? 'Sources:\n' + sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}${source.snippet ? '\n   ' + source.snippet.replace(/\s+/g, ' ') : ''}`).join('\n') : ''].filter(Boolean).join('\n\n');
+// Who answered a search, so the agent can tell the member which engine ran.
+const ENGINES = { tavily: 'Tavily through the company search pool', exa: 'Exa through the company search pool', parallel: 'Parallel through the company search pool',
+  'model-provider': "the model provider's own web search" };
+export function searchResultText({ answer, sources }, engine) {
+  return [ENGINES[engine] ? `Searched with ${ENGINES[engine]}.` : '', answer || 'No summary returned.', sources.length ? 'Sources:\n' + sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}${source.snippet ? '\n   ' + source.snippet.replace(/\s+/g, ' ') : ''}`).join('\n') : ''].filter(Boolean).join('\n\n');
 }

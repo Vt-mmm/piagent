@@ -82,6 +82,10 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
     const executableTools = body => (body.tools??[]).filter(t=>t.name!=='__pi_deferred_placeholder__').map(t=>t.name).sort();
     // Research helpers read the project and the web; they never write or run commands.
     assert.deepEqual(executableTools(researchWire),['find','grep','ls','read','web_fetch','web_search']);
+    // With a research helper the main agent has no web tools: the web is the helper's work.
+    const mainTools=executableTools(requests.find(r=>r.role==='main').body);
+    assert.ok(!mainTools.includes('web_search') && !mainTools.includes('web_fetch') && mainTools.includes('delegate'), mainTools.join(','));
+    assert.match(JSON.stringify(requests.find(r=>r.role==='main').body),/you have no web tools: hand anything on the web/);
     // Reviewers read the code around the patch; they never write, run commands or use the web.
     assert.deepEqual(executableTools(requests.find(r=>r.role==='review').body),['find','grep','ls','read']);
     assert.match(JSON.stringify(requests.find(r=>r.role==='review').body),new RegExp(initial.digest));
@@ -187,6 +191,9 @@ test('scout and verify helpers run with their own tools and only when the Harnes
     const delegate=(requests.find(r=>r.role==='main').body.tools??[]).find(t=>t.name==='delegate');
     assert.deepEqual(delegate.parameters.properties.role.enum,['scout','verify']);
     assert.match(delegate.description,/scout:.*no web/); assert.doesNotMatch(delegate.description,/review:/);
+    // No research helper: the main agent searches the web itself.
+    assert.ok(requests.find(r=>r.role==='main').body.tools.some(t=>t.name==='web_search'));
+    assert.match(JSON.stringify(requests.find(r=>r.role==='main').body),/You are Piagent, the company coding assistant/);
     assert.match(JSON.stringify(requests.find(r=>r.role==='main').body),/delegate role \\"scout\\"/);
     await assert.rejects(managed.delegate({role:'research',task:'Look this up'}), /managed-helper-not-configured: the company Harness has no research subagent; use scout, verify/);
     await assert.rejects(managed.delegate({role:'planner',task:'Plan'}), /managed-helper-unavailable/);

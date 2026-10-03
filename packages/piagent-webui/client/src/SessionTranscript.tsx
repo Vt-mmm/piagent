@@ -46,8 +46,10 @@ function RunningStatus({ live, locale, onOpenActivity }: { live: LiveConversatio
 
 // `onContinue` (given while the conversation is idle and can take a message)
 // sends "tiếp tục" for the last turn when it failed or has no answer.
-export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity, onContinue }: { sessionRef: string; sessionRevision: string;
-  live?: LiveConversation; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void; onContinue?: () => void }) {
+// `reload` (a counter) reads the history again in place: what is shown stays
+// until the new page arrives, so the page never collapses and scrolls.
+export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity, onContinue, reload = 0 }: { sessionRef: string; sessionRevision: string;
+  live?: LiveConversation; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void; onContinue?: () => void; reload?: number }) {
   const [transcript, setTranscript] = useState<PiagentWebUIBoundedTranscriptProjectionV1>();
   const [loading, setLoading] = useState(true), [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState(false), [syncedOperation, setSyncedOperation] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     // every delta, which delayed the user's persisted bubble until activity
     // became quiet. CompletionKey captures the one terminal reconciliation we
     // need without turning progress into a transcript refresh loop.
-  }, [refreshIdentity.key]);
+  }, [refreshIdentity.key, reload]);
   const items = transcript?.state === "ready" ? transcript.items : [];
   const turns = useMemo(() => timelineTurns(items), [items]);
   const durableFinalVisible = useMemo(() => Boolean(live?.user && persistedLiveConversationHasFinal(items, live.user,

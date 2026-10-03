@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.9.2 (unreleased)
+
+### Managed team harness
+
+- With a research helper in the Harness, the web is the helper's work. The main agent has no `web_search` or `web_fetch`: searches and pages are read on the research model, and only its summary with sources reaches the main agent. Before, a question about the news ran search and page reading on the main model.
+- Without a research helper, the main agent keeps its own web tools.
+- A search result now names the engine that answered: Tavily, Exa or Parallel through the company search pool, or the model provider's own search. Before, the agent told the member it did not know which engine it used.
+- The agent introduces itself as Piagent, the company coding assistant, even when the model account's system line gives another product name.
+
+### Dashboard
+
+- Sending a message in a long company conversation no longer jumps the page to the top. When a turn started, the "company mode is off" check remounted the whole history, even though company mode was running, and the page lost its height for a moment. That check now reloads the history only when company mode comes back after being seen down, and the reload keeps the history on the page until the new read arrives.
+- The helper count in the conversation header and the Workspace panel shows the number of helpers the Harness enables (up to four) instead of a fixed 2.
+
 ## v1.9.1 - 2026-10-03
 
 Two more company helpers (scout and verify) and web search for every company

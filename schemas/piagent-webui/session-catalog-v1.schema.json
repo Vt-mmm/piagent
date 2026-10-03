@@ -91,7 +91,7 @@
         "unread": { "type": "boolean" },
         "composerAvailable": { "type": "boolean" },
         "needsAttention": { "type": "boolean" },
-        "managedHelpers": { "type": "object", "additionalProperties": false, "required": ["active", "maximum"], "properties": {"active": {"type": ["integer", "null"], "minimum": 0, "maximum": 2}, "maximum": {"const": 2}} },
+        "managedHelpers": { "type": "object", "additionalProperties": false, "required": ["active", "maximum"], "properties": {"active": {"type": ["integer", "null"], "minimum": 0, "maximum": 4}, "maximum": {"type": "integer", "minimum": 0, "maximum": 4}} },
         "managedThinkingLevels": {"type": "array", "uniqueItems": true, "maxItems": 7, "items": {"enum": ["off","minimal","low","medium","high","xhigh","max"]}},
         "managedPlan": { "type": "object", "additionalProperties": false, "required": ["steps"], "properties": {
           "steps": { "type": "array", "minItems": 1, "maxItems": 30, "items": { "type": "object", "additionalProperties": false, "required": ["step", "status"], "properties": {

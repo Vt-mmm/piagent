@@ -223,7 +223,7 @@ export type SessionRow = {
   needsAttention: boolean;
   managedHelpers?: {
     active: number | null;
-    maximum: 2;
+    maximum: number;
   };
   /**
    * @maxItems 7

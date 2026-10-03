@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 
@@ -44,15 +44,20 @@ export const companyReason = (status: CompanyStatus | null | undefined, locale: 
 // A company conversation opened while the company runtime is not running
 // (stopped, crashed, Agent Watch or Piagent updated). Reading never starts it,
 // since starting may ask macOS for Keychain access, so the member starts it
-// here. It also shows up by itself when the runtime comes back.
+// here. It also shows up by itself when the runtime comes back. The
+// conversation is reloaded only when the runtime comes back after being seen
+// down: found running already (a turn just started), nothing reloads.
 export function CompanyReconnect({ locale, onConnected }: { locale: UiLocale; onConnected(): void }) {
   const [status, setStatus] = useState<CompanyStatus | null>(), [connecting, setConnecting] = useState(false);
+  const seenDown = useRef(false);
+  const cameBack = () => { if (seenDown.current) { seenDown.current = false; onConnected(); } };
   useEffect(() => {
-    let alive = true, ready = false;
+    let alive = true;
     const read = () => void readCompanyStatus().then((value) => {
       if (!alive) return;
       setStatus(value);
-      if (value?.state === "ready" && !ready) { ready = true; onConnected(); }
+      if (value?.state === "ready") cameBack();
+      else if (value) seenDown.current = true;
     }).catch(() => undefined);
     read(); const timer = window.setInterval(read, 5_000);
     return () => { alive = false; window.clearInterval(timer); };
@@ -61,7 +66,7 @@ export function CompanyReconnect({ locale, onConnected }: { locale: UiLocale; on
   if (!status || status.state === "ready" || status.state === "unconfigured") return null;
   const connect = async () => {
     setConnecting(true);
-    try { const next = await connectCompany(); setStatus(next); if (next.state === "ready") onConnected(); }
+    try { const next = await connectCompany(); setStatus(next); if (next.state === "ready") cameBack(); }
     catch { setStatus(await readCompanyStatus().catch(() => null) ?? status); }
     finally { setConnecting(false); }
   };

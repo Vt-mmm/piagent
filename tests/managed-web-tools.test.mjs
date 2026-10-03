@@ -53,7 +53,7 @@ test('a company turn can search the web through Studio and sees the project inst
     provider_model_id: 'gpt-6-sol', profile_id: randomUUID(), effort: 'medium', token: `as_run_${roleID}_${'x'.repeat(43)}`});
   const broker = {async request(action) {
     calls.push(action);
-    if (action === 'config') return {schema_version: 2, credential_mode: 'managed', authority, models, harness: {configuration: {main: {model_ids: ['gpt-6-sol']}, research: {model_ids: ['gpt-6-sol']}}}};
+    if (action === 'config') return {schema_version: 2, credential_mode: 'managed', authority, models, harness: {configuration: {main: {model_ids: ['gpt-6-sol']}, review: {model_ids: ['gpt-6-sol']}}}};
     if (action === 'start' || action === 'renew') return grant();
     if (action === 'close') return true;
     throw Error('unexpected ' + action);

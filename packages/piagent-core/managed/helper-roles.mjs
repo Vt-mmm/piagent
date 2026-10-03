@@ -11,18 +11,26 @@ export const HELPER_CALLS = 8;
 export const HELPER_ROLES = Object.freeze(['scout', 'research', 'verify', 'review']);
 export const helperRoles = manifest => HELPER_ROLES.filter(role => manifest?.harness?.configuration?.[role]);
 const WIDE_READING = 'when understanding the task needs more reading than a few batches of files, such as a flow across many modules of an unfamiliar codebase';
+const NETWORK_COMMANDS = 'run_with_network only when a command itself needs the internet or starts a local server or browser, such as end-to-end tests (the user approves each one)';
+// How the main agent reaches the web. With a research helper it has no web
+// tools: searching and reading pages happen on the helper's model.
+export function webPrompt(roles) {
+  return roles.includes('research')
+    ? ` Shell commands run without network and you have no web tools: hand anything on the web (current information, news, documentation, releases, error messages) to the research helper, and use ${NETWORK_COMMANDS}.`
+    : ` Shell commands run without network: use web_search for current information or documentation, web_fetch to read a public https page, and ${NETWORK_COMMANDS}.`;
+}
 export function helperPrompt(roles) {
   const lines = [];
   if (roles.includes('scout')) lines.push(`Use the scout helper (delegate role "scout") ${WIDE_READING}, and work from its file:line findings; do small lookups yourself.`);
-  if (roles.includes('research')) lines.push(roles.includes('scout') ? 'Use the research helper (delegate role "research") for questions that need external documentation or current information (library and API docs, releases, error messages) together with the code.'
-    : `Use the research helper (delegate role "research") ${WIDE_READING} or external documentation, and work from its findings; do small lookups yourself.`);
+  if (roles.includes('research')) lines.push(roles.includes('scout') ? 'Use the research helper (delegate role "research") for anything on the web (current information, news, library and API docs, releases, error messages), together with the code when needed; give it the question and the answer you need, and work from its summary.'
+    : `Use the research helper (delegate role "research") for anything on the web (current information, news, documentation) and ${WIDE_READING}; work from its findings and do small code lookups yourself.`);
   if (roles.includes('verify')) lines.push('Before you report a non-trivial result as done, you may have the verify helper (delegate role "verify") confirm it independently: it runs the repository checks on the current code and checks claims against the code and primary sources, answering pass, fail or unverifiable with evidence.');
   return lines.length ? ' ' + lines.join(' ') : '';
 }
 const HELPER_USES = {
   scout: () => 'scout: before changing an area you do not know that spans more files than you can read in a few batches (where something is computed and every caller, how a flow crosses modules). It reads only the project, no web, and answers with file:line facts; your own context stays free for the change.',
-  research: roles => roles.includes('scout') ? 'research: questions that need the web as well as the code: library or API documentation, releases, error messages, current information.'
-    : 'research: before changing an area you do not know that spans more files than you can read in a few batches (where something is computed and every caller, how a flow crosses modules), or to read external documentation; your own context stays free for the change. It also searches the web.',
+  research: roles => roles.includes('scout') ? 'research: anything on the web (current information, news, library or API documentation, releases, error messages), with the code when needed. It searches and reads the pages; you get its summary with sources.'
+    : 'research: anything on the web (current information, news, documentation; it searches and reads the pages, you get its summary with sources), and before changing an area you do not know that spans more files than you can read in a few batches (where something is computed and every caller, how a flow crosses modules); your own context stays free for the change.',
   verify: () => 'verify: an independent check of a result: it runs the repository checks on the current code (offline, and the project is read-only for its commands) and confirms claims, yours or a helper\'s, against the code and primary sources. It answers pass, fail or unverifiable per claim, with evidence.',
   review: () => 'review: an independent review of the current patch.',
 };

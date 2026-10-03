@@ -201,7 +201,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     <Box sx={{ flex: 1, width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 3, md: 4 },
       display: "flex", flexDirection: "column", justifyContent: "center" }}>
       {!canSend && session.modelLabel === "agent-watch-auto" && <CompanyReconnect key={session.sessionRef} locale={locale} onConnected={() => setTranscriptLoad((value) => value + 1)} />}
-      <Box sx={{ width: "100%" }}><SessionTranscript key={`${session.sessionRef}:${transcriptLoad}`} sessionRef={session.sessionRef} sessionRevision={session.sessionRevision}
+      <Box sx={{ width: "100%" }}><SessionTranscript key={session.sessionRef} reload={transcriptLoad} sessionRef={session.sessionRef} sessionRevision={session.sessionRevision}
         live={live} approvals={snapshot?.approvals} locale={locale} onOpenActivity={() => onInspector("activity")}
         onContinue={canSend && !submitting && !sendUnconfirmed && session.liveState !== "running" && (!live || live.complete) ? () => void continueTask() : undefined} /></Box>
     </Box>

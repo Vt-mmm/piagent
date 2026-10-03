@@ -14,7 +14,10 @@ export function managedProjection(context: any, entries: any[]) {
   const final = entries.filter(e => e.type === 'custom_message' && e.customType === 'agent-watch-process' && e.details?.phase === 'final').at(-1)?.details;
   const process = final && OUTCOMES.includes(final.outcome) ? { outcome: final.outcome, verified: final.verified === true, reviewed: final.reviewed === true,
     blockingOpen: Number.isInteger(final.blockingOpen) && final.blockingOpen >= 0 ? Math.min(final.blockingOpen, 1000) : 0, ...(final.planSkipped === true ? { planSkipped: true as const } : {}) } : null;
-  return {modelLabel:'agent-watch-auto', managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=2 ? counter.active : 0, maximum:2 as const},
+  // Helpers the Harness enables (up to four); a conversation recorded before
+  // that was known says two.
+  const maximum = Number.isInteger(counter?.maximum) && counter.maximum >= 0 && counter.maximum <= 4 ? counter.maximum : 2;
+  return {modelLabel:'agent-watch-auto', managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),
     ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {})};
 }
