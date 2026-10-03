@@ -2,7 +2,10 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## v1.9.2 (unreleased)
+## v1.9.2 - 2026-10-03
+
+Web work in company sessions goes to the research helper, search results name
+their engine, and sending a message no longer jumps the dashboard to the top.
 
 ### Managed team harness
 
