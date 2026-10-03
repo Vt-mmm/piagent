@@ -80,6 +80,11 @@ async function body(response) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+// How much of a page a role may read at once. A helper's pages stay in its
+// context for every later request of its run, so it reads less per page: a
+// news question read 217k tokens in one request at the old limit.
+export const FETCH_LIMITS = Object.freeze({ main: { usual: 30_000, most: 100_000 }, helper: { usual: 12_000, most: 20_000 } });
+export const fetchLimits = role => role === 'main' ? FETCH_LIMITS.main : FETCH_LIMITS.helper;
 // `requestForTest` replaces only the connection; address checks still apply.
 export async function fetchPublicPage(input, { maxChars = 30_000, signal, resolve = (host) => dns.lookup(host, { all: true, verbatim: true }), requestForTest } = {}) {
   let url;

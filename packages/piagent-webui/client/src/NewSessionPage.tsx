@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { sendsOnEnter } from "./enter-key.ts";
 import AddRounded from "@mui/icons-material/AddRounded";
 import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
@@ -43,7 +44,7 @@ type MenuKind = "project" | "model" | "thinking" | "permission" | null;
 // is not connected the entry explains why and offers to connect.
 const COMPANY_PROVIDER = "agent_watch_managed";
 export function NewSessionPage({ active, defaultProjectRef, busy, error, onCancel, onCreate }: { active: boolean;
-  defaultProjectRef?: string; busy: boolean; error: string | null; onCancel(): void; onCreate(value: CreateValue): void }) {
+  defaultProjectRef?: string; busy: boolean; error: string | null; onCancel(): void; onCreate(value: CreateValue): Promise<void> | void }) {
   const { locale } = useUiPreferences();
   const [options, setOptions] = useState<SessionCreationOptions>();
   // undefined while loading; null on the company runtime's own page (no relay).
@@ -131,8 +132,15 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       ? localize(locale, `Mỗi tin nhắn nhận tối đa ${MAX_ATTACHMENTS} file.`, `Each message accepts at most ${MAX_ATTACHMENTS} files.`) : null);
   };
   const canAttach = !busy && !failed && files.length < MAX_ATTACHMENTS;
-  const submit = () => project && message.trim() && onCreate({ projectRef, placeRef: project.placeRef, modelRef: modelRef || null,
-    thinkingLevel: thinking, permissionMode, message, files });
+  // One conversation per send: a second Enter or click while the first is
+  // being created (before `busy` reaches this page) is ignored.
+  const creating = useRef(false);
+  const submit = () => {
+    if (creating.current || busy || !project || !message.trim()) return;
+    creating.current = true;
+    void Promise.resolve(onCreate({ projectRef, placeRef: project.placeRef, modelRef: modelRef || null,
+      thinkingLevel: thinking, permissionMode, message, files })).finally(() => { creating.current = false; });
+  };
 
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
     <Box sx={{ p: { xs: 1.5, sm: 2 } }}><IconButton aria-label={localize(locale, "Quay lại", "Back")} onClick={onCancel}><ArrowBackRounded /></IconButton></Box>
@@ -163,7 +171,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
           <CircularProgress size={20} /><Typography color="text.secondary">{localize(locale, "Đang mở…", "Opening…")}</Typography></Stack>
           : <><TextField autoFocus fullWidth multiline minRows={3} maxRows={8} value={message} disabled={busy || failed}
             onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); }
+              if (sendsOnEnter(event)) { event.preventDefault(); submit(); }
             }} onPaste={(event) => {
               if (!event.clipboardData?.files.length) return;
               event.preventDefault();

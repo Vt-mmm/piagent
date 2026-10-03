@@ -49,6 +49,7 @@ import { launchProjectRef } from "./bootstrap.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 import { LatestRequestWins } from "./latest-request.ts";
 import { SEND_ADMISSION_WINDOW_MS } from "./session-hub-contract.ts";
+import { sendsOnEnter } from "./enter-key.ts";
 
 const SIDEBAR_WIDTH = 280;
 const PANEL_WIDTH = 320;
@@ -144,9 +145,12 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     void readSessionConnections(session.sessionRef, controller.signal).then(setConnections).catch(() => undefined);
     return () => controller.abort();
   }, [session.sessionRef, session.sessionRevision]);
+  // `submitting` reaches the next render only: a second Enter in between is
+  // held off by this ref, so one message is never sent twice.
+  const sendingNow = useRef(false);
   const submit = async () => {
-    const message = draft; if (!message.trim() || submitting || sendUnconfirmed) return;
-    setSubmitting(true); setSendNotice(null);
+    const message = draft; if (!message.trim() || submitting || sendUnconfirmed || sendingNow.current) return;
+    sendingNow.current = true; setSubmitting(true); setSendNotice(null);
     const staged = attachments.map((item) => item.attachmentRef);
     try {
       const result = await send(message, staged.length > 0
@@ -169,7 +173,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
         "Tin nhắn chưa được gửi. Nội dung và file vẫn được giữ; có thể thử lại khi session sẵn sàng.",
         "The message was not sent. Your message and files are preserved; retry when the session is ready.") });
     }
-    finally { setSubmitting(false); }
+    finally { sendingNow.current = false; setSubmitting(false); }
   };
   useEffect(() => {
     if (!sendUnconfirmed || live?.messageRequestId !== messageRequestId || live.delivery !== "admitted") return;
@@ -255,7 +259,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
         </Stack>}
         <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft} onChange={(event) => { setDraft(event.target.value); setSendNotice(null); }}
-          onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }}
+          onKeyDown={(event) => { if (sendsOnEnter(event)) { event.preventDefault(); void submit(); } }}
           onPaste={(event) => {
             // Only a clipboard actually carrying files is intercepted, so pasting
             // text — including text copied out of a document — still types.
@@ -589,7 +593,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     <Box component="main" sx={{ ml: { md: `${SIDEBAR_WIDTH}px` }, mr: { lg: panelShown ? `${PANEL_WIDTH}px` : 0, xl: inspectorOpen ? INSPECTOR_WIDTH : panelShown ? `${PANEL_WIDTH}px` : 0 },
       pt: "60px", transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={launchProject ?? selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
-        onCreate={(value) => { void createNewSession(value); }} />
+        onCreate={(value) => createNewSession(value)} />
         : selected ? <Conversation session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
             canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"
               && (!selectedLive || selectedLive.complete)

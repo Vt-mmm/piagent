@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.9.3 - 2026-10-03
+
+Typing Vietnamese no longer sends or creates twice, and helpers read less of
+each web page.
+
+### Dashboard
+
+- An Enter that commits text from an input method (Vietnamese Telex/VNI and others; Safari reports key code 229) only finishes the word and never sends. Shift+Enter is still a new line.
+- Pressing Enter twice, or Enter and the send button, before the page re-renders creates one conversation and sends one message. Before, a second press could start a second identical conversation, and a member saw two created two seconds apart.
+
+### Managed team harness
+
+- A helper reads at most 20,000 characters of a web page, and 12,000 unless it asks for more. The main agent keeps 30,000 and 100,000. A helper's pages stay in its context for every later request of its run: a news question had read 217,000 tokens in a single research request. The tool description asks for the page or section that answers the question rather than a whole site.
+
 ## v1.9.2 - 2026-10-03
 
 Web work in company sessions goes to the research helper, search results name

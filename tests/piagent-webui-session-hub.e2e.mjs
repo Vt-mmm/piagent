@@ -1008,3 +1008,48 @@ test("a running company conversation keeps its history and scroll position", asy
     Object.assign(target, saved);
   }
 });
+
+// An Enter that commits Vietnamese (or any input-method) text only finishes
+// the word; Enter pressed twice before the page re-renders creates one
+// conversation and sends one message. A member saw two identical
+// conversations created two seconds apart.
+test("an input-method Enter never sends, and a double Enter creates and sends once", async ({ page }) => {
+  const originalSessions = [...catalog.sessions], originalRevision = catalog.catalogRevision, originalPage = { ...catalog.page };
+  const createsBefore = sessionCreateAttempts, sendsBefore = sessionSendAttempts;
+  // Two keydowns in the same task, as a fast double Enter reaches React before it re-renders.
+  const enter = (locator, init = {}) => locator.evaluate((element, extra) => {
+    for (let index = 0; index < (extra.times ?? 1); index += 1)
+      element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...extra.init }));
+  }, init);
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
+    const draft = page.getByPlaceholder("Nhắn cho Piagent…");
+    await draft.fill("Chào em, em là ai");
+    await enter(draft, { init: { isComposing: true } });
+    await enter(draft, { init: { keyCode: 229 } });
+    await page.waitForTimeout(500);
+    expect(sessionCreateAttempts - createsBefore, "an input-method Enter created a conversation").toBe(0);
+    await enter(draft, { times: 2 });
+    await expect(page.getByText("Chào em, em là ai", { exact: true }).first()).toBeVisible();
+    await page.waitForTimeout(800);
+    expect(sessionCreateAttempts - createsBefore, "conversations created").toBe(1);
+    const composer = page.getByPlaceholder("Nhắn cho Piagent…");
+    await expect(composer).toBeEnabled();
+    await composer.fill("Tin nhắn thứ hai");
+    const sendsAfterCreate = sessionSendAttempts;
+    await enter(composer, { init: { isComposing: true } });
+    await page.waitForTimeout(500);
+    expect(sessionSendAttempts - sendsAfterCreate, "an input-method Enter sent a message").toBe(0);
+    await enter(composer, { times: 2 });
+    await expect.poll(() => sessionSendAttempts - sendsAfterCreate).toBeGreaterThanOrEqual(1);
+    await page.waitForTimeout(800);
+    expect(sessionSendAttempts - sendsAfterCreate, "messages sent").toBe(1);
+    expect(sendsBefore).toBeLessThanOrEqual(sessionSendAttempts);
+  } finally {
+    catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions);
+    catalog.catalogRevision = originalRevision; Object.assign(catalog.page, originalPage);
+  }
+});

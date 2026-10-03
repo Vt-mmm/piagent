@@ -82,6 +82,9 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
     const executableTools = body => (body.tools??[]).filter(t=>t.name!=='__pi_deferred_placeholder__').map(t=>t.name).sort();
     // Research helpers read the project and the web; they never write or run commands.
     assert.deepEqual(executableTools(researchWire),['find','grep','ls','read','web_fetch','web_search']);
+    // A helper reads at most 20,000 characters of a page: its pages stay in its context.
+    const fetchTool=researchWire.tools.find(t=>t.name==='web_fetch'), schema=fetchTool.input_schema??fetchTool.parameters;
+    assert.equal(schema.properties.maxChars.maximum,20000); assert.match(fetchTool.description,/at most 20,000 characters \(12,000 unless you ask for more\)/);
     // With a research helper the main agent has no web tools: the web is the helper's work.
     const mainTools=executableTools(requests.find(r=>r.role==='main').body);
     assert.ok(!mainTools.includes('web_search') && !mainTools.includes('web_fetch') && mainTools.includes('delegate'), mainTools.join(','));
@@ -191,8 +194,9 @@ test('scout and verify helpers run with their own tools and only when the Harnes
     const delegate=(requests.find(r=>r.role==='main').body.tools??[]).find(t=>t.name==='delegate');
     assert.deepEqual(delegate.parameters.properties.role.enum,['scout','verify']);
     assert.match(delegate.description,/scout:.*no web/); assert.doesNotMatch(delegate.description,/review:/);
-    // No research helper: the main agent searches the web itself.
+    // No research helper: the main agent searches the web itself, and reads up to 100,000 characters of a page.
     assert.ok(requests.find(r=>r.role==='main').body.tools.some(t=>t.name==='web_search'));
+    assert.equal(requests.find(r=>r.role==='main').body.tools.find(t=>t.name==='web_fetch').parameters.properties.maxChars.maximum,100000);
     assert.match(JSON.stringify(requests.find(r=>r.role==='main').body),/You are Piagent, the company coding assistant/);
     assert.match(JSON.stringify(requests.find(r=>r.role==='main').body),/delegate role \\"scout\\"/);
     await assert.rejects(managed.delegate({role:'research',task:'Look this up'}), /managed-helper-not-configured: the company Harness has no research subagent; use scout, verify/);

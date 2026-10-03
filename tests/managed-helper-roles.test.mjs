@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from '../packages/piagent-core/managed/helper-roles.mjs';
 import { searchResultText } from '../packages/piagent-core/managed/web-search.mjs';
+import { FETCH_LIMITS, fetchLimits } from '../packages/piagent-core/managed/web-fetch.mjs';
 import { verifyVerdicts } from '../packages/piagent-core/managed/workflow.mjs';
 import { describeFailure, parseFailure, failureKind } from '../packages/piagent-core/runtime/managed-failure.mjs';
 
@@ -64,4 +65,10 @@ test('with a research helper the web is its work; a search result names the engi
   assert.match(searchResultText(found, 'tavily'), /^Searched with Tavily through the company search pool\.\n\nNode 24 is the active LTS\./);
   assert.match(searchResultText(found, 'model-provider'), /^Searched with the model provider's own web search\./);
   assert.match(searchResultText(found), /^Node 24 is the active LTS\./);
+});
+
+test('a helper reads less of a page than the main agent', () => {
+  assert.deepEqual(fetchLimits('main'), { usual: 30_000, most: 100_000 });
+  for (const role of ['scout', 'research', 'verify', 'review']) assert.deepEqual(fetchLimits(role), FETCH_LIMITS.helper);
+  assert.deepEqual(FETCH_LIMITS.helper, { usual: 12_000, most: 20_000 });
 });
