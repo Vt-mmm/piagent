@@ -14,7 +14,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 ### Dashboard
 
 - Sending a message in a long company conversation no longer jumps the page to the top. When a turn started, the "company mode is off" check remounted the whole history, even though company mode was running, and the page lost its height for a moment. That check now reloads the history only when company mode comes back after being seen down, and the reload keeps the history on the page until the new read arrives.
-- The helper count in the conversation header and the Workspace panel shows the number of helpers the Harness enables (up to four) instead of a fixed 2.
+- The helper count in the conversation header and the Workspace panel shows the number of helpers the Harness enables (up to four) instead of a fixed 2. A Harness without helpers shows no count.
 
 ## v1.9.1 - 2026-10-03
 

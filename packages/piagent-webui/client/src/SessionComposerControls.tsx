@@ -105,7 +105,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   return <>
     <Box sx={{ display: "flex", gap: .65, mb: placement === "composer" ? .8 : 0, px: .1, flexWrap: placement === "header" ? "nowrap" : "wrap", flexShrink:0, alignItems: "center",
       justifyContent: placement === "header" ? "flex-end" : "flex-start" }}>
-      {placement === "header" && managed && <Typography variant="caption" color="text.secondary" title={localize(locale,
+      {placement === "header" && managed && (session.managedHelpers?.maximum ?? 2) > 0 && <Typography variant="caption" color="text.secondary" title={localize(locale,
         "Subagent đang chạy trong phiên này; Studio giới hạn tổng số theo thành viên.", "Subagents running in this session; Studio caps the total per member.")}
         sx={{ whiteSpace: "nowrap", display: { xs: "none", sm: "block" }, mr: .5 }}>{localize(locale, "Subagent", "Subagents")} {session.managedHelpers?.active ?? 0}/{session.managedHelpers?.maximum ?? 2}</Typography>}
       {placement === "header" && <ComposerControl active={panel === "model"} onClick={open("model")} icon={<ModelTrainingOutlined fontSize="small" />}

@@ -58,7 +58,8 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
   const percent = known ? context.percent : session.contextUsage.ratio === null ? null : session.contextUsage.ratio * 100;
   const window_ = known ? context.contextWindow : session.contextUsage.contextWindow;
   const used = known ? context.tokens : session.contextUsage.usedTokens;
-  const helpers = session.managedHelpers, plan = session.managedPlan, process = session.managedProcess;
+  // A Harness without helpers shows no helper count.
+  const helpers = session.managedHelpers?.maximum === 0 ? undefined : session.managedHelpers, plan = session.managedPlan, process = session.managedProcess;
   const done = plan?.steps.filter((step) => step.status === "completed").length ?? 0;
   const helperRuns = (live?.activities ?? []).filter((activity) => liveToolKind(activity.toolLabel) === "subagent");
   return <Box role="region" sx={{ height: "100%", overflowY: "auto", bgcolor: "background.paper" }} aria-label={localize(locale, "Thay đổi và ngữ cảnh", "Changes and context")}>
