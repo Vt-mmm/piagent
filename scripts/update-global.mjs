@@ -526,6 +526,8 @@ function main() {
   console.log(options.dryRun
     ? `\nDRY RUN: nothing was installed. Rerun without --dry-run to apply v${targetHelper}.`
     : `\nPASS: updated to v${targetHelper}.`);
+  // A dashboard started before the update still serves the earlier release.
+  if (!options.dryRun && helperNeedsChange) console.log("Open the dashboard with `piagent dashboard`: one still running an earlier release is restarted on the new one.");
 }
 
 main();

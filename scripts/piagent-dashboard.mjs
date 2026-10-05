@@ -155,6 +155,14 @@ async function waitForGatewayStopped(previous, timeoutMs = 8_000) {
 }
 
 async function ensureStarted() {
+  // After an update the Gateway still running is the earlier release, with
+  // its pages loaded: it is replaced rather than reused.
+  const running = readGatewayDescriptor(gatewayProfileState(agentDir));
+  if (running && processAlive(running.pid) && typeof running.packageVersion === "string" && running.packageVersion !== packageJson.version) {
+    process.stderr.write(`Piagent ${running.packageVersion} is still running; restarting the dashboard on ${packageJson.version}.\n`);
+    try { await control("stop"); } catch { /* already stopping */ }
+    await waitForGatewayStopped(running);
+  }
   const existing = await currentLaunchUrl() ?? await waitForRunningGateway();
   if (existing) return existing;
   const effectiveAgentDir = path.resolve(agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"));

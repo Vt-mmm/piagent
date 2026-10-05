@@ -68,5 +68,9 @@ try {
 // The new dashboard opens in a new browser tab: the old tab's browser session
 // ends with the old dashboard. Its launch link is never written to the log.
 fs.writeSync(log, "\nRestarting the dashboard on the new release\n");
-const restart = spawnSync(process.execPath, [dashboard, "restart", "--json"], { stdio: ["ignore", "ignore", log], env, timeout: 3 * 60 * 1000 });
+// Like the \`piagent\` command, with the package's TypeScript loader: an npm
+// install sits under node_modules, where Node does not strip types itself.
+const loader = path.join(packageRoot, "scripts", "register-typescript-loader.mjs");
+const restart = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", loader, dashboard, "restart", "--json"],
+  { stdio: ["ignore", "ignore", log], env, timeout: 3 * 60 * 1000 });
 finish("succeeded", { installed, ...(bindingChanged ? { bindingChanged } : {}), ...(restart.status === 0 ? {} : { reason: "dashboard-restart-failed" }) });

@@ -2,6 +2,15 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+Updates now end on the new release's dashboard, whichever way they ran.
+
+### Fixes
+
+- An update started from the dashboard installed the new release but could not restart the dashboard: the restart ran without the package's TypeScript loader, which an npm install needs under node_modules. It now starts the dashboard the way the `piagent` command does.
+- After `piagent-update` (or any reinstall), `piagent dashboard` reused the dashboard still running the earlier release, which kept showing that release's pages. A dashboard from another release is now stopped and started again on the installed one, and `piagent-update` says so when it finishes.
+
 ## v1.11.0 - 2026-10-05
 
 The dashboard keeps Piagent and Pi up to date itself, and works like an editor:
