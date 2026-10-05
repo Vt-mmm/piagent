@@ -1,27 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import CloseRounded from "@mui/icons-material/CloseRounded";
 import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
-import HubRounded from "@mui/icons-material/HubRounded";
 import ImageRounded from "@mui/icons-material/ImageRounded";
-import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import LanguageRounded from "@mui/icons-material/LanguageRounded";
 import LightModeRounded from "@mui/icons-material/LightModeRounded";
-import MemoryRounded from "@mui/icons-material/MemoryRounded";
-import PsychologyRounded from "@mui/icons-material/PsychologyRounded";
 import SecurityRounded from "@mui/icons-material/SecurityRounded";
-import TuneRounded from "@mui/icons-material/TuneRounded";
 import TravelExploreRounded from "@mui/icons-material/TravelExploreRounded";
-import AccountTreeRounded from "@mui/icons-material/AccountTreeRounded";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
-import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
 import Paper from "@mui/material/Paper";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
@@ -43,7 +31,9 @@ import { label } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 import { RuntimeControlsPanel } from "./RuntimeControlsPanel.tsx";
 
-export type SettingsSection = "general" | "models" | "controls" | "connections" | "permissions" | "usage" | "about";
+export type { SettingsSection } from "./SettingsNavigation.tsx";
+import { SettingsNavigation, ShortcutSettings, type SettingsSection } from "./SettingsNavigation.tsx";
+import { UpdateSettings } from "./UpdateSettings.tsx";
 
 function number(value: number | null | undefined, locale: UiLocale): string {
   return value === null || value === undefined ? "—" : new Intl.NumberFormat(locale === "vi" ? "vi-VN" : "en-US").format(value);
@@ -63,10 +53,11 @@ function GeneralSettings() {
   const { locale, colorMode, setLocale, setColorMode } = useUiPreferences();
   return <><Title>{localize(locale, "Giao diện", "Appearance")}</Title><Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>
     <SettingRow icon={<LanguageRounded color="primary" />} title={localize(locale, "Ngôn ngữ", "Language")}
+      detail={localize(locale, "Ngôn ngữ của giao diện. Agent trả lời theo ngôn ngữ bạn nhắn.", "The interface language. The agent answers in the language you write.")}
       action={<ToggleButtonGroup exclusive size="small" value={locale} onChange={(_, value) => value && setLocale(value)}>
         <ToggleButton value="vi">VI</ToggleButton><ToggleButton value="en">EN</ToggleButton></ToggleButtonGroup>} />
     <Divider /><SettingRow icon={colorMode === "dark" ? <DarkModeRounded color="primary" /> : <LightModeRounded color="primary" />}
-      title={localize(locale, "Chủ đề", "Theme")} action={<ToggleButtonGroup exclusive size="small" value={colorMode}
+      title={localize(locale, "Chủ đề", "Theme")} detail={localize(locale, "Sáng hoặc tối, lưu trên trình duyệt này.", "Light or dark, kept in this browser.")} action={<ToggleButtonGroup exclusive size="small" value={colorMode}
         onChange={(_, value) => value && setColorMode(value)}><ToggleButton value="light">{localize(locale, "Sáng", "Light")}</ToggleButton>
         <ToggleButton value="dark">{localize(locale, "Tối", "Dark")}</ToggleButton></ToggleButtonGroup>} />
   </Paper></>;
@@ -287,28 +278,10 @@ export function SettingsPage({ section, onSection, onBack, session, snapshot, ca
     if (!session) return;
     setConnections(await readSessionConnections(session.sessionRef).catch(() => connections));
   };
-  const navigation = [
-    { id: "general" as const, label: localize(locale, "Giao diện", "Appearance"), icon: <TuneRounded /> },
-    { id: "models" as const, label: localize(locale, "Nhà cung cấp & model", "Providers & models"), icon: <PsychologyRounded /> },
-    { id: "controls" as const, label: localize(locale, "Điều khiển project", "Project controls"), icon: <AccountTreeRounded /> },
-    { id: "connections" as const, label: localize(locale, "MCP & kết nối", "MCP & connections"), icon: <HubRounded /> },
-    { id: "permissions" as const, label: localize(locale, "Quyền truy cập", "Access"), icon: <SecurityRounded /> },
-    { id: "usage" as const, label: localize(locale, "Sử dụng & context", "Usage & context"), icon: <MemoryRounded /> },
-    { id: "about" as const, label: "Piagent", icon: <InfoOutlined /> }
-  ];
-  return <Box sx={{ height: "100%", minHeight: 0, display: { sm: "grid" }, gridTemplateColumns: { sm: "220px minmax(0,1fr)" }, bgcolor: "background.default" }}>
-    <Box component="nav" aria-label={localize(locale, "Mục cài đặt", "Settings sections")} sx={{ borderRight: { sm: 1 }, borderBottom: { xs: 1, sm: 0 },
-      borderColor: "divider", bgcolor: "background.paper", p: 1.25, minHeight: 0, overflow: "auto" }}>
-      <Stack direction="row" sx={{ minHeight: 48, alignItems: "center", justifyContent: "space-between", px: 1, mb: { sm: 1 } }}>
-        <Typography id="piagent-settings-title" sx={{ fontWeight: 700 }}>{localize(locale, "Cài đặt", "Settings")}</Typography>
-        <IconButton aria-label={localize(locale, "Đóng cài đặt", "Close settings")} onClick={onBack}><CloseRounded /></IconButton></Stack>
-      <List component="div" disablePadding sx={{ display: { xs: "flex", sm: "block" }, minWidth: { xs: "max-content", sm: 0 }, overflowX: "auto" }}>
-        {navigation.map((item) => <ListItemButton key={item.id} selected={section === item.id} onClick={() => onSection(item.id)}>
-          <ListItemIcon sx={{ minWidth: 36, color: "inherit", "& .MuiSvgIcon-root": { fontSize: 19 } }}>{item.icon}</ListItemIcon>
-          <ListItemText primary={item.label} slotProps={{ primary: { sx: { fontSize: 13, fontWeight: section === item.id ? 800 : 650 } } }} /></ListItemButton>)}</List>
-    </Box>
+  return <Box sx={{ height: "100%", minHeight: 0, display: { sm: "grid" }, gridTemplateColumns: { sm: "236px minmax(0,1fr)" }, bgcolor: "background.default" }}>
+    <SettingsNavigation section={section} onSection={onSection} onBack={onBack} />
     <Box component="main" sx={{ width: "100%", minHeight: 0, overflowY: "auto", px: { xs: 2, sm: 3, lg: 5 }, py: { xs: 3, md: 4 } }}>
-      {section === "general" && <GeneralSettings />}{section === "models" && <ModelSettings options={options} auth={auth} refreshAuth={refreshAuth} session={session}
+      {section === "general" && <GeneralSettings />}{section === "updates" && <UpdateSettings />}{section === "shortcuts" && <ShortcutSettings />}{section === "models" && <ModelSettings options={options} auth={auth} refreshAuth={refreshAuth} session={session}
         snapshot={snapshot} onSetModel={onSetModel} onSetThinking={onSetThinking} />}
       {section === "connections" && <ConnectionSettings value={connections} loading={connectionsLoading} sessionRef={session?.sessionRef} onChanged={refreshConnections} />}
       {section === "controls" && <RuntimeControlsPanel session={session} options={options} connections={connections} onCompleted={onRuntimeChanged} />}

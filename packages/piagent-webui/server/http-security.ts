@@ -1,4 +1,4 @@
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const SECURITY_HEADERS = Object.freeze({
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -24,4 +24,18 @@ export function jsonResponse(response: ServerResponse, status: number, value: un
 
 export function errorResponse(response: ServerResponse, status: number, code: string): void {
   jsonResponse(response, status, { error: { code } });
+}
+
+export function requestBody(request: IncomingMessage, maximumBytes: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []; let bytes = 0, failed = false;
+    request.on("data", (chunk: Buffer) => {
+      if (failed) return;
+      bytes += chunk.length;
+      if (bytes > maximumBytes) { failed = true; reject(new Error("body-limit")); }
+      else chunks.push(chunk);
+    });
+    request.on("end", () => { if (!failed) resolve(Buffer.concat(chunks)); });
+    request.on("error", (error) => { if (!failed) reject(error); });
+  });
 }

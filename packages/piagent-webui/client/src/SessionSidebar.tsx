@@ -21,6 +21,7 @@ import ListItemText from "@mui/material/ListItemText";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import TextField from "@mui/material/TextField";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
@@ -105,10 +106,12 @@ function readSet(key: string): Set<string> {
 function writeSet(key: string, value: Set<string>) { try { window.localStorage.setItem(key, JSON.stringify([...value].slice(0, 500))); } catch { /* storage may be blocked */ } }
 
 export function SessionSidebar({ locale, canCreate, query, onQuery, groups, count, selectedRef, showArchived, archivedCount, settingsOpen, connection,
-  live, onNew, onSelect, onAction, onToggleArchived, onSettings }: { locale: UiLocale; canCreate: boolean; query: string; onQuery(value: string): void;
+  live, onNew, onSelect, onAction, onToggleArchived, onSettings, updateDot = false }: { locale: UiLocale; updateDot?: boolean; canCreate: boolean; query: string; onQuery(value: string): void;
   groups: ProjectGroup[]; count: number; selectedRef?: string; showArchived: boolean; archivedCount: number; settingsOpen: boolean;
   connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>; onNew(): void; onSelect(sessionRef: string): void;
   onAction(session: SessionRow, action: SessionMenuAction): void; onToggleArchived(): void; onSettings(): void }) {
+  // The status bar shows the Gateway on wide screens; the drawer shows it on narrow ones.
+  const narrow = useMediaQuery((theme: import("@mui/material/styles").Theme) => theme.breakpoints.down("md"));
   // Many conversations stay readable: what runs or needs attention first, a
   // filter by kind, project groups that fold (remembered in this browser) and
   // show their newest few until asked for more.
@@ -171,9 +174,11 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
       onClick={onToggleArchived} sx={{ justifyContent: "flex-start" }}>{showArchived
         ? localize(locale, "Quay lại cuộc trò chuyện", "Back to chats") : localize(locale, `Đã lưu trữ (${archivedCount})`, `Archived (${archivedCount})`)}</Button>
       <Button fullWidth startIcon={<SettingsRounded />} onClick={onSettings}
-        sx={{ justifyContent: "flex-start", mt: .25 }} color={settingsOpen ? "primary" : "inherit"}>{localize(locale, "Cài đặt", "Settings")}</Button>
-      <Stack direction="row" sx={{ px: 1.25, pt: 1, alignItems: "center", gap: 1 }}><Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: connection === "connected" ? "success.main" : "warning.main" }} />
+        sx={{ justifyContent: "flex-start", mt: .25 }} color={settingsOpen ? "primary" : "inherit"}>{localize(locale, "Cài đặt", "Settings")}
+        {updateDot && <Box component="span" role="img" aria-label={localize(locale, "Có bản cập nhật", "Update available")}
+          sx={{ ml: "auto", width: 8, height: 8, borderRadius: "50%", bgcolor: "primary.main" }} />}</Button>
+      {narrow && <Stack direction="row" sx={{ px: 1.25, pt: 1, alignItems: "center", gap: 1 }}><Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: connection === "connected" ? "success.main" : "warning.main" }} />
         <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{connection === "connected" ? "Gateway live" : connection}</Typography>
-        <Typography variant="caption" color="text.disabled">local</Typography></Stack></Box>
+        <Typography variant="caption" color="text.disabled">local</Typography></Stack>}</Box>
   </Box>;
 }

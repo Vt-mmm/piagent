@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+The dashboard keeps Piagent and Pi up to date itself, and works like an editor:
+a status bar, a command palette and Settings that can be searched.
+
+### Dashboard
+
+- Updates: the dashboard checks the registry when it opens and every 6 hours (the Gateway asks npm in the background; a source checkout and the company runtime never do). A newer release shows in the status bar ("Cập nhật Piagent X") and as a dot on Settings. Settings → Cập nhật shows Piagent and Pi as installed and as offered, when it last checked, and "Kiểm tra ngay".
+- One click updates Pi and Piagent together with `piagent-update`, after a confirmation that lists the change. Pi only ever moves to the version the new Piagent pins; a newer Pi is shown as not yet compatible. The button is locked while a conversation runs, and the update runs apart from the dashboard: when done, the dashboard restarts on the new release and opens in a new tab. Its output goes to `~/.pi/piagent-update-job.log`; a failure or an interrupted run is reported for a day. A release that changed the company launcher asks to connect the company key again in Agent Watch.
+- Status bar (wide screens): Gateway state, running conversations, the release and its update, and the command palette.
+- Command palette (⌘K / Ctrl+K): new chat, updates, the Workspace panel, Source Changes, theme, language, refresh, every Settings section and every conversation by name; matching ignores case and Vietnamese accents. ⌘, / Ctrl+, opens Settings.
+- Settings: a search box that finds a setting by what it does, sections grouped (Chung, Agent, Công cụ, Thông tin), a Shortcuts section, a description under each appearance setting, and the release at the foot of the list.
+
 ## v1.10.0 - 2026-10-05
 
 A helper may object to the brief the main agent gave it. The main agent

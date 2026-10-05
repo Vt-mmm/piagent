@@ -7,6 +7,7 @@ import { ThemeProvider } from "@mui/material/styles";
 
 import { App } from "./App.tsx";
 import { SessionHubApp } from "./SessionHubApp.tsx";
+import { UpdateProvider } from "./update-state.tsx";
 import { createPiagentTheme } from "./theme.ts";
 import { preferredLocale } from "./locale-preference.ts";
 import { UiPreferencesProvider, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
@@ -30,7 +31,7 @@ function InspectionApp() {
 
 function GatewayApp() {
   const state = useSessionHub();
-  return <SessionHubApp {...state} />;
+  return <UpdateProvider><SessionHubApp {...state} /></UpdateProvider>;
 }
 
 function storedPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): T {

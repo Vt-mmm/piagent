@@ -9,6 +9,7 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../contracts/generated/sna
 import { startLoopbackServer } from "../server/loopback-server.ts";
 import { startGatewayControlSocket, type GatewayControlResponse } from "./control-socket.ts";
 import { loadPinnedPiHost } from "./pi-host.ts";
+import { UpdateCenter } from "./update-center.ts";
 import {
   gatewayProfileState,
   profileRef,
@@ -113,6 +114,7 @@ export async function startPiagentGateway(options: {
   let mcpAuth: McpAuthBroker | null = null;
   let attachments: SessionAttachmentRegistry | null = null;
   let relay: CompanyRelay | null = null;
+  let updates: UpdateCenter | null = null;
   let closing: Promise<void> | null = null;
   let settleWait: (() => void) | null = null;
   const waited = new Promise<void>((resolve) => { settleWait = resolve; });
@@ -121,7 +123,7 @@ export async function startPiagentGateway(options: {
     if (closing) return await closing;
     closing = (async () => {
       removeGatewayDescriptor(state, gatewayInstanceRef);
-      relay?.close();
+      relay?.close(); updates?.close();
       await loopback?.close().catch(() => undefined);
       // Staged bytes are private temp files. Closing deletes them rather than
       // leaving a directory per session behind for the TTL sweep that will never
@@ -242,6 +244,10 @@ export async function startPiagentGateway(options: {
     attachments = new SessionAttachmentRegistry({
       inspect: async (sessionRef) => await (await inspections.provider(sessionRef)).snapshot() as PiagentWebUICanonicalSnapshotV1
     });
+    // Piagent's own updates: Pi and Piagent together, never while a turn runs.
+    updates = new UpdateCenter({ packageRoot: options.packageRoot, piVersion: options.expectedPiVersion, managed: Boolean(options.managed),
+      busy: async () => runtimes!.currentOperations().length + (relay ? (await relay.operations()).length : 0) });
+    updates.start();
     loopback = await startLoopbackServer({
       staticRoot,
       mode: "gateway",
@@ -280,6 +286,7 @@ export async function startPiagentGateway(options: {
       // conversation runs (the company Gateway for a company conversation).
       readSessionQuestions: (sessionRef) => company(sessionRef)
         ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions`) : runtimes!.questions(sessionRef),
+      updates: { status: () => updates!.status(), check: () => updates!.check(), apply: (request) => updates!.apply(request) },
       answerSessionQuestion: (sessionRef, questionRef, answer) => company(sessionRef)
         ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions/${encodeURIComponent(questionRef)}/answer`, answer)
         : runtimes!.answerQuestion(sessionRef, questionRef, answer),

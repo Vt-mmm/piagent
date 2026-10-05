@@ -27,6 +27,15 @@ let companyState = "unavailable", companyConnects = 0, transcriptUnavailable = f
 const companyModel = { modelRef: COMPANY_MODEL_REF, provider: "agent_watch_managed", modelId: "agent-watch-auto",
   displayName: "agent-watch-auto", reasoning: true, imageInput: true, thinkingLevels: ["low", "medium", "high"] };
 const observedSessionActions = [];
+// Piagent's own update, as the Gateway reports it: 1.11.0 is out, Pi stays on
+// the version it pins while a newer Pi is not qualified.
+const freshUpdate = () => ({ schemaVersion: 1, version: "piagent-update-status-v1", installable: true, reason: null,
+  checkedAt: new Date(Date.now() - 5 * 60_000).toISOString(), checking: false, checkEveryHours: 6,
+  piagent: { installed: "1.10.0", latest: "1.11.0", updateAvailable: true },
+  pi: { installed: "0.87.1", required: "0.87.1", latest: "1.0.2", updateAvailable: false, newerUntested: true },
+  updateAvailable: true, runningConversations: 0, job: null });
+let updateState = freshUpdate();
+const updateApplies = [];
 const observedRuntimeActions = [];
 const inspectionSnapshot = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/snapshot-v1.valid.json"), "utf8"));
 // The Gateway publishes what the host will accept as an attachment, so the hub
@@ -255,6 +264,13 @@ test.beforeAll(async () => {
     executeProjectImport: () => ({ schemaVersion: 1, version: "piagent-project-import-result-v1", importedAt: new Date().toISOString(),
       project: { projectRef: "project_imported_browser", placeRef: "project_imported_browser", label: "imported-project" } }),
     readSessionModel: () => inspectionProvider,
+    updates: { status: () => updateState, check: () => ({ ...updateState, checkedAt: new Date().toISOString() }),
+      apply: (request) => {
+        updateApplies.push(request);
+        if (request?.version !== updateState.piagent.latest) throw new Error("update-version-changed");
+        updateState = { ...updateState, job: { state: "running", from: "1.10.0", to: "1.11.0", startedAt: new Date().toISOString() } };
+        return { job: updateState.job };
+      } },
     executeSessionAttachment: (sessionRef, value) => attachments.execute(sessionRef, value),
     readSessionConnections: (sessionRef) => ({ schemaVersion: 1, version: "piagent-session-connections-v1",
       generatedAt: new Date().toISOString(), sessionRef, state: "ready", summary: { configured: 1, connected: null, approvalRequired: 0 },
@@ -1092,4 +1108,78 @@ test("an input-method Enter never sends, and a double Enter creates and sends on
     catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions);
     catalog.catalogRevision = originalRevision; Object.assign(catalog.page, originalPage);
   }
+});
+
+test("the status bar offers the update, Settings explains it, and the palette and shortcuts reach every setting", async ({ browser }) => {
+  updateState = freshUpdate(); updateApplies.length = 0;
+  test.setTimeout(90_000);
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "vi-VN" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const bar = page.getByRole("contentinfo", { name: "Thanh trạng thái" });
+    await expect(bar.getByText("Gateway live", { exact: true })).toBeVisible();
+    await bar.getByRole("button", { name: /Cập nhật Piagent 1\.11\.0/ }).click();
+    const settings = page.getByRole("dialog", { name: "Cài đặt" });
+    await expect(settings.getByRole("heading", { name: "Cập nhật" })).toBeVisible();
+    await expect(settings.getByText("Đang dùng 1.10.0", { exact: true })).toBeVisible();
+    await expect(settings.getByText("Có bản 1.11.0", { exact: true })).toBeVisible();
+    await expect(settings.getByText(/Pi đã có bản 1\.0\.2.*chưa tương thích/)).toBeVisible();
+    await expect(settings.getByText(/Kiểm tra lần cuối: 5 phút trước · tự kiểm tra mỗi 6 giờ/)).toBeVisible();
+    // Settings search finds a setting by what it does, with or without accents.
+    const search = settings.getByRole("textbox", { name: "Tìm cài đặt" });
+    await search.fill("chu de");
+    await expect(settings.getByRole("navigation").getByRole("button", { name: "Giao diện" })).toBeVisible();
+    await expect(settings.getByRole("navigation").getByRole("button", { name: "Cập nhật" })).toHaveCount(0);
+    await search.press("Enter");
+    await expect(settings.getByRole("heading", { name: "Giao diện" })).toBeVisible();
+    await expect(settings.getByText("Sáng hoặc tối, lưu trên trình duyệt này.", { exact: true })).toBeVisible();
+    await search.fill("");
+    await settings.getByRole("navigation").getByRole("button", { name: /^Cập nhật/ }).click();
+    // While a conversation runs, the update waits for it.
+    updateState = { ...updateState, runningConversations: 1 };
+    await settings.getByRole("button", { name: "Kiểm tra ngay" }).click();
+    await expect(settings.getByRole("button", { name: "Cập nhật lên Piagent 1.11.0" })).toBeDisabled();
+    await expect(settings.getByText("1 cuộc trò chuyện đang chạy; nút mở lại khi chúng xong.", { exact: true })).toBeVisible();
+    updateState = { ...updateState, runningConversations: 0 };
+    await settings.getByRole("button", { name: "Kiểm tra ngay" }).click();
+    await settings.getByRole("button", { name: "Cập nhật lên Piagent 1.11.0" }).click();
+    // The member reads what will change before it starts; the request names the version seen.
+    const confirm = page.getByRole("dialog", { name: "Cập nhật Piagent?" });
+    await expect(confirm.getByText("Piagent 1.10.0 → 1.11.0", { exact: true })).toBeVisible();
+    await expect(confirm.getByText(/Dashboard khởi động lại và mở trong tab mới/)).toBeVisible();
+    await confirm.getByRole("button", { name: "Cập nhật", exact: true }).click();
+    await expect.poll(() => updateApplies.length).toBe(1);
+    expect(updateApplies[0]).toEqual({ version: "1.11.0" });
+    await expect(settings.getByText(/Đang cập nhật lên Piagent 1\.11\.0… Xong, dashboard mở lại trong tab mới/)).toBeVisible();
+    // Focus stays in Settings when the button goes away, so Escape still closes it.
+    await page.keyboard.press("Escape");
+    await expect(settings).toHaveCount(0);
+    await expect(bar.getByText("Đang cập nhật lên 1.11.0…", { exact: true })).toBeVisible();
+    // Ctrl+K: the palette reaches settings and conversations by name, accents optional.
+    await page.keyboard.press("Control+k");
+    const palette = page.getByRole("dialog", { name: "Bảng lệnh" });
+    const input = palette.getByRole("combobox", { name: "Tìm lệnh" });
+    await input.fill("phim tat");
+    await expect(palette.getByRole("option").first()).toContainText("Cài đặt: Phím tắt");
+    await input.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Cài đặt" }).getByRole("heading", { name: "Phím tắt" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Control+k");
+    await input.fill("release prep");
+    await expect(palette.getByRole("option").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    // Ctrl+, opens Settings.
+    await page.keyboard.press("Control+,");
+    await expect(page.getByRole("dialog", { name: "Cài đặt" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    // A narrow screen has no status bar: the Settings button carries the update.
+    updateState = freshUpdate();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.getByRole("contentinfo", { name: "Thanh trạng thái" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Mở điều hướng" }).click();
+    await expect(page.getByRole("img", { name: "Có bản cập nhật" })).toBeVisible();
+    await page.getByRole("button", { name: /^Cài đặt/ }).click();
+    await expect(page.getByRole("dialog", { name: "Cài đặt" }).getByRole("heading", { name: "Cập nhật" })).toBeVisible();
+  } finally { updateState = freshUpdate(); await page.close(); }
 });

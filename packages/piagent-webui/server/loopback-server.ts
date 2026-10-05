@@ -1,7 +1,8 @@
-import http, { type IncomingMessage, type ServerResponse } from "node:http";
+import http, { type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 
-import { errorResponse, applySecurityHeaders, jsonResponse } from "./http-security.ts";
+import { errorResponse, applySecurityHeaders, jsonResponse, requestBody } from "./http-security.ts";
+import { routeMemberRequest, type UpdateRoutes } from "./member-routes.ts";
 import { ReadModelNotFound, type WebUiReadModelProvider } from "./read-model-provider.ts";
 import { routeReadOnlyRequest } from "./read-only-router.ts";
 import { SessionAuthority } from "./session-auth.ts";
@@ -31,20 +32,6 @@ export type LoopbackServer = {
   issueLaunchUrl(): string;
   close(): Promise<void>;
 };
-
-function requestBody(request: IncomingMessage, maximumBytes: number): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []; let bytes = 0, failed = false;
-    request.on("data", (chunk: Buffer) => {
-      if (failed) return;
-      bytes += chunk.length;
-      if (bytes > maximumBytes) { failed = true; reject(new Error("body-limit")); }
-      else chunks.push(chunk);
-    });
-    request.on("end", () => { if (!failed) resolve(Buffer.concat(chunks)); });
-    request.on("error", (error) => { if (!failed) reject(error); });
-  });
-}
 
 function serveAsset(response: ServerResponse, asset: StaticAsset): void {
   response.statusCode = 200;
@@ -83,6 +70,7 @@ export async function startLoopbackServer(options: {
   executeApproval?: (approvalRef: string, decision: unknown) => unknown | Promise<unknown>;
   readSessionQuestions?: (sessionRef: string) => unknown | Promise<unknown>;
   answerSessionQuestion?: (sessionRef: string, questionRef: string, answer: unknown) => unknown | Promise<unknown>;
+  updates?: UpdateRoutes;
   bootstrapTtlMs?: number;
   sessionTtlMs?: number;
 }): Promise<LoopbackServer> {
@@ -304,32 +292,8 @@ export async function startLoopbackServer(options: {
       catch { return errorResponse(response, 503, "attachment-runtime-unavailable"); }
     }
 
-    // The main agent's questions to the member of a conversation, and the answer.
-    const questionPath = /^\/api\/v1\/sessions\/([^/]+)\/questions(?:\/([^/]+)\/answer)?$/.exec(url.pathname);
-    if (request.method === "GET" && questionPath && !questionPath[2] && options.readSessionQuestions) {
-      if (!auth.authenticate(request)) return errorResponse(response, 401, "authentication-required");
-      const sessionRef = decodeURIComponent(questionPath[1]);
-      if (!CURSOR.test(sessionRef)) return errorResponse(response, 400, "invalid-session-ref");
-      try { return jsonResponse(response, 200, await options.readSessionQuestions(sessionRef)); }
-      catch { return errorResponse(response, 503, "questions-unavailable"); }
-    }
-    if (request.method === "POST" && questionPath && questionPath[2] && options.answerSessionQuestion) {
-      if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      const mutationSession = auth.authorizeMutation(request);
-      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
-      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
-      if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
-      const sessionRef = decodeURIComponent(questionPath[1]), questionRef = decodeURIComponent(questionPath[2]);
-      if (!CURSOR.test(sessionRef) || !/^question\.[0-9a-f-]{36}$/.test(questionRef)) return errorResponse(response, 400, "invalid-question-ref");
-      let answer: unknown;
-      try { answer = JSON.parse((await requestBody(request, MAX_CONTROL_BODY_BYTES)).toString("utf8")); }
-      catch (error) { return errorResponse(response, (error as Error).message === "body-limit" ? 413 : 400, "invalid-question-answer"); }
-      try { return jsonResponse(response, 200, await options.answerSessionQuestion(sessionRef, questionRef, answer)); }
-      catch (error) {
-        const code = error instanceof Error ? error.message : "questions-unavailable";
-        return errorResponse(response, code === "question-not-pending" ? 409 : code === "question-answer-invalid" ? 400 : 503, code);
-      }
-    }
+    // The main agent's questions to the member, and Piagent's own updates.
+    if (await routeMemberRequest({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options)) return;
 
     if (request.method === "POST" && url.pathname.startsWith("/api/v1/approvals/") && url.pathname.endsWith("/decision") && options.executeApproval) {
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");

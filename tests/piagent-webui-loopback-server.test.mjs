@@ -510,3 +510,39 @@ describe("Piagent WebUI member questions", () => {
     assert.deepEqual(answers, [{ sessionRef: "session.a", questionRef: ref, answer: { answers: [{ selected: [0] }] } }]);
   });
 });
+
+describe("Piagent WebUI updates", () => {
+  // Piagent's own update: the status is read by a signed-in page; a check or
+  // an update needs the page's Origin and CSRF, and refusals keep their code.
+  it("reads the update status and starts a check or an update only with Origin and CSRF", async () => {
+    const calls = [];
+    const server = await start({ updates: {
+      status: async () => ({ version: "piagent-update-status-v1", updateAvailable: true }),
+      check: async () => { calls.push("check"); return { version: "piagent-update-status-v1", checking: false }; },
+      apply: async (request) => {
+        calls.push(["apply", request]);
+        if (request?.version === "1.11.0") return { job: { state: "starting", from: "1.10.0", to: "1.11.0" } };
+        throw new Error(request?.version === "busy" ? "update-blocked-running" : request?.version === "boom" ? "spawn EACCES /secret/path" : "update-version-changed");
+      } } });
+    assert.equal((await request(server.origin, "/api/v1/updates")).status, 401, "a signed-in page only");
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    assert.equal(JSON.parse((await request(server.origin, "/api/v1/updates", { headers: { Cookie: cookie } })).body).updateAvailable, true);
+    const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    const post = (path, body, extra = {}) => request(server.origin, path, { method: "POST", headers: { ...headers, ...extra }, body: JSON.stringify(body) });
+    assert.equal((await post("/api/v1/updates/apply", { version: "1.11.0" }, { "X-Piagent-CSRF": "wrong" })).status, 403);
+    assert.equal((await post("/api/v1/updates/apply", { version: "1.11.0" }, { Origin: "http://attacker.invalid" })).status, 403);
+    assert.equal((await post("/api/v1/updates/check", {})).status, 200);
+    const started = await post("/api/v1/updates/apply", { version: "1.11.0" });
+    assert.equal(started.status, 202); assert.equal(JSON.parse(started.body).job.to, "1.11.0");
+    const busy = await post("/api/v1/updates/apply", { version: "busy" });
+    assert.equal(busy.status, 409); assert.equal(JSON.parse(busy.body).error.code, "update-blocked-running");
+    assert.equal((await post("/api/v1/updates/apply", { version: "1.12.0" })).status, 409);
+    const failed = await post("/api/v1/updates/apply", { version: "boom" });
+    assert.equal(failed.status, 503); assert.equal(JSON.parse(failed.body).error.code, "update-unavailable", "an unknown failure never leaks its text");
+    assert.equal((await request(server.origin, "/api/v1/updates/elsewhere", { method: "POST", headers, body: "{}" })).status, 404);
+    assert.equal((await post("/api/v1/updates/apply", { padding: "x".repeat(70_000) })).status, 413);
+    assert.deepEqual(calls.map((call) => Array.isArray(call) ? call[1].version : call), ["check", "1.11.0", "busy", "1.12.0", "boom"]);
+  });
+});
