@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.10.0 · 2026-10-05</p>
+  <h2 id="v1-10-0">The main agent asks when it is unsure, and subagents may object to a brief</h2>
+  <p class="section-lead">When a request leaves a decision open, the main agent asks you with a card of numbered choices instead of guessing. A subagent shows its evidence when a brief drifts from the request, and a second disagreement is yours to decide. Used-up quota or a very large patch no longer stops the work.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="ask-user">Questions with choices</h3><p>1–4 questions, each with 2–4 numbered choices, always "Other" in your own words and "Let the agent decide". Press a number to choose, Enter to send. Stop while it waits, and on "continue" the agent asks again instead of choosing for you.</p></article>
+    <article class="card"><h3 id="objections">Subagents object to a brief</h3><p>A subagent reads your request verbatim and the plan above its brief. When the brief is wrong or drifts from the request it shows its evidence, and the main agent has to answer. A second disagreement marks the conversation "needs your decision".</p></article>
+    <article class="card"><h3 id="fallback">Work goes on when quota runs out</h3><p>A subagent whose quota is used up, or whose account rests, starts again on the Harness fallback model. A patch over 120 KB is reviewed in parts and the findings merge.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.9.3 · 2026-10-03</p>
   <h2 id="v1-9-3">Typing Vietnamese never sends by mistake, and subagents read leaner pages</h2>
   <p class="section-lead">An Enter that commits accented text only finishes the word and does not send. Two quick Enters create one conversation and send one message. Subagents read less of each web page, so a news question uses far fewer tokens.</p>

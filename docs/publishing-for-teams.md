@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.10.0`: main agent hỏi lại khi yêu cầu còn để ngỏ một quyết định (thẻ câu hỏi có lựa chọn đánh số, "Khác" và "Để agent tự quyết"); subagent được phản biện brief, bất đồng lần hai thì member quyết (báo cáo quy trình v3 cần Studio và Agent Watch mới, bản cũ vẫn nhận v2); subagent tự chạy lại trên model dự phòng khi hết quota; patch lớn được review theo từng phần; tab dashboard cũ không còn bị từ chối khi dashboard được mở lần nữa trong cùng trình duyệt.
 - `1.9.3`: Enter khi gõ tiếng Việt (bộ gõ đang chốt chữ) không còn gửi tin hay tạo cuộc trò chuyện; bấm Enter hai lần chỉ tạo một cuộc trò chuyện và gửi một tin; subagent đọc tối đa 20.000 ký tự mỗi trang web (main giữ 100.000).
 - `1.9.2`: ở chế độ công ty có subagent nghiên cứu, việc trên web do subagent này làm (main agent không còn công cụ web); kết quả search ghi rõ engine (Tavily, Exa, Parallel); agent tự giới thiệu là Piagent; dashboard không còn giật lên đầu khi gửi tin nhắn; bộ đếm subagent theo số Harness bật.
 - `1.9.1`: subagent khảo sát và xác minh cho tài khoản công ty (chỉ khi Harness bật); tìm web qua search pool của Studio cho mọi vai; gửi `piagent/<version>` cho Studio. Sandbox công ty: đọc được `auth.json` nằm trong source (file dịch); giấu hẳn `.env*` (trừ file mẫu) để Vite/Vitest/Next vẫn chạy; ở thư mục không có git, lệnh chỉ đọc không còn bị tính là sửa code; E2E chạy qua `run_with_network`; bộ cài không gợi ý lệnh đã bỏ.

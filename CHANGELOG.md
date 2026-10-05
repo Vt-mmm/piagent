@@ -2,7 +2,7 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.10.0 - 2026-10-05
 
 A helper may object to the brief the main agent gave it. The main agent
 decides and has to answer; the same disagreement a second time goes to the

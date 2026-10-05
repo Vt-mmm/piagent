@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.10.0 · 2026-10-05</p>
+  <h2 id="v1-10-0">Main agent hỏi lại khi chưa rõ, subagent được phản biện brief</h2>
+  <p class="section-lead">Khi yêu cầu còn để ngỏ một quyết định, main agent hỏi bạn bằng thẻ câu hỏi có lựa chọn đánh số thay vì đoán. Subagent được nêu bằng chứng khi brief lệch yêu cầu, và bất đồng lần hai thì bạn quyết. Hết quota hay patch quá lớn không còn làm dừng việc.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="ask-user">Hỏi lại bằng lựa chọn</h3><p>1–4 câu hỏi, mỗi câu 2–4 lựa chọn đánh số, luôn có "Khác" để tự nhập và "Để agent tự quyết". Bấm số để chọn, Enter để gửi. Bấm Dừng giữa chừng thì khi "tiếp tục", agent hỏi lại chứ không chọn thay bạn.</p></article>
+    <article class="card"><h3 id="objections">Subagent phản biện brief</h3><p>Subagent đọc nguyên văn yêu cầu và plan trước brief. Brief sai hoặc lệch yêu cầu thì subagent nêu bằng chứng và main agent phải trả lời. Bất đồng lần hai, hội thoại ghi "Cần bạn quyết".</p></article>
+    <article class="card"><h3 id="fallback">Chạy tiếp khi hết quota</h3><p>Subagent hết quota hoặc tài khoản đang nghỉ sẽ chạy lại trên model dự phòng của Harness. Patch trên 120 KB được review theo từng phần rồi gộp findings.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.9.3 · 2026-10-03</p>
   <h2 id="v1-9-3">Gõ tiếng Việt không gửi nhầm, subagent đọc trang gọn hơn</h2>
   <p class="section-lead">Phím Enter dùng để chốt chữ khi gõ dấu chỉ chốt chữ, không gửi tin. Bấm Enter hai lần liên tiếp cũng chỉ tạo một cuộc trò chuyện và gửi một tin. Subagent đọc mỗi trang web ít hơn, nên một câu hỏi tin tức tốn ít token hơn hẳn.</p>
