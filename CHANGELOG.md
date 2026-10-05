@@ -2,7 +2,7 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.11.0 - 2026-10-05
 
 The dashboard keeps Piagent and Pi up to date itself, and works like an editor:
 a status bar, a command palette and Settings that can be searched.
