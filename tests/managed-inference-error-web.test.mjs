@@ -82,7 +82,7 @@ test('managed WebUI shows why a subagent failed on its step', {skip:process.plat
   await page.getByRole('button',{name:/Cuộc trò chuyện mới|New chat/}).last().click();
   await page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).fill('Research this');await page.getByRole('button',{name:/^Gửi$|^Send$/}).click();
   await expect(page.getByText('ANSWER_WITHOUT_HELPER',{exact:true}).first()).toBeVisible({timeout:20000});
-  await expect(page.getByText('Subagent nghiên cứu lỗi · Hết hạn mức token').first()).toBeVisible({timeout:15000});
+  await expect(page.getByText('Subagent research lỗi · Hết hạn mức token').first()).toBeVisible({timeout:15000});
   await expect(page.getByText(/^Mã: token_quota_exhausted · request [0-9a-f]{8}$/).first()).toBeVisible();
   await expect(page.getByText(/2 request/).first()).toBeVisible();
   const body=await page.locator('body').innerText();

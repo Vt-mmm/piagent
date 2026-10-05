@@ -112,9 +112,455 @@ export interface CompanyFailure {
   local: boolean;
 }
 export interface HarnessProcess {
-  phase: "plan" | "verify" | "review" | "final";
+  phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute";
   outcome?:
-    "no_change" | "interrupted" | "blocking_open" | "unverified" | "review_unavailable" | "unreviewed" | "clean";
+    | "no_change"
+    | "interrupted"
+    | "disputed"
+    | "blocking_open"
+    | "unverified"
+    | "review_unavailable"
+    | "unreviewed"
+    | "clean";
+  role?: "scout" | "research" | "verify" | "review";
+  by?: "main" | "harness";
+  disputes?: number;
+  unchanged?: true;
+  /**
+   * @maxItems 10
+   */
+  issues?:
+    | []
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ]
+    | [
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        },
+        {
+          kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope";
+          detail: string;
+        }
+      ];
+  /**
+   * @maxItems 10
+   */
+  claims?:
+    | []
+    | [
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ]
+    | [
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        },
+        {
+          claim: string;
+        }
+      ];
   loop?: number;
   maxLoops?: number;
   verified?: boolean;

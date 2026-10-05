@@ -35,8 +35,10 @@ type TranscriptItem = { messageRef: string; parentMessageRef: string | null; rol
   toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown";
     summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess };
 type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
-type HarnessProcess = { phase: "plan" | "verify" | "review" | "final"; outcome?: string; loop?: number; maxLoops?: number; verified?: boolean; reviewed?: boolean;
-  blockingOpen?: number; planOpen?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; findings?: HarnessFinding[] };
+type HarnessIssue = { kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope"; detail: string };
+type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute"; outcome?: string; loop?: number; maxLoops?: number;
+  verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
+  findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[] };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
   revision: TranscriptRevision; eventCursor: string; state: "ready" | "unavailable"; items: TranscriptItem[];
   page: { beforeCursor: string | null; nextBeforeCursor: string | null; hasOlder: boolean; limit: number; truncated: boolean }; reasonCode: string | null };
@@ -163,10 +165,13 @@ function toolCalls(message: any, sessionRef: string, role: TranscriptItem["role"
 }
 // The harness's process notes ("agent-watch-process"): what it asked of the
 // agent before a code-changing turn ended, and how that turn ended.
-const PROCESS_OUTCOMES = ["no_change", "interrupted", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"];
+const PROCESS_OUTCOMES = ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"];
+// A helper's objection to its brief, a failed claim, a disagreement handed to the member.
+const PROCESS_PHASES = ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute"];
+const ISSUE_KINDS = ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"], HELPER_ROLES = ["scout", "research", "verify", "review"];
 const POLICY_MODES = ["off", "suggest", "require"];
 function harnessProcess(details: any): HarnessProcess | null {
-  if (!["plan", "verify", "review", "final"].includes(details?.phase)) return null;
+  if (!PROCESS_PHASES.includes(details?.phase)) return null;
   const loop = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 3;
   const out: HarnessProcess = { phase: details.phase };
   if (PROCESS_OUTCOMES.includes(details.outcome)) out.outcome = details.outcome;
@@ -184,6 +189,14 @@ function harnessProcess(details: any): HarnessProcess | null {
     .filter((f: any) => ["blocking", "major", "minor"].includes(f?.severity) && typeof f.issue === "string" && f.issue.trim()).slice(0, 10)
     .map((f: any) => ({ severity: f.severity, file: safeText(String(f.file ?? "")).full.slice(0, 300), line: Number.isSafeInteger(f.line) && f.line > 0 ? f.line : null,
       issue: safeText(f.issue).full.slice(0, 500) }));
+  if (HELPER_ROLES.includes(details.role)) out.role = details.role;
+  if (["main", "harness"].includes(details.by)) out.by = details.by;
+  if (Number.isInteger(details.disputes) && details.disputes >= 1) out.disputes = Math.min(details.disputes, 1000);
+  if (details.unchanged === true) out.unchanged = true;
+  if (Array.isArray(details.issues)) out.issues = details.issues.filter((i: any) => ISSUE_KINDS.includes(i?.kind) && typeof i.detail === "string" && i.detail.trim()).slice(0, 10)
+    .map((i: any) => ({ kind: i.kind, detail: safeText(i.detail).full.slice(0, 400) }));
+  if (Array.isArray(details.claims)) out.claims = details.claims.filter((c: any) => typeof c?.claim === "string" && c.claim.trim()).slice(0, 10)
+    .map((c: any) => ({ claim: safeText(c.claim).full.slice(0, 500) }));
   return out;
 }
 function role(message: any): TranscriptItem["role"] | null {

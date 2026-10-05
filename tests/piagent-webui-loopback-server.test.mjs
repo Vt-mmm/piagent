@@ -478,3 +478,35 @@ describe("Piagent WebUI local auth and static boundaries", () => {
     assert.throws(() => loadStaticBundle(oversized), /static-asset-invalid/);
   });
 });
+
+describe("Piagent WebUI member questions", () => {
+  // The main agent's questions: read by a signed-in page, answered only with
+  // the page's Origin and CSRF, for one question ref of one conversation.
+  it("reads a conversation's questions and takes an answer with Origin and CSRF", async () => {
+    const answers = [], ref = "question.11111111-2222-4333-8444-555555555555";
+    const server = await start({
+      readSessionQuestions: async (sessionRef) => ({ questions: sessionRef === "session.a" ? [{ questionRef: ref, askedAt: "2026-10-05T00:00:00.000Z", questions: [] }] : [] }),
+      answerSessionQuestion: async (sessionRef, questionRef, answer) => {
+        if (questionRef !== ref) throw new Error("question-not-pending");
+        if (!answer?.answers && !answer?.skipped) throw new Error("question-answer-invalid");
+        answers.push({ sessionRef, questionRef, answer }); return { questionRef, state: "answered" };
+      } });
+    assert.equal((await request(server.origin, "/api/v1/sessions/session.a/questions")).status, 401, "a signed-in page only");
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    const read = await request(server.origin, "/api/v1/sessions/session.a/questions", { headers: { Cookie: cookie } });
+    assert.equal(read.status, 200); assert.equal(JSON.parse(read.body).questions[0].questionRef, ref);
+    const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    const path = `/api/v1/sessions/session.a/questions/${ref}/answer`, body = JSON.stringify({ answers: [{ selected: [0] }] });
+    assert.equal((await request(server.origin, path, { method: "POST", headers: { ...headers, "X-Piagent-CSRF": "wrong" }, body })).status, 403);
+    assert.equal((await request(server.origin, path, { method: "POST", headers: { ...headers, Origin: "http://attacker.invalid" }, body })).status, 403);
+    assert.equal((await request(server.origin, "/api/v1/sessions/session.a/questions/not-a-ref/answer", { method: "POST", headers, body })).status, 400);
+    assert.equal((await request(server.origin, path, { method: "POST", headers, body: JSON.stringify({}) })).status, 400, "an answer of the wrong shape");
+    const accepted = await request(server.origin, path, { method: "POST", headers, body });
+    assert.equal(accepted.status, 200); assert.deepEqual(JSON.parse(accepted.body), { questionRef: ref, state: "answered" });
+    assert.equal((await request(server.origin, path.replace("5555", "6666"), { method: "POST", headers, body })).status, 409, "no longer pending");
+    assert.equal((await request(server.origin, path, { method: "POST", headers, body: JSON.stringify({ padding: "x".repeat(70_000) }) })).status, 413);
+    assert.deepEqual(answers, [{ sessionRef: "session.a", questionRef: ref, answer: { answers: [{ selected: [0] }] } }]);
+  });
+});

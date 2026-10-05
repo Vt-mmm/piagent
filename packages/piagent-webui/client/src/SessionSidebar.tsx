@@ -63,9 +63,9 @@ function StateDot({ activity, locale }: { activity: ReturnType<typeof sessionAct
 }
 
 // How a company conversation's last code-changing turn ended (Harness workflow).
-const OUTCOME_SHORT: Record<string, [string, string]> = { clean: ["Đủ bước", "All steps"], unverified: ["Chưa kiểm chứng", "Unverified"],
-  unreviewed: ["Chưa review", "Not reviewed"], blocking_open: ["Còn lỗi chặn", "Blocking open"], review_unavailable: ["Không review được", "Review unavailable"],
-  interrupted: ["Bị dừng", "Stopped"] };
+const OUTCOME_SHORT: Record<string, [string, string]> = { clean: ["Đủ bước", "All steps"], unverified: ["Chưa verify", "Unverified"],
+  unreviewed: ["Chưa review", "Not reviewed"], blocking_open: ["Còn lỗi blocking", "Blocking open"], review_unavailable: ["Không review được", "Review unavailable"],
+  interrupted: ["Bị dừng", "Stopped"], disputed: ["Cần bạn quyết", "Needs your call"] };
 
 function SessionItem({ session, live, selected, locale, onSelect, onAction, showProject = false }: { session: SessionRow; live?: LiveConversation; selected: boolean;
   locale: UiLocale; onSelect(): void; onAction(action: SessionMenuAction): void; showProject?: boolean }) {

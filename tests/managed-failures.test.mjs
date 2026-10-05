@@ -140,7 +140,7 @@ test('a request Studio held in its own line is asked again at once; one refused 
 });
 
 test('only an admission refusal is asked again; a failure after admission never is', () => {
-  for (const code of ['session_account_busy_retry_later', 'session_account_not_ready_retry_later', 'concurrency_limit', 'account_capacity_unavailable', 'request_rate_limit'])
+  for (const code of ['session_account_busy_retry_later', 'session_account_not_ready_retry_later', 'concurrency_limit', 'account_capacity_unavailable', 'request_rate_limit', 'gateway_busy', 'connector_busy'])
     assert.equal(failureIsAdmissionRefusal(code), true, code);
   for (const code of ['upstream_rate_limited', 'upstream_interrupted', 'upstream_timeout', 'connector_execution_failed', 'token_quota_exhausted', 'live_trial_limit_reached', 'studio-unreachable'])
     assert.equal(failureIsAdmissionRefusal(code), false, code);

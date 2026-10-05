@@ -23,6 +23,7 @@ const CODES = {
   request_rate_limit: ['busy', 'this key sends requests too fast'],
   helper_capacity_exhausted: ['busy', 'this key already runs its maximum number of subagents'],
   connector_busy: ['busy', "Studio's model gateway is at capacity"],
+  gateway_busy: ['busy', "Studio's model gateway is at capacity"],
   operation_unavailable: ['busy', 'Studio could not check this request in time'],
   account_recovering: ['busy', 'the company model account is being checked after an earlier failure'],
   session_account_busy_retry_later: ['busy', "this conversation's model account is busy"],
@@ -77,6 +78,7 @@ const CODES = {
   'managed-helper-used': ['tool', 'this subagent already ran for this message; each runs once per message'],
   'managed-helper-not-configured': ['tool', 'the company Harness does not enable this subagent'],
   'managed-helper-limit': ['tool', 'this subagent already ran 8 times for this message'],
+  'managed-helper-disputed': ['tool', 'this subagent objected to the brief twice for this message; the member decides'],
   helper_run_limit_reached: ['tool', 'this subagent already ran 8 times for this message'],
   'managed-helper-cancelled': ['tool', 'the subagent was stopped'],
   'managed-helper-failed': ['failed', 'the subagent ended without an answer'],
@@ -98,9 +100,11 @@ export function failureKind(code) { return CODES[code]?.[0] ?? 'failed'; }
 // Studio said no at admission, before any model account was asked: the same
 // request can be asked again later, and nothing reaches the model twice. A
 // failure after admission (the model's own error, an interrupted answer) is
-// never in this list: replaying it could repeat billed work.
+// never in this list: replaying it could repeat billed work. A gateway at
+// capacity (Studio's own bound, or the connector's before it starts the
+// attempt) refuses before any of that, so the request waits in line too.
 const ADMISSION_REFUSALS = new Set(['session_account_busy_retry_later', 'session_account_not_ready_retry_later',
-  'concurrency_limit', 'account_capacity_unavailable', 'request_rate_limit']);
+  'concurrency_limit', 'account_capacity_unavailable', 'request_rate_limit', 'gateway_busy', 'connector_busy']);
 export function failureIsAdmissionRefusal(code) { return ADMISSION_REFUSALS.has(code); }
 // Refused before the model did any work, for a reason that passes in seconds:
 // the account's sign-in was being renewed (the provider refused the old one)

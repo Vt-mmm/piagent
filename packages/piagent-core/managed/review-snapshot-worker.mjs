@@ -1,27 +1,45 @@
 import fs from 'node:fs';
-import { createHash } from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { managedGit } from './toolchain.mjs';
 // Executed only through the tool Seatbelt boundary; repo-local Git config cannot
 // grant a hook, textconv or credential helper access to the trusted runtime.
-const git = args => execFileSync(managedGit(), ['--no-pager', ...args], { encoding: 'utf8', maxBuffer: 160000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' } });
+// The snapshot holds the whole patch (its digest decides whether a review is
+// stale); a reviewer reads it in parts (patch-snapshot.mjs). A new file too
+// large to read is held by its hash: a change to it still changes the digest.
+const MAX_SNAPSHOT = 16 * 1024 * 1024, MAX_UNTRACKED = 2000, READ_FILE = 400_000, BINARY_INLINE = 120_000, HASHED_FILE = 256 * 1024 * 1024;
+const git = args => execFileSync(managedGit(), ['--no-pager', ...args], { encoding: 'utf8', maxBuffer: MAX_SNAPSHOT + 1, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' } });
+const sha256 = data => createHash('sha256').update(data).digest('hex');
 const patch = git(['diff', '--binary', '--no-ext-diff', '--no-textconv', 'HEAD', '--', '.']);
 const paths = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).sort();
-if (paths.length > 100) throw Error('review-untracked-limit');
+if (paths.length > MAX_UNTRACKED) throw Error('review-untracked-limit');
 const untracked = paths.map(name => {
   const stat = fs.lstatSync(name);
   if (stat.isSymbolicLink()) return { path: name, mode: 'symlink', target: fs.readlinkSync(name) };
-  if (!stat.isFile() || stat.size > 120000) throw Error('review-file-limit');
+  // A folder Git lists as one entry is a repository of its own (a clone
+  // inside the project): named, not read, and its entries keep the digest.
+  if (stat.isDirectory()) return { path: name, mode: 'directory', encoding: 'omitted', bytes: 0, sha256: sha256(fs.readdirSync(name).sort().join('\0')) };
+  if (!stat.isFile() || stat.size > HASHED_FILE) throw Error('review-file-limit');
+  const data = fs.readFileSync(name), mode = stat.mode & 0o777;
+  if (stat.size > READ_FILE) return { path: name, mode, encoding: 'omitted', bytes: stat.size, sha256: sha256(data) };
   // Text goes as text, so the reviewer can read new files; binary as base64.
-  const data = fs.readFileSync(name);
   let text = null;
   if (!data.includes(0)) { try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data); } catch { text = null; } }
-  return text === null ? { path: name, mode: stat.mode & 0o777, contents: data.toString('base64'), encoding: 'base64' } : { path: name, mode: stat.mode & 0o777, contents: text, encoding: 'utf8' };
+  if (text !== null) return { path: name, mode, contents: text, encoding: 'utf8' };
+  return stat.size > BINARY_INLINE ? { path: name, mode, encoding: 'omitted', bytes: stat.size, sha256: sha256(data) } : { path: name, mode, contents: data.toString('base64'), encoding: 'base64' };
 });
-const snapshot = JSON.stringify({ patch, untracked });
-if (Buffer.byteLength(snapshot) > 120000) throw Error('review-patch-limit');
-// With a part number the snapshot is sent in base64 parts small enough for the
-// shell tool's output limit, each headed by the whole snapshot's digest.
-const part = process.argv[2], bytes = Buffer.from(snapshot), SIZE = 30000;
-if (part === undefined) process.stdout.write(snapshot);
-else process.stdout.write(`${createHash('sha256').update(bytes).digest('hex')} ${Math.max(1, Math.ceil(bytes.length / SIZE))}\n${bytes.subarray(Number(part) * SIZE, (Number(part) + 1) * SIZE).toString('base64')}`);
+const snapshot = Buffer.from(JSON.stringify({ patch, untracked }));
+if (snapshot.length > MAX_SNAPSHOT) throw Error('review-patch-limit');
+// "digest": the digest and size only (is a review still current?). "file":
+// the snapshot goes to a new file in this boundary's temporary directory,
+// named on stdout with its digest; the runtime reads it once, checks the
+// digest and removes it. No argument: the snapshot itself.
+const mode = process.argv[2];
+if (mode === 'digest') process.stdout.write(`${sha256(snapshot)} ${snapshot.length}`);
+else if (mode === 'file') {
+  const name = `review-${randomUUID()}.json`;
+  fs.writeFileSync(path.join(os.tmpdir(), name), snapshot, { mode: 0o600, flag: 'wx' });
+  process.stdout.write(`${sha256(snapshot)} ${snapshot.length} ${name}`);
+} else process.stdout.write(snapshot);

@@ -3,6 +3,41 @@
 
 This is the local implementation under test, not a published release. Studio owns team/key/model authority and usage; Watch imports the connection and brokers credentials; Piagent executes the selected main/research/review harness. Personal OAuth stays in a separate runtime.
 
+## 2026-10-03 — helpers object to a wrong brief; disagreements go to the member
+
+The owner approved the rule:
+- a helper may object to the main agent's brief, with evidence, but never decides;
+- the main agent decides and must answer;
+- the same disagreement a second time goes to the member.
+
+Branch `helper-objections`, installed locally as 1.9.3 with the change, together with Studio (process report v3) and a new Agent Watch build. Nothing committed or published.
+
+- **Live cases.** 16 runs through the real Studio, Agent Watch broker and models:
+  - Harness: all steps required, two fix rounds;
+  - roles: scout mimo-v2.6-flash, research deepseek-v4.1-flash, verify hy3, review claude-sonnet-5, main claude-sonnet-5-5.
+
+  Some cases plant a wrong brief where the main agent hands work to a helper, to see whether the real helper catches it. The planted brief is written into the main agent's own tool call too, so the main agent reads it as its own.
+- **Caught and answered.**
+  - A member's wrong function name passed on to the scout: `wrong_premise`. The agent turned to the real function.
+  - A brief that would change a signature the member asked to keep: `conflicts_with_request`. The agent kept the signature and said the scout was right.
+  - A brief that stayed wrong after a corrected brief: a second objection. The member was told, the helper was not asked again, and the run reported `disputed`.
+  - A failed verify claim went back to the agent. The agent fixed the cause, and the harness's re-check passed.
+  - A claim outside the request that the agent never made was set aside as unverifiable on re-check, with no dispute.
+  - A reviewer's false blocking finding (simulated) was answered without a code change. The reviewer read the answer and withdrew the finding.
+- **Precision.**
+  - A sound scout brief drew a `wrong_premise` objection over a hedged guess ("if any, e.g. tax, shipping"). The brief check now says a marked guess is not an objection; the rerun had none.
+  - Sound research briefs drew none.
+  - The real reviewer twice refused a planted "team rule" that conflicted with the member's request, so no wrong blocking finding was produced.
+- **Fixed during the run.**
+  - Objections to the harness's own briefs (its review, its verify re-check) only restated the member's request. One was counted as a second objection, which produced a false dispute. They are no longer relayed.
+  - The verify re-check now lets a claim outside the request be marked unverifiable.
+  - The timeline kept a turn's last answer as a step when a quiet note followed it, and showed "this turn has no answer". Objection, rejudge and dispute notes now leave the answer in place.
+- **"tiếp tục".** After a stopped turn and "tiếp tục", the harness review read the original request as "Earlier message". Before, it read only "tiếp tục".
+- **Report.**
+  - After the new Agent Watch was approved in Keychain, the broker advertised `process-v3`. Studio stored `version 3, outcome disputed, objections 2, objections_answered 1, disputes 1` for an unchanged run.
+  - Older brokers keep receiving version 2 with the outcome they had before.
+- **Cost.** 16 runs used about 230 live trial requests.
+
 ## 2026-10-02 — a message after Stop: the busy Gateway, and Gateways started beside it
 
 Before pushing 1.9.0 the owner asked for one more long fleet round to hunt the one open defect: a dashboard page that, after Stop, could not send ("no answer" three turns in a row, or a composer locked for minutes). Committed on `release/v1.9.0` with the release; nothing pushed or published.

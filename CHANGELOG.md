@@ -2,6 +2,37 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+A helper may object to the brief the main agent gave it. The main agent
+decides and has to answer; the same disagreement a second time goes to the
+member.
+
+### Managed team harness
+
+- Every helper (scout, research, verify, review) reads the member's request verbatim, and the current plan, above the main agent's brief. A short follow-up such as "tiếp tục" brings the earlier message that states the task. Before, a helper saw only the brief, and a brief that dropped part of the request could not be seen to drift; the harness's own review after "tiếp tục" was told the request was "tiếp tục".
+- A helper ends its answer with `brief_issues` (wrong premise, conflicts with the request, ambiguous, out of scope), each with evidence. It objects only when acting on the brief as written would give a wrong or wasted answer; a guess the brief marks as a guess ("if any", "for example") is not an objection. The harness shows the objection in the conversation and adds a note to the main agent: answer it with a corrected brief, another approach, or a reason. An objection that no corrected brief followed is asked about once before the turn ends.
+- Objections to a brief the harness wrote itself (its review, its re-check) are not relayed: they only restate the member's request.
+- A second objection from the same helper for one message ends the exchange: the member decides, and the helper is refused (`managed-helper-disputed`) until the member's next message.
+- With a required review, an agent that answers a blocking finding instead of changing the code has its answer judged by the reviewer, who keeps or withdraws the finding. A kept finding goes to the member. A re-review after a fix also reads the answer that came with it.
+- With a required verify, a claim the verify helper marked failed goes back to the agent once, then the verify helper checks it again with the agent's answer. A claim outside the member's request that the result does not depend on is set aside as unverifiable; a claim that still fails goes to the member.
+- A turn whose disagreement went to the member ends as `disputed`, with or without a code change. Process report version 3 adds `objections`, `objections_answered` and `disputes`; a Studio or Agent Watch that does not list it receives version 2 with the outcome it had before.
+
+- The main agent asks the member when the request leaves a decision open (`ask_user`): 1–4 questions, each with 2–4 numbered options and "Other" in the member's own words. It waits for the answer, then goes on with it. In the Terminal each question is a selector; with no screen to ask on, the agent states the assumption it makes and goes on.
+- A question the member stopped before answering (or whose screen went away) tells the agent the decisions are still the member's: on "tiếp tục" it asks again instead of choosing for them. The tool also says not to add an "Other" option of its own.
+- A helper's receipt (its tokens, the patch it read) stays in the conversation for the member but is no longer part of the main agent's context, where it read as a message from the member ("you sent a line 'Review: … tokens'").
+- A check command that fails by returning an error result, rather than throwing, counts as a failed check (main agent, network commands and helper checks), so a required check never passes on a failing run.
+- A helper refused for its account's usage, resting, or whose account went away starts once more, and Studio gives it the next model of its role (a Harness "Model dự phòng").
+- A patch larger than one reviewer reads (120 KB) is reviewed in parts of whole files, one after another under the review grant, and the findings merge. A file too large to read, or a repository cloned inside the project, is named as not read instead of stopping the review.
+- Requests of one role running side by side share one grant renewal, so none voids another's token. The main agent's prompt cache key follows the conversation, not the turn.
+
+### Dashboard
+
+- A question from the main agent is a card above the conversation: numbered options with their meaning, "Khác" with a text field, "Để agent tự quyết" and "Gửi câu trả lời". Number keys choose, Enter sends; the turn shows "chờ bạn trả lời câu hỏi" while it waits. A company conversation's question is read and answered through the company Gateway; a card answered in another tab, or withdrawn, leaves within seconds. A waiting question keeps the turn alive past the 15-minute silence limit.
+- A tab whose browser session was replaced by a newer launch in the same browser (Agent Watch's WebUI button clicked again) no longer has every change refused: a refused change reads the browser's current session once and is sent again.
+- Objections, the reviewer judging an answer, failed claims and disagreements appear in the turn; the conversation row says "Cần bạn quyết". A step that asks nothing of the agent no longer hides its last answer behind "this turn has no answer".
+- Harness roles are named Subagent scout, research, verify and review, and process notes keep the usual English terms (check, fix, blocking, claim, plan).
+
 ## v1.9.3 - 2026-10-03
 
 Typing Vietnamese no longer sends or creates twice, and helpers read less of

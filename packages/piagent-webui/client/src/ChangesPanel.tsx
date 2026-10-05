@@ -89,8 +89,8 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
           {(file.stats?.deletions ?? 0) > 0 && <Box component="span" sx={toneText("error")}>−{file.stats.deletions}</Box>}</Typography>
       </Stack>)}</Stack>
     </Section>
-    {(plan || process) && <Section title={plan ? localize(locale, `Kế hoạch · ${done}/${plan.steps.length}`, `Plan · ${done}/${plan.steps.length}`) : localize(locale, "Tiến trình", "Process")}>
-      {plan && <Stack component="ol" spacing={.25} sx={{ m: 0, p: 0, listStyle: "none" }} aria-label={localize(locale, "Kế hoạch của agent", "Agent plan")}>{plan.steps.map((step, index) => {
+    {(plan || process) && <Section title={plan ? localize(locale, `Plan · ${done}/${plan.steps.length}`, `Plan · ${done}/${plan.steps.length}`) : localize(locale, "Tiến trình", "Process")}>
+      {plan && <Stack component="ol" spacing={.25} sx={{ m: 0, p: 0, listStyle: "none" }} aria-label={localize(locale, "Plan của agent", "Agent plan")}>{plan.steps.map((step, index) => {
         const Icon = step.status === "completed" ? CheckBoxRounded : step.status === "in_progress" ? PlayCircleOutlineRounded : CheckBoxOutlineBlankRounded;
         return <Stack component="li" key={index} direction="row" sx={{ alignItems: "flex-start", gap: .75, py: .25 }}
           aria-label={`${step.step}: ${step.status === "completed" ? localize(locale, "xong", "done") : step.status === "in_progress" ? localize(locale, "đang làm", "in progress") : localize(locale, "chưa làm", "pending")}`}>

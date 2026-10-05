@@ -157,8 +157,35 @@
       "additionalProperties": false,
       "required": ["phase"],
       "properties": {
-        "phase": { "enum": ["plan", "verify", "review", "final"] },
-        "outcome": { "enum": ["no_change", "interrupted", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
+        "phase": { "enum": ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute"] },
+        "outcome": { "enum": ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
+        "role": { "enum": ["scout", "research", "verify", "review"] },
+        "by": { "enum": ["main", "harness"] },
+        "disputes": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "unchanged": { "const": true },
+        "issues": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "detail"],
+            "properties": {
+              "kind": { "enum": ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"] },
+              "detail": { "type": "string", "maxLength": 400 }
+            }
+          }
+        },
+        "claims": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["claim"],
+            "properties": { "claim": { "type": "string", "maxLength": 500 } }
+          }
+        },
         "loop": { "type": "integer", "minimum": 0, "maximum": 3 },
         "maxLoops": { "type": "integer", "minimum": 0, "maximum": 3 },
         "verified": { "type": "boolean" },

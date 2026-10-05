@@ -6,6 +6,7 @@ import { activeSessionTask } from "../../piagent-core/extensions/task-state.js";
 import { createSessionOperationSettlement } from "./session-operation-settlement.ts";
 import { inspectTaskControlState } from "../../piagent-core/runtime/inspection/task-control-journal.ts";
 import { piApprovalBroker, type ApprovalBrokerEvent } from "../../piagent-core/runtime/inspection/approval-broker.ts";
+import { answerSessionQuestion, bindSessionQuestions, sessionQuestions } from "./session-questions.ts";
 import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type SessionOwnerProjection, type PiSessionInfo } from "./session-catalog.ts";
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
@@ -311,8 +312,10 @@ export class SessionRuntimeSupervisor {
   }
   #bindApproval(sessionRef: string, active: ActiveRuntime): void {
     const authority = () => sessionApprovalAuthority(this.#key, sessionRef, active);
-    active.unbindApproval = piApprovalBroker.bind({ cwd: active.info.cwd, rawSessionId: active.info.id,
-      runtimeInstanceId: active.lease.runtimeInstanceRef!, authority });
+    // The main agent's questions to the member are answered here too (session-questions.ts).
+    const unbindQuestions = bindSessionQuestions(active.info.id, () => active.watchdog?.progress()), unbindApproval = piApprovalBroker.bind({
+      cwd: active.info.cwd, rawSessionId: active.info.id, runtimeInstanceId: active.lease.runtimeInstanceRef!, authority });
+    active.unbindApproval = () => { unbindQuestions(); unbindApproval(); };
     active.unsubscribeApproval = piApprovalBroker.subscribe(active.info.cwd, active.info.id, (event: ApprovalBrokerEvent) => {
       active.watchdog?.progress();
       const projection = piApprovalBroker.projection(active.info.cwd, active.info.id);
@@ -388,6 +391,8 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef);
     return active ? piApprovalBroker.detail(active.info.cwd, active.info.id, approvalRef) : null;
   }
+  questions(sessionRef: string) { return sessionQuestions(this.#active.get(sessionRef)?.info.id ?? null); }
+  answerQuestion(sessionRef: string, questionRef: string, answer: unknown): unknown { return answerSessionQuestion(this.#active.get(sessionRef)?.info.id ?? null, questionRef, answer); }
   async decideApproval(approvalRef: string, decision: unknown): Promise<unknown> {
     for (const active of this.#active.values()) {
       if (piApprovalBroker.detail(active.info.cwd, active.info.id, approvalRef)) {

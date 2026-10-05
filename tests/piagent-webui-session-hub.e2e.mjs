@@ -859,17 +859,57 @@ test("shows the agent's plan, each time the harness sent the agent back, and how
       await page.goto(server.issueLaunchUrl());
       if (width < 1200) { await page.getByRole("button", { name: "Mở điều hướng" }).click({ force: true }); }
       await page.getByText("Review source changes", { exact: true }).filter({ visible: true }).click();
-      await expect(page.getByText("Harness: chưa có lệnh check nào chạy qua trên code hiện tại, yêu cầu agent chạy check (vòng 1/2)")).toBeVisible();
-      await expect(page.getByText("Harness: review tìm thấy 1 lỗi chặn, gửi lại cho agent sửa (vòng 2/2)")).toBeVisible();
+      await expect(page.getByText("Harness: chưa có check nào pass trên code hiện tại, yêu cầu agent chạy check (vòng 1/2)")).toBeVisible();
+      await expect(page.getByText("Harness: review tìm thấy 1 lỗi blocking, gửi lại agent để fix hoặc giải thích (vòng 2/2)")).toBeVisible();
       await expect(page.getByText("Giảm giá bị trừ hai lần", { exact: false })).toBeVisible();
-      await expect(page.getByRole("status", { name: "Tiến trình của lượt" })).toHaveText("Check đã qua trên code cuối · Còn 1 lỗi chặn chưa sửa");
+      await expect(page.getByRole("status", { name: "Tiến trình của lượt" })).toHaveText("Check đã pass trên code cuối · Còn 1 lỗi blocking chưa fix");
       if (width < 1200) await page.getByRole("button", { name: "Khung Workspace" }).click();
-      const plan = page.getByRole("list", { name: "Kế hoạch của agent" }).filter({ visible: true });
+      const plan = page.getByRole("list", { name: "Plan của agent" }).filter({ visible: true });
       await expect(plan.getByRole("listitem")).toHaveCount(3);
-      await expect(page.getByText("Kế hoạch · 1/3").filter({ visible: true })).toBeVisible();
-      await expect(page.getByText("Lượt sửa code gần nhất: Check đã qua trên code cuối · Còn 1 lỗi chặn chưa sửa").filter({ visible: true })).toBeVisible();
+      await expect(page.getByText("Plan · 1/3").filter({ visible: true })).toBeVisible();
+      await expect(page.getByText("Lượt sửa code gần nhất: Check đã pass trên code cuối · Còn 1 lỗi blocking chưa fix").filter({ visible: true })).toBeVisible();
       assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth));
       await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/harness-process-${width}.png`) });
+      await page.close();
+    }
+  } finally {
+    processTranscript = [];
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
+});
+
+test("shows a helper's objection to the brief and a disagreement the member has to decide", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
+  Object.assign(target, { modelLabel: "agent-watch-auto", sessionRevision: "revision_session_source_review_dispute",
+    managedProcess: { outcome: "disputed", verified: true, reviewed: true, blockingOpen: 1 } });
+  const base = transcriptFixture.items[0], text = (value) => ({ ...base.content, text: value, textChars: value.length });
+  const step = (ref, at, process, value = "Harness") => ({ ...base, messageRef: ref, parentMessageRef: "message_dispute_user", role: "custom", recordedAt: at, content: text(value), toolCalls: [], process });
+  processTranscript = [
+    { ...base, messageRef: "message_dispute_user", role: "user", recordedAt: "2026-08-14T07:00:00.000Z", content: text("Thêm giảm giá theo mã cho giỏ hàng, giữ nguyên API công khai"), toolCalls: [] },
+    step("message_dispute_objection", "2026-08-14T07:00:01.000Z", { phase: "objection", role: "scout", by: "main",
+      issues: [{ kind: "conflicts_with_request", detail: "Brief yêu cầu đổi chữ ký hàm total(items) thành total(items, coupon) trong packages/shop/src/very/long/path/to/cart-total-calculation.js, trái với yêu cầu giữ nguyên API công khai" }] }),
+    { ...base, messageRef: "message_dispute_main", parentMessageRef: "message_dispute_user", role: "assistant", recordedAt: "2026-08-14T07:00:02.000Z", content: text("Đã thêm applyCoupon và giữ nguyên total()."), toolCalls: [] },
+    step("message_dispute_rejudge", "2026-08-14T07:00:03.000Z", { phase: "rejudge", role: "review" }),
+    step("message_dispute_dispute", "2026-08-14T07:00:04.000Z", { phase: "dispute", role: "review",
+      findings: [{ severity: "blocking", file: "packages/shop/src/very/long/path/to/cart-total-calculation.js", line: 42, issue: "Mã giảm giá hết hạn vẫn được áp dụng" }] }),
+    step("message_dispute_final", "2026-08-14T07:00:05.000Z", { phase: "final", outcome: "disputed", disputes: 1, verified: true, reviewed: true, blockingOpen: 1, verifyPolicy: "require", reviewPolicy: "require" })];
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+      await page.goto(server.issueLaunchUrl());
+      if (width < 1200) { await page.getByRole("button", { name: "Mở điều hướng" }).click({ force: true }); }
+      await expect(page.getByText("Cần bạn quyết", { exact: false }).filter({ visible: true }).first()).toBeVisible();
+      await page.getByText("Review source changes", { exact: true }).filter({ visible: true }).click();
+      await expect(page.getByText("Subagent scout phản biện brief của main agent")).toBeVisible();
+      await expect(page.getByText("[conflict với yêu cầu]", { exact: false })).toBeVisible();
+      await expect(page.getByText("Harness: main agent giải thích thay vì fix, Subagent review xem xét lại lời giải thích")).toBeVisible();
+      await expect(page.getByText("Main agent và Subagent review vẫn conflict sau 2 lượt, bạn quyết định")).toBeVisible();
+      await expect(page.getByText("Mã giảm giá hết hạn vẫn được áp dụng", { exact: false })).toBeVisible();
+      await expect(page.getByText("Lượt này chưa có câu trả lời", { exact: false })).toHaveCount(0);
+      await expect(page.getByRole("status", { name: "Tiến trình của lượt" })).toHaveText("Main agent và subagent conflict, bạn quyết định · Check đã pass trên code cuối · Còn 1 lỗi blocking chưa fix");
+      assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth));
+      await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/harness-dispute-${width}.png`), fullPage: true });
       await page.close();
     }
   } finally {
@@ -895,7 +935,7 @@ test("keeps many conversations readable: running first, filter by kind, folding 
     await expect(running.getByText("Kịch bản 1")).toBeVisible(); await expect(running.getByText("harness-edge-cases", { exact: false })).toBeVisible();
     const group = page.getByRole("region", { name: "harness-edge-cases" });
     await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(5);
-    await expect(group.getByText("Còn lỗi chặn", { exact: false })).toBeVisible(); await expect(group.getByText("Đủ bước", { exact: false })).toBeVisible();
+    await expect(group.getByText("Còn lỗi blocking", { exact: false })).toBeVisible(); await expect(group.getByText("Đủ bước", { exact: false })).toBeVisible();
     await group.getByRole("button", { name: "Xem thêm 3" }).click(); await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(8);
     await group.getByRole("button", { name: "Thu gọn" }).click(); await expect(group.getByText(/^Kịch bản \d$/)).toHaveCount(5);
     // A folded group stays folded after a reload.

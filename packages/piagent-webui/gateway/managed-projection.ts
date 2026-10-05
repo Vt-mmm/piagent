@@ -1,6 +1,6 @@
 // Public managed state contains no provider/model route or credential.
 const STATUS = ['pending', 'in_progress', 'completed'];
-const OUTCOMES = ['no_change', 'interrupted', 'blocking_open', 'unverified', 'review_unavailable', 'unreviewed', 'clean'];
+const OUTCOMES = ['no_change', 'interrupted', 'disputed', 'blocking_open', 'unverified', 'review_unavailable', 'unreviewed', 'clean'];
 export function managedProjection(context: any, entries: any[]) {
   if (context?.model?.provider !== 'agent_watch_managed') return {};
   const last = (type: string) => entries.filter(e => e.type === 'custom' && e.customType === type).at(-1)?.data;

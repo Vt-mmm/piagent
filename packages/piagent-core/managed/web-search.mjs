@@ -5,6 +5,7 @@
 // Studio requires to match. A role on an API-key vendor model searches through
 // the company search pool instead (searchThroughPool).
 import { CLIENT_AGENT } from './client-agent.mjs';
+import { isVendor } from './native-catalog.mjs';
 
 const INSTRUCTIONS = 'Search the web for the request. Answer concisely with the facts found and cite every source URL. Prefer official documentation and primary sources.';
 
@@ -97,7 +98,9 @@ export async function searchThroughStudio({ provider, origin, token, roleId, mod
 // Web search from the company search pool (Studio's /v1/search): the team's
 // pool keys first, then keyless providers. It takes no model or effort, so a
 // role on any model can search; Studio meters it per member.
-const POOL_ANSWER_CHARS = 4000, POOL_SNIPPET_CHARS = 500;
+// A keyless provider's answer is its pages' text; at 4,000 characters the
+// search bench lost two of 23 Parallel answers that 8,000 kept.
+const POOL_ANSWER_CHARS = 8000, POOL_SNIPPET_CHARS = 500;
 export async function searchThroughPool({ origin, token, roleId, query, domains, signal, fetchImpl = fetch }) {
   if (typeof query !== 'string' || !query.trim() || query.length > 2000) throw new Error('web-search-query-invalid');
   const allowed = Array.isArray(domains) ? domains.filter((domain) => typeof domain === 'string' && /^[a-z0-9.-]{1,253}$/i.test(domain)).map((domain) => domain.toLowerCase()).slice(0, 20) : [];
@@ -126,8 +129,26 @@ export async function searchThroughPool({ origin, token, roleId, query, domains,
   return { answer, sources, provider: typeof body?.provider === 'string' ? body.provider : 'pool' };
 }
 
+// A company role's search on its grant: the company search pool answers
+// first for every role (Codex web search, the team's search keys, then
+// keyless providers). A Claude or Codex role falls back to its provider's own
+// search tool when the pool is missing (an older Studio) or found nothing;
+// an API-key vendor model has none.
+export async function searchForRole({ origin, grant, route, query, domains, signal }) {
+  if (grant.provider_model_id !== route.native || grant.provider !== route.provider) throw Error('managed-route-changed');
+  try {
+    const pooled = await searchThroughPool({ origin, token: grant.token, roleId: grant.role_id, query, domains, signal });
+    return { content: [{ type: 'text', text: searchResultText(pooled, pooled.provider) }], details: { sources: pooled.sources.length, provider: pooled.provider } };
+  } catch (error) {
+    if (isVendor(route.provider) || signal?.aborted) throw error;
+  }
+  const result = await searchThroughStudio({ provider: route.provider, origin, token: grant.token, roleId: grant.role_id,
+    model: route.native, effort: grant.effort, query, domains, signal });
+  return { content: [{ type: 'text', text: searchResultText(result, 'model-provider') }], details: { sources: result.sources.length, provider: route.provider } };
+}
+
 // Who answered a search, so the agent can tell the member which engine ran.
-const ENGINES = { tavily: 'Tavily through the company search pool', exa: 'Exa through the company search pool', parallel: 'Parallel through the company search pool',
+const ENGINES = { codex: "OpenAI's web search on a company Codex account", tavily: 'Tavily through the company search pool', exa: 'Exa through the company search pool', parallel: 'Parallel through the company search pool',
   'model-provider': "the model provider's own web search" };
 export function searchResultText({ answer, sources }, engine) {
   return [ENGINES[engine] ? `Searched with ${ENGINES[engine]}.` : '', answer || 'No summary returned.', sources.length ? 'Sources:\n' + sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}${source.snippet ? '\n   ' + source.snippet.replace(/\s+/g, ' ') : ''}`).join('\n') : ''].filter(Boolean).join('\n\n');

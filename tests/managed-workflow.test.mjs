@@ -93,6 +93,27 @@ test('outside git only commands that only read leave the code unchanged', async 
   assert.equal(inside.mutations, 1);
 });
 
+// A failed check may come back as an error result instead of a thrown error
+// (newer SDK bash tools do so): the harness must count it as failed, never as
+// a check the final code passed.
+test('a check that fails with an error result is counted as failed, not as passed', async () => {
+  const { processEditTools } = await import('../packages/piagent-core/managed/workflow.mjs');
+  const { countedCheck } = await import('../packages/piagent-core/managed/helper-roles.mjs');
+  const policy = { plan: 'off', verify: 'require', review: 'off', maxFixLoops: 1 };
+  const run = new RunProcess(policy, { request: 'x', complex: false, checks: { commands: ['npm test'] } });
+  const session = { run, mainAnswers: 0, checks: run.checks, session: { sessionManager: { getEntries: () => [] } }, digest: async () => 'd'.repeat(64), refreshReview: async () => {} };
+  const outcome = { isError: true, content: [{ type: 'text', text: '1 failing\n\nCommand exited with code 1' }] };
+  const [bash] = processEditTools(session, [{ name: 'bash', execute: async () => outcome }]);
+  assert.equal(await bash.execute('c1', { command: 'npm test' }), outcome);
+  assert.equal(run.checksFailed, 1); assert.equal(run.verifiedOn('d'.repeat(64)), false);
+  // A helper's check (verify runs the repository checks) is counted the same way.
+  await countedCheck(session, { name: 'bash', execute: async () => outcome }).execute('c2', { command: 'npm test' });
+  assert.equal(run.checksRun, 2); assert.equal(run.checksFailed, 2);
+  const [passing] = processEditTools(session, [{ name: 'bash', execute: async () => ({ content: [{ type: 'text', text: 'ok' }] }) }]);
+  await passing.execute('c3', { command: 'npm test' });
+  assert.equal(run.verifiedOn('d'.repeat(64)), true);
+});
+
 function project() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-workflow-')));
   fs.writeFileSync(path.join(base, 'a.txt'), 'start\n');
@@ -183,6 +204,11 @@ test('required checks and review: the harness sends the agent back until the fin
     assert.deepEqual(notes.map(n => n.details.phase), ['verify', 'review', 'final']);
     assert.match(notes[1].content, /1 blocking issue\(s\):\n1\. \[blocking\] a\.txt:1 — no final newline/);
     assert.equal(notes[2].details.outcome, 'clean');
+    // The main agent reads the findings; the review's receipt (tokens, patch)
+    // is for the member and never reaches the model as a message.
+    const mainContexts = server.requests.filter(r => r.role === 'main').map(r => JSON.stringify(r.body.messages));
+    assert.ok(mainContexts.some(c => /no final newline/.test(c)));
+    assert.ok(mainContexts.every(c => !/Review: \d+ tokens/.test(c)), 'no receipt in the main context');
     // The reviewer reads the project but cannot write, and sees the member's request.
     const reviews = server.requests.filter(r => r.role === 'review');
     assert.equal(reviews.length, 2);
@@ -450,4 +476,82 @@ test('a patch above the shell output limit is still reviewed; a review that cann
     assert.deepEqual(processNotes(managed4), []);
     assert.deepEqual([runReport(quiet).changed, runReport(quiet).outcome], [false, 'no_change']);
   } finally { await managed4.dispose(); await server4.close(); fs.rmSync(reader, { recursive: true, force: true }); }
+});
+
+// A patch larger than one reviewer reads is reviewed in parts of whole files,
+// a few at a time under one review grant; findings merge most severe first. A
+// file too large to read is named, never silently skipped, and its hash keeps
+// the digest exact: changing it still makes a review stale.
+test('a large patch is reviewed in parts and the findings merge', async () => {
+  const { reviewParts, mergeReviews, reviewText } = await import('../packages/piagent-core/managed/patch-snapshot.mjs');
+  const { briefIssues } = await import('../packages/piagent-core/managed/workflow.mjs');
+  const diff = name => `diff --git a/${name} b/${name}\nindex 1..2 100644\n--- a/${name}\n+++ b/${name}\n@@ -1 +1 @@\n-old\n+${'y'.repeat(50_000)}\n`;
+  const small = { digest: 'd'.repeat(64), patch: JSON.stringify({ patch: diff('a.js').slice(0, 200), untracked: [] }) };
+  assert.deepEqual(reviewParts(small), { parts: [{ files: null, text: reviewText(small) }], omitted: [] }, 'a patch one reviewer reads is one part, as before');
+  const snapshot = { digest: 'e'.repeat(64), patch: JSON.stringify({ patch: ['a.js', 'b.js', 'c.js'].map(diff).join('') + diff('package-lock.json').replace('y'.repeat(50_000), 'z'.repeat(500_000)),
+    untracked: [{ path: 'n.js', mode: 420, encoding: 'utf8', contents: 'x'.repeat(30_000) }, { path: 'blob.bin', mode: 420, encoding: 'omitted', bytes: 900_000, sha256: 'f'.repeat(64) }] }) };
+  const review = reviewParts(snapshot);
+  assert.deepEqual(review.parts.map(p => p.files), [['a.js', 'b.js'], ['c.js', 'n.js']]);
+  assert.deepEqual(review.omitted.map(o => o.path).sort(), ['blob.bin', 'package-lock.json']);
+  for (const [i, part] of review.parts.entries()) {
+    assert.match(part.text, new RegExp(`^Patch snapshot e{64}, part ${i + 1} of 2\\.`));
+    assert.match(part.text, /Not read: blob\.bin \(900000 bytes, too large to review\), package-lock\.json \(\d+ bytes, too large to review\)\./);
+    assert.ok(Buffer.byteLength(part.text) < 125_000);
+  }
+  assert.doesNotMatch(review.parts[0].text, /c\.js|=== new file/); assert.match(review.parts[1].text, /=== new file n\.js/);
+  const files = n => ({ digest: 'a'.repeat(64), patch: JSON.stringify({ patch: Array.from({ length: n }, (_, i) => diff(`f${i}.js`)).join(''), untracked: [] }) });
+  assert.equal(reviewParts(files(96), 60_000).parts.length, 96);
+  assert.throws(() => reviewParts(files(97), 60_000), /managed-review-patch-too-large/, 'more parts than a review may have');
+  const answer = (findings, issues = []) => ({ reply: `ok\n\`\`\`json\n${JSON.stringify({ findings, brief_issues: issues, summary: `${findings.length} found` })}\n\`\`\``, usage: 10 });
+  const merged = mergeReviews(review, [answer([{ severity: 'minor', file: 'a.js', issue: 'naming' }]),
+    answer([{ severity: 'blocking', file: 'c.js', line: 2, issue: 'wrong branch', evidence: 'x' }], [{ kind: 'ambiguous', detail: 'which API' }])], { findingsOf: reviewFindings, issuesOf: briefIssues });
+  assert.deepEqual([merged.usage, merged.parsed, merged.blocking, merged.findings.map(f => f.severity)], [20, true, 1, ['blocking', 'minor']]);
+  assert.deepEqual(reviewFindings(merged.reply).map(f => f.file), ['c.js', 'a.js'], 'the merged answer carries every finding');
+  assert.equal(briefIssues(merged.reply)[0].kind, 'ambiguous');
+  assert.match(merged.reply, /^Review of the patch in 2 parts\. Not read, too large: /);
+  const unparsed = mergeReviews(review, [answer([]), { reply: 'no json', usage: 1 }], { findingsOf: reviewFindings, issuesOf: briefIssues });
+  assert.deepEqual([unparsed.parsed, unparsed.blocking], [false, 0]);
+  assert.match(unparsed.reply, /Part 2\/2 .*no JSON findings; its answer began: no json/);
+});
+
+test('the harness reviews a patch larger than one reviewer reads in parts', { skip: !supported, timeout: 240000 }, async () => {
+  const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 1 });
+  const content = n => Array.from({ length: 850 }, (_, i) => `export const v${n}_${i} = "${'x'.repeat(30)} ${i}";`).join('\n') + '\n';
+  fs.writeFileSync(path.join(root, 'huge.bin'), Buffer.alloc(500_000, 1));
+  const names = ['p1.js', 'p2.js', 'p3.js', 'p4.js', 'p5.js'];
+  const clean = 'Fine.\n```json\n{"findings":[],"summary":"ok"}\n```';
+  const server = await studio({ roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [names.map(name => ({ tool: 'write', input: { path: name, content: content(name) } })), 'Done.'], review: [clean, clean, clean] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Add the five modules');
+    const reviews = server.requests.filter(r => r.role === 'review').map(r => JSON.stringify(r.body.messages));
+    assert.equal(reviews.length, 3, 'one reviewer per part');
+    assert.deepEqual(reviews.map(text => /part (\d) of 3/.exec(text)?.[1]).sort(), ['1', '2', '3']);
+    for (const name of names) assert.equal(reviews.filter(text => text.includes(`=== new file ${name}`)).length, 1, `${name} is read by one reviewer`);
+    assert.ok(reviews.every(text => text.includes('huge.bin (500000 bytes, too large to review)')), 'every reviewer is told which file was not read');
+    assert.deepEqual([runReport(agent).outcome, runReport(agent).reviews], ['clean', 1]);
+    assert.deepEqual([managed.review.parts, managed.review.unread, managed.review.stale], [3, ['huge.bin'], false]);
+    // The unread file still counts: changing it makes the review stale.
+    fs.writeFileSync(path.join(root, 'huge.bin'), Buffer.alloc(500_000, 2));
+    await managed.refreshReview();
+    assert.equal(managed.review.stale, true);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// A repository cloned inside the project is one untracked entry for Git: the
+// review names it as not read and still reviews the patch, instead of saying
+// the patch is too large.
+test('a repository inside the project does not stop the review', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 1 });
+  const nested = path.join(root, 'vendor-clone'); fs.mkdirSync(nested); fs.writeFileSync(path.join(nested, 'x.txt'), 'x\n'); execFileSync('git', ['init', '-q', nested]);
+  const server = await studio({ roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [{ tool: 'write', input: { path: 'a.txt', content: 'changed\n' } }, 'Done.'], review: ['Fine.\n```json\n{"findings":[],"summary":"ok"}\n```'] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Change a.txt');
+    assert.deepEqual([runReport(agent).outcome, runReport(agent).reviews], ['clean', 1]);
+    const review = JSON.stringify(server.requests.find(r => r.role === 'review').body.messages);
+    assert.match(review, /Patch snapshot [0-9a-f]{64}\.\\nNot read: vendor-clone\/? \(a repository of its own\)\./); assert.match(review, /\+changed/);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });

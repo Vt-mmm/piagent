@@ -13,6 +13,19 @@ async function captureSession(response: Response): Promise<boolean> {
 
 export function browserCsrfToken(): string | null { return csrfToken; }
 
+// A launch in another tab of this browser replaces the session cookie, and
+// with it the token this tab holds: a refused change re-reads the session of
+// the cookie once and is sent again when the token was indeed replaced.
+export async function csrfFetch(input: string, init: RequestInit & { headers: Record<string, string> }): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status !== 403) return response;
+  const sent = init.headers["X-Piagent-CSRF"];
+  try { await captureSession(await fetch("/api/v1/browser-session", { credentials: "same-origin", headers: { Accept: "application/json" }, signal: init.signal })); }
+  catch { return response; }
+  if (!csrfToken || csrfToken === sent) return response;
+  return fetch(input, { ...init, headers: { ...init.headers, "X-Piagent-CSRF": csrfToken } });
+}
+
 // A launcher (Agent Watch's WebUI button) names the project it opened for.
 let launchProject: string | null = null;
 export function launchProjectRef(): string | null { return launchProject; }

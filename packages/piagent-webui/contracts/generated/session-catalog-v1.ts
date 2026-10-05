@@ -108,7 +108,14 @@ export type SessionRow = {
   };
   managedProcess?: {
     outcome:
-      "no_change" | "interrupted" | "blocking_open" | "unverified" | "review_unavailable" | "unreviewed" | "clean";
+      | "no_change"
+      | "interrupted"
+      | "disputed"
+      | "blocking_open"
+      | "unverified"
+      | "review_unavailable"
+      | "unreviewed"
+      | "clean";
     verified: boolean;
     reviewed: boolean;
     blockingOpen: number;

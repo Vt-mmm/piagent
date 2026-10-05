@@ -24,6 +24,7 @@ function turnFor(user: TranscriptItem, key: string): TimelineTurn {
     startedAt: user.recordedAt, endedAt: null, outputTokens: 0, generationMs: 0 };
 }
 
+const QUIET_PHASES = new Set<string>(["objection", "rejudge", "dispute"]);
 export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] {
   const turns: TimelineTurn[] = [];
   let current: TimelineTurn | null = null, sentAt = NaN;
@@ -40,10 +41,12 @@ export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] 
     if (item.role === "tool-result") continue;
     current.endedAt = item.recordedAt;
     // The harness's process step (checks, review, how the turn ended).
-    // An answer the harness sent back (run checks, fix findings) becomes a step.
+    // An answer the harness sent back (run checks, fix findings) becomes a
+    // step; a step that asks nothing of the agent (a helper's objection, the
+    // reviewer judging its answer, a disagreement for the member) leaves it the answer.
     if (item.role === "custom" && item.process) {
       if (item.process.phase === "final") { current.process = item.process; continue; }
-      if (current.answer) { current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer }); current.answer = null; }
+      if (current.answer && !QUIET_PHASES.has(item.process.phase)) { current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer }); current.answer = null; }
       current.steps.push({ kind: "process", key: item.messageRef, process: item.process }); continue;
     }
     if (item.role === "assistant" && item.usage?.outputTokens && at > requestedAt) {

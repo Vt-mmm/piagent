@@ -69,8 +69,8 @@ export function failureContinuable(reason: string): boolean { return CONTINUABLE
 
 // Who failed: a harness role, never a model name.
 export function failureRole(role: "main" | "scout" | "research" | "verify" | "review", locale: UiLocale): string {
-  return role === "main" ? "Main agent" : role === "scout" ? localize(locale, "Subagent khảo sát", "Scout subagent")
-    : role === "research" ? localize(locale, "Subagent nghiên cứu", "Research subagent")
-    : role === "verify" ? localize(locale, "Subagent xác minh", "Verify subagent")
-    : localize(locale, "Subagent kiểm tra", "Review subagent");
+  return role === "main" ? "Main agent" : role === "scout" ? localize(locale, "Subagent scout", "Scout subagent")
+    : role === "research" ? localize(locale, "Subagent research", "Research subagent")
+    : role === "verify" ? localize(locale, "Subagent verify", "Verify subagent")
+    : localize(locale, "Subagent review", "Review subagent");
 }

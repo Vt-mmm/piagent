@@ -37,7 +37,7 @@ The machine-readable rule is `architecture/layers.json`; `npm run architecture:c
 | Layer | Current location | Owns | Must not own |
 |---|---|---|---|
 | Composition | `packages/piagent-core/extensions/piagent-guard.ts` | Wiring, dependency construction, registration order | Feature algorithms, mutable state implementations, large formatters |
-| Managed harness | `packages/piagent-core/managed/` | Company sessions imported by Agent Watch: Studio grants, sandboxed tool worker, research/review helpers, web search/fetch | Personal OAuth, personal extensions, Studio policy decisions |
+| Managed harness | `packages/piagent-core/managed/` | Company sessions imported by Agent Watch: Studio grants, sandboxed tool worker, scout/research/verify/review helpers and their objections to a brief, web search/fetch | Personal OAuth, personal extensions, Studio policy decisions |
 | Runtime adapters | `packages/piagent-core/runtime/` | Pi lifecycle hooks, shared session state, command/tool registration, input routing | Reusable policy decisions |
 | Core services | `packages/piagent-core/extensions/` except the entrypoint | Policy, context, task lifecycle, state services | Pi command menus and UI text |
 | MCP integration | `packages/piagent-core/mcp/` | MCP config layers, readiness, approval, command actions | Task and context policy |

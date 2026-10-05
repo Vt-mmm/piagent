@@ -276,6 +276,13 @@ export async function startPiagentGateway(options: {
         ? relayPost("/api/v1/runtime-commands", command) : runtimeCommands.execute(command),
       executeSessionAttachment: (sessionRef, command) => company(sessionRef)
         ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/attachments`, command) : attachments.execute(sessionRef, command),
+      // The main agent's questions to the member, read and answered where the
+      // conversation runs (the company Gateway for a company conversation).
+      readSessionQuestions: (sessionRef) => company(sessionRef)
+        ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions`) : runtimes!.questions(sessionRef),
+      answerSessionQuestion: (sessionRef, questionRef, answer) => company(sessionRef)
+        ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions/${encodeURIComponent(questionRef)}/answer`, answer)
+        : runtimes!.answerQuestion(sessionRef, questionRef, answer),
       // Approval refs carry no session; a company approval is not pending here.
       executeApproval: async (approvalRef, decision) => {
         try { return await runtimes!.decideApproval(approvalRef, decision); }

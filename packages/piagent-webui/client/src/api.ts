@@ -22,7 +22,7 @@ import type { Command, Receipt } from "../../contracts/generated/control-command
 import type { ApprovalDecision, ApprovalReceipt, ApprovalRequest } from "../../contracts/generated/approval-v1.ts";
 import type { Catalog } from "../../contracts/generated/session-catalog-v1.ts";
 import type { PiagentWebUICanonicalVolatileSessionOperationStateV1 } from "../../contracts/generated/session-live-state-v1.ts";
-import { browserCsrfToken } from "./bootstrap.ts";
+import { browserCsrfToken, csrfFetch } from "./bootstrap.ts";
 
 export class WebUiRequestError extends Error {
   readonly status: number;
@@ -91,7 +91,7 @@ export function readProviderAuthJob(jobRef: string, signal?: AbortSignal): Promi
 
 async function providerAuthCommand(command: Record<string, unknown>, signal?: AbortSignal): Promise<ProviderAuthJob> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/provider-auth", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/provider-auth", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as ProviderAuthJob;
@@ -112,7 +112,7 @@ export function cancelProviderAuth(jobRef: string, signal?: AbortSignal): Promis
 export async function importProjectFolder(signal?: AbortSignal): Promise<{ schemaVersion: 1; version: "piagent-project-import-result-v1";
   importedAt: string; project: SessionCreationOptions["projects"][number]; projects?: SessionCreationOptions["projects"] }> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/projects/import", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/projects/import", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
     body: JSON.stringify({ action: "project.import" }) });
   if (!response.ok) throw new WebUiRequestError(response.status);
@@ -132,7 +132,7 @@ export async function readCompanyStatus(signal?: AbortSignal): Promise<CompanySt
 // Starts or reconnects the company runtime; macOS may ask for Keychain access.
 export async function connectCompany(signal?: AbortSignal): Promise<CompanyStatus> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/managed/connect", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/managed/connect", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
     body: JSON.stringify({ action: "managed.connect" }) });
   if (!response.ok) throw new WebUiRequestError(response.status);
@@ -219,7 +219,7 @@ export type McpAuthJob = { schemaVersion: 1; version: "piagent-mcp-auth-job-v1";
 export async function executeSessionConnection(command: { action: "mcp.enable" | "mcp.disable" | "mcp.oauth"; sessionRef: string; connectionRef: string },
   signal?: AbortSignal): Promise<SessionConnections | McpAuthJob> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/session-connections", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/session-connections", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json();
@@ -231,7 +231,7 @@ export function readMcpAuthJob(jobRef: string, signal?: AbortSignal): Promise<Mc
 
 export async function executeRuntimeCommand(command: RuntimeCommand, signal?: AbortSignal): Promise<RuntimeReceipt> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/runtime-commands", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/runtime-commands", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as RuntimeReceipt;
@@ -239,7 +239,7 @@ export async function executeRuntimeCommand(command: RuntimeCommand, signal?: Ab
 
 export async function cancelMcpAuthJob(jobRef: string, signal?: AbortSignal): Promise<McpAuthJob> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch(`/api/v1/mcp-auth/jobs/${encodeURIComponent(jobRef)}/cancel`, { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch(`/api/v1/mcp-auth/jobs/${encodeURIComponent(jobRef)}/cancel`, { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "X-Piagent-CSRF": csrf } });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json();
@@ -320,7 +320,7 @@ export function readApproval(approvalRef: string, signal?: AbortSignal): Promise
 
 export async function decideApproval(decision: ApprovalDecision, signal?: AbortSignal): Promise<ApprovalReceipt> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch(`/api/v1/approvals/${encodeURIComponent(decision.approvalRef)}/decision`, { method: "POST",
+  const response = await csrfFetch(`/api/v1/approvals/${encodeURIComponent(decision.approvalRef)}/decision`, { method: "POST",
     credentials: "same-origin", signal, headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
     body: JSON.stringify(decision) });
   if (!response.ok) throw new WebUiRequestError(response.status);
@@ -330,7 +330,7 @@ export async function decideApproval(decision: ApprovalDecision, signal?: AbortS
 export async function sendChatCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/chat/messages", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/chat/messages", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -339,7 +339,7 @@ export async function sendChatCommand(command: Command, signal?: AbortSignal): P
 export async function sendSessionOptionCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/session-options", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/session-options", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -348,7 +348,7 @@ export async function sendSessionOptionCommand(command: Command, signal?: AbortS
 export async function sendLifecycleCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/lifecycle", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/lifecycle", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -357,7 +357,7 @@ export async function sendLifecycleCommand(command: Command, signal?: AbortSigna
 export async function sendResumeAndContinueCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/control/resume-and-continue", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/control/resume-and-continue", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -366,7 +366,7 @@ export async function sendResumeAndContinueCommand(command: Command, signal?: Ab
 export async function sendReviewCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/reviews", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/reviews", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -374,7 +374,7 @@ export async function sendReviewCommand(command: Command, signal?: AbortSignal):
 
 export async function sendSourceMutationCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/source-mutations", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/source-mutations", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -382,7 +382,7 @@ export async function sendSourceMutationCommand(command: Command, signal?: Abort
 
 export async function sendSourceRevertCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/source-mutations", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/source-mutations", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -390,7 +390,7 @@ export async function sendSourceRevertCommand(command: Command, signal?: AbortSi
 
 export async function sendSourceOpenCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/source-handoffs", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/source-handoffs", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
@@ -402,7 +402,7 @@ export async function stageSessionAttachment(sessionRef: string, command: StageC
   signal?: AbortSignal): Promise<StageReceipt | DiscardReceipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/attachments`, { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/attachments`, { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as StageReceipt | DiscardReceipt;
@@ -420,8 +420,25 @@ export function readDocument(sessionRef: string | null, documentRef: string, sig
 export async function stageAttachment(command: StageCommand | DiscardCommand, signal?: AbortSignal): Promise<StageReceipt | DiscardReceipt> {
   const csrf = browserCsrfToken();
   if (!csrf) throw new WebUiRequestError(403);
-  const response = await fetch("/api/v1/attachments", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch("/api/v1/attachments", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as StageReceipt | DiscardReceipt;
+}
+
+// The main agent's questions to the member, waiting in a conversation.
+export type MemberQuestion = { header: string; question: string; options: Array<{ label: string; description: string }>; multiSelect: boolean };
+export type PendingQuestion = { questionRef: string; askedAt: string; questions: MemberQuestion[] };
+export type QuestionAnswer = { skipped: true } | { answers: Array<{ selected: number[]; other?: string }> };
+
+export function readSessionQuestions(sessionRef: string, signal?: AbortSignal): Promise<{ questions: PendingQuestion[] }> {
+  return readJson(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions`, signal);
+}
+
+export async function answerSessionQuestion(sessionRef: string, questionRef: string, answer: QuestionAnswer, signal?: AbortSignal): Promise<void> {
+  const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
+  const response = await csrfFetch(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions/${encodeURIComponent(questionRef)}/answer`, { method: "POST",
+    credentials: "same-origin", signal, headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
+    body: JSON.stringify(answer) });
+  if (!response.ok) throw new WebUiRequestError(response.status);
 }

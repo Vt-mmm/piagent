@@ -157,6 +157,7 @@ function liveToolPhase(toolLabel: string, locale: "vi" | "en"): string {
   const tool = toolLabel.toLowerCase();
   if (tool === "compaction") return locale === "vi" ? "tóm tắt phần cũ của cuộc trò chuyện" : "summarising the older part of the conversation";
   if (tool === "capacity-wait") return locale === "vi" ? "chờ tài khoản công ty rảnh" : "waiting for a free company account";
+  if (tool === "ask_user") return locale === "vi" ? "chờ bạn trả lời câu hỏi" : "waiting for your answer";
   if (/(subagent|scout|delegate|agent)/.test(tool)) return locale === "vi" ? "phối hợp agent hỗ trợ" : "coordinating a helper agent";
   if (/(bash|exec|shell|command|terminal)/.test(tool)) return locale === "vi" ? "chạy lệnh" : "running a command";
   if (/(read|grep|find|list|glob|search_file)/.test(tool)) return locale === "vi" ? "đọc mã nguồn" : "reading source";

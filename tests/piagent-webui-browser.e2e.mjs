@@ -204,7 +204,7 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
   await expect.poll(() => handoffHistoryRequests.length).toBeGreaterThan(0);
   assert.match(new URL(handoffHistoryRequests[0]).pathname, /^\/api\/v1\/tasks\/run\.[a-f0-9]{48}\/handoff-history$/);
   await expect(page.getByRole("heading", { name: "Quyền sở hữu và vòng đời helper", exact: true })).toBeVisible();
-  await expect(page.getByText("Khảo sát · Chỉ đọc", { exact: true })).toBeVisible();
+  await expect(page.getByText("Scout · Chỉ đọc", { exact: true })).toBeVisible();
   await expect(page.getByText(/Cây lồng nhiều tầng: chưa có durable lineage/)).toBeVisible();
   await expect.poll(() => subagentTreeRequests.length).toBeGreaterThan(0);
   assert.match(new URL(subagentTreeRequests[0]).pathname, /^\/api\/v1\/tasks\/run\.[a-f0-9]{48}\/subagent-tree$/);

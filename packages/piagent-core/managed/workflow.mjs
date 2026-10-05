@@ -113,13 +113,32 @@ export function workflowPrompt(policy, checks) {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
     lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''}`);
   }
-  if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix.'
+  if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix, or to answer when a finding is wrong: the reviewer then judges your answer, and a disagreement that remains goes to the member.'
     : '- Review: before you finish a code change, ask the review helper (delegate role "review") to review the patch, then fix blocking findings.');
   return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\nEnd-to-end tests that start a local server and a browser run through run_with_network, which the user approves. If a step cannot be done here (a check needs a database or another service), say so plainly; do not try to install or start services to get around the sandbox.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.` : '';
 }
 
-export const REVIEW_PROMPT = 'You review a patch for the company coding assistant. The patch snapshot below is immutable; read files to check the code around it. Report only problems that matter: incorrect behaviour, regressions, security issues, parts of the request that are missing, changed behaviour without tests. Do not report style or preferences. Classify each finding: blocking (must be fixed before the work is done), major, or minor. End your answer with one JSON object in a ```json block: {"findings":[{"severity":"blocking|major|minor","file":"path","line":1,"issue":"what is wrong","evidence":"why"}],"summary":"one sentence"}. Use an empty findings list when the patch is fine. You cannot change files or delegate.';
+// Every helper checks the brief it was given: it may object with evidence, it
+// never decides and never answers another question instead. The main agent
+// decides and answers the objection (objections.mjs).
+export const BRIEF_ISSUE_KINDS = ['wrong_premise', 'conflicts_with_request', 'ambiguous', 'out_of_scope'];
+export const BRIEF_CHECK = 'The member\'s request is quoted above the brief, and the brief is a reading of it. Check the brief against the request and against what you find. Object only when acting on the brief as written would give a wrong or wasted answer: it states as fact something the code or sources contradict, it conflicts with the request, it is too ambiguous to answer, or it asks for work the request does not need. A guess the brief marks as a guess ("if any", "for example", "maybe") that turns out empty is not an objection: say what you found. When you object, say so first with evidence, then answer what can be answered: the main agent decides. Never answer a different question in silence, and do not object to a brief that is only short or worded differently from the request.';
+export const BRIEF_ISSUES_JSON = '"brief_issues":[{"kind":"wrong_premise|conflicts_with_request|ambiguous|out_of_scope","detail":"what is wrong with the brief","evidence":"file:line, the member\'s words or a source URL"}]';
+export const REVIEW_PROMPT = `You review a patch for the company coding assistant. The patch snapshot below is immutable; read files to check the code around it. Report only problems that matter: incorrect behaviour, regressions, security issues, parts of the request that are missing, changed behaviour without tests. Do not report style or preferences. Classify each finding: blocking (must be fixed before the work is done), major, or minor. ${BRIEF_CHECK} End your answer with one JSON object in a \`\`\`json block: {"findings":[{"severity":"blocking|major|minor","file":"path","line":1,"issue":"what is wrong","evidence":"why"}],${BRIEF_ISSUES_JSON},"summary":"one sentence"}. Use an empty findings list when the patch is fine and an empty brief_issues list when the brief is sound. You cannot change files or delegate.`;
 const clip = (value, n) => typeof value === 'string' ? value.slice(0, n) : '';
+// A helper's objections to its brief, from its answer; null when it gave no valid JSON.
+export function briefIssues(text) {
+  const blocks = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map(m => m[1]);
+  for (const raw of blocks.reverse()) {
+    try {
+      const value = JSON.parse(raw);
+      if (!Array.isArray(value?.brief_issues)) continue;
+      return value.brief_issues.filter(i => BRIEF_ISSUE_KINDS.includes(i?.kind) && typeof i.detail === 'string' && i.detail.trim()).slice(0, 5)
+        .map(i => ({ kind: i.kind, detail: clip(i.detail.trim(), 400), evidence: clip(i.evidence, 300) }));
+    } catch { /* not this block */ }
+  }
+  return null;
+}
 // The reviewer's findings from its answer; null when it gave no valid JSON.
 export function reviewFindings(text) {
   const blocks = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map(m => m[1]);
@@ -135,7 +154,7 @@ export function reviewFindings(text) {
 }
 // The verify helper re-checks a result on its own: claims against the code and
 // primary sources, the repository's checks on the current code.
-export const VERIFY_PROMPT = 'You verify a result for the company coding assistant, independently of whoever produced it. For each claim or requirement in the brief: read the code it is about, run the repository checks that cover it with bash, and confirm external facts against primary sources (official documentation, the project\'s own repository) with web_search and web_fetch. Commands run offline and the project is read-only for them: a check that must write into the project or reach the network fails for that reason. Report such a claim as unverifiable and say why; do not work around the sandbox. Never mark a claim pass without evidence you saw. End your answer with one JSON object in a ```json block: {"verdicts":[{"claim":"what was checked","status":"pass|fail|unverifiable","evidence":"file:line, the command and its result, or the source URL"}],"summary":"one sentence"}. You cannot change files or delegate.';
+export const VERIFY_PROMPT = `You verify a result for the company coding assistant, independently of whoever produced it. For each claim or requirement in the brief: read the code it is about, run the repository checks that cover it with bash, and confirm external facts against primary sources (official documentation, the project's own repository) with web_search and web_fetch. Commands run offline and the project is read-only for them: a check that must write into the project or reach the network fails for that reason. Report such a claim as unverifiable and say why; do not work around the sandbox. Never mark a claim pass without evidence you saw. ${BRIEF_CHECK} End your answer with one JSON object in a \`\`\`json block: {"verdicts":[{"claim":"what was checked","status":"pass|fail|unverifiable","evidence":"file:line, the command and its result, or the source URL"}],${BRIEF_ISSUES_JSON},"summary":"one sentence"}. Use an empty brief_issues list when the brief is sound. You cannot change files or delegate.`;
 // The verifier's verdicts from its answer; null when it gave no valid JSON.
 export function verifyVerdicts(text) {
   const blocks = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map(m => m[1]);
@@ -172,7 +191,12 @@ export class RunProcess {
   constructor(policy, { request, complex, checks }) {
     Object.assign(this, { policy, request: String(request ?? ''), complex, checks, startDigest: null, mutations: 0, lastCheck: null, checksRun: 0, checksFailed: 0,
       reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, planAsked: false, unplannedChange: false,
-      unknownTools: 0, changed: false, verified: false, reviewed: false, reviewUnavailable: false, outcome: null });
+      unknownTools: 0, changed: false, verified: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
+      // Helper objections to a brief, disagreements handed to the member, the
+      // claims verify marked failed, and where the harness last sent the
+      // agent back (to read its answer and see whether the code moved).
+      objections: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false,
+      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, objectionsAsked: false });
   }
   // Plan "require" on a complex task that has no plan yet.
   planMissing(plan) {
@@ -207,13 +231,18 @@ export class RunProcess {
   }
   // Version 2 (a broker advertising "process-v2") adds whether code was
   // changed without the required plan and how many calls named no tool.
+  // Version 3 adds helper objections, those the agent answered and the
+  // disagreements handed to the member ("disputed"); older versions get the
+  // outcome the run would have had without that.
   report(plan, version = 1) {
     const steps = this.planUpdated || unfinished(plan) ? plan?.plan ?? [] : [];
+    const fallback = this.changed ? 'interrupted' : 'no_change', count = n => Math.min(n, 1000);
     return { version, policy: { plan: this.policy.plan, verify: this.policy.verify, review: this.policy.review }, changed: this.changed,
-      plan_steps: steps.length, plan_done: steps.filter(p => p.status === 'completed').length, checks: Math.min(this.checksRun, 1000), checks_failed: Math.min(this.checksFailed, 1000),
-      verified: this.verified, reviews: Math.min(this.reviews, 1000), reviewed: this.reviewed, blocking: Math.min(this.blocking, 1000), blocking_open: Math.min(this.blockingOpen, this.blocking, 1000),
-      fix_loops: this.fixLoops, outcome: this.outcome ?? (this.changed ? 'interrupted' : 'no_change'),
-      ...(version === 2 ? { plan_skipped: this.planSkipped, unknown_tools: Math.min(this.unknownTools, 1000) } : {}) };
+      plan_steps: steps.length, plan_done: steps.filter(p => p.status === 'completed').length, checks: count(this.checksRun), checks_failed: count(this.checksFailed),
+      verified: this.verified, reviews: count(this.reviews), reviewed: this.reviewed, blocking: count(this.blocking), blocking_open: Math.min(this.blockingOpen, this.blocking, 1000),
+      fix_loops: this.fixLoops, outcome: (version === 3 ? this.outcome : this.legacyOutcome) ?? fallback,
+      ...(version >= 2 ? { plan_skipped: this.planSkipped, unknown_tools: count(this.unknownTools) } : {}),
+      ...(version === 3 ? { objections: count(this.objections.length), objections_answered: count(this.objections.filter(o => o.answered && !o.disputed).length), disputes: count(this.disputes.length) } : {}) };
   }
 }
 
@@ -221,58 +250,111 @@ export class RunProcess {
 // the final code and whether the final patch was reviewed. With "require" the
 // harness acts (asks for checks, runs the review, sends blocking findings back)
 // within max_fix_loops; every turn that changed code ends with a status note.
+// A finding, a failed claim or an objection to a brief is the agent's to fix
+// or answer; the same disagreement a second time goes to the member.
 export async function completionGate(managed, run, signal) {
   const session = managed.session, policy = run.policy;
-  const digestOf = async () => { try { return (await managed.patchSnapshot()).digest; } catch { return null; } };
+  const digestOf = async () => { try { return await managed.patchDigest(); } catch { return null; } };
   const stopped = () => signal?.aborted || ['aborted', 'error'].includes(session.messages.findLast(m => m.role === 'assistant')?.stopReason);
-  const send = (content, details) => session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details }, { triggerTurn: true });
+  const message = triggerTurn => (content, details) => session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details }, { triggerTurn });
+  const send = message(true), note = message(false);
+  // What the agent said after the harness sent it back: its answer.
+  const answerSince = at => session.messages.slice(at ?? session.messages.length).filter(m => m.role === 'assistant')
+    .map(m => (m.content ?? []).filter(p => p.type === 'text').map(p => p.text).join('\n')).join('\n').trim().slice(-3000);
   let digest = null, interrupted = false, verifyGaveUp = false;
-  for (let step = 0; step < 12; step += 1) {
+  for (let step = 0; step < 16; step += 1) {
     digest = await digestOf();
     run.changed = run.startDigest !== null && digest !== null ? digest !== run.startDigest : run.mutations > 0;
-    if (!run.changed) break;
-    if (stopped()) { interrupted = true; break; }
-    run.verified = run.verifiedOn(digest);
-    const review = managed.review, fresh = !!review && !review.stale && digest !== null && review.patchDigest === digest;
-    run.reviewed = fresh;
-    run.blockingOpen = fresh ? review.blocking ?? 0 : run.blockingOpen;
-    // Out of fix rounds the check stays unmet, but a required review still runs.
-    if (policy.verify === 'require' && !run.verified && !verifyGaveUp && run.fixLoops >= policy.maxFixLoops) verifyGaveUp = true;
-    if (policy.verify === 'require' && !run.verified && !verifyGaveUp) {
-      run.fixLoops += 1;
-      const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
-      await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run here (it needs a database, a service or the network) or fails for a reason unrelated to your change, say so plainly instead of trying to install or start services.`,
-        { phase: 'verify', loop: run.fixLoops, maxLoops: policy.maxFixLoops, lastCheckFailed: run.lastCheck?.ok === false });
-      continue;
-    }
-    if (policy.review === 'require' && !fresh) {
-      const plan = currentPlan(session.sessionManager);
-      const brief = `Review the current patch against the member's request.\n\nMember's request:\n${run.request.slice(0, 6000)}\n\nPlan:\n${planText(plan) || '(none)'}\n\nChecks: ${run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.`;
-      try { await managed.delegate({ role: 'review', task: brief }, signal); }
-      catch (error) {
-        run.reviewUnavailable = !stopped(); run.reviewUnavailableReason = reviewUnavailableReason(error?.message); interrupted = stopped();
-        // Why the review could not run, as a code only (the report says "failed").
-        if (run.reviewUnavailable) try { session.sessionManager.appendCustomEntry('agent-watch-failure-detail', { role: 'review', code: failureCode(error?.message) }); } catch { /* the report still says it */ }
-        break;
+    if (stopped()) { interrupted = run.changed; break; }
+    if (run.changed) {
+      run.verified = run.verifiedOn(digest);
+      const review = managed.review, fresh = !!review && !review.stale && digest !== null && review.patchDigest === digest;
+      run.reviewed = fresh;
+      run.blockingOpen = fresh ? review.blocking ?? 0 : run.blockingOpen;
+      // Out of fix rounds the check stays unmet, but a required review still runs.
+      if (policy.verify === 'require' && !run.verified && !verifyGaveUp && run.fixLoops >= policy.maxFixLoops) verifyGaveUp = true;
+      if (policy.verify === 'require' && !run.verified && !verifyGaveUp) {
+        run.fixLoops += 1;
+        const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
+        await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run here (it needs a database, a service or the network) or fails for a reason unrelated to your change, say so plainly instead of trying to install or start services.`,
+          { phase: 'verify', loop: run.fixLoops, maxLoops: policy.maxFixLoops, lastCheckFailed: run.lastCheck?.ok === false });
+        continue;
       }
-      continue;
+      if (policy.review === 'require' && !fresh && !run.reviewSettled) {
+        // After a round of findings the reviewer also reads the agent's answer to them.
+        const answer = run.sentAt !== null ? answerSince(run.sentAt) : '';
+        const brief = `Review the current patch against the member's request.\n\nChecks: ${run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.${answer ? `\n\nThe main agent's answer to your previous blocking findings (the code changed after it):\n${answer}` : ''}`;
+        try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
+        catch (error) {
+          run.reviewUnavailable = !stopped(); run.reviewUnavailableReason = reviewUnavailableReason(error?.message); interrupted = stopped();
+          // Why the review could not run, as a code only (the report says "failed").
+          if (run.reviewUnavailable) try { session.sessionManager.appendCustomEntry('agent-watch-failure-detail', { role: 'review', code: failureCode(error?.message) }); } catch { /* the report still says it */ }
+          break;
+        }
+        continue;
+      }
+      if (policy.review === 'require' && fresh && (review.blocking ?? 0) > 0 && !run.reviewSettled) {
+        const blocking = (review.findings ?? []).filter(f => f.severity === 'blocking'), list = blocking.map((f, i) => `${i + 1}. ${findingText(f)}`).join('\n');
+        if (run.sentDigest === digest && !run.rejudged) {
+          // The agent answered the findings without changing the code: the
+          // reviewer reads that answer once and judges its findings again.
+          run.rejudged = true;
+          await note('Harness: the main agent answered the review instead of changing the code; the reviewer judges its answer.', { phase: 'rejudge', role: 'review' });
+          const brief = `Judge your previous blocking findings on this patch again. The main agent answered them without changing the code:\n${answerSince(run.sentAt) || '(no answer)'}\n\nYour previous blocking findings:\n${list}\n\nKeep a finding as blocking when the answer does not hold against the code; leave it out when the answer is right.`;
+          try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
+          catch { if (stopped()) { interrupted = true; break; } run.reviewSettled = true; }
+          continue;
+        }
+        if (run.sentDigest === digest) {
+          // It heard the answer and kept its findings: the member decides.
+          run.reviewSettled = true; run.disputes.push({ source: 'review' });
+          await note(`Harness: the main agent and the review subagent still disagree after two rounds; the member decides.\n${list}`, { phase: 'dispute', role: 'review', findings: blocking.slice(0, 10) });
+        } else if (run.fixLoops >= policy.maxFixLoops) run.reviewSettled = true;
+        else {
+          run.fixLoops += 1; run.sentDigest = digest; run.sentAt = session.messages.length;
+          await send(`Harness review of the current patch found ${blocking.length} blocking issue(s):\n${list}\nFix them, or explain why an issue is not real: an answer without a code change goes back to the reviewer, who judges it. The patch is reviewed again after your change.`,
+            { phase: 'review', loop: run.fixLoops, maxLoops: policy.maxFixLoops, findings: blocking.slice(0, 10) });
+          continue;
+        }
+      }
     }
-    if (policy.review === 'require' && fresh && (review.blocking ?? 0) > 0) {
-      if (run.fixLoops >= policy.maxFixLoops) break;
-      run.fixLoops += 1;
-      const blocking = (review.findings ?? []).filter(f => f.severity === 'blocking');
-      await send(`Harness review of the current patch found ${blocking.length} blocking issue(s):\n${blocking.map((f, i) => `${i + 1}. ${findingText(f)}`).join('\n')}\nFix them, or explain why an issue is not real. The patch is reviewed again after your change.`,
-        { phase: 'review', loop: run.fixLoops, maxLoops: policy.maxFixLoops, findings: blocking.slice(0, 10) });
-      continue;
+    // Claims the verify subagent marked failed, under a required verify: back
+    // to the agent once, then checked again with its answer; still failing,
+    // the member decides.
+    if (policy.verify === 'require' && run.verifyFails.length && !run.claimsDone) {
+      const fails = run.verifyFails, list = fails.map((v, i) => `${i + 1}. ${v.claim}${v.evidence ? `\n   Evidence: ${v.evidence}` : ''}`).join('\n'), claims = fails.slice(0, 10).map(v => ({ claim: v.claim }));
+      if (!run.claimsAsked) {
+        run.claimsAsked = true; run.claimsAt = session.messages.length;
+        await send(`Harness: the verify subagent marked ${fails.length} claim(s) as failed:\n${list}\nFix the cause, or explain why a verdict is wrong. The verify subagent then checks these claims again with your answer.`, { phase: 'claims', claims });
+        continue;
+      }
+      if (!run.claimsRechecked) {
+        run.claimsRechecked = true;
+        await note("Harness: the verify subagent checks the failed claims again with the main agent's answer.", { phase: 'rejudge', role: 'verify' });
+        try { await managed.delegate({ role: 'verify', task: `Check these claims again on the current code; they were marked failed before:\n${list}\n\nThe main agent's answer:\n${answerSince(run.claimsAt) || '(no answer)'}\n\nA claim passes only on evidence you see yourself. It stays failed when it does not hold and the result the member asked for depends on it. When the answer shows the claim is not part of what the member asked and the result does not depend on it, mark it unverifiable and say why.` }, signal, { harness: true }); }
+        catch { if (stopped()) { interrupted = run.changed; break; } }
+        continue;
+      }
+      run.claimsDone = true; run.disputes.push({ source: 'verify' });
+      await note(`Harness: the main agent and the verify subagent still disagree after two rounds; the member decides.\n${list}`, { phase: 'dispute', role: 'verify', claims });
     }
     // Plan "require": a checklist written in this turn is brought up to date
     // once before the turn ends (models often write it and never touch it again).
     const plan = currentPlan(session.sessionManager);
-    if (policy.plan === 'require' && run.planUpdated && !run.planAsked && unfinished(plan)) {
+    if (run.changed && policy.plan === 'require' && run.planUpdated && !run.planAsked && unfinished(plan)) {
       run.planAsked = true;
       const open = plan.plan.filter(p => p.status !== 'completed').length;
       await send(`Harness process check: your checklist still has ${open} step(s) not marked completed:\n${planText(plan)}\nUpdate it with update_plan so it shows what was done. For a step you did not do, do it or say plainly why it is left.`,
         { phase: 'plan', planOpen: open });
+      continue;
+    }
+    // An objection no corrected brief followed is answered to the member, once.
+    const open = run.objections.filter(o => !o.answered && !o.disputed);
+    if (open.length && !run.objectionsAsked) {
+      run.objectionsAsked = true;
+      await send(`Harness: ${open.length} objection(s) to a brief got no corrected brief:\n${open.map(o => `- ${o.role} subagent: ${o.issues.map(i => `[${i.kind}] ${i.detail}`).join('; ')}`).join('\n')}\nIn your answer to the member, say in one or two sentences what you decided about ${open.length === 1 ? 'it' : 'each'} and why.`,
+        { phase: 'answer', role: open[0].role, issues: open.flatMap(o => o.issues).slice(0, 10) });
+      for (const o of open) o.answered = true;
       continue;
     }
     break;
@@ -280,18 +362,20 @@ export async function completionGate(managed, run, signal) {
   // However the code was changed, a complex task under plan "require" that
   // never had a plan is reported as changed without it.
   if (run.changed && run.planMissing(currentPlan(session.sessionManager))) run.planSkipped = true;
-  run.outcome = !run.changed ? 'no_change' : interrupted ? 'interrupted' : run.blockingOpen > 0 ? 'blocking_open'
+  run.legacyOutcome = !run.changed ? 'no_change' : interrupted ? 'interrupted' : run.blockingOpen > 0 ? 'blocking_open'
     : policy.verify !== 'off' && !run.verified ? 'unverified' : run.reviewUnavailable ? 'review_unavailable' : policy.review !== 'off' && !run.reviewed ? 'unreviewed' : 'clean';
+  run.outcome = run.legacyOutcome !== 'interrupted' && run.disputes.length ? 'disputed' : run.legacyOutcome;
   const settled = run.outcome !== 'interrupted';
   session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome });
-  if (!run.changed) return;
+  if (!run.changed && !run.disputes.length) return;
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status !== 'completed').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
-    ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}) };
-  const words = [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : 'no check passed on the final code',
+    ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
+  const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : 'no check passed on the final code',
     run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
-    run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null].filter(Boolean);
-  await session.sendCustomMessage({ customType: 'agent-watch-process', content: `Process status for this turn: code changed; ${words.join('; ') || 'no process step configured'}.`, display: true,
+    run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
+    run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null].filter(Boolean);
+  await session.sendCustomMessage({ customType: 'agent-watch-process', content: `Process status for this turn: ${run.changed ? 'code changed' : 'no code changed'}; ${words.join('; ') || 'no process step configured'}.`, display: true,
     details: { phase: 'final', outcome: run.outcome, ...status, ...(run.reviewUnavailable ? { reviewUnavailable: run.reviewUnavailableReason } : {}), policy: { verify: policy.verify, review: policy.review } } }, { triggerTurn: false });
 }
 
@@ -310,7 +394,9 @@ export function processEditTools(session, tools) {
       const watch = tool.name === 'bash' && !!session.run?.planMissing(plan) && !session.run.unplannedChange && session.run.startDigest !== null;
       let ok = false;
       try {
-        const result = await execute(...args); ok = true;
+        // A command that ran and failed may come back as an error result
+        // rather than a thrown error: either way the check did not pass.
+        const result = await execute(...args); ok = !result?.isError;
         if (watch && session.run) {
           const digest = await session.digest();
           if (digest !== null && digest !== session.run.startDigest) {

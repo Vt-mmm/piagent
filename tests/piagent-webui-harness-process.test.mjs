@@ -66,3 +66,48 @@ test("the session row carries the checklist and the last turn's process, and dro
   assert.equal(bad.managedPlan, undefined); assert.equal(bad.managedProcess, undefined);
   assert.deepEqual(managedProjection({ model: { provider: "anthropic" } }, [plan]), {});
 });
+
+test("a helper's objection, a failed claim, the reviewer judging an answer and a disagreement for the member reach the timeline", () => {
+  const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
+  const issue = { kind: "wrong_premise", detail: `billing.js does not exist; key ${secret}`, evidence: "find: nothing" };
+  const value = projectTranscript({ identity, revision, eventCursor: "cursor.objection", generatedAt: "2026-10-01T09:02:00.000Z", entries: [
+    message("o1", "user", [{ type: "text", text: "Where is the discount computed?" }]),
+    message("o2", "assistant", [{ type: "toolCall", id: "d1", name: "delegate", arguments: { role: "scout", task: "Find billing.js" } }], { stopReason: "toolUse" }),
+    note("o3", "agent-watch-process", { phase: "objection", role: "scout", by: "main", issues: [issue, { kind: "style", detail: "x" }] }),
+    note("o4", "agent-watch-process", { phase: "dispute", role: "scout", issues: [issue] }),
+    note("o5", "agent-watch-process", { phase: "claims", claims: [{ claim: "a.txt says fixed" }, { claim: " " }] }),
+    note("o6", "agent-watch-process", { phase: "rejudge", role: "review" }),
+    note("o7", "agent-watch-process", { phase: "answer", role: "research", issues: [{ kind: "ambiguous", detail: "which cart?" }] }),
+    message("o8", "assistant", [{ type: "text", text: "The scout and I disagree about billing.js." }], { stopReason: "stop" }),
+    note("o9", "agent-watch-process", { phase: "final", outcome: "disputed", disputes: 1, unchanged: true, verified: false, reviewed: false, blockingOpen: 0, policy: { verify: "require", review: "off" } }),
+  ] });
+  const validation = validateFixture(registry, "transcript-v1", value);
+  assert.equal(validation.valid, true, validation.errors);
+  const processes = value.items.filter(item => item.process).map(item => item.process);
+  assert.deepEqual(processes.map(p => p.phase), ["objection", "dispute", "claims", "rejudge", "answer", "final"]);
+  assert.equal(JSON.stringify(value).includes(secret), false, "objection text is redacted like findings");
+  assert.deepEqual(processes[0].issues.map(i => i.kind), ["wrong_premise"]);
+  assert.equal("evidence" in processes[0].issues[0], false, "only the kind and the detail reach the browser");
+  assert.deepEqual([processes[0].role, processes[0].by], ["scout", "main"]);
+  assert.deepEqual(processes[2].claims, [{ claim: "a.txt says fixed" }]);
+  assert.deepEqual(processes[5], { phase: "final", outcome: "disputed", disputes: 1, unchanged: true, verified: false, reviewed: false, blockingOpen: 0, verifyPolicy: "require", reviewPolicy: "off" });
+  const [turn] = timelineTurns(value.items);
+  assert.equal(turn.process.outcome, "disputed");
+  assert.equal(turn.answer, "The scout and I disagree about billing.js.");
+  // The reviewer judging the agent's answer and the disagreement after it keep that answer the turn's answer.
+  const later = projectTranscript({ identity, revision, eventCursor: "cursor.dispute", generatedAt: "2026-10-01T09:03:00.000Z", entries: [
+    message("q1", "user", [{ type: "text", text: "Make a.txt say fixed" }]),
+    message("q2", "assistant", [{ type: "text", text: "Done." }], { stopReason: "stop" }),
+    note("q3", "agent-watch-process", { phase: "review", loop: 1, maxLoops: 2, findings: [{ severity: "blocking", file: "a.txt", line: 1, issue: "no header" }] }),
+    message("q4", "assistant", [{ type: "text", text: "The finding is wrong: no file here has a header." }], { stopReason: "stop" }),
+    note("q5", "agent-watch-process", { phase: "rejudge", role: "review" }),
+    note("q6", "agent-watch-process", { phase: "dispute", role: "review", findings: [{ severity: "blocking", file: "a.txt", line: 1, issue: "no header" }] }),
+    note("q7", "agent-watch-process", { phase: "final", outcome: "disputed", disputes: 1, verified: false, reviewed: true, blockingOpen: 1, policy: { verify: "off", review: "require" } }),
+  ] });
+  const [disputed] = timelineTurns(later.items);
+  assert.equal(disputed.answer, "The finding is wrong: no file here has a header.");
+  assert.deepEqual(disputed.steps.map(step => step.kind === "note" ? step.text : step.kind === "process" ? step.process.phase : step.kind), ["Done.", "review", "rejudge", "dispute"]);
+  // The session row says a turn ended with a disagreement for the member.
+  const row = managedProjection({ model: { provider: "agent_watch_managed" } }, [{ type: "custom_message", customType: "agent-watch-process", details: { phase: "final", outcome: "disputed", verified: false, reviewed: false, blockingOpen: 0 } }]);
+  assert.equal(row.managedProcess.outcome, "disputed");
+});

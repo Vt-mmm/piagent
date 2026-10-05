@@ -37,7 +37,7 @@ Rule máy đọc nằm tại `architecture/layers.json`; chạy `npm run archite
 | Layer | Vị trí hiện tại | Ownership | Không được chứa |
 |---|---|---|---|
 | Composition | `packages/piagent-core/extensions/piagent-guard.ts` | Wiring, dependency construction, thứ tự registration | Feature algorithm, mutable state implementation, formatter lớn |
-| Managed harness | `packages/piagent-core/managed/` | Phiên công ty do Agent Watch nhập: grant Studio, tool worker trong sandbox, helper research/review, web search/fetch | OAuth cá nhân, extension cá nhân, quyết định chính sách của Studio |
+| Managed harness | `packages/piagent-core/managed/` | Phiên công ty do Agent Watch nhập: grant Studio, tool worker trong sandbox, helper scout/research/verify/review và phản biện brief của chúng, web search/fetch | OAuth cá nhân, extension cá nhân, quyết định chính sách của Studio |
 | Runtime adapters | `packages/piagent-core/runtime/` | Pi lifecycle hook, shared session state, command/tool registration, input routing | Policy decision dùng lại |
 | Core services | `packages/piagent-core/extensions/` trừ entrypoint | Policy, context, task lifecycle, state service | Pi command menu và UI text |
 | MCP integration | `packages/piagent-core/mcp/` | MCP config layer, readiness, approval, command action | Task và context policy |

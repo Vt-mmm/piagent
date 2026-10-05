@@ -34,7 +34,7 @@ const ICONS: Record<Kind, typeof BuildOutlined> = { read: DescriptionOutlined, w
   network: PublicRounded, git: CallSplitRounded, plan: ChecklistRounded, other: BuildOutlined };
 const VERBS: Record<Kind, [string, string]> = { read: ["Đọc", "Read"], write: ["Tạo", "Write"], edit: ["Sửa", "Edit"], command: ["Chạy", "Run"],
   search: ["Tìm", "Search"], list: ["Xem thư mục", "List"], "web-search": ["Tìm web", "Web search"], "web-fetch": ["Đọc trang", "Fetch page"],
-  subagent: ["Subagent", "Subagent"], network: ["Chạy có mạng", "Run with network"], git: ["Git", "Git"], plan: ["Kế hoạch", "Plan"], other: ["Công cụ", "Tool"] };
+  subagent: ["Subagent", "Subagent"], network: ["Chạy có mạng", "Run with network"], git: ["Git", "Git"], plan: ["Plan", "Plan"], other: ["Công cụ", "Tool"] };
 const LIVE_KINDS: Record<string, Kind> = { read: "read", write: "write", edit: "edit", apply_patch: "edit", bash: "command", run_experiment: "command", grep: "search", find: "search", ls: "list",
   web_search: "web-search", web_fetch: "web-fetch", delegate: "subagent", subagent: "subagent", run_with_network: "network", fetch_origin: "git", update_plan: "plan" };
 
