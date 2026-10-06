@@ -2,6 +2,15 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.13.1 - 2026-10-06
+
+### Fixes
+
+- Opening a conversation no longer jumps to its first message. Each conversation keeps the place it was left while the dashboard stays open; one opened for the first time, or left at its end, opens at its newest message and follows an answer as it streams.
+- Text the agent writes between tool calls, and earlier answers of a turn, are formatted like the final answer instead of showing their markdown (`**`, backticks, `#`, `-`) as plain text. The first answer after opening the dashboard no longer shows as plain text for a moment.
+
+Updating from 1.13.0 needs no new Agent Watch import; from 1.12 or earlier, import again as described for 1.13.0.
+
 ## v1.13.0 - 2026-10-06
 
 Piagent on Windows through WSL2, with company conversations in a bubblewrap sandbox; personal mode on Windows itself as a preview.

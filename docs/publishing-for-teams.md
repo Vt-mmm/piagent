@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.13.1`: mở lại cuộc trò chuyện giữ đúng chỗ đang đọc (lần đầu mở ở tin mới nhất); chữ agent viết giữa các tool call hiển thị có định dạng thay vì markdown thô.
 - `1.13.0`: Piagent trên Windows qua WSL2 (sandbox bubblewrap, Agent Watch cho Windows); sau khi cập nhật, mỗi thành viên nhập lại cấu hình Piagent trong Agent Watch.
 - `1.12.1`: nhánh (fork) của cuộc trò chuyện công ty gửi được tin nhắn; nhánh tạo trước bản này cần tạo lại.
 - `1.12.0`: @ trong dashboard chọn file và folder ở bất kỳ đâu trên máy, agent đọc được folder ngoài project (chỉ đọc); khung chat giữ tin nhắn đang soạn khi chuyển cuộc trò chuyện; skill và command của `.claude`, `.codex`, `.agents` (project và máy) dùng được bằng `/`; sandbox công ty chạy được unit và integration test của các ngôn ngữ phổ biến (cache package theo project, server trên localhost, Xcode đã chọn, .NET).
