@@ -36,7 +36,7 @@ Bản local này chưa phải bản phát hành có Developer ID. [Trạng thái
 
 ## Windows
 
-Trên Windows, Piagent chạy trong WSL2 (Ubuntu): chế độ công ty với sandbox bubblewrap và Agent Watch cho Windows, và cả chế độ cá nhân. Chạy thẳng trên Windows mới là bản xem trước cho chế độ cá nhân. Cài đặt từng bước: [Windows](docs/vi/windows.md).
+Trên Windows, Piagent chạy trong WSL2 (Ubuntu): chế độ công ty với sandbox bubblewrap và Agent Watch cho Windows, và cả chế độ cá nhân. Một lệnh PowerShell cài tất cả. Chạy thẳng trên Windows mới là bản xem trước cho chế độ cá nhân. Cài đặt từng bước: [Windows](docs/vi/windows.md).
 
 ## Web search và vision
 

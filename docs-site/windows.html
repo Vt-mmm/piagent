@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi" data-copy-success="Đã lấy" data-copy-fallback="Chọn lệnh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Piagent trên Windows bằng một lệnh · Pi Agent Platform Docs</title>
+    <meta name="description" content="Một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch, nối key công ty và thêm Piagent vào Start menu; chạy lại để cập nhật." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/windows" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/windows" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/windows" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/windows" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Piagent trên Windows bằng một lệnh · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch, nối key công ty và thêm Piagent vào Start menu; chạy lại để cập nhật." />
+    <meta property="og:url" content="https://piagent.io.vn/windows" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.13.1 docs · VI</span>
+        <nav class="language-switch" aria-label="Ngôn ngữ">
+          <a class="language-option current" href="/windows" hreflang="vi" lang="vi" aria-current="true">VI</a>
+          <a class="language-option" href="/en/windows" hreflang="en" lang="en">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button top-command-link" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/ecosystem">Hệ sinh thái</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link current" href="/windows" aria-current="page">Cài trên Windows</a>
+            <a class="nav-link" href="/whats-new">Có gì mới</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/context-engine">Context Engine</a>
+            <a class="nav-link" href="/benchmark">Benchmark</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>Cài trên Windows</span>
+            </nav>
+            <div class="page-head">
+              <h1>Piagent trên Windows bằng một lệnh</h1>
+              <p>Một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch, nối key công ty và thêm Piagent vào Start menu; chạy lại để cập nhật.</p>
+            </div>
+<section class="section">
+
+  <div class="steps">
+    <article class="step">
+      <div>
+        <h3 id="cai-mot-lenh">Cài bằng một lệnh</h3>
+        <p>Mở <strong>PowerShell</strong> (Start → gõ PowerShell) và chạy:</p>
+        <div class="command-card">
+          <header><span>Một lệnh</span><button class="clip-btn" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Lấy lệnh</button></header>
+          <pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre>
+        </div>
+        <p>Lệnh này lần lượt:</p>
+        <ol>
+          <li>Cài <strong>WSL2</strong> nếu máy chưa có. Windows hỏi quyền quản trị; lần đầu cần khởi động lại, và cài đặt tự chạy tiếp khi bạn đăng nhập lại.</li>
+          <li>Cài <strong>Ubuntu</strong>, tạo user Ubuntu theo tên Windows của bạn và hỏi mật khẩu cho user đó (dùng khi chạy <span class="inline-code">sudo</span>).</li>
+          <li>Cài <strong>Piagent trong Ubuntu</strong>: gói hệ thống, sandbox bubblewrap, Node 24, Piagent và đúng bản Pi mà release đang pin.</li>
+          <li>Hỏi <strong>mã kết nối</strong> admin gửi. Dán vào thì lệnh cài Agent Watch, kết nối key công ty và nối Piagent trong Ubuntu với key đó. Bấm Enter để bỏ qua nếu bạn chỉ dùng tài khoản AI của riêng mình.</li>
+          <li>Thêm mục <strong>Piagent</strong> vào Start menu và mở dashboard trong trình duyệt.</li>
+        </ol>
+        <p><strong>Cập nhật:</strong> chạy lại đúng lệnh trên. Những bước đã xong được bỏ qua; Piagent và Agent Watch được cập nhật và nối lại key công ty.</p>
+        <p>Agent Watch là bản nội bộ chưa ký số: nếu Windows SmartScreen cảnh báo, chọn <em>More info → Run anyway</em>.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="dung-hang-ngay">Dùng hằng ngày</h3>
+        <p>Mở <strong>Piagent</strong> từ Start menu: một cửa sổ Ubuntu mở dashboard trong trình duyệt Windows. Giữ cửa sổ đó mở khi đang dùng.</p>
+        <p>Để project trong ổ của Ubuntu (ví dụ <span class="inline-code">~/projects</span>) cho nhanh; folder Windows (<span class="inline-code">/mnt/c/...</span>) vẫn dùng được nhưng chậm hơn rõ với npm và git. VS Code trên Windows mở thẳng folder trong Ubuntu qua extension WSL.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="khi-cai-bi-loi">Khi cài bị lỗi</h3>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Dấu hiệu</th>
+                <th>Cách xử lý</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Lệnh đòi khởi động lại mãi, hoặc Ubuntu báo <span class="inline-code">0x80370114</span></td>
+                <td>Windows ghi đã bật <em>Virtual Machine Platform</em> nhưng thiếu dịch vụ máy ảo. Nếu <span class="inline-code">Test-Path C:\Windows\System32\vmcompute.exe</span> ra <span class="inline-code">False</span>: trong PowerShell <em>Run as administrator</em> chạy <span class="inline-code">DISM /Online /Cleanup-Image /RestoreHealth</span> và <span class="inline-code">sfc /scannow</span>, rồi tắt và bật lại <em>VirtualMachinePlatform</em> bằng <span class="inline-code">dism.exe</span> (mỗi lần Restart). Vẫn thiếu: cài đè Windows 11 bằng Installation Assistant, chọn giữ file và ứng dụng.</td>
+              </tr>
+              <tr>
+                <td><span class="inline-code">0x80370102</span> hoặc lỗi ảo hoá</td>
+                <td>Bật Virtualization (Intel VT-x / AMD SVM) trong BIOS.</td>
+              </tr>
+              <tr>
+                <td>Tải Ubuntu lỗi mạng</td>
+                <td><span class="inline-code">wsl --install -d Ubuntu --web-download</span>, rồi chạy lại lệnh cài.</td>
+              </tr>
+              <tr>
+                <td>Dashboard báo Agent Watch hoặc Piagent vừa cập nhật</td>
+                <td>Chạy lại lệnh cài, hoặc trong Agent Watch bấm <strong>Kết nối Piagent trong WSL</strong>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Kiểm tra máy: trong Ubuntu chạy <span class="inline-code">piagent studio --doctor</span>. Khi máy đã khởi động lại mà Windows vẫn thiếu dịch vụ máy ảo, lệnh cài in đúng các bước sửa ở trên thay vì đòi khởi động lại tiếp.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="vi-sao-wsl2">Vì sao là WSL2</h3>
+        <p>Ubuntu trong WSL2 chạy ngay bên trong Windows như một máy ảo nhẹ do Windows quản lý, không phải cài song song. Chế độ công ty cần sandbox của hệ điều hành cho mọi lệnh agent chạy: Seatbelt trên macOS, bubblewrap trên Linux và WSL2. Windows chưa có sandbox tương đương, nên Piagent chạy trong WSL2.</p>
+        <p>Chạy thẳng trên Windows (không qua WSL) mới là bản xem trước cho chế độ cá nhân. Cài từng bước bằng tay và chi tiết sandbox: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/vi/windows.md">Piagent trên Windows</a>.</p>
+      </div>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/quickstart">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+              <a class="pager-next" href="/whats-new">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Có gì mới</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="Liên kết ngoài">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/en/windows" hreflang="en">English</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>

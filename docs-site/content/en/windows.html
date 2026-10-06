@@ -1,0 +1,76 @@
+<section class="section">
+
+  <div class="steps">
+    <article class="step">
+      <div>
+        <h3 id="one-command">Install with one command</h3>
+        <p>Open <strong>PowerShell</strong> (Start → type PowerShell) and run:</p>
+        <div class="command-card">
+          <header><span>One command</span><button class="clip-btn" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Copy</button></header>
+          <pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre>
+        </div>
+        <p>It goes through these steps:</p>
+        <ol>
+          <li>Installs <strong>WSL2</strong> when it is missing. Windows asks for administrator approval; the first time a restart is needed, and setup continues when you sign in again.</li>
+          <li>Installs <strong>Ubuntu</strong>, creates an Ubuntu user named after your Windows user and asks for its password (used for <span class="inline-code">sudo</span>).</li>
+          <li>Installs <strong>Piagent inside Ubuntu</strong>: system packages, the bubblewrap sandbox, Node 24, Piagent and the Pi version the release pins.</li>
+          <li>Asks for the <strong>connection code</strong> your admin sent. With a code it installs Agent Watch, connects the company key and binds Piagent in Ubuntu to it. Press Enter to skip if you only use your own AI account.</li>
+          <li>Adds a <strong>Piagent</strong> entry to the Start menu and opens the dashboard in the browser.</li>
+        </ol>
+        <p><strong>Updating:</strong> run the same command again. Finished steps are skipped; Piagent and Agent Watch are updated and the company key is bound again.</p>
+        <p>Agent Watch is an internal build without a code signature: if Windows SmartScreen warns, choose <em>More info → Run anyway</em>.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="every-day">Every day</h3>
+        <p>Open <strong>Piagent</strong> from the Start menu: an Ubuntu window opens the dashboard in the Windows browser. Keep that window open while you work.</p>
+        <p>Keep projects on the Ubuntu disk (for example <span class="inline-code">~/projects</span>) for speed; Windows folders (<span class="inline-code">/mnt/c/...</span>) work but are much slower for npm and git. VS Code on Windows opens folders inside Ubuntu through its WSL extension.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="when-setup-fails">When setup fails</h3>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Symptom</th>
+                <th>What to do</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Setup asks for a restart after every restart, or Ubuntu fails with <span class="inline-code">0x80370114</span></td>
+                <td>Windows reads <em>Virtual Machine Platform</em> as enabled but lacks its VM service. If <span class="inline-code">Test-Path C:\Windows\System32\vmcompute.exe</span> prints <span class="inline-code">False</span>: in PowerShell opened with <em>Run as administrator</em> run <span class="inline-code">DISM /Online /Cleanup-Image /RestoreHealth</span> and <span class="inline-code">sfc /scannow</span>, then turn <em>VirtualMachinePlatform</em> off and on again with <span class="inline-code">dism.exe</span> (restart each time). Still missing: repair-install Windows 11 with the Installation Assistant, keeping files and apps.</td>
+              </tr>
+              <tr>
+                <td><span class="inline-code">0x80370102</span> or a virtualization error</td>
+                <td>Turn on virtualization (Intel VT-x / AMD SVM) in the BIOS.</td>
+              </tr>
+              <tr>
+                <td>Downloading Ubuntu fails</td>
+                <td><span class="inline-code">wsl --install -d Ubuntu --web-download</span>, then run setup again.</td>
+              </tr>
+              <tr>
+                <td>The dashboard says Agent Watch or Piagent changed</td>
+                <td>Run setup again, or choose <strong>Kết nối Piagent trong WSL</strong> (Connect Piagent in WSL) in Agent Watch.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Check the machine with <span class="inline-code">piagent studio --doctor</span> inside Ubuntu. When Windows still lacks the VM service after a restart, setup prints the repair steps above instead of asking for another restart.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="why-wsl2">Why WSL2</h3>
+        <p>Ubuntu in WSL2 runs inside Windows as a lightweight virtual machine that Windows manages; it is not a second operating system to boot. Company mode needs an operating-system sandbox around every command the agent runs: Seatbelt on macOS, bubblewrap on Linux and WSL2. Windows has no equivalent sandbox yet, so Piagent runs in WSL2.</p>
+        <p>Running on Windows itself (without WSL) is a preview of personal mode. Manual steps and sandbox details: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/en/windows.md">Piagent on Windows</a>.</p>
+      </div>
+    </article>
+  </div>
+</section>

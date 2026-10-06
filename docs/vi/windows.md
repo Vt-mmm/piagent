@@ -11,7 +11,26 @@ Trên Windows, chạy Piagent trong **WSL2** (Ubuntu), cho cả cuộc trò chuy
 
 Chế độ công ty cần sandbox của hệ điều hành cho mọi lệnh agent chạy. Trên macOS đó là Seatbelt; trên Linux và WSL2 là bubblewrap. Windows chưa có sandbox tương đương dùng được cho agent, nên chế độ công ty chạy trong WSL2.
 
-## Chế độ công ty trong WSL2
+## Cài bằng một lệnh
+
+Mở **PowerShell** và chạy:
+
+```powershell
+irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex
+```
+
+Lệnh này:
+- cài WSL2 và Ubuntu nếu thiếu (lần đầu cần khởi động lại, cài đặt tự chạy tiếp khi đăng nhập);
+- tạo user Ubuntu và cài Piagent trong Ubuntu;
+- hỏi mã kết nối: dán vào thì cài Agent Watch và nối key công ty; Enter để bỏ qua nếu chỉ dùng chế độ cá nhân;
+- thêm mục **Piagent** vào Start menu để mở dashboard.
+
+Chạy lại đúng lệnh để cập nhật. Hướng dẫn đầy đủ và cách xử lý lỗi cài đặt: trang [Cài trên Windows](https://piagent.io.vn/windows) của docs.
+
+## Cài từng bước (chế độ công ty trong WSL2)
+
+Những bước lệnh một dòng ở trên tự làm, khi cần làm tay:
+
 
 1. Cài WSL2 với Ubuntu (PowerShell): `wsl --install -d Ubuntu`.
 2. Trong Ubuntu:

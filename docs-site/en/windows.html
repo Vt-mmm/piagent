@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Piagent on Windows with one command · Pi Agent Platform Docs</title>
+    <meta name="description" content="One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/windows" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/windows" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/windows" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/windows" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Piagent on Windows with one command · Pi Agent Platform Docs" />
+    <meta property="og:description" content="One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update." />
+    <meta property="og:url" content="https://piagent.io.vn/en/windows" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.13.1 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/windows" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/windows" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link current" href="/en/windows" aria-current="page">Windows</a>
+            <a class="nav-link" href="/en/whats-new">What’s new</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>Windows</span>
+            </nav>
+            <div class="page-head">
+              <h1>Piagent on Windows with one command</h1>
+              <p>One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update.</p>
+            </div>
+<section class="section">
+
+  <div class="steps">
+    <article class="step">
+      <div>
+        <h3 id="one-command">Install with one command</h3>
+        <p>Open <strong>PowerShell</strong> (Start → type PowerShell) and run:</p>
+        <div class="command-card">
+          <header><span>One command</span><button class="clip-btn" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Copy</button></header>
+          <pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre>
+        </div>
+        <p>It goes through these steps:</p>
+        <ol>
+          <li>Installs <strong>WSL2</strong> when it is missing. Windows asks for administrator approval; the first time a restart is needed, and setup continues when you sign in again.</li>
+          <li>Installs <strong>Ubuntu</strong>, creates an Ubuntu user named after your Windows user and asks for its password (used for <span class="inline-code">sudo</span>).</li>
+          <li>Installs <strong>Piagent inside Ubuntu</strong>: system packages, the bubblewrap sandbox, Node 24, Piagent and the Pi version the release pins.</li>
+          <li>Asks for the <strong>connection code</strong> your admin sent. With a code it installs Agent Watch, connects the company key and binds Piagent in Ubuntu to it. Press Enter to skip if you only use your own AI account.</li>
+          <li>Adds a <strong>Piagent</strong> entry to the Start menu and opens the dashboard in the browser.</li>
+        </ol>
+        <p><strong>Updating:</strong> run the same command again. Finished steps are skipped; Piagent and Agent Watch are updated and the company key is bound again.</p>
+        <p>Agent Watch is an internal build without a code signature: if Windows SmartScreen warns, choose <em>More info → Run anyway</em>.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="every-day">Every day</h3>
+        <p>Open <strong>Piagent</strong> from the Start menu: an Ubuntu window opens the dashboard in the Windows browser. Keep that window open while you work.</p>
+        <p>Keep projects on the Ubuntu disk (for example <span class="inline-code">~/projects</span>) for speed; Windows folders (<span class="inline-code">/mnt/c/...</span>) work but are much slower for npm and git. VS Code on Windows opens folders inside Ubuntu through its WSL extension.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="when-setup-fails">When setup fails</h3>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Symptom</th>
+                <th>What to do</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Setup asks for a restart after every restart, or Ubuntu fails with <span class="inline-code">0x80370114</span></td>
+                <td>Windows reads <em>Virtual Machine Platform</em> as enabled but lacks its VM service. If <span class="inline-code">Test-Path C:\Windows\System32\vmcompute.exe</span> prints <span class="inline-code">False</span>: in PowerShell opened with <em>Run as administrator</em> run <span class="inline-code">DISM /Online /Cleanup-Image /RestoreHealth</span> and <span class="inline-code">sfc /scannow</span>, then turn <em>VirtualMachinePlatform</em> off and on again with <span class="inline-code">dism.exe</span> (restart each time). Still missing: repair-install Windows 11 with the Installation Assistant, keeping files and apps.</td>
+              </tr>
+              <tr>
+                <td><span class="inline-code">0x80370102</span> or a virtualization error</td>
+                <td>Turn on virtualization (Intel VT-x / AMD SVM) in the BIOS.</td>
+              </tr>
+              <tr>
+                <td>Downloading Ubuntu fails</td>
+                <td><span class="inline-code">wsl --install -d Ubuntu --web-download</span>, then run setup again.</td>
+              </tr>
+              <tr>
+                <td>The dashboard says Agent Watch or Piagent changed</td>
+                <td>Run setup again, or choose <strong>Kết nối Piagent trong WSL</strong> (Connect Piagent in WSL) in Agent Watch.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Check the machine with <span class="inline-code">piagent studio --doctor</span> inside Ubuntu. When Windows still lacks the VM service after a restart, setup prints the repair steps above instead of asking for another restart.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="why-wsl2">Why WSL2</h3>
+        <p>Ubuntu in WSL2 runs inside Windows as a lightweight virtual machine that Windows manages; it is not a second operating system to boot. Company mode needs an operating-system sandbox around every command the agent runs: Seatbelt on macOS, bubblewrap on Linux and WSL2. Windows has no equivalent sandbox yet, so Piagent runs in WSL2.</p>
+        <p>Running on Windows itself (without WSL) is a preview of personal mode. Manual steps and sandbox details: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/en/windows.md">Piagent on Windows</a>.</p>
+      </div>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/quickstart">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+              <a class="pager-next" href="/en/whats-new">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">What’s new</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/windows" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>

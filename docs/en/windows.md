@@ -11,7 +11,26 @@ On Windows, run Piagent in **WSL2** (Ubuntu), for company and personal conversat
 
 Company mode needs an operating-system sandbox around every command the agent runs. On macOS that is Seatbelt; on Linux and WSL2 it is bubblewrap. Windows has no equivalent sandbox an agent can use yet, so company mode runs in WSL2.
 
-## Company mode in WSL2
+## Install with one command
+
+Open **PowerShell** and run:
+
+```powershell
+irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex
+```
+
+It:
+- installs WSL2 and Ubuntu when they are missing (the first time needs a restart; setup continues when you sign in);
+- creates an Ubuntu user and installs Piagent inside Ubuntu;
+- asks for the connection code: with one it installs Agent Watch and binds the company key; press Enter to skip for personal mode only;
+- adds a **Piagent** Start-menu entry that opens the dashboard.
+
+Run the same command again to update. The full guide and fixes for failed installs: the docs page [Windows](https://piagent.io.vn/en/windows).
+
+## Step by step (company mode in WSL2)
+
+What the one-line command does, when you need to do it by hand:
+
 
 1. Install WSL2 with Ubuntu (PowerShell): `wsl --install -d Ubuntu`.
 2. In Ubuntu:

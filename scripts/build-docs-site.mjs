@@ -70,6 +70,12 @@ const NAV = [
         lead: "Hai lệnh để cài, mở repo, chọn profile và quyền, rồi giao việc bằng lời thường; guard kiểm tra từng tool call."
       },
       {
+        slug: "windows",
+        nav: "Cài trên Windows",
+        title: "Piagent trên Windows bằng một lệnh",
+        lead: "Một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch, nối key công ty và thêm Piagent vào Start menu; chạy lại để cập nhật."
+      },
+      {
         slug: "whats-new",
         nav: "Có gì mới",
         title: "Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra",
@@ -199,6 +205,11 @@ const EN_PAGE_COPY = {
     nav: "Quickstart",
     title: "Step by step for new team members",
     lead: "Install with two commands, open a repository, choose its profile and permissions, then ask in plain language; the guard checks every tool call."
+  },
+  windows: {
+    nav: "Windows",
+    title: "Piagent on Windows with one command",
+    lead: "One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update."
   },
   "whats-new": {
     nav: "What’s new",

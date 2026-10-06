@@ -1,0 +1,76 @@
+<section class="section">
+
+  <div class="steps">
+    <article class="step">
+      <div>
+        <h3 id="cai-mot-lenh">Cài bằng một lệnh</h3>
+        <p>Mở <strong>PowerShell</strong> (Start → gõ PowerShell) và chạy:</p>
+        <div class="command-card">
+          <header><span>Một lệnh</span><button class="clip-btn" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Lấy lệnh</button></header>
+          <pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre>
+        </div>
+        <p>Lệnh này lần lượt:</p>
+        <ol>
+          <li>Cài <strong>WSL2</strong> nếu máy chưa có. Windows hỏi quyền quản trị; lần đầu cần khởi động lại, và cài đặt tự chạy tiếp khi bạn đăng nhập lại.</li>
+          <li>Cài <strong>Ubuntu</strong>, tạo user Ubuntu theo tên Windows của bạn và hỏi mật khẩu cho user đó (dùng khi chạy <span class="inline-code">sudo</span>).</li>
+          <li>Cài <strong>Piagent trong Ubuntu</strong>: gói hệ thống, sandbox bubblewrap, Node 24, Piagent và đúng bản Pi mà release đang pin.</li>
+          <li>Hỏi <strong>mã kết nối</strong> admin gửi. Dán vào thì lệnh cài Agent Watch, kết nối key công ty và nối Piagent trong Ubuntu với key đó. Bấm Enter để bỏ qua nếu bạn chỉ dùng tài khoản AI của riêng mình.</li>
+          <li>Thêm mục <strong>Piagent</strong> vào Start menu và mở dashboard trong trình duyệt.</li>
+        </ol>
+        <p><strong>Cập nhật:</strong> chạy lại đúng lệnh trên. Những bước đã xong được bỏ qua; Piagent và Agent Watch được cập nhật và nối lại key công ty.</p>
+        <p>Agent Watch là bản nội bộ chưa ký số: nếu Windows SmartScreen cảnh báo, chọn <em>More info → Run anyway</em>.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="dung-hang-ngay">Dùng hằng ngày</h3>
+        <p>Mở <strong>Piagent</strong> từ Start menu: một cửa sổ Ubuntu mở dashboard trong trình duyệt Windows. Giữ cửa sổ đó mở khi đang dùng.</p>
+        <p>Để project trong ổ của Ubuntu (ví dụ <span class="inline-code">~/projects</span>) cho nhanh; folder Windows (<span class="inline-code">/mnt/c/...</span>) vẫn dùng được nhưng chậm hơn rõ với npm và git. VS Code trên Windows mở thẳng folder trong Ubuntu qua extension WSL.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="khi-cai-bi-loi">Khi cài bị lỗi</h3>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Dấu hiệu</th>
+                <th>Cách xử lý</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Lệnh đòi khởi động lại mãi, hoặc Ubuntu báo <span class="inline-code">0x80370114</span></td>
+                <td>Windows ghi đã bật <em>Virtual Machine Platform</em> nhưng thiếu dịch vụ máy ảo. Nếu <span class="inline-code">Test-Path C:\Windows\System32\vmcompute.exe</span> ra <span class="inline-code">False</span>: trong PowerShell <em>Run as administrator</em> chạy <span class="inline-code">DISM /Online /Cleanup-Image /RestoreHealth</span> và <span class="inline-code">sfc /scannow</span>, rồi tắt và bật lại <em>VirtualMachinePlatform</em> bằng <span class="inline-code">dism.exe</span> (mỗi lần Restart). Vẫn thiếu: cài đè Windows 11 bằng Installation Assistant, chọn giữ file và ứng dụng.</td>
+              </tr>
+              <tr>
+                <td><span class="inline-code">0x80370102</span> hoặc lỗi ảo hoá</td>
+                <td>Bật Virtualization (Intel VT-x / AMD SVM) trong BIOS.</td>
+              </tr>
+              <tr>
+                <td>Tải Ubuntu lỗi mạng</td>
+                <td><span class="inline-code">wsl --install -d Ubuntu --web-download</span>, rồi chạy lại lệnh cài.</td>
+              </tr>
+              <tr>
+                <td>Dashboard báo Agent Watch hoặc Piagent vừa cập nhật</td>
+                <td>Chạy lại lệnh cài, hoặc trong Agent Watch bấm <strong>Kết nối Piagent trong WSL</strong>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Kiểm tra máy: trong Ubuntu chạy <span class="inline-code">piagent studio --doctor</span>. Khi máy đã khởi động lại mà Windows vẫn thiếu dịch vụ máy ảo, lệnh cài in đúng các bước sửa ở trên thay vì đòi khởi động lại tiếp.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="vi-sao-wsl2">Vì sao là WSL2</h3>
+        <p>Ubuntu trong WSL2 chạy ngay bên trong Windows như một máy ảo nhẹ do Windows quản lý, không phải cài song song. Chế độ công ty cần sandbox của hệ điều hành cho mọi lệnh agent chạy: Seatbelt trên macOS, bubblewrap trên Linux và WSL2. Windows chưa có sandbox tương đương, nên Piagent chạy trong WSL2.</p>
+        <p>Chạy thẳng trên Windows (không qua WSL) mới là bản xem trước cho chế độ cá nhân. Cài từng bước bằng tay và chi tiết sandbox: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/vi/windows.md">Piagent trên Windows</a>.</p>
+      </div>
+    </article>
+  </div>
+</section>

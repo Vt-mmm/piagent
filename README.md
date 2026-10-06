@@ -34,7 +34,7 @@ Because it runs from an installed package, the source it writes into `.pi/settin
 | Linux x64 + Bash | Verified in CI for this release. |
 | macOS Intel (`darwin/x64`) + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
 | Linux ARM64 + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
-| WSL2 (Windows) | The way to run Piagent on Windows: company mode with the bubblewrap sandbox and Agent Watch for Windows, and personal mode. The Linux sandbox is checked in CI. See [Windows](docs/en/windows.md). |
+| WSL2 (Windows) | The way to run Piagent on Windows: company mode with the bubblewrap sandbox and Agent Watch for Windows, and personal mode. One PowerShell command installs everything; the Linux sandbox is checked in CI. See [Windows](docs/en/windows.md). |
 | Native Windows | Preview of personal mode: the guard, path and dashboard tests run in CI on Windows; `piagent-update` does not run there yet. See [Windows](docs/en/windows.md). |
 
 Pinned step-by-step rollouts, updates, rollback, and the fast-moving `--dev` channel are in [Release and install policy](docs/release-install-policy.md).

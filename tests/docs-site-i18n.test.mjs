@@ -23,7 +23,7 @@ describe("bilingual docs site", () => {
     const viPages = pagesFor(LOCALES.vi);
     const enPages = pagesFor(LOCALES.en);
 
-    assert.equal(viPages.length, 19);
+    assert.equal(viPages.length, 20);
     assert.equal(enPages.length, viPages.length);
     assert.equal(outputs.length, viPages.length * 2);
     assert.deepEqual(enPages.map((page) => page.slug), viPages.map((page) => page.slug));
@@ -33,8 +33,11 @@ describe("bilingual docs site", () => {
     assert.equal(hrefFor(viPages[1], LOCALES.vi), "/ecosystem");
     assert.equal(hrefFor(enPages[1], LOCALES.en), "/en/ecosystem");
     assert.equal(hrefFor(enPages[2], LOCALES.en), "/en/quickstart");
-    assert.equal(hrefFor(viPages[3], LOCALES.vi), "/whats-new");
-    assert.equal(hrefFor(enPages[3], LOCALES.en), "/en/whats-new");
+    // Windows setup follows the quickstart: one PowerShell command.
+    assert.equal(hrefFor(viPages[3], LOCALES.vi), "/windows");
+    assert.equal(hrefFor(enPages[3], LOCALES.en), "/en/windows");
+    assert.equal(hrefFor(viPages[4], LOCALES.vi), "/whats-new");
+    assert.equal(hrefFor(enPages[4], LOCALES.en), "/en/whats-new");
   });
 
   it("emits language-specific canonical, alternates, controls, and copy labels", () => {
