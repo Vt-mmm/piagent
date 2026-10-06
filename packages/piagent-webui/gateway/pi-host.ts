@@ -29,8 +29,12 @@ export function installedPiHostRoot(): string {
     // The operator installation is normally global.
   }
   try {
-    const executable = execFileSync("which", ["pi"], { encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "ignore"] }).trim();
-    const found = packageRootFrom(fs.realpathSync(executable));
+    const windows = process.platform === "win32";
+    const executable = execFileSync(windows ? "where" : "which", ["pi"], { encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "ignore"] }).trim().split(/\r?\n/)[0];
+    // npm on Windows puts the pi.cmd shim in the global prefix and the package
+    // in node_modules beside it.
+    const found = packageRootFrom(fs.realpathSync(executable))
+      ?? (windows ? packageRootFrom(path.join(path.dirname(executable), "node_modules", "@earendil-works", "pi-coding-agent", "package.json")) : null);
     if (found) return found;
   } catch {
     // A launcher with a short PATH (Agent Watch, launchd) cannot see `pi`.
@@ -42,8 +46,7 @@ export function installedPiHostRoot(): string {
     const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
     recorded = JSON.parse(fs.readFileSync(path.join(agentDir, "piagent-runtime.json"), "utf8")).pi_sdk_root ?? null;
   } catch { /* no record yet */ }
-  // npm on Windows keeps global packages in %APPDATA%\npm\node_modules, or
-  // beside node.exe, with no lib folder.
+  // npm's default Windows prefixes (%APPDATA%\npm, or beside node.exe) have no lib folder.
   const appData = process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
   const windowsHosts = process.platform !== "win32" ? []
     : [path.join(appData, "npm"), path.dirname(process.execPath)].map((prefix) => path.join(prefix, "node_modules", "@earendil-works", "pi-coding-agent"));
