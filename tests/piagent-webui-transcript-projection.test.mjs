@@ -51,6 +51,19 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.match(value.items[1].toolCalls[0].toolCallRef, /^tool\./);
   });
 
+  it("shows a skill the member called as typed, not the instructions the model received", () => {
+    const block = '<skill name="deploy" location="/Users/dev/.claude/skills/deploy/SKILL.md">\nReferences are relative to /Users/dev/.claude/skills/deploy.\n\nRun ship.sh.\n</skill>';
+    const value = project([
+      entry("entry_1", "user", [{ type: "text", text: `${block}\n\nstaging, then tell me the URL` }]),
+      entry("entry_2", "user", [{ type: "text", text: block }]),
+      entry("entry_3", "user", [{ type: "text", text: "Explain <skill name=\"x\"> tags" }])
+    ]);
+    expectValid(value);
+    assert.deepEqual(value.items.map((item) => item.content.text),
+      ["/skill:deploy staging, then tell me the URL", "/skill:deploy", "Explain <skill name=\"x\"> tags"]);
+    assert.equal(JSON.stringify(value).includes("ship.sh"), false);
+  });
+
   it("gives the agent timeline each tool call's target, diff and redacted result without paths outside the project", () => {
     const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz", cwd = "/work/shop";
     const call = (id, name, args) => ({ type: "toolCall", id, name, arguments: args });

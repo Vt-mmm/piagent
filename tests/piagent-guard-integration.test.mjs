@@ -262,6 +262,7 @@ describe("piagent guard integration", () => {
       "message_end",
       "message_start",
       "model_select",
+      "resources_discover",
       "session_before_compact",
       "session_before_fork",
       "session_before_switch",
@@ -1540,6 +1541,90 @@ non-secret metadata are safe alternatives.`;
     const other = await callToolCall(authorize, ctx, "read", { path: outside });
     assert.equal(other.block, true);
     assert.match(other.reason, /outside the project/);
+  });
+
+  // Skills and commands kept for other coding agents are Pi's too: the guard
+  // hands Pi the .claude/.codex folders and lets the model read a member's
+  // skill where it is installed, and nothing else of those folders.
+  it("offers the .claude and .codex skills and commands and reads a member skill where it is installed", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-guard-integration-"));
+    temporaryRoots.add(root);
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(root, "home-")));
+    for (const [file, text] of [[".claude/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: Deploy.\n---\nShip it.\n"],
+      [".claude/settings.json", "{}\n"], [".codex/prompts/standup.md", "Summarize.\n"], [".codex/skills/pdf/SKILL.md", "---\nname: pdf\ndescription: PDF.\n---\n"]]) {
+      fs.mkdirSync(path.dirname(path.join(home, file)), { recursive: true }); fs.writeFileSync(path.join(home, file), text);
+    }
+    const previousHome = process.env.HOME;
+    process.env.HOME = home;
+    t.after(() => { process.env.HOME = previousHome; });
+    const { piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.mkdirSync(path.join(cwd, ".claude", "commands"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, ".claude", "commands", "review.md"), "Review $1.\n");
+    const ctx = createContext(cwd, { sessionId: "session-agent-skills", sessionName: "AGENT-SKILLS" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const discovered = await harness.handlers.get("resources_discover")({ type: "resources_discover", cwd, reason: "startup" }, ctx);
+    assert.deepEqual(discovered.skillPaths, [path.join(home, ".claude/skills"), path.join(home, ".codex/skills")]);
+    assert.deepEqual(discovered.promptPaths, [fs.realpathSync.native(path.join(cwd, ".claude/commands")), path.join(home, ".codex/prompts")]);
+    const authorize = harness.handlers.get("tool_call");
+    const skill = await callToolCall(authorize, ctx, "read", { path: "~/.claude/skills/deploy/SKILL.md" });
+    assert.notEqual(skill.block, true, skill.reason);
+    assert.notEqual((await callToolCall(authorize, ctx, "read", { path: path.join(home, ".codex/skills/pdf/SKILL.md") })).block, true);
+    assert.equal((await callToolCall(authorize, ctx, "read", { path: path.join(home, ".claude/settings.json") })).block, true);
+    assert.equal((await callToolCall(authorize, ctx, "write", { path: path.join(home, ".claude/skills/deploy/SKILL.md"), content: "x\n" })).block, true);
+  });
+
+  // A member points the agent to another folder of theirs for reference (an
+  // @ mention or "read ~/Documents/old-shop"): read, ls, grep and find reach
+  // it; hidden home files, ~/Library, credential files and writes do not.
+  it("reads the member's other folders for reference, read-only, with secrets closed", async (t) => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(root, "home-")));
+    const reference = path.join(home, "Documents", "old shop");
+    fs.mkdirSync(path.join(reference, "src"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".ssh")); fs.mkdirSync(path.join(home, "Library", "Mail"), { recursive: true });
+    fs.writeFileSync(path.join(reference, "src", "pricing.js"), "export const vat = 0.1;\n");
+    fs.writeFileSync(path.join(reference, ".env"), "TOKEN=fixture\n");
+    fs.writeFileSync(path.join(home, ".zshrc"), "export TOKEN=fixture\n");
+    fs.writeFileSync(path.join(home, ".ssh", "id_ed25519"), "fixture\n");
+    fs.writeFileSync(path.join(home, "Library", "Mail", "inbox"), "fixture\n");
+    fs.symlinkSync(path.join(home, ".ssh"), path.join(reference, "keys"));
+    const previousHome = process.env.HOME;
+    process.env.HOME = home;
+    t.after(() => { process.env.HOME = previousHome; });
+
+    const ctx = createContext(cwd, { sessionId: "session-reference-read", sessionName: "REFERENCE-READ" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const authorize = harness.handlers.get("tool_call");
+    for (const [tool, input] of [
+      ["read", { path: path.join(reference, "src", "pricing.js") }],
+      ["read", { path: "~/Documents/old shop/src/pricing.js" }],
+      ["read", { path: "@~/Documents/old shop/src/pricing.js" }],
+      ["ls", { path: reference }],
+      ["grep", { pattern: "vat", path: reference }],
+      ["find", { pattern: "*.js", path: "~/Documents/old shop" }]
+    ]) {
+      const decision = await callToolCall(authorize, ctx, tool, input);
+      assert.notEqual(decision.block, true, `${tool} ${input.path}: ${decision.reason}`);
+    }
+    for (const [tool, input] of [
+      ["read", { path: path.join(home, ".zshrc") }],
+      ["read", { path: "~/.ssh/id_ed25519" }],
+      ["read", { path: "@~/.ssh/id_ed25519" }],
+      ["read", { path: path.join(reference, "keys", "id_ed25519") }],
+      ["ls", { path: "~/Library/Mail" }],
+      ["read", { path: path.join(reference, ".env") }],
+      ["write", { path: path.join(reference, "src", "new.js"), content: "x\n" }],
+      ["edit", { path: "~/Documents/old shop/src/pricing.js", edits: [{ oldText: "0.1", newText: "0.2" }] }]
+    ]) {
+      const decision = await callToolCall(authorize, ctx, tool, input);
+      assert.equal(decision.block, true, `${tool} ${input.path} stays closed`);
+    }
   });
 
   it("grants one external source checkout read-only to its session without exposing cache mutation or private paths", async (t) => {

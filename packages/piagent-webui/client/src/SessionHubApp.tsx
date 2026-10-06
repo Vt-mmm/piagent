@@ -35,6 +35,8 @@ import { acceptAttribute, attachmentDetail, discardAttachment, dragCarriesFiles,
   stageFiles } from "./attachment-intake.ts";
 import { CompanyReconnect, createFailureText } from "./CompanyReconnect.tsx";
 import { NewSessionPage } from "./NewSessionPage.tsx";
+import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
+import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { SessionComposerControls } from "./SessionComposerControls.tsx";
 import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
 import { SessionTranscript } from "./SessionTranscript.tsx";
@@ -74,17 +76,26 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
   return <Chip size="small" variant="outlined" color={color} label={text} />;
 }
 
+type KeptComposer = { attachments: Attachment[]; messageRequestId: string; sendUnconfirmed: boolean };
+
 function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
   send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<SessionSendResult>;
   abort(): Promise<unknown>; restart(): Promise<unknown>; canRestart: boolean; onInspector(value: SessionWorkspaceId): void }) {
-  const [draft, setDraft] = useState(""), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // One composer per conversation (the hub keys it by session): what was typed,
+  // staged files and a send still being confirmed come back with it.
+  const sessionRef = session.sessionRef, kept = readComposerMemory<KeptComposer>(sessionRef);
+  const [draft, setDraftText] = useState(() => readDraft(sessionRef)), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
+  const setDraft = (value: string) => { setDraftText(value); writeDraft(sessionRef, value); };
+  const mentions = useComposerSuggestions({ projectRef: session.projectRef, value: draft, locale, onChange: (value) => { setDraft(value); setSendNotice(null); } });
+  const [attachments, setAttachments] = useState<Attachment[]>(() => kept?.attachments ?? []);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [messageRequestId, setMessageRequestId] = useState(() => `message-request.${crypto.randomUUID()}`);
+  const [messageRequestId, setMessageRequestId] = useState(() => kept?.messageRequestId ?? `message-request.${crypto.randomUUID()}`);
   const [uploading, setUploading] = useState(false), [attachError, setAttachError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<{ tone: "warning" | "error"; text: string } | null>(null);
-  const [sendUnconfirmed, setSendUnconfirmed] = useState(false);
+  const [sendUnconfirmed, setSendUnconfirmed] = useState(() => kept?.sendUnconfirmed ?? false);
+  useEffect(() => { writeComposerMemory<KeptComposer>(sessionRef, attachments.length || sendUnconfirmed
+    ? { attachments, messageRequestId, sendUnconfirmed } : null); }, [sessionRef, attachments, messageRequestId, sendUnconfirmed]);
   // An unconfirmed send that no Gateway took within its window has expired and
   // can no longer run: the draft stays and the member may send it again.
   useEffect(() => {
@@ -103,10 +114,6 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   // boolean set on leave clears the highlight while the file is still over the
   // composer. Counting entries against leaves tracks the region as a whole.
   const dragDepth = useRef(0);
-  useEffect(() => { setDraft(""); setAdvancedOpen(false); setAttachments([]); setAttachError(null); setSendNotice(null);
-    setSendUnconfirmed(false);
-    setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
-
 
   // A file dropped anywhere the composer does not cover is navigated to by the
   // browser, which replaces the running session with the file.
@@ -160,6 +167,8 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
       const result = await send(message, staged.length > 0
         ? { messageRequestId, attachmentRefs: staged, attachments } : undefined);
       if (result.state === "unconfirmed") {
+        // Also when the member has opened another conversation meanwhile.
+        writeComposerMemory<KeptComposer>(sessionRef, { attachments, messageRequestId, sendUnconfirmed: true });
         setSendUnconfirmed(true);
         setSendNotice({ tone: "warning", text: localize(locale,
           "Piagent đang xác nhận lần gửi này. Nội dung và file vẫn được giữ; đừng gửi lại để tránh chạy trùng.",
@@ -169,6 +178,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
       // Refs are one-shot: the dispatch consumed them, so the next message starts
       // from a fresh request id rather than reusing refs that no longer exist.
       setDraft(""); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
+      writeComposerMemory(sessionRef, null);
     } catch {
       // A thrown send is a deterministic pre-admission rejection. Transport or
       // effect uncertainty resolves through the non-error branch above so the
@@ -262,8 +272,10 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             onDelete={submitting || sendUnconfirmed || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
             deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
         </Stack>}
-        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft} onChange={(event) => { setDraft(event.target.value); setSendNotice(null); }}
-          onKeyDown={(event) => { if (sendsOnEnter(event)) { event.preventDefault(); void submit(); } }}
+        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft}
+          inputRef={mentions.inputRef} {...mentions.inputProps}
+          onChange={(event) => { setDraft(event.target.value); setSendNotice(null); mentions.track(event); }}
+          onKeyDown={(event) => { if (mentions.onKeyDown(event)) return; if (sendsOnEnter(event)) { event.preventDefault(); void submit(); } }}
           onPaste={(event) => {
             // Only a clipboard actually carrying files is intercepted, so pasting
             // text — including text copied out of a document — still types.
@@ -271,7 +283,9 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             event.preventDefault();
             if (canAttach) void takeFiles(event.clipboardData.files);
           }}
-          placeholder={localize(locale, "Nhắn cho Piagent…", "Message Piagent…")} variant="standard" slotProps={{ input: { disableUnderline: true } }} />
+          placeholder={localize(locale, "Nhắn cho Piagent… (@ để chọn file, folder)", "Message Piagent… (@ for files and folders)")} variant="standard"
+          slotProps={{ input: { disableUnderline: true }, htmlInput: mentions.htmlInput }} />
+        {mentions.menu}
         <Collapse in={advancedOpen} id="piagent-message-options">
           <Box sx={{ mt: .65, p: .85, borderRadius: 2, bgcolor: "action.hover" }}>
             <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale}
@@ -493,6 +507,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
         message: value.message, messageRequestId, deferInitialMessage: withFiles });
       createdSessionRef = receipt.sessionRef;
       if (!createdSessionRef) throw new Error("session-create-result-invalid");
+      // The message now belongs to the conversation: the new chat starts empty.
+      writeDraft(NEW_CHAT_DRAFT, ""); writeComposerMemory(NEW_CHAT_DRAFT, null);
       if (receipt.phase !== "settled") {
         setSelectedRef(createdSessionRef); setView("chat"); setNotice({
           title: localize(locale, "Session đã được tạo", "The session was created"),
@@ -525,6 +541,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "session-create-failed";
       if (createdSessionRef) {
+        // Its files were not staged, so the message was not sent: it waits in
+        // that conversation's composer.
+        if (value.files.length > 0) writeDraft(createdSessionRef, value.message);
         setSelectedRef(createdSessionRef); setView("chat"); setNotice({
           title: localize(locale, "Session đã tạo nhưng file chưa được gửi", "The session was created, but the files were not sent"), message
         });
@@ -608,7 +627,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       pt: "60px", transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={launchProject ?? selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
         onCreate={(value) => createNewSession(value)} />
-        : selected ? <Conversation session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
+        : selected ? <Conversation key={selected.sessionRef} session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
             canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"
               && (!selectedLive || selectedLive.complete)
               && !["required", "restarting", "failed"].includes(String(live[selected.sessionRef]?.runtimeRecovery))}

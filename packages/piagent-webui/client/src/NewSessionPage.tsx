@@ -35,6 +35,8 @@ import { dragCarriesFiles, formatSize, MAX_ATTACHMENTS, supportedAttachmentAccep
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { label } from "./view-model.ts";
+import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
+import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { localize, type UiLocale, useUiPreferences } from "./ui-preferences.tsx";
 
 type CreateValue = { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; permissionMode: PermissionMode | null;
@@ -53,9 +55,12 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [failed, setFailed] = useState(false), [projectRef, setProjectRef] = useState(""), [modelRef, setModelRef] = useState("");
   const [thinking, setThinking] = useState("high");
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [permissionMode, setPermissionMode] = useState<PermissionMode | null>(null), [message, setMessage] = useState("");
+  const [permissionMode, setPermissionMode] = useState<PermissionMode | null>(null), [message, setMessageText] = useState(() => readDraft(NEW_CHAT_DRAFT));
+  // Kept when the member opens a conversation and comes back (composer-drafts.ts).
+  const setMessage = (value: string) => { setMessageText(value); writeDraft(NEW_CHAT_DRAFT, value); };
   const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
-  const [files, setFiles] = useState<readonly File[]>([]), [fileError, setFileError] = useState<string | null>(null);
+  const [files, setFiles] = useState<readonly File[]>(() => readComposerMemory<readonly File[]>(NEW_CHAT_DRAFT) ?? []), [fileError, setFileError] = useState<string | null>(null);
+  useEffect(() => { writeComposerMemory(NEW_CHAT_DRAFT, files.length ? files : null); }, [files]);
   const [dragging, setDragging] = useState(false);
   // dragenter and dragleave fire again for every child the pointer crosses, so a
   // boolean set on leave clears the highlight while the file is still over the
@@ -65,7 +70,8 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [importing, setImporting] = useState(false), [importError, setImportError] = useState<string | null>(null);
   useEffect(() => {
     if (!active) return;
-    const controller = new AbortController(); setOptions(undefined); setFailed(false); setMessage(""); setImportError(null); setFiles([]); setFileError(null); setDragging(false); setAdvancedOpen(false); dragDepth.current = 0;
+    // The message and files the member left here stay (composer-drafts.ts).
+    const controller = new AbortController(); setOptions(undefined); setFailed(false); setImportError(null); setFileError(null); setDragging(false); setAdvancedOpen(false); dragDepth.current = 0;
     void readSessionCreationOptions(controller.signal).then((value) => {
       if (controller.signal.aborted) return;
       setOptions(value);
@@ -87,6 +93,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
     return () => { window.removeEventListener("dragover", block); window.removeEventListener("drop", block); };
   }, [active]);
   const project = options?.projects.find((value) => value.projectRef === projectRef);
+  const mentions = useComposerSuggestions({ projectRef: project?.projectRef, value: message, onChange: setMessage, locale });
   const model = options?.models.find((value) => value.modelRef === modelRef);
   const company = !managed && model?.provider === COMPANY_PROVIDER;
   const companyModels = managed ? [] : options?.models.filter((value) => value.provider === COMPANY_PROVIDER) ?? [];
@@ -170,14 +177,17 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
         {!options && !failed ? <Stack direction="row" spacing={1.5} sx={{ minHeight: 126, alignItems: "center", justifyContent: "center" }}>
           <CircularProgress size={20} /><Typography color="text.secondary">{localize(locale, "Đang mở…", "Opening…")}</Typography></Stack>
           : <><TextField autoFocus fullWidth multiline minRows={3} maxRows={8} value={message} disabled={busy || failed}
-            onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
+            inputRef={mentions.inputRef} {...mentions.inputProps}
+            onChange={(event) => { setMessage(event.target.value); mentions.track(event); }} onKeyDown={(event) => {
+              if (mentions.onKeyDown(event)) return;
               if (sendsOnEnter(event)) { event.preventDefault(); submit(); }
             }} onPaste={(event) => {
               if (!event.clipboardData?.files.length) return;
               event.preventDefault();
               if (canAttach) selectFiles(event.clipboardData.files);
-            }} placeholder={localize(locale, "Nhắn cho Piagent…", "Message Piagent…")} variant="standard"
-            slotProps={{ input: { disableUnderline: true }, htmlInput: { maxLength: 32_768 } }} sx={{ px: .5 }} />
+            }} placeholder={localize(locale, "Nhắn cho Piagent… (@ để chọn file, folder)", "Message Piagent… (@ for files and folders)")} variant="standard"
+            slotProps={{ input: { disableUnderline: true }, htmlInput: { maxLength: 32_768, ...mentions.htmlInput } }} sx={{ px: .5 }} />
+          {mentions.menu}
           {files.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pt: .75 }}
             aria-label={localize(locale, "File sẽ gửi cùng tin nhắn đầu tiên", "Files for the first message")}>
             {files.map((file) => <Chip key={`${file.name}:${file.size}:${file.lastModified}`} size="small" variant="outlined"

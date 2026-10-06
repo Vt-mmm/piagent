@@ -263,13 +263,52 @@ test('user toolchains of the member machine are usable read-only; approved netwo
   const agent = net.createServer((socket) => socket.end('SOCKET_REACHED')); await new Promise((done) => agent.listen(socketPath, done));
   const boundary = new ManagedToolBoundary({cwd: api, sdkRoot, protectedRoots: [], userHome: home});
   try {
-    assert.equal(text(await boundary.invoke('bash', {command: 'hello-cargo && echo "$CARGO_HOME"'})).trim(), `cargo-tool-ok\n${fs.realpathSync(path.join(home, '.cargo'))}`);
+    // The member's cargo tools run; what cargo downloads goes to the project's cache.
+    const [ran, cargoHome] = text(await boundary.invoke('bash', {command: 'hello-cargo && echo "$CARGO_HOME"'})).trim().split('\n');
+    assert.equal(ran, 'cargo-tool-ok');
+    assert.ok(cargoHome.startsWith(path.join(fs.realpathSync(home), 'Library/Caches/Piagent/sandbox/')), cargoHome);
     await assert.rejects(boundary.invoke('bash', {command: `echo x > ${JSON.stringify(path.join(home, '.cargo/bin/new-tool'))}`}), /not permitted|managed-sandbox-denied/);
     await assert.rejects(boundary.invoke('bash', {command: `cat ${JSON.stringify(path.join(home, '.ssh/id_ed25519'))}`}), /not permitted|managed-sandbox-denied/);
     // Unix sockets (ssh-agent, docker, Watch) stay closed even for approved commands.
     fs.writeFileSync(path.join(api, 'probe.cjs'), `require('net').connect(${JSON.stringify(socketPath)}).on('data', (d) => { console.log(String(d)); process.exit(0); }).on('error', (e) => { console.error(e.code); process.exit(3); });\n`);
     await assert.rejects(boundary.invoke('bash', {command: 'node probe.cjs'}, undefined, undefined, undefined, {network: true}), /EPERM|EACCES|not permitted/);
   } finally { await boundary.dispose(); await new Promise((done) => agent.close(done)); fs.rmSync(base, {recursive: true, force: true}); fs.rmSync(short, {recursive: true, force: true}); }
+});
+
+// A member points the agent to another folder on the Mac for reference (an
+// @ mention or "read ~/Documents/old-shop"): it reads it, never writes it,
+// and hidden home files, app data and credential files stay closed.
+test('folders outside the project are readable for reference, never writable; secrets stay closed', {skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot)}, async () => {
+  const {base, api} = repository();
+  const home = path.join(base, 'home'), reference = path.join(home, 'Documents/old shop');
+  for (const dir of ['Documents/old shop/src', '.ssh', '.cargo/bin', 'Library/Application Support/Browser']) fs.mkdirSync(path.join(home, dir), {recursive: true});
+  fs.writeFileSync(path.join(reference, 'src/pricing.js'), 'export const vat = 0.1;\n');
+  fs.writeFileSync(path.join(reference, '.env'), 'TOKEN=secret\n');
+  fs.writeFileSync(path.join(home, '.zshrc'), 'export OPENAI_API_KEY=secret\n');
+  fs.writeFileSync(path.join(home, '.ssh/id_ed25519'), 'secret');
+  fs.writeFileSync(path.join(home, 'Library/Application Support/Browser/Cookies'), 'secret');
+  fs.writeFileSync(path.join(home, '.cargo/bin/hello-cargo'), '#!/bin/sh\necho cargo-tool-ok\n', {mode: 0o755});
+  const boundary = new ManagedToolBoundary({cwd: api, sdkRoot, protectedRoots: [], userHome: home});
+  const helper = new ManagedToolBoundary({cwd: api, sdkRoot, protectedRoots: [], userHome: home, readOnly: true});
+  const real = fs.realpathSync(reference);
+  try {
+    assert.match(text(await boundary.invoke('read', {path: path.join(real, 'src/pricing.js')})), /vat = 0\.1/);
+    assert.match(text(await boundary.invoke('read', {path: '@~/Documents/old shop/src/pricing.js'})), /vat = 0\.1/, 'an @~/ mention is the member home');
+    assert.match(text(await boundary.invoke('ls', {path: '~/Documents/old shop'})), /src\//);
+    assert.match(text(await helper.invoke('read', {path: path.join(real, 'src/pricing.js')})), /vat = 0\.1/, 'read-only helpers read it too');
+    assert.match(text(await boundary.invoke('bash', {command: `cat ${JSON.stringify(path.join(real, 'src/pricing.js'))}`})), /vat = 0\.1/);
+    if (searchTools) assert.match(text(await boundary.invoke('grep', {pattern: 'vat', path: real})), /pricing\.js:1/);
+    await assert.rejects(boundary.invoke('write', {path: path.join(real, 'src/new.js'), content: 'x'}));
+    await assert.rejects(boundary.invoke('bash', {command: `echo x >> ${JSON.stringify(path.join(real, 'src/pricing.js'))}`}), /not permitted|managed-sandbox-denied/);
+    assert.equal(fs.readFileSync(path.join(reference, 'src/pricing.js'), 'utf8'), 'export const vat = 0.1;\n', 'the reference folder is unchanged');
+    for (const secret of [path.join(reference, '.env'), path.join(home, '.zshrc'), path.join(home, '.ssh/id_ed25519'), path.join(home, 'Library/Application Support/Browser/Cookies')]) {
+      await assert.rejects(boundary.invoke('read', {path: secret}), undefined, `${path.relative(home, secret)} stays closed`);
+      await assert.rejects(boundary.invoke('bash', {command: `cat ${JSON.stringify(secret)}`}), /not permitted|managed-sandbox-denied/);
+    }
+    assert.equal(text(await boundary.invoke('bash', {command: 'hello-cargo'})).trim(), 'cargo-tool-ok', 'toolchains in hidden folders still run');
+    // A command with network reads the project, not the member's other files.
+    await assert.rejects(boundary.invoke('bash', {command: `cat ${JSON.stringify(path.join(real, 'src/pricing.js'))}`}, undefined, undefined, undefined, {network: true}), /not permitted|managed-sandbox-denied/);
+  } finally { await boundary.dispose(); await helper.dispose(); fs.rmSync(base, {recursive: true, force: true}); }
 });
 
 // Machine differences between members: folder names (Vietnamese, as typed or

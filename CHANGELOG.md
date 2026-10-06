@@ -2,6 +2,31 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+@ in the dashboard picks any file or folder on the Mac, and the agent reads folders outside the project for reference.
+
+### Features
+
+- Typing @ in a conversation or a new chat offers the project's files and folders, matched loosely by name with git-ignored ones left out, and after `~/`, `/` or `../` any folder on this Mac. Arrow keys move, Enter or Tab picks, Escape closes. A folder stays open for the next name, and a path with spaces is quoted, as in Pi's terminal.
+- Company conversations read the folders a member points to outside the project — an @ mention, or "read ~/Documents/old-shop" — with read, ls, grep, find and commands. Those folders are read-only: changes go in the project only. Hidden files and folders of the home folder (shell files, histories, tool settings), `~/Library` and credential files (`.env`, `.npmrc`, `credentials`, `auth.json`) stay closed, and a command the member approved for network still reads the project only.
+- Personal conversations read those folders too, with read, ls, grep and find; protected paths are still refused.
+- A message typed and not sent stays where it was written — in each conversation and in the new chat — when another conversation is opened, and in this browser across a reload. Staged files and a send still being confirmed come back with it. Creating the chat or sending the message clears it.
+- Skills and commands kept for coding agents are Piagent's too: the project's `.claude/skills`, `.claude/commands`, `.codex/skills`, `.agents/skills` and `.pi` folders (from the project up to its repository root) and the member's `~/.claude`, `~/.codex`, `~/.agents` and `~/.pi/agent` ones. The model sees each skill by name and description; `/command`, `/skill:name` and `/skill-name` expand in company and personal conversations; a / at the start of a message lists them in the dashboard; the chat shows a skill call as typed. In company conversations the sandbox reads a skill's folder where it is installed, and nothing else of those folders.
+- Tests of the common languages run in company conversations:
+  - Package caches (npm, pnpm, yarn, bun, deno, pip, uv, poetry, Go, Cargo, Gradle, Maven, NuGet, Composer, pub, gems) are kept per project under `~/Library/Caches/Piagent/sandbox`, so after one approved install, tests run offline. The member's own Go, Gradle, Maven and NuGet caches are read-only sources.
+  - A test's own server and a local database on this Mac are reachable without approval — unless a local proxy (the system's, `*_PROXY`, or a proxy or VPN client's usual port) listens, since it would carry a command to the internet; the error then says to ask for approval.
+  - JDKs under `~/Library/Java`, the Android SDK, the system Ruby gems, MacPorts and Playwright's browsers are available without approval; `JAVA_HOME` and `ANDROID_HOME` are set.
+  - The sandbox uses the developer tools selected with `xcode-select`, so Swift package tests find XCTest; SwiftPM and xcodebuild run without their own nested sandbox, and xcodebuild builds into the project cache.
+  - An approved command can restore .NET packages (TLS through the macOS Security framework); offline, .NET reads the packages the member already restored.
+  - `piagent studio --doctor` lists the languages installed on the Mac and checks localhost and the package cache.
+  - Docker and the iOS Simulator remain unavailable in the sandbox.
+
+### Fixes
+
+- In personal conversations the guard checked a path such as `~/notes.md` or `@~/notes.md` as if it were inside the project, while Pi's tools opened it in the home folder, so an edit there was allowed outside the project. The guard now checks the path the tool opens.
+- In company conversations a path starting with `~/` named the sandbox's own empty home folder; it now names the member's.
+
 ## v1.11.1 - 2026-10-05
 
 Updates now end on the new release's dashboard, whichever way they ran.

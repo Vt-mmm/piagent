@@ -98,7 +98,13 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
   // hashing them here would turn the chat bubble into a document dump and make
   // a bounded UI digest an oracle over user files. The first block is the exact
   // text the operator typed; the remaining recognized blocks become cards.
-  return { text: attachments.length ? String(textParts[0]?.text ?? "") : messageText(message), attachments: attachments.slice(0, 4) };
+  return { text: typedSkillCall(attachments.length ? String(textParts[0]?.text ?? "") : messageText(message)), attachments: attachments.slice(0, 4) };
+}
+// A skill the member called (/skill:name): the message holds the skill's
+// instructions for the model; the chat shows what was typed.
+function typedSkillCall(text: string): string {
+  const skill = /^<skill name="([^"\n]+)" location="[^"\n]+">\n[\s\S]*?\n<\/skill>(?:\n\n([\s\S]+))?$/.exec(text);
+  return skill ? `/skill:${skill[1]}${skill[2] ? ` ${skill[2]}` : ""}` : text;
 }
 // A company request fails with Studio's (or Agent Watch's) own code: who
 // failed, which kind of failure, and Studio's request id. Text is never shown.

@@ -431,6 +431,21 @@ export type MemberQuestion = { header: string; question: string; options: Array<
 export type PendingQuestion = { questionRef: string; askedAt: string; questions: MemberQuestion[] };
 export type QuestionAnswer = { skipped: true } | { answers: Array<{ selected: number[]; other?: string }> };
 
+export type PathSuggestion = { value: string; label: string; detail: string; kind: "file" | "directory" };
+// What an @ in the composer offers: names under the project, or under the
+// folder typed after ~/ or /.
+export function readPathSuggestions(projectRef: string, query: string, signal?: AbortSignal): Promise<{ suggestions: PathSuggestion[] }> {
+  return readJson(`/api/v1/projects/${encodeURIComponent(projectRef)}/paths?query=${encodeURIComponent(query)}`, signal);
+}
+
+export type AgentCommand = { kind: "command" | "skill"; name: string; description: string; argumentHint: string | null;
+  origin: "claude" | "codex" | "agents" | "pi"; scope: "project" | "user" };
+// What a / at the start of a message offers: the project's and the member's
+// commands and skills.
+export function readProjectCommands(projectRef: string, signal?: AbortSignal): Promise<{ commands: AgentCommand[] }> {
+  return readJson(`/api/v1/projects/${encodeURIComponent(projectRef)}/commands`, signal);
+}
+
 export function readSessionQuestions(sessionRef: string, signal?: AbortSignal): Promise<{ questions: PendingQuestion[] }> {
   return readJson(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions`, signal);
 }

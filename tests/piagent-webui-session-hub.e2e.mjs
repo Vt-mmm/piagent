@@ -10,6 +10,8 @@ import { GatewayProtocolService } from "../packages/piagent-webui/gateway/gatewa
 import { SessionAttachmentRegistry } from "../packages/piagent-webui/gateway/session-attachment-registry.ts";
 import { COMPANY_MODEL_REF } from "../packages/piagent-webui/gateway/company-relay.ts";
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
+import { suggestPaths } from "../packages/piagent-webui/gateway/path-suggestions.ts";
+import { listAgentCommands } from "../packages/piagent-core/runtime/resources/agent-resources.mjs";
 import { WEBUI_WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
 
@@ -36,6 +38,18 @@ const freshUpdate = () => ({ schemaVersion: 1, version: "piagent-update-status-v
   updateAvailable: true, runningConversations: 0, job: null });
 let updateState = freshUpdate();
 const updateApplies = [];
+// What an @ in a composer walks: a project (a git repository, so the search
+// runs the same without fd) and a home folder with another project inside.
+const mentionBase = fs.realpathSync(fs.mkdtempSync(path.join(process.env.TMPDIR ?? "/tmp", "piagent-mentions-")));
+const mentionProject = path.join(mentionBase, "project"), mentionHome = path.join(mentionBase, "home");
+for (const [file, text] of [["project/src/pricing.js", "export const vat = 0.1;\n"], ["project/src/cart.js", "export {};\n"],
+  ["project/docs/notes.md", "# Notes\n"], ["home/Documents/old shop/notes.md", "# Old shop\n"], ["home/Documents/old shop/src/app.js", "\n"],
+  ["home/.ssh/config", "Host *\n"], ["project/.claude/commands/review.md", "---\ndescription: Review the staged changes\nargument-hint: \"[focus]\"\n---\nReview $1.\n"],
+  ["project/.claude/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: Deploy the shop.\n---\nShip.\n"],
+  ["home/.codex/skills/pdf/SKILL.md", "---\nname: pdf\ndescription: Read PDF files.\n---\n"], ["project/src/a-very-long-folder-name-for-the-checkout-and-payment-flow/Tài liệu đặc tả thanh toán phiên bản mới nhất.md", "x"]]) {
+  fs.mkdirSync(path.dirname(path.join(mentionBase, file)), { recursive: true }); fs.writeFileSync(path.join(mentionBase, file), text);
+}
+execFileSync("git", ["init", "-q", mentionProject]); execFileSync("git", ["-C", mentionProject, "add", "-A"]);
 const observedRuntimeActions = [];
 const inspectionSnapshot = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/snapshot-v1.valid.json"), "utf8"));
 // The Gateway publishes what the host will accept as an attachment, so the hub
@@ -264,6 +278,8 @@ test.beforeAll(async () => {
     executeProjectImport: () => ({ schemaVersion: 1, version: "piagent-project-import-result-v1", importedAt: new Date().toISOString(),
       project: { projectRef: "project_imported_browser", placeRef: "project_imported_browser", label: "imported-project" } }),
     readSessionModel: () => inspectionProvider,
+    suggestPaths: (_projectRef, query) => suggestPaths({ root: mentionProject, query, home: mentionHome, fd: null }),
+    listCommands: () => ({ commands: listAgentCommands({ cwd: mentionProject, home: mentionHome }) }),
     updates: { status: () => updateState, check: () => ({ ...updateState, checkedAt: new Date().toISOString() }),
       apply: (request) => {
         updateApplies.push(request);
@@ -294,7 +310,7 @@ test.beforeAll(async () => {
   });
 });
 
-test.afterAll(async () => { await server?.close(); attachments?.close(); });
+test.afterAll(async () => { await server?.close(); attachments?.close(); fs.rmSync(mentionBase, { recursive: true, force: true }); });
 
 test("waits for canonical live state on bootstrap and after a replay gap", async ({ page }) => {
   await page.addInitScript(() => {
@@ -1182,4 +1198,142 @@ test("the status bar offers the update, Settings explains it, and the palette an
     await page.getByRole("button", { name: /^Cài đặt/ }).click();
     await expect(page.getByRole("dialog", { name: "Cài đặt" }).getByRole("heading", { name: "Cập nhật" })).toBeVisible();
   } finally { updateState = freshUpdate(); await page.close(); }
+});
+
+test("@ in a composer offers the project's files and folders, then any folder on the Mac, and writes the path", async ({ page }) => {
+  const sendsBefore = sessionSendAttempts;
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  const composer = page.getByPlaceholder("Nhắn cho Piagent…"), list = page.getByRole("listbox", { name: "File và folder" });
+  await composer.fill("");
+  await composer.pressSequentially("Xem @pric");
+  await expect(list.getByRole("option", { name: /pricing\.js/ })).toBeVisible();
+  await expect(composer).toHaveAttribute("aria-activedescendant", /.+/);
+  await page.waitForTimeout(200);
+  // The menu and the composer it belongs to (the transcript has its own audit).
+  const audit = await new AxeBuilder({ page }).include("[role=listbox]").include("textarea[aria-autocomplete]").analyze();
+  assert.deepEqual(audit.violations.map((violation) => violation.id), [], JSON.stringify(audit.violations.map((violation) => ({
+    id: violation.id, nodes: violation.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })) }))));
+  // Enter picks the suggestion instead of sending.
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("Xem @src/pricing.js ");
+  await expect(list).toHaveCount(0);
+  expect(sessionSendAttempts).toBe(sendsBefore);
+  // ~/ walks the Mac: hidden folders only when asked for, folders stay open.
+  await composer.pressSequentially("và @~/");
+  await expect(list.getByRole("option", { name: /Documents\// })).toBeVisible();
+  await expect(list.getByRole("option", { name: /\.ssh/ })).toHaveCount(0);
+  await list.getByRole("option", { name: /Documents\// }).click();
+  await expect(composer).toHaveValue("Xem @src/pricing.js và @~/Documents/");
+  await expect(list.getByRole("option", { name: /old shop\// })).toBeVisible();
+  await composer.press("Tab");
+  await expect(composer).toHaveValue('Xem @src/pricing.js và @"~/Documents/old shop/"');
+  await expect(list.getByRole("option", { name: /notes\.md/ })).toBeVisible();
+  await list.getByRole("option", { name: /notes\.md/ }).click();
+  await expect(composer).toHaveValue('Xem @src/pricing.js và @"~/Documents/old shop/notes.md" ');
+  // An email address never opens the menu; Escape closes it.
+  await composer.pressSequentially("hỏi an@example.com");
+  await page.waitForTimeout(300);
+  await expect(list).toHaveCount(0);
+  await composer.pressSequentially(" @");
+  await expect(list.getByRole("option", { name: /src\// })).toBeVisible();
+  await composer.press("Escape");
+  await expect(list).toHaveCount(0);
+  expect(sessionSendAttempts).toBe(sendsBefore);
+  // The new chat composer offers the chosen project's files too.
+  await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+  const draft = page.getByPlaceholder("Nhắn cho Piagent…");
+  await draft.pressSequentially("Đọc @docs/");
+  await expect(list.getByRole("option", { name: /notes\.md/ })).toBeVisible();
+  await draft.press("Enter");
+  await expect(draft).toHaveValue("Đọc @docs/notes.md ");
+});
+
+test("an unsent message stays in its conversation and in the new chat, across switching and a reload, until it is sent", async ({ page }) => {
+  const originalSessions = [...catalog.sessions], originalRevision = catalog.catalogRevision, originalPage = { ...catalog.page };
+  const open = async (title) => {
+    await page.getByText(title, { exact: true }).filter({ visible: true }).first().click();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  };
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const composer = page.getByPlaceholder("Nhắn cho Piagent…");
+    await open("Release preparation");
+    await composer.fill("Nháp ở Release preparation");
+    await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+    await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({
+      name: "kept-brief.md", mimeType: "text/markdown", buffer: Buffer.from("# Kept brief\n") });
+    await expect(page.getByText(/kept-brief\.md · /)).toBeVisible();
+    await open("Review source changes");
+    await expect(composer).toHaveValue("");
+    await composer.fill("Nháp ở Review source changes");
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    const newChat = page.getByPlaceholder("Nhắn cho Piagent…");
+    await expect(newChat).toHaveValue("");
+    await newChat.fill("Nháp cho chat mới");
+    await page.getByRole("button", { name: "Quay lại" }).click();
+    await open("Release preparation");
+    await expect(composer).toHaveValue("Nháp ở Release preparation");
+    await expect(page.getByText(/kept-brief\.md · /)).toBeVisible();
+    await open("Review source changes");
+    await expect(composer).toHaveValue("Nháp ở Review source changes");
+    await expect(page.getByText(/kept-brief\.md · /)).toHaveCount(0);
+    // The text survives a reload of the page (staged files belong to the page).
+    await page.reload();
+    await open("Release preparation");
+    await expect(composer).toHaveValue("Nháp ở Release preparation");
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(newChat).toHaveValue("Nháp cho chat mới");
+    await page.getByRole("button", { name: "Quay lại" }).click();
+    // A sent message leaves an empty composer that stays empty.
+    await open("Review source changes");
+    await expect(composer).toHaveValue("Nháp ở Review source changes");
+    const sendsBefore = sessionSendAttempts;
+    await page.getByRole("button", { name: "Gửi" }).click();
+    await expect.poll(() => sessionSendAttempts).toBe(sendsBefore + 1);
+    await expect(composer).toHaveValue("");
+    await open("Release preparation");
+    await open("Review source changes");
+    await expect(composer).toHaveValue("");
+    await page.reload();
+    await open("Review source changes");
+    await expect(composer).toHaveValue("");
+    // Creating the chat takes its draft: the next new chat starts empty.
+    const createsBefore = sessionCreateAttempts;
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(newChat).toHaveValue("Nháp cho chat mới");
+    await newChat.press("Enter");
+    await expect.poll(() => sessionCreateAttempts).toBe(createsBefore + 1);
+    await expect(page.getByText("Nháp cho chat mới", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(newChat).toHaveValue("");
+  } finally {
+    catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions);
+    catalog.catalogRevision = originalRevision; Object.assign(catalog.page, originalPage);
+  }
+});
+
+test("/ at the start of a message offers the project's and the member's commands and skills", async ({ page }) => {
+  const sendsBefore = sessionSendAttempts;
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  const composer = page.getByPlaceholder("Nhắn cho Piagent…"), list = page.getByRole("listbox", { name: "Lệnh và skill" });
+  await composer.fill("");
+  await composer.pressSequentially("/");
+  await expect(list.getByRole("option")).toHaveCount(3);
+  await expect(list.getByRole("option", { name: /\/review.*\[focus\].*Review the staged changes.*\.claude/ })).toBeVisible();
+  await expect(list.getByRole("option", { name: /\/skill:pdf.*~\/\.codex/ })).toBeVisible();
+  await composer.pressSequentially("dep");
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("/skill:deploy ");
+  expect(sessionSendAttempts).toBe(sendsBefore);
+  await composer.fill("");
+  await composer.pressSequentially("/rev");
+  await composer.press("Tab");
+  await expect(composer).toHaveValue("/review ");
+  // Mid-message, a / is text: no menu.
+  await composer.pressSequentially("checkout /tmp");
+  await expect(list).toHaveCount(0);
+  await composer.fill("");
 });

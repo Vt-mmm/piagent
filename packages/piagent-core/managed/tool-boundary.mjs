@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
+import net from 'node:net';
 import { StringDecoder } from 'node:string_decoder';
 import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
+import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
+import { languageEnvironment } from './language-environment.mjs';
 
 const TOOL_NAMES = Object.freeze(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
 const MAX_WIRE_BYTES = 12 * 1024 * 1024;
@@ -16,8 +18,25 @@ function literal(value) {
   return JSON.stringify(value);
 }
 function inside(file, root) { return file === root || file.startsWith(root + path.sep); }
+const pattern = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false }) {
+// Folders a member points the agent to for reference (an @ mention, "read
+// ~/Documents/old-shop"): their own files on this Mac, external drives and
+// the shared folder, read-only. Hidden entries of the home folder (shell
+// files, histories, tool configs) and ~/Library (app data, mail, browser
+// profiles) stay closed, except the read roots there (toolchains, the SDK).
+// Their metadata stays readable as before: Node resolves the SDK under ~/.pi
+// through each folder on the way. Seatbelt lets a rule naming file-read-data
+// win over one naming file-read* whatever their order, so the roots are left
+// out of this rule rather than allowed again after it.
+function referenceRules(home, roots) {
+  if (!home || /["\\]/.test(home)) return '';
+  const opened = roots.filter(root => inside(root, home)).map(root => ` (require-not (subpath ${literal(root)}))`).join('');
+  return `(allow file-read* (subpath ${literal(home)}) (subpath "/Volumes") (subpath "/Users/Shared") (subpath "/private/tmp"))
+(deny file-read-data file-read-xattr (require-all (require-any (regex #"^${pattern(home)}/\\.") (subpath ${literal(path.join(home, 'Library'))}))${opened}))`;
+}
+
+export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false, references = null, skills = [], caches = [], loopback = true, license = null }) {
   // Default-deny protects Keychain/SSH agent/Watch IPC and process inspection.
   // System libraries/toolchains are read-only. Writes stay in this project and
   // a fresh temporary directory. No network exception or unsandboxed fallback.
@@ -28,9 +47,12 @@ export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, de
   const system = ['/Library/Frameworks', '/Library/Java', '/Library/Apple', '/private/var/db/oah', '/private/var/db/timezone'];
   // An approved network command may also drive the member's Playwright
   // browsers against a server it starts on this Mac (E2E tests).
-  const readRoots = ['/System', '/usr', '/bin', '/sbin', '/Library/Developer', '/Applications/Xcode.app', '/opt/homebrew', ...system, ...developer, sdkRoot, runtimeRoot, cwd, temporary, ...repository, ...gitDirs, ...toolchains, ...(network ? browsers : [])];
+  // Skill folders (the member's ~/.claude/skills…) are read where installed.
+  const readRoots = ['/System', '/usr', '/bin', '/sbin', '/Library/Developer', '/Applications/Xcode.app', '/opt/homebrew', ...system, ...developer, sdkRoot, runtimeRoot, cwd, temporary, ...repository, ...gitDirs, ...toolchains, ...skills, ...caches, ...browsers];
   const filters = readRoots.map(root => `(subpath ${literal(root)})`).join(' ');
-  const writeRoots = [temporary, ...(!readOnly ? [cwd, ...gitDirs] : [])];
+  // Package caches persist per project (language-environment.mjs), also for
+  // read-only helpers that run checks.
+  const writeRoots = [temporary, ...caches, ...(!readOnly ? [cwd, ...gitDirs] : [])];
   // Credential files are unreadable, unwritable and hidden: a stat fails, so a
   // tool that loads them when present (Vite and Next read .env.local) carries
   // on without them instead of failing on a file it was shown. auth.json holds
@@ -38,13 +60,20 @@ export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, de
   // .composer); one deeper in the source (a translation file) is ordinary, and
   // so are committed templates (.env.example, .env.sample…).
   const projectRoots = [...new Set([cwd, ...repository])];
-  // An approved network command may also start a server and run Playwright's
-  // Chromium against it (E2E tests). The rule names loopback, but the sandbox
-  // cannot tell it from all interfaces (0.0.0.0): like the internet access the
-  // member approved, a server it starts is reachable while it runs. Chromium
-  // needs only its own rendezvous services (org.chromium.*) and the
-  // power-management client; other system services, Keychain among them,
-  // stay closed.
+  // Every command may start servers on this Mac and reach them (a test's
+  // own server, a database for integration tests, Playwright's Chromium
+  // against the app). The rule names loopback, but the sandbox cannot tell it
+  // from all interfaces (0.0.0.0): a server it starts is reachable while it
+  // runs. Without approval nothing else is reached: no internet, no name
+  // lookups; while a proxy listens on this Mac, not even its servers
+  // (localProxyListening: Seatbelt cannot close one port of an open
+  // loopback, so the proxy would carry a command out). An approved command
+  // (run_with_network) reaches the internet. Chromium needs only its own
+  // rendezvous services (org.chromium.*) and the power-management client.
+  // TLS through the macOS Security framework (.NET's NuGet, Swift) needs the
+  // security server, the system keychain of public roots and the module
+  // directory: for approved commands only. The member's keychain files and
+  // other system services stay closed.
   // Signals reach only processes of this sandbox: a search stops ripgrep at
   // its limit and a cancelled command stops its children, while nothing
   // outside (Agent Watch, the member's apps) can be signalled.
@@ -55,16 +84,19 @@ export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, de
 (allow sysctl-read)
 (allow mach-lookup (global-name "com.apple.system.logger") (global-name "com.apple.system.opendirectoryd"))
 (allow file-read-metadata)
-(allow file-read* (literal "/") ${filters} (literal ${literal(node)}) (subpath "/private/etc") (subpath "/dev"))
+(allow file-read* (literal "/") ${filters} (literal ${literal(node)}) (subpath "/private/etc") (subpath "/dev")${license ? ` (literal ${literal(license)})` : ''})
+${referenceRules(references, readRoots)}
 (allow file-write* ${writeRoots.map(root => `(subpath ${literal(root)})`).join(' ')} (literal "/dev/null") (literal "/dev/tty"))
-${network ? `(allow network-outbound (remote ip))
-(allow network-outbound (literal "/private/var/run/mDNSResponder"))
 (allow network-bind network-inbound (local ip "localhost:*"))
-(allow system-socket)
 (allow iokit-open (iokit-user-client-class "RootDomainUserClient"))
 (allow mach-register mach-lookup (global-name-regex #"^org\\.chromium\\."))
-(allow mach-lookup (global-name "com.apple.dnssd.service") (global-name "com.apple.trustd.agent") (global-name "com.apple.SystemConfiguration.configd"))` : ''}
-${denied.map(root => `(deny file-read* file-write* (subpath ${literal(root)}))`).join('\n')}
+${network ? `(allow network-outbound (remote ip))
+(allow network-outbound (literal "/private/var/run/mDNSResponder"))
+(allow system-socket)
+(allow mach-lookup (global-name "com.apple.dnssd.service") (global-name "com.apple.trustd.agent") (global-name "com.apple.SystemConfiguration.configd"))
+(allow mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.ocspd"))
+(allow file-read* (subpath "/private/var/db/mds") (literal "/Library/Keychains/System.keychain") (subpath "/Library/Security/Trust Settings"))` : loopback ? '(allow network-outbound (remote ip "localhost:*"))' : ''}
+${denied.map(root => `(deny file-read* file-write* (require-all (subpath ${literal(root)})${skills.filter(dir => inside(dir, root) && dir !== root).map(dir => ` (require-not (subpath ${literal(dir)}))`).join('')}))`).join('\n')}
 (deny file-read* file-read-metadata file-write* (require-all (require-any (regex #"(^|/)(\\.env([./]|$)|credentials([./]|$)|\\.npmrc$|\\.netrc$)") (regex #"/\\.[^/]+/auth\\.json$") ${projectRoots.map(root => `(literal ${literal(path.join(root, 'auth.json'))})`).join(' ')})
   (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))
 `;
@@ -74,18 +106,47 @@ ${denied.map(root => `(deny file-read* file-write* (subpath ${literal(root)}))`)
 // git identity this project gets on the user's machine (name and email only)
 // so commits work. Without network, package managers fail fast instead of
 // retrying for minutes.
-function toolEnvironment({ git, node, home, temporary, toolchains, developer, identity, scope, browsers }) {
-  const PATH = [...new Set([path.dirname(node), ...toolchains.bins, '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', ...developer.bins, path.dirname(git), '/usr/bin', '/bin', '/usr/sbin', '/sbin'])].join(':');
+function toolEnvironment({ git, node, home, temporary, toolchains, developer, identity, scope, browsers, languages }) {
+  const PATH = [...new Set([languages.bin, path.dirname(node), ...toolchains.bins, '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', ...developer.bins, path.dirname(git), '/usr/bin', '/bin', '/usr/sbin', '/sbin'])].join(':');
   const common = { ...toolchains.env, ...developer.env, PATH, HOME: home, TMPDIR: temporary, PIAGENT_TOOL_SCOPE: scope, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', RIPGREP_CONFIG_PATH: path.join(home, '.ripgreprc'),
     ...(identity ? { GIT_AUTHOR_NAME: identity.name, GIT_AUTHOR_EMAIL: identity.email, GIT_COMMITTER_NAME: identity.name, GIT_COMMITTER_EMAIL: identity.email } : {}) };
   // The sandbox home is empty: Playwright finds the member's browsers by path.
-  return { network: { ...common, ...(browsers ? { PLAYWRIGHT_BROWSERS_PATH: browsers } : {}) },
-    offline: { ...common, npm_config_fetch_retries: '0', npm_config_fetch_timeout: '5000', PIP_RETRIES: '0', PIP_TIMEOUT: '5' } };
+  const playwright = browsers ? { PLAYWRIGHT_BROWSERS_PATH: browsers } : {};
+  return { network: { ...common, ...languages.env.network, ...playwright },
+    offline: { ...common, ...languages.env.offline, ...playwright, npm_config_fetch_retries: '0', npm_config_fetch_timeout: '5000', PIP_RETRIES: '0', PIP_TIMEOUT: '5' } };
 }
 // The browsers `npx playwright install` put in the member's cache.
 function playwrightBrowsers(userHome) {
   try { const dir = fs.realpathSync(path.join(userHome, 'Library/Caches/ms-playwright')); return fs.statSync(dir).isDirectory() ? dir : null; } catch { return null; }
 }
+// Without network a command still reaches servers on this Mac (a test's own
+// server, a database for integration tests), unless a proxy listens here:
+// the system's and the environment's proxies, and the usual ports of local
+// proxy and VPN clients, which would carry it to the internet.
+const LOCAL_PROXY_PORTS = [1080, 1087, 6152, 6153, 7890, 7891, 7897, 8118, 9050, 9150, 10808, 10809];
+function localProxyPorts() {
+  const ports = new Set(LOCAL_PROXY_PORTS), loopback = host => /^(localhost|127(\.\d+){3}|\[?::1\]?)$/i.test(host);
+  try {
+    const out = execFileSync('/usr/sbin/scutil', ['--proxy'], { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] });
+    for (const kind of ['HTTP', 'HTTPS', 'SOCKS']) {
+      const host = new RegExp(`${kind}Proxy : (\\S+)`).exec(out)?.[1], port = Number(new RegExp(`${kind}Port : (\\d+)`).exec(out)?.[1]);
+      if (host && loopback(host) && port > 0 && port < 65536) ports.add(port);
+    }
+  } catch { /* no proxy settings */ }
+  for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']) {
+    try { const url = new URL(process.env[name]); if (loopback(url.hostname) && url.port) ports.add(Number(url.port)); } catch { /* unset or not a URL */ }
+  }
+  return [...ports].sort((a, b) => a - b);
+}
+// Whether one of them answers now; checked again every few seconds.
+function localProxyListening(ports) {
+  return Promise.all(ports.map(port => new Promise(resolve => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    const done = value => { socket.destroy(); resolve(value); };
+    socket.setTimeout(250, () => done(false)); socket.once('connect', () => done(true)); socket.once('error', () => done(false));
+  }))).then(answers => answers.some(Boolean));
+}
+
 // Effective config for this project, as the user's own git would see it:
 // global and XDG files, includeIf (e.g. a work email for ~/work) and the
 // repository's own settings. `git config --get` runs no hooks or helpers.
@@ -125,7 +186,7 @@ export class ManagedToolBoundary {
   // readOnly: the project cannot be written. commands: bash is offered all
   // the same (a helper that runs checks); it writes only to its temporary
   // directory, and has no network.
-  constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, commands = false, node = process.execPath, identity, userHome: home, searchTools = true }) {
+  constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, commands = false, node = process.execPath, identity, userHome: home, searchTools = true, skills: skillFolders = [], proxyPorts }) {
     if (process.platform !== 'darwin') throw new Error('managed-sandbox-unavailable');
     this.cwd = fs.realpathSync(cwd); this.sdkRoot = fs.realpathSync(sdkRoot);
     this.node = fs.realpathSync(node);
@@ -157,14 +218,30 @@ export class ManagedToolBoundary {
     // neither read as a monorepo nor writable through its git directory.
     const gitDirs = repo && (repo.top === this.cwd || allowedRoot(repo.top)) ? [...new Set([repo.gitDir, repo.commonDir])].filter(dir => !inside(dir, this.cwd) && allowedRoot(dir)) : [];
     const toolchains = userToolchains(userHome, this.node), developer = developerTools(), browsers = playwrightBrowsers(userHome);
+    const languages = languageEnvironment({ userHome, repositoryTop: this.repositoryTop, home: this.home });
+    this.packageCache = languages.cache;
+    // A skill folder opens for reading only inside the agent folders (.claude,
+    // .codex, .pi, .agents) or outside the home folder's hidden entries, and
+    // never when it holds a closed folder (a link to ~/.ssh, the home folder).
+    const agentFolders = ['.claude', '.codex', '.pi', '.agents'].map(dir => path.join(userHome, dir));
+    const skills = [...new Set(skillFolders.flatMap(dir => { try { return [fs.realpathSync(dir)]; } catch { return []; } }))]
+      .filter(dir => dir !== '/' && !/[\x00-\x1f\x7f]/.test(dir) && !narrowed.some(root => inside(root, dir)) && !inside(userHome, dir)
+        && (!inside(dir, userHome) || agentFolders.some(root => inside(dir, root)) || !path.relative(userHome, dir).startsWith('.')));
     const base = { cwd: this.cwd, sdkRoot: this.sdkRoot, runtimeRoot: this.runtimeRoot, temporary: this.temporary, node: this.node,
-      denied: narrowed, readOnly, repository, gitDirs, toolchains: toolchains.roots, developer: developer.roots, browsers: browsers ? [browsers] : [] };
-    this.profile = managedSeatbelt(base);
-    // Only for commands the user approved (run_with_network); credentials stay denied.
+      denied: narrowed, readOnly, repository, gitDirs, toolchains: [...toolchains.roots, ...languages.readRoots], developer: developer.roots,
+      browsers: browsers ? [browsers] : [], skills, caches: languages.writeRoots, license: developerLicense() };
+    this.userHome = userHome;
+    this.profile = managedSeatbelt({ ...base, references: userHome });
+    // The same without loopback, while a local proxy listens (localProxyListening).
+    this.isolatedProfile = managedSeatbelt({ ...base, references: userHome, loopback: false });
+    this.proxyPorts = proxyPorts ?? localProxyPorts(); this.proxyCheck = { at: 0, listening: Promise.resolve(false) };
+    // Only for commands the user approved (run_with_network); credentials stay
+    // denied, and so do reference folders: what a command with network can
+    // read is the project, not the member's other files.
     this.networkProfile = readOnly ? null : managedSeatbelt({ ...base, network: true });
     // Every process a command starts carries this marker, also one it detaches.
     this.scope = randomUUID();
-    this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers,
+    this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers, languages,
       identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) });
     if (searchTools) provisionSearchTools(this.home, userHome);
     else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
@@ -185,10 +262,15 @@ export class ManagedToolBoundary {
     if (this.#closed || !this.allowed.includes(name) || network && (name !== 'bash' || !this.networkProfile)) throw new Error('managed-tool-unavailable');
     if (signal?.aborted) throw new Error('managed-tool-cancelled');
     for (const [file, digest] of this.pins) if (hash(file) !== digest) throw new Error('managed-runtime-changed');
-    const message = JSON.stringify({ name, args, ...(network ? { network: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
+    // `~` (as in an @~/… mention) is the member's home folder: the sandbox's
+    // own HOME is an empty private folder.
+    if (name !== 'bash' && typeof args?.path === 'string' && /^@?~(\/|$)/.test(args.path)) args = { ...args, path: this.userHome + args.path.replace(/^@?~/, '') };
+    if (!network && Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
+    const isolated = !network && await this.proxyCheck.listening;
+    const message = JSON.stringify({ name, args, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
-      const child = spawn('/usr/bin/sandbox-exec', ['-p', network ? this.networkProfile : this.profile, this.node, workerPath, this.sdkPath, this.cwd], {
+      const child = spawn('/usr/bin/sandbox-exec', ['-p', network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile, this.node, workerPath, this.sdkPath, this.cwd], {
         cwd: this.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'],
         env: network ? this.environment.network : this.environment.offline,
       });

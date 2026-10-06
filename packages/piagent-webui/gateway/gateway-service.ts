@@ -19,6 +19,8 @@ import {
   type GatewayDescriptor
 } from "./profile-state.ts";
 import { buildSessionCatalog, projectRefForCwd } from "./session-catalog.ts";
+import { suggestPaths } from "./path-suggestions.ts";
+import { listAgentCommands } from "../../piagent-core/runtime/resources/agent-resources.mjs";
 import { sessionRefForPath } from "../ownership/session-refs.ts";
 import { SessionMetadataStore } from "./session-metadata-store.ts";
 import { GatewayProtocolService } from "./gateway-protocol-service.ts";
@@ -222,6 +224,9 @@ export async function startPiagentGateway(options: {
     // Every revision the browser sees and sends back is the merged one.
     const hubCatalog = relay ? async () => relay!.merge(await readCatalog()) : readCatalog;
     const company = (sessionRef: unknown) => !!relay?.owns(sessionRef);
+    const projectFolder = async (projectRef: string) => projects.resolve(projectRef)
+      ?? (await runtimes!.listSessions()).find((info) => typeof info.cwd === "string" && projectRefForCwd(key, info.cwd) === projectRef)?.cwd
+      ?? (relay ? (await relay.folders()).find((folder) => projectRefForCwd(key, folder) === projectRef) : undefined);
     const relayPost = (path: string, body: unknown) => relay!.json("POST", path, body);
     const commands = new SessionCommandController({ catalog: hubCatalog, runtimes, metadata,
       store: new SessionCommandStore(state.root, key), events,
@@ -286,6 +291,17 @@ export async function startPiagentGateway(options: {
       // conversation runs (the company Gateway for a company conversation).
       readSessionQuestions: (sessionRef) => company(sessionRef)
         ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions`) : runtimes!.questions(sessionRef),
+      // What an @ or a / in the composer offers, under a folder this dashboard
+      // knows: an imported project or the folder of a conversation (company
+      // ones too).
+      suggestPaths: async (projectRef, query) => {
+        const root = await projectFolder(projectRef);
+        return root ? await suggestPaths({ root, query }) : null;
+      },
+      listCommands: async (projectRef) => {
+        const root = await projectFolder(projectRef);
+        return root ? { commands: listAgentCommands({ cwd: root }) } : null;
+      },
       updates: { status: () => updates!.status(), check: () => updates!.check(), apply: (request) => updates!.apply(request) },
       answerSessionQuestion: (sessionRef, questionRef, answer) => company(sessionRef)
         ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/questions/${encodeURIComponent(questionRef)}/answer`, answer)

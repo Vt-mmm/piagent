@@ -22,14 +22,15 @@ export function projectInstructions(cwd, top = cwd) {
 }
 
 // Managed sessions never consult the personal trust store or execute resources
-// discovered in a project.
-export function managedResourceLoader(api, { systemPrompt, extensions = [], agentsFiles = [] } = {}) {
+// discovered in a project. Skills and commands are text (agent-skills.mjs):
+// what they ask for runs with the session's own tools.
+export function managedResourceLoader(api, { systemPrompt, extensions = [], agentsFiles = [], skills = [], prompts = [] } = {}) {
   const runtime = api.createExtensionRuntime();
   const empty = Object.freeze([]);
   return Object.freeze({
     getExtensions: () => ({ extensions, errors: empty, runtime }),
-    getSkills: () => ({ skills: empty, diagnostics: empty }),
-    getPrompts: () => ({ prompts: empty, diagnostics: empty }),
+    getSkills: () => ({ skills: [...skills], diagnostics: empty }),
+    getPrompts: () => ({ prompts: [...prompts], diagnostics: empty }),
     getThemes: () => ({ themes: empty, diagnostics: empty }),
     getAgentsFiles: () => ({ agentsFiles: agentsFiles.map((file) => ({ ...file })) }),
     getSystemPrompt: () => typeof systemPrompt === 'function' ? systemPrompt() : systemPrompt,

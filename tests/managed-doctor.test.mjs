@@ -20,7 +20,7 @@ test('the doctor passes on a working machine and sends no model request', { skip
   const report = doctorReport(results);
   assert.equal(report.ok, true, report.text);
   assert.deepEqual(results.filter(result => result.required && !result.ok), []);
-  for (const label of ['sandbox starts and runs a command', 'write, read, edit, list, find, search a file', 'files outside the project stay out of reach',
+  for (const label of ['sandbox starts and runs a command', 'write, read, edit, list, find, search a file', 'folders outside the project are read-only',
     'commands have no network unless approved', 'git', 'node', 'this Piagent knows every harness model']) assert.equal(results.find(result => result.label === label)?.ok, true, label);
   assert.deepEqual(broker.calls, ['config']);
   assert.match(report.text, /Ready for company sessions.*No model request was sent\.$/);

@@ -18,7 +18,7 @@ import {
   resolveRepositoryPathCandidate, shellGlobTargetsProtectedPath,
   unresolvedExpansionReason
 } from "./shell-reach.ts";
-import { grantedSourceCheckoutRootForPath, shellTouchesGrantedSourceCheckout } from "./source-checkout-paths.ts";
+import { grantedSourceCheckoutRootForPath, piToolPathInput, referenceReadRootForPath, shellTouchesGrantedSourceCheckout } from "./source-checkout-paths.ts";
 import { experimentLoopDecision } from "./experiment-loop-policy.ts";
 import { extractShellWritePathCandidates } from "./shell-write-targets.js";
 import { isProjectMutatingShellCommand } from "./readonly-inline-inspection.ts";
@@ -163,6 +163,8 @@ import { finalGateConfig } from "./acceptance-diagnostic-policy.ts";
 import { fallbackBasePolicy } from "./fallback-base-policy.ts";
 import { prefixCompletions, registerPiagentTool as registerToolDefinition, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
 import { registerTaskEvidenceTools } from "../runtime/registration/task-evidence-tools.ts";
+import { registerAgentResources } from "../runtime/registration/agent-resources.ts";
+import { userSkillFolders } from "../runtime/resources/agent-resources.mjs";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
 import { registerPiagentStatusCommand } from "../runtime/registration/runtime-model-status.ts";
 import { registerTaskPreflightCommand } from "../runtime/registration/task-preflight.ts";
@@ -348,9 +350,10 @@ const DEFAULT_POLICY = fallbackBasePolicy(CONTEXT_INDEX_FILE, DEFAULT_ORCHESTRAT
 // so it is resolved once here rather than threaded through every profile load.
 const PLATFORM_ROOT = findPlatformRoot(path.dirname(fileURLToPath(import.meta.url)));
 // The skills Pi lists for the model are read where they are installed: this
-// package's and the user's. Reading them is allowed; writes stay in the project.
+// package's and the user's (also those kept for other coding agents, such as
+// ~/.claude/skills). Reading them is allowed; writes stay in the project.
 const SKILL_READ_ROOTS = [path.join(PLATFORM_ROOT, "packages", "piagent-core", "skills"),
-  path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "skills")]
+  path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "skills"), ...userSkillFolders()]
   .flatMap((root) => { try { return [fs.realpathSync.native(root)]; } catch { return []; } });
 const UPDATE_CHECK_MODULE = fileURLToPath(new URL("./update-check.js", import.meta.url));
 // The installed version, read from the package this file ships in. A maintainer
@@ -924,11 +927,12 @@ function evaluatePathLikeToolAccess(
     sourceCheckoutReadRoots?: string[];
   } = {}
 ): { block: boolean; reason?: string } {
-  const scopeAwareTool = options.forceScopeAware === true || ["read", "write", "edit", "grep", "find", "ls"].includes(toolName)
+  const piFileTool = ["read", "write", "edit", "grep", "find", "ls"].includes(toolName);
+  const scopeAwareTool = options.forceScopeAware === true || piFileTool
     || /(?:^|[_-])(?:fs|filesystem)(?:[_-]|$)/i.test(toolName);
   const inspection = inspectPathInputsFromInput(
     cwd,
-    input,
+    piFileTool ? piToolPathInput(input) : input,
     usesFilesystemContentFields(toolName, options.allowAmbiguousFilesystemContentFields !== false)
   );
   if (inspection.maxDepthExceeded) {
@@ -966,6 +970,7 @@ function evaluatePathLikeToolAccess(
     const fieldAccessMode = filesystemFieldAccessMode(toolName, item.field, writesFilesystem);
     const sourceCheckoutReadRoot = fieldAccessMode === "read"
       ? grantedSourceCheckoutRootForPath(cwd, item.path, options.sourceCheckoutReadRoots ?? [])
+        ?? (piFileTool && !writesFilesystem ? referenceReadRootForPath(cwd, item.path) : undefined)
       : undefined;
     if (scopeAwareTool && isFilesystemScopeField(item.field)) {
       const boundary = inspectRepositoryPathBoundary(cwd, item.path);
@@ -4144,5 +4149,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // registers. The completion module holds only task-bound tools (memory
   // citations need a task id), so it is no longer registered at all.
   registerTaskEvidenceTools(pi, registrationDeps);
+  registerAgentResources(pi);
   registerSessionCommands(pi, { ...registrationDeps, ...contextCommandApi });
 }

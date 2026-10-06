@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { extractShellPathCandidates, normalizePathCandidate } from "./policy-core.js";
@@ -22,6 +23,36 @@ export function grantedSourceCheckoutRootForPath(cwd: string, candidate: string,
     return undefined;
   }
   return roots.find((root) => inside(root, canonical));
+}
+
+// Folders a member points the agent to for reference (an @ mention, "read
+// ~/Documents/old-shop"): their own files, external drives and the shared
+// folder, read with read, grep, find or ls. Hidden entries of the home folder
+// (shell files, histories, tool configs) and ~/Library (app data, mail,
+// browser profiles) stay closed; a link is judged by where it leads.
+export function referenceReadRootForPath(cwd: string, candidate: string): string | undefined {
+  let target: string, home: string;
+  try {
+    target = fs.realpathSync.native(path.resolve(cwd, normalizePathCandidate(candidate)));
+    home = fs.realpathSync.native(os.homedir());
+  } catch {
+    return undefined;
+  }
+  if (inside(home, target)) {
+    const first = path.relative(home, target).split(path.sep)[0];
+    return first.startsWith(".") || first === "Library" ? undefined : home;
+  }
+  return ["/Volumes", "/Users/Shared", "/private/tmp"].find((root) => inside(root, target));
+}
+
+// Pi's own file tools drop a leading @ (an @path mention) and expand ~ to the
+// home folder before they open a path: check the path they will open.
+export function piToolPathInput(input: Record<string, unknown>): Record<string, unknown> {
+  const value = input.path;
+  if (typeof value !== "string") return input;
+  const bare = value.startsWith("@") ? value.slice(1) : value;
+  const opened = bare === "~" ? os.homedir() : bare.startsWith("~/") ? path.join(os.homedir(), bare.slice(2)) : bare;
+  return opened === value ? input : { ...input, path: opened };
 }
 
 // A shell command can name a file it is about to create. realpath fails for that

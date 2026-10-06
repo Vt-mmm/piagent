@@ -15,6 +15,12 @@ import { fetchPublicPage } from './web-fetch.mjs';
 const text = result => (result?.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('\n').trim();
 const first = value => String(value ?? '').split('\n')[0].slice(0, 160);
 
+const LANGUAGES = [['pnpm', 'pnpm --version'], ['yarn', 'yarn --version'], ['bun', 'bun --version'], ['deno', 'deno --version'], ['uv', 'uv --version'],
+  ['poetry', 'poetry --version'], ['go', 'go version'], ['rust (cargo)', 'cargo --version'], ['java', 'javac -version', 'test -n "$JAVA_HOME"'], ['maven', 'mvn -v'],
+  ['gradle', 'gradle --version --offline'], ['kotlin', 'kotlinc -version'], ['.NET', 'dotnet --version'], ['php', 'php --version'], ['composer', 'composer --version'],
+  ['ruby', 'ruby --version'], ['bundler', 'bundle --version'], ['swift', 'swift --version'], ['dart', 'dart --version'], ['flutter', 'flutter --version --suppress-analytics'],
+  ['elixir', 'elixir --version']];
+
 export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
   const results = [];
   const check = async (label, required, run) => {
@@ -47,10 +53,12 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
       await boundary.invoke('write', { path: 'Dự án mới/ghi chú.md', content: 'ổn\n' });
       if (await bash("cat 'Dự án mới/ghi chú.md'") !== 'ổn') throw Error('content changed'); return 'ok';
     });
-    await check('files outside the project stay out of reach', true, async () => {
+    await check('folders outside the project are read-only', true, async () => {
       let refused = false; try { await boundary.invoke('write', { path: '../piagent-doctor-outside.txt', content: 'x' }); } catch { refused = true; }
       if (!refused) { fs.rmSync(path.join(path.dirname(project), 'piagent-doctor-outside.txt'), { force: true }); throw Error('a write outside the project was allowed'); }
-      return 'refused';
+      // A folder the member points to for reference (@~/…) is readable.
+      await boundary.invoke('ls', { path: '~' });
+      return 'read, write refused';
     });
     await check('commands have no network unless approved', true, async () => {
       let refused = false; try { await bash('curl -sS -m 5 https://example.com/ >/dev/null'); } catch { refused = true; }
@@ -70,6 +78,19 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
       await bash('cc main.c -o main && ./main'); return first(await bash('cc --version'));
     });
     await check('make', false, () => bash('make --version'));
+    // Tests that start a server or use a local database (tool-boundary.mjs).
+    await check('tests reach servers on this Mac (localhost)', false, async () => {
+      await boundary.invoke('write', { path: 'loopback.mjs', content: "import http from 'node:http'; const s = http.createServer((q, r) => r.end('ok')); s.listen(0, '127.0.0.1', async () => { console.log(await (await fetch(`http://127.0.0.1:${s.address().port}/`)).text()); s.close(); });\n" });
+      try { return await bash('node loopback.mjs'); }
+      catch (error) { throw Error(/loopback-blocked/.test(String(error?.message)) ? 'a local proxy listens on this Mac: tests that use localhost need run_with_network' : first(String(error?.message))); }
+    });
+    await check('package caches kept for the project', false, async () => { await bash('mkdir -p "$npm_config_cache" && touch "$npm_config_cache/.piagent-doctor"'); return boundary.packageCache; });
+    // The languages installed on this Mac, each started once in the sandbox.
+    // (macOS ships stubs for some, such as javac without a JDK: a probe decides.)
+    for (const [label, command, probe = `command -v ${command.split(' ')[0]} >/dev/null`] of LANGUAGES) {
+      if (await bash(`${probe} && echo yes || true`) !== 'yes') continue;
+      await check(label, false, async () => first(await bash(`${command} 2>&1`)));
+    }
     if (network) await check('web_fetch reads a public page', false, async () => `status ${(await fetchPublicPage('https://example.com/', { maxChars: 1000 })).status}`);
   } finally { await boundary?.dispose(); fs.rmSync(project, { recursive: true, force: true }); }
   if (broker) {

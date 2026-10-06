@@ -4,12 +4,14 @@ import { errorResponse, jsonResponse, requestBody } from "./http-security.ts";
 import type { SessionAuthority } from "./session-auth.ts";
 
 // Requests a member makes beside a conversation: answering the main agent's
-// questions, and keeping Piagent itself up to date. Reads need the browser
-// session; every change also needs this origin, the session's CSRF token and
-// a share of the control rate.
+// questions, what an @ or a / in the composer offers, and keeping
+// Piagent itself up to date. Reads need the browser session; every change
+// also needs this origin, the session's CSRF token and a share of the control
+// rate.
 const MAX_CONTROL_BODY_BYTES = 70_000;
 const CURSOR = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const QUESTION_PATH = /^\/api\/v1\/sessions\/([^/]+)\/questions(?:\/([^/]+)\/answer)?$/;
+const PROJECT_PATH = /^\/api\/v1\/projects\/([^/]+)\/(paths|commands)$/;
 
 export type UpdateRoutes = {
   // What is installed, what is available, and the last update run.
@@ -27,6 +29,11 @@ type Context = {
 type Options = {
   readSessionQuestions?: (sessionRef: string) => unknown | Promise<unknown>;
   answerSessionQuestion?: (sessionRef: string, questionRef: string, answer: unknown) => unknown | Promise<unknown>;
+  // Names under the project (or the folder typed after ~/ or /); null when the
+  // project is not one this dashboard knows.
+  suggestPaths?: (projectRef: string, query: string) => unknown | Promise<unknown>;
+  // The project's and the member's commands and skills; null as above.
+  listCommands?: (projectRef: string) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
 };
 
@@ -74,6 +81,18 @@ export async function routeMemberRequest(context: Context, options: Options): Pr
       const code = error instanceof Error ? error.message : "questions-unavailable";
       errorResponse(response, code === "question-not-pending" ? 409 : code === "question-answer-invalid" ? 400 : 503, code);
     }
+    return true;
+  }
+  const project = request.method === "GET" ? PROJECT_PATH.exec(url.pathname) : null;
+  const read = project?.[2] === "paths" ? options.suggestPaths : project ? options.listCommands : undefined;
+  if (project && read) {
+    if (!auth.authenticate(request)) { errorResponse(response, 401, "authentication-required"); return true; }
+    const projectRef = decodeURIComponent(project[1]), query = url.searchParams.get("query") ?? "";
+    if (!CURSOR.test(projectRef) || query.length > 512 || /[\x00-\x1f]/.test(query)) { errorResponse(response, 400, `invalid-${project[2] === "paths" ? "path" : "command"}-query`); return true; }
+    try {
+      const value = await read(projectRef, query);
+      if (value === null) errorResponse(response, 404, "project-not-found"); else jsonResponse(response, 200, value);
+    } catch { errorResponse(response, 503, `${project[2] === "paths" ? "path-suggestions" : "commands"}-unavailable`); }
     return true;
   }
 

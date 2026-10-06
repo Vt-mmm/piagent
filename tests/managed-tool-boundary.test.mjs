@@ -128,26 +128,28 @@ test('credential files are hidden; a nested auth.json and env templates stay rea
   assert.doesNotMatch(out,/FIXTURE-/);
  } finally { for (const file of Object.keys(files)) await fs.rm(path.join(cwd,file),{force:true}); }
 });
-// An approved network command may start a server (a test server for an
-// end-to-end suite); a plain command cannot listen at all. The sandbox cannot
-// tell loopback from all interfaces, which the approval card says.
-test('only an approved network command may listen', async () => {
+// Any command may start a server on this Mac (a test's own server, an
+// end-to-end suite's app); what lies beyond this Mac needs approval. The
+// sandbox cannot tell loopback from all interfaces, which the approval card
+// says.
+test('a command may listen on this Mac, with or without approval', async () => {
  const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
  const listen = (host, network) => boundary.invoke('bash',{command:quote(process.execPath)+' -e '+quote(`const s=require('node:net').createServer();s.on('error',e=>{console.log('${host} '+e.code);process.exit(0)});s.listen(0,'${host}',()=>{console.log('${host} LISTEN');s.close()})`),timeout:5},undefined,undefined,undefined,{network}).then(content);
  assert.match(await listen('127.0.0.1', true), /127\.0\.0\.1 LISTEN/);
- assert.match(await listen('127.0.0.1', false), /127\.0\.0\.1 EPERM/);
+ assert.match(await listen('127.0.0.1', false), /127\.0\.0\.1 LISTEN/);
 });
-// Playwright's Chromium against a server the command starts, only with
-// approval. Opt-in: needs a project with @playwright/test and its browser
-// installed (PIAGENT_TEST_PLAYWRIGHT_PROJECT=<that project>).
+// Playwright's Chromium against a server the command starts, with or without
+// approval while no local proxy listens. Opt-in: needs a project with
+// @playwright/test and its browser installed
+// (PIAGENT_TEST_PLAYWRIGHT_PROJECT=<that project>).
 const playwrightProject = process.env.PIAGENT_TEST_PLAYWRIGHT_PROJECT;
 test('an approved network command can drive Playwright\'s Chromium against a local server', { skip: !playwrightProject, timeout: 120000 }, async () => {
  const probe = path.join(playwrightProject, '.piagent-sandbox-probe.mjs');
  await fs.writeFile(probe, "import http from 'node:http';import {chromium} from '@playwright/test';const s=http.createServer((q,r)=>r.end('<h1 id=x>sandbox ok</h1>'));await new Promise(r=>s.listen(0,'127.0.0.1',r));try{const b=await chromium.launch();const p=await b.newPage();await p.goto('http://127.0.0.1:'+s.address().port+'/');console.log('PAGE '+await p.textContent('#x'));await b.close()}finally{s.close()}\n");
- const project = new ManagedToolBoundary({ cwd: playwrightProject, sdkRoot });
+ const project = new ManagedToolBoundary({ cwd: playwrightProject, sdkRoot, proxyPorts: [] });
  try {
   const run = network => project.invoke('bash',{command:'node .piagent-sandbox-probe.mjs 2>&1 | tail -3',timeout:90},undefined,undefined,undefined,{network}).then(content, error => String(error.message));
   assert.match(await run(true), /PAGE sandbox ok/);
-  assert.doesNotMatch(await run(false), /PAGE sandbox ok/);
+  assert.match(await run(false), /PAGE sandbox ok/);
  } finally { await project.dispose(); await fs.rm(probe, { force: true }); }
 });

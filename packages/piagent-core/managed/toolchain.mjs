@@ -22,18 +22,20 @@ export function managedGit() {
   throw Error('managed-git-unavailable');
 }
 
-// Compilers without the /usr/bin shims: inside Seatbelt, xcrun cannot read
-// the Xcode license record and xcodebuild aborts, so cc/c++/make (and so Rust,
-// cgo and node-gyp builds) would fail on machines that select Xcode.app while
-// working on machines with only the Command Line Tools. Resolve the tools and
-// SDK here, outside the sandbox, the same way on every machine: the Command
-// Line Tools when installed, otherwise the selected Xcode.
+// Compilers without the /usr/bin shims, resolved here, outside the sandbox:
+// the developer directory the member selected (xcode-select), as their
+// Terminal uses it, so a package's tests find XCTest and the compiler matches
+// the SDK. The sandbox reads Xcode's license record (tool-boundary.mjs);
+// without it xcrun reports an unaccepted license. Otherwise the Command Line
+// Tools, else Xcode.app.
+const DEVELOPER_LICENSE = '/Library/Preferences/com.apple.dt.Xcode.plist';
+export const developerLicense = () => fs.existsSync(DEVELOPER_LICENSE) ? DEVELOPER_LICENSE : null;
 let developer;
 export function developerTools() {
   if (developer) return developer;
   const selected = selectedDeveloperDir();
-  const dir = executable(`${CLT}/usr/bin/clang`) ? CLT
-    : [selected, '/Applications/Xcode.app/Contents/Developer'].find(dev => dev && executable(path.join(dev, 'Toolchains/XcodeDefault.xctoolchain/usr/bin/clang')));
+  const clang = dev => dev === CLT ? `${CLT}/usr/bin/clang` : path.join(dev, 'Toolchains/XcodeDefault.xctoolchain/usr/bin/clang');
+  const dir = [selected, CLT, '/Applications/Xcode.app/Contents/Developer'].find(dev => dev && executable(clang(dev)));
   if (!dir) return (developer = { roots: [], bins: [], env: {} });
   let sdk = '';
   try {

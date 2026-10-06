@@ -546,3 +546,31 @@ describe("Piagent WebUI updates", () => {
     assert.deepEqual(calls.map((call) => Array.isArray(call) ? call[1].version : call), ["check", "1.11.0", "busy", "1.12.0", "boom"]);
   });
 });
+
+describe("Piagent WebUI path suggestions", () => {
+  // What an @ in a composer offers: a signed-in page reads names under a
+  // project the dashboard knows; an unknown project or a bad query is refused.
+  it("answers a signed-in page for a known project only", async () => {
+    const asked = [];
+    const server = await start({ suggestPaths: async (projectRef, query) => {
+      asked.push([projectRef, query]);
+      if (projectRef === "project.unknown") return null;
+      if (query === "boom") throw new Error("EACCES /Users/someone/secret");
+      return { suggestions: [{ value: "src/pricing.js", label: "pricing.js", detail: "src/pricing.js", kind: "file" }] };
+    } });
+    const path = (projectRef, query) => `/api/v1/projects/${projectRef}/paths?query=${encodeURIComponent(query)}`;
+    assert.equal((await request(server.origin, path("project.a", "pri"))).status, 401, "a signed-in page only");
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const cookie = exchange.headers["set-cookie"][0].split(";", 1)[0], read = (url) => request(server.origin, url, { headers: { Cookie: cookie } });
+    const answer = await read(path("project.a", "~/Documents/old shop/"));
+    assert.equal(answer.status, 200); assert.equal(JSON.parse(answer.body).suggestions[0].value, "src/pricing.js");
+    assert.equal((await read(path("project.unknown", ""))).status, 404);
+    assert.equal((await read(path("project.a", "x".repeat(513)))).status, 400);
+    assert.equal((await read(path("project.a", "a\nb"))).status, 400);
+    assert.equal((await read(path("..%2Fetc", ""))).status, 400);
+    const failed = await read(path("project.a", "boom"));
+    assert.equal(failed.status, 503); assert.deepEqual(JSON.parse(failed.body), { error: { code: "path-suggestions-unavailable" } }, "a failure never leaks its text");
+    assert.deepEqual(asked, [["project.a", "~/Documents/old shop/"], ["project.unknown", ""], ["project.a", "boom"]]);
+  });
+});
