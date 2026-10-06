@@ -42,8 +42,13 @@ export function installedPiHostRoot(): string {
     const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
     recorded = JSON.parse(fs.readFileSync(path.join(agentDir, "piagent-runtime.json"), "utf8")).pi_sdk_root ?? null;
   } catch { /* no record yet */ }
+  // npm on Windows keeps global packages in %APPDATA%\npm\node_modules, or
+  // beside node.exe, with no lib folder.
+  const appData = process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
+  const windowsHosts = process.platform !== "win32" ? []
+    : [path.join(appData, "npm"), path.dirname(process.execPath)].map((prefix) => path.join(prefix, "node_modules", "@earendil-works", "pi-coding-agent"));
   for (const candidate of [recorded, path.join(home, ".pi", "npm-global", hostPackage), path.join(home, ".local", hostPackage),
-    path.join("/opt/homebrew", hostPackage), path.join("/usr/local", hostPackage)]) {
+    path.join("/opt/homebrew", hostPackage), path.join("/usr/local", hostPackage), ...windowsHosts]) {
     if (!candidate) continue;
     const found = packageRootFrom(path.join(candidate, "package.json"));
     if (found) return found;
