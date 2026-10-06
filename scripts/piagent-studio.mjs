@@ -150,6 +150,6 @@ try {
   // Never print JSON payloads or startup objects that can contain role tokens.
   const code = error instanceof Error && /^managed-[a-z:_-]+$/.test(error.message) ? error.message : 'managed-launch-failed';
   const hint = code === 'managed-session-open-elsewhere' ? 'This conversation is running in the Piagent WebUI; continue it there, or start a new one here.'
-    : 'Refresh the Studio import or check Keychain access.';
+    : process.platform === 'linux' ? 'In Agent Watch for Windows, choose Connect Piagent in WSL again.' : 'Refresh the Studio import or check Keychain access.';
   process.stderr.write(`Agent Watch: ${code}. ${hint}\n`); process.exitCode = 1;
 } finally { await gateway?.close(); if (current) await current.dispose(); else await broker?.dispose(); hold?.release(); }

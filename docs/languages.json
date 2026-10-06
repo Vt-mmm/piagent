@@ -21,8 +21,8 @@
       "en": "README.md",
       "vi": "README.vi.md",
       "consistentAt": {
-        "en": "4b74c1136ac3962b36dba64d71d6685c5c4b0ff1",
-        "vi": "ab17be1ebadedec376328ab8c1bfcc76a209eafd"
+        "en": "8d27cae04ea473fee41991bb79b103237cdf1ff2",
+        "vi": "300d289331b297a01792963b9f36d5008746e586"
       }
     },
     {
@@ -30,8 +30,8 @@
       "en": "docs/en/README.md",
       "vi": "docs/vi/README.md",
       "consistentAt": {
-        "en": "659e68ecd362bbef6cbce5a4b3fa86d4bd52f2a4",
-        "vi": "d8686c9e11aa79faecae658d7275ca14c628de18"
+        "en": "1b0cad5ad3e47b6dff855ccfef73fec5af3abd2e",
+        "vi": "5ca35d1626e3b0b55071d95028d4d148f3beb127"
       }
     },
     {
@@ -50,6 +50,15 @@
       "consistentAt": {
         "en": "e04ab2a64da66c59fbc2f52b472db481815c6ea5",
         "vi": "8ce84e7221156cfa3882e29d50045be989d1ea7d"
+      }
+    },
+    {
+      "topic": "windows",
+      "en": "docs/en/windows.md",
+      "vi": "docs/vi/windows.md",
+      "consistentAt": {
+        "en": "0b3aa448c1693d6dcbadda504a4f956f8e0534f5",
+        "vi": "d2e17de951171804c9e325e7240189fe4f8d3d74"
       }
     }
   ]

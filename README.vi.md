@@ -34,6 +34,10 @@ Main có tối đa hai trợ lý chỉ đọc; không sinh nhánh con tiếp. Re
 
 Bản local này chưa phải bản phát hành có Developer ID. [Trạng thái nghiệm thu](docs/managed-local-acceptance.md) phân biệt test nội bộ, gọi provider thật và phần còn thiếu.
 
+## Windows
+
+Chế độ cá nhân chạy thẳng trên Windows (Git Bash cho lệnh shell). Chế độ công ty chạy trong WSL2 (Ubuntu) với sandbox bubblewrap và Agent Watch cho Windows. Cài đặt từng bước: [Windows](docs/vi/windows.md).
+
 ## Web search và vision
 
 Web research và đọc ảnh là hai capability tách biệt. Tích hợp `pi-web-access`

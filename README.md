@@ -34,8 +34,8 @@ Because it runs from an installed package, the source it writes into `.pi/settin
 | Linux x64 + Bash | Verified in CI for this release. |
 | macOS Intel (`darwin/x64`) + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
 | Linux ARM64 + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
-| Native Windows | Not a team-rollout target yet; terminal helpers and shell policy rely on Bash/POSIX semantics. |
-| WSL2 | Experimental and not release-gated yet. |
+| Native Windows | Personal mode: the guard, dashboard and path checks run in CI on Windows; shell commands use Git Bash. Company mode runs in WSL2. See [Windows](docs/en/windows.md). |
+| WSL2 (Windows) | Company mode with the bubblewrap sandbox and Agent Watch for Windows; the Linux sandbox is checked in CI. See [Windows](docs/en/windows.md). |
 
 Pinned step-by-step rollouts, updates, rollback, and the fast-moving `--dev` channel are in [Release and install policy](docs/release-install-policy.md).
 

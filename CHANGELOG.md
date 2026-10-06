@@ -2,6 +2,31 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+Piagent on Windows: company conversations in WSL2, personal ones on Windows itself.
+
+### Features
+
+- Company conversations run on Linux, and so in WSL2 on Windows, with a bubblewrap sandbox that keeps the macOS promises:
+  - The project, its package cache and a private temporary folder are writable.
+  - The member's other folders are readable for reference, read-only; the home folder's hidden entries are not there at all.
+  - Credential files read as empty.
+  - A command without approval gets its own network namespace: it reaches only the servers it starts itself.
+  - A command's processes end with it.
+  - Windows programs cannot be started from inside.
+  - `piagent studio --doctor` checks each of these.
+- Agent Watch for Windows binds Piagent in WSL. Piagent keeps WSL's interop variables when it starts the Windows broker, and keeps the company store in `$XDG_DATA_HOME/agentwatch` (`~/.local/share/agentwatch`) on Linux. Members re-bind Piagent in Agent Watch after updating.
+- On Windows itself:
+  - The dashboard's project picker is Windows' folder dialog; from WSL it is that dialog too, with the answer converted to a WSL path.
+  - Links open in the Windows browser from WSL.
+  - @ suggestions find `fd`/`fdfind` and git on PATH.
+- When the company runtime cannot start from WSL, the dashboard and `piagent studio` say what to do in Agent Watch for Windows instead of pointing at macOS Keychain.
+- [Windows](docs/en/windows.md) is the setup guide. A Windows workflow runs the guard, dashboard and path tests on Windows, and the Ubuntu job runs the Linux sandbox.
+
+### Fixes
+
+- On Windows the guard treated a path on another drive (`D:\x`) as a project path, and `~\` was not the home folder; `AppData` is closed to reference reads like `~/Library`.
 ## v1.12.1 - 2026-10-06
 
 ### Fixes

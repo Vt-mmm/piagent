@@ -53,7 +53,7 @@ test('the company Gateway starts without a browser or project and the launch log
 
 test('launch reports Watch-side failures by code and never runs a changed broker', async () => {
   const denied = fixture({broker: 'exit 77'});
-  await assert.rejects(ensureCompanyGateway(denied.agent, denied.home, 5000), /managed-keychain-approval-required/);
+  await assert.rejects(ensureCompanyGateway(denied.agent, denied.home, 5000), process.platform === 'linux' ? /managed-key-unavailable/ : /managed-keychain-approval-required/);
   const disconnected = fixture({broker: 'exit 67'});
   await assert.rejects(ensureCompanyGateway(disconnected.agent, disconnected.home, 5000), /managed-profile-disconnected/);
   const changed = fixture({});

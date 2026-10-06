@@ -6,6 +6,7 @@
 
 - [Architecture](architecture.md): dependency direction, code ownership, runtime flow, and state boundaries.
 - [Maintainer guide](maintainer-guide.md): where new code belongs, file budgets, split queue, and review checklist.
+- [Windows](windows.md): personal mode on Windows, company mode in WSL2 with the bubblewrap sandbox.
 - [Release and install policy](../release-install-policy.md)
 - [Quality benchmark](../quality-benchmark.md)
 - [Security threat model](../security-threat-model.md)

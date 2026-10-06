@@ -6,6 +6,7 @@
 
 - [Architecture](architecture.md): chiều dependency, ownership của code, luồng runtime và ranh giới state.
 - [Maintainer guide](maintainer-guide.md): code mới đặt ở đâu, file budget, thứ tự tách file và checklist review.
+- [Windows](windows.md): chế độ cá nhân thẳng trên Windows, chế độ công ty trong WSL2 với sandbox bubblewrap.
 - [Release và install policy](../release-install-policy.md)
 - [Quality benchmark](../quality-benchmark.md)
 - [Security threat model](../security-threat-model.md)

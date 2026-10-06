@@ -66,7 +66,9 @@ async function running(socket: string): Promise<{ packageVersion?: unknown } | "
 
 // Same foreground step as Agent Watch: macOS may ask once to let this build of
 // the broker read its Keychain item. Nothing secret comes back. Exit 67 means
-// the imported key is no longer connected in Agent Watch.
+// the imported key is no longer connected in Agent Watch. From WSL the broker is
+// Agent Watch for Windows, whose key has no prompt: any other failure means the
+// key cannot be read on this computer.
 async function authorize(pinned: Binding): Promise<void> {
   if (fs.realpathSync(pinned.broker) !== pinned.broker || sha256(pinned.broker) !== pinned.brokerSha256) throw new Error("managed-launch-binding-changed");
   const code = await new Promise<number | null>((resolve) => {
@@ -75,7 +77,7 @@ async function authorize(pinned: Binding): Promise<void> {
     child.once("exit", (exit) => resolve(exit));
   });
   if (code === 67) throw new Error("managed-profile-disconnected");
-  if (code !== 0) throw new Error("managed-keychain-approval-required");
+  if (code !== 0) throw new Error(process.platform === "linux" ? "managed-key-unavailable" : "managed-keychain-approval-required");
 }
 
 // The control socket of a running company Gateway, without launching one.
