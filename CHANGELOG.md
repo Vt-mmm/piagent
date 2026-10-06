@@ -4,6 +4,10 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Fixes
+
+- `piagent-update` in WSL2 no longer warns that WSL2 is experimental and not release-gated: since 1.13.0 it is how Windows runs Piagent, and the Windows setup and the bubblewrap sandbox run in CI.
+
 ### Docs
 
 - Windows installs with one PowerShell command (`irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex`): WSL2 and Ubuntu when missing, Piagent in Ubuntu, Agent Watch and the company key, and a Piagent Start-menu entry; running it again updates. The docs site has a "Cài trên Windows" page with the fixes for failed installs, and the Windows guide leads with the command.

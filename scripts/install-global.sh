@@ -135,7 +135,12 @@ detect_runtime_surface() {
   arch_name="$(uname -m 2>/dev/null || echo unknown)"
 
   if [[ "$os_name" == "Linux" && -r /proc/version ]] && grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-    printf 'wsl2/%s (experimental; not release-gated)' "$arch_name"
+    # WSL2 is how Windows runs Piagent (since 1.13.0): the Windows setup and
+    # the bubblewrap sandbox run in CI on x86_64.
+    case "$arch_name" in
+      x86_64|amd64) printf 'wsl2/%s (verified in CI: Windows setup and the bubblewrap sandbox)' "$arch_name" ;;
+      *) printf 'wsl2/%s (supported target; run smoke before team rollout)' "$arch_name" ;;
+    esac
     return
   fi
 
@@ -153,7 +158,7 @@ detect_runtime_surface() {
       printf 'linux-arm64 (supported target; run smoke before team rollout)'
       ;;
     MINGW*|MSYS*|CYGWIN*)
-      printf 'native-windows/%s (not release-gated; terminal helpers require Bash semantics)' "$arch_name"
+      printf 'native-windows/%s (personal-mode preview, not release-gated; teams use WSL2)' "$arch_name"
       ;;
     *)
       printf '%s/%s (outside v1.2.0 release matrix)' "$os_name" "$arch_name"
