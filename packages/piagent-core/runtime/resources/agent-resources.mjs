@@ -17,14 +17,14 @@ const MAX_FILE_BYTES = 256 * 1024;
 const MAX_ENTRIES = 400;
 
 function folder(file) {
-  try { return fs.statSync(file).isDirectory() ? fs.realpathSync(file) : null; } catch { return null; }
+  try { return fs.statSync(file).isDirectory() ? fs.realpathSync.native(file) : null; } catch { return null; }
 }
 
 // The project folder and its parents up to the repository root (the first
 // folder holding .git), at most 12 levels, never the home folder or above it.
 export function projectFolders(cwd, home = os.homedir()) {
-  const folders = [], stop = fs.realpathSync(home);
-  for (let dir = fs.realpathSync(cwd), depth = 0; depth < 12; depth += 1) {
+  const folders = [], stop = fs.realpathSync.native(home);
+  for (let dir = fs.realpathSync.native(cwd), depth = 0; depth < 12; depth += 1) {
     if (dir === stop || dir === path.dirname(dir) || (stop + path.sep).startsWith(dir + path.sep)) break;
     folders.push(dir);
     if (fs.existsSync(path.join(dir, '.git'))) break;
@@ -89,7 +89,7 @@ function readSmall(file) {
 
 function origin(file, home) {
   const name = /(?:^|\/)\.(claude|codex|agents|pi)\//.exec(file)?.[1] ?? 'pi';
-  return { origin: name, scope: file.startsWith(`${fs.realpathSync(home)}${path.sep}.`) ? 'user' : 'project' };
+  return { origin: name, scope: file.startsWith(`${fs.realpathSync.native(home)}${path.sep}.`) ? 'user' : 'project' };
 }
 
 function skillFiles(root, depth = 0, files = []) {

@@ -33,6 +33,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Build the dashboard
+        run: npm run build --workspace @piagent/webui
+
       # piagent-update is left out: it runs npm, Pi and Bash the macOS/Linux
       # way, and its tests stand in for them with Bash scripts.
       - name: Windows-facing tests
