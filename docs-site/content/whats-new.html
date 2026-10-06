@@ -1,4 +1,17 @@
 <section class="section">
+  <p class="section-kicker">v1.13.0 · 2026-10-06</p>
+  <h2 id="v1-13-0">Piagent trên Windows qua WSL2</h2>
+  <p class="section-lead">Thành viên dùng Windows chạy Piagent trong WSL2 (Ubuntu), cả cuộc trò chuyện công ty lẫn cá nhân. Cuộc trò chuyện công ty có sandbox bubblewrap giữ đúng những gì sandbox macOS bảo đảm, và Agent Watch cho Windows giữ key công ty. Hướng dẫn cài đặt: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/vi/windows.md">Piagent trên Windows</a>.</p>
+  <ul>
+    <li>Project, cache package của project và thư mục tạm riêng ghi được; folder khác trong home chỉ đọc để tham chiếu; mục ẩn trong home không có trong sandbox; file credential đọc ra rỗng.</li>
+    <li>Lệnh chưa được duyệt mạng chỉ tới được server do chính nó mở; tiến trình lệnh để lại kết thúc cùng lệnh.</li>
+    <li>Từ WSL, hộp chọn folder là hộp thoại của Windows và link mở trong trình duyệt Windows.</li>
+    <li>Chạy thẳng trên Windows là bản xem trước cho chế độ cá nhân; <code>piagent-update</code> chưa chạy ở đó.</li>
+  </ul>
+  <p>Sau khi cập nhật, mỗi thành viên nhập lại cấu hình Piagent trong Agent Watch (macOS: Studio → Áp dụng cho Piagent; Windows: Kết nối Piagent trong WSL).</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.12.1 · 2026-10-06</p>
   <h2 id="v1-12-1">Nhánh cuộc trò chuyện công ty gửi được tin nhắn</h2>
   <p class="section-lead">Tạo nhánh (fork) một cuộc trò chuyện công ty để giữ context giờ gửi tin nhắn bình thường. Trước đây nhánh vẫn hiện trong danh sách nhưng mọi tin nhắn đều báo “Tin nhắn chưa được gửi”. Nhánh tạo bằng bản cũ cần tạo lại sau khi cập nhật.</p>

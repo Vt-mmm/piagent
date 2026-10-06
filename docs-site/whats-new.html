@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.12.1 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.13.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -103,6 +103,19 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.13.0 · 2026-10-06</p>
+  <h2 id="v1-13-0">Piagent trên Windows qua WSL2</h2>
+  <p class="section-lead">Thành viên dùng Windows chạy Piagent trong WSL2 (Ubuntu), cả cuộc trò chuyện công ty lẫn cá nhân. Cuộc trò chuyện công ty có sandbox bubblewrap giữ đúng những gì sandbox macOS bảo đảm, và Agent Watch cho Windows giữ key công ty. Hướng dẫn cài đặt: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/vi/windows.md">Piagent trên Windows</a>.</p>
+  <ul>
+    <li>Project, cache package của project và thư mục tạm riêng ghi được; folder khác trong home chỉ đọc để tham chiếu; mục ẩn trong home không có trong sandbox; file credential đọc ra rỗng.</li>
+    <li>Lệnh chưa được duyệt mạng chỉ tới được server do chính nó mở; tiến trình lệnh để lại kết thúc cùng lệnh.</li>
+    <li>Từ WSL, hộp chọn folder là hộp thoại của Windows và link mở trong trình duyệt Windows.</li>
+    <li>Chạy thẳng trên Windows là bản xem trước cho chế độ cá nhân; <code>piagent-update</code> chưa chạy ở đó.</li>
+  </ul>
+  <p>Sau khi cập nhật, mỗi thành viên nhập lại cấu hình Piagent trong Agent Watch (macOS: Studio → Áp dụng cho Piagent; Windows: Kết nối Piagent trong WSL).</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.12.1 · 2026-10-06</p>
   <h2 id="v1-12-1">Nhánh cuộc trò chuyện công ty gửi được tin nhắn</h2>
