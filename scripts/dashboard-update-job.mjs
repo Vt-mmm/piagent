@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const RELEASE = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -70,7 +70,8 @@ try {
 fs.writeSync(log, "\nRestarting the dashboard on the new release\n");
 // Like the \`piagent\` command, with the package's TypeScript loader: an npm
 // install sits under node_modules, where Node does not strip types itself.
-const loader = path.join(packageRoot, "scripts", "register-typescript-loader.mjs");
+// --import takes a URL: a Windows path (C:\...) reads as a URL scheme.
+const loader = pathToFileURL(path.join(packageRoot, "scripts", "register-typescript-loader.mjs")).href;
 const restart = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", loader, dashboard, "restart", "--json"],
   { stdio: ["ignore", "ignore", log], env, timeout: 3 * 60 * 1000 });
 finish("succeeded", { installed, ...(bindingChanged ? { bindingChanged } : {}), ...(restart.status === 0 ? {} : { reason: "dashboard-restart-failed" }) });

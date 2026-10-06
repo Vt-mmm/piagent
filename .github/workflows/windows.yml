@@ -33,6 +33,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # piagent-update is left out: it runs npm, Pi and Bash the macOS/Linux
+      # way, and its tests stand in for them with Bash scripts.
       - name: Windows-facing tests
         shell: bash
         env:
@@ -46,5 +48,4 @@ jobs:
           tests/piagent-webui-loopback-server.test.mjs
           tests/piagent-webui-project-registry.test.mjs
           tests/piagent-dashboard-busy-gateway.test.mjs
-          tests/update-global.test.mjs
           tests/managed-linux-sandbox.test.mjs

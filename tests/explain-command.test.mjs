@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -26,7 +27,7 @@ function fixture() {
 function explain(command, cwd, extra = []) {
   const result = execFileSync(process.execPath, [
     "--disable-warning=ExperimentalWarning",
-    "--import", path.join(root, "scripts", "register-typescript-loader.mjs"),
+    "--import", pathToFileURL(path.join(root, "scripts", "register-typescript-loader.mjs")).href,
     path.join(root, "scripts", "explain-command.mjs"),
     command, "--project", cwd, "--json", ...extra
   ], { encoding: "utf8", cwd: root, env: { ...process.env, PIAGENT_PROFILE: "" } });

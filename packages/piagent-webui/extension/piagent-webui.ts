@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -343,7 +343,7 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
     fs.chmodSync(socketDirectory, 0o700);
     const socket = path.join(socketDirectory, "control.sock");
     const controlToken = randomBytes(32).toString("base64url");
-    const loader = path.join(PLATFORM_ROOT, "scripts", "register-typescript-loader.mjs");
+    const loader = pathToFileURL(path.join(PLATFORM_ROOT, "scripts", "register-typescript-loader.mjs")).href;
     const main = path.join(PACKAGE_ROOT, "server", "sidecar-main.ts");
     const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", loader, main], {
       cwd: ctx.cwd, env: { PATH: process.env.PATH ?? "", TMPDIR: process.env.TMPDIR ?? os.tmpdir(), NO_COLOR: "1" },

@@ -23,7 +23,8 @@ it("persists imported folders owner-only and exposes only opaque project project
   assert.equal(projection.label, "example-project"); assert.equal(JSON.stringify(projection).includes(value.project), false);
   assert.equal(registry.resolve(projection.projectRef), fs.realpathSync(value.project));
   assert.deepEqual(new ProjectRegistry(value.state, value.key).list(), [projection]);
-  assert.equal(fs.statSync(registry.file).mode & 0o777, 0o600);
+  // Windows has no POSIX modes.
+  if (process.platform !== "win32") assert.equal(fs.statSync(registry.file).mode & 0o777, 0o600);
 });
 
 it("fails closed for root folders and corrupt durable registries", () => {

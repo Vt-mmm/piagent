@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptByCommand = {
   "piagent-setup": "scripts/setup.sh",
@@ -140,7 +140,7 @@ const sourceRoot = invokedAs === "piagent-benchmark" ? benchmarkSourceRoot() : p
 const target = path.join(sourceRoot, script);
 const runner = target.endsWith(".mjs") ? process.execPath : "bash";
 const runnerArgs = target.endsWith(".mjs")
-  ? ["--disable-warning=ExperimentalWarning", "--import", path.join(sourceRoot, "scripts", "register-typescript-loader.mjs"), target]
+  ? ["--disable-warning=ExperimentalWarning", "--import", pathToFileURL(path.join(sourceRoot, "scripts", "register-typescript-loader.mjs")).href, target]
   : [target];
 const child = spawn(runner, [...runnerArgs, ...forwardedArgs], {
   cwd: process.cwd(),

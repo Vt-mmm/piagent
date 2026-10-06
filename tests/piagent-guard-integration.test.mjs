@@ -161,7 +161,7 @@ function explainCommand(command, cwd) {
   try {
     const stdout = execFileSync(process.execPath, [
       "--disable-warning=ExperimentalWarning",
-      "--import", path.join(repoRoot, "scripts", "register-typescript-loader.mjs"),
+      "--import", pathToFileURL(path.join(repoRoot, "scripts", "register-typescript-loader.mjs")).href,
       path.join(repoRoot, "scripts", "explain-command.mjs"),
       command, "--project", cwd, "--json"
     ], { cwd: repoRoot, encoding: "utf8", env: { ...process.env, PIAGENT_PROFILE: "" } });
@@ -1554,9 +1554,10 @@ non-secret metadata are safe alternatives.`;
       [".claude/settings.json", "{}\n"], [".codex/prompts/standup.md", "Summarize.\n"], [".codex/skills/pdf/SKILL.md", "---\nname: pdf\ndescription: PDF.\n---\n"]]) {
       fs.mkdirSync(path.dirname(path.join(home, file)), { recursive: true }); fs.writeFileSync(path.join(home, file), text);
     }
-    const previousHome = process.env.HOME;
-    process.env.HOME = home;
-    t.after(() => { process.env.HOME = previousHome; });
+    // os.homedir() reads USERPROFILE on Windows.
+    const previousHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = home; process.env.USERPROFILE = home;
+    t.after(() => { for (const [name, value] of Object.entries(previousHome)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
     const { piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     fs.mkdirSync(path.join(cwd, ".claude", "commands"), { recursive: true });
@@ -1592,9 +1593,10 @@ non-secret metadata are safe alternatives.`;
     fs.writeFileSync(path.join(home, ".ssh", "id_ed25519"), "fixture\n");
     fs.writeFileSync(path.join(home, "Library", "Mail", "inbox"), "fixture\n");
     fs.symlinkSync(path.join(home, ".ssh"), path.join(reference, "keys"));
-    const previousHome = process.env.HOME;
-    process.env.HOME = home;
-    t.after(() => { process.env.HOME = previousHome; });
+    // os.homedir() reads USERPROFILE on Windows.
+    const previousHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = home; process.env.USERPROFILE = home;
+    t.after(() => { for (const [name, value] of Object.entries(previousHome)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
 
     const ctx = createContext(cwd, { sessionId: "session-reference-read", sessionName: "REFERENCE-READ" });
     const harness = createPiHarness();

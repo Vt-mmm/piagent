@@ -2,12 +2,12 @@
 
 [English](../en/windows.md)
 
-Piagent chạy trên Windows theo hai cách:
+Trên Windows, chạy Piagent trong **WSL2** (Ubuntu), cho cả cuộc trò chuyện công ty lẫn cá nhân:
 
 | Chế độ | Chạy ở đâu | Cần gì |
 |---|---|---|
-| Cá nhân (tài khoản AI của bạn) | Thẳng trên Windows, hoặc trong WSL2 | Node 24, Git for Windows (cho tool `bash`) |
-| Công ty (model qua Agent Studio) | Trong **WSL2** (Ubuntu) | WSL2, bubblewrap, Agent Watch cho Windows |
+| Công ty (model qua Agent Studio) | WSL2 | WSL2, bubblewrap, Agent Watch cho Windows |
+| Cá nhân (tài khoản AI của bạn) | WSL2 (nên dùng), hoặc thẳng trên Windows ở dạng xem trước | WSL2; bản xem trước cần Node 24 và Git for Windows |
 
 Chế độ công ty cần sandbox của hệ điều hành cho mọi lệnh agent chạy. Trên macOS đó là Seatbelt; trên Linux và WSL2 là bubblewrap. Windows chưa có sandbox tương đương dùng được cho agent, nên chế độ công ty chạy trong WSL2.
 
@@ -50,13 +50,17 @@ Cùng những gì sandbox macOS bảo đảm, dựng bằng mount của bubblewr
 
 Khác macOS: folder Windows (`/mnt/c/...`) chưa đọc được để tham chiếu từ một project trong WSL; project nằm trên `/mnt/c` vẫn dùng được nhưng chậm hơn trong ổ của WSL.
 
-## Chế độ cá nhân thẳng trên Windows
+## Chế độ cá nhân trong WSL2
 
-Cài Node 24 và [Git for Windows](https://git-scm.com/download/win), rồi trong PowerShell:
+Làm bước 1–2 ở trên, rồi chạy `piagent dashboard` trong Ubuntu. Không cần Agent Watch.
+
+## Xem trước: chế độ cá nhân thẳng trên Windows
+
+Dành cho thành viên đã chạy Pi trên Windows. Guard của Piagent, hộp chọn folder và gợi ý @ của dashboard hiểu đường dẫn Windows: ổ đĩa khác (`D:\…`), `AppData` và mục ẩn trong home không phải đường dẫn của project, và Git Bash chạy lệnh shell của agent. Chưa có: `piagent-update` (nó chạy npm, Pi và Bash theo kiểu macOS/Linux), nên cài và cập nhật bằng tay trong PowerShell:
 
 ```powershell
 npm install -g --ignore-scripts @piagent/platform
 piagent dashboard
 ```
 
-Guard của Piagent kiểm tra đường dẫn kiểu Windows: ổ đĩa khác (`D:\…`), `AppData` và mục ẩn trong home không phải đường dẫn của project.
+Dashboard cần đúng bản Pi mà Piagent ghim; `piagent-update --dry-run` trong WSL cho biết bản đó.

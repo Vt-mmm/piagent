@@ -4,7 +4,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-Piagent on Windows: company conversations in WSL2, personal ones on Windows itself.
+Piagent on Windows through WSL2, with company conversations in a bubblewrap sandbox; personal mode on Windows itself as a preview.
 
 ### Features
 
@@ -17,7 +17,7 @@ Piagent on Windows: company conversations in WSL2, personal ones on Windows itse
   - Windows programs cannot be started from inside.
   - `piagent studio --doctor` checks each of these.
 - Agent Watch for Windows binds Piagent in WSL. Piagent keeps WSL's interop variables when it starts the Windows broker, and keeps the company store in `$XDG_DATA_HOME/agentwatch` (`~/.local/share/agentwatch`) on Linux. Members re-bind Piagent in Agent Watch after updating.
-- On Windows itself:
+- On Windows itself (preview of personal mode; `piagent-update` does not run there yet):
   - The dashboard's project picker is Windows' folder dialog; from WSL it is that dialog too, with the answer converted to a WSL path.
   - Links open in the Windows browser from WSL.
   - @ suggestions find `fd`/`fdfind` and git on PATH.
@@ -27,6 +27,10 @@ Piagent on Windows: company conversations in WSL2, personal ones on Windows itse
 ### Fixes
 
 - On Windows the guard treated a path on another drive (`D:\x`) as a project path, and `~\` was not the home folder; `AppData` is closed to reference reads like `~/Library`.
+- On Windows a command ending in `2>/dev/null` counted as a write (Git Bash's `/dev/null` is the null device), so read-only commands needed approval.
+- On Windows the dashboard, `piagent` and the update job could not start their TypeScript loader (a `C:\…` path given to `--import` reads as a URL scheme).
+- On Windows saving a task's journal or state failed: a file was flushed through a read-only handle, and a folder was flushed at all.
+- On Windows an image path such as `C:\Users\me\shot.png` or `.\shots\a.png` in a message was not attached.
 ## v1.12.1 - 2026-10-06
 
 ### Fixes

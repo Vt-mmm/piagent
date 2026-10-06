@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,19 +85,24 @@ export function supportedChatImageMimeType(bytes: Buffer): string | undefined {
   return undefined;
 }
 
+// On Windows a path may also start with a drive (C:\) and use backslashes.
+const WINDOWS = process.platform === "win32";
+const HOME_PREFIX = WINDOWS ? /^~[\\/]/ : /^~\//;
+const RELATIVE_PREFIX = WINDOWS ? /^\.\.?[\\/]/ : /^\.\.?\//;
+
 function normalizeImagePathCandidate(candidate: string, cwd: string, options: { allowBareRelative?: boolean } = {}): string | undefined {
   let raw = candidate.trim().replace(/^['"`<]+|['"`>,.;:!?]+$/g, "");
   if (!raw) return undefined;
   const allowBareRelative = options.allowBareRelative !== false;
-  const hasExplicitPathPrefix = raw.startsWith("file://") || raw.startsWith("~/") || path.isAbsolute(raw) || raw.startsWith("./") || raw.startsWith("../");
+  const hasExplicitPathPrefix = raw.startsWith("file://") || HOME_PREFIX.test(raw) || path.isAbsolute(raw) || RELATIVE_PREFIX.test(raw);
   if (!allowBareRelative && !hasExplicitPathPrefix) return undefined;
   try {
     if (raw.startsWith("file://")) raw = fileURLToPath(raw);
   } catch {
     return undefined;
   }
-  if (raw.startsWith("~/")) {
-    const home = process.env.HOME;
+  if (HOME_PREFIX.test(raw)) {
+    const home = process.env.HOME || (WINDOWS ? os.homedir() : undefined);
     if (!home) return undefined;
     raw = path.join(home, raw.slice(2));
   }
@@ -123,7 +129,8 @@ export function extractLocalImagePathCandidates(text: string, cwd: string): stri
     if (normalized) candidates.add(normalized);
   }
 
-  const linePathPattern = '\\s((?:/|~\\/|\\.\\.?/)[^\\n\\r"\\\'<>]*?\\.' + imageExt + ')(?=$|\\s|["\\\'`)>])';
+  const start = WINDOWS ? "(?:/|[A-Za-z]:[\\\\/]|~[\\\\/]|\\.\\.?[\\\\/])" : "(?:/|~\\/|\\.\\.?/)";
+  const linePathPattern = '\\s(' + start + '[^\\n\\r"\\\'<>]*?\\.' + imageExt + ')(?=$|\\s|["\\\'`)>])';
   const linePath = new RegExp(linePathPattern, "gi");
   for (const match of text.matchAll(linePath)) {
     const normalized = normalizeImagePathCandidate(match[1], cwd);

@@ -21,7 +21,8 @@ const sdkRoot = piSdk();
 const usable = process.platform === 'linux' && BWRAP && fs.existsSync(sdkRoot)
   && spawnSync(BWRAP, ['--ro-bind', '/', '/', '--unshare-net', 'true']).status === 0;
 
-test('credential files are found by the names the macOS profile closes', () => {
+// The Linux sandbox's paths are POSIX; Windows reaches it through WSL.
+test('credential files are found by the names the macOS profile closes', {skip: process.platform === 'win32'}, () => {
   const roots = ['/p'];
   for (const name of ['.env', '.env.local', '.env.production', 'credentials', 'credentials.json', '.npmrc', '.netrc']) assert.equal(credentialName(name, '/p/a', roots), true, name);
   for (const name of ['.env.example', '.env.sample', '.env.template', 'environment.ts', 'credential-form.tsx', 'auth.ts']) assert.equal(credentialName(name, '/p/a', roots), false, name);
@@ -35,7 +36,7 @@ test('credential files are found by the names the macOS profile closes', () => {
   } finally { fs.rmSync(base, {recursive: true, force: true}); }
 });
 
-test('mounts go parent first, the project over its reference folder, masks last, then the root read-only', () => {
+test('mounts go parent first, the project over its reference folder, masks last, then the root read-only', {skip: process.platform === 'win32'}, () => {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'linux-args-')));
   try {
     const home = path.join(base, 'home'), project = path.join(home, 'Documents/shop'), cache = path.join(home, '.cache/piagent/sandbox/x');

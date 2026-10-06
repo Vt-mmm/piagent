@@ -127,8 +127,11 @@ function writeJsonAtomic(cwd, filePath, value) {
     fs.renameSync(temporary, safePath);
     fs.chmodSync(parent, 0o700);
     fs.chmodSync(safePath, 0o600);
-    const directory = fs.openSync(parent, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
-    try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+    // Windows cannot flush a directory handle; NTFS journals the rename itself.
+    if (process.platform !== "win32") {
+      const directory = fs.openSync(parent, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+      try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+    }
   } catch {
     try { fs.unlinkSync(temporary); } catch {}
     throw new Error("Task state atomic persistence failed");
@@ -537,7 +540,8 @@ export function durableTaskContractMatches(cwd, expected) {
     const safePath = resolveLocalStatePath(cwd, taskRunPath(cwd, normalized.taskRunId), {
       label: "Task state", kind: "file"
     });
-    const descriptor = fs.openSync(safePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    // Windows flushes only a handle opened for writing.
+    const descriptor = fs.openSync(safePath, (process.platform === "win32" ? fs.constants.O_RDWR : fs.constants.O_RDONLY) | (fs.constants.O_NOFOLLOW ?? 0));
     try {
       fs.fsyncSync(descriptor);
       const before = fs.fstatSync(descriptor, { bigint: true });

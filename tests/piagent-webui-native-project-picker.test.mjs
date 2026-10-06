@@ -29,7 +29,7 @@ it("falls back to kdialog and stays unavailable on unsupported hosts", () => {
   const kdialog = executable("kdialog");
   const picker = resolveNativeProjectPicker({ platform: "linux", environment: { PATH: kdialog.root, DISPLAY: ":0" } });
   assert.equal(picker?.executable, kdialog.file); assert.equal(picker?.args[0], "--getexistingdirectory");
-  assert.equal(resolveNativeProjectPicker({ platform: "win32", environment: { PATH: kdialog.root } }), null);
+  assert.equal(resolveNativeProjectPicker({ platform: "win32", environment: { PATH: kdialog.root, SystemRoot: path.join(kdialog.root, "no-windows") } }), null);
 });
 
 // From WSL the picker is Windows' own folder dialog (Windows programs run as

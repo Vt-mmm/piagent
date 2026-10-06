@@ -256,7 +256,8 @@ function appendJournalRecord(safePaths, journal, event, recordedAt) {
   const previousBytes = fs.existsSync(safePaths.events) ? fs.statSync(safePaths.events).size : 0;
   try {
     fs.appendFileSync(safePaths.events, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-    const descriptor = fs.openSync(safePaths.events, fs.constants.O_RDONLY);
+    // Windows flushes only a handle opened for writing.
+    const descriptor = fs.openSync(safePaths.events, process.platform === "win32" ? fs.constants.O_RDWR : fs.constants.O_RDONLY);
     try { fs.fsyncSync(descriptor); } finally { fs.closeSync(descriptor); }
   } catch (error) {
     try { fs.truncateSync(safePaths.events, previousBytes); } catch { /* A later read fails closed if rollback itself is impossible. */ }

@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { requestGatewayControl } from "../packages/piagent-webui/gateway/control-socket.ts";
 import { browserCommand } from "../packages/piagent-core/runtime/host/browser-opener.mjs";
@@ -170,7 +170,7 @@ async function ensureStarted() {
   writeGatewayErrorLog(state);
   const child = spawn(process.execPath, [
     "--disable-warning=ExperimentalWarning",
-    "--import", path.join(packageRoot, "scripts", "register-typescript-loader.mjs"),
+    "--import", pathToFileURL(path.join(packageRoot, "scripts", "register-typescript-loader.mjs")).href,
     fileURLToPath(import.meta.url),
     "serve",
     ...(agentDir ? ["--agent-dir", agentDir] : [])

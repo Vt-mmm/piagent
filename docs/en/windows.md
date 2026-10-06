@@ -2,12 +2,12 @@
 
 [Tiếng Việt](../vi/windows.md)
 
-Piagent runs on Windows in two ways:
+On Windows, run Piagent in **WSL2** (Ubuntu), for company and personal conversations alike:
 
 | Mode | Where it runs | What it needs |
 |---|---|---|
-| Personal (your own AI account) | On Windows itself, or in WSL2 | Node 24, Git for Windows (for the `bash` tool) |
-| Company (models through Agent Studio) | In **WSL2** (Ubuntu) | WSL2, bubblewrap, Agent Watch for Windows |
+| Company (models through Agent Studio) | WSL2 | WSL2, bubblewrap, Agent Watch for Windows |
+| Personal (your own AI account) | WSL2 (recommended), or Windows itself as a preview | WSL2; for the preview, Node 24 and Git for Windows |
 
 Company mode needs an operating-system sandbox around every command the agent runs. On macOS that is Seatbelt; on Linux and WSL2 it is bubblewrap. Windows has no equivalent sandbox an agent can use yet, so company mode runs in WSL2.
 
@@ -50,13 +50,17 @@ It keeps the macOS sandbox's promises, built from bubblewrap mounts:
 
 Unlike macOS: Windows folders (`/mnt/c/...`) are not readable for reference from a project in WSL; a project on `/mnt/c` works but is slower than one on the WSL disk.
 
-## Personal mode on Windows itself
+## Personal mode in WSL2
 
-Install Node 24 and [Git for Windows](https://git-scm.com/download/win), then in PowerShell:
+Steps 1–2 above, then `piagent dashboard` in Ubuntu. No Agent Watch is needed.
+
+## Preview: personal mode on Windows itself
+
+For members who already run Pi on Windows. Piagent's guard, the dashboard's folder picker and @ suggestions handle Windows paths: another drive (`D:\…`), `AppData` and hidden entries of the home folder are not project paths, and Git Bash runs the agent's shell commands. Not there yet: `piagent-update` (it runs npm, Pi and Bash the macOS/Linux way), so install and update by hand in PowerShell:
 
 ```powershell
 npm install -g --ignore-scripts @piagent/platform
 piagent dashboard
 ```
 
-Piagent's guard checks Windows-style paths: another drive (`D:\…`), `AppData` and hidden entries of the home folder are not project paths.
+The dashboard needs the Pi version Piagent pins; `piagent-update --dry-run` in WSL shows it.

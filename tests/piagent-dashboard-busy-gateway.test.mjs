@@ -5,7 +5,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { gatewayProfileState, readGatewayDescriptor, writeGatewayDescriptor } from "../packages/piagent-webui/ownership/profile-state.ts";
 
@@ -34,7 +34,7 @@ test("dashboard open waits for a running Gateway that answers late instead of st
     startedAt: new Date().toISOString(), origin: "http://127.0.0.1:9", controlSocket: state.controlSocket, profileRef: "profile_busy",
     packageVersion: JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version });
 
-  const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", path.join(root, "scripts/register-typescript-loader.mjs"),
+  const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", pathToFileURL(path.join(root, "scripts/register-typescript-loader.mjs")).href,
     path.join(root, "scripts/piagent-dashboard.mjs"), "open", "--no-open", "--json", "--agent-dir", agentDir], { stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "", stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -61,13 +61,13 @@ test("dashboard open replaces a Gateway left running by an earlier release", { t
     });
   });
   await new Promise((resolve) => gateway.listen(state.controlSocket, resolve));
-  const stop = () => new Promise((resolve) => spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", path.join(root, "scripts/register-typescript-loader.mjs"),
+  const stop = () => new Promise((resolve) => spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", pathToFileURL(path.join(root, "scripts/register-typescript-loader.mjs")).href,
     path.join(root, "scripts/piagent-dashboard.mjs"), "stop", "--json", "--agent-dir", agentDir], { stdio: "ignore" }).on("exit", resolve));
   t.after(async () => { sleeper.kill(); gateway.close(); await stop(); fs.rmSync(agentDir, { recursive: true, force: true }); });
   writeGatewayDescriptor(state, { version: "piagent-gateway-descriptor-v1", gatewayInstanceRef: "gateway_older", pid: sleeper.pid,
     startedAt: new Date().toISOString(), origin: "http://127.0.0.1:9", controlSocket: state.controlSocket, profileRef: "profile_older", packageVersion: "1.0.0" });
 
-  const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", path.join(root, "scripts/register-typescript-loader.mjs"),
+  const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", pathToFileURL(path.join(root, "scripts/register-typescript-loader.mjs")).href,
     path.join(root, "scripts/piagent-dashboard.mjs"), "open", "--no-open", "--json", "--agent-dir", agentDir], { stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, PIAGENT_NO_UPDATE_CHECK: "1" } });
   let stdout = "", stderr = "";

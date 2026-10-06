@@ -18,7 +18,8 @@ const FIND_FILE_OUTPUT_ACTIONS = new Set(["-fprint", "-fprint0", "-fprintf", "-f
 function isNullDeviceRedirectionTarget(value) {
   const candidate = String(value ?? "");
   if (process.platform !== "win32") return candidate === "/dev/null";
-  return candidate.replace(/\\/g, "/").toLowerCase() === "//./nul";
+  // Git Bash, which runs the bash tool on Windows, has /dev/null as well.
+  return candidate === "/dev/null" || candidate.replace(/\\/g, "/").toLowerCase() === "//./nul";
 }
 
 function commandName(value) {
