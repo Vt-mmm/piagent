@@ -188,6 +188,22 @@ piagent-model-scope --preset full --default-model openai-codex/gpt-6-sol:high
 piagent-model-scope --preset full --default-model anthropic/claude-sonnet-5:xhigh
 ```
 
+### Cập nhật giữ lựa chọn của bạn
+
+Từ 1.14.0, `piagent-update`, nút cập nhật trong dashboard và `piagent-setup` chỉ đặt default model và danh sách model (`enabledModels`) ở **lần cài đầu**. Ở các lần sau:
+
+- Default model bạn đã chọn và danh sách model của bạn được giữ nguyên.
+- Model mà bản mới **lần đầu** đưa vào được thêm vào cuối danh sách. Model bạn đã bỏ ra không bị thêm lại.
+- Piagent nhớ những model nó đã từng đưa ra trong `~/.pi/agent/piagent-model-scope.json`.
+
+Muốn áp lại preset của Piagent lên máy (đè lựa chọn hiện tại):
+
+```bash
+piagent-update -- --reset-model-scope
+```
+
+Hoặc chạy `piagent-model-scope` như trên: lệnh gõ tay luôn áp preset.
+
 ## Benchmark rule
 
 Không claim “Pi + provider X tiết kiệm hơn provider Y” bằng cảm giác. Pin model

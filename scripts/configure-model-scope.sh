@@ -14,6 +14,9 @@ Options:
   --dry-run                          Print resulting settings JSON without writing
   --prune                            Only remove enabledModels patterns that match no model
                                      Pi knows (Pi warns about each on every start); keep the rest
+  --keep-member-choices              Install/update mode: set the default model and model list
+                                     only where Pi has none yet; otherwise keep the member's and
+                                     add only models this release offers for the first time
   -h, --help
 
 Purpose:
@@ -36,6 +39,7 @@ DEFAULT_MODEL="openai-codex/gpt-6-sol:high"
 SETTINGS_PATH="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}/settings.json"
 DRY_RUN=false
 PRUNE=false
+KEEP=false
 
 # A flag whose value is missing swallows the next flag instead. `--settings
 # --dry-run` used to set the settings path to the string "--dry-run", leave
@@ -75,6 +79,10 @@ while [[ $# -gt 0 ]]; do
       PRUNE=true
       shift
       ;;
+    --keep-member-choices)
+      KEEP=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -102,14 +110,15 @@ case "$PRESET" in
     ;;
 esac
 
-PIAGENT_SCOPE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" node --input-type=module - "$SETTINGS_PATH" "$PRESET" "$DEFAULT_MODEL" "$DRY_RUN" <<'NODE'
+PIAGENT_SCOPE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" node --input-type=module - "$SETTINGS_PATH" "$PRESET" "$DEFAULT_MODEL" "$DRY_RUN" "$KEEP" <<'NODE'
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 const { prepareClaudeModelAdditions } = await import(pathToFileURL(process.env.PIAGENT_SCOPE_ROOT + "/scripts/claude-model-additions.mjs"));
 
-const [settingsPath, preset, defaultModelInput, dryRunRaw] = process.argv.slice(2);
+const [settingsPath, preset, defaultModelInput, dryRunRaw, keepRaw] = process.argv.slice(2);
 const dryRun = dryRunRaw === "true";
+const keep = keepRaw === "true";
 
 const codexModels = [
   "openai-codex/gpt-5.3-codex-spark:minimal",
@@ -160,10 +169,28 @@ const parsedDefault = parseDefaultModel(defaultModelInput);
 const settingsBefore = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : null;
 const settings = settingsBefore === null ? {} : JSON.parse(settingsBefore);
 
-settings.defaultProvider = parsedDefault.provider;
-settings.defaultModel = parsedDefault.model;
-settings.defaultThinkingLevel = parsedDefault.thinking;
-settings.enabledModels = enabledModels;
+// What Piagent last offered, so an update adds only models new to this
+// release and never puts back one the member removed.
+const recordPath = path.join(path.dirname(settingsPath), "piagent-model-scope.json");
+let offered = null;
+try { const record = JSON.parse(fs.readFileSync(recordPath, "utf8")); if (Array.isArray(record.offered)) offered = record.offered; } catch { /* none yet */ }
+const notes = [];
+if (!keep || !settings.defaultModel) {
+  settings.defaultProvider = parsedDefault.provider;
+  settings.defaultModel = parsedDefault.model;
+  settings.defaultThinkingLevel = parsedDefault.thinking;
+} else {
+  notes.push(`kept the member's default: ${settings.defaultProvider ?? "?"}/${settings.defaultModel}${settings.defaultThinkingLevel ? `:${settings.defaultThinkingLevel}` : ""}`);
+}
+if (!keep || !Array.isArray(settings.enabledModels) || settings.enabledModels.length === 0) {
+  settings.enabledModels = enabledModels;
+} else {
+  // Installed before this record existed: the member's list stays, and the
+  // record starts now.
+  const fresh = offered ? enabledModels.filter((model) => !offered.includes(model) && !settings.enabledModels.includes(model)) : [];
+  settings.enabledModels = [...settings.enabledModels, ...fresh];
+  notes.push(fresh.length ? `kept the member's model list, added ${fresh.join(", ")}` : "kept the member's model list");
+}
 
 const catalogEdit = preset === "codex" ? null : prepareClaudeModelAdditions(path.join(path.dirname(settingsPath), "models.json"));
 const output = `${JSON.stringify(settings, null, 2)}\n`;
@@ -180,9 +207,11 @@ if (dryRun) {
     }
     throw error;
   }
+  fs.writeFileSync(recordPath, `${JSON.stringify({ version: 1, preset, offered: enabledModels }, null, 2)}\n`);
   console.log(`Configured Pi model scope: ${settingsPath}`);
   console.log(`  preset: ${preset}`);
-  console.log(`  default: ${parsedDefault.provider}/${parsedDefault.model}:${parsedDefault.thinking}`);
-  console.log(`  enabledModels: ${enabledModels.length}`);
+  console.log(`  default: ${settings.defaultProvider}/${settings.defaultModel}:${settings.defaultThinkingLevel}`);
+  console.log(`  enabledModels: ${settings.enabledModels.length}`);
+  for (const note of notes) console.log(`  ${note}`);
 }
 NODE

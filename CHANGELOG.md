@@ -4,6 +4,12 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+Updates keep each member's Pi model choices.
+
+### Features
+
+- `piagent-update`, the dashboard's update and `piagent-setup` set Pi's default model and model list (`enabledModels`) only on a first install. Later they keep the member's default model and list, and add only models the release offers for the first time; a model the member removed is not added back. What Piagent offered is kept in `~/.pi/agent/piagent-model-scope.json`. `piagent-update -- --reset-model-scope` applies the preset over the member's choices as every update did before; `piagent-model-scope` run by hand still applies it.
+
 ### Fixes
 
 - `piagent-update` in WSL2 no longer warns that WSL2 is experimental and not release-gated: since 1.13.0 it is how Windows runs Piagent, and the Windows setup and the bubblewrap sandbox run in CI.

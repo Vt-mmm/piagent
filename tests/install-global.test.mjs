@@ -189,6 +189,18 @@ describe("install-global release channels", () => {
     assert.doesNotMatch(setup.stdout, /default-model openai-codex\/gpt-6-sol:xhigh/);
   });
 
+  // Updates keep a member's default model and model list; --reset-model-scope
+  // applies the preset over them as every update did before.
+  it("keeps member model choices on install and update unless reset is asked for", () => {
+    const keep = runInstaller(["--stable", "--dry-run", "--no-mcp", "--no-subagents", "--no-web-access"]);
+    assert.equal(keep.status, 0, keep.stderr);
+    assert.match(keep.stdout, /configure-model-scope\.sh --preset full --default-model openai-codex\/gpt-6-sol:high --keep-member-choices/);
+    const reset = runInstaller(["--stable", "--dry-run", "--no-mcp", "--no-subagents", "--no-web-access", "--reset-model-scope"]);
+    assert.equal(reset.status, 0, reset.stderr);
+    assert.match(reset.stdout, /configure-model-scope\.sh --preset full --default-model openai-codex\/gpt-6-sol:high(?! --keep)/);
+    assert.doesNotMatch(reset.stdout, /--keep-member-choices/);
+  });
+
   it("resolves exact version tags when requested", () => {
     const result = runInstaller(["--version", "v1.0.2", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);

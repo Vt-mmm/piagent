@@ -24,7 +24,11 @@ Options:
                                   Install pi-web-access for the researcher subagent (default: install).
   --with-herdr                    Also configure Herdr integration.
   --model-scope <full|codex|claude>
-                                  Model families to enable in Pi (default: full).
+                                  Model families to enable in Pi (default: full). A member who
+                                  already has a default model and model list keeps them; an
+                                  update only adds models new to this release.
+  --reset-model-scope             Replace the member's default model and model list with the
+                                  preset (what every update did before 1.14.0).
   --no-model-scope                Leave the user's enabledModels untouched.
   --default-model <provider/model[:thinking]>
                                   Default model written to Pi settings
@@ -90,6 +94,7 @@ SUBAGENTS_MODEL_SCOPE="none"
 WITH_WEB_ACCESS=true
 WITH_HERDR=false
 CONFIGURE_MODEL_SCOPE=true
+RESET_MODEL_SCOPE=false
 MODEL_SCOPE_PRESET="full"
 DEFAULT_MODEL="openai-codex/gpt-6-sol:high"
 DRY_RUN=false
@@ -535,6 +540,10 @@ while [[ $# -gt 0 ]]; do
       DEFAULT_MODEL="$2"
       shift 2
       ;;
+    --reset-model-scope)
+      RESET_MODEL_SCOPE=true
+      shift
+      ;;
     --no-model-scope)
       CONFIGURE_MODEL_SCOPE=false
       shift
@@ -755,7 +764,11 @@ fi
 
 if [[ "$CONFIGURE_MODEL_SCOPE" == true ]]; then
   echo "Configuring Pi model selector scope:"
-  run_cmd bash "$PLATFORM_ROOT/scripts/configure-model-scope.sh" --preset "$MODEL_SCOPE_PRESET" --default-model "$DEFAULT_MODEL"
+  if [[ "$RESET_MODEL_SCOPE" == true ]]; then
+    run_cmd bash "$PLATFORM_ROOT/scripts/configure-model-scope.sh" --preset "$MODEL_SCOPE_PRESET" --default-model "$DEFAULT_MODEL"
+  else
+    run_cmd bash "$PLATFORM_ROOT/scripts/configure-model-scope.sh" --preset "$MODEL_SCOPE_PRESET" --default-model "$DEFAULT_MODEL" --keep-member-choices
+  fi
 fi
 
 if [[ "$WITH_HERDR" == true ]]; then
