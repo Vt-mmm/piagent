@@ -54,8 +54,10 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
       if (await bash("cat 'Dự án mới/ghi chú.md'") !== 'ổn') throw Error('content changed'); return 'ok';
     });
     await check('folders outside the project are read-only', true, async () => {
-      let refused = false; try { await boundary.invoke('write', { path: '../piagent-doctor-outside.txt', content: 'x' }); } catch { refused = true; }
-      if (!refused) { fs.rmSync(path.join(path.dirname(project), 'piagent-doctor-outside.txt'), { force: true }); throw Error('a write outside the project was allowed'); }
+      // Refused, or (Linux) kept in the sandbox's own /tmp: never on this machine.
+      const outside = path.join(path.dirname(project), 'piagent-doctor-outside.txt');
+      try { await boundary.invoke('write', { path: '../piagent-doctor-outside.txt', content: 'x' }); } catch { /* refused */ }
+      if (fs.existsSync(outside)) { fs.rmSync(outside, { force: true }); throw Error('a write outside the project was allowed'); }
       // A folder the member points to for reference (@~/…) is readable.
       await boundary.invoke('ls', { path: '~' });
       return 'read, write refused';
@@ -79,7 +81,7 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
     });
     await check('make', false, () => bash('make --version'));
     // Tests that start a server or use a local database (tool-boundary.mjs).
-    await check('tests reach servers on this Mac (localhost)', false, async () => {
+    await check('tests reach their own servers (localhost)', false, async () => {
       await boundary.invoke('write', { path: 'loopback.mjs', content: "import http from 'node:http'; const s = http.createServer((q, r) => r.end('ok')); s.listen(0, '127.0.0.1', async () => { console.log(await (await fetch(`http://127.0.0.1:${s.address().port}/`)).text()); s.close(); });\n" });
       try { return await bash('node loopback.mjs'); }
       catch (error) { throw Error(/loopback-blocked/.test(String(error?.message)) ? 'a local proxy listens on this Mac: tests that use localhost need run_with_network' : first(String(error?.message))); }

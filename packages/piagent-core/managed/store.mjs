@@ -9,6 +9,18 @@ import { createHash } from 'node:crypto';
 // points at it (`<slot>/store`), so a new key lists and continues the same
 // conversations. Another member, or another Studio, gets another store.
 const SLOT = /^[a-f0-9]{64}$/;
+
+// Where Agent Watch keeps a member's company data on this machine: the macOS
+// app's support folder; on Linux, and so in WSL, the XDG data folder.
+export function agentWatchDataDirectory(home, environment = process.env) {
+  return process.platform === 'linux' ? path.join(environment.XDG_DATA_HOME || path.join(home, '.local/share'), 'agentwatch')
+    : path.join(home, 'Library/Application Support/AgentWatch');
+}
+// What a Windows program (Agent Watch's broker) needs to start from WSL; a
+// clean environment otherwise drops it.
+export function interopEnvironment(environment = process.env) {
+  return Object.fromEntries(['WSL_INTEROP', 'WSL_DISTRO_NAME'].filter(name => environment[name]).map(name => [name, environment[name]]));
+}
 const read = file => { try { return fs.readFileSync(file, 'utf8').trim(); } catch { return null; } };
 const write = (file, value) => { fs.writeFileSync(file, value + '\n', { mode: 0o600 }); };
 const sessionFiles = dir => { try { return fs.readdirSync(path.join(dir, 'sessions')).filter(name => name.endsWith('.jsonl')); } catch { return []; } };

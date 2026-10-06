@@ -29,7 +29,8 @@ export function grantedSourceCheckoutRootForPath(cwd: string, candidate: string,
 // ~/Documents/old-shop"): their own files, external drives and the shared
 // folder, read with read, grep, find or ls. Hidden entries of the home folder
 // (shell files, histories, tool configs) and ~/Library (app data, mail,
-// browser profiles) stay closed; a link is judged by where it leads.
+// browser profiles) stay closed, as does AppData on Windows; a link is judged
+// by where it leads.
 export function referenceReadRootForPath(cwd: string, candidate: string): string | undefined {
   let target: string, home: string;
   try {
@@ -40,7 +41,7 @@ export function referenceReadRootForPath(cwd: string, candidate: string): string
   }
   if (inside(home, target)) {
     const first = path.relative(home, target).split(path.sep)[0];
-    return first.startsWith(".") || first === "Library" ? undefined : home;
+    return first.startsWith(".") || first === "Library" || first === "AppData" ? undefined : home;
   }
   return ["/Volumes", "/Users/Shared", "/private/tmp"].find((root) => inside(root, target));
 }
@@ -51,7 +52,7 @@ export function piToolPathInput(input: Record<string, unknown>): Record<string, 
   const value = input.path;
   if (typeof value !== "string") return input;
   const bare = value.startsWith("@") ? value.slice(1) : value;
-  const opened = bare === "~" ? os.homedir() : bare.startsWith("~/") ? path.join(os.homedir(), bare.slice(2)) : bare;
+  const opened = bare === "~" ? os.homedir() : /^~[/\\]/.test(bare) ? path.join(os.homedir(), bare.slice(2)) : bare;
   return opened === value ? input : { ...input, path: opened };
 }
 

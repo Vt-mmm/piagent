@@ -732,7 +732,9 @@ function usesFilesystemContentFields(toolName: string, allowAmbiguousSource = tr
 
 function inspectRepositoryPathBoundary(cwd: string, candidate: string): { reason?: string } {
   const normalized = normalizePathCandidate(candidate);
-  if (normalized === ".." || normalized.startsWith("../") || path.posix.isAbsolute(normalized)) {
+  // On Windows a path on another drive stays absolute after path.relative
+  // (D:\x becomes D:/x): a drive letter is never a project path.
+  if (normalized === ".." || normalized.startsWith("../") || path.posix.isAbsolute(normalized) || /^[A-Za-z]:/.test(normalized)) {
     return { reason: `path resolves outside the project: ${candidate}` };
   }
   let current = cwd;

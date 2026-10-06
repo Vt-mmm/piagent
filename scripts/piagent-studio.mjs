@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ManagedBrokerClient } from '../packages/piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
+import { agentWatchDataDirectory, interopEnvironment, resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
 
 const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 // Node's experimental-feature notices (type stripping, SQLite) are not
@@ -23,7 +23,7 @@ for (let i = 0; i < args.length; i++) {
 const home = os.homedir();
 // Do this before importing the SDK: it must not discover personal keys, Node
 // preload hooks, proxy overrides or provider endpoints from an ambient shell.
-const clean = { PATH: '/usr/bin:/bin', HOME: home, LANG: 'en_US.UTF-8', TERM: process.env.TERM || 'xterm-256color' };
+const clean = { PATH: '/usr/bin:/bin', HOME: home, LANG: 'en_US.UTF-8', TERM: process.env.TERM || 'xterm-256color', ...interopEnvironment() };
 for (const key of Object.keys(process.env)) delete process.env[key];
 Object.assign(process.env, clean);
 let broker, current, gateway, hold;
@@ -53,7 +53,7 @@ try {
   }
   // Conversations live in one store per member on this machine, whichever key
   // Agent Watch holds: a key's slot learns its member once, then points there.
-  const root = path.join(home, 'Library/Application Support/AgentWatch/ManagedSessions');
+  const root = path.join(agentWatchDataDirectory(home), 'ManagedSessions');
   let store = storedSlot(root, config.profile_id);
   if (!store) {
     const asked = new ManagedBrokerClient({ executable: config.broker, profileID: config.profile_id });

@@ -31,6 +31,7 @@ import { SourceMutationController } from "./source-mutation-controller.ts";
 import { SourceRevertController } from "./source-revert-controller.ts";
 import { SourceOpenController } from "./source-open-controller.ts";
 import { VSCodeHandoff } from "./vscode-handoff.ts";
+import { browserCommand } from "../../piagent-core/runtime/host/browser-opener.mjs";
 import { TerminalSessionAdapter } from "./terminal-session-adapter.ts";
 import { isGatewayRuntimeContext } from "../ownership/gateway-runtime-context.ts";
 
@@ -124,9 +125,9 @@ function removeControlDirectory(directory: string): void {
 }
 
 function openLocalUrl(url: string): boolean {
-  const command = process.platform === "darwin" ? "open" : process.platform === "linux" ? "xdg-open" : null;
-  if (!command) return false;
-  try { const child = spawn(command, [url], { detached: true, stdio: "ignore" }); child.unref(); return true; }
+  const opener = browserCommand(url);
+  if (!opener) return false;
+  try { const child = spawn(opener.command, opener.args, { detached: true, stdio: "ignore", ...opener.options }); child.unref(); return true; }
   catch { return false; }
 }
 

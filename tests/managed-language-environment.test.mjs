@@ -16,12 +16,18 @@ import {ManagedToolBoundary} from '../packages/piagent-core/managed/tool-boundar
 const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
 const text = (result) => (result?.content ?? []).map((part) => part.text ?? '').join('');
 const write = (file, value = 'x\n') => { fs.mkdirSync(path.dirname(file), {recursive: true}); fs.writeFileSync(file, value); };
+// Where caches, the Android SDK and pnpm's settings live on this platform.
+const macos = process.platform === 'darwin';
+const CACHE_ROOT = macos ? 'Library/Caches/Piagent/sandbox' : '.cache/piagent/sandbox';
+const ANDROID = macos ? 'Library/Android/sdk' : 'Android/Sdk';
+const PNPM_RC = macos ? 'Library/Preferences/pnpm/rc' : '.config/pnpm/rc';
+delete process.env.XDG_CACHE_HOME;
 
 function machine() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-languages-')));
   const home = path.join(base, 'home'), project = path.join(base, 'shop'), sandboxHome = path.join(base, 'sandbox-home');
   for (const file of ['.gradle/caches/modules-2/files-2.1/x.jar', '.m2/repository/org/x/x.pom', '.m2/settings.xml', '.nuget/packages/newtonsoft.json/13.0.3/x.nupkg',
-    'go/pkg/mod/cache/download/example.com/x/@v/list', 'Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/release', 'Library/Android/sdk/platforms/x']) write(path.join(home, file));
+    'go/pkg/mod/cache/download/example.com/x/@v/list', 'Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/release', `${ANDROID}/platforms/x`]) write(path.join(home, file));
   fs.mkdirSync(project); fs.mkdirSync(sandboxHome);
   return {base, home, project, sandboxHome};
 }
@@ -30,9 +36,9 @@ test('package caches persist per project; the member\'s caches are read-only see
   const {base, home, project, sandboxHome} = machine();
   try {
     const env = languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome});
-    assert.ok(env.cache.startsWith(path.join(home, 'Library/Caches/Piagent/sandbox/')));
+    assert.ok(env.cache.startsWith(path.join(home, CACHE_ROOT) + '/'), env.cache);
     assert.equal(fs.statSync(env.cache).mode & 0o777, 0o700);
-    assert.equal(fs.readFileSync(path.join(sandboxHome, 'Library/Preferences/pnpm/rc'), 'utf8'), `store-dir=${env.cache}/pnpm-store\n`);
+    assert.equal(fs.readFileSync(path.join(sandboxHome, PNPM_RC), 'utf8'), `store-dir=${env.cache}/pnpm-store\n`);
     assert.deepEqual(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).cache, env.cache, 'the same project keeps its cache');
     assert.notEqual(languageEnvironment({userHome: home, repositoryTop: path.join(base, 'other'), home: sandboxHome}).cache, env.cache, 'another project has its own');
     for (const [name, value] of Object.entries(env.env.offline)) {
@@ -44,19 +50,19 @@ test('package caches persist per project; the member\'s caches are read-only see
     assert.match(env.env.offline.MAVEN_OPTS, new RegExp(`-Dmaven\\.repo\\.local=${env.cache}/m2/repository -Dmaven\\.repo\\.local\\.tail=${path.join(home, '.m2/repository')}`));
     assert.equal(env.env.offline.GOPROXY, `file://${path.join(home, 'go/pkg/mod/cache/download')},off`, 'offline Go reads the member\'s modules, never the internet');
     assert.match(env.env.network.GOPROXY, /^file:\/\/.+,https:\/\/proxy\.golang\.org,direct$|^file:\/\/.+,.+/);
-    assert.equal(env.env.offline.ANDROID_HOME, path.join(home, 'Library/Android/sdk'));
-    for (const root of [path.join(home, '.m2/repository'), path.join(home, '.gradle/caches'), path.join(home, 'Library/Java/JavaVirtualMachines')])
+    assert.equal(env.env.offline.ANDROID_HOME, path.join(home, ANDROID));
+    for (const root of [path.join(home, '.m2/repository'), path.join(home, '.gradle/caches'), ...(macos ? [path.join(home, 'Library/Java/JavaVirtualMachines')] : [])])
       assert.ok(env.readRoots.includes(root), `${root} is readable`);
     assert.ok(!env.readRoots.some((root) => root === path.join(home, '.m2') || root === path.join(home, '.gradle')), 'their settings and credentials are not');
     // A cache unused for a month is removed; this project's is kept.
-    const stale = path.join(home, 'Library/Caches/Piagent/sandbox/stale'); fs.mkdirSync(stale);
+    const stale = path.join(home, CACHE_ROOT, 'stale'); fs.mkdirSync(stale);
     const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000); fs.utimesSync(stale, old, old);
     languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome});
     assert.equal(fs.existsSync(stale), false); assert.equal(fs.existsSync(env.cache), true);
   } finally { fs.rmSync(base, {recursive: true, force: true}); }
 });
 
-test('swift and xcodebuild run without their own sandbox; build products go to the project cache', () => {
+test('swift and xcodebuild run without their own sandbox; build products go to the project cache', {skip: !macos}, () => {
   const {base, home, project, sandboxHome} = machine();
   try {
     const env = languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome});

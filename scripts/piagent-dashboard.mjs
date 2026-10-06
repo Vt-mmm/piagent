@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { requestGatewayControl } from "../packages/piagent-webui/gateway/control-socket.ts";
+import { browserCommand } from "../packages/piagent-core/runtime/host/browser-opener.mjs";
 import { installedPiHostRoot } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { gatewayProfileState, profileRef, readGatewayDescriptor, readOrCreateCatalogKey,
   removeGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
@@ -32,11 +33,10 @@ function output(value) {
 
 function openBrowser(url) {
   if (noOpen) return;
-  const opener = process.platform === "darwin" ? ["open", [url]]
-    : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
-      : ["xdg-open", [url]];
-  const result = spawnSync(opener[0], opener[1], { stdio: "ignore" });
-  if (result.status !== 0) process.stderr.write(`Dashboard is ready at ${url}\n`);
+  const opener = browserCommand(url);
+  const result = opener ? spawnSync(opener.command, opener.args, { stdio: "ignore", ...opener.options }) : null;
+  // explorer.exe (WSL) exits 1 even when it opened the page.
+  if (!result || result.error || (result.status !== 0 && !/explorer\.exe$/.test(opener.command))) process.stderr.write(`Dashboard is ready at ${url}\n`);
 }
 
 function processAlive(pid) {

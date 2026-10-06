@@ -1,9 +1,22 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-type PickerSpec = { executable: string; args: string[] };
+// `wsl`: the picker is Windows' own, run from WSL; its paths are converted.
+type PickerSpec = { executable: string; args: string[]; wsl?: boolean };
+
+// Windows' folder dialog, through PowerShell (also from WSL, where Windows
+// programs run as they are). It prints the chosen folder; cancel exits 1.
+const WINDOWS_PICKER = [
+  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+  "Add-Type -AssemblyName System.Windows.Forms",
+  "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+  "$dialog.Description = 'Choose a project folder for Piagent'",
+  "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.WriteLine($dialog.SelectedPath); exit 0 } else { exit 1 }"
+].join("; ");
+const windowsPicker = (executable: string, wsl = false): PickerSpec =>
+  ({ executable, args: ["-NoProfile", "-NonInteractive", "-STA", "-Command", WINDOWS_PICKER], ...(wsl ? { wsl } : {}) });
 type PickerEnvironment = Readonly<Record<string, string | undefined>>;
 
 function executableOnPath(name: string, environment: PickerEnvironment): string | null {
@@ -31,6 +44,14 @@ export function resolveNativeProjectPicker(options: { platform?: NodeJS.Platform
       'return output'
     ].join("\n");
     return { executable: "/usr/bin/osascript", args: ["-e", script] };
+  }
+  if (platform === "win32") {
+    const executable = path.win32.join(environment.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    return fs.existsSync(executable) ? windowsPicker(executable) : null;
+  }
+  if (platform === "linux" && environment.WSL_DISTRO_NAME) {
+    const executable = executableOnPath("powershell.exe", environment);
+    if (executable) return windowsPicker(executable, true);
   }
   if (platform !== "linux" || !(environment.DISPLAY || environment.WAYLAND_DISPLAY)) return null;
   for (const name of ["zenity", "qarma"]) {
@@ -71,7 +92,11 @@ export function pickNativeProjectFolders(): Promise<string[]> {
           ? (error as unknown as { code: number }).code : null;
         reject(new Error(exitCode === 1 ? "project-import-cancelled" : "project-import-picker-failed")); return;
       }
-      const selected = selectedFolders(stdout);
+      let selected = selectedFolders(stdout.replace(/\r/g, ""));
+      // C:\Users\me\shop, as seen from WSL: /mnt/c/Users/me/shop.
+      if (picker.wsl) selected = selected.flatMap((folder) => {
+        try { return [execFileSync("wslpath", ["-u", folder], { encoding: "utf8", timeout: 5000 }).trim()]; } catch { return []; }
+      });
       if (!selected.length) { reject(new Error("project-import-cancelled")); return; }
       resolve(selected);
     });

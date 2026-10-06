@@ -8,6 +8,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
 import { languageEnvironment } from './language-environment.mjs';
+import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
+import { agentWatchDataDirectory } from './store.mjs';
 
 const TOOL_NAMES = Object.freeze(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
 const MAX_WIRE_BYTES = 12 * 1024 * 1024;
@@ -108,7 +110,9 @@ ${denied.map(root => `(deny file-read* file-write* (require-all (subpath ${liter
 // retrying for minutes.
 function toolEnvironment({ git, node, home, temporary, toolchains, developer, identity, scope, browsers, languages }) {
   const PATH = [...new Set([languages.bin, path.dirname(node), ...toolchains.bins, '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', ...developer.bins, path.dirname(git), '/usr/bin', '/bin', '/usr/sbin', '/sbin'])].join(':');
-  const common = { ...toolchains.env, ...developer.env, PATH, HOME: home, TMPDIR: temporary, PIAGENT_TOOL_SCOPE: scope, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', RIPGREP_CONFIG_PATH: path.join(home, '.ripgreprc'),
+  // C.UTF-8 is on every Linux; en_US.UTF-8 may not be generated there.
+  const locale = process.platform === 'linux' ? 'C.UTF-8' : 'en_US.UTF-8';
+  const common = { ...toolchains.env, ...developer.env, PATH, HOME: home, TMPDIR: temporary, PIAGENT_TOOL_SCOPE: scope, LANG: locale, LC_ALL: locale, RIPGREP_CONFIG_PATH: path.join(home, '.ripgreprc'),
     ...(identity ? { GIT_AUTHOR_NAME: identity.name, GIT_AUTHOR_EMAIL: identity.email, GIT_COMMITTER_NAME: identity.name, GIT_COMMITTER_EMAIL: identity.email } : {}) };
   // The sandbox home is empty: Playwright finds the member's browsers by path.
   const playwright = browsers ? { PLAYWRIGHT_BROWSERS_PATH: browsers } : {};
@@ -117,7 +121,8 @@ function toolEnvironment({ git, node, home, temporary, toolchains, developer, id
 }
 // The browsers `npx playwright install` put in the member's cache.
 function playwrightBrowsers(userHome) {
-  try { const dir = fs.realpathSync(path.join(userHome, 'Library/Caches/ms-playwright')); return fs.statSync(dir).isDirectory() ? dir : null; } catch { return null; }
+  const cache = process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright';
+  try { const dir = fs.realpathSync(path.join(userHome, cache)); return fs.statSync(dir).isDirectory() ? dir : null; } catch { return null; }
 }
 // Without network a command still reaches servers on this Mac (a test's own
 // server, a database for integration tests), unless a proxy listens here:
@@ -187,7 +192,9 @@ export class ManagedToolBoundary {
   // the same (a helper that runs checks); it writes only to its temporary
   // directory, and has no network.
   constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, commands = false, node = process.execPath, identity, userHome: home, searchTools = true, skills: skillFolders = [], proxyPorts }) {
-    if (process.platform !== 'darwin') throw new Error('managed-sandbox-unavailable');
+    // macOS: Seatbelt. Linux, and Windows through WSL2: bubblewrap (linux-sandbox.mjs).
+    this.linux = process.platform === 'linux';
+    if (process.platform !== 'darwin' && !(this.linux && BWRAP)) throw new Error('managed-sandbox-unavailable');
     this.cwd = fs.realpathSync(cwd); this.sdkRoot = fs.realpathSync(sdkRoot);
     this.node = fs.realpathSync(node);
     this.runtimeRoot = fs.realpathSync(path.dirname(workerPath));
@@ -204,7 +211,7 @@ export class ManagedToolBoundary {
     this.home = path.join(this.temporary, 'home'); fs.mkdirSync(this.home, { mode: 0o700 });
     const denied = [path.join(userHome, '.ssh'), path.join(userHome, '.aws'), path.join(userHome, '.config'),
       path.join(userHome, '.pi'), path.join(userHome, '.codex'), path.join(userHome, '.claude'),
-      path.join(userHome, 'Library/Keychains'), path.join(userHome, 'Library/Application Support/AgentWatch'),
+      path.join(userHome, 'Library/Keychains'), agentWatchDataDirectory(userHome),
       ...protectedRoots.map(p => path.resolve(p))];
     // A pinned SDK may itself be installed under ~/.pi; grant that code only,
     // while keeping the adjacent personal auth/config subtree inaccessible.
@@ -231,14 +238,23 @@ export class ManagedToolBoundary {
       denied: narrowed, readOnly, repository, gitDirs, toolchains: [...toolchains.roots, ...languages.readRoots], developer: developer.roots,
       browsers: browsers ? [browsers] : [], skills, caches: languages.writeRoots, license: developerLicense() };
     this.userHome = userHome;
-    this.profile = managedSeatbelt({ ...base, references: userHome });
-    // The same without loopback, while a local proxy listens (localProxyListening).
-    this.isolatedProfile = managedSeatbelt({ ...base, references: userHome, loopback: false });
-    this.proxyPorts = proxyPorts ?? localProxyPorts(); this.proxyCheck = { at: 0, listening: Promise.resolve(false) };
     // Only for commands the user approved (run_with_network); credentials stay
     // denied, and so do reference folders: what a command with network can
     // read is the project, not the member's other files.
-    this.networkProfile = readOnly ? null : managedSeatbelt({ ...base, network: true });
+    this.networkAllowed = !readOnly;
+    if (this.linux) {
+      const references = referenceFolders(userHome).filter(dir => !narrowed.some(root => inside(dir, root) || inside(root, dir)));
+      const empty = path.join(this.temporary, 'empty'); fs.writeFileSync(empty, '', { mode: 0o400 });
+      this.linuxBase = { ...base, toolchains: [...base.toolchains, ...base.browsers], references, empty };
+      this.referenceCredentials = credentialFiles(references, { limit: 30_000 });
+      this.projectCredentials = { at: 0, files: [] };
+    } else {
+      this.profile = managedSeatbelt({ ...base, references: userHome });
+      // The same without loopback, while a local proxy listens (localProxyListening).
+      this.isolatedProfile = managedSeatbelt({ ...base, references: userHome, loopback: false });
+      this.proxyPorts = proxyPorts ?? localProxyPorts(); this.proxyCheck = { at: 0, listening: Promise.resolve(false) };
+      this.networkProfile = readOnly ? null : managedSeatbelt({ ...base, network: true });
+    }
     // Every process a command starts carries this marker, also one it detaches.
     this.scope = randomUUID();
     this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers, languages,
@@ -259,18 +275,20 @@ export class ManagedToolBoundary {
     } }));
   }
   async invoke(name, args, signal, onUpdate, model, { network = false } = {}) {
-    if (this.#closed || !this.allowed.includes(name) || network && (name !== 'bash' || !this.networkProfile)) throw new Error('managed-tool-unavailable');
+    if (this.#closed || !this.allowed.includes(name) || network && (name !== 'bash' || !this.networkAllowed)) throw new Error('managed-tool-unavailable');
     if (signal?.aborted) throw new Error('managed-tool-cancelled');
     for (const [file, digest] of this.pins) if (hash(file) !== digest) throw new Error('managed-runtime-changed');
     // `~` (as in an @~/… mention) is the member's home folder: the sandbox's
     // own HOME is an empty private folder.
     if (name !== 'bash' && typeof args?.path === 'string' && /^@?~(\/|$)/.test(args.path)) args = { ...args, path: this.userHome + args.path.replace(/^@?~/, '') };
-    if (!network && Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
-    const isolated = !network && await this.proxyCheck.listening;
+    if (!this.linux && !network && Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
+    const isolated = !this.linux && !network && await this.proxyCheck.listening;
     const message = JSON.stringify({ name, args, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
-      const child = spawn('/usr/bin/sandbox-exec', ['-p', network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile, this.node, workerPath, this.sdkPath, this.cwd], {
+      const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network)]
+        : ['/usr/bin/sandbox-exec', ['-p', network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile]];
+      const child = spawn(sandbox, [...sandboxArgs, this.node, workerPath, this.sdkPath, this.cwd], {
         cwd: this.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'],
         env: network ? this.environment.network : this.environment.offline,
       });
@@ -327,11 +345,20 @@ export class ManagedToolBoundary {
       if (signal?.aborted) abort();
     });
   }
+  // bubblewrap arguments for one command: credential files of the project are
+  // looked for again every 15 seconds (a file the member just added).
+  bubblewrap(network) {
+    if (Date.now() - this.projectCredentials.at > 15_000)
+      this.projectCredentials = { at: Date.now(), files: credentialFiles([this.cwd, ...this.linuxBase.repository]) };
+    const credentials = [...this.projectCredentials.files, ...(network ? [] : this.referenceCredentials)];
+    return bubblewrapArgs({ ...this.linuxBase, references: network ? [] : this.linuxBase.references, network, credentials });
+  }
   // Processes a command left running (`nohup … &`, a detached child) outlive
   // it with the marker in their environment. They are stopped when a turn ends
   // and when the boundary closes; nothing outside this boundary has the marker.
   async stopStrays() {
-    if (this.#children.size) return 0;
+    // On Linux a command's processes end with it (its own PID namespace).
+    if (this.#children.size || this.linux) return 0;
     const marker = `PIAGENT_TOOL_SCOPE=${this.scope}`, find = () => {
       try {
         return execFileSync('/bin/ps', ['-axwwE', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 << 20, timeout: 5000 }).split('\n')

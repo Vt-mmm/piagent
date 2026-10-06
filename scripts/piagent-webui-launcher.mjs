@@ -4,6 +4,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { browserCommand } from "../packages/piagent-core/runtime/host/browser-opener.mjs";
 
 const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 
@@ -83,9 +84,9 @@ function requestLaunch(descriptor) {
 }
 
 function openUrl(url) {
-  const command = process.platform === "darwin" ? "open" : process.platform === "linux" ? "xdg-open" : null;
-  if (!command) return false;
-  const child = spawn(command, [url], { detached: true, stdio: "ignore" });
+  const opener = browserCommand(url);
+  if (!opener) return false;
+  const child = spawn(opener.command, opener.args, { detached: true, stdio: "ignore", ...opener.options });
   child.unref(); return true;
 }
 

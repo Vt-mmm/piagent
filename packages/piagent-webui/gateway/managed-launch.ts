@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { requestGatewayControl } from "./control-socket.ts";
 import { gatewayProfileState } from "./profile-state.ts";
-import { storedSlot } from "../../piagent-core/managed/store.mjs";
+import { agentWatchDataDirectory, interopEnvironment, storedSlot } from "../../piagent-core/managed/store.mjs";
 
 // The personal dashboard shows company sessions but never runs them: it starts
 // the pinned managed entrypoint (its own process and Gateway, `--serve`) the
@@ -15,7 +15,7 @@ import { storedSlot } from "../../piagent-core/managed/store.mjs";
 export type ManagedLaunchStatus = { schemaVersion: 1; version: "piagent-managed-launch-status-v1"; available: boolean; model: "agent-watch-auto" };
 type Binding = { file: string; profile: string; node: string; entrypoint: string; broker: string; brokerSha256: string };
 
-const CLEAN_ENV = { PATH: "/usr/bin:/bin", LANG: "en_US.UTF-8", TERM: "xterm-256color" };
+const CLEAN_ENV = { PATH: "/usr/bin:/bin", LANG: "en_US.UTF-8", TERM: "xterm-256color", ...interopEnvironment() };
 const READY = /^Agent Watch Auto: ready$/m;
 const sha256 = (file: string) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const HEX64 = /^[a-f0-9]{64}$/;
@@ -51,7 +51,7 @@ export function managedLaunchStatus(agentDir = DEFAULT_AGENT_DIR): ManagedLaunch
 // A key's slot points at its member's conversation store once it has been
 // launched (store.mjs); until then the slot's own folder is asked.
 function controlSocket(home: string, profile: string): string {
-  const root = path.join(home, "Library/Application Support/AgentWatch/ManagedSessions");
+  const root = path.join(agentWatchDataDirectory(home), "ManagedSessions");
   return gatewayProfileState(path.join(root, storedSlot(root, profile) ?? profile)).controlSocket;
 }
 
@@ -117,7 +117,7 @@ async function start(agentDir: string, home: string, timeoutMs: number): Promise
   await authorize(pinned);
   // Startup failures are reported on stderr as `Agent Watch: managed-…`; the
   // log is private and removed once the process is ready or has exited.
-  const directory = path.join(home, "Library/Application Support/AgentWatch/ManagedLaunch");
+  const directory = path.join(agentWatchDataDirectory(home), "ManagedLaunch");
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 }); fs.chmodSync(directory, 0o700);
   const log = path.join(directory, `launch-${process.pid}-${Date.now()}.log`);
   const fd = fs.openSync(log, "wx", 0o600);

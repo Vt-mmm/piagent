@@ -48,7 +48,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ripgrep
+          sudo apt-get install --yes ripgrep bubblewrap
+          # The company sandbox on Linux (and WSL2) is bubblewrap, which needs
+          # unprivileged user namespaces; Ubuntu 24.04 restricts them by default.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       - name: Install macOS test tools
         if: runner.os == 'macOS'

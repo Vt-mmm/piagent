@@ -120,9 +120,9 @@ export function useComposerSuggestions({ projectRef, value, onChange, locale }: 
     <Paper elevation={8} sx={{ borderRadius: 2, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 340 }}>
       <Typography variant="caption" color="text.secondary" sx={{ px: 1.5, pt: 1, pb: .5 }}>
         {mode === "command"
-          ? localize(locale, "Lệnh và skill của project và trên máy này · Tab để chọn", "Commands and skills of the project and on this Mac · Tab to pick")
+          ? localize(locale, "Lệnh và skill của project và trên máy này · Tab để chọn", "Commands and skills of the project and on this computer · Tab to pick")
           : localize(locale, "File và folder · gõ ~/ hoặc / để chọn folder khác trên máy · Tab để chọn",
-            "Files and folders · type ~/ or / for other folders on this Mac · Tab to pick")}</Typography>
+            "Files and folders · type ~/ or / for other folders on this computer · Tab to pick")}</Typography>
       {suggestions.length ? <Box component="ul" role="listbox" id={listId} aria-label={title}
         sx={{ listStyle: "none", m: 0, p: .5, pt: 0, overflowY: "auto" }}>
         {suggestions.map((item, index) => <Box component="li" key={item.key} id={`${listId}-${index}`} role="option" aria-selected={index === active}

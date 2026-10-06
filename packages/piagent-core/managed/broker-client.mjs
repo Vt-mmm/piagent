@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
 import fs from 'node:fs';
 import path from 'node:path';
+import { interopEnvironment } from './store.mjs';
 
 export class ManagedBrokerClient {
   #child; #pending = new Map(); #tail = Promise.resolve(); #closed = false;
   constructor({ executable, profileID }) {
     if (!path.isAbsolute(executable) || fs.realpathSync(executable) !== executable || !/^[a-f0-9]{64}$/.test(profileID)) throw Error('managed-broker-binding-invalid');
     this.#child = spawn(executable, ['managed-broker', '--profile', profileID], {
-      stdio: ['pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' },
+      stdio: ['pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', ...interopEnvironment() },
     });
     let pending = ''; const decoder = new StringDecoder('utf8');
     const fail = () => { this.#closed = true; for (const item of this.#pending.values()) { clearTimeout(item.timer); item.reject(Error('managed-broker-disconnected')); } this.#pending.clear(); };

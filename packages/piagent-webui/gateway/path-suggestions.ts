@@ -24,12 +24,18 @@ const either = (value: string) => value.normalize("NFC") === value.normalize("NF
   : `(?:${escape(value.normalize("NFC"))}|${escape(value.normalize("NFD"))})`;
 const inside = (file: string, root: string) => file === root || file.startsWith(root + path.sep);
 
+// fd where it is commonly installed, then on PATH (Debian and Ubuntu name it
+// fdfind; Windows adds .exe).
 export function findFd(home = os.homedir()): string | null {
-  for (const candidate of ["/opt/homebrew/bin/fd", "/usr/local/bin/fd", path.join(home, ".pi/agent/bin/fd")]) {
+  const names = process.platform === "win32" ? ["fd.exe"] : ["fd", "fdfind"];
+  const onPath = String(process.env.PATH ?? "").split(path.delimiter).filter(Boolean).flatMap((dir) => names.map((name) => path.join(dir, name)));
+  for (const candidate of ["/opt/homebrew/bin/fd", "/usr/local/bin/fd", path.join(home, ".pi/agent/bin", names[0]), ...onPath]) {
     try { fs.accessSync(candidate, fs.constants.X_OK); return candidate; } catch { /* next */ }
   }
   return null;
 }
+// macOS: the system's git, always there; elsewhere git from PATH.
+const GIT = process.platform === "darwin" ? "/usr/bin/git" : "git";
 
 // Higher is better: the name itself, then its start, then anywhere in it,
 // then anywhere in the path; a folder before a file with the same score.
@@ -59,7 +65,7 @@ async function listed(folder: string, signal?: AbortSignal): Promise<Entry[]> {
     }
   } catch { /* unreadable */ }
   if (!entries.length) return entries;
-  const ignored = new Set((await run("/usr/bin/git", ["-C", folder, "check-ignore", "-z", "--stdin"], signal, entries.map((entry) => `${entry.path}\0`).join("")))
+  const ignored = new Set((await run(GIT, ["-C", folder, "check-ignore", "-z", "--stdin"], signal, entries.map((entry) => `${entry.path}\0`).join("")))
     .split("\0").filter(Boolean));
   return ignored.size ? entries.filter((entry) => !ignored.has(entry.path)) : entries;
 }
@@ -75,7 +81,7 @@ async function searched(folder: string, query: string, options: { fd: string | n
       .map((line) => ({ path: line.replace(/^\.\//, "").replace(/\/$/, ""), directory: line.endsWith("/") }));
   }
   if (!options.atRoot) return [];
-  const files = (await run("/usr/bin/git", ["-C", folder, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], options.signal))
+  const files = (await run(GIT, ["-C", folder, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], options.signal))
     .split("\0").filter(Boolean).slice(0, 50_000);
   const folders = new Set<string>();
   for (const file of files) for (let dir = path.posix.dirname(file); dir !== "."; dir = path.posix.dirname(dir)) folders.add(dir);

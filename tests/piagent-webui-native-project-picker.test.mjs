@@ -31,3 +31,16 @@ it("falls back to kdialog and stays unavailable on unsupported hosts", () => {
   assert.equal(picker?.executable, kdialog.file); assert.equal(picker?.args[0], "--getexistingdirectory");
   assert.equal(resolveNativeProjectPicker({ platform: "win32", environment: { PATH: kdialog.root } }), null);
 });
+
+// From WSL the picker is Windows' own folder dialog (Windows programs run as
+// they are there); its C:\… answer is converted to a WSL path.
+it("uses Windows' folder dialog from WSL, and on Windows itself when PowerShell is there", () => {
+  const powershell = executable("powershell.exe");
+  const picker = resolveNativeProjectPicker({ platform: "linux", environment: { PATH: powershell.root, WSL_DISTRO_NAME: "Ubuntu" } });
+  assert.equal(picker?.executable, powershell.file);
+  assert.equal(picker?.wsl, true);
+  assert.deepEqual(picker?.args.slice(0, 4), ["-NoProfile", "-NonInteractive", "-STA", "-Command"]);
+  assert.match(picker?.args[4] ?? "", /FolderBrowserDialog/);
+  assert.equal(resolveNativeProjectPicker({ platform: "linux", environment: { PATH: powershell.root } }), null, "not WSL, no desktop: no picker");
+  assert.equal(resolveNativeProjectPicker({ platform: "win32", environment: { SystemRoot: path.join(os.tmpdir(), "no-windows-here") } }), null);
+});

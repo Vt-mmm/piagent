@@ -30,6 +30,13 @@ function prune(root, keep) {
 }
 
 function javaHome(userHome) {
+  if (process.platform === 'linux') {
+    if (process.env.JAVA_HOME) return existing(process.env.JAVA_HOME);
+    for (const dir of (process.env.PATH ?? '/usr/bin').split(':')) {
+      try { return existing(path.dirname(path.dirname(fs.realpathSync(path.join(dir, 'javac'))))); } catch { /* next */ }
+    }
+    return null;
+  }
   try {
     const home = execFileSync('/usr/libexec/java_home', [], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], env: { HOME: userHome, PATH: '/usr/bin:/bin' } }).trim();
     return existing(home);
@@ -56,7 +63,8 @@ esac
 `;
 
 export function languageEnvironment({ userHome, repositoryTop, home }) {
-  const root = path.join(userHome, 'Library/Caches/Piagent/sandbox');
+  const linux = process.platform === 'linux';
+  const root = linux ? path.join(process.env.XDG_CACHE_HOME || path.join(userHome, '.cache'), 'piagent/sandbox') : path.join(userHome, 'Library/Caches/Piagent/sandbox');
   const cache = path.join(root, createHash('sha256').update(repositoryTop).digest('hex').slice(0, 24));
   fs.mkdirSync(cache, { recursive: true, mode: 0o700 });
   fs.chmodSync(cache, 0o700);
@@ -73,16 +81,17 @@ export function languageEnvironment({ userHome, repositoryTop, home }) {
     // here: packages the member restored are read from their own folder.
     nuget: existing(path.join(userHome, '.nuget/packages')),
   };
-  const java = javaHome(userHome), android = existing(path.join(userHome, 'Library/Android/sdk'));
+  const java = javaHome(userHome), android = existing(path.join(userHome, linux ? 'Android/Sdk' : 'Library/Android/sdk'));
   const readRoots = [...new Set([...Object.values(seeds), java, android, existing(path.join(userHome, 'Library/Java/JavaVirtualMachines')),
     existing('/Library/Ruby'), existing('/opt/local')].filter(Boolean))];
 
   const bin = path.join(home, '.piagent/bin');
   fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
-  for (const name of ['swift', 'xcodebuild']) fs.writeFileSync(path.join(bin, name), SWIFT_WRAPPER, { mode: 0o755 });
+  // (Only macOS: SwiftPM on Linux starts no sandbox of its own.)
+  if (!linux) for (const name of ['swift', 'xcodebuild']) fs.writeFileSync(path.join(bin, name), SWIFT_WRAPPER, { mode: 0o755 });
   // pnpm's store: its own settings file, which npm does not read (an npm_config_
   // variable would make every npm command warn about an unknown setting).
-  const pnpm = path.join(home, 'Library/Preferences/pnpm');
+  const pnpm = path.join(home, linux ? '.config/pnpm' : 'Library/Preferences/pnpm');
   fs.mkdirSync(pnpm, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(pnpm, 'rc'), `store-dir=${at('pnpm-store')}\n`, { mode: 0o600 });
 
@@ -105,9 +114,10 @@ export function languageEnvironment({ userHome, repositoryTop, home }) {
   // .NET keeps its named mutexes (NuGet's among them) as files in
   // /tmp/.dotnet, whatever TMPDIR says.
   const dotnet = [path.join(userHome, '.dotnet/dotnet'), '/usr/local/share/dotnet/dotnet', '/opt/homebrew/bin/dotnet'].some(file => fs.existsSync(file));
-  if (dotnet) try { fs.mkdirSync('/private/tmp/.dotnet', { recursive: true, mode: 0o777 }); } catch { /* another user's */ }
+  // (On Linux the sandbox has its own /tmp.)
+  if (dotnet && !linux) try { fs.mkdirSync('/private/tmp/.dotnet', { recursive: true, mode: 0o777 }); } catch { /* another user's */ }
   return {
-    cache, readRoots, writeRoots: [cache, ...(dotnet && existing('/private/tmp/.dotnet') ? ['/private/tmp/.dotnet'] : [])], bin,
+    cache, readRoots, writeRoots: [cache, ...(dotnet && !linux && existing('/private/tmp/.dotnet') ? ['/private/tmp/.dotnet'] : [])], bin,
     env: {
       // .NET's dual-stack sockets reach 127.0.0.1 as ::ffff:127.0.0.1, which
       // the loopback rule does not name (the test host would not connect).

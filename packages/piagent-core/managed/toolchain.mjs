@@ -16,7 +16,8 @@ function selectedDeveloperDir() {
 // Pin the actual installed binary; never widen access to user preferences.
 export function managedGit() {
   const selected = selectedDeveloperDir();
-  for (const candidate of [`${CLT}/usr/bin/git`, ...(selected ? [path.join(selected, 'usr/bin/git')] : []), '/Applications/Xcode.app/Contents/Developer/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git']) {
+  for (const candidate of [`${CLT}/usr/bin/git`, ...(selected ? [path.join(selected, 'usr/bin/git')] : []), '/Applications/Xcode.app/Contents/Developer/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git',
+    ...(process.platform === 'linux' ? ['/usr/bin/git'] : [])]) {
     if (executable(candidate)) return fs.realpathSync(candidate);
   }
   throw Error('managed-git-unavailable');
@@ -65,7 +66,9 @@ const downloaded = new Map();
 // ripgrep and fd for Pi's grep/find, on any member machine: an installed copy,
 // else Pi's own downloader run here (outside the sandbox, like personal Pi).
 export function searchToolPath(name, userHome = os.homedir()) {
-  for (const candidate of [downloaded.get(name), `/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`, path.join(userHome, '.pi/agent/bin', name)]) {
+  // Debian and Ubuntu install fd as fdfind.
+  const system = process.platform === 'linux' ? [`/usr/bin/${name}`, ...(name === 'fd' ? ['/usr/bin/fdfind'] : [])] : [];
+  for (const candidate of [downloaded.get(name), `/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`, path.join(userHome, '.pi/agent/bin', name), ...system]) {
     if (candidate && executable(candidate)) return fs.realpathSync(candidate);
   }
   return null;
