@@ -30,6 +30,7 @@ Piagent on Windows through WSL2, with company conversations in a bubblewrap sand
 - On Windows a command ending in `2>/dev/null` counted as a write (Git Bash's `/dev/null` is the null device), so read-only commands needed approval.
 - On Windows the dashboard, `piagent` and the update job could not start their TypeScript loader (a `C:\…` path given to `--import` reads as a URL scheme).
 - On Windows saving a task's journal or state failed: a file was flushed through a read-only handle, and a folder was flushed at all.
+- On Windows a second dashboard start could not take over from an earlier release's Gateway (its control pipe was linked like a Unix socket), and `piagent` could not register a `C:\…` project with the dashboard.
 - On Windows an image path such as `C:\Users\me\shot.png` or `.\shots\a.png` in a message was not attached.
 ## v1.12.1 - 2026-10-06
 

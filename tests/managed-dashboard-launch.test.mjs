@@ -8,6 +8,7 @@ import '../scripts/register-typescript-loader.mjs';
 import {agentWatchCompanyConnector, attachCompanyGateway, ensureCompanyGateway, managedLaunchStatus} from '../packages/piagent-webui/gateway/managed-launch.ts';
 import {startGatewayControlSocket} from '../packages/piagent-webui/gateway/control-socket.ts';
 import {gatewayProfileState} from '../packages/piagent-webui/ownership/profile-state.ts';
+import {agentWatchDataDirectory} from '../packages/piagent-core/managed/store.mjs';
 
 // The personal dashboard starts the pinned company entrypoint in `--serve`
 // mode (no browser, no project). These fixtures stand in for Agent Watch's
@@ -31,7 +32,7 @@ process.stdout.write('Agent Watch Auto: ready\\n');`);
   fs.writeFileSync(path.join(agent, 'agent-watch-managed.json'), JSON.stringify(config));
   return {home, agent, config, file: path.join(agent, 'agent-watch-managed.json')};
 }
-const launchLogs = home => { try { return fs.readdirSync(path.join(home, 'Library/Application Support/AgentWatch/ManagedLaunch')); } catch { return []; } };
+const launchLogs = home => { try { return fs.readdirSync(path.join(agentWatchDataDirectory(home), 'ManagedLaunch')); } catch { return []; } };
 
 test('company sessions are offered only when Watch imported a valid binding into this Pi folder', () => {
   const {agent, file, config} = fixture({});
@@ -75,7 +76,7 @@ test('the dashboard and the company Gateway are always the same Piagent release'
   // A company Gateway started before an update is not reused: it is stopped
   // and this release starts.
   const updated = fixture({});
-  const socketPath = gatewayProfileState(path.join(updated.home, 'Library/Application Support/AgentWatch/ManagedSessions', 'a'.repeat(64))).controlSocket;
+  const socketPath = gatewayProfileState(path.join(agentWatchDataDirectory(updated.home), 'ManagedSessions', 'a'.repeat(64))).controlSocket;
   let stopped = false, control;
   control = await startGatewayControlSocket({socketPath, handle: async (request) => {
     if (request.action === 'health') return {ok: true, value: {packageVersion: '0.0.1'}};

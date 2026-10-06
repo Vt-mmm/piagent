@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import net from "node:net";
+import path from "node:path";
 
 const MAX_MESSAGE_BYTES = 4_096;
 // The folder list grows with every project the company runtime has seen.
@@ -60,7 +61,8 @@ export async function startGatewayControlSocket(options: {
   socketPath: string;
   handle(request: GatewayControlRequest): Promise<GatewayControlResponse> | GatewayControlResponse;
 }): Promise<{ close(): Promise<void> }> {
-  await removeStaleSocket(options.socketPath);
+  const windows = process.platform === "win32";
+  if (!windows) await removeStaleSocket(options.socketPath);
   const server = net.createServer((socket) => {
     socket.setEncoding("utf8");
     let body = "", finished = false;
@@ -79,7 +81,7 @@ export async function startGatewayControlSocket(options: {
           const register = parsed?.action === "project.register";
           if (!parsed || !["health", "issue-launch-url", "stop", "project.paths", "project.register"].includes(String(parsed.action))
             || Object.keys(parsed).some((key) => key !== "action" && !(register && key === "cwd"))
-            || register && (typeof parsed.cwd !== "string" || !parsed.cwd.startsWith("/") || parsed.cwd.length > 4096)) throw new Error("invalid");
+            || register && (typeof parsed.cwd !== "string" || !path.isAbsolute(parsed.cwd) || parsed.cwd.length > 4096)) throw new Error("invalid");
           request = parsed as GatewayControlRequest;
         } catch { socket.end(`${JSON.stringify({ ok: false, error: "invalid-request" })}\n`); return; }
         try { socket.end(`${JSON.stringify(await options.handle(request))}\n`); }
@@ -88,6 +90,16 @@ export async function startGatewayControlSocket(options: {
     });
     socket.once("error", () => { socket.destroy(); });
   });
+  // A Windows pipe is not a file: there is no stale one to remove and nothing
+  // to link. Its name stays taken while a Gateway listens on it.
+  if (windows) {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", (error: NodeJS.ErrnoException) => reject(error.code === "EADDRINUSE" ? new Error("gateway-already-running") : error));
+      server.listen(options.socketPath, resolve);
+    });
+    let closed: Promise<void> | null = null;
+    return { close: () => closed ??= new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())) };
+  }
   // Closing a server removes the path it was bound to, whoever holds that path
   // by then: a Gateway that exited after another had taken the path removed the
   // running Gateway's socket, which could no longer be stopped or asked for a
