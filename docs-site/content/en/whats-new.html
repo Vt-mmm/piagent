@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.14.0 · 2026-10-06</p>
+  <h2 id="v1-14-0">Updates keep your model choices</h2>
+  <p class="section-lead"><span class="inline-code">piagent-update</span>, the dashboard’s update and <span class="inline-code">piagent-setup</span> set Pi’s default model and model list only on a first install. From this release, every update keeps the model you chose and your list, adding only models the release offers for the first time; a model you removed is not added back. To apply Piagent’s preset again: <span class="inline-code">piagent-update -- --reset-model-scope</span>.</p>
+  <ul>
+    <li>On Windows (WSL2), updates no longer call WSL2 experimental: it is how Piagent runs on Windows since 1.13.0.</li>
+    <li>Windows installs with one PowerShell command: see <a href="/en/windows">Windows</a>.</li>
+  </ul>
+  <p>Updating from 1.13.x needs no new import in Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.13.1 · 2026-10-06</p>
   <h2 id="v1-13-1">Conversations keep their place, the agent's notes are formatted</h2>
   <p class="section-lead">Opening a conversation again no longer jumps to its first message: each one keeps the place it was left, and one opened for the first time or left at its end opens at its newest message and follows the answer as it streams. Text the agent writes between tool calls is formatted like the answer instead of showing raw markdown. Updating from 1.13.0 needs no new Agent Watch import.</p>

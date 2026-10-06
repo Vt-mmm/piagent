@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.13.1 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.14.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,17 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.14.0 · 2026-10-06</p>
+  <h2 id="v1-14-0">Updates keep your model choices</h2>
+  <p class="section-lead"><span class="inline-code">piagent-update</span>, the dashboard’s update and <span class="inline-code">piagent-setup</span> set Pi’s default model and model list only on a first install. From this release, every update keeps the model you chose and your list, adding only models the release offers for the first time; a model you removed is not added back. To apply Piagent’s preset again: <span class="inline-code">piagent-update -- --reset-model-scope</span>.</p>
+  <ul>
+    <li>On Windows (WSL2), updates no longer call WSL2 experimental: it is how Piagent runs on Windows since 1.13.0.</li>
+    <li>Windows installs with one PowerShell command: see <a href="/en/windows">Windows</a>.</li>
+  </ul>
+  <p>Updating from 1.13.x needs no new import in Agent Watch.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.13.1 · 2026-10-06</p>
   <h2 id="v1-13-1">Conversations keep their place, the agent's notes are formatted</h2>

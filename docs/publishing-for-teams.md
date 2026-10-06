@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.14.0`: cập nhật Piagent giữ model mặc định và danh sách model thành viên đã chọn, chỉ thêm model mới của bản phát hành; trên Windows, WSL2 không còn bị báo là thử nghiệm.
 - `1.13.1`: mở lại cuộc trò chuyện giữ đúng chỗ đang đọc (lần đầu mở ở tin mới nhất); chữ agent viết giữa các tool call hiển thị có định dạng thay vì markdown thô.
 - `1.13.0`: Piagent trên Windows qua WSL2 (sandbox bubblewrap, Agent Watch cho Windows); sau khi cập nhật, mỗi thành viên nhập lại cấu hình Piagent trong Agent Watch.
 - `1.12.1`: nhánh (fork) của cuộc trò chuyện công ty gửi được tin nhắn; nhánh tạo trước bản này cần tạo lại.
