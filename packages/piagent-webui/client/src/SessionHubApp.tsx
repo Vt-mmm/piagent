@@ -388,7 +388,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const [sessionAction, setSessionAction] = useState<{ kind: Exclude<SessionMenuAction, "pin" | "unarchive">; session: SessionRow } | null>(null);
   const [actionTitle, setActionTitle] = useState(""), [actionBusy, setActionBusy] = useState(false), [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
-  useEffect(() => { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, [view, selectedRef]);
+  // Pages start at the top; a conversation restores its own place (SessionTranscript).
+  useEffect(() => { if (view === "chat" && selectedRef) return;
+    window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, [view, selectedRef]);
   const sessions = useMemo(() => (catalog?.sessions ?? []).filter((item) => item.archived === showArchived
     && `${item.title} ${item.projectLabel} ${item.preview}`.toLowerCase().includes(query.trim().toLowerCase())), [catalog, query, showArchived]);
   const projectGroups = useMemo(() => {

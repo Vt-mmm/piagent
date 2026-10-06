@@ -20,7 +20,12 @@ import { liveToolKind, ToolCard } from "./ToolCard.tsx";
 import { ProcessNote } from "./ProcessNote.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 
-const MarkdownMessage = lazy(async () => ({ default: (await import("./MarkdownMessage.tsx")).MarkdownMessage }));
+// Its own chunk, fetched when a conversation opens (preloadMarkdown) rather
+// than on the first answer, which showed its markdown as plain text until the
+// chunk arrived.
+let markdownModule: Promise<typeof import("./MarkdownMessage.tsx")> | null = null;
+export const preloadMarkdown = () => (markdownModule ??= import("./MarkdownMessage.tsx"));
+const MarkdownMessage = lazy(async () => ({ default: (await preloadMarkdown()).MarkdownMessage }));
 
 export function AssistantText({ children }: { children: string }) {
   return <Suspense fallback={<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.75 }}>{children}</Typography>}>
@@ -121,7 +126,8 @@ export function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineT
     {agent && <AgentBlock>
       {turn.steps.map((step) => step.kind === "tool" ? <ToolCard key={step.key} tool={step.tool} locale={locale} />
         : step.kind === "process" ? <ProcessNote key={step.key} process={step.process} locale={locale} />
-        : <Typography key={step.key} variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>{step.text}</Typography>)}
+        : <Box key={step.key} sx={{ color: "text.secondary", fontSize: ".875rem", "& .MuiTypography-root": { fontSize: "inherit" } }}>
+          <AssistantText>{step.text}</AssistantText></Box>)}
       {turn.failure && <TurnFailure code={turn.failure} detail={turn.failureDetail} locale={locale} onContinue={onContinue} />}
       {unanswered && <Alert severity="info" variant="outlined" sx={{ alignSelf: "stretch" }}
         action={<Button color="inherit" size="small" onClick={onContinue}>{localize(locale, "Tiếp tục", "Continue")}</Button>}>

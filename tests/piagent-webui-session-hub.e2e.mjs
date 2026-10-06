@@ -1081,6 +1081,47 @@ test("a running company conversation keeps its history and scroll position", asy
   }
 });
 
+// Switching conversations used to scroll every one back to its first message,
+// and the agent's notes between tool calls showed their markdown as text.
+test("a conversation opens at its newest message, keeps its place across switching, and renders notes as markdown", async ({ page }) => {
+  const base = transcriptFixture.items[0], text = (value) => ({ ...base.content, text: value, textChars: value.length });
+  const note = "**Bước 1** đọc `cart.js`:\n\n- tính tổng\n- áp mã giảm giá";
+  processTranscript = Array.from({ length: 12 }, (_, index) => [
+    { ...base, messageRef: `message_scroll_user_${index}`, role: "user", recordedAt: `2026-08-14T08:${String(index).padStart(2, "0")}:00.000Z`,
+      content: text(`Câu hỏi số ${index}: ${"giải thích thêm phần này. ".repeat(12)}`), toolCalls: [] },
+    { ...base, messageRef: `message_scroll_note_${index}`, parentMessageRef: `message_scroll_user_${index}`, role: "assistant",
+      recordedAt: `2026-08-14T08:${String(index).padStart(2, "0")}:01.000Z`, content: text(note), toolCalls: [] },
+    { ...base, messageRef: `message_scroll_answer_${index}`, parentMessageRef: `message_scroll_user_${index}`, role: "assistant",
+      recordedAt: `2026-08-14T08:${String(index).padStart(2, "0")}:02.000Z`, content: text(`Trả lời số ${index}. ${"Nội dung dài. ".repeat(30)}`), toolCalls: [] }
+  ]).flat();
+  await page.setViewportSize({ width: 1440, height: 700 });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const open = (title) => page.getByText(title, { exact: true }).filter({ visible: true }).first().click();
+    const place = () => page.evaluate(() => ({ y: Math.round(window.scrollY), bottom: document.documentElement.scrollHeight - window.innerHeight }));
+    await open("Review source changes");
+    await expect(page.getByText("Trả lời số 11.", { exact: false })).toBeVisible();
+    await expect.poll(async () => { const now = await place(); return now.bottom - now.y; }).toBeLessThanOrEqual(2);
+    // A note between tools is markdown: bold, code and a list, no literal asterisks.
+    const notes = page.locator(".markdown-message").filter({ hasText: "Bước 1" });
+    await expect(notes.first().locator("strong")).toHaveText("Bước 1");
+    await expect(notes.first().locator("li")).toHaveCount(2);
+    await expect(page.getByText("**Bước 1**", { exact: false })).toHaveCount(0);
+    // Leave this conversation half way up, open another, then come back.
+    const middle = Math.round((await place()).bottom / 2);
+    await page.evaluate((y) => window.scrollTo(0, y), middle);
+    await expect.poll(async () => (await place()).y).toBe(middle);
+    await open("Release preparation");
+    await expect.poll(async () => { const now = await place(); return now.bottom - now.y; }).toBeLessThanOrEqual(2);
+    await open("Review source changes");
+    await expect(page.getByText("Trả lời số 11.", { exact: false })).toBeAttached();
+    await expect.poll(async () => (await place()).y).toBe(middle);
+    // A conversation left at its newest message opens there again.
+    await open("Release preparation");
+    await expect.poll(async () => { const now = await place(); return now.bottom - now.y; }).toBeLessThanOrEqual(2);
+  } finally { processTranscript = []; }
+});
+
 // An Enter that commits Vietnamese (or any input-method) text only finishes
 // the word; Enter pressed twice before the page re-renders creates one
 // conversation and sends one message. A member saw two identical

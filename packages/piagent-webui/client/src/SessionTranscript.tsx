@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ErrorOutlineRounded from "@mui/icons-material/ErrorOutlineRounded";
 import HistoryRounded from "@mui/icons-material/HistoryRounded";
 import Alert from "@mui/material/Alert";
@@ -16,7 +16,7 @@ import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
 import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
 import { liveTokensPerSecond, timelineTurns } from "./timeline-view-model.ts";
-import { LIVE_FAILURES, LiveTurnView, TimelineTurnView } from "./TimelineTurn.tsx";
+import { LIVE_FAILURES, LiveTurnView, preloadMarkdown, TimelineTurnView } from "./TimelineTurn.tsx";
 import { durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
   persistedLiveConversationMatches, persistedLiveUserExists, successfulAssistantText } from "./transcript-view-model.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
@@ -45,6 +45,41 @@ function RunningStatus({ live, locale, onOpenActivity }: { live: LiveConversatio
   </Stack>;
 }
 
+// Where each conversation was left, for this page's lifetime: a position, or
+// "end" when it was read to the bottom. A conversation opened for the first
+// time starts at its newest message.
+const scrollPlaces = new Map<string, number | "end">();
+const END_SLACK = 96;
+const pageBottom = () => document.documentElement.scrollHeight - window.innerHeight;
+const atEnd = () => pageBottom() - window.scrollY <= END_SLACK;
+
+// Restores the place once the history is on screen, then keeps the newest
+// message in view while the reader stays at the end (a streaming answer, a
+// late-loading message body) and remembers the place as the reader scrolls.
+function useConversationScroll(sessionRef: string, ready: boolean) {
+  const content = useRef<HTMLDivElement>(null), restored = useRef(false), following = useRef(true);
+  useLayoutEffect(() => {
+    if (!ready || restored.current) return;
+    restored.current = true;
+    const place = scrollPlaces.get(sessionRef) ?? "end";
+    following.current = place === "end";
+    window.scrollTo(0, place === "end" ? pageBottom() : Math.min(place, pageBottom()));
+  }, [ready, sessionRef]);
+  useEffect(() => {
+    const remember = () => {
+      if (!restored.current) return;
+      following.current = atEnd();
+      scrollPlaces.set(sessionRef, following.current ? "end" : window.scrollY);
+    };
+    window.addEventListener("scroll", remember, { passive: true });
+    const node = content.current, observer = typeof ResizeObserver === "undefined" || !node ? null
+      : new ResizeObserver(() => { if (restored.current && following.current) window.scrollTo(0, pageBottom()); });
+    if (node) observer?.observe(node);
+    return () => { window.removeEventListener("scroll", remember); observer?.disconnect(); };
+  }, [sessionRef]);
+  return content;
+}
+
 // `onContinue` (given while the conversation is idle and can take a message)
 // sends "tiếp tục" for the last turn when it failed or has no answer.
 // `reload` (a counter) reads the history again in place: what is shown stays
@@ -54,6 +89,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
   const [transcript, setTranscript] = useState<PiagentWebUIBoundedTranscriptProjectionV1>();
   const [loading, setLoading] = useState(true), [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState(false), [syncedOperation, setSyncedOperation] = useState<string | null>(null);
+  useEffect(() => { void preloadMarkdown(); }, []);
   const refreshIdentity = durableTranscriptRefreshIdentity(sessionRef, sessionRevision, live);
   const { completionKey, user: completedUser, assistant: completedAssistant,
     operationRef: completedOperationRef, messageRequestId: completedMessageRequestId, startedAt: completedStartedAt } = refreshIdentity;
@@ -94,7 +130,8 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     } catch { setError(true); } finally { setLoadingOlder(false); }
   };
   const liveAnswer = live ? successfulAssistantText(live.assistant || "") : null;
-  return <Stack spacing={3}>
+  const content = useConversationScroll(sessionRef, Boolean(transcript) || error);
+  return <Stack ref={content} spacing={3}>
     {transcript?.page.hasOlder && <Box sx={{ textAlign: "center" }}><Button size="small" variant="text" startIcon={loadingOlder
       ? <CircularProgress size={14} /> : <HistoryRounded />} disabled={loadingOlder} onClick={() => void loadOlder()}>
       {localize(locale, "Tải tin cũ hơn", "Load older messages")}</Button></Box>}
