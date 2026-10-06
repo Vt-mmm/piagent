@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.12.0`: @ trong dashboard chọn file và folder ở bất kỳ đâu trên máy, agent đọc folder ngoài project để tham khảo (chỉ đọc); khung chat giữ tin nhắn đang soạn khi chuyển cuộc trò chuyện; skill và command của `.claude`, `.codex`, `.agents` (project và máy) dùng được bằng `/`; sandbox công ty chạy được unit và integration test của các ngôn ngữ phổ biến (cache package theo project, server trên localhost, Xcode đã chọn, .NET).
 - `1.11.1`: cập nhật xong luôn chạy dashboard của bản mới: nút cập nhật trong dashboard khởi động lại dashboard đúng cách (bản 1.11.0 cài xong nhưng không tự khởi động lại), và `piagent dashboard` thay dashboard của bản cũ còn đang chạy sau `piagent-update`.
 - `1.11.0`: dashboard tự kiểm tra bản mới (khi mở và mỗi 6 giờ) và cập nhật Pi + Piagent bằng một nút, Pi luôn lên đúng bản Piagent yêu cầu, khoá khi đang có lượt chạy; thanh trạng thái kiểu IDE, bảng lệnh ⌘K/Ctrl+K, ⌘,/Ctrl+, mở Cài đặt; Cài đặt có ô tìm kiếm, nhóm mục và mục Phím tắt. Máy đang ở 1.10.0 cập nhật tay một lần; từ 1.11.0 bấm nút trong dashboard.
 - `1.10.0`: main agent hỏi lại khi yêu cầu còn để ngỏ một quyết định (thẻ câu hỏi có lựa chọn đánh số, "Khác" và "Để agent tự quyết"); subagent được phản biện brief, bất đồng lần hai thì member quyết (báo cáo quy trình v3 cần Studio và Agent Watch mới, bản cũ vẫn nhận v2); subagent tự chạy lại trên model dự phòng khi hết quota; patch lớn được review theo từng phần; tab dashboard cũ không còn bị từ chối khi dashboard được mở lần nữa trong cùng trình duyệt.

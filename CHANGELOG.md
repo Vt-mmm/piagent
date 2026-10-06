@@ -2,7 +2,7 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.12.0 - 2026-10-06
 
 @ in the dashboard picks any file or folder on the Mac, and the agent reads folders outside the project for reference.
 

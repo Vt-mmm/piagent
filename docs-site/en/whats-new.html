@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.11.1 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.12.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -103,6 +103,18 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.12.0 · 2026-10-06</p>
+  <h2 id="v1-12-0">@ any folder, skills from /, and tests in the company sandbox</h2>
+  <p class="section-lead">Point the agent at exactly the file or folder to read, reuse the skills and commands you already keep, and let the agent run the project's unit and integration tests.</p>
+  <div class="grid cols-2">
+    <article class="card"><h3 id="at-mentions">@ files and folders</h3><p>Type <code>@</code> in the composer to pick the project's files and folders; type <code>~/</code> or <code>/</code> for any other folder on the Mac. The agent reads folders outside the project for reference, read-only; hidden home files, <code>~/Library</code> and credential files stay closed.</p></article>
+    <article class="card"><h3 id="kept-drafts">Unsent messages are kept</h3><p>A message typed in a conversation or in the new chat is still there after opening another conversation or reloading the page, with its attached files.</p></article>
+    <article class="card"><h3 id="skills-commands">Skills and commands</h3><p>Skills and commands in the project's and your <code>.claude</code>, <code>.codex</code>, <code>.agents</code> and <code>.pi</code> folders work as they are: the model sees the skills, and a <code>/</code> at the start of a message offers <code>/command</code> and <code>/skill:name</code>.</p></article>
+    <article class="card"><h3 id="tests-in-sandbox">Tests in the company sandbox</h3><p>Package caches kept per project (npm, pnpm, pip, uv, Go, Cargo, Gradle, Maven, NuGet…), servers and databases on localhost, the selected Xcode, JDKs, .NET. Run <code>piagent studio --doctor</code> to see which languages are ready. Docker and the iOS Simulator are not available in the sandbox yet.</p></article>
+  </div>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.11.1 · 2026-10-05</p>
   <h2 id="v1-11-1">An update ends on the new release's dashboard</h2>
