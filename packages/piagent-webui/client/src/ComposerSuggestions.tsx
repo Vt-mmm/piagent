@@ -88,7 +88,13 @@ export function useComposerSuggestions({ projectRef, value, onChange, locale }: 
     if (!live) return;
     const next = item.apply(value, live);
     onChange(next.text); setCaret(next.caret);
-    requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.setSelectionRange(next.caret, next.caret); });
+    // React writing the new text moves the caret to its end (past a closing
+    // quote); a late selection event would then close the menu. The caret is
+    // put back, and recorded again, once the text is on screen.
+    requestAnimationFrame(() => {
+      const input = inputRef.current; if (!input) return;
+      input.focus(); input.setSelectionRange(next.caret, next.caret); setCaret(next.caret);
+    });
   };
   const onKeyDown = (event: KeyboardEvent): boolean => {
     if (!open || event.nativeEvent.isComposing || event.keyCode === 229) return false;

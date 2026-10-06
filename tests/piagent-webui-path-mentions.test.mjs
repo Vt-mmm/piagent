@@ -44,6 +44,9 @@ describe("@ mentions in a composer", () => {
         `shop/${"Tài liệu".normalize("NFD")}/đặc tả.md`, "home/Documents/old shop/notes.md", "home/.ssh/config", "home/Library/Mail/inbox"]) write(file);
       fs.writeFileSync(path.join(project, ".gitignore"), "dist/\n");
       execFileSync("git", ["init", "-q", project]); execFileSync("git", ["-C", project, "add", "-A"]);
+      // The first /usr/bin/git on a fresh macOS runner can take longer than the
+      // suggestions' 4 s limit, which then leaves ignored names in.
+      if (fs.existsSync("/usr/bin/git")) execFileSync("/usr/bin/git", ["--version"]);
       for (const fd of [null, ...(findFd() ? [findFd()] : [])]) {
         const values = async (query) => (await suggestPaths({ root: project, query, home, fd })).suggestions.map((item) => item.value);
         const label = fd ? "fd" : "git";

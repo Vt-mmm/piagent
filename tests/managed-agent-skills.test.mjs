@@ -58,7 +58,7 @@ test('skills and commands of the project (up to its repository root) and of the 
   } finally { fs.rmSync(base, {recursive: true, force: true}); }
 });
 
-test('/command, /skill:name and /skill-name expand as Pi does; other text is left as typed', async () => {
+test('/command, /skill:name and /skill-name expand as Pi does; other text is left as typed', {skip: !fs.existsSync(sdkRoot)}, async () => {
   const templates = await import(path.join(sdkRoot, 'dist/core/prompt-templates.js'));
   const api = await import(path.join(sdkRoot, 'dist/index.js'));
   const {base, repo} = machine();
