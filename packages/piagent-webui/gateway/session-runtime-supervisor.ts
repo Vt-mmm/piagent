@@ -426,7 +426,9 @@ export class SessionRuntimeSupervisor {
       if (!file) throw new Error("session-fork-unavailable");
       forkManager = this.#host.SessionManager.open(file);
     } else {
-      forkManager = this.#host.SessionManager.forkFrom(source.path, source.cwd);
+      // Managed members keep sessions flat in one folder; Pi would otherwise write
+      // the fork into its per-cwd folder, where the gateway never finds it again.
+      forkManager = this.#host.SessionManager.forkFrom(source.path, source.cwd, this.#sessionDirectory);
     }
     if (title) forkManager.appendSessionInfo(title);
     const file = forkManager.getSessionFile(), id = forkManager.getSessionId?.();

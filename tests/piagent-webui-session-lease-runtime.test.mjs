@@ -18,6 +18,7 @@ import { preferAuthoritativePiagentGuard } from "../packages/piagent-webui/gatew
 import { sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation }
   from "../packages/piagent-webui/gateway/session-operation-watchdog.ts";
 import { SessionRuntimeSupervisor } from "../packages/piagent-webui/gateway/session-runtime-supervisor.ts";
+import { cachedSessionLister } from "../packages/piagent-webui/gateway/session-list-cache.ts";
 import { installedPiHostRoot, loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { TerminalSessionAdapter } from "../packages/piagent-webui/extension/terminal-session-adapter.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
@@ -1392,6 +1393,41 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(providerTurns, 0);
     await supervisor.release(createdRef);
     assert.equal((await supervisor.listSessions()).length, 2);
+    await supervisor.close();
+  });
+
+  it("keeps a managed member's fork in the flat session folder so its first message can open it", async (t) => {
+    const { root, key } = state(t);
+    const cwd = path.join(root, "project"), agentDir = path.join(root, "agent"), sessionDir = path.join(agentDir, "sessions");
+    fs.mkdirSync(cwd); fs.mkdirSync(sessionDir, { recursive: true });
+    const priorAgentDir = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = agentDir;
+    t.after(() => { if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = priorAgentDir; });
+    const expected = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"))
+      .peerDependencies["@earendil-works/pi-coding-agent"];
+    const host = await loadPinnedPiHost(expected);
+    const manager = host.SessionManager.create(cwd, sessionDir, { id: "managed-fork-source" });
+    manager.appendMessage({ role: "user", content: [{ type: "text", text: "Keep this context." }], timestamp: Date.now() });
+    manager.appendMessage({ role: "assistant", content: [{ type: "text", text: "Kept." }], api: "fixture", provider: "fixture", model: "fixture",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: Date.now() });
+    // The gateway's managed wiring: one flat folder, listed without per-cwd subfolders.
+    const listSessions = cachedSessionLister((dir) => host.SessionManager.listAll(dir), sessionDir, true);
+    const sourceRef = sessionRefForPath(key, (await listSessions())[0].path);
+    const runtimeFactory = async (info, _runtimeInstanceRef, sessionManager) => ({
+      session: { sessionManager: sessionManager ?? host.SessionManager.open(info.path, sessionDir), isIdle: true },
+      dispose: async () => {} });
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_managed_fork", key,
+      leases: new SessionLeaseStore(root, key), listSessions, host, agentDir, packageRoot: repositoryRoot, modelRuntime: {},
+      runtimeFactory, sessionDirectory: sessionDir });
+    const forkRef = await supervisor.fork(sourceRef, null, "Managed fork");
+    assert.deepEqual(fs.readdirSync(sessionDir).filter((name) => !name.endsWith(".jsonl")), [], "the fork must not open a per-cwd folder");
+    const forked = (await listSessions()).find((info) => sessionRefForPath(key, info.path) === forkRef);
+    assert.equal(forked?.parentSessionPath, path.join(sessionDir, path.basename(forked.parentSessionPath)));
+    assert.equal(forked?.name, "Managed fork");
+    await supervisor.release(sourceRef);
+    // session.send acquires the conversation first; before the fix this was session-not-found.
+    assert.equal((await supervisor.acquire(forkRef)).state, "gateway-owned");
+    assert.match(supervisor.liveSessionManager(forkRef).buildSessionContext().messages.map((message) => message.content[0].text).join(" "), /Keep this context/);
     await supervisor.close();
   });
 

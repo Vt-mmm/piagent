@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.12.1 - 2026-10-06
+
+### Fixes
+
+- A forked company conversation takes messages again. The fork was written where Pi keeps personal conversations, outside the member's company session folder, so the dashboard listed it but every message to it returned "The message was not sent". Forks made with 1.12.0 or earlier stay unreachable: fork the source conversation again after updating.
+
 ## v1.12.0 - 2026-10-06
 
 @ in the dashboard picks any file or folder on the Mac, and the agent reads folders outside the project for reference.
