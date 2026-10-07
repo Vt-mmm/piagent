@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.15.2`: cuộc trò chuyện công ty dài tóm tắt được trở lại (trước đó Studio từ chối với 401 `authentication_required`); tóm tắt ở 90% cửa sổ model, muộn nhất 300k token; tóm tắt lỗi được thử lại sau 1, 2, 4 … phút.
 - `1.15.1`: mỗi call model công ty báo Studio mục đích (Studio 0.20.0: Logs → "Lượt agent"); nhiều cuộc trò chuyện trong một folder không nhận nhầm thay đổi của nhau; runtime công ty không mở được nói rõ lý do và lưu trữ được.
 - `1.15.0`: subagent bị Studio từ chối nói đúng lý do (cần Agent Watch 0.15.0); lệnh in nhiều và chạy lâu không còn bị dừng vì `managed-tool-output-too-large`; ghi vào `/tmp` được chỉ sang `$TMPDIR`.
 - `1.14.0`: cập nhật Piagent giữ model mặc định và danh sách model thành viên đã chọn, chỉ thêm model mới của bản phát hành; trên Windows, WSL2 không còn bị báo là thử nghiệm.

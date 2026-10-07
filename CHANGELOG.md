@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.15.2 - 2026-10-07
+
+Long company conversations shrink again, earlier.
+
+### Fixes
+
+- A long company conversation could not be summarised: Pi's summary request carried the company provider's placeholder key instead of the run's grant, Studio refused it (401 `authentication_required`, listed as "Chưa chọn tài khoản" / "CLI trực tiếp" in the request monitor) before every step, and the conversation kept growing past the model's window. Summaries now use the run's grant, and Studio logs them as `summary`.
+- A summary that fails is asked again after 1, 2, 4 … minutes (at most 30) instead of before every step.
+
+### Changes
+
+- A company conversation is summarised at 90% of the model's window and never later than 300k tokens, as Codex does: 244.8k on a 272k GPT window (prices double above 272k), 300k on a 1M-token window instead of about 984k. The summary keeps about the last 20k tokens word for word, as before.
+
 ## v1.15.1 - 2026-10-07
 
 Studio sees what each company model call is for; several conversations in one folder keep their changes apart.

@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.15.2 · 2026-10-07</p>
+  <h2 id="v1-15-2">Long company conversations shrink again, earlier</h2>
+  <p class="section-lead">A long company conversation's summary carried the provider's placeholder key instead of the run's grant, so Studio refused it (401 <span class="inline-code">authentication_required</span>, "Chưa chọn tài khoản" / "CLI trực tiếp" in the request monitor) before every step and the conversation kept growing. Summaries now use the run's grant, and Studio logs them as <span class="inline-code">summary</span>.</p>
+  <ul>
+    <li>A conversation is summarised at 90% of the model's window and never later than 300k tokens: 244.8k on a 272k GPT window (prices double above 272k), 300k on a 1M-token window instead of about 984k. About the last 20k tokens stay word for word.</li>
+    <li>A summary that fails is asked again after 1, 2, 4 … minutes (at most 30) instead of before every step.</li>
+  </ul>
+  <p>Updating from 1.15.x needs no re-import in Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.15.1 · 2026-10-07</p>
   <h2 id="v1-15-1">Studio sees what each model call is for</h2>
   <p class="section-lead">Every company model call tells Studio what it is for: the answer to your message, a step after tools (with the tools just run), a turn the harness started, a conversation summary, a subagent's brief (with a one-line title of its job) or a web search. No other prompt text is sent. Studio 0.20.0 shows them in Logs → "Lượt agent".</p>
