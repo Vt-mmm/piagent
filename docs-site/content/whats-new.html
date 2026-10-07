@@ -1,4 +1,16 @@
 <section class="section">
+  <p class="section-kicker">v1.15.0 · 2026-10-07</p>
+  <h2 id="v1-15-0">Subagent bị từ chối nói đúng lý do</h2>
+  <p class="section-lead">Khi Studio từ chối một subagent công ty, Piagent nay báo lý do của Studio thay vì luôn báo "cấu hình vừa thay đổi". Ví dụ: không tài khoản AI nào của công ty phục vụ model của vai trò này, và quản trị viên cần gắn hoặc bật một tài khoản. Cần Agent Watch 0.15.0; với Studio 0.19.0, subagent thiếu tài khoản lúc bắt đầu lượt sẽ tự lấy model đang phục vụ khi được gọi.</p>
+  <ul>
+    <li>Lệnh in nhiều và chạy lâu (bộ test, build) không còn bị dừng với <span class="inline-code">managed-tool-output-too-large</span>.</li>
+    <li>Lệnh ghi vào <span class="inline-code">/tmp</span> ở chế độ công ty được chỉ sang <span class="inline-code">$TMPDIR</span> hoặc thư mục project.</li>
+    <li><span class="inline-code">piagent-update</span> chạy từ <span class="inline-code">npm exec</span> cài helper lâu dài; trên Windows, Pi được tìm thấy trong npm prefix tùy chỉnh.</li>
+  </ul>
+  <p>Cập nhật từ 1.14.x không cần nhập lại cấu hình trong Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.14.0 · 2026-10-06</p>
   <h2 id="v1-14-0">Cập nhật giữ lựa chọn model của bạn</h2>
   <p class="section-lead"><span class="inline-code">piagent-update</span>, nút cập nhật trong dashboard và <span class="inline-code">piagent-setup</span> chỉ đặt default model và danh sách model của Pi ở lần cài đầu. Từ bản này, mỗi lần cập nhật giữ nguyên model bạn đã chọn và danh sách của bạn, chỉ thêm model bản mới lần đầu đưa vào; model bạn đã bỏ ra không bị thêm lại. Muốn áp lại preset của Piagent: <span class="inline-code">piagent-update -- --reset-model-scope</span>.</p>

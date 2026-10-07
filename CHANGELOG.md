@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.15.0 - 2026-10-07
+
+A refused subagent says why; long noisy commands finish.
+
+### Fixes
+
+- A company subagent that Studio refuses now says Studio's reason, which Agent Watch 0.15.0 passes along, instead of "the key, harness or run changed in Studio" for every refusal. With Studio 0.19.0, a subagent whose role had no AI account when the run started takes a model that serves when it is called; when none serves, the member reads that no company AI account serves the role's model and an administrator has to link or enable one.
+- A company command that printed for more than about 25 seconds (a test suite, a build) stopped as `managed-tool-output-too-large`, although its result was about 50 KB: the 12 MB limit counted every progress update. The limit now applies to each message.
+- A company command that writes to `/tmp` (read-only on macOS in company mode) is told to use `$TMPDIR` or the project, instead of the general notice about credentials and the network.
+- `piagent-update` started from `npm exec` installs a lasting helper even when the version already matches, and `--no-host` with an incompatible Pi stops before changing either global package. On Windows, Pi is found in custom npm prefixes.
+
 ## v1.14.0 - 2026-10-06
 
 Updates keep each member's Pi model choices.

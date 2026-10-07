@@ -1,4 +1,16 @@
 <section class="section">
+  <p class="section-kicker">v1.15.0 · 2026-10-07</p>
+  <h2 id="v1-15-0">A refused subagent says why</h2>
+  <p class="section-lead">When Studio refuses a company subagent, Piagent now gives Studio's reason instead of always saying the configuration changed. For example: no company AI account serves this role's model, and an administrator has to link or enable one. Needs Agent Watch 0.15.0; with Studio 0.19.0, a subagent that had no account when the run started takes a model that serves when it is called.</p>
+  <ul>
+    <li>Long commands that print a lot (test suites, builds) no longer stop with <span class="inline-code">managed-tool-output-too-large</span>.</li>
+    <li>A company command that writes to <span class="inline-code">/tmp</span> is pointed to <span class="inline-code">$TMPDIR</span> or the project.</li>
+    <li><span class="inline-code">piagent-update</span> started from <span class="inline-code">npm exec</span> installs a lasting helper; on Windows, Pi is found in custom npm prefixes.</li>
+  </ul>
+  <p>Updating from 1.14.x needs no new import in Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.14.0 · 2026-10-06</p>
   <h2 id="v1-14-0">Updates keep your model choices</h2>
   <p class="section-lead"><span class="inline-code">piagent-update</span>, the dashboard’s update and <span class="inline-code">piagent-setup</span> set Pi’s default model and model list only on a first install. From this release, every update keeps the model you chose and your list, adding only models the release offers for the first time; a model you removed is not added back. To apply Piagent’s preset again: <span class="inline-code">piagent-update -- --reset-model-scope</span>.</p>
