@@ -51,6 +51,10 @@ if (invokedAs === "piagent") {
   } else if (subcommand === "select-verification") {
     script = "scripts/select-independent-verification.mjs";
     forwardedArgs = forwardedArgs.slice(1);
+  } else if (subcommand && Object.hasOwn(scriptByCommand, `piagent-${subcommand}`)) {
+    // `piagent doctor` is `piagent-doctor`: members type it both ways.
+    script = scriptByCommand[`piagent-${subcommand}`];
+    forwardedArgs = forwardedArgs.slice(1);
   } else if ([undefined, "help", "--help", "-h"].includes(subcommand)) {
     // Subcommands are listed, their flags are not. Restating them here meant a
     // second copy that drifts: this line still advertised the dashboard without
@@ -70,7 +74,7 @@ if (invokedAs === "piagent") {
 }
 
 if (!script) {
-  console.error(`Unknown Pi Agent command: ${invokedAs || "(unknown)"}`);
+  console.error(`Unknown Pi Agent command: ${[invokedAs || "(unknown)", invokedAs === "piagent" ? forwardedArgs[0] : ""].filter(Boolean).join(" ")}`);
   console.error(`Expected one of: ${Object.keys(scriptByCommand).sort().join(", ")}`);
   process.exit(2);
 }

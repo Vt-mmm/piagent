@@ -460,6 +460,19 @@ describe("package distribution", () => {
     assert.match(result.stdout, /Usage: piagent dashboard/);
   });
 
+  it("runs `piagent doctor` as piagent-doctor and names an unknown subcommand", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
+    temporaryRoots.add(root);
+    const link = path.join(root, "piagent");
+    fs.symlinkSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs"), link);
+    const doctor = spawnSync(link, ["doctor", "--help"], { cwd: repositoryRoot, encoding: "utf8" });
+    assert.equal(doctor.status, 0, doctor.stderr);
+    assert.match(doctor.stdout, /team-doctor\.sh/);
+    const unknown = spawnSync(link, ["nosuch"], { cwd: repositoryRoot, encoding: "utf8" });
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stderr, /^Unknown Pi Agent command: piagent nosuch$/m);
+  });
+
   it("shows help successfully for every global command without requiring project state", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
