@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
+import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
 
 const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
@@ -128,20 +129,30 @@ for (const changeDuringReview of [true, false]) test(`mixed-provider helpers inv
 // Scout and verify: each runs with its own tools, only when the Harness
 // enables it. Verify runs the repository's checks with the project read-only,
 // and a check that passed there counts for the run.
-test('scout and verify helpers run with their own tools and only when the Harness enables them', {skip: !supported, timeout: 120000}, async () => {
+test('scout and verify helpers run with their own tools and only when the Harness enables them', {skip: !supported, timeout: 120000}, async (t) => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-scout-verify-')));
   const project = path.join(root, 'project'); fs.mkdirSync(project);
   const git = args => execFileSync('/usr/bin/git', args, {cwd:project, encoding:'utf8'}).trim();
   git(['init', '-q']);
   fs.writeFileSync(path.join(project, 'AGENTS.md'), '# Fixture\n\n## Checks\n- `sh check.sh`\n');
   // The check tries to write into the project: the verify sandbox refuses it.
-  fs.writeFileSync(path.join(project, 'check.sh'), 'sleep 3; if (echo x > written.txt) 2>/dev/null; then echo PROJECT-WRITABLE; else echo PROJECT-READ-ONLY; fi\n');
+  fs.writeFileSync(path.join(project, 'check.sh'), 'if (echo x > written.txt) 2>/dev/null; then echo PROJECT-WRITABLE; else echo PROJECT-READ-ONLY; fi\n');
   git(['add', '.']); git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'baseline']);
   const roles = ['main', 'scout', 'verify'], roleIDs = Object.fromEntries(roles.map(role => [role, randomUUID()]));
   const runID = randomUUID(), authority = {studio_instance_id:randomUUID(), dataset_epoch:randomUUID(), auth_generation:1};
   const models = [{id:'main-model', provider_model_id:'gpt-6-sol', owned_by:'codex'}, {id:'helper-model', provider_model_id:'claude-opus-5-5', owned_by:'claude'}];
   const fences = {}, calls = [], requests = [], mainEntered = deferred(), mainRelease = deferred();
   let verifyStarts = 0;
+  const invoke = ManagedToolBoundary.prototype.invoke;
+  t.mock.method(ManagedToolBoundary.prototype, 'invoke', function(name, args, ...rest) {
+    // countedCheck has captured the pre-check digest when it dispatches here.
+    // Edit at that boundary, then execute the real sandbox command. A timer
+    // from the provider response could fire before that digest on a busy host,
+    // in which case accepting the check was correct and the assertion flaky.
+    if (name === 'bash' && args.command === 'sh check.sh' && verifyStarts === 2)
+      fs.writeFileSync(path.join(project, 'edited.txt'), 'main agent edit\n');
+    return invoke.call(this, name, args, ...rest);
+  });
   const grant = role => ({...authority, run_id:runID, role_id:roleIDs[role], role, fence:fences[role]=(fences[role]??0)+1,
     token:`as_run_${roleIDs[role]}_${'x'.repeat(43)}`, model_id:role==='main'?'main-model':'helper-model', provider:role==='main'?'codex':'claude', provider_model_id:role==='main'?'gpt-6-sol':'claude-opus-5-5', effort:'medium'});
   const broker = {async request(action, args={}) {
@@ -168,8 +179,7 @@ test('scout and verify helpers run with their own tools and only when the Harnes
     emit({type:'message_start',message:{id:'msg_fixture',type:'message',role:'assistant',content:[],model:body.model,stop_reason:null,stop_sequence:null,usage:{input_tokens:12,output_tokens:0}}});
     // Verify first runs the repository check, then answers with its verdicts.
     if(role==='verify' && !body.messages.some(m=>JSON.stringify(m).includes('tool_result'))) {
-      // The second verify call: the main agent edits while the check runs.
-      if(++verifyStarts===2) setTimeout(()=>fs.writeFileSync(path.join(project,'edited.txt'),'main agent edit\n'),1500);
+      verifyStarts += 1;
       emit({type:'content_block_start',index:0,content_block:{type:'tool_use',id:'toolu_check',name:'bash',input:{}}});
       emit({type:'content_block_delta',index:0,delta:{type:'input_json_delta',partial_json:JSON.stringify({command:'sh check.sh'})}});
       emit({type:'content_block_stop',index:0});
