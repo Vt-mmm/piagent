@@ -7,9 +7,9 @@
 // target is only known at run time, removing Docker volumes, and sudo.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { evaluateExecPolicyCore } from '../extensions/policy-core.js';
+import { evaluateExecPolicyCore } from '../../extensions/policy-core.js';
 
-const POLICY = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../policies/base-policy.json', import.meta.url)), 'utf8'));
+const POLICY = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../../policies/base-policy.json', import.meta.url)), 'utf8'));
 // Exec-policy prompts a member in bypass may skip: local, reversible.
 const BYPASSABLE_RULES = new Set(['prompt-git-add-broad']);
 // Tools that reach other machines or accounts; none runs without asking.
@@ -28,7 +28,7 @@ export async function mustConfirm(command) {
   const result = evaluateExecPolicyCore(String(command), { policy: POLICY, mode: 'enforce' });
   const kept = result.reasons.filter(reason => ![...BYPASSABLE_RULES].some(id => reason.startsWith(`Prompt required by exec policy ${id}:`)));
   if (result.decision !== 'allow' && kept.length) return kept[0];
-  const { findShellExternalConfirmationReason } = await import('../extensions/guard-shell-analysis.ts');
+  const { findShellExternalConfirmationReason } = await import('../../extensions/guard-shell-analysis.ts');
   const external = findShellExternalConfirmationReason(result.segments, { defaultMode: 'enforce', ...POLICY.externalActionPolicy });
   if (external) return external;
   for (const segment of result.segments) {

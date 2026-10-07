@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../scripts/register-typescript-loader.mjs';
-import {mustConfirm} from '../packages/piagent-core/managed/bypass-policy.mjs';
+import {mustConfirm} from '../packages/piagent-core/runtime/policy/bypass-policy.mjs';
 
 test('Bypass runs local and download commands, and still asks before anything that must be confirmed', async () => {
   for (const command of ['npm install', 'pnpm add zod', './mvnw -q test', 'git pull', 'git fetch origin', 'git add -A', 'npx playwright test',
