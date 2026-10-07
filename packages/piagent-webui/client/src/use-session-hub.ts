@@ -4,7 +4,7 @@ import type { Catalog, SessionRow } from "../../contracts/generated/session-cata
 import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
 import { readSessionCatalog, readSessionLiveState } from "./api.ts";
 import { coalescedRefresh } from "./coalesced-refresh.ts";
-import { bootstrapBrowserSession } from "./bootstrap.ts";
+import { bootstrapBrowserSession, browserSessionLost } from "./bootstrap.ts";
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
   liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, conversationAfterRejectedSend, pendingUserConversation, terminalOperationActivity,
@@ -316,7 +316,7 @@ export function useSessionHub(): SessionHub {
       } catch { return opaque("client"); }
     })();
     const connect = () => {
-      if (stopped) return;
+      if (stopped || browserSessionLost()) return;
       setConnection(attempt === 0 ? "connecting" : "reconnecting");
       const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(`${scheme}//${window.location.host}/api/v1/gateway`, "piagent.gateway.v1"); socketRef.current = socket;
@@ -473,7 +473,7 @@ export function useSessionHub(): SessionHub {
       socket.addEventListener("error", () => { /* close owns reconnect */ });
     };
     const requireCanonicalAndConnect = async () => {
-      if (stopped) return;
+      if (stopped || browserSessionLost()) return;
       const value = await refresh({ requireLiveState: true });
       if (stopped) return;
       if (value) { attempt = 0; connect(); return; }

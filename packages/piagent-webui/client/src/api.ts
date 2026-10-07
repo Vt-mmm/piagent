@@ -22,7 +22,7 @@ import type { Command, Receipt } from "../../contracts/generated/control-command
 import type { ApprovalDecision, ApprovalReceipt, ApprovalRequest } from "../../contracts/generated/approval-v1.ts";
 import type { Catalog } from "../../contracts/generated/session-catalog-v1.ts";
 import type { PiagentWebUICanonicalVolatileSessionOperationStateV1 } from "../../contracts/generated/session-live-state-v1.ts";
-import { browserCsrfToken, csrfFetch } from "./bootstrap.ts";
+import { browserCsrfToken, csrfFetch, noteUnauthorized } from "./bootstrap.ts";
 
 export class WebUiRequestError extends Error {
   readonly status: number;
@@ -141,6 +141,7 @@ export async function connectCompany(signal?: AbortSignal): Promise<CompanyStatu
 
 async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" }, signal });
+  if (response.status === 401) noteUnauthorized();
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as T;
 }

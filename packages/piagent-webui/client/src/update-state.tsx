@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { bootstrapBrowserSession, browserCsrfToken, csrfFetch } from "./bootstrap.ts";
+import { bootstrapBrowserSession, browserCsrfToken, browserSessionLost, csrfFetch, noteUnauthorized } from "./bootstrap.ts";
 
 // Piagent's own updates, as the dashboard sees them: one poll shared by the
 // status bar, Settings and the command palette. The Gateway asks the registry
@@ -25,6 +25,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     response = await csrfFetch(path, { ...init, credentials: "same-origin",
       headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf } });
   } else response = await fetch(path, { ...init, credentials: "same-origin", headers: { Accept: "application/json" } });
+  if (response.status === 401) noteUnauthorized();
   const value = await response.json().catch(() => null) as { error?: { code?: unknown } } | null;
   if (!response.ok) throw new UpdateRequestError(response.status, typeof value?.error?.code === "string" ? value.error.code : `request-${response.status}`);
   return value;
@@ -47,7 +48,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   const live = useRef(true);
   const refresh = useCallback(async () => {
     // The first read waits for this page's browser session, so it is not refused.
-    try { await bootstrapBrowserSession(); const value = await readUpdateStatus(); if (live.current) { setStatus(value); setSupported(true); } }
+    try { await bootstrapBrowserSession(); if (browserSessionLost()) return; const value = await readUpdateStatus(); if (live.current) { setStatus(value); setSupported(true); } }
     catch (failure) { if (live.current && failure instanceof UpdateRequestError && failure.status === 404) setSupported(false); }
   }, []);
   // The Gateway's answer changes rarely; a running update is followed closely,

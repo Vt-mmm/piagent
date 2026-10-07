@@ -38,6 +38,7 @@ import { NewSessionPage } from "./NewSessionPage.tsx";
 import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
 import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { SessionComposerControls } from "./SessionComposerControls.tsx";
+import { SessionExpired, useSessionLost } from "./SessionExpired.tsx";
 import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
 import { SessionTranscript } from "./SessionTranscript.tsx";
 import { SessionSidebar, sessionActivity, type SessionMenuAction, type ProjectGroup } from "./SessionSidebar.tsx";
@@ -367,6 +368,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     archive(session: SessionRow): Promise<Receipt>; unarchive(session: SessionRow): Promise<Receipt>;
     fork(session: SessionRow, title: string | null): Promise<Receipt> }) {
   const { locale, colorMode, setLocale, setColorMode } = useUiPreferences();
+  const sessionLost = useSessionLost();
   const updates = useUpdates(), [paletteOpen, setPaletteOpen] = useState(false);
   const [query, setQuery] = useState(""), [selectedRef, setSelectedRef] = useState<string>();
   const [mobileOpen, setMobileOpen] = useState(false), [showArchived, setShowArchived] = useState(false);
@@ -599,6 +601,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     onOpenReview={() => openInspector("source")} onClose={() => setPanelOpen(false)} /> : null;
   const panelShown = Boolean(workspacePanel) && panelOpen && !inspectorOpen;
 
+  if (sessionLost) return <SessionExpired locale={locale} />;
   if (!catalog && connection !== "failed") return <Stack sx={{ minHeight: "100vh", alignItems: "center", justifyContent: "center" }} spacing={2}>
     <CircularProgress size={24} /><Typography>{localize(locale, "Đang mở Piagent…", "Opening Piagent…")}</Typography></Stack>;
   const title = view === "new" ? localize(locale, "Cuộc trò chuyện mới", "New chat") : selected?.title ?? "Piagent";

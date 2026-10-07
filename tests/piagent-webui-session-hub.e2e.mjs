@@ -1378,3 +1378,18 @@ test("/ at the start of a message offers the project's and the member's commands
   await expect(list).toHaveCount(0);
   await composer.fill("");
 });
+
+test("a tab that lost its browser session says how to open Piagent again and stops polling", async ({ page }) => {
+  await page.goto(server.issueLaunchUrl());
+  await expect(page.getByText("Review source changes", { exact: true }).filter({ visible: true })).toBeVisible();
+  // The Gateway restarted or another launch replaced the cookie: every read is now refused.
+  await page.context().clearCookies();
+  await page.getByRole("button", { name: "Làm mới" }).click();
+  await expect(page.getByRole("heading", { name: "Tab này đã hết phiên đăng nhập" })).toBeVisible();
+  await expect(page.getByText("piagent dashboard", { exact: true })).toBeVisible();
+  const reads = [];
+  page.on("request", (request) => { if (request.url().includes("/api/v1/")) reads.push(request.url()); });
+  await page.waitForTimeout(4_500);
+  assert.deepEqual(reads, []);
+  assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth));
+});

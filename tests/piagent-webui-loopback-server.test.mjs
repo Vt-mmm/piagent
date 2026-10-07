@@ -445,6 +445,24 @@ describe("Piagent WebUI loopback server", () => {
     assert.equal((await request(second.origin, "/api/v1/capabilities", { headers: { Cookie: cookie } })).status, 401);
     assert.equal(reads, 0);
   });
+
+  it("names the session cookie after its port so two local servers keep their own tabs signed in", async () => {
+    const start = async () => { const server = await startLoopbackServer({ staticRoot: staticRoot(), readCapabilities: () => capabilities });
+      servers.add(server); return server; };
+    const signIn = async (server) => (await request(server.origin, "/api/v1/bootstrap", {
+      method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) })
+    })).headers["set-cookie"][0].split(";", 1)[0];
+    const gateway = await start(), company = await start();
+    const gatewayCookie = await signIn(gateway), companyCookie = await signIn(company);
+    assert.equal(gatewayCookie.startsWith(`piagent_webui_session_${new URL(gateway.origin).port}=`), true);
+    assert.equal(companyCookie.startsWith(`piagent_webui_session_${new URL(company.origin).port}=`), true);
+    // One browser jar sends every 127.0.0.1 cookie to every port.
+    const jar = `${companyCookie}; ${gatewayCookie}`;
+    assert.equal((await request(gateway.origin, "/api/v1/browser-session", { headers: { Cookie: jar } })).status, 200);
+    assert.equal((await request(company.origin, "/api/v1/browser-session", { headers: { Cookie: jar } })).status, 200);
+    assert.equal((await request(gateway.origin, "/api/v1/browser-session", { headers: { Cookie: companyCookie } })).status, 401);
+  });
 });
 
 describe("Piagent WebUI local auth and static boundaries", () => {

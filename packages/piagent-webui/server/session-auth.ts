@@ -1,6 +1,10 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
+// Cookies are scoped by host, not by port: every Piagent server on 127.0.0.1
+// (the Gateway, a company service, an older launch) shares one cookie jar.
+// The name carries the port once bound, so one server's launch no longer
+// replaces the session of another server's open tab.
 const SESSION_COOKIE = "piagent_webui_session";
 
 function secret(): string { return randomBytes(32).toString("base64url"); }
@@ -23,6 +27,7 @@ export class SessionAuthority {
   readonly #bootstrapTtlMs: number;
   readonly #sessionTtlMs: number;
   readonly #cookieSigningKey = randomBytes(32);
+  #cookieName = SESSION_COOKIE;
   #bootstraps = new Map<string, number>();
   #sessions = new Map<string, BrowserSession>();
 
@@ -33,6 +38,12 @@ export class SessionAuthority {
   }
 
   get bootstrapCapability(): string { return this.#initialBootstrap; }
+  get cookieName(): string { return this.#cookieName; }
+
+  bindPort(port: number): void {
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("invalid-session-port");
+    this.#cookieName = `${SESSION_COOKIE}_${port}`;
+  }
 
   issueBootstrapCapability(now = Date.now()): string {
     for (const [value, createdAt] of this.#bootstraps) {
@@ -54,7 +65,7 @@ export class SessionAuthority {
   }
 
   authenticate(request: IncomingMessage, now = Date.now()): BrowserSession | null {
-    const value = cookie(request, SESSION_COOKIE);
+    const value = cookie(request, this.#cookieName);
     if (!value) return null;
     const separator = value.lastIndexOf(".");
     if (separator < 1) return null;
@@ -77,7 +88,7 @@ export class SessionAuthority {
   cookieHeader(session: BrowserSession): string {
     const seconds = Math.max(1, Math.floor((session.expiresAt - Date.now()) / 1000));
     const token = `${session.id}.${this.#cookieSignature(session.id)}`;
-    return `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${seconds}`;
+    return `${this.#cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${seconds}`;
   }
 
   #cookieSignature(id: string): string {

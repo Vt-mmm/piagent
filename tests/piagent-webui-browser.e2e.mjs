@@ -225,7 +225,7 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
   await expect.poll(() => new URL(page.url()).hash).toBe("");
   const cookies = await context.cookies(server.origin);
-  assert.equal(cookies.some((cookie) => cookie.name === "piagent_webui_session" && cookie.httpOnly && cookie.sameSite === "Strict"), true);
+  assert.equal(cookies.some((cookie) => cookie.name === `piagent_webui_session_${new URL(server.origin).port}` && cookie.httpOnly && cookie.sameSite === "Strict"), true);
 
   await openWorkspace(page, "Source Changes");
   const taskTab = page.getByRole("tab", { name: /Thay đổi của task/ });
