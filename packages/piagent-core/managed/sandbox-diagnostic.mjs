@@ -1,5 +1,8 @@
 const DENIAL = /\b(?:EPERM|EACCES)\b|operation not permitted|permission denied/i;
-const OFFLINE = /ENOTFOUND|EAI_AGAIN|Could not resolve host|getaddrinfo|npm error network|Failed to establish a new connection/i;
+// A download that never left the machine: resolvers, npm/pip, and the curl or
+// wget a build wrapper runs (mvnw/gradlew fetch their distribution: "curl:
+// Failed to fetch https://repo.maven.apache.org/…").
+const OFFLINE = /ENOTFOUND|EAI_AGAIN|Could not resolve host|getaddrinfo|npm error network|Failed to establish a new connection|\bcurl: (?:\(\d+\) )?Failed to (?:fetch|connect)|\bwget: unable to resolve|Unknown host|UnknownHostException/i;
 // `network`: the member approved this command and it ran with network, so a
 // name that does not resolve is the machine's network, not the sandbox.
 // `isolated`: a proxy listens on this Mac, so without approval a command does

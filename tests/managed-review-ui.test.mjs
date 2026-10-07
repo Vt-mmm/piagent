@@ -34,6 +34,9 @@ test('sandbox denial has actionable reason, ordinary tool failures are not misla
  assert.equal(sandboxDiagnostic('SyntaxError: missing brace'),'SyntaxError: missing brace');
  // Offline plain bash points to run_with_network; an approved network command that still cannot resolve does not ask again.
  assert.match(sandboxDiagnostic('npm error code ENOTFOUND'),/^managed-network-blocked:.*run_with_network/);
+ // A build wrapper fetching its distribution (mvnw, gradlew) points there too.
+ assert.match(sandboxDiagnostic('curl: Failed to fetch https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.14/apache-maven-3.9.14-bin.zip'),/^managed-network-blocked:.*run_with_network/);
+ assert.match(sandboxDiagnostic('java.net.UnknownHostException: services.gradle.org'),/^managed-network-blocked:/);
  assert.match(sandboxDiagnostic('npm error code ENOTFOUND',{network:true}),/^managed-network-unreachable:.*Không xin duyệt lại/);
 });
 test('doctor distinguishes same-version old installations without executing them',()=>{
