@@ -134,6 +134,8 @@ async function studio(script) {
     const body = JSON.parse(Buffer.concat(chunks)), role = script.roleOf(req.headers['x-session-id']);
     requests.push({ role, body });
     let step = script[role].shift() ?? 'Done.';
+    // A function: something else happens in the folder now, then its answer.
+    if (typeof step === 'function') step = await step();
     // { wait, then }: answer late (a request still running when the member stops).
     if (step?.wait) { await new Promise(resolve => setTimeout(resolve, step.wait)); if (res.destroyed || req.destroyed) return; step = step.then; }
     if (step?.fail) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: 'upstream_unavailable', message: 'upstream_unavailable', request_id: randomUUID() } })); return; }
@@ -517,11 +519,11 @@ test('a large patch is reviewed in parts and the findings merge', async () => {
 test('the harness reviews a patch larger than one reviewer reads in parts', { skip: !supported, timeout: 240000 }, async () => {
   const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 1 });
   const content = n => Array.from({ length: 850 }, (_, i) => `export const v${n}_${i} = "${'x'.repeat(30)} ${i}";`).join('\n') + '\n';
-  fs.writeFileSync(path.join(root, 'huge.bin'), Buffer.alloc(500_000, 1));
   const names = ['p1.js', 'p2.js', 'p3.js', 'p4.js', 'p5.js'];
   const clean = 'Fine.\n```json\n{"findings":[],"summary":"ok"}\n```';
   const server = await studio({ roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
-    main: [names.map(name => ({ tool: 'write', input: { path: name, content: content(name) } })), 'Done.'], review: [clean, clean, clean] });
+    main: [[...names.map(name => ({ tool: 'write', input: { path: name, content: content(name) } })),
+      { tool: 'bash', input: { command: "head -c 500000 /dev/zero | tr '\\0' '\\1' > huge.bin" } }], 'Done.'], review: [clean, clean, clean] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   try {
     await managed.session.prompt('Add the five modules');
@@ -539,14 +541,39 @@ test('the harness reviews a patch larger than one reviewer reads in parts', { sk
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+// Two conversations in one folder: each answers for the files it changed. A
+// change another one makes meanwhile is neither this run's change, nor in its
+// review, nor a reason to check or review a turn that only read.
+test('another conversation changing files in the same folder is not this run\'s change', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 1 });
+  const elsewhere = text => fs.writeFileSync(path.join(root, 'other.txt'), text);
+  const server = await studio({ roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [() => { elsewhere('from the other conversation\n'); return { tool: 'write', input: { path: 'a.txt', content: 'mine\n' } }; }, 'Done.',
+      () => { elsewhere('changed again elsewhere\n'); return { tool: 'read', input: { path: 'a.txt' } }; }, 'It reads mine.'],
+    review: ['Fine.\n```json\n{"findings":[],"summary":"ok"}\n```'] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Change a.txt');
+    assert.deepEqual([runReport(agent).outcome, runReport(agent).reviews], ['clean', 1]);
+    const review = JSON.stringify(server.requests.find(r => r.role === 'review').body.messages);
+    assert.match(review, /\+mine/); assert.doesNotMatch(review, /other\.txt|other conversation/);
+    assert.deepEqual([...managed.ownPaths], ['a.txt']);
+    // The next message only reads while the other conversation edits again.
+    agent.closes.length = 0;
+    await managed.session.prompt('What does a.txt say?');
+    assert.equal(runReport(agent).outcome, 'no_change');
+    assert.equal(server.requests.filter(r => r.role === 'review').length, 1, 'no second review');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 // A repository cloned inside the project is one untracked entry for Git: the
 // review names it as not read and still reviews the patch, instead of saying
 // the patch is too large.
 test('a repository inside the project does not stop the review', { skip: !supported, timeout: 180000 }, async () => {
   const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 1 });
-  const nested = path.join(root, 'vendor-clone'); fs.mkdirSync(nested); fs.writeFileSync(path.join(nested, 'x.txt'), 'x\n'); execFileSync('git', ['init', '-q', nested]);
   const server = await studio({ roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
-    main: [{ tool: 'write', input: { path: 'a.txt', content: 'changed\n' } }, 'Done.'], review: ['Fine.\n```json\n{"findings":[],"summary":"ok"}\n```'] });
+    main: [[{ tool: 'write', input: { path: 'a.txt', content: 'changed\n' } },
+      { tool: 'bash', input: { command: "mkdir vendor-clone && printf 'x\\n' > vendor-clone/x.txt && git init -q vendor-clone" } }], 'Done.'], review: ['Fine.\n```json\n{"findings":[],"summary":"ok"}\n```'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   try {
     await managed.session.prompt('Change a.txt');

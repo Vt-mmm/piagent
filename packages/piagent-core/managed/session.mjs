@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -17,8 +18,8 @@ import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stageCompaction } from './compaction.mjs';
-import { readPatchDigest, readPatchSnapshot } from './patch-snapshot.mjs';
-import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, processEditTools } from './workflow.mjs';
+import { readPatchDigest, readPatchSnapshot, readChangedFiles } from './patch-snapshot.mjs';
+import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, processEditTools } from './workflow.mjs';
 import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
@@ -89,7 +90,7 @@ export class ManagedSession {
     const api = await import(pathToFileURL(path.join(sdk, 'dist/index.js')));
     const ai = await import(pathToFileURL(path.join(sdk, 'node_modules/@earendil-works/pi-ai/dist/index.js')));
     const manifest = usable(await patiently(() => broker.request('config'), 3));
-    const self = new ManagedSession(); Object.assign(self, { sdk, cwd: fs.realpathSync(cwd), origin: safeOrigin(origin), broker, api, ai, manifest, protectedRoots, helpers: new Map(), helperCalls: new Map(), listeners: new Set(), capacityWaits: new Set(), routes: new WeakMap(), grant: null,
+    const self = new ManagedSession(); Object.assign(self, { sdk, cwd: fs.realpathSync(cwd), origin: safeOrigin(origin), broker, api, ai, manifest, protectedRoots, helpers: new Map(), helperCalls: new Map(), ownPaths: new Set(), listeners: new Set(), capacityWaits: new Set(), routes: new WeakMap(), grant: null,
       renewBroker, bindingRevision, bindingSeen: bindingRevision?.() ?? null, preflight: null, blocked: null });
     await ensureSearchTools(sdk);
     // The project's and the member's skills and commands (also those kept for
@@ -133,8 +134,9 @@ export class ManagedSession {
           unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
         if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
         let ok=false;
+        const before=await self.changedFiles();
         try { const result=await self.boundary.invoke('bash',{command:args.command,...(args.timeout?{timeout:args.timeout}:{})},signal,onUpdate,ctx?.model,{network:true}); ok=!result?.isError; return result; }
-        finally { await self.run?.afterTool('bash',args,ok,()=>self.digest()); await self.refreshReview(); }
+        finally { await self.claimChanges(before); await self.run?.afterTool('bash',args,ok,()=>self.digest()); await self.refreshReview(); }
       }});
     // The helpers of the Harness this conversation enrolled with. A later
     // enrollment that drops one is refused at the call (delegate).
@@ -267,7 +269,11 @@ export class ManagedSession {
             managedThinkingLevels: managedThinkingLevels(self.manifest,self.modelRuntime,actual),
           });
           self.run = new RunProcess(workflowPolicy(self.manifest), { request: text, complex: taskClass(text) === 'complex', checks: self.checks });
-          self.run.startDigest = pendingBaseline(manager) ?? await self.digest();
+          // The files this conversation changed and has not settled: carried
+          // over from a turn that was cut, otherwise none yet.
+          const pending = pendingBaseline(manager);
+          self.ownPaths = new Set(pending !== null ? pendingPaths(manager) : []);
+          self.run.startDigest = pending ?? await self.digest();
         } catch (error) { self.preflight = describeFailure('main', failureText(error)); }
         self.activePrompt = true;
       })();
@@ -348,7 +354,7 @@ export class ManagedSession {
     if (!sameKey(this.scope, scope)) { this.session.sessionManager.appendCustomEntry('agent-watch-scope', scope); this.scope = scope; }
     this.session?.setActiveToolsByName(this.session.getActiveToolNames()); // the new Harness workflow reaches the prompt
   }
-  async digest() { try { return await this.patchDigest(); } catch { return null; } }
+  async digest() { try { return await this.changeDigest(); } catch { return null; } }
   refusedAsTooLong() {
     const messages = this.session.messages, last = messages.findLast(message => message.role === 'assistant');
     const code = last?.stopReason === 'error' ? failureCode(last.errorMessage) : null;
@@ -412,8 +418,30 @@ export class ManagedSession {
           details: { url: page.url, status: page.status } };
       } }];
   }
-  async patchSnapshot() { return readPatchSnapshot(this.boundary); }
-  async patchDigest() { return readPatchDigest(this.boundary); }
+  // Whether this conversation changed code, and whether a check ran on it,
+  // look only at the files it changed: another conversation (or the member)
+  // changing other files in the same folder is not this run's change.
+  async changeDigest() { return readPatchDigest(this.boundary, this.ownPaths); }
+  async folderDigest() { try { return await readPatchDigest(this.boundary); } catch { return null; } }
+  // What a reviewer reads: this conversation's files; before it changed any,
+  // the whole folder (the member's own changes, asked to be reviewed).
+  reviewScope() { return this.ownPaths.size ? this.ownPaths : null; }
+  async patchSnapshot() { return readPatchSnapshot(this.boundary, this.reviewScope()); }
+  async patchDigest() { return readPatchDigest(this.boundary, this.reviewScope()); }
+  async changedFiles() { try { return await readChangedFiles(this.boundary); } catch { return null; } }
+  // A write or edit names its file; a command, the files it changed.
+  claimPath(raw) {
+    if (typeof raw !== 'string' || !raw) return;
+    const value = raw.replace(/^@/, ''), file = value === '~' || value.startsWith('~/') ? path.join(this.boundary.userHome ?? os.homedir(), value.slice(1)) : value;
+    const relative = path.relative(this.cwd, path.resolve(this.cwd, file));
+    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) this.ownPaths.add(relative.split(path.sep).join('/'));
+  }
+  async claimChanges(before) {
+    if (!before) return;
+    const after = await this.changedFiles();
+    if (!after) return;
+    for (const name of new Set([...before.keys(), ...after.keys()])) if (before.get(name) !== after.get(name)) this.ownPaths.add(name);
+  }
 
   async refreshReview() {
     if (!this.review || this.review.stale || !this.session) return;

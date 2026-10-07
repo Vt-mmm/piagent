@@ -12,8 +12,33 @@ import { managedGit } from './toolchain.mjs';
 const MAX_SNAPSHOT = 16 * 1024 * 1024, MAX_UNTRACKED = 2000, READ_FILE = 400_000, BINARY_INLINE = 120_000, HASHED_FILE = 256 * 1024 * 1024;
 const git = args => execFileSync(managedGit(), ['--no-pager', ...args], { encoding: 'utf8', maxBuffer: MAX_SNAPSHOT + 1, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' } });
 const sha256 = data => createHash('sha256').update(data).digest('hex');
-const patch = git(['diff', '--binary', '--no-ext-diff', '--no-textconv', 'HEAD', '--', '.']);
-const paths = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).sort();
+const mode = process.argv[2];
+// "files": what each changed or new file holds now (a hash, "deleted"), so
+// the runtime can tell which files one conversation's command changed.
+if (mode === 'files') {
+  const changed = git(['diff', '--name-only', '--no-renames', '--relative', '-z', 'HEAD', '--', '.']).split('\0').filter(Boolean);
+  const fresh = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+  if (changed.length + fresh.length > MAX_UNTRACKED * 4) throw Error('review-untracked-limit');
+  const print = name => {
+    let stat; try { stat = fs.lstatSync(name); } catch { return 'deleted'; }
+    if (stat.isSymbolicLink()) return 'link:' + sha256(fs.readlinkSync(name));
+    if (stat.isDirectory()) return 'dir:' + sha256(fs.readdirSync(name).sort().join('\0'));
+    return stat.size > HASHED_FILE ? `size:${stat.size}:${stat.mtimeMs}` : sha256(fs.readFileSync(name)) + ':' + (stat.mode & 0o777);
+  };
+  const files = Object.fromEntries([...new Set([...changed, ...fresh])].sort().map(name => [name, print(name)]));
+  const name = `files-${randomUUID()}.json`, data = Buffer.from(JSON.stringify(files));
+  fs.writeFileSync(path.join(os.tmpdir(), name), data, { mode: 0o600, flag: 'wx' });
+  process.stdout.write(`${sha256(data)} ${data.length} ${name}`);
+  process.exit(0);
+}
+// A scope (a file the runtime wrote in this boundary's temporary directory):
+// only these paths, the ones this conversation changed, make the patch.
+const scopeName = process.argv[3];
+if (scopeName !== undefined && !/^scope-[0-9a-f-]{36}\.json$/.test(scopeName)) throw Error('review-scope-invalid');
+const scope = scopeName ? new Set(JSON.parse(fs.readFileSync(path.join(os.tmpdir(), scopeName), 'utf8'))) : null;
+if (scope && [...scope].some(p => typeof p !== 'string' || !p || path.isAbsolute(p) || p.split('/').includes('..'))) throw Error('review-scope-invalid');
+const patch = scope && !scope.size ? '' : git(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', 'HEAD', '--', ...(scope ? [...scope].sort().map(p => ':(literal)' + p) : ['.'])]);
+const paths = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).filter(p => !scope || scope.has(p)).sort();
 if (paths.length > MAX_UNTRACKED) throw Error('review-untracked-limit');
 const untracked = paths.map(name => {
   const stat = fs.lstatSync(name);
@@ -36,7 +61,6 @@ if (snapshot.length > MAX_SNAPSHOT) throw Error('review-patch-limit');
 // the snapshot goes to a new file in this boundary's temporary directory,
 // named on stdout with its digest; the runtime reads it once, checks the
 // digest and removes it. No argument: the snapshot itself.
-const mode = process.argv[2];
 if (mode === 'digest') process.stdout.write(`${sha256(snapshot)} ${snapshot.length}`);
 else if (mode === 'file') {
   const name = `review-${randomUUID()}.json`;

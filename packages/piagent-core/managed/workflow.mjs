@@ -181,6 +181,11 @@ export function pendingBaseline(manager) {
   const last = manager.getEntries().filter(e => e.type === 'custom' && e.customType === BASELINE_ENTRY).at(-1)?.data;
   return last && last.settled === false && typeof last.digest === 'string' ? last.digest : null;
 }
+// The files that unsettled turn changed: its digest covers only those.
+export function pendingPaths(manager) {
+  const last = manager.getEntries().filter(e => e.type === 'custom' && e.customType === BASELINE_ENTRY).at(-1)?.data;
+  return last?.settled === false && Array.isArray(last.paths) ? last.paths.filter(p => typeof p === 'string' && p).slice(0, 2000) : [];
+}
 
 // A model that cannot write a valid plan is not stuck forever: after this many
 // refused answers its edits go through and the run reports that.
@@ -254,7 +259,8 @@ export class RunProcess {
 // or answer; the same disagreement a second time goes to the member.
 export async function completionGate(managed, run, signal) {
   const session = managed.session, policy = run.policy;
-  const digestOf = async () => { try { return await managed.patchDigest(); } catch { return null; } };
+  const digestOf = async () => { try { return await (managed.changeDigest ?? managed.patchDigest).call(managed); } catch { return null; } };
+  const reviewDigestOf = async () => { try { return await managed.patchDigest(); } catch { return null; } };
   const stopped = () => signal?.aborted || ['aborted', 'error'].includes(session.messages.findLast(m => m.role === 'assistant')?.stopReason);
   const message = triggerTurn => (content, details) => session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details }, { triggerTurn });
   const send = message(true), note = message(false);
@@ -268,7 +274,8 @@ export async function completionGate(managed, run, signal) {
     if (stopped()) { interrupted = run.changed; break; }
     if (run.changed) {
       run.verified = run.verifiedOn(digest);
-      const review = managed.review, fresh = !!review && !review.stale && digest !== null && review.patchDigest === digest;
+      const reviewDigest = managed.review ? await reviewDigestOf() : null;
+      const review = managed.review, fresh = !!review && !review.stale && reviewDigest !== null && review.patchDigest === reviewDigest;
       run.reviewed = fresh;
       run.blockingOpen = fresh ? review.blocking ?? 0 : run.blockingOpen;
       // Out of fix rounds the check stays unmet, but a required review still runs.
@@ -366,7 +373,8 @@ export async function completionGate(managed, run, signal) {
     : policy.verify !== 'off' && !run.verified ? 'unverified' : run.reviewUnavailable ? 'review_unavailable' : policy.review !== 'off' && !run.reviewed ? 'unreviewed' : 'clean';
   run.outcome = run.legacyOutcome !== 'interrupted' && run.disputes.length ? 'disputed' : run.legacyOutcome;
   const settled = run.outcome !== 'interrupted';
-  session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome });
+  session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome,
+    ...(settled ? {} : { paths: [...(managed.ownPaths ?? [])].slice(0, 2000) }) });
   if (!run.changed && !run.disputes.length) return;
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status !== 'completed').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
@@ -392,11 +400,16 @@ export function processEditTools(session, tools) {
       // While a required plan is missing, a command that changes files
       // counts as an edit: the code is compared after each command.
       const watch = tool.name === 'bash' && !!session.run?.planMissing(plan) && !session.run.unplannedChange && session.run.startDigest !== null;
+      // Which files this conversation changes: a write or edit names its
+      // file; a command that may write is compared before and after.
+      const before = tool.name === 'bash' && !isReadOnlyCommand(args[1]?.command) ? await session.changedFiles?.() : null;
       let ok = false;
       try {
         // A command that ran and failed may come back as an error result
         // rather than a thrown error: either way the check did not pass.
-        const result = await execute(...args); ok = !result?.isError;
+        let result;
+        try { result = await execute(...args); ok = !result?.isError; }
+        finally { if (tool.name === 'bash') await session.claimChanges?.(before); else if (ok) session.claimPath?.(args[1]?.path); }
         if (watch && session.run) {
           const digest = await session.digest();
           if (digest !== null && digest !== session.run.startDigest) {

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
@@ -9,8 +9,16 @@ const WORKER = fileURLToPath(new URL('./review-snapshot-worker.mjs', import.meta
 const MAX_SNAPSHOT = 16 * 1024 * 1024;
 
 // The worker runs inside the tool boundary; what it prints is one short line.
-async function worker(boundary, mode) {
-  const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} ${mode}`, timeout: 60 });
+// `scope`: only these paths (relative to the project) make the patch.
+async function worker(boundary, mode, scope = null) {
+  let scopeName = null;
+  if (scope) {
+    scopeName = `scope-${randomUUID()}.json`;
+    fs.writeFileSync(path.join(boundary.temporary, scopeName), JSON.stringify([...scope]), { mode: 0o600, flag: 'wx' });
+  }
+  let result;
+  try { result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} ${mode}${scopeName ? ' ' + scopeName : ''}`, timeout: 60 }); }
+  finally { if (scopeName) fs.rmSync(path.join(boundary.temporary, scopeName), { force: true }); }
   const text = textContent(result).trim();
   if (result.details?.truncation?.truncated || text.includes('\n')) throw Error(/review-(patch|file|untracked)-limit/.exec(text)?.[0] ?? 'managed-review-patch-unreadable');
   const [digest, bytes, name] = text.split(' ');
@@ -20,15 +28,29 @@ async function worker(boundary, mode) {
 
 // The digest of the patch a reviewer would see (diff against HEAD plus
 // untracked files): whether a review is still current. Nothing else moves.
-export async function readPatchDigest(boundary) { return (await worker(boundary, 'digest')).digest; }
+export async function readPatchDigest(boundary, scope = null) { return (await worker(boundary, 'digest', scope)).digest; }
 
 // The patch a reviewer sees, read inside the tool boundary. The worker writes
 // it to the boundary's temporary directory and names it, with its digest, on
 // its output; the file is read once, must match that digest (a file changed
 // meanwhile never passes) and is removed.
-export async function readPatchSnapshot(boundary) {
-  const { digest, bytes, name } = await worker(boundary, 'file');
+export async function readPatchSnapshot(boundary, scope = null) {
+  const { digest, bytes, name } = await worker(boundary, 'file', scope);
   if (!/^review-[0-9a-f-]{36}\.json$/.test(name ?? '')) throw Error('managed-review-patch-unreadable');
+  return { patch: readOnce(boundary, name, bytes, digest).toString('utf8'), digest };
+}
+
+// What each changed or new file of the project holds now: { path: hash }.
+// Compared before and after a command, it names the files that command
+// changed, so a conversation answers for its own changes, not for another
+// conversation's in the same folder.
+export async function readChangedFiles(boundary) {
+  const { digest, bytes, name } = await worker(boundary, 'files');
+  if (!/^files-[0-9a-f-]{36}\.json$/.test(name ?? '')) throw Error('managed-review-patch-unreadable');
+  return new Map(Object.entries(JSON.parse(readOnce(boundary, name, bytes, digest).toString('utf8'))));
+}
+
+function readOnce(boundary, name, bytes, digest) {
   const file = path.join(boundary.temporary, name);
   let data;
   try {
@@ -40,7 +62,7 @@ export async function readPatchSnapshot(boundary) {
     } finally { fs.closeSync(fd); }
   } finally { fs.rmSync(file, { force: true }); }
   if (createHash('sha256').update(data).digest('hex') !== digest) throw Error('managed-review-patch-changed');
-  return { patch: data.toString('utf8'), digest };
+  return data;
 }
 
 // Why a required review could not run, in one word for the member.

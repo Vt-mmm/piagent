@@ -58,12 +58,16 @@ export const HELPER_SETUP = {
 export function countedCheck(managed, tool) {
   if (tool.name !== 'bash') return tool;
   return { ...tool, execute: async (...args) => {
-    const counted = managed.run && isCheckCommand(args[1]?.command, managed.checks.commands), before = counted ? await managed.digest() : null;
+    // Whether anything in the folder moved during the check (another
+    // conversation's edit too: the suite ran on the whole folder); the check
+    // then counts for this conversation's own code.
+    const folder = async () => { try { return await (managed.folderDigest ?? managed.digest).call(managed); } catch { return null; } };
+    const counted = managed.run && isCheckCommand(args[1]?.command, managed.checks.commands), before = counted ? await folder() : null;
     let ok = false;
     try { const result = await tool.execute(...args); ok = !result?.isError; return result; }
     finally {
-      const after = counted && before !== null ? await managed.digest() : null;
-      if (after !== null && after === before) await managed.run.afterTool('bash', args[1], ok, async () => after);
+      const after = counted && before !== null ? await folder() : null;
+      if (after !== null && after === before) await managed.run.afterTool('bash', args[1], ok, () => managed.digest());
     }
   } };
 }
