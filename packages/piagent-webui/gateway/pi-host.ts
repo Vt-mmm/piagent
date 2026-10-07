@@ -28,9 +28,23 @@ export function installedPiHostRoot(): string {
   } catch {
     // The operator installation is normally global.
   }
+  const windows = process.platform === "win32";
+  if (windows) {
+    // npm's global prefix is configurable (CI commonly uses C:\npm\prefix).
+    // Read the package beside each PATH entry directly: where.exe may be
+    // unavailable in a restricted launcher, and an earlier stale shim must
+    // not hide a valid installation later on PATH. Windows env keys ignore case.
+    const environment = Object.fromEntries(Object.entries(process.env).map(([key, value]) => [key.toLowerCase(), value]));
+    const prefixes = [...(environment.path ?? "").split(";"), environment.npm_config_prefix];
+    for (const value of prefixes) {
+      const prefix = value?.trim().replace(/^"(.*)"$/, "$1");
+      if (!prefix || !path.isAbsolute(prefix)) continue;
+      const found = packageRootFrom(path.join(prefix, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"));
+      if (found) return found;
+    }
+  }
   try {
-    const windows = process.platform === "win32";
-    const executable = execFileSync(windows ? "where" : "which", ["pi"], { encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "ignore"] }).trim().split(/\r?\n/)[0];
+    const executable = execFileSync(windows ? "where.exe" : "which", ["pi"], { encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "ignore"] }).trim().split(/\r?\n/)[0];
     // npm on Windows puts the pi.cmd shim in the global prefix and the package
     // in node_modules beside it.
     const found = packageRootFrom(fs.realpathSync(executable))

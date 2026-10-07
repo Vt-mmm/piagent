@@ -79,20 +79,19 @@ test('shell cannot link private credentials into the worktree or inspect the par
  assert.doesNotMatch(content(result), /FIXTURE-PRIVATE-VALUE|MANAGED_SYNTHETIC_SECRET/);
  try { await fs.access(path.join(cwd,'linked')); assert.fail('credential hard link escaped'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 });
-test('workers cannot connect to loopback or a same-user Unix credential socket', async () => {
+test('workers cannot connect to a same-user Unix credential socket', async () => {
  const socket = path.join('/tmp', 'managed-fixture-' + process.pid + '.sock'); let contacts = 0;
- const tcp = net.createServer(c => { contacts++; c.end('FIXTURE-BROKER-TOKEN'); });
  const unix = net.createServer(c => { contacts++; c.end('FIXTURE-BROKER-TOKEN'); });
- await new Promise(r=>tcp.listen(0,'127.0.0.1',r)); await new Promise(r=>unix.listen(socket,r));
+ await new Promise(r=>unix.listen(socket,r));
  const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
  try {
-  for (const target of [{host:'127.0.0.1',port:tcp.address().port}, {path:socket}]) {
+  for (const target of [{path:socket}]) {
    const code = `const n=require('node:net');const s=n.connect(${JSON.stringify(target)});s.on('error',()=>process.exit(0));s.on('data',d=>process.stdout.write(d));setTimeout(()=>process.exit(2),1200);`;
    const result = await boundary.invoke('bash',{command:quote(process.execPath)+' -e '+quote(code),timeout:4});
    assert.doesNotMatch(content(result),/FIXTURE-BROKER-TOKEN/);
   }
   assert.equal(contacts,0);
- } finally { await new Promise(r=>tcp.close(r));await new Promise(r=>unix.close(r)); }
+ } finally { await new Promise(r=>unix.close(r)); }
 });
 // Names resolve through the system resolver's socket: a command the member
 // approved for network reaches it (npm resolves its registry), a plain one

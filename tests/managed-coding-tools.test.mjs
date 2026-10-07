@@ -38,7 +38,7 @@ test('coding work in the sandbox: search, commit in a monorepo package, network 
   const {base, repo, api} = repository();
   const server = http.createServer((_req, res) => res.end('local-ok'));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const boundary = new ManagedToolBoundary({cwd: api, sdkRoot, protectedRoots: [], identity: {name: 'Company Dev', email: 'dev@example.com'}});
+  const boundary = new ManagedToolBoundary({cwd: api, sdkRoot, protectedRoots: [], identity: {name: 'Company Dev', email: 'dev@example.com'}, proxyPorts: []});
   try {
     if (searchTools) {
       assert.match(text(await boundary.invoke('grep', {pattern: 'total'})), /src\/cart\.js:1/);
@@ -51,9 +51,9 @@ test('coding work in the sandbox: search, commit in a monorepo package, network 
     assert.match(commit, /Company Dev <dev@example\.com> Sum prices/);
     await assert.rejects(boundary.invoke('write', {path: '../../outside.txt', content: 'x'}));
     assert.equal(fs.existsSync(path.join(repo, 'outside.txt')), false, 'writes stay in the project folder');
-    // Plain commands have no network, and say how to ask for it.
+    // Plain commands may reach localhost for integration tests, but not the internet.
     const port = server.address().port;
-    await assert.rejects(boundary.invoke('bash', {command: `curl -sS -m 3 http://127.0.0.1:${port}/`}), /Command exited|not permitted|managed-network-blocked/);
+    assert.equal(text(await boundary.invoke('bash', {command: `curl -sS -m 3 http://127.0.0.1:${port}/`})), 'local-ok');
     await assert.rejects(boundary.invoke('bash', {command: "node -e \"fetch('https://registry.npmjs.org/').catch(e=>{console.error(e.cause?.code);process.exit(1)})\""}), /managed-network-blocked/);
     // An approved command gets network; credentials stay unreadable.
     assert.equal(text(await boundary.invoke('bash', {command: `curl -sS -m 3 http://127.0.0.1:${port}/`}, undefined, undefined, undefined, {network: true})), 'local-ok');

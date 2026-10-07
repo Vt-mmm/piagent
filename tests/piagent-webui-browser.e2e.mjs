@@ -370,7 +370,10 @@ test("bounds stale selected-file detail recovery and keeps the retry budget stab
   await expect.poll(() => diffReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
 
   await page.unroute(diffPattern, recoverHandler); await page.unroute(snapshotPattern, snapshotHandler);
-  const sourcePattern = "**/api/v1/source-changes?view=working-tree";
+  // The rotated canonical projection applies to every source view. Leaving
+  // task view on the old projection introduces a separate list recovery whose
+  // timing used to make this detail-budget test fail only on slower CI.
+  const sourcePattern = "**/api/v1/source-changes?*";
   diffReads = 0; snapshotReads = 0; countSnapshots = false;
   let rotatedProjection = null;
   const exhaustedSnapshotHandler = async (route) => {
@@ -406,7 +409,14 @@ test("bounds stale selected-file detail recovery and keeps the retry budget stab
   assert.equal(diffReads, 2, "a persistent detail mismatch must not start a third detail read");
   assert.equal(snapshotReads, 1, "projection rotation must not reset the detail resync budget");
 
+  const taskSourceLoaded = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/source-changes" && url.searchParams.get("view") === "task" && response.ok();
+  });
   await page.getByRole("tab", { name: /Thay đổi của task/ }).click();
+  await taskSourceLoaded;
+  await expect(page.locator(".diff-toolbar strong")).toHaveText("src/example.ts");
+  assert.equal(snapshotReads, 1, "the consistent task view must not trigger an unrelated list recovery");
   await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
   await expect(page.getByText("Diff chưa thể đồng bộ với revision hiện tại.", { exact: true })).toBeVisible();
   await page.waitForTimeout(250);

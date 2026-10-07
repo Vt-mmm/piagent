@@ -36,6 +36,11 @@ jobs:
           pi_version="$(node -p "require('./package.json').peerDependencies['@earendil-works/pi-coding-agent']")"
           npm install --global --ignore-scripts "@earendil-works/pi-coding-agent@$pi_version"
 
+      - name: Verify global Pi discovery
+        shell: pwsh
+        run: |
+          node --input-type=module -e "import {loadPinnedPiHost} from './packages/piagent-webui/gateway/pi-host.ts'; import fs from 'node:fs'; await loadPinnedPiHost(JSON.parse(fs.readFileSync('package.json','utf8')).peerDependencies['@earendil-works/pi-coding-agent']);"
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -57,4 +62,5 @@ jobs:
           tests/piagent-webui-loopback-server.test.mjs
           tests/piagent-webui-project-registry.test.mjs
           tests/piagent-dashboard-busy-gateway.test.mjs
+          tests/piagent-pi-host-discovery.test.mjs
           tests/managed-linux-sandbox.test.mjs
