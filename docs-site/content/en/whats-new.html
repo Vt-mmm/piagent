@@ -1,4 +1,16 @@
 <section class="section">
+  <p class="section-kicker">v1.15.1 · 2026-10-07</p>
+  <h2 id="v1-15-1">Studio sees what each model call is for</h2>
+  <p class="section-lead">Every company model call tells Studio what it is for: the answer to your message, a step after tools (with the tools just run), a turn the harness started, a conversation summary, a subagent's brief (with a one-line title of its job) or a web search. No other prompt text is sent. Studio 0.20.0 shows them in Logs → "Lượt agent".</p>
+  <ul>
+    <li>Several company conversations in one folder no longer take each other's edits for their own: checks, reviews and the plan guard look only at the files that conversation changed.</li>
+    <li>A new company conversation whose runtime fails to open says why, and Archive or Restart work on it without restarting the dashboard.</li>
+    <li>A blocked <span class="inline-code">mvnw</span>/<span class="inline-code">gradlew</span> download points to <span class="inline-code">run_with_network</span>; <span class="inline-code">piagent doctor</span> runs <span class="inline-code">piagent-doctor</span>.</li>
+  </ul>
+  <p>Updating from 1.14.x or 1.15.0 needs no re-import in Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.15.0 · 2026-10-07</p>
   <h2 id="v1-15-0">A refused subagent says why</h2>
   <p class="section-lead">When Studio refuses a company subagent, Piagent now gives Studio's reason instead of always saying the configuration changed. For example: no company AI account serves this role's model, and an administrator has to link or enable one. Needs Agent Watch 0.15.0; with Studio 0.19.0, a subagent that had no account when the run started takes a model that serves when it is called.</p>

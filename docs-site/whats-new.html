@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.15.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.15.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,18 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.15.1 · 2026-10-07</p>
+  <h2 id="v1-15-1">Studio thấy mỗi call của model dùng để làm gì</h2>
+  <p class="section-lead">Mỗi call model trong phiên công ty báo cho Studio nó dùng để làm gì: trả lời tin nhắn, bước tiếp sau tool (kèm tên tool vừa chạy), lượt harness yêu cầu, tóm tắt hội thoại, subagent nhận việc (kèm tiêu đề một dòng của việc) hoặc tìm web. Không gửi thêm nội dung prompt nào khác. Studio 0.20.0 hiện chúng ở Logs → "Lượt agent".</p>
+  <ul>
+    <li>Nhiều cuộc trò chuyện công ty trong cùng một folder không còn nhận nhầm thay đổi của nhau: check, review và kế hoạch chỉ xét các file chính cuộc trò chuyện đó đã sửa.</li>
+    <li>Cuộc trò chuyện công ty mới không mở được runtime nói rõ lý do, và Lưu trữ hoặc Khởi động lại dùng được mà không cần khởi động lại dashboard.</li>
+    <li><span class="inline-code">mvnw</span>/<span class="inline-code">gradlew</span> tải bị chặn được chỉ sang <span class="inline-code">run_with_network</span>; <span class="inline-code">piagent doctor</span> chạy <span class="inline-code">piagent-doctor</span>.</li>
+  </ul>
+  <p>Cập nhật từ 1.14.x hoặc 1.15.0 không cần nhập lại cấu hình trong Agent Watch.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.15.0 · 2026-10-07</p>
   <h2 id="v1-15-0">Subagent bị từ chối nói đúng lý do</h2>

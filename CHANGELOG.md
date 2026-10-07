@@ -2,6 +2,21 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.15.1 - 2026-10-07
+
+Studio sees what each company model call is for; several conversations in one folder keep their changes apart.
+
+### Changes
+
+- Every company model call tells Studio what it is for: the answer to your message, a step after tools (with the tools the answer before it called), a turn the harness started, a summary of a long conversation, a subagent's brief or a web search. A subagent's brief also carries a one-line title of its job (the `delegate` tool takes an optional `title`; otherwise the brief's first line). No other prompt text is sent. Studio 0.20.0 shows them in Logs → "Lượt agent"; older Studios ignore them.
+
+### Fixes
+
+- Several company conversations in one folder no longer take each other's edits for their own: a conversation records the files it changes (writes, edits, and commands compared before and after), and whether the run changed code, whether a check covers it, and what a review reads follow those files only. Before a conversation changes anything, a review reads the whole folder.
+- A new company conversation whose runtime fails to open says why (`company-<kind>`) instead of "resyncing", and Archive and Restart work on it without restarting the dashboard.
+- A build wrapper (`mvnw`, `gradlew`) whose download is blocked in company mode points to `run_with_network`.
+- `piagent doctor` and other `piagent <command>` forms run `piagent-<command>`; an unknown subcommand is named.
+
 ## v1.15.0 - 2026-10-07
 
 A refused subagent says why; long noisy commands finish.
