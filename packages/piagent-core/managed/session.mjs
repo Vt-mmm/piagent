@@ -17,7 +17,7 @@ import { wrapRoleStreams } from './request-stream.mjs';
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { stageCompaction } from './compaction.mjs';
+import { stageCompaction, compactEarly, backOffFailedCompaction } from './compaction.mjs';
 import { readPatchDigest, readPatchSnapshot, readChangedFiles } from './patch-snapshot.mjs';
 import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, processEditTools } from './workflow.mjs';
 import { beforeDelegate } from './objections.mjs';
@@ -197,6 +197,7 @@ export class ManagedSession {
       if (event?.type === 'tool_execution_end' && event.isError && textContent(event.result ?? {}) === `Tool ${event.toolName} not found`) self.run && (self.run.unknownTools += 1);
     });
     await stageCompaction(self.session, self.api, self.sdk);
+    compactEarly(settings); backOffFailedCompaction(self.session);
     self.publishHelpers();
     const setThinking=self.session.setThinkingLevel.bind(self.session);
     self.runThinking = setThinking;

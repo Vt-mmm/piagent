@@ -17,6 +17,49 @@ function addUsage(a, b) {
     totalTokens: sum(a.totalTokens, b.totalTokens), cost: Object.fromEntries(Object.keys(a.cost ?? {}).map(k => [k, sum(a.cost[k], b.cost?.[k])])) };
 }
 
+// When a long conversation is summarised. Pi waits until the window is full
+// but for its 16k reserve; Codex summarises at 90% of the window, and its
+// GPT models report a 272k window under an 872k maximum. A turn re-reads the
+// whole context: a 1M-token window full to the brim bills about 1M input
+// tokens per step (GPT doubles its price above 272k) and answers worse.
+// Summarise at 90% of the window, and never later than 300k tokens.
+export const COMPACT_SHARE = 0.9, COMPACT_CEILING_TOKENS = 300_000;
+// Pi's own reserve: the summary may write up to 80% of it.
+export const SUMMARY_RESERVE_TOKENS = 16_384;
+export function compactionTrigger(contextWindow) {
+  return Math.min(Math.floor(contextWindow * COMPACT_SHARE), contextWindow - SUMMARY_RESERVE_TOKENS, COMPACT_CEILING_TOKENS);
+}
+// Pi compacts once context > window - reserveTokens: the trigger is set
+// through the reserve, per model (Auto may move a conversation to another
+// window). The summary keeps Pi's reserve (see stageCompaction).
+export function compactEarly(settingsManager) {
+  const settings = settingsManager.getCompactionSettings.bind(settingsManager);
+  settingsManager.getCompactionSettings = model => {
+    const own = settings(model), window = model?.contextWindow;
+    return window > 0 ? { ...own, reserveTokens: Math.max(own.reserveTokens, window - compactionTrigger(window)) } : own;
+  };
+}
+// A summary that failed is not asked again at every step: each attempt can
+// cost a full read of the conversation. Threshold attempts wait 1, 2, 4 …
+// minutes (at most 30) after a failure; a success or an overflow (Pi retries
+// that once on its own) is not held back.
+export const COMPACT_BACKOFF_MS = 60_000, COMPACT_BACKOFF_MAX_MS = 30 * 60_000;
+export function backOffFailedCompaction(session, now = Date.now) {
+  const run = session._runAutoCompaction?.bind(session);
+  if (!run) throw Error('managed-sdk-version-unqualified');
+  let failures = 0, failedAt = 0;
+  session.subscribe(event => {
+    if (event?.type !== 'compaction_end' || event.reason !== 'threshold') return;
+    if (event.result) failures = 0;
+    else if (!event.aborted) { failures += 1; failedAt = now(); }
+  });
+  session._runAutoCompaction = (reason, willRetry) => {
+    const wait = failures ? Math.min(COMPACT_BACKOFF_MS * 2 ** (failures - 1), COMPACT_BACKOFF_MAX_MS) : 0;
+    if (reason === 'threshold' && now() - failedAt < wait) return Promise.resolve(false);
+    return run(reason, willRetry);
+  };
+}
+
 // Pi summarises everything older than the kept tail in one request. A
 // conversation can be longer than the window of the model a run uses now
 // (the harness moved from a 1M-token model to a 272k one, or Auto fell
@@ -33,7 +76,10 @@ export async function stageCompaction(session, api, sdk) {
     return unfinished(plan) ? { ...result, summary: `${result.summary}\n\nCurrent plan (kept verbatim; keep it up to date with update_plan):\n${planText(plan)}` } : result;
   };
   session._runDefaultCompaction = async (preparation, model, apiKey, headers, instructions, signal, env, reason) => {
-    const { settings, previousSummary } = preparation, room = model.contextWindow - settings.reserveTokens;
+    // The reserve that set the trigger is not the summary's budget.
+    const settings = { ...preparation.settings, reserveTokens: Math.min(preparation.settings.reserveTokens, SUMMARY_RESERVE_TOKENS) };
+    preparation = { ...preparation, settings };
+    const { previousSummary } = preparation, room = model.contextWindow - settings.reserveTokens;
     const history = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
     const size = history.reduce((n, m) => n + api.estimateTokens(m), 0) + Math.ceil((previousSummary?.length ?? 0) / 4);
     if (size + 4096 <= room) {

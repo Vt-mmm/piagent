@@ -6,6 +6,7 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
+import { backOffFailedCompaction, compactEarly, compactionTrigger } from '../packages/piagent-core/managed/compaction.mjs';
 
 // Long tasks: a company conversation shrinks by summary before it outgrows the
 // model it runs on, including after the harness moved it to a model with a
@@ -101,12 +102,12 @@ test('a history longer than the new harness model\'s window is summarised in par
   let revision = 'r1', current = broker(authority, 'sonnet');
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current, bindingRevision: () => revision });
   try {
-    // 375k tokens on a 1M-token model: nothing to summarise yet.
-    for (let turn = 1; turn <= 5; turn++) await managed.session.prompt(words(`turn ${turn}`, 75000));
+    // 290k tokens on a 1M-token model: under the 300k trigger, nothing to summarise yet.
+    for (let turn = 1; turn <= 11; turn++) await managed.session.prompt(words(`turn ${turn}`, 26500));
     assert.equal(compactions(managed).length, 0);
-    assert.ok(server.requests.at(-1).tokens > 300000);
+    assert.ok(server.requests.at(-1).tokens > 272000);
     // The harness moves to a 272k model. One summary request of the older
-    // 300k would be refused; parts that fit are summarised one after another.
+    // 265k would not fit; parts that fit are summarised one after another.
     revision = 'r2'; current = broker(authority, 'sol', revision);
     await managed.session.prompt('continue on the new model');
     assert.equal(compactions(managed).length, 1);
@@ -115,7 +116,7 @@ test('a history longer than the new harness model\'s window is summarised in par
     assert.ok(summaries.every(request => request.model === 'gpt-6-sol' && request.tokens < 272000 && !request.refused));
     assert.deepEqual(summaries.map(request => request.previous), summaries.map((_, index) => index > 0), 'each part updates the summary of the parts before');
     assert.match(summaries[1].raw, /SUMMARY_\d+/);
-    assert.match(summaries[0].raw, /turn 1/); assert.match(summaries.at(-1).raw, /turn 4/);
+    assert.match(summaries[0].raw, /turn 1 /); assert.match(summaries.at(-1).raw, /turn 10 /);
     assert.match(compactions(managed)[0].summary, /^SUMMARY_\d+/);
     assert.equal(answers(managed).at(-1).stopReason, 'stop', answers(managed).at(-1).errorMessage);
     assert.equal(server.requests.at(-1).model, 'gpt-6-sol');
@@ -143,12 +144,12 @@ test('a request refused as too long is followed by a summary; continuing goes on
 });
 
 test('dense text the estimate undercounts: continuing after the refusal summarises first', { skip: !supported, timeout: 120000 }, async () => {
-  // Three characters per token: Pi's estimate stays under its threshold.
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(3), agent = broker(authorityOf(), 'sol');
+  // Two characters per token: Pi's estimate stays under its threshold.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(2), agent = broker(authorityOf(), 'sol');
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   try {
-    await managed.session.prompt(words('first', 105000));
-    await managed.session.prompt(words('second', 105000));
+    await managed.session.prompt(words('first', 70000));
+    await managed.session.prompt(words('second', 70000));
     assert.equal(server.requests[1].refused, true);
     assert.equal(compactions(managed).length, 0, 'Pi did not see it coming');
     await managed.session.prompt('continue');
@@ -159,21 +160,23 @@ test('dense text the estimate undercounts: continuing after the refusal summaris
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('a body over Studio\'s 4 MiB before a 1M-token window is full: continuing summarises first', { skip: !supported, timeout: 120000 }, async () => {
-  // JSON-heavy history (escaped code, tool calls): five bytes per token, so
-  // the body passes 4 MiB near 840k tokens, before Pi's threshold (984k).
+test('a body over Studio\'s 4 MiB before a 1M-token window is full: the older part is summarised and continuing goes on', { skip: !supported, timeout: 120000 }, async () => {
+  // JSON-heavy history (escaped code, tool calls): five bytes per token. One
+  // pasted message takes the body past 4 MiB at about 850k tokens, under the
+  // 1M window.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(5), agent = broker(authorityOf(), 'sonnet');
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   try {
-    await managed.session.prompt(words('first', 550000));
-    await managed.session.prompt(words('second', 500000));
+    await managed.session.prompt(words('first', 250000));
+    assert.equal(compactions(managed).length, 0, 'under the 300k trigger');
+    await managed.session.prompt(words('second', 850000));
     assert.equal(server.requests[1].refused, 'studio');
     assert.match(answers(managed).at(-1).errorMessage, /\[request_too_large\]/);
-    assert.equal(compactions(managed).length, 0, 'far from the model\'s window');
     await managed.session.prompt('continue');
-    assert.equal(compactions(managed).length, 1);
+    assert.ok(compactions(managed).length >= 1);
     assert.equal(answers(managed).at(-1).stopReason, 'stop', answers(managed).at(-1).errorMessage);
-    assert.deepEqual(server.requests.map(request => [request.summary, request.refused ?? false]), [[false, false], [false, 'studio'], [true, false], [false, false]]);
+    assert.deepEqual(server.requests.slice(0, 4).map(request => [request.summary, request.refused ?? false]), [[false, false], [false, 'studio'], [true, false], [false, false]]);
+    assert.ok(server.requests.slice(2).every(request => !request.refused));
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -193,4 +196,52 @@ test('an unfinished plan is kept word for word through a summary', { skip: !supp
     assert.doesNotMatch(compactions(managed).at(-1).summary, /Current plan \(kept verbatim[^\n]*\n1\. \[x\] Backfill old orders/);
     assert.doesNotMatch(compactions(managed).at(-1).summary, /Backfill old orders\s*$/);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a 1M-token window is summarised at 300k, not when nearly full', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(), agent = broker(authorityOf(), 'sonnet');
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt(words('first', 200000));
+    assert.equal(compactions(managed).length, 0);
+    await managed.session.prompt(words('second', 120000));
+    assert.equal(compactions(managed).length, 1, '320k of 1M is past the trigger');
+    await managed.session.prompt('third');
+    assert.ok(server.requests.at(-1).tokens < 150000, 'the older part is now a summary');
+    assert.equal(answers(managed).at(-1).stopReason, 'stop');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('the trigger: 90% of the window, Pi\'s reserve kept, never past 300k', () => {
+  assert.equal(compactionTrigger(272000), 244800);
+  assert.equal(compactionTrigger(1000000), 300000);
+  assert.equal(compactionTrigger(128000), 111616);
+  const settings = { getCompactionSettings: () => ({ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 }) };
+  compactEarly(settings);
+  assert.deepEqual(settings.getCompactionSettings({ contextWindow: 1000000 }), { enabled: true, reserveTokens: 700000, keepRecentTokens: 20000 });
+  assert.equal(settings.getCompactionSettings({ contextWindow: 272000 }).reserveTokens, 27200);
+  assert.equal(settings.getCompactionSettings(undefined).reserveTokens, 16384);
+});
+
+test('a failed summary is not asked again at every step: 1, 2, 4 … minutes, at most 30', async () => {
+  let clock = 0, runs = 0; const listeners = [];
+  const session = { subscribe: listener => listeners.push(listener), _runAutoCompaction: async () => { runs += 1; return true; } };
+  backOffFailedCompaction(session, () => clock);
+  const end = event => listeners.forEach(listener => listener({ type: 'compaction_end', reason: 'threshold', ...event }));
+  assert.equal(await session._runAutoCompaction('threshold', false), true);
+  end({ result: undefined, aborted: false, errorMessage: 'refused' });
+  clock += 59_000; assert.equal(await session._runAutoCompaction('threshold', false), false);
+  assert.equal(await session._runAutoCompaction('overflow', true), true, 'an overflow is not held back');
+  clock += 1_000; assert.equal(await session._runAutoCompaction('threshold', false), true);
+  end({ result: undefined, aborted: false });
+  clock += 119_000; assert.equal(await session._runAutoCompaction('threshold', false), false);
+  clock += 1_000; assert.equal(await session._runAutoCompaction('threshold', false), true);
+  for (let i = 0; i < 10; i++) end({ result: undefined, aborted: false });
+  clock += 30 * 60_000 - 1; assert.equal(await session._runAutoCompaction('threshold', false), false);
+  clock += 1; assert.equal(await session._runAutoCompaction('threshold', false), true);
+  end({ result: { summary: 'ok' } });
+  assert.equal(await session._runAutoCompaction('threshold', false), true, 'a success clears the wait');
+  end({ result: undefined, aborted: true });
+  assert.equal(await session._runAutoCompaction('threshold', false), true, 'a stopped summary is not a failure');
+  assert.equal(runs, 7);
 });
