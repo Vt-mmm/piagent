@@ -142,12 +142,14 @@ export class ManagedSession {
         try { const result=await self.boundary.invoke('bash',{command:args.command,...(args.timeout?{timeout:args.timeout}:{})},signal,onUpdate,ctx?.model,{network:true}); ok=!result?.isError; return result; }
         finally { await self.claimChanges(before); await self.run?.afterTool('bash',args,ok,()=>self.digest()); await self.refreshReview(); }
       }});
-    // The helpers of the Harness this conversation enrolled with; a later
-    // enrollment updates the list in place (enroll), so a Harness saved while
-    // the member works adds or removes helpers without a new conversation.
+    // Every helper role passes the tool's schema: Pi fixes a tool's schema
+    // and description when the conversation opens, so a helper a Harness
+    // saved later adds must already pass it. The system prompt, rebuilt each
+    // turn, names the Harness's current helpers; delegate refuses one the
+    // Harness does not have.
     const roles = helperRoles(manifest);
-    if (roles.length) customTools.push(self.delegateTool = { name: 'delegate', label: 'Subagent', description: delegateDescription(roles),
-      parameters: { type: 'object', properties: { role: { type: 'string', enum: roles }, title: { type: 'string', maxLength: 120, description: 'One line naming the job, for the company logs (for example "Find where login tokens are stored").' }, task: { type: 'string', minLength: 1, maxLength: 12000 } }, required: ['role', 'task'], additionalProperties: false },
+    if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles),
+      parameters: { type: 'object', properties: { role: { type: 'string', enum: HELPER_ROLES }, title: { type: 'string', maxLength: 120, description: 'One line naming the job, for the company logs (for example "Find where login tokens are stored").' }, task: { type: 'string', minLength: 1, maxLength: 12000 } }, required: ['role', 'task'], additionalProperties: false },
       execute: (_id, args, signal) => self.delegate(args, signal) });
     customTools.push(planTool(async plan => {
       self.session.sessionManager.appendCustomEntry(PLAN_ENTRY, { ...plan, at: new Date().toISOString() });
@@ -367,8 +369,6 @@ export class ManagedSession {
     this.blocked = this.scope && sameMember(this.scope, scope) ? null : 'managed-session-scope-changed';
     if (this.blocked) throw Error(this.blocked);
     if (!sameKey(this.scope, scope)) { this.session.sessionManager.appendCustomEntry('agent-watch-scope', scope); this.scope = scope; }
-    const roles = helperRoles(manifest);
-    if (this.delegateTool && roles.length) { this.delegateTool.parameters.properties.role.enum = roles; this.delegateTool.description = delegateDescription(roles); }
     this.session?.setActiveToolsByName(this.session.getActiveToolNames()); // the new Harness workflow and helpers reach the prompt
   }
   async digest() { try { return await this.changeDigest(); } catch { return null; } }

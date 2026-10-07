@@ -394,12 +394,15 @@ test('a helper the harness adds while the member works is offered in the same co
   const server = await studio(), authority = authorityOf();
   let revision = 'r1', current = broker(authority, { main: 'sol', knows: ['sol'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current, bindingRevision: () => revision });
-  const offered = request => JSON.stringify(request.body.tools ?? []).match(/"enum":\[("[a-z]+",?)+\]/)?.[0];
+  const offered = request => ['research', 'verify'].filter(role => JSON.stringify(request.body).includes(`delegate role \\"${role}\\"`));
   try {
     await managed.session.prompt('first');
-    revision = 'r2'; current = broker(authority, { main: 'sol', knows: ['sol'], helpers: ['research', 'review'], revision });
+    revision = 'r2'; current = broker(authority, { main: 'sol', knows: ['sol'], helpers: ['research', 'verify'], revision });
     await managed.session.prompt('second');
-    assert.deepEqual(server.requests.map(offered), ['"enum":["research"]', '"enum":["research","review"]']);
+    assert.deepEqual(server.requests.map(offered), [['research'], ['research', 'verify']]);
+    // The tool schema fixed when the conversation opened accepts the new helper.
+    const delegate = server.requests[1].body.tools.find(t => t.name === 'delegate');
+    assert.ok(delegate.parameters.properties.role.enum.includes('verify'));
     assert.deepEqual(managed.session.messages.filter(message => message.role === 'assistant').map(message => message.stopReason), ['stop', 'stop']);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });

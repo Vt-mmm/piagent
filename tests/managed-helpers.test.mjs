@@ -200,9 +200,10 @@ test('scout and verify helpers run with their own tools and only when the Harnes
     managed.session.setThinkingLevel('medium');
     prompt=managed.session.prompt('Scout and verify this project');
     await mainEntered.promise;
-    // The main agent is offered exactly the helpers the Harness enables.
+    // The main agent is told exactly the helpers the Harness enables; the
+    // schema names every role, so a helper a later Harness adds passes it.
     const delegate=(requests.find(r=>r.role==='main').body.tools??[]).find(t=>t.name==='delegate');
-    assert.deepEqual(delegate.parameters.properties.role.enum,['scout','verify']);
+    assert.deepEqual(delegate.parameters.properties.role.enum,['scout','research','verify','review']);
     assert.match(delegate.description,/scout:.*no web/); assert.doesNotMatch(delegate.description,/review:/);
     // No research helper: the main agent searches the web itself, and reads up to 100,000 characters of a page.
     assert.ok(requests.find(r=>r.role==='main').body.tools.some(t=>t.name==='web_search'));
