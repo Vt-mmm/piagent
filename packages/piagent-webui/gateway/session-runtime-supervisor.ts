@@ -133,7 +133,7 @@ export class SessionRuntimeSupervisor {
     const runtimeInstanceRef = `runtime_${randomBytes(24).toString("base64url")}`;
     const prior = this.#leases.inspect(sessionRef);
     if (prior.state === "gateway-owned" || prior.state === "terminal-owned" || prior.state === "recovery-required") {
-      try { this.#leases.releaseDeadOwnerForExplicitRecovery(sessionRef); } catch { /* live or unprovable owners stay authoritative */ }
+      try { this.#leases.releaseDeadOwnerForExplicitRecovery(sessionRef, new Date(), this.#gatewayInstanceRef); } catch { /* live or unprovable owners stay authoritative */ }
     }
     const lease = this.#leases.acquire(sessionRef, this.#gatewayInstanceRef, runtimeInstanceRef);
     try {
@@ -161,7 +161,7 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef);
     if (!active) {
       const current = this.#leases.inspect(sessionRef);
-      if (current.state === "released") return current;
+      if (current.state === "released" || current.state === "recovery-required" && current.gatewayInstanceRef === this.#gatewayInstanceRef) return this.#leases.releaseOwnRecovery(sessionRef, this.#gatewayInstanceRef);
       throw new Error(current.state === "recovery-required" ? "session-recovery-required" : "session-owner-conflict");
     }
     if (active.operationRef) throw new Error("session-runtime-busy");

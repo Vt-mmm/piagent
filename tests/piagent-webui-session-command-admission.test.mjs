@@ -243,6 +243,26 @@ describe("Piagent durable session command admission", () => {
     await runtimes.close(); assert.equal(disposed, 1);
   });
 
+  it("says why a company runtime did not open, then archives the conversation", async (t) => {
+    const value = fixture(t), leases = new SessionLeaseStore(value.root, Buffer.alloc(32, 11));
+    const runtimes = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_command_test", key: Buffer.alloc(32, 11), leases,
+      listSessions: async () => [value.info], runtimeFactory: async () => { throw new Error("managed-broker:identityChanged"); } });
+    const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_command_test", key: Buffer.alloc(32, 11), listSessions: async () => [value.info],
+      readOwnership: (ref) => runtimes.ownership(ref) });
+    const controller = new SessionCommandController({ catalog, runtimes, store: new SessionCommandStore(value.root, Buffer.alloc(32, 11)), events: new GatewayEventStore(),
+      metadata: new SessionMetadataStore(value.root, Buffer.alloc(32, 11)), now: () => new Date("2026-08-14T09:06:00.000Z") });
+    const before = await catalog(), row = before.sessions[0];
+    const refused = await controller.execute(command(row, before.catalogRevision, "session.acquire", "company_open_1"));
+    assert.equal(validateFixture(registry, "session-command-v1", refused).valid, true);
+    assert.equal(refused.phase, "rejected"); assert.equal(refused.resultCode, "unavailable");
+    assert.equal(refused.error.code, "company-config-changed");
+    const held = await catalog();
+    assert.equal(held.sessions[0].state, "recovery-required");
+    const archived = await controller.execute(command(held.sessions[0], held.catalogRevision, "session.archive", "company_archive"));
+    assert.equal(archived.phase, "settled", JSON.stringify(archived.error));
+    await runtimes.close();
+  });
+
   it("acquires and releases once with schema-valid durable deduplicated receipts", async (t) => {
     const value = fixture(t), before = await value.catalog(), row = before.sessions[0];
     const acquire = command(row, before.catalogRevision, "session.acquire", "acquire_0001");

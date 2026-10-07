@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { companyFailureCopy } from "./company-failure.tsx";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 
@@ -27,6 +28,9 @@ const CREATE_FAILURES: Record<string, [string, string]> = {
   "session-command-expired": ["Yêu cầu chờ quá lâu nên đã hết hạn. Gửi lại tin nhắn.", "The request waited too long and expired. Send the message again."],
 };
 export function createFailureText(code: string, locale: UiLocale): string {
+  // The company runtime did not open: its kind's own explanation.
+  const company = code.startsWith("company-") ? companyFailureCopy(code, null, locale) : null;
+  if (company) return `${company.title}: ${company.text}`;
   const known = CREATE_FAILURES[code] ?? REASONS[code];
   return known ? localize(locale, ...known) : `${localize(locale, "Chưa tạo được cuộc trò chuyện", "The conversation could not be created")} (${code}).`;
 }

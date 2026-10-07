@@ -977,6 +977,32 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     await failedDispose.close();
   });
 
+  it("lets the Gateway whose own runtime failed to open archive or reopen the conversation", async (t) => {
+    const { root, key } = state(t), leases = new SessionLeaseStore(root, key), broken = info(root, "broken-open.jsonl");
+    const ref = sessionRefForPath(key, broken.path);
+    let fail = true, opened = 0;
+    const gateway = new SessionRuntimeSupervisor({
+      gatewayInstanceRef: "gateway_own_recovery", key, leases, listSessions: async () => [broken],
+      runtimeFactory: async () => { if (fail) throw new Error("managed-broker:identityChanged"); opened += 1; return { async dispose() {} }; }
+    });
+    await assert.rejects(() => gateway.acquire(ref), /identityChanged/);
+    assert.equal(gateway.ownership(ref).state, "recovery-required");
+    // Another live Gateway cannot take it: this one is alive and holds it.
+    const other = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_other", key, leases, listSessions: async () => [broken],
+      runtimeFactory: async () => ({ async dispose() {} }) });
+    await assert.rejects(() => other.release(ref), /session-recovery-required/);
+    // The owner itself archives it (release) while still running...
+    assert.equal((await gateway.release(ref)).state, "released");
+    // ...and reopens it once the cause is gone.
+    await assert.rejects(() => gateway.acquire(ref), /identityChanged/);
+    fail = false;
+    await gateway.acquire(ref);
+    assert.equal(opened, 1);
+    assert.equal(gateway.ownership(ref).state, "gateway-owned");
+    await gateway.release(ref);
+    await gateway.close(); await other.close();
+  });
+
   it("keeps an unpersisted Pi session under one lease until the first assistant reply persists", async (t) => {
     const { root, key } = state(t), seed = info(root, "seed.jsonl"), newFile = path.join(root, "new-session.jsonl");
     const manager = { getSessionFile: () => newFile, getSessionId: () => "new-session-id" };

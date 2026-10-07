@@ -50,6 +50,7 @@ import { dashboardCommands } from "./dashboard-commands.tsx";
 import { updateInProgress, useUpdates } from "./update-state.tsx";
 import type { ConnectionState } from "./use-inspection.ts";
 import type { LiveConversation, TerminalOperationActivity } from "./live-state-view-model.ts";
+import { companyFailureCopy } from "./company-failure.tsx";
 import type { SessionSendResult } from "./use-session-hub.ts";
 import { launchProjectRef } from "./bootstrap.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
@@ -108,7 +109,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     }, SEND_ADMISSION_WINDOW_MS + 15_000);
     return () => window.clearTimeout(timer);
   }, [sendUnconfirmed, locale]);
-  const [restartingRuntime, setRestartingRuntime] = useState(false);
+  const [restartingRuntime, setRestartingRuntime] = useState(false), [restartError, setRestartError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false), [transcriptLoad, setTranscriptLoad] = useState(0);
   // dragenter and dragleave fire again for every child the pointer crosses, so a
   // boolean set on leave clears the highlight while the file is still over the
@@ -208,9 +209,11 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   };
   const restartRuntime = async () => {
     if (restartingRuntime) return;
-    setRestartingRuntime(true);
+    setRestartingRuntime(true); setRestartError(null);
     try { await restart(); }
-    catch { /* the recovery alert remains actionable and the catalog refresh carries authoritative state */ }
+    // The recovery alert remains actionable; a company runtime that did not
+    // open says why (its kind), the catalog refresh carries the rest.
+    catch (error) { setRestartError(error instanceof Error ? error.message : null); }
     finally { setRestartingRuntime(false); }
   };
   // "stale": another process still appears to hold this conversation.
@@ -237,7 +240,12 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
         {recovery === "recovered"
           ? localize(locale, "Runtime mới đã được xác minh; lịch sử và context của session được giữ nguyên.", "The new runtime is verified; session history and context were preserved.")
           : recovery === "failed"
-            ? localize(locale, "Runtime đã đổi nhưng chưa khởi động lại được. Hãy dùng nút bên cạnh hoặc restart Dashboard.", "The runtime changed but could not restart. Use the action here or restart the Dashboard.")
+            ? restartError?.startsWith("company-") && companyFailureCopy(restartError, null, locale)
+              ? `${companyFailureCopy(restartError, null, locale)!.title}: ${companyFailureCopy(restartError, null, locale)!.text}`
+              : localize(locale, "Runtime đã đổi nhưng chưa khởi động lại được. Hãy dùng nút bên cạnh hoặc restart Dashboard.", "The runtime changed but could not restart. Use the action here or restart the Dashboard.")
+            : recovery === "stale" && ["session-runtime-open-failed", "session-runtime-dispose-failed"].includes(session.reasonCode ?? "")
+              ? localize(locale, "Runtime của phiên này chưa mở được (thường do key, Harness hoặc Agent Watch lúc đó). Bấm Khởi động lại phiên để thử lại, hoặc lưu trữ phiên; lịch sử được giữ nguyên.",
+                "This session's runtime did not open (usually the key, the Harness or Agent Watch at the time). Restart the session to try again, or archive it; its history is kept.")
             : recovery === "stale"
               ? localize(locale, "Phiên này chưa được đóng đúng cách và có thể đang mở ở cửa sổ Terminal khác. Đóng cửa sổ đó (nếu có) rồi bấm Khởi động lại phiên để làm tiếp; lịch sử được giữ nguyên.",
                 "This session was not closed cleanly and may still be open in a Terminal window. Close it (if any), then restart the session to go on; its history is kept.")

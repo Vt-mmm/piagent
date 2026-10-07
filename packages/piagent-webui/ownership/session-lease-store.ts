@@ -253,8 +253,10 @@ export class SessionLeaseStore {
     return this.#acquireOwner(sessionRef, gatewayInstanceRef, runtimeInstanceRef, now);
   }
 
-  releaseDeadOwnerForExplicitRecovery(sessionRef: string, now = new Date()): SessionLeaseSnapshot {
+  // `ownGateway`: the calling Gateway, whose own recovery it may release.
+  releaseDeadOwnerForExplicitRecovery(sessionRef: string, now = new Date(), ownGateway?: string): SessionLeaseSnapshot {
     if (!Number.isFinite(now.getTime())) throw new Error("session-lease-input-invalid");
+    if (ownGateway && this.inspect(sessionRef).state === "recovery-required" && this.inspect(sessionRef).gatewayInstanceRef === ownGateway) return this.releaseOwnRecovery(sessionRef, ownGateway, now);
     return this.#withMutationLock(sessionRef, () => {
       const current = this.inspect(sessionRef);
       const terminalOwner = current.state === "terminal-owned"
@@ -325,6 +327,23 @@ export class SessionLeaseStore {
       const current = this.#matchingOwner(sessionRef, ownerEpoch, ownerInstanceRef, runtimeInstanceRef, expectedState, now);
       this.#append(sessionRef, { recordedAt: now.toISOString(), sessionRef, event: "released", ownerEpoch: current.ownerEpoch!,
         gatewayInstanceRef: current.gatewayInstanceRef!, runtimeInstanceRef: current.runtimeInstanceRef!, reasonCode: null });
+      return this.inspect(sessionRef);
+    });
+  }
+
+  // A Gateway whose own runtime failed to open or to close left the lease in
+  // recovery under its own name. Nothing of it runs (the Gateway knows its
+  // live runtimes), so that Gateway may release it: archiving or reopening
+  // must not wait for the Gateway itself to exit. Another owner's recovery
+  // still needs proof that the owner is gone.
+  releaseOwnRecovery(sessionRef: string, gatewayInstanceRef: string, now = new Date()): SessionLeaseSnapshot {
+    if (!validRef(gatewayInstanceRef) || gatewayInstanceRef.startsWith(TERMINAL_OWNER_PREFIX) || !Number.isFinite(now.getTime())) throw new Error("session-lease-input-invalid");
+    return this.#withMutationLock(sessionRef, () => {
+      const current = this.inspect(sessionRef);
+      if (current.state === "released") return current;
+      if (current.state !== "recovery-required" || current.gatewayInstanceRef !== gatewayInstanceRef) throw new Error("session-recovery-required");
+      this.#append(sessionRef, { recordedAt: now.toISOString(), sessionRef, event: "released", ownerEpoch: current.ownerEpoch!,
+        gatewayInstanceRef, runtimeInstanceRef: current.runtimeInstanceRef!, reasonCode: null });
       return this.inspect(sessionRef);
     });
   }

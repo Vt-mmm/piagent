@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { parseFailure } from "../../piagent-core/runtime/managed-failure.mjs";
 
 import type { Catalog, SessionRow } from "../contracts/generated/session-catalog-v1.ts";
 import type { Receipt } from "../contracts/generated/session-command-v1.ts";
@@ -278,6 +279,16 @@ export class SessionCommandController {
       if (attachmentReservation) {
         try { if (noDispatchEffect) attachmentReservation.release(); else attachmentReservation.commit(); }
         catch { /* an attempted dispatch with an unprovable reservation remains uncertain */ }
+      }
+      // The company runtime of a new or reopened conversation did not open
+      // (key, harness, Agent Watch helper): nothing was sent. Say why, by
+      // its kind, rather than "resyncing" or a bare "could not restart".
+      const company = ["session.create", "session.acquire"].includes(command.action) && /^managed-[a-z]/.test(message) ? parseFailure(message) : null;
+      if (company && company.code !== "managed-request-failed") {
+        const receipt = this.#rejected(command, after, afterRow, "unavailable", `company-${company.kind}`);
+        try { this.#store.settle(command, receipt, this.#now()); } catch { /* intent remains uncertain */ }
+        if (command.action === "session.create" && afterRow) this.#events.publish("session.changed", { catalogRevision: after.catalogRevision, session: afterRow });
+        return receipt;
       }
       const code = /recovery/.test(message) ? "recovery-required"
         : /(owner-conflict|operation-conflict|runtime-busy)/.test(message) ? "owner-conflict"
