@@ -10,6 +10,9 @@ export function sandboxDiagnostic(message, { network = false, isolated = false }
   if(network&&!DENIAL.test(text)&&OFFLINE.test(text))return 'managed-network-unreachable: Lệnh đã được duyệt và chạy có mạng nhưng không tới được host (máy đang offline, cần VPN/proxy công ty, hoặc sai tên host). Không xin duyệt lại cùng lệnh; báo người dùng lỗi mạng này.\n'+text;
   if(!DENIAL.test(text)&&OFFLINE.test(text))return 'managed-network-blocked: Lệnh bash thường không có mạng trong chế độ công ty. Nếu lệnh thật sự cần mạng (cài package, tải dữ liệu), dùng run_with_network để người dùng duyệt đúng lệnh đó.\n'+text;
   if(!DENIAL.test(text))return text;
+  // /tmp is shared by every process on the Mac, so it stays read-only; each
+  // command has its own temporary folder in $TMPDIR (Linux: a private /tmp).
+  if(/(?:^|[\s'"=:(])\/(?:private\/)?tmp\//.test(text))return 'managed-sandbox-denied: /tmp chỉ được đọc trong chế độ công ty. Ghi file tạm (log, kết quả test) vào "$TMPDIR" (thư mục tạm riêng của lệnh, ví dụ "$TMPDIR/test.log") hoặc trong project. Không tự chạy lại bên ngoài sandbox.\n'+text;
   return 'managed-sandbox-denied: Công cụ bị giới hạn quyền trong chế độ công ty (hoặc quyền file của hệ điều hành). Keychain và file chứa credential như .env/.npmrc bị chặn. Lệnh cần mạng (cài package, tải dữ liệu) dùng run_with_network để xin duyệt; git fetch origin dùng fetch_origin. Không tự chạy lại bên ngoài sandbox.\n'+text;
 }
 

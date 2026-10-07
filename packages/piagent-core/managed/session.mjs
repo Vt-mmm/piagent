@@ -11,7 +11,7 @@ import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { managedThinkingLevels, nearestLevel } from './capabilities.mjs';
 import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from './native-catalog.mjs';
 import { repositoryFetchPlan, executeRepositoryFetch } from './repository-operation.mjs';
-import { describeFailure, failureCode } from '../runtime/managed-failure.mjs';
+import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { wrapRoleStreams } from './request-stream.mjs';
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
@@ -268,7 +268,7 @@ export class ManagedSession {
           });
           self.run = new RunProcess(workflowPolicy(self.manifest), { request: text, complex: taskClass(text) === 'complex', checks: self.checks });
           self.run.startDigest = pendingBaseline(manager) ?? await self.digest();
-        } catch (error) { self.preflight = describeFailure('main', error?.message); }
+        } catch (error) { self.preflight = describeFailure('main', failureText(error)); }
         self.activePrompt = true;
       })();
       try { await self.starting; } finally { self.starting = null; }

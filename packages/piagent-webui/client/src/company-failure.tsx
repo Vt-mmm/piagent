@@ -53,8 +53,19 @@ const COPY: Record<string, Copy> = {
 const OTHER_KEY: [string, string] = ["Cuộc trò chuyện này thuộc thành viên hoặc Studio khác với key đang nhập trong Agent Watch. Nội dung cũ vẫn đọc được; tạo cuộc trò chuyện mới để làm tiếp.",
   "This conversation belongs to another member or Studio than the key Agent Watch holds. It stays readable; start a new conversation to go on."];
 
+// Codes that say more than their kind: no account serves a role's model, or
+// the run started without one (the subagent then cannot run at all).
+const CODE_COPY: Record<string, Copy> = {
+  "harness_route_unavailable": { title: ["Không có tài khoản AI cho vai trò này", "No AI account for this role"],
+    text: ["Không tài khoản AI nào của công ty đang phục vụ model của vai trò này cho team (tài khoản bị ngắt, tắt cho team hoặc hết lượt). Quản trị viên cần gắn hoặc bật tài khoản trong Studio (Tài khoản AI), hoặc đổi model của vai trò trong Harness.",
+      "No company AI account serves this role's model for the team right now (disconnected, off for the team or out of usage). An administrator has to link or enable one in Studio (AI accounts), or change the role's model in the harness."] },
+  "harness_profile_unavailable": { title: ["Harness không có model cho vai trò này", "Harness has no model for this role"],
+    text: ["Lượt này bắt đầu khi Harness của team không có model dùng được cho vai trò này. Quản trị viên kiểm tra Harness và tài khoản AI của team trong Studio, rồi gửi lại.",
+      "This run started while the team's harness had no usable model for this role. An administrator checks the team's harness and AI accounts in Studio; then send again."] },
+};
+
 export function companyFailureCopy(reason: string, code: string | null, locale: UiLocale): { title: string; text: string } | null {
-  const copy = COPY[reason] ?? (reason.startsWith("company-") ? COPY["company-failed"] : undefined);
+  const copy = (code ? CODE_COPY[code] : undefined) ?? COPY[reason] ?? (reason.startsWith("company-") ? COPY["company-failed"] : undefined);
   if (!copy) return null;
   return { title: localize(locale, ...copy.title), text: localize(locale, ...(code === "managed-session-scope-changed" ? OTHER_KEY : copy.text)) };
 }

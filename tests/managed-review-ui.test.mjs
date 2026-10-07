@@ -28,6 +28,9 @@ test('thinking choices intersect enabled helper capabilities without editing nat
 test('sandbox denial has actionable reason, ordinary tool failures are not mislabelled',()=>{
  assert.match(sandboxDiagnostic('EPERM: operation not permitted'),/^managed-sandbox-denied/);
  assert.equal(sandboxDiagnostic('build ok'),'build ok');
+ // A write to the shared /tmp points to the command's own $TMPDIR.
+ assert.match(sandboxDiagnostic('/bin/bash: line 17: /tmp/review-tests.log: Operation not permitted'),/^managed-sandbox-denied: \/tmp .*\$TMPDIR/);
+ assert.doesNotMatch(sandboxDiagnostic('cat: /Users/a/project/.env: Operation not permitted'),/TMPDIR/);
  assert.equal(sandboxDiagnostic('SyntaxError: missing brace'),'SyntaxError: missing brace');
  // Offline plain bash points to run_with_network; an approved network command that still cannot resolve does not ask again.
  assert.match(sandboxDiagnostic('npm error code ENOTFOUND'),/^managed-network-blocked:.*run_with_network/);

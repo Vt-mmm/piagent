@@ -152,3 +152,13 @@ test('an approved network command can drive Playwright\'s Chromium against a loc
   assert.match(await run(false), /PAGE sandbox ok/);
  } finally { await project.dispose(); await fs.rm(probe, { force: true }); }
 });
+test('a command that prints for a long time is not stopped by its progress updates', { timeout: 90000 }, async () => {
+ // Each update carries the output's last 50KB; together they pass the 12MB
+ // per-message cap long before the command ends.
+ const script = "let i=0;const t=setInterval(()=>{process.stdout.write('x'.repeat(60000)+' '+(++i)+'\\n');if(i>=1400)clearInterval(t)},20)";
+ const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+ let streamed = 0;
+ const result = await boundary.invoke('bash', { command: quote(process.execPath) + ' -e ' + quote(script), timeout: 55 }, undefined, update => { streamed += JSON.stringify(update).length; });
+ assert.ok(streamed > 12 * 1024 * 1024, String(streamed));
+ assert.match(JSON.stringify(result.content), / 1400\b/);
+});

@@ -6,7 +6,7 @@
 import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { managedResourceLoader } from './resource-loader.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
-import { describeFailure, failureCode } from '../runtime/managed-failure.mjs';
+import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { reviewParts, mergeReviews, REVIEW_PARALLEL } from './patch-snapshot.mjs';
 import { reviewFindings, briefIssues } from './workflow.mjs';
 import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
@@ -48,7 +48,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     managed.helperCalls.set(role, (managed.helperCalls.get(role) ?? 0) + 1);
     try { verifyGrant(grant, managed.manifest, role); }
     catch (error) { try { await managed.broker.request('close', { role }); } catch { /* closes with the run */ } throw error; }
-  } catch (error) { throw Error(`managed-helper-failed: ${describeFailure(role, error?.message)}`); }
+  } catch (error) { throw Error(`managed-helper-failed: ${describeFailure(role, failureText(error))}`); }
   let boundary;
   const sessions = new Set();
   try {

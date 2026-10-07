@@ -35,7 +35,8 @@ const CODES = {
   policy_denied: ['policy', 'this key may not use this model, thinking level or output size'],
   thinking_level_unavailable: ['policy', 'this thinking level is not available for the harness'],
   harness_model_unsupported: ['policy', 'the harness uses a model Studio cannot run'],
-  harness_profile_unavailable: ['policy', 'the team has no usable harness'],
+  harness_profile_unavailable: ['policy', "the team's harness has no model for this role"],
+  harness_route_unavailable: ['provider-limit', "no company model account serves this role's model for the team right now; an administrator has to link or enable one in Studio"],
   execution_capability_unavailable: ['policy', 'no company model account can run this model'],
   session_account_unavailable_start_new_session: ['new-session', "this conversation's model account is gone"],
   run_state_conflict: ['config-changed', 'this run was closed or replaced'],
@@ -147,6 +148,13 @@ export function failureCode(raw) {
   if (/stream ended without a (terminal event|stop reason)|response has no body/i.test(text)) return 'upstream_incomplete';
   if (NETWORK.test(text)) return 'studio-unreachable';
   return 'managed-request-failed';
+}
+
+// An error's text with Studio's own reason for a refusal Agent Watch passed
+// on (error.studioCode), in the shape failureCode reads first.
+export function failureText(error) {
+  const text = String(error?.message ?? error ?? '');
+  return typeof error?.studioCode === 'string' ? `${text} {"code":"${error.studioCode}"}` : text;
 }
 
 // "Agent Watch main agent: <what failed> [code] (request <id>)". The role says

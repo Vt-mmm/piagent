@@ -26,7 +26,13 @@ export class ManagedBrokerClient {
           const result = JSON.parse(line), item = this.#pending.get(result.id);
           if (!item) throw Error('unexpected-broker-response');
           clearTimeout(item.timer); this.#pending.delete(result.id);
-          if (result.error) item.reject(Error(`managed-broker:${String(result.error).replace(/[^a-zA-Z_]/g, '').slice(0, 80)}`));
+          if (result.error) {
+            // Agent Watch's coarse error stays the message (start and renewal
+            // decide on it); Studio's own reason rides along for the member.
+            const error = Error(`managed-broker:${String(result.error).replace(/[^a-zA-Z_]/g, '').slice(0, 80)}`);
+            if (typeof result.studio_code === 'string' && /^[a-z0-9_]{1,64}$/.test(result.studio_code)) error.studioCode = result.studio_code;
+            item.reject(error);
+          }
           else item.resolve(result.result);
         } catch { this.#child.kill(); fail(); }
       }

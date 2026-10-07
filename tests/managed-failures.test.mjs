@@ -8,7 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { capacityDelayMs } from '../packages/piagent-core/managed/request-stream.mjs';
-import { describeFailure, failureKind, failureIsAdmissionRefusal, failureIsBriefRefusal, parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
+import { describeFailure, failureKind, failureIsAdmissionRefusal, failureIsBriefRefusal, failureText, parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
+import { ManagedBrokerClient } from '../packages/piagent-core/managed/broker-client.mjs';
 
 const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
@@ -113,6 +114,31 @@ function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet'
 const authorityOf = () => ({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 });
 const last = managed => managed.session.messages.at(-1);
 const roles = managed => managed.session.messages.map(message => message.role);
+
+test('Studio\'s reason for a refused run or subagent reaches the member, not just "configuration changed"', async () => {
+  // Agent Watch passes Studio's code beside its coarse error; the message
+  // itself stays the coarse error, which start and renewal decide on.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-broker-code-'));
+  const executable = path.join(fs.realpathSync(dir), 'agentwatch');
+  fs.writeFileSync(executable, `#!${process.execPath}
+const lines = require('node:readline').createInterface({ input: process.stdin });
+lines.on('line', line => { const { id, role } = JSON.parse(line);
+  const answer = role === 'scout' ? { id, error: 'identityChanged', studio_code: 'harness_profile_unavailable' } : role === 'verify' ? { id, error: 'identityChanged', studio_code: 'Not a code!' } : { id, error: 'serverUnavailable', studio_code: 'harness_route_unavailable' };
+  process.stdout.write(JSON.stringify(answer) + '\\n'); });
+`, { mode: 0o700 });
+  const client = new ManagedBrokerClient({ executable, profileID: 'a'.repeat(64) });
+  try {
+    const refused = await client.request('child', { role: 'scout' }).catch(error => error);
+    assert.equal(refused.message, 'managed-broker:identityChanged');
+    assert.equal(describeFailure('scout', failureText(refused)), "Agent Watch scout subagent: the team's harness has no model for this role [harness_profile_unavailable]");
+    const unavailable = await client.request('child', { role: 'research' }).catch(error => error);
+    assert.equal(unavailable.message, 'managed-broker:serverUnavailable');
+    assert.deepEqual(parseFailure(describeFailure('research', failureText(unavailable))), { role: 'research', code: 'harness_route_unavailable', kind: 'provider-limit', requestId: null, local: false });
+    const malformed = await client.request('child', { role: 'verify' }).catch(error => error);
+    assert.equal(malformed.studioCode, undefined);
+    assert.match(describeFailure('verify', failureText(malformed)), /\[managed-broker:identityChanged\]$/);
+  } finally { client.dispose().catch(() => {}); fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('a failed request is answered in words; the conversation continues with the next message', { skip: !supported, timeout: 120000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-')); let failing = true;

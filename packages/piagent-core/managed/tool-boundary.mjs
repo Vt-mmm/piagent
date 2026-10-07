@@ -313,7 +313,11 @@ export class ManagedToolBoundary {
       signal?.addEventListener('abort', abort, { once: true });
       child.stdin.on('error', () => {});
       child.stdout.on('data', chunk => {
-        bytes += chunk.length;
+        // The cap is per message, not per command: a noisy command streams a
+        // progress update (the output's last 50KB) every 100ms, so a running
+        // total would stop any build or test that prints for ~25 seconds.
+        const newline = chunk.lastIndexOf(10);
+        bytes = newline < 0 ? bytes + chunk.length : chunk.length - newline - 1;
         if (bytes > MAX_WIRE_BYTES) { failure = new Error('managed-tool-output-too-large'); terminate(); return; }
         pending += decoder.write(chunk);
         for (;;) {
