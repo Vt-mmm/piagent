@@ -3,6 +3,7 @@
 // A helper whose company model account is out of usage, or resting after a
 // refusal, starts once more: Studio then gives the new helper the next model
 // of its role that serves (an auto role's list).
+import { jobTitle } from './call-purpose.mjs';
 import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { managedResourceLoader } from './resource-loader.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
@@ -20,20 +21,20 @@ const textContent = result => result.content?.filter(p => p.type === 'text').map
 const HELPER_SWITCH = new Set(['upstream_rate_limited', 'session_account_not_ready_retry_later', 'session_account_unavailable_start_new_session', 'account_capacity_unavailable', 'execution_capability_unavailable']);
 const HELPER_ATTEMPTS = 2;
 
-export async function runHelper(managed, role, task, signal, harness, { verifyGrant, patiently }) {
+export async function runHelper(managed, role, task, signal, harness, { verifyGrant, patiently, title }) {
   const snapshot = role === 'review' ? await managed.patchSnapshot() : null, parts = snapshot ? reviewParts(snapshot) : null;
   // A helper whose company model account is out of usage, or resting after
   // a refusal, starts once more: Studio then gives the new helper the next
   // model of its role that serves (an auto role's list). Helpers read and
   // run checks only, so starting over repeats no change.
   for (let attempt = 1; ; attempt += 1) {
-    try { return await helperAttempt(managed, role, task, signal, harness, snapshot, parts, { verifyGrant, patiently }); }
+    try { return await helperAttempt(managed, role, task, signal, harness, snapshot, parts, { verifyGrant, patiently, title }); }
     catch (error) {
       if (attempt >= HELPER_ATTEMPTS || signal?.aborted || !HELPER_SWITCH.has(failureCode(error?.message)) || (managed.helperCalls.get(role) ?? 0) >= HELPER_CALLS) throw error;
     }
   }
 }
-async function helperAttempt(managed, role, task, signal, harness, snapshot, parts, { verifyGrant, patiently }) {
+async function helperAttempt(managed, role, task, signal, harness, snapshot, parts, { verifyGrant, patiently, title }) {
   // A long local tool step may outlive the main lease. Refresh authority
   // before asking for a child; the broker serializes concurrent renewals,
   // and main's own searches running beside it share managed renew.
@@ -54,6 +55,8 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
   try {
     const runtime = await managed.api.ModelRuntime.create({ credentials: new managed.ai.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false, allowModelNetwork: false });
     const model = managed.installModel(runtime, grant); managed.wrapStreams(runtime, role);
+    // Studio's logs name the job by its title (the brief's first line without one).
+    (managed.jobTitles ??= new WeakMap()).set(runtime, jobTitle(task, title));
     const setup = HELPER_SETUP[role];
     boundary = new ManagedToolBoundary({ cwd: managed.cwd, sdkRoot: managed.sdk, protectedRoots: managed.protectedRoots, readOnly: true, commands: setup.commands });
     const checks = role === 'verify' ? `\n\nRepository checks: ${managed.checks.commands.length ? managed.checks.commands.map(c => '`' + c + '`').join(', ') : 'none declared or detected; choose the tests, type check or build that cover the claims'}.` : '';

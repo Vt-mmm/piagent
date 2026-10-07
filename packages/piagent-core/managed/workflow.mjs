@@ -262,7 +262,8 @@ export async function completionGate(managed, run, signal) {
   const digestOf = async () => { try { return await (managed.changeDigest ?? managed.patchDigest).call(managed); } catch { return null; } };
   const reviewDigestOf = async () => { try { return await managed.patchDigest(); } catch { return null; } };
   const stopped = () => signal?.aborted || ['aborted', 'error'].includes(session.messages.findLast(m => m.role === 'assistant')?.stopReason);
-  const message = triggerTurn => (content, details) => session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details }, { triggerTurn });
+  // A turn the harness starts is logged in Studio as the harness's (X-Agent-Purpose).
+  const message = triggerTurn => (content, details) => { if (triggerTurn) managed.nextPurpose = 'harness'; return session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details }, { triggerTurn }); };
   const send = message(true), note = message(false);
   // What the agent said after the harness sent it back: its answer.
   const answerSince = at => session.messages.slice(at ?? session.messages.length).filter(m => m.role === 'assistant')

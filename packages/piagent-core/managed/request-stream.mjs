@@ -9,6 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { describeFailure, failureCode, failureIsAdmissionRefusal, failureIsBriefRefusal, failureReason, unnamedFailureText } from '../runtime/managed-failure.mjs';
 import { CLIENT_AGENT } from './client-agent.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
+import { purposeHeaders } from './call-purpose.mjs';
 
 // How long one request waits in line for a free company model account.
 const CAPACITY_WAIT_MS = 20 * 60_000;
@@ -25,6 +26,8 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
     runtime[method] = (model, context, options) => {
       // Tools run between two answers: the count names the answer they came from.
       if (role === 'main') owner.mainAnswers = (owner.mainAnswers ?? 0) + 1;
+      // What this call is for, named once: an ask again after a refusal is the same call.
+      const purpose = purposeHeaders(owner, runtime, role, context);
       const out = owner.ai.createAssistantMessageEventStream(), signal = options?.signal;
       void (async () => {
         let wait = null, noted = false, brief = 0, refused = null, rebinds = 0, share = null;
@@ -59,7 +62,7 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             // same company account and prompt cache; a helper names its role.
             const conversation = role === 'main' ? conversationSession(owner) : null;
             const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0,
-              headers: { ...options?.headers, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
+              headers: { ...options?.headers, ...purpose, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
             // Whether Studio admitted the request is known at its first event
             // after "start": until then nothing is passed on, so a refused
             // request leaves no trace in the conversation.

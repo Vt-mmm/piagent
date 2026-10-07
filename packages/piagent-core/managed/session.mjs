@@ -142,7 +142,7 @@ export class ManagedSession {
     // enrollment that drops one is refused at the call (delegate).
     const roles = helperRoles(manifest);
     if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles),
-      parameters: { type: 'object', properties: { role: { type: 'string', enum: roles }, task: { type: 'string', minLength: 1, maxLength: 12000 } }, required: ['role', 'task'], additionalProperties: false },
+      parameters: { type: 'object', properties: { role: { type: 'string', enum: roles }, title: { type: 'string', maxLength: 120, description: 'One line naming the job, for the company logs (for example "Find where login tokens are stored").' }, task: { type: 'string', minLength: 1, maxLength: 12000 } }, required: ['role', 'task'], additionalProperties: false },
       execute: (_id, args, signal) => self.delegate(args, signal) });
     customTools.push(planTool(async plan => {
       self.session.sessionManager.appendCustomEntry(PLAN_ENTRY, { ...plan, at: new Date().toISOString() });
@@ -454,7 +454,7 @@ export class ManagedSession {
       content: 'Review is stale: code changed after review. Obtain a new review for the current patch.', details: this.review }, { triggerTurn: false });
   }
   // `harness`: the completion gate asks, not the main agent (its brief, its turn).
-  async delegate({ role, task }, signal, { harness = false } = {}) {
+  async delegate({ role, task, title }, signal, { harness = false } = {}) {
     if (!this.grant || !HELPER_ROLES.includes(role) || typeof task !== 'string' || !task.trim() || task.length > 12000 || this.helpers.has(role)) throw Error('managed-helper-unavailable');
     const enabled = helperRoles(this.manifest);
     if (!enabled.includes(role)) throw Error(`managed-helper-not-configured: the company Harness has no ${role} subagent${enabled.length ? `; use ${enabled.join(', ')}` : ''}.`);
@@ -464,7 +464,7 @@ export class ManagedSession {
     // message). Say so at once instead of asking for a grant it refuses.
     if ((this.helperCalls.get(role) ?? 0) >= HELPER_CALLS) throw Error(`managed-helper-limit: the ${role} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
     beforeDelegate(this.run, role, harness);
-    const job = this.runHelper(role, task, signal, harness); this.helpers.set(role, job); this.publishHelpers();
+    const job = this.runHelper(role, task, signal, harness, title); this.helpers.set(role, job); this.publishHelpers();
     try { return await job; } finally { this.helpers.delete(role); this.publishHelpers(); }
   }
   publishHelpers() {
@@ -478,7 +478,7 @@ export class ManagedSession {
   notify(event) {
     for (const listener of [...this.listeners]) { try { listener(event); } catch { /* a listener's failure is its own */ } }
   }
-  runHelper(role, task, signal, harness) { return runHelper(this, role, task, signal, harness, { verifyGrant, patiently }); }
+  runHelper(role, task, signal, harness, title) { return runHelper(this, role, task, signal, harness, { verifyGrant, patiently, title: typeof title === 'string' ? title : '' }); }
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;

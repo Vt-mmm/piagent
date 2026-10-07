@@ -81,7 +81,7 @@ export async function searchThroughStudio({ provider, origin, token, roleId, mod
         include: ['web_search_call.action.sources'], tool_choice: 'required', ...(effort ? { reasoning: { effort } } : {}) };
   const response = await fetchImpl(`${origin}${claude ? '/claude/v1/messages' : '/v1/responses'}`, {
     method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'text/event-stream', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': roleId,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'text/event-stream', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': roleId, 'X-Agent-Purpose': 'web_search',
       ...(claude ? { 'anthropic-version': '2023-06-01' } : {}) },
     body: JSON.stringify(body) });
   const text = await response.text();

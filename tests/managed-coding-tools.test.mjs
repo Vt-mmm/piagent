@@ -179,7 +179,7 @@ test('web search uses the provider search tool through Studio with the grant mod
     ].map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}`).join('\n\n')};
   const studio = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
-    seen.push({path: req.url, auth: req.headers.authorization, session: req.headers['x-session-id'], version: req.headers['anthropic-version'], body: JSON.parse(Buffer.concat(chunks))});
+    seen.push({path: req.url, auth: req.headers.authorization, session: req.headers['x-session-id'], purpose: req.headers['x-agent-purpose'], version: req.headers['anthropic-version'], body: JSON.parse(Buffer.concat(chunks))});
     if (req.url === '/refused') { res.writeHead(409, {'Content-Type': 'application/json'}); res.end('{"error":{"code":"harness_model_unsupported"}}'); return; }
     res.writeHead(200, {'Content-Type': 'text/event-stream'}); res.end(replies[req.url]);
   });
@@ -190,7 +190,7 @@ test('web search uses the provider search tool through Studio with the grant mod
     assert.equal(codex.answer, 'Node 24 is the active LTS.');
     assert.deepEqual(codex.sources.map((source) => source.url), ['https://nodejs.org/en/blog', 'https://nodejs.org/en/about/previous-releases']);
     assert.deepEqual(seen[0].body.tools, [{type: 'web_search', filters: {allowed_domains: ['nodejs.org']}}]);
-    assert.deepEqual([seen[0].path, seen[0].auth, seen[0].session, seen[0].body.model, seen[0].body.reasoning], ['/v1/responses', 'Bearer as_run_fixture', 'role-1', 'gpt-6-sol', {effort: 'medium'}]);
+    assert.deepEqual([seen[0].path, seen[0].auth, seen[0].session, seen[0].purpose, seen[0].body.model, seen[0].body.reasoning], ['/v1/responses', 'Bearer as_run_fixture', 'role-1', 'web_search', 'gpt-6-sol', {effort: 'medium'}]);
     const claude = await searchThroughStudio({provider: 'claude', origin, token: 'as_run_fixture', roleId: 'role-2', model: 'claude-sonnet-5-5', effort: 'high', query: 'React release'});
     assert.equal(claude.answer, 'React 20 shipped.');
     assert.deepEqual(claude.sources.map((source) => source.url), ['https://react.dev/blog', 'https://react.dev/blog/react-20']);
