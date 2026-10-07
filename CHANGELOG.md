@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.16.0 - 2026-10-07
+
+Bypass for company conversations; a Harness change never interrupts your work.
+
+### Changes
+
+- A company conversation can run in **Bypass** (new-chat options or the conversation header; "Hỏi trước" stays the default). In Bypass, commands that need the internet (package installs, downloads, `git pull`, tests with a server or browser) and fetching origin run without asking. You are still asked before anything that pushes or sends data out (`git push`, publish, deploy, uploads, `gh` writes, `ssh`/`scp`, remote `rsync`, cloud and cluster tools, `docker push`), database migrations, deletes whose target is only known at run time, `docker compose down -v`, and `sudo`; the request says why Bypass still asks.
+- Personal sessions with full access no longer ask before a broad `git add`; deletes, migrations and external actions are still asked.
+
+### Fixes
+
+- A helper the company Harness adds while a conversation is open can be used in that conversation from the next message; with Studio 0.20.1 a run already running keeps going when the Harness is saved.
+
 ## v1.15.2 - 2026-10-07
 
 Long company conversations shrink again, earlier.

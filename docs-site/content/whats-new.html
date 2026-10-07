@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.16.0 · 2026-10-07</p>
+  <h2 id="v1-16-0">Bypass cho cuộc trò chuyện công ty</h2>
+  <p class="section-lead">Chọn <strong>Bypass</strong> trong tùy chọn cuộc trò chuyện mới hoặc trên thanh đầu cuộc trò chuyện ("Hỏi trước" vẫn là mặc định). Lệnh cần internet (cài package, tải file, git pull, test có server hay browser) chạy luôn, không hỏi. Vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài (git push, publish, deploy, upload, ssh), chạy migration database, xóa mà không rõ đích hoặc dùng sudo.</p>
+  <ul>
+    <li>Harness công ty thêm subagent trong lúc bạn đang làm: dùng được ngay từ tin nhắn kế tiếp, không cần mở cuộc trò chuyện mới. Với Studio 0.20.1, lượt đang chạy không bị dừng khi Harness được lưu.</li>
+    <li>Phiên cá nhân "Toàn quyền" không còn hỏi trước <span class="inline-code">git add</span> toàn bộ; xóa, migration và thao tác ra ngoài vẫn hỏi.</li>
+  </ul>
+  <p>Cập nhật từ 1.15.x không cần nhập lại cấu hình trong Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.15.2 · 2026-10-07</p>
   <h2 id="v1-15-2">Cuộc trò chuyện công ty dài tự thu gọn trở lại, và sớm hơn</h2>
   <p class="section-lead">Tóm tắt hội thoại dài ở chế độ công ty gửi nhầm key giữ chỗ thay vì quyền của lượt chạy, nên Studio từ chối (401 <span class="inline-code">authentication_required</span>, hiện là "Chưa chọn tài khoản" / "CLI trực tiếp" trong theo dõi request) trước mỗi bước và hội thoại cứ dài thêm. Giờ tóm tắt dùng quyền của lượt chạy và Studio ghi là <span class="inline-code">summary</span>.</p>

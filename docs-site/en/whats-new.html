@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.15.2 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.16.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,17 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.16.0 · 2026-10-07</p>
+  <h2 id="v1-16-0">Bypass for company conversations</h2>
+  <p class="section-lead">Choose <strong>Bypass</strong> in the new-chat options or the conversation header ("Ask first" stays the default). Commands that need the internet (package installs, downloads, git pull, tests with a server or browser) run without asking. You are still asked before anything that pushes or sends data out (git push, publish, deploy, uploads, ssh), database migrations, deletes with an unknown target, and sudo.</p>
+  <ul>
+    <li>A helper the company Harness adds while you work is available from your next message, without a new conversation. With Studio 0.20.1 a running turn is not stopped when the Harness is saved.</li>
+    <li>Personal sessions with full access no longer ask before a broad <span class="inline-code">git add</span>; deletes, migrations and external actions are still asked.</li>
+  </ul>
+  <p>Updating from 1.15.x needs no re-import in Agent Watch.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.15.2 · 2026-10-07</p>
   <h2 id="v1-15-2">Long company conversations shrink again, earlier</h2>
