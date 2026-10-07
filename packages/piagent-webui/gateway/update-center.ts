@@ -10,13 +10,14 @@ import { compareReleaseVersions, releaseVersion, writeUpdateCache } from "../../
 // past the version the newest Piagent pins (its peer dependency): that is the
 // host its managed runtime is qualified on. A newer Pi is shown as untested.
 //
-// The registry is asked in the background, at most every 6 hours unless the
+// The registry is asked in the background, at most every hour unless the
 // member asks now; the dashboard reads the cached answer. Everything read from
 // outside (registry answers, the cache and job files any local process could
 // write) is accepted only as release versions and known codes.
 const PLATFORM = "@piagent/platform";
 const HOST = "@earendil-works/pi-coding-agent";
-export const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
+// Releases ship several times a day; members should hear within the hour.
+export const CHECK_EVERY_MS = 60 * 60 * 1000;
 const FORCED_CHECK_GAP_MS = 30_000;
 const PROBE_TIMEOUT_MS = 20_000;
 const MAX_FILE_BYTES = 4096;

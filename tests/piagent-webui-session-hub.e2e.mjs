@@ -32,11 +32,13 @@ const observedSessionActions = [];
 // Piagent's own update, as the Gateway reports it: 1.11.0 is out, Pi stays on
 // the version it pins while a newer Pi is not qualified.
 const freshUpdate = () => ({ schemaVersion: 1, version: "piagent-update-status-v1", installable: true, reason: null,
-  checkedAt: new Date(Date.now() - 5 * 60_000).toISOString(), checking: false, checkEveryHours: 6,
+  checkedAt: new Date(Date.now() - 5 * 60_000).toISOString(), checking: false, checkEveryHours: 1,
   piagent: { installed: "1.10.0", latest: "1.11.0", updateAvailable: true },
   pi: { installed: "0.87.1", required: "0.87.1", latest: "1.0.2", updateAvailable: false, newerUntested: true },
   updateAvailable: true, runningConversations: 0, job: null });
-let updateState = freshUpdate();
+// Other tests run on a machine that is up to date: the offer dialog would cover them.
+const upToDate = () => ({ ...freshUpdate(), piagent: { installed: "1.11.0", latest: "1.11.0", updateAvailable: false }, updateAvailable: false });
+let updateState = upToDate();
 const updateApplies = [];
 // What an @ in a composer walks: a project (a git repository, so the search
 // runs the same without fd) and a home folder with another project inside.
@@ -1174,6 +1176,12 @@ test("the status bar offers the update, Settings explains it, and the palette an
   try {
     await page.goto(server.issueLaunchUrl());
     const bar = page.getByRole("contentinfo", { name: "Thanh trạng thái" });
+    // A new release is announced in a dialog, not only by the status bar icon.
+    const offer = page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" });
+    await expect(offer.getByText("Piagent 1.10.0 → 1.11.0", { exact: true })).toBeVisible();
+    await offer.getByRole("button", { name: "Xem chi tiết" }).click();
+    await expect(offer).toHaveCount(0);
+    await page.getByRole("dialog", { name: "Cài đặt" }).press("Escape");
     await expect(bar.getByText("Gateway live", { exact: true })).toBeVisible();
     await bar.getByRole("button", { name: /Cập nhật Piagent 1\.11\.0/ }).click();
     const settings = page.getByRole("dialog", { name: "Cài đặt" });
@@ -1181,7 +1189,7 @@ test("the status bar offers the update, Settings explains it, and the palette an
     await expect(settings.getByText("Đang dùng 1.10.0", { exact: true })).toBeVisible();
     await expect(settings.getByText("Có bản 1.11.0", { exact: true })).toBeVisible();
     await expect(settings.getByText(/Pi đã có bản 1\.0\.2.*chưa tương thích/)).toBeVisible();
-    await expect(settings.getByText(/Kiểm tra lần cuối: 5 phút trước · tự kiểm tra mỗi 6 giờ/)).toBeVisible();
+    await expect(settings.getByText(/Kiểm tra lần cuối: 5 phút trước · tự kiểm tra mỗi giờ/)).toBeVisible();
     // Settings search finds a setting by what it does, with or without accents.
     const search = settings.getByRole("textbox", { name: "Tìm cài đặt" });
     await search.fill("chu de");
@@ -1233,12 +1241,19 @@ test("the status bar offers the update, Settings explains it, and the palette an
     updateState = freshUpdate();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
+    // "Later" puts the offer off for an hour, across a reload.
+    const again = page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" });
+    await again.getByRole("button", { name: /Để sau/ }).click();
+    await expect(again).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Mở điều hướng" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" })).toHaveCount(0);
     await expect(page.getByRole("contentinfo", { name: "Thanh trạng thái" })).toHaveCount(0);
     await page.getByRole("button", { name: "Mở điều hướng" }).click();
     await expect(page.getByRole("img", { name: "Có bản cập nhật" })).toBeVisible();
     await page.getByRole("button", { name: /^Cài đặt/ }).click();
     await expect(page.getByRole("dialog", { name: "Cài đặt" }).getByRole("heading", { name: "Cập nhật" })).toBeVisible();
-  } finally { updateState = freshUpdate(); await page.close(); }
+  } finally { updateState = upToDate(); await page.close(); }
 });
 
 test("@ in a composer offers the project's files and folders, then any folder on the Mac, and writes the path", async ({ page }) => {
@@ -1392,4 +1407,22 @@ test("a tab that lost its browser session says how to open Piagent again and sto
   await page.waitForTimeout(4_500);
   assert.deepEqual(reads, []);
   assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth));
+});
+
+test("the update dialog waits for running conversations, then updates in one click and shows the progress", async ({ browser }) => {
+  updateState = { ...freshUpdate(), runningConversations: 1 }; updateApplies.length = 0;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: "vi-VN" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const offer = page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" });
+    await expect(offer.getByText(/1 cuộc trò chuyện đang chạy/)).toBeVisible();
+    await expect(offer.getByRole("button", { name: "Cập nhật ngay" })).toBeDisabled();
+    updateState = freshUpdate();
+    await page.reload();
+    await page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" }).getByRole("button", { name: "Cập nhật ngay" }).click();
+    await expect.poll(() => updateApplies.length).toBe(1);
+    expect(updateApplies[0]).toEqual({ version: "1.11.0" });
+    await expect(page.getByRole("dialog", { name: "Cài đặt" }).getByText(/Đang cập nhật lên Piagent 1\.11\.0…/)).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" })).toHaveCount(0);
+  } finally { updateState = upToDate(); await page.close(); }
 });

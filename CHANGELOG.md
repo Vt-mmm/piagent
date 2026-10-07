@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.16.1 - 2026-10-07
+
+New releases are announced in a dialog and checked every hour; a dashboard tab no longer gets stuck signed out.
+
+### Changes
+
+- When a new Piagent is out, the dashboard opens a dialog with what will change and **Update now**; **Later** asks again after an hour. After the update, the restarted dashboard says it worked.
+- The dashboard checks for a new release every hour (was 6 hours), and the Terminal notice every hour (was a day).
+
+### Fixes
+
+- A dashboard tab no longer loses its sign-in when another local Piagent server (the company runtime, another launch) signs in: the session cookie is named after its port.
+- A tab whose sign-in is gone (Piagent restarted, older than 8 hours) stops polling every 2 seconds with 401 and says how to open Piagent again (`piagent dashboard` or Agent Watch).
+
 ## v1.16.0 - 2026-10-07
 
 Bypass for company conversations; a Harness change never interrupts your work.

@@ -39,6 +39,7 @@ import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
 import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { SessionComposerControls } from "./SessionComposerControls.tsx";
 import { SessionExpired, useSessionLost } from "./SessionExpired.tsx";
+import { UpdatePrompt } from "./UpdatePrompt.tsx";
 import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
 import { SessionTranscript } from "./SessionTranscript.tsx";
 import { SessionSidebar, sessionActivity, type SessionMenuAction, type ProjectGroup } from "./SessionSidebar.tsx";
@@ -661,6 +662,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
+    <UpdatePrompt locale={locale} onDetails={() => openSettings("updates")} />
     <StatusBar locale={locale} connection={connection} running={running} onUpdates={() => openSettings("updates")} onPalette={() => setPaletteOpen(true)} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} locale={locale} />
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"

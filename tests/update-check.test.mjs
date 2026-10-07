@@ -98,8 +98,8 @@ describe("update availability check", () => {
   });
 
   it("refreshes a cache older than a day and leaves a fresh one alone", () => {
-    assert.equal(evaluateUpdateCheck({ installed: OLD, cache: { latest: OLD, checkedAt: now - 2 * hour }, now, env: {} }).probe, false);
-    assert.equal(evaluateUpdateCheck({ installed: OLD, cache: { latest: OLD, checkedAt: now - 25 * hour }, now, env: {} }).probe, true);
+    assert.equal(evaluateUpdateCheck({ installed: OLD, cache: { latest: OLD, checkedAt: now - 0.5 * hour }, now, env: {} }).probe, false);
+    assert.equal(evaluateUpdateCheck({ installed: OLD, cache: { latest: OLD, checkedAt: now - 2 * hour }, now, env: {} }).probe, true);
     assert.equal(evaluateUpdateCheck({ installed: OLD, cache: {}, now, env: {} }).probe, true);
   });
 

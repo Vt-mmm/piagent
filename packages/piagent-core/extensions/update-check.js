@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 // Telling someone a new release exists is only useful if it costs them nothing.
 // A session start that waits on the registry pays a network round trip every
-// time Pi opens, for information that changes a few times a month, so the check
+// time Pi opens, for information that can change several times a day, so the check
 // never runs in the session's path: the session reads a cache file and, when
 // that cache is old, leaves a detached process behind to refresh it. The notice
 // lands on this session if the cache already knew, and on the next one if it did
@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const HELPER_PACKAGE = "@piagent/platform";
 const CACHE_FILE = "piagent-update-check.json";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 60 * 1000;
 const PROBE_TIMEOUT_MS = 10_000;
 const MAX_CACHE_BYTES = 4096;
 const RELEASE_VERSION = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;

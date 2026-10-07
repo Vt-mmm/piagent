@@ -4,7 +4,7 @@ import { bootstrapBrowserSession, browserCsrfToken, browserSessionLost, csrfFetc
 
 // Piagent's own updates, as the dashboard sees them: one poll shared by the
 // status bar, Settings and the command palette. The Gateway asks the registry
-// (every 6 hours, or when the member checks now); this only reads its answer.
+// (every hour, or when the member checks now); this only reads its answer.
 export type UpdateJob = { state: "starting" | "running" | "succeeded" | "failed"; from: string; to: string; startedAt: string;
   finishedAt?: string; reason?: string; installed?: string; bindingChanged?: boolean };
 export type UpdateStatus = {

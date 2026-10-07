@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.16.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.16.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,17 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.16.1 · 2026-10-07</p>
+  <h2 id="v1-16-1">Báo bản mới rõ ràng, kiểm tra mỗi giờ</h2>
+  <p class="section-lead">Khi có bản Piagent mới, dashboard mở một dialog ghi rõ sẽ đổi gì và nút <strong>Cập nhật ngay</strong>; chọn <strong>Để sau</strong> thì 1 giờ sau nhắc lại. Cập nhật xong, dashboard mở lại báo đã thành công. Dashboard và Terminal tự kiểm tra bản mới mỗi giờ.</p>
+  <ul>
+    <li>Tab dashboard không còn bị mất đăng nhập khi một server Piagent khác trên máy (runtime công ty, lần mở khác) đăng nhập.</li>
+    <li>Tab đã hết phiên (Piagent khởi động lại, quá 8 giờ) không còn gọi lại liên tục với lỗi 401 mà nói rõ cách mở lại: <span class="inline-code">piagent dashboard</span> hoặc Agent Watch.</li>
+  </ul>
+  <p>Cập nhật từ 1.16.0 không cần nhập lại cấu hình trong Agent Watch.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.16.0 · 2026-10-07</p>
   <h2 id="v1-16-0">Bypass cho cuộc trò chuyện công ty</h2>

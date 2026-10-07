@@ -104,8 +104,8 @@ export function UpdateSettings() {
       <Divider />
       <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", gap: 1.5, p: 2.25 }}>
         <Typography variant="body2" color="text.secondary">{localize(locale,
-          `Kiểm tra lần cuối: ${relative(locale, status?.checkedAt ?? null)} · tự kiểm tra mỗi ${status?.checkEveryHours ?? 6} giờ`,
-          `Last checked: ${relative(locale, status?.checkedAt ?? null)} · checks every ${status?.checkEveryHours ?? 6} hours`)}</Typography>
+          `Kiểm tra lần cuối: ${relative(locale, status?.checkedAt ?? null)} · tự kiểm tra ${(status?.checkEveryHours ?? 1) === 1 ? "mỗi giờ" : `mỗi ${status?.checkEveryHours} giờ`}`,
+          `Last checked: ${relative(locale, status?.checkedAt ?? null)} · checks every ${(status?.checkEveryHours ?? 1) === 1 ? "hour" : `${status?.checkEveryHours} hours`}`)}</Typography>
         <Button variant="outlined" disabled={checking || running || !status?.installable} onClick={() => void check()}
           startIcon={checking ? <CircularProgress size={14} /> : undefined}>{localize(locale, "Kiểm tra ngay", "Check now")}</Button></Stack>
     </Paper>

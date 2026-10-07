@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.16.1 · 2026-10-07</p>
+  <h2 id="v1-16-1">New releases are announced, checked every hour</h2>
+  <p class="section-lead">When a new Piagent is out, the dashboard opens a dialog with what will change and <strong>Update now</strong>; <strong>Later</strong> asks again after an hour. After the update, the restarted dashboard says it worked. The dashboard and the Terminal check for a new release every hour.</p>
+  <ul>
+    <li>A dashboard tab no longer loses its sign-in when another Piagent server on the machine (the company runtime, another launch) signs in.</li>
+    <li>A tab whose sign-in is gone (Piagent restarted, older than 8 hours) no longer retries with 401 errors; it says how to open Piagent again: <span class="inline-code">piagent dashboard</span> or Agent Watch.</li>
+  </ul>
+  <p>Updating from 1.16.0 needs no re-import in Agent Watch.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.16.0 · 2026-10-07</p>
   <h2 id="v1-16-0">Bypass for company conversations</h2>
   <p class="section-lead">Choose <strong>Bypass</strong> in the new-chat options or the conversation header ("Ask first" stays the default). Commands that need the internet (package installs, downloads, git pull, tests with a server or browser) run without asking. You are still asked before anything that pushes or sends data out (git push, publish, deploy, uploads, ssh), database migrations, deletes with an unknown target, and sudo.</p>
