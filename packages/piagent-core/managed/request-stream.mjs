@@ -11,6 +11,14 @@ import { CLIENT_AGENT } from './client-agent.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { purposeHeaders } from './call-purpose.mjs';
 
+// A caller may pass the provider's resolved auth headers (Pi's compaction and
+// branch summaries do): for this provider that is the registered placeholder
+// key, and caller headers override the role token. Only the grant authenticates.
+const CREDENTIAL_HEADERS = /^(authorization|x-api-key)$/i;
+function withoutCredentials(headers) {
+  return headers && Object.fromEntries(Object.entries(headers).filter(([name]) => !CREDENTIAL_HEADERS.test(name)));
+}
+
 // How long one request waits in line for a free company model account.
 const CAPACITY_WAIT_MS = 20 * 60_000;
 // How long a helper's request waits before the helper moves to another model.
@@ -62,7 +70,7 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             // same company account and prompt cache; a helper names its role.
             const conversation = role === 'main' ? conversationSession(owner) : null;
             const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0,
-              headers: { ...options?.headers, ...purpose, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
+              headers: { ...withoutCredentials(options?.headers), ...purpose, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
             // Whether Studio admitted the request is known at its first event
             // after "start": until then nothing is passed on, so a refused
             // request leaves no trace in the conversation.

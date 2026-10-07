@@ -15,6 +15,10 @@ test('a call names what it is for: answer, step after tools, harness turn, summa
   assert.deepEqual(purposeHeaders(owner, runtime, 'main', {messages: [user, answer(), {role: 'user', content: 'run the checks'}]}), {'X-Agent-Purpose': 'harness'});
   assert.equal(owner.nextPurpose, null, 'the harness mark is used once');
   assert.equal(purposeHeaders(owner, runtime, 'main', {systemPrompt: 'You are a context summarization assistant. Your task…', messages: [user]})['X-Agent-Purpose'], 'summary');
+  // Pi folds the system prompt into a leading system message before the provider call.
+  assert.equal(purposeHeaders(owner, runtime, 'main', {messages: [{role: 'system', content: 'You are a context summarization assistant. Your task…'}, user]})['X-Agent-Purpose'], 'summary');
+  assert.equal(purposeHeaders(owner, runtime, 'main', {messages: [{role: 'system', content: [{type: 'text', text: 'You are a context summarization assistant.'}]}, user]})['X-Agent-Purpose'], 'summary');
+  assert.equal(purposeHeaders(owner, runtime, 'main', {messages: [{role: 'system', content: 'You are the company agent'}, user]})['X-Agent-Purpose'], 'answer');
   owner.jobTitles = new WeakMap([[helper, 'Tìm chỗ lưu token đăng nhập']]);
   assert.deepEqual(purposeHeaders(owner, helper, 'scout', {messages: [user]}),
     {'X-Agent-Purpose': 'brief', 'X-Agent-Task': encodeURIComponent('Tìm chỗ lưu token đăng nhập')});

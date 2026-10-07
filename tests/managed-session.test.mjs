@@ -78,8 +78,20 @@ test('isolated SDK session sends native Claude/Codex streams with role tokens an
         assert.match(wire.headers.authorization, /^Bearer as_run_/);
         assert.equal(JSON.stringify(wire.body).includes('/task'), false);
         assert.throws(() => managed.session.setModel({ provider: 'openai-codex', id: 'gpt-6-sol' }), /new-session/);
+        // A long conversation compacts itself inside the turn. Pi's compaction
+        // resolves the provider's own auth headers (the registered placeholder
+        // key) and passes them in; the role token must still reach Studio.
+        const settings = managed.session.settingsManager, compaction = settings.getCompactionSettings.bind(settings);
+        settings.getCompactionSettings = model => ({ ...compaction(model), keepRecentTokens: 1, reserveTokens: model.contextWindow - 1 });
+        const before = requests.length;
+        await managed.session.prompt('alo 456');
+        const summary = requests.slice(before).find(r => r.headers['x-agent-purpose'] === 'summary');
+        assert.ok(summary, 'the turn compacted its context');
+        assert.match(summary.headers.authorization, /^Bearer as_run_/);
+        assert.ok(requests.slice(before).every(r => /^Bearer as_run_/.test(r.headers.authorization)));
+        assert.equal(managed.session.messages.some(m => m.role === 'compactionSummary'), true);
       } finally { await managed.dispose(); }
     }
-    assert.equal(requests.length, 3);
+    assert.equal(requests.filter(r => r.headers['x-agent-purpose'] !== 'summary').length, 6);
   } finally { await new Promise(resolve => server.close(resolve)); fs.rmSync(root, { recursive: true, force: true }); }
 });

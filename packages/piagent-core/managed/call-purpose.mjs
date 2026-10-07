@@ -29,11 +29,21 @@ export function jobTitle(task, title) {
 export function purposeHeaders(owner, runtime, role, context) {
   const messages = context?.messages ?? [], last = messages.at(-1);
   let purpose, after = '';
-  if (typeof context?.systemPrompt === 'string' && context.systemPrompt.startsWith(SUMMARY_PROMPT)) purpose = 'summary';
+  if (systemText(context).startsWith(SUMMARY_PROMPT)) purpose = 'summary';
   else if (last?.role === 'toolResult') { purpose = 'tool_step'; after = afterTools(messages.findLast(m => m.role === 'assistant')); }
   else if (role !== 'main') purpose = 'brief';
   else if (owner.nextPurpose === 'harness') { purpose = 'harness'; owner.nextPurpose = null; }
   else purpose = 'answer';
   const title = purpose === 'brief' ? owner.jobTitles?.get(runtime) : '';
   return { 'X-Agent-Purpose': purpose, ...(after ? { 'X-Agent-After': after } : {}), ...(title ? { 'X-Agent-Task': encodeURIComponent(title) } : {}) };
+}
+
+// Pi folds the system prompt into a leading system message before a call
+// reaches a provider, so a summary is recognised in either shape.
+function systemText(context) {
+  if (typeof context?.systemPrompt === 'string') return context.systemPrompt;
+  const first = context?.messages?.[0];
+  if (first?.role !== 'system') return '';
+  if (typeof first.content === 'string') return first.content;
+  return Array.isArray(first.content) ? first.content.filter(p => p?.type === 'text').map(p => p.text).join('') : '';
 }
