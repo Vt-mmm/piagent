@@ -178,6 +178,21 @@ function runUpdate(stage, args, { env = {} } = {}) {
 }
 
 describe("piagent-update", () => {
+  it("persists a same-version npm exec bootstrap without requiring force", () => {
+    const stage = stageGlobalInstall({ layout: "npx-cache", helperVersion: "1.1.4", registryVersion: "1.1.4", installedHost: "0.82.0" });
+    const result = runUpdate(stage, []);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.installs.some(line => line.startsWith("npm install") && line.includes("@piagent/platform@1.1.4")));
+    assert.ok(fs.existsSync(path.join(stage.root, "lib/node_modules/@piagent/platform/package.json")));
+  });
+
+  it("refuses no-host with an incompatible Pi before changing globals", () => {
+    const result = runUpdate(stageGlobalInstall(), ["--no-host"]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--no-host cannot install this Pi package/);
+    assert.equal(result.installs.length, 0);
+  });
+
   it("decides about the pi the run will actually use, not the one PATH resolved first", () => {
     // The host version is read before the run prepends the install prefix's bin.
     // With `--npm-prefix`, or a default global root that is not writable, every

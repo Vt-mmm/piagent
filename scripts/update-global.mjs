@@ -423,7 +423,8 @@ function main() {
     fail(`${HELPER_PACKAGE}@${targetHelper} does not pin an exact ${HOST_PACKAGE} version, so the host cannot be updated safely.`);
   }
 
-  const helperNeedsChange = options.force || currentHelper !== targetHelper;
+  // npm exec is temporary even when its version already matches the target.
+  const helperNeedsChange = options.force || currentHelper !== targetHelper || isNpxCacheRoot(platformRoot);
   const hostNeedsChange = options.host && (options.force || currentHost !== targetHost);
 
   console.log("Pi Agent Platform update");
@@ -473,6 +474,11 @@ function main() {
       console.log(`  host:    the active prefix resolves pi ${activeHost ?? "not installed"}, not ${currentHost ?? "not installed"};`
         + ` using ${effectiveHost ?? "not installed"} -> ${targetHost}${effectiveHostNeedsChange ? "" : " (already current)"}`);
     }
+  }
+
+  // Refuse an impossible package installation before replacing either global.
+  if (options.package && !options.host && effectiveHost !== targetHost) {
+    fail(`--no-host cannot install this Pi package: active Pi is ${effectiveHost ?? "missing"}, but v${targetHelper} requires ${targetHost}. Rerun without --no-host.`);
   }
 
   // Host first: piagent-install refuses to run against a host that does not match
