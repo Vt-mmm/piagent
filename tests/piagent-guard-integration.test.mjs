@@ -2070,7 +2070,7 @@ non-secret metadata are safe alternatives.`;
     assert.notEqual(allowedPiagent.block, true);
   });
 
-  it("keeps protected paths and destructive confirmations active under trusted-full-access", async () => {
+  it("keeps protected paths and destructive confirmations active under trusted-full-access, but not local reversible prompts", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
@@ -2099,8 +2099,10 @@ non-secret metadata are safe alternatives.`;
     assert.match(protectedShell.reason, /protected path/);
     assert.equal(destructivePrompt.block, true);
     assert.match(destructivePrompt.reason, /User denied command|Confirmation required/);
-    assert.equal(broadStagePrompt.block, true);
-    assert.match(broadStagePrompt.reason, /prompt-git-add-broad|User denied command|Confirmation required/);
+    // A local, reversible step the member chose full access for is not asked.
+    assert.notEqual(broadStagePrompt.block, true);
+    const migrationPrompt = await callToolCall(toolCall, ctx, "bash", { command: "npx prisma migrate deploy" });
+    assert.equal(migrationPrompt.block, true);
   });
 
   it("fails closed when an unavailable execution backend is requested", async () => {

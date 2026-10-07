@@ -547,6 +547,9 @@ function verifyProjectCapabilityState(
   }
 }
 
+// Exec-policy prompts a full-access session does not show: local, reversible.
+const FULL_ACCESS_SKIPPED_PROMPTS = ["prompt-git-add-broad"];
+
 function evaluateExecPolicy(command: string, profile: ProjectProfile, policy: BasePolicy): {
   mode: RuntimePolicySettings["execPolicy"];
   decision: "allow" | "prompt" | "forbid";
@@ -3953,7 +3956,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
         return { block: true, reason: unresolvedExpansionReason("Command", unresolvedExpansions) };
       }
 
-      const confirmationReasons = execDecision.mode !== "off" && execDecision.decision === "prompt" ? [...execDecision.reasons] : [];
+      // Full access skips the prompts for local, reversible steps; deletes,
+      // migrations and anything sent outside this machine are still asked.
+      const confirmationReasons = (execDecision.mode !== "off" && execDecision.decision === "prompt" ? [...execDecision.reasons] : [])
+        .filter((reason) => permissionProfile.mode !== "trusted-full-access"
+          || !FULL_ACCESS_SKIPPED_PROMPTS.some((id) => reason.startsWith(`Prompt required by exec policy ${id}:`)));
       const externalReason = findShellExternalConfirmationReason(execDecision.segments, externalActionPolicyConfig(policy));
       if (externalReason) confirmationReasons.push(externalReason);
       if (confirmationReasons.length > 0) {

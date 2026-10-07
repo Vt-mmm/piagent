@@ -96,7 +96,7 @@ const MODELS = { sonnet: { id: 'claude-sonnet-5-5', provider_model_id: 'claude-s
 // the models of the key when this broker enrolled.
 // Like Studio, a run carries the member's level (start) unless the Harness fixes
 // it: `mainEffort` for the main agent, `helperEffort` for both helpers.
-function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet', knows = [main], revision = 'r1', fail = {}, helper = 'opus', mainEffort, helperEffort } = {}) {
+function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet', knows = [main], revision = 'r1', fail = {}, helper = 'opus', helpers = ['research'], mainEffort, helperEffort } = {}) {
   const calls = [], efforts = [], roles = { main: randomUUID(), research: randomUUID(), review: randomUUID() }, run = randomUUID(); let fence = 0, runEffort = 'medium';
   const grant = role => { const model = MODELS[role === 'main' ? main : helper]; return { ...authority, run_id: run, role_id: roles[role], role, fence: ++fence, provider: model.owned_by,
     model_id: model.id, provider_model_id: model.provider_model_id, effort: role === 'main' ? runEffort : helperEffort ?? runEffort, token: `as_run_${roles[role]}_${'x'.repeat(43)}` }; };
@@ -105,7 +105,7 @@ function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet'
     if (fail[action]) throw Error(fail[action]);
     if (action === 'start') { efforts.push(args.effort); runEffort = mainEffort ?? args.effort; }
     if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: key, user: { id: member }, revision,
-      models: [...new Set([...knows, helper])].map(name => MODELS[name]), harness: { configuration: { main: { model_ids: [MODELS[knows[0]].id] }, research: { model_ids: [MODELS[helper].id] } } } };
+      models: [...new Set([...knows, helper])].map(name => MODELS[name]), harness: { configuration: { main: { model_ids: [MODELS[knows[0]].id] }, ...Object.fromEntries(helpers.map(role => [role, { model_ids: [MODELS[helper].id] }])) } } };
     if (['start', 'renew', 'child'].includes(action)) return grant(args.role ?? 'main');
     if (action === 'close') return true;
     throw Error('unexpected-broker-action');
@@ -386,6 +386,21 @@ test('Claude history continues on a Codex main model and back after the harness 
     // Each model received the whole conversation so far, whoever answered it.
     assert.match(JSON.stringify(server.requests[1].body.input), /first[\s\S]*Fixture answer[\s\S]*second/);
     assert.match(JSON.stringify(server.requests[2].body.messages), /first[\s\S]*Fixture answer[\s\S]*second[\s\S]*Fixture answer[\s\S]*third/);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a helper the harness adds while the member works is offered in the same conversation', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
+  const server = await studio(), authority = authorityOf();
+  let revision = 'r1', current = broker(authority, { main: 'sol', knows: ['sol'] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current, bindingRevision: () => revision });
+  const offered = request => JSON.stringify(request.body.tools ?? []).match(/"enum":\[("[a-z]+",?)+\]/)?.[0];
+  try {
+    await managed.session.prompt('first');
+    revision = 'r2'; current = broker(authority, { main: 'sol', knows: ['sol'], helpers: ['research', 'review'], revision });
+    await managed.session.prompt('second');
+    assert.deepEqual(server.requests.map(offered), ['"enum":["research"]', '"enum":["research","review"]']);
+    assert.deepEqual(managed.session.messages.filter(message => message.role === 'assistant').map(message => message.stopReason), ['stop', 'stop']);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 

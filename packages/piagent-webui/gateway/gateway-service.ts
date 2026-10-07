@@ -71,7 +71,8 @@ function capabilities(gatewayInstanceRef: string, runtimeAvailable = false, mana
         abort: runtimeAvailable ? available() : unavailable("session-runtime-not-enabled"),
         setModel: runtimeAvailable && !managed ? available() : unavailable("model-managed-by-studio"),
         setThinking: runtimeAvailable ? available() : unavailable("session-runtime-not-enabled"),
-        setPermission: runtimeAvailable && !managed ? available() : unavailable("permissions-managed-by-studio"),
+        // A company conversation offers "Ask first" or Bypass (no read-only).
+        setPermission: runtimeAvailable ? available() : unavailable("session-runtime-not-enabled"),
         rename: runtimeAvailable ? available() : unavailable("session-runtime-not-enabled"),
         pin: runtimeAvailable ? available() : unavailable("session-runtime-not-enabled"),
         archive: runtimeAvailable ? available() : unavailable("session-runtime-not-enabled"),

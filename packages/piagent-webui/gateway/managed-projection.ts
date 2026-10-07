@@ -17,7 +17,9 @@ export function managedProjection(context: any, entries: any[]) {
   // Helpers the Harness enables (up to four); a conversation recorded before
   // that was known says two.
   const maximum = Number.isInteger(counter?.maximum) && counter.maximum >= 0 && counter.maximum <= 4 ? counter.maximum : 2;
-  return {modelLabel:'agent-watch-auto', managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
+  // The member's access choice: "trusted-full-access" is Bypass.
+  const permission = last('agent-watch-permission')?.mode === 'trusted-full-access' ? 'trusted-full-access' : 'workspace-write';
+  return {modelLabel:'agent-watch-auto', managedPermission: permission, managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),
     ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {})};
 }

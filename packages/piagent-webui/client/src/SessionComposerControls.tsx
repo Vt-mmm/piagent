@@ -71,6 +71,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const [permissionValue, setPermissionValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
   useEffect(() => { setPermissionValue(null); }, [session.sessionRef]);
   useEffect(() => { if (permission?.state === "known") setPermissionValue(permission.value ?? null); }, [permission?.state, permission?.value]);
+  // A company conversation keeps its own choice: ask first, or Bypass.
+  useEffect(() => { if (session.managedPermission) setPermissionValue(session.managedPermission); }, [session.managedPermission]);
   const snapshotContext = snapshot?.usage.context;
   const contextKnown = snapshotContext?.state === "known";
   const contextTokens = contextKnown ? snapshotContext.tokens : session.contextUsage.usedTokens;
@@ -112,8 +114,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         label={`${(managed ? "agent-watch-auto" : session.modelLabel) ?? localize(locale, "Model session", "Session model")} · ${
           session.thinkingLevel === "unknown" || thinkingLevels.length > 0 && !thinkingLevels.includes(session.thinkingLevel) ? "—" : label(session.thinkingLevel, locale)}`}
         title={managed ? 'agent-watch-auto · Thinking' : localize(locale, "Đổi model và mức suy luận", "Change model and thinking level")} />}
-      {placement === "header" && !managed && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
-        label={permissionValue ? label(permissionValue, locale) : localize(locale, "Quyền", "Access")}
+      {placement === "header" && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
+        label={managed ? companyAccessLabel(permissionValue, locale) : permissionValue ? label(permissionValue, locale) : localize(locale, "Quyền", "Access")}
         title={localize(locale, "Đổi quyền truy cập", "Change access level")} />}
       {placement === "composer" && <ComposerControl active={panel === "context"} onClick={open("context")} icon={<DataUsageRounded fontSize="small" />}
         title={`Context · ${contextPercent}`} />}
@@ -148,20 +150,31 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         <McpConnectionActions compact sessionRef={session.sessionRef} connection={connection} onChanged={(value) => onConnectionsChanged?.(value)} /></ListItem>)}
         {connections && connections.connections.length === 0 && <ListItem><ListItemText primary={localize(locale, "Chưa có MCP", "No MCP configured")} /></ListItem>}
         {!connections && <ListItem><ListItemText primary={localize(locale, "Đang đọc…", "Loading…")} /></ListItem>}</List>}
-      {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(["read-only", "workspace-write", "trusted-full-access"] as const).map((value) =>
+      {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(managed ? ["workspace-write", "trusted-full-access"] as const : ["read-only", "workspace-write", "trusted-full-access"] as const).map((value) =>
         <Button key={value} variant={permissionValue === value ? "contained" : "outlined"} color={value === "trusted-full-access" ? "warning" : "primary"}
           disabled={!canSetPermission || optionBusy || session.liveState === "running"} onClick={() => changePermission(value)} sx={{ justifyContent: "flex-start" }}>
-          {label(value, locale)}</Button>)}{optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}</Stack>}
+          {managed ? companyAccessLabel(value, locale) : label(value, locale)}</Button>)}{optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}</Stack>}
       {panel === "changes" && <Box sx={{ px: .5, pt: .75 }}><Stat name={localize(locale, "Task changes", "Task changes")} value={String(source?.task?.counts.files ?? 0)} />
         <Stat name={localize(locale, "Working tree", "Working tree")} value={String(source?.workingTree.counts.files ?? 0)} />
         <Stat name={localize(locale, "Staged", "Staged")} value={String(source?.staged.counts.files ?? 0)} />
         <Button fullWidth variant="outlined" startIcon={<DifferenceRounded />} sx={{ mt: 1 }} onClick={() => { close(); onOpenChanges(); }}>
           {localize(locale, "Mở Source Changes", "Open Source Changes")}</Button></Box>}
     </Popover>
-    <ActionConfirmationDialog open={pendingPermission !== null} title={localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={managed ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
+      description={managed ? companyBypassDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={localize(locale, "Bật toàn quyền", "Enable full access")}
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
       onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); void applyPermission("trusted-full-access"); }} />
   </>;
+}
+
+// A company conversation's access: ask before each command that needs the
+// internet, or Bypass (asks only for what must be confirmed).
+export function companyAccessLabel(value: string | null | undefined, locale: UiLocale) {
+  return value === "trusted-full-access" ? "Bypass" : localize(locale, "Hỏi trước", "Ask first");
+}
+export function companyBypassDetail(locale: UiLocale) {
+  return localize(locale,
+    "Lệnh cần internet (cài package, tải file, git pull, test có server hay browser) chạy luôn, không hỏi. Vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài (git push, publish, deploy, upload, ssh), chạy migration database, xóa mà không rõ đích hoặc dùng sudo.",
+    "Commands that need the internet (package installs, downloads, git pull, tests with a server or browser) run without asking. You are still asked before anything that pushes or sends data out (git push, publish, deploy, uploads, ssh), database migrations, deletes whose target is unknown, and sudo.");
 }
