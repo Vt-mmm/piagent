@@ -943,6 +943,7 @@ export interface ToolCall {
       | "web-fetch"
       | "subagent"
       | "network"
+      | "docker"
       | "git"
       | "plan"
       | "other";

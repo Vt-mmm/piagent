@@ -23,7 +23,8 @@ import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, wo
 import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
-import { restorePermission, permissionSetter, networkConfirmation } from './permission.mjs';
+import { restorePermission, permissionSetter } from './permission.mjs';
+import { commandTools, servicesPrompt } from './command-tools.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 // Who the agent is: the model account may put another product's name in an
@@ -33,10 +34,10 @@ const BASE_PROMPT = 'You are Piagent, the company coding assistant. If an earlie
 // they name) are readable for reference; the sandbox keeps them read-only.
 const referencePrompt = home => ` The member may point you to folders outside the project for reference (an @path mention or a folder they name): read them with read, ls, grep and find. They are read-only: changes go in the project only. In those tools ~ is the member's home folder (${home}); in bash ~ is a private empty folder, so use absolute paths there.`;
 // Tests in the sandbox (tool-boundary.mjs, language-environment.mjs).
-const TEST_PROMPT = ' To run unit and integration tests, use bash. Installing packages (npm, pnpm, pip, uv, go, cargo, gradle, maven…) needs run_with_network once; the project\'s package caches are kept, so later runs work offline. ./mvnw reuses the Maven it already unpacked on this Mac; Maven\'s files are under $MAVEN_USER_HOME and $GRADLE_USER_HOME, not ~/.m2 or ~/.gradle (closed here). '
+const TEST_PROMPT = ' To run unit and integration tests, use bash. Installing packages (npm, pnpm, pip, uv, go, cargo, gradle, maven…) needs run_with_network once; the project\'s package caches are kept, so later runs work offline. ./mvnw and ./gradlew reuse the Maven and Gradle they already unpacked on this Mac; Maven\'s files are under $MAVEN_USER_HOME and $GRADLE_USER_HOME, not ~/.m2 or ~/.gradle (closed here). '
   + (process.platform === 'linux'
-    ? 'A command without network reaches only the servers it starts itself, which end with it: start a test server and run the tests in one command; a database or service already running on this machine needs run_with_network. Docker is not available in the sandbox: ask the member to start those services.'
-    : 'Servers on localhost (a test\'s own server, a local database) are reachable, except while a local proxy runs (the error says so: then use run_with_network). Docker and the iOS Simulator are not available in the sandbox: ask the member to start those services or run those tests.');
+    ? 'A command without network reaches only the servers it starts itself, which end with it: start a test server and run the tests in one command; a database or service already running on this machine needs run_with_network.'
+    : 'Servers on localhost (a test\'s own server, a local database) are reachable, except while a local proxy runs (the error says so: then use run_with_network).');
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
 export function taskClass(text) {
   // Advisory hint only. Studio owns allowed models, budgets and run authority.
@@ -124,23 +125,8 @@ export class ManagedSession {
     // With a research helper the web is its work: search results and pages
     // are read on its cheaper model, not in the main agent's context.
     if (!helperRoles(manifest).includes('research')) customTools.push(...self.webTools(self.modelRuntime, 'main'));
-    customTools.push({name:'run_with_network',label:'Run with network',description:'Run one shell command that needs the internet (package install, download, git pull of a public repository), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no network and cannot listen on a port. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
-      parameters:{type:'object',properties:{command:{type:'string',minLength:1,maxLength:4000},reason:{type:'string',minLength:1,maxLength:300},timeout:{type:'number',minimum:1,maximum:1800}},required:['command','reason'],additionalProperties:false},
-      execute:async(id,args,signal,onUpdate,ctx)=>{
-        // Bypass runs it without asking, unless it is one the member must confirm.
-        const confirm=await networkConfirmation(self,args.command);
-        const decision=confirm===null?{allowed:true,consume:()=>true}:await (await import('../runtime/inspection/approval-broker.ts')).piApprovalBroker.request({cwd:self.cwd,rawSessionId:self.session.sessionManager.getSessionId(),toolCallId:id,
-          action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'run_with_network',rawAction:{command:args.command},commandPreview:String(args.command),
-            targetPaths:[self.cwd],provider:'network',urlOrigin:null,requestedScope:'network-command-once',reason:(confirm==='ask'?String(args.reason):`Bypass still asks: ${confirm}. ${args.reason}`).slice(0,300),riskClass:'medium',
-            allowConsequence:'Run this exact command once, with internet access; a server it starts accepts connections while it runs.',denyConsequence:'The command does not run; the agent is told you declined.'},
-          terminalConfirm:()=>ctx?.ui?.confirm?.('Chạy lệnh có internet',`${args.command}\n\nLý do: ${args.reason}${confirm==='ask'?'':`\nBypass vẫn hỏi: ${confirm}`}\n\nĐồng ý: chạy đúng lệnh này một lần, có internet; server nó mở nhận kết nối trong lúc chạy.\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.`)??Promise.resolve(false),
-          unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
-        if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
-        let ok=false;
-        const before=await self.changedFiles();
-        try { const result=await self.boundary.invoke('bash',{command:args.command,...(args.timeout?{timeout:args.timeout}:{})},signal,onUpdate,ctx?.model,{network:true}); ok=!result?.isError; return result; }
-        finally { await self.claimChanges(before); await self.run?.afterTool('bash',args,ok,()=>self.digest()); await self.refreshReview(); }
-      }});
+    // Commands with network, and with Docker when this machine has an engine.
+    customTools.push(...commandTools(self));
     // Every helper role passes the tool's schema: Pi fixes a tool's schema
     // and description when the conversation opens, so a helper a Harness
     // saved later adds must already pass it. The system prompt, rebuilt each
@@ -160,7 +146,7 @@ export class ManagedSession {
     const agentsFiles = projectInstructions(self.cwd, self.boundary.repositoryTop);
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
-    const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
+    const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, terminalExtensions) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd);

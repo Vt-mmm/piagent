@@ -27,7 +27,8 @@ function machine() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-languages-')));
   const home = path.join(base, 'home'), project = path.join(base, 'shop'), sandboxHome = path.join(base, 'sandbox-home');
   for (const file of ['.gradle/caches/modules-2/files-2.1/x.jar', '.m2/repository/org/x/x.pom', '.m2/settings.xml',
-    '.m2/wrapper/dists/apache-maven-3.9.14/db91789b/bin/mvn', '.nuget/packages/newtonsoft.json/13.0.3/x.nupkg',
+    '.m2/wrapper/dists/apache-maven-3.9.14/db91789b/bin/mvn', '.gradle/wrapper/dists/gradle-8.10-bin/abc123/gradle-8.10/bin/gradle', '.gradle/wrapper/dists/gradle-8.10-bin/abc123/gradle-8.10-bin.zip.ok',
+    '.gradle/wrapper/dists/gradle-8.10-bin/abc123/gradle-8.10-bin.zip', '.gradle/wrapper/dists/gradle-8.11-bin/def456/gradle-8.11-bin.zip.part', '.nuget/packages/newtonsoft.json/13.0.3/x.nupkg',
     'go/pkg/mod/cache/download/example.com/x/@v/list', 'Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/release', `${ANDROID}/platforms/x`]) write(path.join(home, file));
   fs.mkdirSync(project); fs.mkdirSync(sandboxHome);
   return {base, home, project, sandboxHome};
@@ -56,6 +57,16 @@ test('package caches persist per project; the member\'s caches are read-only see
     assert.ok(env.readRoots.includes(path.join(home, '.m2/wrapper/dists')));
     languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome});
     assert.equal(fs.readlinkSync(dist), path.join(home, '.m2/wrapper/dists/apache-maven-3.9.14/db91789b'), 'a link already there is kept');
+    // ./gradlew: its own folder per distribution (the wrapper locks a file
+    // there), the marker copied and the unpacked distribution linked; one
+    // still downloading is left out.
+    const gradle = path.join(env.cache, 'gradle/wrapper/dists/gradle-8.10-bin/abc123');
+    assert.ok(fs.lstatSync(gradle).isDirectory());
+    assert.equal(fs.readlinkSync(path.join(gradle, 'gradle-8.10')), path.join(home, '.gradle/wrapper/dists/gradle-8.10-bin/abc123/gradle-8.10'));
+    assert.ok(fs.lstatSync(path.join(gradle, 'gradle-8.10-bin.zip.ok')).isFile());
+    assert.equal(fs.existsSync(path.join(gradle, 'gradle-8.10-bin.zip')), false, 'the downloaded archive is not needed');
+    assert.equal(fs.existsSync(path.join(env.cache, 'gradle/wrapper/dists/gradle-8.11-bin/def456')), false);
+    assert.ok(env.readRoots.includes(path.join(home, '.gradle/wrapper/dists')));
     assert.equal(env.env.offline.GOPROXY, `file://${path.join(home, 'go/pkg/mod/cache/download')},off`, 'offline Go reads the member\'s modules, never the internet');
     assert.match(env.env.network.GOPROXY, /^file:\/\/.+,https:\/\/proxy\.golang\.org,direct$|^file:\/\/.+,.+/);
     assert.equal(env.env.offline.ANDROID_HOME, path.join(home, ANDROID));

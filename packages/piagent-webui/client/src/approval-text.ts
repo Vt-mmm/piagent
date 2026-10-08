@@ -12,14 +12,15 @@ type Action = ApprovalRequest["action"];
 const KINDS: Record<string, [string, string]> = { "workspace-patch": ["Sửa trong project", "Change in the project"],
   "external-provider-action": ["Tác động ra bên ngoài", "Reaches outside this machine"] };
 const SCOPES: Record<string, [string, string]> = { "one-shell-command": ["Đúng một lệnh", "This one command"],
-  "network-command-once": ["Đúng một lệnh, có mạng", "This one command, with network"], "one-external-action": ["Đúng một hành động", "This one action"] };
+  "network-command-once": ["Đúng một lệnh, có mạng", "This one command, with network"], "docker-command-once": ["Đúng một lệnh, có mạng và Docker", "This one command, with network and Docker"], "one-external-action": ["Đúng một hành động", "This one action"] };
 const CONSEQUENCES: Record<string, [string, string]> = {
   "Run this exact command once, after the guard checks the working tree again.": ["Chạy đúng lệnh này một lần, sau khi guard kiểm tra lại thư mục làm việc.", ""],
   "The command does not run; the agent is told you declined.": ["Lệnh không chạy; agent được báo là bạn đã từ chối.", ""],
   "Run this exact action once, after the guard checks its authority again.": ["Thực hiện đúng hành động này một lần, sau khi guard kiểm tra lại quyền.", ""],
   "The action does not run; nothing outside changes.": ["Hành động không chạy; không có gì bên ngoài bị thay đổi.", ""],
   "Run this exact command once, with internet access.": ["Chạy đúng lệnh này một lần, có mạng.", ""],
-  "Run this exact command once, with internet access; a server it starts accepts connections while it runs.": ["Chạy đúng lệnh này một lần, có mạng; server mà lệnh mở nhận kết nối trong lúc chạy.", ""] };
+  "Run this exact command once, with internet access; a server it starts accepts connections while it runs.": ["Chạy đúng lệnh này một lần, có mạng; server mà lệnh mở nhận kết nối trong lúc chạy.", ""],
+  "Run this exact command once, with internet access and the Docker engine; a container it starts can read folders Docker shares from this machine and may keep running.": ["Chạy đúng lệnh này một lần, có mạng và Docker; container mà lệnh tạo đọc được các thư mục Docker chia sẻ trên máy và có thể tiếp tục chạy.", ""] };
 const known = (table: Record<string, [string, string]>, value: string, locale: UiLocale) => {
   const entry = table[value]; return entry ? localize(locale, entry[0], entry[1] || value) : null;
 };
