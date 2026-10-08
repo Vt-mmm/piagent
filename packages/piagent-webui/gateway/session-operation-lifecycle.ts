@@ -18,9 +18,10 @@ export type SessionOperationObservation = Readonly<{
 
 const DEFAULT_RETRY_POLICY: SessionOperationRetryPolicy = Object.freeze({
   // Pi's provider retry is useful before a response exists, but a long retry
-  // chain burns quota and keeps the browser in Working. One automatic retry
-  // absorbs an ordinary transient failure without replaying a persistent one.
-  maximumAttempts: 1,
+  // chain burns quota and keeps the browser in Working. Two automatic retries
+  // (the company turn retry's budget, turn-retry.mjs) absorb a transient
+  // failure without replaying a persistent one for long.
+  maximumAttempts: 2,
   maximumDelayMs: 8_000
 });
 
@@ -145,6 +146,12 @@ export class SessionOperationLifecycle {
       if (this.#phase === "pending") this.#phase = "running";
     }
 
+    // Replay safety belongs to the model call that failed: Pi retries only
+    // that call, after the tools of earlier ones ran once. A new answer
+    // starts clean; output or a tool of this answer makes it unsafe.
+    if (type === "message_start" && event?.message?.role === "assistant") {
+      this.#visibleAssistantOutput = false; this.#toolCallObserved = false;
+    }
     if (type === "message_update") {
       const update = event?.assistantMessageEvent;
       if (update?.type === "text_delta" && hasVisibleText(update.delta)) this.#visibleAssistantOutput = true;

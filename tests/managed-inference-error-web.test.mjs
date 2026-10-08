@@ -35,16 +35,19 @@ test('managed WebUI shows a Studio refusal instead of an endless wait and accept
   await page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).fill('hello em');await page.getByRole('button',{name:/^Gửi$|^Send$/}).click();
   // Who failed (a harness role, never the model), what kind, what to do, and the code an administrator needs.
   const refusal=/Main agent lỗi · Dịch vụ model lỗi/;
+  // A passing service failure is asked again twice (2 s, then 4 s) before it is shown.
+  await expect.poll(()=>requests.length,{timeout:20000}).toBe(3);
   await expect(page.getByText(refusal).first()).toBeVisible({timeout:15000});
   await expect(page.getByText(/Studio đã nhận yêu cầu nhưng dịch vụ model phía sau không trả lời/).first()).toBeVisible();
   await expect(page.getByText(/^Mã: connector_unavailable · request [0-9a-f]{8}$/).first()).toBeVisible();
-  await expect(page.getByText(/1 request/).first()).toBeVisible();
+  await expect(page.getByText(/3 request/).first()).toBeVisible();
   assert.doesNotMatch(await page.locator('body').innerText(),/claude-opus|opus-5/i);
   const composer=page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).last();
   await composer.fill('thử lại');await composer.press('Enter');
-  await expect.poll(()=>requests.length,{timeout:15000}).toBe(2);
+  await expect.poll(()=>requests.length,{timeout:20000}).toBe(6);
   await expect(page.getByText('thử lại',{exact:true}).first()).toBeVisible();
   await expect(page.getByText(refusal)).toHaveCount(2,{timeout:15000});
+  assert.equal(requests.length,6,'two retries for each message, no more');
  }finally{await browser?.close();await gateway?.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}
 });
 

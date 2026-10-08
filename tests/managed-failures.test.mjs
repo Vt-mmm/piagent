@@ -216,9 +216,10 @@ test('Stop ends a wait for a free account; a wait that lasts too long fails with
 });
 
 // Studio admitted the request and the answer stream ended with nothing in it:
-// a named service failure, not asked again. A failure no code names keeps its
-// own words, redacted, in the conversation file for a later look.
-test('an empty answer stream is a named failure; an unnamed one keeps its words', { skip: !supported, timeout: 120000 }, async () => {
+// a named service failure, asked again twice (turn-retry.mjs) and then shown.
+// A failure no code names is not asked again and keeps its own words,
+// redacted, in the conversation file for a later look.
+test('an empty answer stream is a named failure after two retries; an unnamed one keeps its words', { skip: !supported, timeout: 120000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-')); let mode = 'empty';
   const server = await studio((_req, res) => {
     if (mode === 'ok') return false;
@@ -228,15 +229,17 @@ test('an empty answer stream is a named failure; an unnamed one keeps its words'
   });
   const authority = authorityOf(), agent = broker(authority);
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
   try {
+    assert.equal(managed.turnRetry, true);
     await managed.session.prompt('hello');
     assert.equal(last(managed).stopReason, 'error');
     assert.match(last(managed).errorMessage, /^Agent Watch main agent: the model returned no response \[upstream_incomplete\]$/);
-    assert.equal(server.requests.length, 1, 'not asked again');
+    assert.equal(server.requests.length, 3, 'asked again twice, then shown');
     mode = 'garbled';
     await managed.session.prompt('again');
     const kept = managed.session.sessionManager.getEntries().filter(entry => entry.customType === 'agent-watch-failure-detail');
-    assert.equal(server.requests.length, 2);
+    assert.equal(server.requests.length, 4, 'a failure no code names is not asked again');
     if (/\[managed-request-failed\]$/.test(last(managed).errorMessage)) {
       assert.equal(kept.length, 1); assert.equal(kept[0].data.role, 'main');
       assert.doesNotMatch(kept[0].data.text, /as_live_1/, 'credentials are redacted');
@@ -244,6 +247,35 @@ test('an empty answer stream is a named failure; an unnamed one keeps its words'
     mode = 'ok';
     await managed.session.prompt('once more');
     assert.equal(last(managed).stopReason, 'stop');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// One passing failure after admission costs the member nothing: the answer
+// comes on the next ask, the failed attempt is not in what the model sees,
+// and a request the model rejected is never asked again.
+test('a passing failure after admission is asked again once and answered; a rejected request is not', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-')); let mode = 'cut-once';
+  const server = await studio((req, res) => {
+    if (mode === 'cut-once') { mode = 'ok'; res.writeHead(200, { 'Content-Type': 'text/event-stream' }); res.end(); return true; }
+    if (mode === 'rejected') return refuse(400, 'upstream_request_rejected', true)(req, res);
+    return false;
+  });
+  const authority = authorityOf(), agent = broker(authority);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
+  const retries = []; managed.session.subscribe(event => { if (event.type === 'auto_retry_start' || event.type === 'auto_retry_end') retries.push([event.type, event.attempt, event.success ?? null]); });
+  try {
+    await managed.session.prompt('hello');
+    assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
+    assert.equal(server.requests.length, 2);
+    assert.deepEqual(retries, [['auto_retry_start', 1, null], ['auto_retry_end', 1, true]]);
+    assert.equal(JSON.stringify(server.requests[1].body.messages ?? server.requests[1].body.input).includes('no response'), false,
+      'the failed attempt is not sent to the model');
+    mode = 'rejected';
+    await managed.session.prompt('again');
+    assert.equal(last(managed).stopReason, 'error');
+    assert.match(last(managed).errorMessage, /\[upstream_request_rejected\]/);
+    assert.equal(server.requests.length, 3, 'a rejected request is not asked again');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -650,4 +682,25 @@ for (const provider of ['claude', 'codex']) test(`a ${provider} task that fails 
     }
     assert.doesNotMatch(text, /upstream_rate_limited|token_quota_exhausted|Agent Watch main agent/, 'the failure itself is not replayed to the model');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('only a passing failure after admission is asked again by the turn retry, by code, never by words', async () => {
+  const { companyTurnRetryable, enableCompanyTurnRetry } = await import('../packages/piagent-core/managed/turn-retry.mjs');
+  const failed = (code) => ({ stopReason: 'error', errorMessage: describeFailure('main', `503 {"error":{"code":"${code}","request_id":"${REQUEST}"}}`) });
+  for (const code of ['upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable', 'connector_unavailable', 'connector_execution_failed', 'inference_unavailable'])
+    assert.equal(companyTurnRetryable(failed(code)), true, code);
+  assert.equal(companyTurnRetryable({ stopReason: 'error', errorMessage: describeFailure('main', 'fetch failed') }), true, 'Studio unreachable');
+  // Words Pi would retry on ("rate limited", "quota", "timeout" in a sentence) do not count here.
+  for (const code of ['upstream_rate_limited', 'token_quota_exhausted', 'concurrency_limit', 'authentication_required', 'policy_denied', 'upstream_request_rejected',
+    'upstream_policy_refusal', 'request_too_large', 'session_account_unavailable_start_new_session', 'run_state_conflict', 'live_trial_limit_reached', 'operation_unavailable'])
+    assert.equal(companyTurnRetryable(failed(code)), false, code);
+  assert.equal(companyTurnRetryable({ stopReason: 'aborted', errorMessage: 'Request was aborted' }), false, 'a Stop is never retried');
+  assert.equal(companyTurnRetryable({ stopReason: 'error', errorMessage: 'something nobody named' }), false);
+  // A Pi without the hook keeps retry off rather than retrying by words.
+  const applied = []; const settings = { applyOverrides: (value) => applied.push(value) };
+  assert.equal(enableCompanyTurnRetry({}, settings), false); assert.deepEqual(applied, []);
+  const session = { _isRetryableError: () => true };
+  assert.equal(enableCompanyTurnRetry(session, settings), true);
+  assert.equal(session._isRetryableError(failed('upstream_rate_limited')), false);
+  assert.deepEqual(applied, [{ retry: { enabled: true, maxRetries: 2, baseDelayMs: 2000 } }]);
 });

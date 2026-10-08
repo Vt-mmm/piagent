@@ -40,7 +40,7 @@ function waitFor(assertion, timeout = 1_000) {
 
 describe("Piagent replay-safe operation lifecycle", () => {
   it("admits only bounded pristine provider retries and keeps compaction on a separate phase", () => {
-    assert.deepEqual(sessionOperationRetryPolicy(), { maximumAttempts: 1, maximumDelayMs: 8_000 });
+    assert.deepEqual(sessionOperationRetryPolicy(), { maximumAttempts: 2, maximumDelayMs: 8_000 });
     assert.throws(() => sessionOperationRetryPolicy({ maximumAttempts: 11 }), /retry-policy-invalid/);
     const lifecycle = new SessionOperationLifecycle({ operationRef: "operation_pristine",
       retryPolicy: { maximumAttempts: 2, maximumDelayMs: 20 } });
@@ -68,7 +68,7 @@ describe("Piagent replay-safe operation lifecycle", () => {
     assert.equal(compaction.observe({ type: "auto_retry_start", attempt: 1, delayMs: 5 }).retry, "allowed");
   });
 
-  it("blocks retry after visible output or any tool call and ignores foreign or terminal events", () => {
+  it("blocks retry after visible output or a tool call of the failing answer and ignores foreign or terminal events", () => {
     const visible = new SessionOperationLifecycle({ operationRef: "operation_visible" });
     visible.observe({ type: "agent_start" });
     visible.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "I changed the file." } });
@@ -84,6 +84,22 @@ describe("Piagent replay-safe operation lifecycle", () => {
     assert.equal(tool.replayUnsafe, true);
     assert.equal(tool.observe({ type: "auto_retry_start", attempt: 1, delayMs: 0 }).reasonCode,
       "automatic-retry-replay-unsafe");
+
+    // Pi asks again only the model call that failed; the tools of earlier
+    // answers ran once and stay in the conversation. A failed answer that
+    // showed nothing after a tool ran is safe to ask again.
+    const later = new SessionOperationLifecycle({ operationRef: "operation_later" });
+    later.observe({ type: "agent_start" });
+    later.observe({ type: "message_start", message: { role: "assistant" } });
+    later.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Reading the file first." } });
+    later.observe({ type: "message_end", message: { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "call-read", name: "read", arguments: {} }] } });
+    later.observe({ type: "tool_execution_start", toolCallId: "call-read", toolName: "read" });
+    later.observe({ type: "tool_execution_end", toolCallId: "call-read", toolName: "read", isError: false });
+    later.observe({ type: "message_start", message: { role: "assistant" } });
+    later.observe({ type: "message_end", message: { role: "assistant", stopReason: "error", content: [] } });
+    assert.equal(later.replayUnsafe, false);
+    assert.equal(later.observe({ type: "agent_end", willRetry: true }).retry, "none");
+    assert.equal(later.observe({ type: "auto_retry_start", attempt: 1, delayMs: 0 }).retry, "allowed");
 
     const correlated = new SessionOperationLifecycle({ operationRef: "operation_current" });
     correlated.observe({ type: "agent_start" });
@@ -102,6 +118,8 @@ describe("Piagent replay-safe operation lifecycle", () => {
     stream.observe({ type: "tool_execution_start", toolCallId: "call-write", toolName: "write" });
     stream.observe({ type: "tool_execution_end", toolCallId: "call-write", toolName: "write", isError: false });
     stream.observe({ type: "message_start", message: { role: "assistant" } });
+    // The failing answer had already shown text: asking again would show it twice.
+    stream.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "I wrote the file and now" } });
     stream.observe({ type: "message_end", message: { role: "assistant", stopReason: "error", content: [] } });
     const decision = stream.observe({ type: "auto_retry_start", attempt: 1, maxAttempts: 10, delayMs: 0 });
     assert.equal(decision.retry, "abort");
@@ -137,6 +155,7 @@ describe("Piagent replay-safe operation lifecycle", () => {
         emit({ type: "tool_execution_start", toolCallId: "call-write", toolName: "write" });
         emit({ type: "tool_execution_end", toolCallId: "call-write", toolName: "write", isError: false });
         emit({ type: "message_start", message: { role: "assistant" } });
+        emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Writing it again" } });
         emit({ type: "message_end", message: { role: "assistant", stopReason: "error", content: [] } });
         emit({ type: "agent_end", messages: [], willRetry: true });
         emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 10, delayMs: 0, errorMessage: "transient" });
