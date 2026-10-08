@@ -12,6 +12,7 @@ const MAX_CONTROL_BODY_BYTES = 70_000;
 const CURSOR = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const QUESTION_PATH = /^\/api\/v1\/sessions\/([^/]+)\/questions(?:\/([^/]+)\/answer)?$/;
 const PROJECT_PATH = /^\/api\/v1\/projects\/([^/]+)\/(paths|commands)$/;
+const BRANCH_PATH = /^\/api\/v1\/projects\/([^/]+)\/branches(\/switch)?$/;
 
 export type UpdateRoutes = {
   // What is installed, what is available, and the last update run.
@@ -34,6 +35,10 @@ type Options = {
   suggestPaths?: (projectRef: string, query: string) => unknown | Promise<unknown>;
   // The project's and the member's commands and skills; null as above.
   listCommands?: (projectRef: string) => unknown | Promise<unknown>;
+  // The project's Git branches, and a switch to one of them (or a new one);
+  // null as above.
+  listBranches?: (projectRef: string) => unknown | Promise<unknown>;
+  switchBranch?: (projectRef: string, request: unknown) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
 };
 
@@ -52,6 +57,11 @@ async function jsonBody(context: Context, code: string): Promise<{ ok: true; val
   try { return { ok: true, value: JSON.parse((await requestBody(context.request, MAX_CONTROL_BODY_BYTES)).toString("utf8")) }; }
   catch (error) { errorResponse(context.response, (error as Error).message === "body-limit" ? 413 : 400, code); return { ok: false }; }
 }
+
+const BRANCH_STATUS: Record<string, number> = {
+  "branch-request-invalid": 400, "branch-name-invalid": 400, "not-a-git-repository": 404, "branch-not-found": 404,
+  "branch-switch-blocked-running": 409, "branch-switch-local-changes": 409, "branch-exists": 409, "branch-switch-unfinished-merge": 409
+};
 
 const UPDATE_STATUS: Record<string, number> = {
   "update-not-installable": 409, "update-blocked-running": 409, "update-already-running": 409,
@@ -93,6 +103,34 @@ export async function routeMemberRequest(context: Context, options: Options): Pr
       const value = await read(projectRef, query);
       if (value === null) errorResponse(response, 404, "project-not-found"); else jsonResponse(response, 200, value);
     } catch { errorResponse(response, 503, `${project[2] === "paths" ? "path-suggestions" : "commands"}-unavailable`); }
+    return true;
+  }
+
+  const branches = BRANCH_PATH.exec(url.pathname);
+  if (branches && (request.method === "GET" && !branches[2] && options.listBranches || request.method === "POST" && branches[2] && options.switchBranch)) {
+    const projectRef = decodeURIComponent(branches[1]);
+    if (request.method === "GET") {
+      if (!auth.authenticate(request)) { errorResponse(response, 401, "authentication-required"); return true; }
+      if (!CURSOR.test(projectRef)) { errorResponse(response, 400, "invalid-project-ref"); return true; }
+      try {
+        const value = await options.listBranches!(projectRef);
+        if (value === null) errorResponse(response, 404, "project-not-found"); else jsonResponse(response, 200, value);
+      } catch { errorResponse(response, 503, "branches-unavailable"); }
+      return true;
+    }
+    if (!authorizeChange(context)) return true;
+    if (!CURSOR.test(projectRef)) { errorResponse(response, 400, "invalid-project-ref"); return true; }
+    const body = await jsonBody(context, "branch-request-invalid");
+    if (!body.ok) return true;
+    try {
+      const value = await options.switchBranch!(projectRef, body.value);
+      if (value === null) errorResponse(response, 404, "project-not-found"); else jsonResponse(response, 200, value);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "branch-switch-failed";
+      const detail = (error as { detail?: unknown })?.detail;
+      jsonResponse(response, BRANCH_STATUS[code] ?? 500, { error: { code: BRANCH_STATUS[code] || code === "branch-switch-failed" || code === "branch-switch-timeout" ? code : "branch-switch-failed",
+        ...(typeof detail === "string" ? { detail } : {}) } });
+    }
     return true;
   }
 

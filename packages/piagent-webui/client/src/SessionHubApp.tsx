@@ -47,7 +47,7 @@ import { ChangesPanel } from "./ChangesPanel.tsx";
 import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { SettingsPage, type SettingsSection } from "./SettingsPage.tsx";
 import { StatusBar, STATUS_BAR_HEIGHT } from "./StatusBar.tsx";
-import { GitBranchLabel } from "./GitBranchLabel.tsx";
+import { BranchSwitcher } from "./BranchSwitcher.tsx";
 import { CommandPalette, useDashboardShortcuts } from "./CommandPalette.tsx";
 import { dashboardCommands } from "./dashboard-commands.tsx";
 import { updateInProgress, useUpdates } from "./update-state.tsx";
@@ -621,7 +621,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       <Box sx={{ flex: 1, minWidth: 0 }}><Typography component="h1" noWrap sx={{ fontWeight: 600, fontSize: "inherit" }}>{title}</Typography>
         {view === "chat" && selected && <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ display: "flex", alignItems: "center", gap: .75, minWidth: 0 }}>
           <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", flexShrink: 3, minWidth: 24 }}>{selected.projectLabel}</Box>
-          {selected.gitBranch && <><Box component="span" aria-hidden sx={{ color: "text.disabled" }}>·</Box><GitBranchLabel branch={selected.gitBranch} locale={locale} maxWidth="45%" /></>}</Typography>}</Box>
+          {selected.gitBranch && <><Box component="span" aria-hidden sx={{ color: "text.disabled" }}>·</Box><BranchSwitcher projectRef={selected.projectRef} projectLabel={selected.projectLabel} branch={selected.gitBranch} locale={locale} maxWidth="45%"
+            onSwitched={() => void refresh()} /></>}</Typography>}</Box>
       {view === "chat" && selected && <><SessionComposerControls placement="header" session={selected} snapshot={currentInspection} locale={locale}
         onOpenChanges={() => openInspector("source")}
         canSetModel={connection === "connected" && capabilities?.capabilities.sessionActions.setModel.status === "available"}
@@ -666,7 +667,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
     <UpdatePrompt locale={locale} onDetails={() => openSettings("updates")} />
-    <StatusBar locale={locale} connection={connection} running={running} branch={view === "chat" ? selected?.gitBranch : undefined} onUpdates={() => openSettings("updates")} onPalette={() => setPaletteOpen(true)} />
+    <StatusBar locale={locale} connection={connection} running={running} session={view === "chat" ? selected : undefined}
+      onBranchSwitched={() => void refresh()} onUpdates={() => openSettings("updates")} onPalette={() => setPaletteOpen(true)} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} locale={locale} />
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },

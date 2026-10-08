@@ -7,7 +7,7 @@ import Tooltip from "@mui/material/Tooltip";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
 import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
-import { GitBranchLabel } from "./GitBranchLabel.tsx";
+import { BranchSwitcher } from "./BranchSwitcher.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 import { updateInProgress, useUpdates } from "./update-state.tsx";
 
@@ -22,8 +22,8 @@ const staticSx = { height: STATUS_BAR_HEIGHT, px: 1, gap: .75, fontSize: 12, col
 const itemSx = { ...staticSx, borderRadius: 0, "&:hover": { bgcolor: "action.hover", color: "text.primary" },
   "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } };
 
-export function StatusBar({ locale, connection, running, branch, onUpdates, onPalette }: { locale: UiLocale; connection: string; running: number; branch?: SessionRow["gitBranch"];
-  onUpdates(): void; onPalette(): void }) {
+export function StatusBar({ locale, connection, running, session, onBranchSwitched, onUpdates, onPalette }: { locale: UiLocale; connection: string; running: number;
+  session?: SessionRow; onBranchSwitched?(): void; onUpdates(): void; onPalette(): void }) {
   const { status, supported } = useUpdates();
   const wide = useMediaQuery((theme: import("@mui/material/styles").Theme) => theme.breakpoints.up("md"));
   const updating = updateInProgress(status), available = Boolean(status?.updateAvailable && status.installable);
@@ -35,7 +35,8 @@ export function StatusBar({ locale, connection, running, branch, onUpdates, onPa
     <Stack direction="row" sx={staticSx}>
       <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: connection === "connected" ? "success.main" : "warning.main" }} />
       <span>{connection === "connected" ? "Gateway live" : connection}</span><Box component="span" sx={{ color: "text.disabled" }}>local</Box></Stack>
-    {branch && <Stack direction="row" sx={{ ...staticSx, minWidth: 0 }}><GitBranchLabel branch={branch} locale={locale} maxWidth={320} /></Stack>}
+    {session?.gitBranch && <Stack direction="row" sx={{ ...staticSx, minWidth: 0 }}><BranchSwitcher projectRef={session.projectRef} projectLabel={session.projectLabel}
+      branch={session.gitBranch} locale={locale} maxWidth={320} onSwitched={onBranchSwitched} /></Stack>}
     {running > 0 && <Stack direction="row" sx={staticSx}>
       <CircularProgress size={10} thickness={6} /><span>{localize(locale, `${running} đang chạy`, `${running} running`)}</span></Stack>}
     <Box sx={{ flex: 1 }} />

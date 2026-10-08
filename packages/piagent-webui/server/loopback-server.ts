@@ -72,6 +72,8 @@ export async function startLoopbackServer(options: {
   answerSessionQuestion?: (sessionRef: string, questionRef: string, answer: unknown) => unknown | Promise<unknown>;
   suggestPaths?: (projectRef: string, query: string) => unknown | Promise<unknown>;
   listCommands?: (projectRef: string) => unknown | Promise<unknown>;
+  listBranches?: (projectRef: string) => unknown | Promise<unknown>;
+  switchBranch?: (projectRef: string, request: unknown) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
   bootstrapTtlMs?: number;
   sessionTtlMs?: number;
@@ -294,7 +296,8 @@ export async function startLoopbackServer(options: {
       catch { return errorResponse(response, 503, "attachment-runtime-unavailable"); }
     }
 
-    // The main agent's questions to the member, and Piagent's own updates.
+    // The main agent's questions to the member, a project's Git branches, and
+    // Piagent's own updates.
     if (await routeMemberRequest({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options)) return;
 
     if (request.method === "POST" && url.pathname.startsWith("/api/v1/approvals/") && url.pathname.endsWith("/decision") && options.executeApproval) {

@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changes
+
+- The Git branch in the chat header and the status bar is a button: it lists the project's branches (local ones, then remote ones with no local branch yet) and switches the folder to one of them, or to a new branch typed in the menu, made from the current commit. A switch waits while any conversation in that folder runs, company ones included, so an agent never finds its files changed under it. Git does the switch itself, so it refuses what it refuses in a Terminal; the menu shows its reason in its own words (for example, uncommitted changes the switch would overwrite) and leaves the files as they were.
+
 ## v1.17.0 - 2026-10-08
 
 The dashboard shows which Git branch each project is on.

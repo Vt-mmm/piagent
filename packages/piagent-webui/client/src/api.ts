@@ -458,3 +458,35 @@ export async function answerSessionQuestion(sessionRef: string, questionRef: str
     body: JSON.stringify(answer) });
   if (!response.ok) throw new WebUiRequestError(response.status);
 }
+
+export type GitBranchHead = { name: string; detached: boolean };
+export type GitBranchRow = { name: string; current: boolean; remote: string | null; committedAt: string | null };
+export type ProjectBranches = { repository: false; running: number }
+  | { repository: true; head: GitBranchHead | null; branches: GitBranchRow[]; truncated: boolean; changedFiles: number; running: number };
+
+export class BranchRequestError extends Error {
+  readonly status: number; readonly code: string; readonly detail: string | null;
+  constructor(status: number, code: string, detail: string | null) { super(code); this.status = status; this.code = code; this.detail = detail; }
+}
+
+export function readProjectBranches(projectRef: string, signal?: AbortSignal): Promise<ProjectBranches> {
+  return readJson(`/api/v1/projects/${encodeURIComponent(projectRef)}/branches`, signal);
+}
+
+// Switches the project folder to a branch: an existing one, a new one from
+// the current commit (create), or a remote one as a new tracking branch.
+export async function switchProjectBranch(projectRef: string, request: { branch: string; create?: boolean; remote?: string | null },
+  signal?: AbortSignal): Promise<{ head: GitBranchHead | null }> {
+  const csrf = browserCsrfToken(); if (!csrf) throw new BranchRequestError(403, "mutation-authority-rejected", null);
+  const response = await csrfFetch(`/api/v1/projects/${encodeURIComponent(projectRef)}/branches/switch`, { method: "POST", credentials: "same-origin", signal,
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(request) });
+  if (response.status === 401) noteUnauthorized();
+  if (!response.ok) {
+    let code = `branch-request-${response.status}`, detail: string | null = null;
+    try { const body = await response.json() as { error?: { code?: unknown; detail?: unknown } };
+      if (typeof body.error?.code === "string") code = body.error.code;
+      if (typeof body.error?.detail === "string") detail = body.error.detail; } catch { /* keep the status code */ }
+    throw new BranchRequestError(response.status, code, detail);
+  }
+  return await response.json();
+}

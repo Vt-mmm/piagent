@@ -70,3 +70,53 @@ describe("Piagent Gateway Git branch of a project", () => {
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 });
+
+describe("Piagent Gateway Git branch switch", () => {
+  it("lists local and remote branches, switches, creates, tracks a remote branch and keeps Git's refusals", async () => {
+    const { listBranches, switchBranch } = await import("../packages/piagent-webui/gateway/git-branches.ts");
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-git-branches-")));
+    try {
+      const origin = path.join(root, "origin"), repo = path.join(root, "repo");
+      fs.mkdirSync(origin); git(origin, "init", "-q");
+      fs.writeFileSync(path.join(origin, "a.txt"), "one\n"); git(origin, "add", "a.txt"); git(origin, "commit", "-q", "-m", "first");
+      git(origin, "checkout", "-q", "-b", "feature/remote-only"); git(origin, "commit", "-q", "--allow-empty", "-m", "remote work");
+      git(origin, "checkout", "-q", "main");
+      execFileSync("git", ["clone", "-q", origin, repo], { stdio: "pipe" });
+      git(repo, "branch", "local-only");
+
+      let list = await listBranches(repo);
+      assert.equal(list.repository, true);
+      assert.deepEqual(list.head, { name: "main", detached: false });
+      assert.deepEqual(list.branches.filter((item) => !item.remote).map((item) => [item.name, item.current]).sort(),
+        [["local-only", false], ["main", true]]);
+      assert.deepEqual(list.branches.filter((item) => item.remote).map((item) => `${item.remote}/${item.name}`), ["origin/feature/remote-only"],
+        "a remote branch shows only when no local branch has its name");
+      assert.equal(list.changedFiles, 0);
+
+      assert.deepEqual(await switchBranch(repo, { branch: "local-only" }), { name: "local-only", detached: false });
+      assert.deepEqual(await switchBranch(repo, { branch: "feature/new-ui", create: true }), { name: "feature/new-ui", detached: false });
+      assert.deepEqual(await switchBranch(repo, { branch: "feature/remote-only", remote: "origin" }), { name: "feature/remote-only", detached: false });
+      assert.match(git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"), /^origin\/feature\/remote-only$/);
+
+      await assert.rejects(switchBranch(repo, { branch: "main", create: true }), (error) => error.message === "branch-exists");
+      await assert.rejects(switchBranch(repo, { branch: "--orphan" }), (error) => error.message === "branch-name-invalid");
+      await assert.rejects(switchBranch(repo, { branch: "bad..name", create: true }), (error) => error.message === "branch-name-invalid");
+      await assert.rejects(switchBranch(repo, { branch: "nowhere" }), (error) => error.message === "branch-not-found");
+
+      // A change Git would overwrite stops the switch, with Git's own words.
+      git(repo, "checkout", "-q", "main");
+      fs.writeFileSync(path.join(repo, "a.txt"), "on main\n"); git(repo, "commit", "-q", "-am", "main edit");
+      git(repo, "checkout", "-q", "local-only");
+      fs.writeFileSync(path.join(repo, "a.txt"), "uncommitted\n");
+      list = await listBranches(repo);
+      assert.equal(list.changedFiles, 1);
+      await assert.rejects(switchBranch(repo, { branch: "main" }), (error) => error.message === "branch-switch-local-changes"
+        && /would be overwritten/.test(error.detail ?? ""));
+      assert.deepEqual(list.head, { name: "local-only", detached: false });
+      assert.equal(fs.readFileSync(path.join(repo, "a.txt"), "utf8"), "uncommitted\n", "the member's change is untouched");
+
+      const plain = path.join(root, "plain"); fs.mkdirSync(plain);
+      assert.equal(await listBranches(plain), null);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});

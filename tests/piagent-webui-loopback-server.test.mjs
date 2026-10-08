@@ -592,3 +592,46 @@ describe("Piagent WebUI path suggestions", () => {
     assert.deepEqual(asked, [["project.a", "~/Documents/old shop/"], ["project.unknown", ""], ["project.a", "boom"]]);
   });
 });
+
+describe("Piagent WebUI Git branches", () => {
+  // A project's branches are read by a signed-in page; a switch needs the
+  // page's Origin and CSRF, and Git's refusals keep their code and words.
+  it("reads a project's branches and switches only with Origin and CSRF", async () => {
+    const switches = [];
+    const server = await start({
+      listBranches: async (projectRef) => projectRef === "project.unknown" ? null
+        : { repository: true, head: { name: "main", detached: false }, branches: [{ name: "main", current: true, remote: null, committedAt: null }],
+          truncated: false, changedFiles: 0, running: 0 },
+      switchBranch: async (projectRef, request) => {
+        switches.push([projectRef, request]);
+        if (request?.branch === "busy") throw new Error("branch-switch-blocked-running");
+        if (request?.branch === "dirty") throw Object.assign(new Error("branch-switch-local-changes"), { detail: "error: Your local changes would be overwritten by checkout" });
+        if (request?.branch === "boom") throw new Error("spawn EACCES /secret/path");
+        return { head: { name: request.branch, detached: false } };
+      } });
+    const path = "/api/v1/projects/project.a/branches";
+    assert.equal((await request(server.origin, path)).status, 401, "a signed-in page only");
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    const listed = await request(server.origin, path, { headers: { Cookie: cookie } });
+    assert.equal(listed.status, 200); assert.equal(JSON.parse(listed.body).head.name, "main");
+    assert.equal((await request(server.origin, "/api/v1/projects/project.unknown/branches", { headers: { Cookie: cookie } })).status, 404);
+    assert.equal((await request(server.origin, "/api/v1/projects/..%2Fetc/branches", { headers: { Cookie: cookie } })).status, 400);
+    const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    const post = (body, extra = {}) => request(server.origin, `${path}/switch`, { method: "POST", headers: { ...headers, ...extra }, body: JSON.stringify(body) });
+    assert.equal((await post({ branch: "feature" }, { "X-Piagent-CSRF": "wrong" })).status, 403);
+    assert.equal((await post({ branch: "feature" }, { Origin: "http://attacker.invalid" })).status, 403);
+    const switched = await post({ branch: "feature", create: true });
+    assert.equal(switched.status, 200); assert.equal(JSON.parse(switched.body).head.name, "feature");
+    const busy = await post({ branch: "busy" });
+    assert.equal(busy.status, 409); assert.equal(JSON.parse(busy.body).error.code, "branch-switch-blocked-running");
+    const dirty = await post({ branch: "dirty" });
+    assert.equal(dirty.status, 409); assert.deepEqual(JSON.parse(dirty.body).error,
+      { code: "branch-switch-local-changes", detail: "error: Your local changes would be overwritten by checkout" });
+    const failed = await post({ branch: "boom" });
+    assert.equal(failed.status, 500); assert.deepEqual(JSON.parse(failed.body), { error: { code: "branch-switch-failed" } }, "an unknown failure never leaks its text");
+    assert.equal((await post({ padding: "x".repeat(70_000) })).status, 413);
+    assert.deepEqual(switches.map(([, request]) => request.branch), ["feature", "busy", "dirty", "boom"]);
+  });
+});

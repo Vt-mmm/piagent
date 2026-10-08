@@ -20,6 +20,7 @@ import {
 } from "./profile-state.ts";
 import { buildSessionCatalog, projectRefForCwd } from "./session-catalog.ts";
 import { suggestPaths } from "./path-suggestions.ts";
+import { GitBranchError, listBranches, switchBranch, type SwitchRequest } from "./git-branches.ts";
 import { listAgentCommands } from "../../piagent-core/runtime/resources/agent-resources.mjs";
 import { sessionRefForPath } from "../ownership/session-refs.ts";
 import { SessionMetadataStore } from "./session-metadata-store.ts";
@@ -229,6 +230,8 @@ export async function startPiagentGateway(options: {
       ?? (await runtimes!.listSessions()).find((info) => typeof info.cwd === "string" && projectRefForCwd(key, info.cwd) === projectRef)?.cwd
       ?? (relay ? (await relay.folders()).find((folder) => projectRefForCwd(key, folder) === projectRef) : undefined);
     const relayPost = (path: string, body: unknown) => relay!.json("POST", path, body);
+    const runningInProject = async (projectRef: string) => (await hubCatalog()).sessions.filter((row) => row.projectRef === projectRef
+      && !row.archived && ["running", "waiting-approval", "paused"].includes(row.liveState)).length;
     const commands = new SessionCommandController({ catalog: hubCatalog, runtimes, metadata,
       store: new SessionCommandStore(state.root, key), events,
       // Resolved at call time: the attachment registry is built after this
@@ -302,6 +305,29 @@ export async function startPiagentGateway(options: {
       listCommands: async (projectRef) => {
         const root = await projectFolder(projectRef);
         return root ? { commands: listAgentCommands({ cwd: root }) } : null;
+      },
+      // The project's Git branches and a switch between them. A switch waits
+      // until no conversation in the folder runs (company ones included): the
+      // agent would find its files changed under it.
+      listBranches: async (projectRef) => {
+        const root = await projectFolder(projectRef);
+        if (!root) return null;
+        const [list, running] = await Promise.all([listBranches(root), runningInProject(projectRef)]);
+        return list ? { ...list, running } : { repository: false, running };
+      },
+      switchBranch: async (projectRef, request) => {
+        const root = await projectFolder(projectRef);
+        if (!root) return null;
+        const value = request as Partial<SwitchRequest> | null;
+        if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.branch !== "string"
+          || Object.keys(value).some((name) => !["branch", "create", "remote"].includes(name))
+          || (value.create !== undefined && typeof value.create !== "boolean")
+          || (value.remote !== undefined && value.remote !== null && typeof value.remote !== "string")) throw new GitBranchError("branch-request-invalid");
+        if (!(await listBranches(root))) throw new GitBranchError("not-a-git-repository");
+        if (await runningInProject(projectRef) > 0) throw new GitBranchError("branch-switch-blocked-running");
+        const head = await switchBranch(root, { branch: value.branch, create: value.create === true, remote: value.remote ?? null });
+        events.publish("catalog.changed", { reasonCode: "git-branch-switched" });
+        return { head, branches: await listBranches(root) };
       },
       updates: { status: () => updates!.status(), check: () => updates!.check(), apply: (request) => updates!.apply(request) },
       answerSessionQuestion: (sessionRef, questionRef, answer) => company(sessionRef)

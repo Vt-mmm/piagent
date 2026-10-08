@@ -16,12 +16,13 @@ export function branchTitle(branch: NonNullable<SessionRow["gitBranch"]>, locale
 
 // The Git branch a conversation's project folder stands on. Detached HEAD
 // shows the short commit and reads as a warning: work there belongs to no branch.
-export function GitBranchLabel({ branch, locale, maxWidth = 220 }: { branch: SessionRow["gitBranch"]; locale: UiLocale; maxWidth?: number | string }) {
+export function GitBranchLabel({ branch, locale, maxWidth = 220, tooltip = true }: { branch: SessionRow["gitBranch"]; locale: UiLocale;
+  maxWidth?: number | string; tooltip?: boolean }) {
   if (!branch) return null;
-  return <Tooltip describeChild title={branchTitle(branch, locale)}>
-    <Box component="span" aria-label={branchTitle(branch, locale)} sx={{ display: "inline-flex", alignItems: "center", gap: .4, minWidth: 0, maxWidth,
+  const label = <Box component="span" aria-label={tooltip ? branchTitle(branch, locale) : undefined} sx={{ display: "inline-flex", alignItems: "center", gap: .4, minWidth: 0, maxWidth,
       verticalAlign: "bottom", color: branch.detached ? "warning.main" : "inherit" }}>
       <GitBranchIcon sx={{ fontSize: "1.1em", flexShrink: 0 }} />
       <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: ".95em" }}>
-        {branch.name}</Box></Box></Tooltip>;
+        {branch.name}</Box></Box>;
+  return tooltip ? <Tooltip describeChild title={branchTitle(branch, locale)}>{label}</Tooltip> : label;
 }

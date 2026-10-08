@@ -11,6 +11,7 @@ import { SessionAttachmentRegistry } from "../packages/piagent-webui/gateway/ses
 import { COMPANY_MODEL_REF } from "../packages/piagent-webui/gateway/company-relay.ts";
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
 import { suggestPaths } from "../packages/piagent-webui/gateway/path-suggestions.ts";
+import { listBranches, switchBranch } from "../packages/piagent-webui/gateway/git-branches.ts";
 import { listAgentCommands } from "../packages/piagent-core/runtime/resources/agent-resources.mjs";
 import { WEBUI_WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
@@ -39,6 +40,8 @@ const freshUpdate = () => ({ schemaVersion: 1, version: "piagent-update-status-v
 // Other tests run on a machine that is up to date: the offer dialog would cover them.
 const upToDate = () => ({ ...freshUpdate(), piagent: { installed: "1.11.0", latest: "1.11.0", updateAvailable: false }, updateAvailable: false });
 let updateState = upToDate();
+// The project of "Release preparation" is a real Git repository in the branch test.
+let branchRepo = null, branchRunning = 0;
 const updateApplies = [];
 // What an @ in a composer walks: a project (a git repository, so the search
 // runs the same without fd) and a home folder with another project inside.
@@ -282,6 +285,20 @@ test.beforeAll(async () => {
     readSessionModel: () => inspectionProvider,
     suggestPaths: (_projectRef, query) => suggestPaths({ root: mentionProject, query, home: mentionHome, fd: null }),
     listCommands: () => ({ commands: listAgentCommands({ cwd: mentionProject, home: mentionHome }) }),
+    listBranches: async (projectRef) => {
+      if (!branchRepo || projectRef !== "project_session_release_prep") return null;
+      const list = await listBranches(branchRepo);
+      return list ? { ...list, running: branchRunning } : { repository: false, running: branchRunning };
+    },
+    switchBranch: async (projectRef, request) => {
+      if (!branchRepo || projectRef !== "project_session_release_prep") return null;
+      if (branchRunning > 0) throw new Error("branch-switch-blocked-running");
+      const head = await switchBranch(branchRepo, request);
+      const row = catalog.sessions.find((item) => item.sessionRef === "session_release_prep");
+      row.gitBranch = head; row.sessionRevision = `revision_release_prep_${head.name}`;
+      catalog.catalogRevision = `revision_catalog_branch_${head.name}`;
+      return { head };
+    },
     updates: { status: () => updateState, check: () => ({ ...updateState, checkedAt: new Date().toISOString() }),
       apply: (request) => {
         updateApplies.push(request);
@@ -1005,17 +1022,17 @@ test("shows the Git branch a conversation's project stands on, and a detached HE
         await page.getByRole("button", { name: /^Release preparation/ }).filter({ visible: true }).first().click();
         const header = page.getByRole("banner");
         await expect(header.getByRole("heading", { name: "Release preparation" })).toBeVisible();
-        const branch = header.getByLabel(/Nhánh Git của project: feature\/show-the-git-branch/);
+        const branch = header.getByRole("button", { name: /Đổi nhánh Git của pi-company-platform \(đang ở feature\/show-the-git-branch/ });
         await expect(branch).toBeVisible();
         const box = await branch.boundingBox(), headerBox = await header.boundingBox();
         expect(box.x + box.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         const bar = page.getByRole("contentinfo", { name: "Thanh trạng thái" });
         if (width >= 900) {
-          await expect(bar.getByLabel(/Nhánh Git của project: feature\/show/)).toBeVisible();
+          await expect(bar.getByRole("button", { name: /đang ở feature\/show/ })).toBeVisible();
           await expect(page.getByRole("navigation").getByLabel(/Nhánh Git của project: feature\/show/)).toBeVisible();
           await page.getByRole("navigation").getByText("Review source changes", { exact: true }).click();
-          await expect(header.getByLabel("Git không ở nhánh nào (detached HEAD tại 3f6edf8)")).toBeVisible();
+          await expect(header.getByRole("button", { name: "Đổi nhánh Git của sample-project (detached HEAD tại 3f6edf8)" })).toBeVisible();
           await expect(bar.getByText("3f6edf8", { exact: true })).toBeVisible();
         } else await expect(bar).toHaveCount(0);
         await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/git-branch-${width}.png`) });
@@ -1025,6 +1042,80 @@ test("shows the Git branch a conversation's project stands on, and a detached HE
     [release.gitBranch, review.gitBranch] = saved;
     if (!release.gitBranch) delete release.gitBranch;
     if (!review.gitBranch) delete review.gitBranch;
+  }
+});
+
+test("switches the project's Git branch from the header: an existing one, a new one, never while a conversation runs, and Git's refusal in its words", async ({ browser }) => {
+  const scratch = fs.mkdtempSync(path.join(root, ".tmp", "branch-switch-"));
+  const git = (...args) => execFileSync("git", ["-c", "init.defaultBranch=main", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: scratch, stdio: "pipe" }).toString();
+  git("init", "-q"); fs.writeFileSync(path.join(scratch, "a.txt"), "one\n"); git("add", "a.txt"); git("commit", "-q", "-m", "first");
+  git("branch", "release/1.18");
+  git("checkout", "-q", "-b", "edit-a"); fs.writeFileSync(path.join(scratch, "a.txt"), "edited\n"); git("commit", "-q", "-am", "edit"); git("checkout", "-q", "main");
+  branchRepo = scratch; branchRunning = 0;
+  const row = catalog.sessions.find((item) => item.sessionRef === "session_release_prep");
+  const saved = { gitBranch: row.gitBranch, sessionRevision: row.sessionRevision, catalogRevision: catalog.catalogRevision };
+  row.gitBranch = { name: "main", detached: false };
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole("button", { name: /^Release preparation/ }).filter({ visible: true }).first().click();
+    const header = page.getByRole("banner");
+    await header.getByRole("button", { name: /Đổi nhánh Git của pi-company-platform \(đang ở main\)/ }).click();
+    const menu = page.getByRole("dialog", { name: "Nhánh Git" });
+    await expect(menu.getByRole("button", { name: /^release\/1\.18/ })).toBeVisible();
+    await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/git-branch-menu.png") });
+    await menu.getByRole("button", { name: /^release\/1\.18/ }).click();
+    await expect(menu).toHaveCount(0);
+    expect(git("branch", "--show-current").trim()).toBe("release/1.18");
+    await expect(header.getByRole("button", { name: /đang ở release\/1\.18/ })).toBeVisible();
+
+    // A new branch from what is typed, with Enter.
+    await header.getByRole("button", { name: /đang ở release\/1\.18/ }).click();
+    await menu.getByRole("textbox", { name: "Tìm nhánh" }).fill("feature/branch-menu");
+    await expect(menu.getByRole("button", { name: /Tạo nhánh mới “feature\/branch-menu”/ })).toBeVisible();
+    await menu.getByRole("textbox", { name: "Tìm nhánh" }).press("Enter");
+    await expect(menu).toHaveCount(0);
+    expect(git("branch", "--show-current").trim()).toBe("feature/branch-menu");
+
+    // Git refuses to overwrite an uncommitted change; the menu says so in Git's words and the file stays.
+    fs.writeFileSync(path.join(scratch, "a.txt"), "uncommitted\n");
+    await header.getByRole("button", { name: /đang ở feature\/branch-menu/ }).click();
+    await expect(menu.getByText(/1 file đang sửa dở sẽ đi theo/)).toBeVisible();
+    await menu.getByRole("button", { name: /^edit-a/ }).click();
+    await expect(menu.getByText(/thay đổi chưa commit sẽ bị ghi đè/)).toBeVisible();
+    await expect(menu.getByText(/would be overwritten by checkout/)).toBeVisible();
+    expect(fs.readFileSync(path.join(scratch, "a.txt"), "utf8")).toBe("uncommitted\n");
+    await page.keyboard.press("Escape");
+
+    // While a conversation in the folder runs, nothing switches.
+    branchRunning = 1;
+    await header.getByRole("button", { name: /đang ở feature\/branch-menu/ }).click();
+    await expect(menu.getByText(/1 cuộc trò chuyện đang chạy trong folder này/)).toBeVisible();
+    await expect(menu.getByRole("button", { name: /^main/ })).toBeDisabled();
+    await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/git-branch-blocked.png") });
+    await page.keyboard.press("Escape");
+
+    // The status bar opens the same menu.
+    branchRunning = 0;
+    await page.getByRole("contentinfo", { name: "Thanh trạng thái" }).getByRole("button", { name: /Đổi nhánh Git/ }).click();
+    await expect(menu).toBeVisible();
+    await page.keyboard.press("Escape");
+    for (const width of [390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.getByRole("banner").getByRole("button", { name: /Đổi nhánh Git/ }).click();
+      await expect(menu.getByRole("button", { name: /^main/ })).toBeEnabled();
+      await expect(menu.getByText(/đang chạy trong folder này/)).toHaveCount(0);
+      const box = await menu.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
+      await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/git-branch-menu-${width}.png`) });
+      await page.keyboard.press("Escape");
+    }
+  } finally {
+    await page.close();
+    branchRepo = null; branchRunning = 0;
+    if (saved.gitBranch) row.gitBranch = saved.gitBranch; else delete row.gitBranch;
+    row.sessionRevision = saved.sessionRevision; catalog.catalogRevision = saved.catalogRevision;
+    fs.rmSync(scratch, { recursive: true, force: true });
   }
 });
 
