@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.17.0 - 2026-10-08
+
+The dashboard shows which Git branch each project is on.
 
 ### Changes
 
