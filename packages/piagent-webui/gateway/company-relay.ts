@@ -4,6 +4,8 @@ import { WebSocket } from "ws";
 import type { Catalog, SessionRow } from "../contracts/generated/session-catalog-v1.ts";
 import { webUiModelRef } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
 import { requestGatewayControl } from "./control-socket.ts";
+import { gitHeadReader } from "./git-head.ts";
+import { childRepositoryReader } from "./git-repositories.ts";
 import type { GatewayEventKind, GatewayEventStore } from "./gateway-events.ts";
 
 // The personal dashboard lists and drives company sessions through this relay.
@@ -250,12 +252,22 @@ export class CompanyRelay {
     const company = await this.catalog();
     if (personal.state !== "ready" || !personal.catalogRevision) return personal;
     const ready = this.#state === "ready";
+    // The Git facts of a company conversation's folder are read here, on the
+    // same Mac: the company Gateway may run an earlier release (Agent Watch
+    // restarts it only now and then) that does not report them.
+    const readHead = gitHeadReader(), readRepositories = childRepositoryReader();
     const rows: SessionRow[] = (company?.state === "ready" ? company.sessions : []).map((row) => {
       const folder = this.#paths.get(row.projectRef);
-      return { ...row, projectRef: folder ? this.#hubProject(folder) : row.projectRef, composerAvailable: ready && row.composerAvailable };
+      const { gitBranch: _branch, gitRepositories: _repositories, ...rest } = row;
+      const head = folder ? readHead(folder) : null, repositories = folder && !head ? readRepositories(folder) : [];
+      return { ...rest, projectRef: folder ? this.#hubProject(folder) : row.projectRef, composerAvailable: ready && row.composerAvailable,
+        ...(folder ? {} : _branch ? { gitBranch: _branch } : {}), ...(folder ? {} : _repositories ? { gitRepositories: _repositories } : {}),
+        ...(head ? { gitBranch: head } : {}),
+        ...(repositories.length ? { gitRepositories: repositories.map((repository) => ({ name: repository.name, branch: repository.head })) } : {}) };
     });
     const sessions = [...personal.sessions, ...rows].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-    const digest = createHash("sha256").update(JSON.stringify([personal.catalogRevision, company?.catalogRevision ?? null, ready])).digest("hex");
+    const digest = createHash("sha256").update(JSON.stringify([personal.catalogRevision, company?.catalogRevision ?? null, ready,
+      rows.map((row) => [row.gitBranch ?? null, row.gitRepositories ?? null])])).digest("hex");
     return { ...personal, catalogRevision: `rev_${digest}`, sessions,
       page: { ...personal.page, returned: sessions.length, total: personal.page.total + rows.length } };
   }
