@@ -4,7 +4,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## v1.19.0 - 2026-10-08
 
-A company task with a checklist is carried to its end, and every turn says how it ended.
+A company task with a checklist is carried to its end, every turn says how it ended, Docker in the company sandbox, and folders that hold several repositories.
 
 ### Changes
 
@@ -13,6 +13,9 @@ A company task with a checklist is carried to its end, and every turn says how i
 - "tiếp tục" (or the Continue button) after a turn that stopped midway takes up the open checklist: the turn's end and the harness rounds follow it even when the agent does not update it again.
 - Every company turn ends with a line under the last answer, in the dashboard and the company Terminal: "Hoàn thành · n/n bước", "Dừng giữa chừng · còn x/y bước" (and why: two rounds without progress, the round limit, or a Harness that does not require a plan), "Lượt dừng vì lỗi" (which role) or "Bạn đã dừng lượt này", with Continue when the task is not finished. The sidebar shows the same for each conversation. The line never reaches the model.
 - A folder that holds several repositories (a workspace with the front end, the back end and other projects side by side) shows "N repo" where a repository shows its branch: in the chat header, the status bar and the sidebar. Its menu lists the repositories found one level down with their branches and changed files, as an editor's source control view does; picking one opens its branches to switch or create one there.
+
+- Company sandbox: Docker for approved commands. When Docker runs on the machine (Docker Desktop, Colima, OrbStack, Podman or the Linux daemon), the agent gets `run_with_docker`: one command the member approves runs with internet and the Docker engine, and nothing else is opened (`docker compose up -d` for a test database, `docker build`, Testcontainers tests). The Docker CLI gets its own settings without registry credentials: public images pull, private registries and `docker push` do not. Bypass still asks when a command or the project's compose file mounts a folder outside the project, mounts the Docker socket, or gives a container the host's processes, network or privileges. A plain command that tries Docker is pointed at `run_with_docker`; `piagent studio --doctor` checks Docker. The dashboard shows these commands as "Chạy với Docker".
+- Company sandbox: `./gradlew` reuses the Gradle distributions already unpacked in `~/.gradle/wrapper/dists`, as `./mvnw` does with Maven, so it runs without asking for network.
 
 ### Fixes
 
