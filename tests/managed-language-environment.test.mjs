@@ -26,7 +26,8 @@ delete process.env.XDG_CACHE_HOME;
 function machine() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-languages-')));
   const home = path.join(base, 'home'), project = path.join(base, 'shop'), sandboxHome = path.join(base, 'sandbox-home');
-  for (const file of ['.gradle/caches/modules-2/files-2.1/x.jar', '.m2/repository/org/x/x.pom', '.m2/settings.xml', '.nuget/packages/newtonsoft.json/13.0.3/x.nupkg',
+  for (const file of ['.gradle/caches/modules-2/files-2.1/x.jar', '.m2/repository/org/x/x.pom', '.m2/settings.xml',
+    '.m2/wrapper/dists/apache-maven-3.9.14/db91789b/bin/mvn', '.nuget/packages/newtonsoft.json/13.0.3/x.nupkg',
     'go/pkg/mod/cache/download/example.com/x/@v/list', 'Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/release', `${ANDROID}/platforms/x`]) write(path.join(home, file));
   fs.mkdirSync(project); fs.mkdirSync(sandboxHome);
   return {base, home, project, sandboxHome};
@@ -48,6 +49,13 @@ test('package caches persist per project; the member\'s caches are read-only see
     assert.equal(env.env.offline.GRADLE_RO_DEP_CACHE, path.join(home, '.gradle/caches'));
     assert.equal(env.env.offline.NUGET_FALLBACK_PACKAGES, path.join(home, '.nuget/packages'));
     assert.match(env.env.offline.MAVEN_OPTS, new RegExp(`-Dmaven\\.repo\\.local=${env.cache}/m2/repository -Dmaven\\.repo\\.local\\.tail=${path.join(home, '.m2/repository')}`));
+    // ./mvnw finds the distribution the member already unpacked, read-only, through the project's cache.
+    assert.equal(env.env.offline.MAVEN_USER_HOME, path.join(env.cache, 'm2'));
+    const dist = path.join(env.cache, 'm2/wrapper/dists/apache-maven-3.9.14/db91789b');
+    assert.equal(fs.readlinkSync(dist), path.join(home, '.m2/wrapper/dists/apache-maven-3.9.14/db91789b'));
+    assert.ok(env.readRoots.includes(path.join(home, '.m2/wrapper/dists')));
+    languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome});
+    assert.equal(fs.readlinkSync(dist), path.join(home, '.m2/wrapper/dists/apache-maven-3.9.14/db91789b'), 'a link already there is kept');
     assert.equal(env.env.offline.GOPROXY, `file://${path.join(home, 'go/pkg/mod/cache/download')},off`, 'offline Go reads the member\'s modules, never the internet');
     assert.match(env.env.network.GOPROXY, /^file:\/\/.+,https:\/\/proxy\.golang\.org,direct$|^file:\/\/.+,.+/);
     assert.equal(env.env.offline.ANDROID_HOME, path.join(home, ANDROID));
@@ -101,5 +109,8 @@ test('tests reach servers on this Mac unless a local proxy listens; caches outli
     assert.match(text(await open.invoke('bash', {command: `ls ${JSON.stringify(path.join(home, '.m2/repository/org/x'))}`})), /x\.pom/);
     await assert.rejects(open.invoke('bash', {command: `echo y > ${JSON.stringify(path.join(home, '.m2/repository/org/x/y.pom'))}`}), /not permitted|managed-sandbox-denied/);
     await assert.rejects(open.invoke('bash', {command: `cat ${JSON.stringify(path.join(home, '.m2/settings.xml'))}`}), /not permitted|managed-sandbox-denied/);
+    // ./mvnw's distribution: read without network through the project cache, never written.
+    assert.equal(text(await open.invoke('bash', {command: 'cat "$MAVEN_USER_HOME/wrapper/dists/apache-maven-3.9.14/db91789b/bin/mvn"'})).trim(), 'x');
+    await assert.rejects(open.invoke('bash', {command: 'echo y > "$MAVEN_USER_HOME/wrapper/dists/apache-maven-3.9.14/db91789b/bin/mvn"'}), /not permitted|managed-sandbox-denied/);
   } finally { await open.dispose(); await guarded.dispose(); await new Promise((resolve) => proxy.close(resolve)); fs.rmSync(base, {recursive: true, force: true}); }
 });
