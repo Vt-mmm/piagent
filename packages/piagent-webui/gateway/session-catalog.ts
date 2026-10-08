@@ -7,6 +7,7 @@ import type { Catalog, SessionRow } from "../contracts/generated/session-catalog
 import type { MetadataSnapshot, SessionMetadata } from "./session-metadata-store.ts";
 import { projectRefForCwd, sessionRefForPath } from "../ownership/session-refs.ts";
 import { gitHeadReader, type GitHead } from "./git-head.ts";
+import { childRepositoryReader, type ChildRepository } from "./git-repositories.ts";
 
 export { projectRefForCwd, sessionRefForPath } from "../ownership/session-refs.ts";
 
@@ -106,8 +107,11 @@ function revision(key: Buffer, value: unknown): string {
 }
 
 function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undefined, metadataReason: string | null,
-  ownership?: SessionOwnerProjection, sessionOptions?: SessionOptionProjection, gitHead?: GitHead | null): SessionRow {
+  ownership?: SessionOwnerProjection, sessionOptions?: SessionOptionProjection, gitHead?: GitHead | null, repositories: ChildRepository[] = []): SessionRow {
   const gitBranch = gitHead ? { name: display(gitHead.name, 200, "HEAD"), detached: gitHead.detached } : null;
+  // A folder that is not a repository but holds some (front end, back end…).
+  const gitRepositories = gitBranch ? [] : repositories.map((repository) => ({ name: display(repository.name, 255, "repository").replace(/[/\\]/g, "-"),
+    branch: repository.head ? { name: display(repository.head.name, 200, "HEAD"), detached: repository.head.detached } : null }));
   const projectLabel = display(info.cwd ? path.basename(info.cwd) : "", 120, "Unknown project");
   const projected = projectedSessionTitle(info);
   return {
@@ -126,6 +130,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
     composerAvailable: metadata?.archived ? false : ownership?.composerAvailable ?? false,
     needsAttention: metadata?.archived ? false : ownership?.needsAttention ?? false,
     ...(gitBranch ? { gitBranch } : {}),
+    ...(gitRepositories.length ? { gitRepositories } : {}),
     ...(sessionOptions?.managedHelpers ? {managedHelpers:{...sessionOptions.managedHelpers,
       active: ownership?.liveState === 'idle' ? 0 : ownership?.liveState === 'running' || ownership?.liveState === 'waiting-approval' ? sessionOptions.managedHelpers.active : null}} : {}),
     ...(sessionOptions?.managedThinkingLevels ? {managedThinkingLevels:sessionOptions.managedThinkingLevels} : {}),
@@ -141,7 +146,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
       : ownership?.owner ?? { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "unknown" },
     sessionRevision: revision(key, [info.path, info.modified.toISOString(), info.messageCount, info.name ?? null, metadata?.revision ?? null,
       sessionOptions?.modelLabel ?? null, sessionOptions?.thinkingLevel ?? "unknown", sessionOptions?.managedHelpers, sessionOptions?.managedThinkingLevels, sessionOptions?.managedPermission ?? null, sessionOptions?.managedPlan, sessionOptions?.managedProcess,
-      gitBranch,
+      gitBranch, gitRepositories,
       metadata?.archived ? "archived" : ownership ? [ownership.state, ownership.liveState, ownership.owner.kind,
         ownership.owner.ownerEpoch, ownership.owner.runtimeInstanceRef, ownership.reasonCode] : "offline"]),
     reasonCode: metadata?.archived ? metadataReason : ownership?.reasonCode ?? metadataReason
@@ -156,17 +161,18 @@ export async function buildSessionCatalog(options: {
   readOwnership?(sessionRef: string): SessionOwnerProjection;
   readSessionOptions?(info: PiSessionInfo): SessionOptionProjection;
   readGitHead?(cwd: string): GitHead | null;
+  readChildRepositories?(cwd: string): ChildRepository[];
   limit?: number;
 }): Promise<Catalog> {
   const limit = Math.max(1, Math.min(200, options.limit ?? 200));
   try {
     const found = (await options.listSessions()).filter(isUserConversationSession);
-    const readHead = options.readGitHead ?? gitHeadReader();
+    const readHead = options.readGitHead ?? gitHeadReader(), readRepositories = options.readChildRepositories ?? childRepositoryReader();
     const metadata = options.readMetadata?.() ?? { state: "ready", revision: null, sessions: new Map(), reasonCode: null };
     const sessions = found.map((info) => {
       const sessionRef = sessionRefForPath(options.key, info.path);
       return row(options.key, info, metadata.sessions.get(sessionRef), metadata.reasonCode, options.readOwnership?.(sessionRef),
-        options.readSessionOptions?.(info), readHead(info.cwd));
+        options.readSessionOptions?.(info), readHead(info.cwd), readRepositories(info.cwd));
     }).sort((left, right) => Number(right.pinned) - Number(left.pinned)
       || Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, limit);
     return {

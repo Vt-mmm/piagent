@@ -35,8 +35,8 @@ export function StatusBar({ locale, connection, running, session, onBranchSwitch
     <Stack direction="row" sx={staticSx}>
       <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: connection === "connected" ? "success.main" : "warning.main" }} />
       <span>{connection === "connected" ? "Gateway live" : connection}</span><Box component="span" sx={{ color: "text.disabled" }}>local</Box></Stack>
-    {session?.gitBranch && <Stack direction="row" sx={{ ...staticSx, minWidth: 0 }}><BranchSwitcher projectRef={session.projectRef} projectLabel={session.projectLabel}
-      branch={session.gitBranch} locale={locale} maxWidth={320} onSwitched={onBranchSwitched} /></Stack>}
+    {(session?.gitBranch || Boolean(session?.gitRepositories?.length)) && <Stack direction="row" sx={{ ...staticSx, minWidth: 0 }}><BranchSwitcher projectRef={session!.projectRef} projectLabel={session!.projectLabel}
+      branch={session!.gitBranch} repositories={session!.gitRepositories} locale={locale} maxWidth={320} onSwitched={onBranchSwitched} /></Stack>}
     {running > 0 && <Stack direction="row" sx={staticSx}>
       <CircularProgress size={10} thickness={6} /><span>{localize(locale, `${running} đang chạy`, `${running} running`)}</span></Stack>}
     <Box sx={{ flex: 1 }} />

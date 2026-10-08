@@ -25,8 +25,13 @@ import type { PiagentWebUICanonicalVolatileSessionOperationStateV1 } from "../..
 import { browserCsrfToken, csrfFetch, noteUnauthorized } from "./bootstrap.ts";
 
 export class WebUiRequestError extends Error {
-  readonly status: number;
-  constructor(status: number) { super(`webui-request-${status}`); this.status = status; }
+  readonly status: number; readonly code: string | null;
+  constructor(status: number, code: string | null = null) { super(`webui-request-${status}`); this.status = status; this.code = code; }
+}
+
+async function errorCode(response: Response): Promise<string | null> {
+  try { const body = await response.json() as { error?: { code?: unknown } }; return typeof body.error?.code === "string" ? body.error.code : null; }
+  catch { return null; }
 }
 
 export async function readSnapshot(signal?: AbortSignal): Promise<PiagentWebUICanonicalSnapshotV1> {
@@ -115,7 +120,7 @@ export async function importProjectFolder(signal?: AbortSignal): Promise<{ schem
   const response = await csrfFetch("/api/v1/projects/import", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf },
     body: JSON.stringify({ action: "project.import" }) });
-  if (!response.ok) throw new WebUiRequestError(response.status);
+  if (!response.ok) throw new WebUiRequestError(response.status, await errorCode(response));
   return await response.json();
 }
 
@@ -461,21 +466,23 @@ export async function answerSessionQuestion(sessionRef: string, questionRef: str
 
 export type GitBranchHead = { name: string; detached: boolean };
 export type GitBranchRow = { name: string; current: boolean; remote: string | null; committedAt: string | null };
-export type ProjectBranches = { repository: false; running: number }
-  | { repository: true; head: GitBranchHead | null; branches: GitBranchRow[]; truncated: boolean; changedFiles: number; running: number };
+export type ChildRepositoryRow = { name: string; head: GitBranchHead | null; changedFiles: number };
+// A folder that is not a repository lists the repositories one level down.
+export type ProjectBranches = { repository: false; running: number; repositories?: ChildRepositoryRow[] }
+  | { repository: true; head: GitBranchHead | null; branches: GitBranchRow[]; truncated: boolean; changedFiles: number; running: number; name?: string };
 
 export class BranchRequestError extends Error {
   readonly status: number; readonly code: string; readonly detail: string | null;
   constructor(status: number, code: string, detail: string | null) { super(code); this.status = status; this.code = code; this.detail = detail; }
 }
 
-export function readProjectBranches(projectRef: string, signal?: AbortSignal): Promise<ProjectBranches> {
-  return readJson(`/api/v1/projects/${encodeURIComponent(projectRef)}/branches`, signal);
+export function readProjectBranches(projectRef: string, repository: string | null = null, signal?: AbortSignal): Promise<ProjectBranches> {
+  return readJson(`/api/v1/projects/${encodeURIComponent(projectRef)}/branches${repository === null ? "" : `?repository=${encodeURIComponent(repository)}`}`, signal);
 }
 
 // Switches the project folder to a branch: an existing one, a new one from
 // the current commit (create), or a remote one as a new tracking branch.
-export async function switchProjectBranch(projectRef: string, request: { branch: string; create?: boolean; remote?: string | null },
+export async function switchProjectBranch(projectRef: string, request: { branch: string; create?: boolean; remote?: string | null; repository?: string },
   signal?: AbortSignal): Promise<{ head: GitBranchHead | null }> {
   const csrf = browserCsrfToken(); if (!csrf) throw new BranchRequestError(403, "mutation-authority-rejected", null);
   const response = await csrfFetch(`/api/v1/projects/${encodeURIComponent(projectRef)}/branches/switch`, { method: "POST", credentials: "same-origin", signal,

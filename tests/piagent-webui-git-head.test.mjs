@@ -120,3 +120,36 @@ describe("Piagent Gateway Git branch switch", () => {
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 });
+
+describe("Piagent Gateway folders that hold several repositories", () => {
+  it("finds the repositories one level down, with their branches, and lists them on catalog rows", async () => {
+    const { childRepositories, childRepositoryFolder } = await import("../packages/piagent-webui/gateway/git-repositories.ts");
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-child-repos-")));
+    try {
+      const working = path.join(root, "Working");
+      for (const name of ["FE", "docs", ".hidden", "node_modules/pkg"]) fs.mkdirSync(path.join(working, name), { recursive: true });
+      const fe = path.join(working, "FE");
+      git(fe, "init", "-q"); git(fe, "commit", "-q", "--allow-empty", "-m", "first"); git(fe, "checkout", "-q", "-b", "feature/login");
+      git(fe, "worktree", "add", "-q", "-b", "develop", path.join(working, "BE"));
+      git(path.join(working, ".hidden"), "init", "-q");
+      git(path.join(working, "node_modules"), "init", "-q");
+      assert.deepEqual(childRepositories(working), [
+        { name: "BE", path: "BE", head: { name: "develop", detached: false } },
+        { name: "FE", path: "FE", head: { name: "feature/login", detached: false } }]);
+      assert.deepEqual(childRepositories(fe), [], "a folder inside a repository is that repository");
+      assert.equal(childRepositoryFolder(working, "FE"), fe);
+      for (const bad of ["docs", "../Working/FE", "FE/..", ".hidden", "node_modules", ""]) assert.equal(childRepositoryFolder(working, bad), null, bad);
+
+      const at = new Date("2026-10-08T01:00:00Z");
+      const info = (file, cwd) => ({ path: file, id: path.basename(file), cwd, created: at, modified: at, messageCount: 1, firstMessage: "hi", allMessagesText: "hi" });
+      const catalog = await buildSessionCatalog({ gatewayInstanceRef: "gateway_child_repos", key: Buffer.alloc(32, 4),
+        listSessions: async () => [info(path.join(root, "a.jsonl"), working), info(path.join(root, "b.jsonl"), fe)] });
+      const workspace = catalog.sessions.find((row) => row.projectLabel === "Working"), single = catalog.sessions.find((row) => row.projectLabel === "FE");
+      assert.equal("gitBranch" in workspace, false);
+      assert.deepEqual(workspace.gitRepositories, [{ name: "BE", branch: { name: "develop", detached: false } }, { name: "FE", branch: { name: "feature/login", detached: false } }]);
+      assert.equal("gitRepositories" in single, false, "a repository shows its branch, not its children");
+      const result = validateFixture(createWebUiSchemaRegistry(), "session-catalog-v1", catalog);
+      assert.equal(result.valid, true, String(result.errors));
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});

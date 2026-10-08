@@ -72,7 +72,7 @@ export async function startLoopbackServer(options: {
   answerSessionQuestion?: (sessionRef: string, questionRef: string, answer: unknown) => unknown | Promise<unknown>;
   suggestPaths?: (projectRef: string, query: string) => unknown | Promise<unknown>;
   listCommands?: (projectRef: string) => unknown | Promise<unknown>;
-  listBranches?: (projectRef: string) => unknown | Promise<unknown>;
+  listBranches?: (projectRef: string, repository: string | null) => unknown | Promise<unknown>;
   switchBranch?: (projectRef: string, request: unknown) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
   bootstrapTtlMs?: number;

@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changes
+
+- A folder that holds several repositories (a workspace with the front end, the back end and other projects side by side) shows "N repo" where a repository shows its branch: in the chat header, the status bar and the sidebar. Its menu lists the repositories found one level down with their branches and changed files, as an editor's source control view does; picking one opens its branches to switch or create one there.
+
+### Fixes
+
+- Adding a folder failed with "Không thể thêm thư mục" once 200 folders had been added: the list only grew. A full list now forgets folders gone from the disk, then the ones added longest ago, and a folder added again moves to the newest place. The add dialog also says why a folder could not be added (the folder picker did not open, a drive root or a link, too many attempts).
+- Company sandbox: `./mvnw` failed without network ("curl: Failed to fetch apache-maven-…-bin.zip") even when the Maven it wants was already unpacked on the Mac, and a Maven downloaded through an approved command was gone in the next conversation. The Maven Wrapper now reuses the distributions in `~/.m2/wrapper/dists` (read-only) and keeps one it downloads in the project's cache, so `./mvnw -o` runs at once.
+
 ## v1.18.0 - 2026-10-08
 
 Switch the Git branch from the dashboard, retries for passing failures, and Claude Haiku 5.5.

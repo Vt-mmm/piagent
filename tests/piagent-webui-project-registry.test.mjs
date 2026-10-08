@@ -45,3 +45,30 @@ it("tells same-name projects apart by their parent folders", async () => {
   assert.deepEqual(projectLocations(["/srv/a/x/y", "/srv/b/x/y"]), ["…/a/x/y", "…/b/x/y"]);
   assert.deepEqual(projectLocations([home, `${home}/code`, "/tmp"]), ["~", "~/code", "/tmp"]);
 });
+
+// The list of added folders never refuses a new one: a full list forgets
+// folders gone from the disk first, then the folders added longest ago; a
+// folder added again moves to the newest place.
+it("makes room for a new folder when the list is full", () => {
+  const value = fixture(), registry = new ProjectRegistry(value.state, value.key);
+  const folder = (name) => { const dir = path.join(value.root, name); fs.mkdirSync(dir); return dir; };
+  const first = registry.register(folder("first"), new Date("2026-01-01T00:00:00.000Z"));
+  const gone = folder("gone"); registry.register(gone, new Date("2026-01-02T00:00:00.000Z"));
+  for (let index = 0; index < 197; index += 1) registry.register(folder(`lab-${index}`), new Date(Date.UTC(2026, 1, 1, 0, index)));
+  const kept = registry.register(folder("kept"), new Date("2026-03-01T00:00:00.000Z"));
+  assert.equal(registry.list().length, 200);
+  fs.rmSync(gone, { recursive: true });
+  // Added again, "first" is now the newest.
+  registry.register(value.root + "/first", new Date("2026-04-01T00:00:00.000Z"));
+  const fe = registry.register(folder("FE"), new Date("2026-04-02T00:00:00.000Z"));
+  let labels = registry.list().map((item) => item.label);
+  assert.equal(labels.length, 200);
+  assert.equal(labels.includes("gone"), false, "a folder gone from the disk is forgotten first");
+  assert.deepEqual(labels.slice(-2), ["first", "FE"]);
+  assert.ok(registry.resolve(fe.projectRef) && registry.resolve(first.projectRef) && registry.resolve(kept.projectRef));
+  registry.register(folder("BE"), new Date("2026-04-03T00:00:00.000Z"));
+  labels = registry.list().map((item) => item.label);
+  assert.equal(labels.length, 200);
+  assert.equal(labels.includes("lab-0"), false, "then the folder added longest ago");
+  assert.deepEqual(labels.slice(-3), ["first", "FE", "BE"]);
+});
