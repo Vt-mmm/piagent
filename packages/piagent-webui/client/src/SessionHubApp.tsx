@@ -47,6 +47,7 @@ import { ChangesPanel } from "./ChangesPanel.tsx";
 import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { SettingsPage, type SettingsSection } from "./SettingsPage.tsx";
 import { StatusBar, STATUS_BAR_HEIGHT } from "./StatusBar.tsx";
+import { GitBranchLabel } from "./GitBranchLabel.tsx";
 import { CommandPalette, useDashboardShortcuts } from "./CommandPalette.tsx";
 import { dashboardCommands } from "./dashboard-commands.tsx";
 import { updateInProgress, useUpdates } from "./update-state.tsx";
@@ -405,10 +406,10 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const sessions = useMemo(() => (catalog?.sessions ?? []).filter((item) => item.archived === showArchived
     && `${item.title} ${item.projectLabel} ${item.preview}`.toLowerCase().includes(query.trim().toLowerCase())), [catalog, query, showArchived]);
   const projectGroups = useMemo(() => {
-    const grouped = new Map<string, { label: string; sessions: SessionRow[] }>();
+    const grouped = new Map<string, { label: string; gitBranch?: SessionRow["gitBranch"]; sessions: SessionRow[] }>();
     for (const session of sessions) {
-      const group = grouped.get(session.projectRef) ?? { label: session.projectLabel, sessions: [] };
-      group.sessions.push(session); grouped.set(session.projectRef, group);
+      const group = grouped.get(session.projectRef) ?? { label: session.projectLabel, gitBranch: session.gitBranch, sessions: [] };
+      group.gitBranch ??= session.gitBranch; group.sessions.push(session); grouped.set(session.projectRef, group);
     }
     return [...grouped.entries()].map(([projectRef, group]) => ({ projectRef, ...group,
       sessions: group.sessions.sort((left, right) => Number(right.pinned) - Number(left.pinned) || Date.parse(right.updatedAt) - Date.parse(left.updatedAt)) }))
@@ -618,7 +619,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       borderColor: "divider", bgcolor: "rgba(var(--piagent-palette-background-defaultChannel) / .9)", backdropFilter: "blur(18px)" }}><Toolbar sx={{ minHeight: "60px !important", gap: 1 }}>
       <IconButton aria-label={localize(locale, "Mở điều hướng", "Open navigation")} onClick={() => setMobileOpen(true)} sx={{ display: { md: "none" } }}><MenuRounded /></IconButton>
       <Box sx={{ flex: 1, minWidth: 0 }}><Typography component="h1" noWrap sx={{ fontWeight: 600, fontSize: "inherit" }}>{title}</Typography>
-        {view === "chat" && selected && <Typography variant="caption" color="text.secondary" noWrap>{selected.projectLabel}</Typography>}</Box>
+        {view === "chat" && selected && <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ display: "flex", alignItems: "center", gap: .75, minWidth: 0 }}>
+          <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", flexShrink: 3, minWidth: 24 }}>{selected.projectLabel}</Box>
+          {selected.gitBranch && <><Box component="span" aria-hidden sx={{ color: "text.disabled" }}>·</Box><GitBranchLabel branch={selected.gitBranch} locale={locale} maxWidth="45%" /></>}</Typography>}</Box>
       {view === "chat" && selected && <><SessionComposerControls placement="header" session={selected} snapshot={currentInspection} locale={locale}
         onOpenChanges={() => openInspector("source")}
         canSetModel={connection === "connected" && capabilities?.capabilities.sessionActions.setModel.status === "available"}
@@ -663,7 +666,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
     <UpdatePrompt locale={locale} onDetails={() => openSettings("updates")} />
-    <StatusBar locale={locale} connection={connection} running={running} onUpdates={() => openSettings("updates")} onPalette={() => setPaletteOpen(true)} />
+    <StatusBar locale={locale} connection={connection} running={running} branch={view === "chat" ? selected?.gitBranch : undefined} onUpdates={() => openSettings("updates")} onPalette={() => setPaletteOpen(true)} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} locale={locale} />
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },

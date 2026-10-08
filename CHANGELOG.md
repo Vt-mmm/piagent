@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changes
+
+- The dashboard shows the Git branch each conversation's project stands on: next to the project name under the chat title, in the status bar, and beside each project group in the sidebar. A detached HEAD shows its short commit in the warning colour, since work there belongs to no branch. The branch is read from the repository's own HEAD file (linked worktrees included), and a branch switched by the agent or in a Terminal shows at the next refresh, or when you come back to the tab.
+
 ## v1.16.3 - 2026-10-08
 
 A dashboard updated from its own button checks for the next release again.

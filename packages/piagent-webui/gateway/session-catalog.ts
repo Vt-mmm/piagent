@@ -6,6 +6,7 @@ import { workflowCommandPattern } from "../../piagent-core/runtime/workflows/web
 import type { Catalog, SessionRow } from "../contracts/generated/session-catalog-v1.ts";
 import type { MetadataSnapshot, SessionMetadata } from "./session-metadata-store.ts";
 import { projectRefForCwd, sessionRefForPath } from "../ownership/session-refs.ts";
+import { gitHeadReader, type GitHead } from "./git-head.ts";
 
 export { projectRefForCwd, sessionRefForPath } from "../ownership/session-refs.ts";
 
@@ -105,7 +106,8 @@ function revision(key: Buffer, value: unknown): string {
 }
 
 function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undefined, metadataReason: string | null,
-  ownership?: SessionOwnerProjection, sessionOptions?: SessionOptionProjection): SessionRow {
+  ownership?: SessionOwnerProjection, sessionOptions?: SessionOptionProjection, gitHead?: GitHead | null): SessionRow {
+  const gitBranch = gitHead ? { name: display(gitHead.name, 200, "HEAD"), detached: gitHead.detached } : null;
   const projectLabel = display(info.cwd ? path.basename(info.cwd) : "", 120, "Unknown project");
   const projected = projectedSessionTitle(info);
   return {
@@ -123,6 +125,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
     unread: metadata?.unread ?? false,
     composerAvailable: metadata?.archived ? false : ownership?.composerAvailable ?? false,
     needsAttention: metadata?.archived ? false : ownership?.needsAttention ?? false,
+    ...(gitBranch ? { gitBranch } : {}),
     ...(sessionOptions?.managedHelpers ? {managedHelpers:{...sessionOptions.managedHelpers,
       active: ownership?.liveState === 'idle' ? 0 : ownership?.liveState === 'running' || ownership?.liveState === 'waiting-approval' ? sessionOptions.managedHelpers.active : null}} : {}),
     ...(sessionOptions?.managedThinkingLevels ? {managedThinkingLevels:sessionOptions.managedThinkingLevels} : {}),
@@ -138,6 +141,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
       : ownership?.owner ?? { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "unknown" },
     sessionRevision: revision(key, [info.path, info.modified.toISOString(), info.messageCount, info.name ?? null, metadata?.revision ?? null,
       sessionOptions?.modelLabel ?? null, sessionOptions?.thinkingLevel ?? "unknown", sessionOptions?.managedHelpers, sessionOptions?.managedThinkingLevels, sessionOptions?.managedPermission ?? null, sessionOptions?.managedPlan, sessionOptions?.managedProcess,
+      gitBranch,
       metadata?.archived ? "archived" : ownership ? [ownership.state, ownership.liveState, ownership.owner.kind,
         ownership.owner.ownerEpoch, ownership.owner.runtimeInstanceRef, ownership.reasonCode] : "offline"]),
     reasonCode: metadata?.archived ? metadataReason : ownership?.reasonCode ?? metadataReason
@@ -151,16 +155,18 @@ export async function buildSessionCatalog(options: {
   readMetadata?(): MetadataSnapshot;
   readOwnership?(sessionRef: string): SessionOwnerProjection;
   readSessionOptions?(info: PiSessionInfo): SessionOptionProjection;
+  readGitHead?(cwd: string): GitHead | null;
   limit?: number;
 }): Promise<Catalog> {
   const limit = Math.max(1, Math.min(200, options.limit ?? 200));
   try {
     const found = (await options.listSessions()).filter(isUserConversationSession);
+    const readHead = options.readGitHead ?? gitHeadReader();
     const metadata = options.readMetadata?.() ?? { state: "ready", revision: null, sessions: new Map(), reasonCode: null };
     const sessions = found.map((info) => {
       const sessionRef = sessionRefForPath(options.key, info.path);
       return row(options.key, info, metadata.sessions.get(sessionRef), metadata.reasonCode, options.readOwnership?.(sessionRef),
-        options.readSessionOptions?.(info));
+        options.readSessionOptions?.(info), readHead(info.cwd));
     }).sort((left, right) => Number(right.pinned) - Number(left.pinned)
       || Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, limit);
     return {

@@ -989,6 +989,45 @@ test("keeps many conversations readable: running first, filter by kind, folding 
   }
 });
 
+test("shows the Git branch a conversation's project stands on, and a detached HEAD as a warning", async ({ browser }) => {
+  const release = catalog.sessions.find((row) => row.sessionRef === "session_release_prep");
+  const review = catalog.sessions.find((row) => row.sessionRef === "session_source_review");
+  const saved = [release.gitBranch, review.gitBranch];
+  release.gitBranch = { name: "feature/show-the-git-branch-in-the-dashboard-header-and-status-bar", detached: false };
+  review.gitBranch = { name: "3f6edf8", detached: true };
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+      try {
+        await page.goto(server.issueLaunchUrl());
+        // Earlier tests may leave a newer chat selected; open this one by name.
+        if (width < 900) await page.getByRole("button", { name: "Mở điều hướng" }).click();
+        await page.getByRole("button", { name: /^Release preparation/ }).filter({ visible: true }).first().click();
+        const header = page.getByRole("banner");
+        await expect(header.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+        const branch = header.getByLabel(/Nhánh Git của project: feature\/show-the-git-branch/);
+        await expect(branch).toBeVisible();
+        const box = await branch.boundingBox(), headerBox = await header.boundingBox();
+        expect(box.x + box.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        const bar = page.getByRole("contentinfo", { name: "Thanh trạng thái" });
+        if (width >= 900) {
+          await expect(bar.getByLabel(/Nhánh Git của project: feature\/show/)).toBeVisible();
+          await expect(page.getByRole("navigation").getByLabel(/Nhánh Git của project: feature\/show/)).toBeVisible();
+          await page.getByRole("navigation").getByText("Review source changes", { exact: true }).click();
+          await expect(header.getByLabel("Git không ở nhánh nào (detached HEAD tại 3f6edf8)")).toBeVisible();
+          await expect(bar.getByText("3f6edf8", { exact: true })).toBeVisible();
+        } else await expect(bar).toHaveCount(0);
+        await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/git-branch-${width}.png`) });
+      } finally { await page.close(); }
+    }
+  } finally {
+    [release.gitBranch, review.gitBranch] = saved;
+    if (!release.gitBranch) delete release.gitBranch;
+    if (!review.gitBranch) delete review.gitBranch;
+  }
+});
+
 test("a conversation running in the company Terminal is followed, not continued, from the WebUI", async ({ browser }) => {
   const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
   Object.assign(target, { modelLabel: "agent-watch-auto", state: "terminal-owned", liveState: "uncertain", composerAvailable: false, reasonCode: "terminal-owner-active",

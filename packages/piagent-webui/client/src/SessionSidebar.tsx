@@ -30,6 +30,7 @@ import Typography from "@mui/material/Typography";
 import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { LiveConversation } from "./live-state-view-model.ts";
 import type { ConnectionState } from "./use-inspection.ts";
+import { GitBranchLabel } from "./GitBranchLabel.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 import { toneText } from "./tone.ts";
 import { outcomeTone } from "./ProcessNote.tsx";
@@ -97,7 +98,7 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
     </Menu></Box>;
 }
 
-export type ProjectGroup = { projectRef: string; label: string; sessions: SessionRow[] };
+export type ProjectGroup = { projectRef: string; label: string; gitBranch?: SessionRow["gitBranch"]; sessions: SessionRow[] };
 const PER_GROUP = 5, COLLAPSED_KEY = "piagent.sidebar.collapsed";
 function readSet(key: string): Set<string> {
   try { const value = JSON.parse(window.localStorage.getItem(key) ?? "[]"); return new Set(Array.isArray(value) ? value.filter((item) => typeof item === "string").slice(0, 500) : []); }
@@ -161,7 +162,9 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
           <ButtonBase onClick={() => toggle(setCollapsed, group.projectRef, true)} aria-expanded={open} sx={{ width: "100%", justifyContent: "flex-start", gap: .7, px: 2, py: .55, borderRadius: 1 }}>
             <ExpandMoreRounded sx={{ fontSize: 16, color: "text.disabled", transform: open ? "none" : "rotate(-90deg)", transition: "transform .15s" }} />
             <FolderOpenOutlined sx={{ fontSize: 15, color: "text.disabled" }} /><Typography component="div" variant="caption" color="text.secondary"
-              noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 600, textAlign: "left" }}>{group.label}</Typography>
+              noWrap sx={{ flexShrink: 1, minWidth: 0, fontWeight: 600, textAlign: "left" }}>{group.label}</Typography>
+            <Typography component="div" variant="caption" color="text.disabled" sx={{ flex: 1, minWidth: 0, display: "flex", textAlign: "left" }}>
+              {group.gitBranch && <GitBranchLabel branch={group.gitBranch} locale={locale} maxWidth="100%" />}</Typography>
             <Typography variant="caption" color="text.disabled">{group.sessions.length}</Typography></ButtonBase>
           {open && items.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]}
             selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => onSelect(session.sessionRef)} onAction={(action) => onAction(session, action)} />)}

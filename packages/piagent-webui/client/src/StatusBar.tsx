@@ -6,12 +6,15 @@ import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
+import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
+import { GitBranchLabel } from "./GitBranchLabel.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 import { updateInProgress, useUpdates } from "./update-state.tsx";
 
 // The dashboard's status bar, as in an editor: where the Gateway stands, what
-// runs, the release and its update, and the command palette. Hidden on narrow
-// screens, where the Settings button carries the update dot.
+// runs, the open conversation's Git branch, the release and its update, and
+// the command palette. Hidden on narrow screens, where the Settings button
+// carries the update dot and the header shows the branch.
 export const STATUS_BAR_HEIGHT = 28;
 export const modifierKey = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
 
@@ -19,7 +22,7 @@ const staticSx = { height: STATUS_BAR_HEIGHT, px: 1, gap: .75, fontSize: 12, col
 const itemSx = { ...staticSx, borderRadius: 0, "&:hover": { bgcolor: "action.hover", color: "text.primary" },
   "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } };
 
-export function StatusBar({ locale, connection, running, onUpdates, onPalette }: { locale: UiLocale; connection: string; running: number;
+export function StatusBar({ locale, connection, running, branch, onUpdates, onPalette }: { locale: UiLocale; connection: string; running: number; branch?: SessionRow["gitBranch"];
   onUpdates(): void; onPalette(): void }) {
   const { status, supported } = useUpdates();
   const wide = useMediaQuery((theme: import("@mui/material/styles").Theme) => theme.breakpoints.up("md"));
@@ -32,6 +35,7 @@ export function StatusBar({ locale, connection, running, onUpdates, onPalette }:
     <Stack direction="row" sx={staticSx}>
       <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: connection === "connected" ? "success.main" : "warning.main" }} />
       <span>{connection === "connected" ? "Gateway live" : connection}</span><Box component="span" sx={{ color: "text.disabled" }}>local</Box></Stack>
+    {branch && <Stack direction="row" sx={{ ...staticSx, minWidth: 0 }}><GitBranchLabel branch={branch} locale={locale} maxWidth={320} /></Stack>}
     {running > 0 && <Stack direction="row" sx={staticSx}>
       <CircularProgress size={10} thickness={6} /><span>{localize(locale, `${running} đang chạy`, `${running} running`)}</span></Stack>}
     <Box sx={{ flex: 1 }} />
