@@ -125,7 +125,7 @@
     "apiVersion": 1,
     "packageDigest": "sha256:858419d30695c364ec1ea3d364f6e96e3700b8afa867a9936ce10c56042cb201",
     "packageSource": "../",
-    "packageVersion": "1.18.0",
+    "packageVersion": "1.19.0",
     "runtimeFiles": [
       {
         "byteSize": 6832,

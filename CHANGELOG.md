@@ -2,7 +2,7 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.19.0 - 2026-10-08
 
 A company task with a checklist is carried to its end, and every turn says how it ended.
 

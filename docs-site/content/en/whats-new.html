@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.19.0 · 2026-10-08</p>
+  <h2 id="v1-19-0">Tasks with a checklist are carried to the end, and each turn says whether it finished</h2>
+  <p class="section-lead">In a company conversation, when the main agent stops while its checklist still has open steps (say, after STEP06 of the STEP22 you asked for) and the team's Harness requires a plan, the harness sends it on to the next open step, as if you had sent “continue”. It stops when the checklist is done, when you press Stop or write, when a round fails, or after 2 rounds in a row that finish no step. Every turn ends with one line: Done, Stopped midway with x of y steps open (and why), Turn stopped by a failure, or You stopped this turn, with Continue when the task is not finished; the conversation list shows it too. A turn whose change the agent committed is still checked and reviewed.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.18.0 · 2026-10-08</p>
   <h2 id="v1-18-0">Switch the Git branch from the dashboard, retries for passing failures, Claude Haiku 5.5</h2>
   <p class="section-lead">Click the branch under the chat title or in the status bar to choose another branch or create one. The dashboard does not switch while a conversation in the folder runs, and shows Git's reason when it refuses (for example, uncommitted changes it would overwrite). When a model's answer fails for a passing reason (a cut stream, a model or Studio gateway that does not answer), Piagent asks again up to twice before showing the failure; quota, key and policy failures still show at once. Claude Haiku 5.5, Anthropic's fastest model, can be chosen in company and personal sessions.</p>

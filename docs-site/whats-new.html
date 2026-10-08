@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.18.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.19.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,12 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.19.0 · 2026-10-08</p>
+  <h2 id="v1-19-0">Task có checklist được làm đến hết, và mỗi lượt báo rõ đã xong hay chưa</h2>
+  <p class="section-lead">Trong cuộc trò chuyện công ty, khi main agent tự dừng lúc checklist còn bước (ví dụ làm xong STEP06 rồi dừng, dù bạn giao đến STEP22) và Harness của team bắt buộc plan, Harness tự cho agent làm tiếp bước kế tiếp, như bạn gửi “tiếp tục”. Nó dừng khi checklist xong, khi bạn bấm Stop hoặc nhắn tin, khi gặp lỗi, hoặc sau 2 vòng liên tiếp không xong thêm bước nào. Cuối mỗi lượt có một dòng: Hoàn thành, Dừng giữa chừng còn x/y bước (kèm lý do), Lượt dừng vì lỗi, hoặc Bạn đã dừng lượt này, với nút Tiếp tục khi task chưa xong; danh sách cuộc trò chuyện cũng hiện trạng thái này. Lượt mà agent đã commit vẫn được chạy check và review.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.18.0 · 2026-10-08</p>
   <h2 id="v1-18-0">Đổi nhánh Git trên dashboard, tự thử lại khi lỗi tạm thời, Claude Haiku 5.5</h2>
