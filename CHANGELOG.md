@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.18.0 - 2026-10-08
+
+Switch the Git branch from the dashboard, retries for passing failures, and Claude Haiku 5.5.
 
 ### Changes
 

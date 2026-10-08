@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.18.0`: đổi nhánh Git ngay trên dashboard (bấm vào tên nhánh: chọn nhánh có sẵn hoặc tạo nhánh mới; không đổi khi có cuộc trò chuyện đang chạy trong folder); lỗi tạm thời của model sau khi Studio đã nhận (stream bị cắt, model hoặc gateway không trả lời) tự thử lại tối đa 2 lần; Claude Haiku 5.5.
 - `1.17.0`: dashboard hiện nhánh Git của project (dưới tên cuộc trò chuyện, ở thanh trạng thái và cạnh từng nhóm project); detached HEAD hiện mã commit màu cảnh báo.
 - `1.16.3`: dashboard cập nhật bằng nút xong vẫn tự kiểm tra bản mới (trước đó bị tắt tới khi khởi động lại máy).
 - `1.16.2`: Terminal (`pi`, `piagent studio`) hỏi "Cập nhật ngay / Để sau" khi có bản mới, `/piagent-update`; `/bypass` trong `piagent studio`; lệnh mạng hỏi kèm lý do; lỗi và ghi chú Harness trong Terminal bằng tiếng Việt. Đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình ở lần đồng bộ kế tiếp.
