@@ -134,6 +134,8 @@ Các command này đến từ package `piagent-core`; tất cả chạy ngay và
 | `/fast status\|on\|off` | Xem/bật/tắt Fast service tier cho session OpenAI Codex. | Chạy ngay, 0 model token; giữ nguyên model/thinking. Session trống mặc định tắt, environment override hoặc state đã lưu khi resume có thể được ưu tiên. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/piagent-mcp` | Xem/quản trị MCP trong Pi. | Menu MCP, không gọi model. |
+| `/piagent-update` | Kiểm tra bản Piagent mới ngay (Terminal tự hỏi mỗi giờ, giữa các lượt). | Hỏi "Cập nhật ngay / Để sau"; cập nhật xong nhắc mở lại `pi` hoặc `piagent studio`. Không gọi model. |
+| `/bypass [on\|off\|status]` | Chỉ trong `piagent studio`: bật/tắt Bypass cho cuộc trò chuyện công ty (giống công tắc trên dashboard). | Bypass: lệnh cần internet chạy luôn, vẫn hỏi việc bắt buộc (đẩy/gửi ra ngoài, migration, xoá không rõ đích, sudo). Footer hiện "Bypass". Không gọi model. |
 
 `/piagent-inspector` không thêm bước bắt buộc nào. Panel bốn dòng tự hiện sát
 phía trên footer native từ lúc mở session và dùng working-tree status (bản ghi
@@ -473,8 +475,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.16.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.16.1` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.16.2` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.16.2` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const INSTRUCTION_FILES = ['AGENTS.override.md', 'AGENTS.md', 'AGENTS.MD', 'CLAUDE.md', 'CLAUDE.MD'];
 // Project instructions from the project folder up to its repository root, as
@@ -24,8 +25,7 @@ export function projectInstructions(cwd, top = cwd) {
 // Managed sessions never consult the personal trust store or execute resources
 // discovered in a project. Skills and commands are text (agent-skills.mjs):
 // what they ask for runs with the session's own tools.
-export function managedResourceLoader(api, { systemPrompt, extensions = [], agentsFiles = [], skills = [], prompts = [] } = {}) {
-  const runtime = api.createExtensionRuntime();
+export function managedResourceLoader(api, { systemPrompt, extensions = [], runtime = api.createExtensionRuntime(), agentsFiles = [], skills = [], prompts = [] } = {}) {
   const empty = Object.freeze([]);
   return Object.freeze({
     getExtensions: () => ({ extensions, errors: empty, runtime }),
@@ -40,4 +40,16 @@ export function managedResourceLoader(api, { systemPrompt, extensions = [], agen
     extendResources: () => { throw new Error('managed-project-resources-disabled'); },
     reload: async () => {},
   });
+}
+
+// Extensions the company Terminal adds itself (its commands and how Harness
+// notes read), built the way Pi builds an inline extension. Never project code.
+export async function inlineExtensions(api, sdkRoot, cwd, factories = []) {
+  const runtime = api.createExtensionRuntime();
+  if (!factories.length) return { extensions: [], runtime };
+  const load = (file) => import(pathToFileURL(path.join(sdkRoot, 'dist', ...file.split('/'))).href);
+  const [{ loadExtensionFromFactory }, { createEventBus }] = await Promise.all([load('core/extensions/loader.js'), load('core/event-bus.js')]);
+  const bus = createEventBus(), extensions = [];
+  for (const [index, factory] of factories.entries()) extensions.push(await loadExtensionFromFactory(factory, cwd, bus, runtime, `<inline:company-terminal-${index + 1}>`));
+  return { extensions, runtime };
 }

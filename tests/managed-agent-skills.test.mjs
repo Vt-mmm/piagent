@@ -131,3 +131,24 @@ test('a company turn lists the project skills to the model and sends a /command 
     assert.doesNotMatch(asked, /\/review checkout/);
   } finally { await managed.dispose?.(); await new Promise((resolve) => server.close(resolve)); fs.rmSync(base, {recursive: true, force: true}); }
 });
+
+test('a Terminal command (/bypass) runs in the company session without starting a turn or a run', {skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 60000}, async () => {
+  const {base, repo} = machine();
+  const actions = [], authority = {studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1};
+  const models = [{id: 'gpt-6-sol', provider_model_id: 'gpt-6-sol', owned_by: 'codex'}];
+  const broker = {async request(action) {
+    actions.push(action);
+    if (action === 'config') return {schema_version: 2, credential_mode: 'managed', authority, models, harness: {configuration: {main: {model_ids: ['gpt-6-sol']}, review: {model_ids: ['gpt-6-sol']}}}};
+    if (action === 'close') return true;
+    throw Error('unexpected ' + action);
+  }, async dispose() {}};
+  const ran = [];
+  const terminal = (pi) => pi.registerCommand('bypass', {description: 'test', handler: async (args) => { ran.push(args); }});
+  const managed = await ManagedSession.create({sdkRoot, cwd: repo, origin: 'http://127.0.0.1:9', broker, terminalExtensions: [terminal]});
+  try {
+    await managed.session.prompt('/bypass on');
+    assert.deepEqual(ran, ['on']);
+    assert.equal(actions.includes('start'), false, 'no Studio run was started for a Terminal command');
+    assert.equal(managed.session.messages.filter((message) => message.role === 'user').length, 0);
+  } finally { await managed.dispose?.(); fs.rmSync(base, {recursive: true, force: true}); }
+});

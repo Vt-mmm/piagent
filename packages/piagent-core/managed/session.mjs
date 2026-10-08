@@ -5,7 +5,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { ensureSearchTools, trustSystemCertificates } from './toolchain.mjs';
-import { managedResourceLoader, projectInstructions } from './resource-loader.mjs';
+import { inlineExtensions, managedResourceLoader, projectInstructions } from './resource-loader.mjs';
 import { fetchPublicPage, fetchLimits } from './web-fetch.mjs';
 import { searchForRole } from './web-search.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
@@ -84,7 +84,7 @@ export class ManagedSession {
   // renewBroker/bindingRevision (optional) let a long-lived conversation follow
   // a key or harness change: Agent Watch rewrites the binding's revision, and
   // the conversation enrolls again before its next run.
-  static async create({ sdkRoot, cwd, origin, broker, protectedRoots = [], agentDir, sessionManager, renewBroker = null, bindingRevision = null }) {
+  static async create({ sdkRoot, cwd, origin, broker, protectedRoots = [], agentDir, sessionManager, renewBroker = null, bindingRevision = null, terminalExtensions = [] }) {
     const sdk = fs.realpathSync(sdkRoot);
     if (JSON.parse(fs.readFileSync(path.join(sdk, 'package.json'))).version !== '0.87.1') throw Error('managed-sdk-version-unqualified');
     await trustSystemCertificates();
@@ -116,7 +116,7 @@ export class ManagedSession {
           action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'fetch_origin',rawAction:plan,
             targetPaths:[self.cwd],provider:'github',urlOrigin:'https://github.com',requestedScope:'fetch-origin-once',
             reason:`Fetch origin branches from ${plan.repository}`,riskClass:'low',allowConsequence:'Download origin branches once; keep the current branch and working files unchanged.',denyConsequence:'No network request or credential read.'},
-          terminalConfirm:()=>ctx?.ui?.confirm?.('Fetch origin',`Fetch ${plan.repository} into ${self.cwd}? No working files will be changed.`)??Promise.resolve(false),
+          terminalConfirm:()=>ctx?.ui?.confirm?.('Tải nhánh từ origin',`Tải các nhánh của ${plan.repository} về ${self.cwd} một lần.\n\nĐồng ý: chỉ tải nhánh; nhánh hiện tại và file đang làm không đổi.\nTừ chối: không gửi request mạng, không đọc thông tin đăng nhập.`)??Promise.resolve(false),
           unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
         if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
         return executeRepositoryFetch(self.boundary,plan,signal);
@@ -133,7 +133,7 @@ export class ManagedSession {
           action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'run_with_network',rawAction:{command:args.command},commandPreview:String(args.command),
             targetPaths:[self.cwd],provider:'network',urlOrigin:null,requestedScope:'network-command-once',reason:(confirm==='ask'?String(args.reason):`Bypass still asks: ${confirm}. ${args.reason}`).slice(0,300),riskClass:'medium',
             allowConsequence:'Run this exact command once, with internet access; a server it starts accepts connections while it runs.',denyConsequence:'The command does not run; the agent is told you declined.'},
-          terminalConfirm:()=>ctx?.ui?.confirm?.('Run with network',`Allow internet access for: ${args.command}`)??Promise.resolve(false),
+          terminalConfirm:()=>ctx?.ui?.confirm?.('Chạy lệnh có internet',`${args.command}\n\nLý do: ${args.reason}${confirm==='ask'?'':`\nBypass vẫn hỏi: ${confirm}`}\n\nĐồng ý: chạy đúng lệnh này một lần, có internet; server nó mở nhận kết nối trong lúc chạy.\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.`)??Promise.resolve(false),
           unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
         if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
         let ok=false;
@@ -161,7 +161,7 @@ export class ManagedSession {
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
-      skills: self.resources.skills, prompts: self.resources.prompts });
+      skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, terminalExtensions) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd);
     const scope = scopeOf(self.origin, manifest);
@@ -229,6 +229,8 @@ export class ManagedSession {
     };
     const prompt = self.session.prompt.bind(self.session);
     self.session.prompt = async (text, options) => {
+      // An extension command (/bypass, /piagent-update) runs here, never as a turn.
+      if (/^\/\S/.test(text) && self.session.extensionRunner?.getCommand(text.slice(1).split(/\s/)[0])) return prompt(text, options);
       // /skill:name, /command: the run sees what the member asked for in full.
       text = self.resources.expand(text);
       if (self.starting) await self.starting;

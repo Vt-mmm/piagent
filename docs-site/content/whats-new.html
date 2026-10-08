@@ -1,4 +1,17 @@
 <section class="section">
+  <p class="section-kicker">v1.16.2 · 2026-10-08</p>
+  <h2 id="v1-16-2">Terminal nói giống dashboard</h2>
+  <p class="section-lead">Có bản Piagent mới thì Terminal (<span class="inline-code">pi</span> và <span class="inline-code">piagent studio</span>) hỏi <strong>Cập nhật ngay</strong> hoặc <strong>Để sau</strong> (nhắc lại sau 1 giờ), chỉ giữa các lượt, kèm một dòng dưới footer; <span class="inline-code">/piagent-update</span> kiểm tra ngay.</p>
+  <ul>
+    <li><span class="inline-code">/bypass</span> trong <span class="inline-code">piagent studio</span> bật/tắt Bypass cho cuộc trò chuyện, giống công tắc trên dashboard; footer hiện "Bypass" khi đang bật.</li>
+    <li>Lệnh cần internet được hỏi kèm lý do, lý do Bypass vẫn hỏi và hậu quả khi đồng ý hay từ chối.</li>
+    <li>Lỗi khi gửi, lỗi khi mở phiên công ty và ghi chú của Harness (check, review, phản biện của subagent, "bạn quyết định") hiện bằng tiếng Việt như trên dashboard.</li>
+    <li>Với Agent Watch 0.15.2: sau khi Watch cập nhật mà cần cấp lại quyền Keychain, Watch hỏi bằng dialog và cập nhật lại cấu hình Piagent ngay.</li>
+  </ul>
+  <p>Bản này đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình ở lần đồng bộ kế tiếp (vài phút). Nếu <span class="inline-code">piagent studio</span> báo cấu hình đã đổi, mở Agent Watch → Studio và nhập lại cấu hình cho Piagent.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.16.1 · 2026-10-07</p>
   <h2 id="v1-16-1">Báo bản mới rõ ràng, kiểm tra mỗi giờ</h2>
   <p class="section-lead">Khi có bản Piagent mới, dashboard mở một dialog ghi rõ sẽ đổi gì và nút <strong>Cập nhật ngay</strong>; chọn <strong>Để sau</strong> thì 1 giờ sau nhắc lại. Cập nhật xong, dashboard mở lại báo đã thành công. Dashboard và Terminal tự kiểm tra bản mới mỗi giờ.</p>

@@ -164,6 +164,7 @@ import { fallbackBasePolicy } from "./fallback-base-policy.ts";
 import { prefixCompletions, registerPiagentTool as registerToolDefinition, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
 import { registerTaskEvidenceTools } from "../runtime/registration/task-evidence-tools.ts";
 import { registerAgentResources } from "../runtime/registration/agent-resources.ts";
+import { registerTerminalUpdateOffer } from "../runtime/update/terminal-update-offer.mjs";
 import { userSkillFolders } from "../runtime/resources/agent-resources.mjs";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
 import { registerPiagentStatusCommand } from "../runtime/registration/runtime-model-status.ts";
@@ -4159,5 +4160,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // citations need a task id), so it is no longer registered at all.
   registerTaskEvidenceTools(pi, registrationDeps);
   registerAgentResources(pi);
+  // A new release is asked about in the Terminal, as the dashboard does.
+  registerTerminalUpdateOffer(pi, { installed: installedPlatformVersion(), packageRoot: PLATFORM_ROOT, restart: "pi" });
   registerSessionCommands(pi, { ...registrationDeps, ...contextCommandApi });
 }

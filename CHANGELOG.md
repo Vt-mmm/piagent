@@ -2,6 +2,24 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.16.2 - 2026-10-08
+
+The Terminal says what the dashboard says.
+
+### Changes
+
+- A new Piagent is asked about in the Terminal too, in `pi` and in `piagent studio`: "Có bản Piagent mới" with **Cập nhật ngay** (runs `piagent-update`, then asks you to reopen) or **Để sau** (asked again after an hour), only between turns, with a footer line until you update. `/piagent-update` checks at once. Before, `pi` printed one line at session start and `piagent studio` said nothing.
+- `/bypass` in `piagent studio` switches the conversation between asking first and Bypass (`on`, `off`, or a choice), kept with the conversation like the dashboard's switch; the footer shows "Bypass" while it is on.
+- A network command in the company Terminal is confirmed with its reason, why Bypass still asks, and what allowing or declining does, as on the dashboard.
+- The company Terminal explains a failed request (quota, account, Harness, refused…) and a runtime that cannot start in the dashboard's Vietnamese words, with the code for support; the Harness's notes (checks, review findings, a subagent's objection, "bạn quyết định") read in Vietnamese.
+
+### Fixes
+
+- A slash command of a company Terminal extension was sent to the model as a message.
+- With Agent Watch 0.15.2, a Watch update that needs Keychain access again asks for it in a dialog and refreshes Piagent's company setup at once; before, `piagent studio` stopped with `managed-launch-binding-changed` until the member found the button.
+
+This release changes the company launcher: Agent Watch refreshes Piagent's setup on its next sync (within minutes); if `piagent studio` reports the setup changed, open Agent Watch → Studio and import it for Piagent.
+
 ## v1.16.1 - 2026-10-07
 
 New releases are announced in a dialog and checked every hour; a dashboard tab no longer gets stuck signed out.

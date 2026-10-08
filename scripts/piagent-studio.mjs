@@ -114,6 +114,11 @@ try {
   // company Gateway uses: the WebUI shows it running here and never runs it
   // at the same time. One the WebUI is running is refused.
   const { holdManagedSession } = await import('../packages/piagent-webui/ownership/managed-terminal-lease.ts');
+  // The Terminal's own commands and words (updates, Bypass, Harness notes): company-terminal.mjs.
+  const { companyTerminalExtension } = await import('./company-terminal.mjs');
+  const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const terminal = companyTerminalExtension({ managed: () => current, packageRoot, sdkRoot: config.sdk_root,
+    bindingChanged: () => { try { return digest(config.entrypoint) !== config.entrypoint_sha256; } catch { return true; } } });
   const factory = async ({ cwd, sessionManager }) => {
     let next;
     try { next = holdManagedSession(agentDir, sessionManager.getSessionFile()); }
@@ -122,7 +127,7 @@ try {
     // A conversation that enrolled again (key or harness changed) holds the live broker.
     if (current) { broker = current.broker; await current.session.abort(); await Promise.allSettled([...current.helpers.values()]); await broker.request('close'); current.session.dispose(); await current.boundary.dispose(); }
     current = await ManagedSession.create({ sdkRoot: config.sdk_root, cwd, origin: config.origin, broker, agentDir, sessionManager,
-      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision });
+      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal] });
     return { session: current.session, extensionsResult: current.extensionsResult, services: current.services, diagnostics: [] };
   };
   const host = await api.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: api.SessionManager.create(cwd, path.join(agentDir, 'sessions')) });
@@ -136,7 +141,8 @@ try {
     const last=current.session.messages.filter(message=>message.role==='assistant').at(-1);
     if (last?.stopReason === 'error') {
       // Already says who failed and why, ending in its stable [code].
-      process.stderr.write(`${String(last.errorMessage??'Agent Watch: the request failed [managed-request-failed]')}\n`);process.exitCode = 1;
+      const { failureLines } = await import('./company-terminal.mjs');
+      process.stderr.write(`${failureLines(last.errorMessage) ?? String(last.errorMessage??'Agent Watch: the request failed [managed-request-failed]')}\n`);process.exitCode = 1;
     }
   } else {
     // The company terminal runs the pinned Pi release: no "Run pi update" notice
@@ -149,7 +155,10 @@ try {
 } catch (error) {
   // Never print JSON payloads or startup objects that can contain role tokens.
   const code = error instanceof Error && /^managed-[a-z:_-]+$/.test(error.message) ? error.message : 'managed-launch-failed';
-  const hint = code === 'managed-session-open-elsewhere' ? 'This conversation is running in the Piagent WebUI; continue it there, or start a new one here.'
-    : process.platform === 'linux' ? 'In Agent Watch for Windows, choose Connect Piagent in WSL again.' : 'Refresh the Studio import or check Keychain access.';
+  // The same words as the dashboard (shared/company-copy.ts), with the code for support.
+  let explained = null;
+  try { await import('./register-typescript-loader.mjs'); explained = (await import('../packages/piagent-webui/shared/company-copy.ts')).launchReasonText(code, 'vi'); } catch { /* the code alone */ }
+  const hint = explained ?? (code === 'managed-session-open-elsewhere' ? 'Cuộc trò chuyện này đang chạy trong Piagent WebUI; tiếp tục ở đó, hoặc mở cuộc trò chuyện mới ở đây.'
+    : process.platform === 'linux' ? 'Trong Agent Watch cho Windows, chọn lại Kết nối Piagent trong WSL.' : 'Mở Agent Watch → Studio, nhập lại cấu hình cho Piagent, hoặc kiểm tra quyền Keychain.');
   process.stderr.write(`Agent Watch: ${code}. ${hint}\n`); process.exitCode = 1;
 } finally { await gateway?.close(); if (current) await current.dispose(); else await broker?.dispose(); hold?.release(); }

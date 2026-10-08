@@ -1,4 +1,17 @@
 <section class="section">
+  <p class="section-kicker">v1.16.2 · 2026-10-08</p>
+  <h2 id="v1-16-2">The Terminal says what the dashboard says</h2>
+  <p class="section-lead">When a new Piagent is out, the Terminal (<span class="inline-code">pi</span> and <span class="inline-code">piagent studio</span>) asks <strong>Update now</strong> or <strong>Later</strong> (asked again after an hour), only between turns, with a footer line; <span class="inline-code">/piagent-update</span> checks at once.</p>
+  <ul>
+    <li><span class="inline-code">/bypass</span> in <span class="inline-code">piagent studio</span> switches Bypass for the conversation, like the dashboard's switch; the footer shows "Bypass" while it is on.</li>
+    <li>A network command is confirmed with its reason, why Bypass still asks, and what allowing or declining does.</li>
+    <li>Failed requests, a company runtime that cannot start and the Harness's notes (checks, review, a subagent's objection, "your call") read in Vietnamese as on the dashboard.</li>
+    <li>With Agent Watch 0.15.2: when a Watch update needs Keychain access again, Watch asks in a dialog and refreshes Piagent's setup at once.</li>
+  </ul>
+  <p>This release changes the company launcher: Agent Watch refreshes the setup on its next sync (minutes). If <span class="inline-code">piagent studio</span> says the setup changed, open Agent Watch → Studio and import it for Piagent.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.16.1 · 2026-10-07</p>
   <h2 id="v1-16-1">New releases are announced, checked every hour</h2>
   <p class="section-lead">When a new Piagent is out, the dashboard opens a dialog with what will change and <strong>Update now</strong>; <strong>Later</strong> asks again after an hour. After the update, the restarted dashboard says it worked. The dashboard and the Terminal check for a new release every hour.</p>
