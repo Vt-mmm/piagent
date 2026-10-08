@@ -4071,7 +4071,9 @@ test("forwards interruption and durably retains the unaccepted paid attempt", as
       PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
     }
   });
-  const timeout = Date.now() + 10_000;
+  // The runner prepares two surfaces before Pi starts: ~4 s on an idle Mac,
+  // over 10 s on a loaded macOS CI runner. The wait ends as soon as Pi starts.
+  const timeout = Date.now() + 60_000;
   while (!fs.existsSync(signalFile) && Date.now() < timeout) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
