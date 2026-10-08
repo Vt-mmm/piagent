@@ -8,6 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
 import { languageEnvironment } from './language-environment.mjs';
+import { containerEngine, engineEnvironment } from './container-engine.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
 import { agentWatchDataDirectory } from './store.mjs';
 
@@ -38,7 +39,7 @@ function referenceRules(home, roots) {
 (deny file-read-data file-read-xattr (require-all (require-any (regex #"^${pattern(home)}/\\.") (subpath ${literal(path.join(home, 'Library'))}))${opened}))`;
 }
 
-export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false, references = null, skills = [], caches = [], loopback = true, license = null }) {
+export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false, references = null, skills = [], caches = [], loopback = true, license = null, docker = null }) {
   // Default-deny protects Keychain/SSH agent/Watch IPC and process inspection.
   // System libraries/toolchains are read-only. Writes stay in this project and
   // a fresh temporary directory. No network exception or unsandboxed fallback.
@@ -97,7 +98,8 @@ ${network ? `(allow network-outbound (remote ip))
 (allow system-socket)
 (allow mach-lookup (global-name "com.apple.dnssd.service") (global-name "com.apple.trustd.agent") (global-name "com.apple.SystemConfiguration.configd"))
 (allow mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.ocspd"))
-(allow file-read* (subpath "/private/var/db/mds") (literal "/Library/Keychains/System.keychain") (subpath "/Library/Security/Trust Settings"))` : loopback ? '(allow network-outbound (remote ip "localhost:*"))' : ''}
+(allow file-read* (subpath "/private/var/db/mds") (literal "/Library/Keychains/System.keychain") (subpath "/Library/Security/Trust Settings"))${docker ? `
+(allow network-outbound (literal ${literal(docker)}))` : ''}` : loopback ? '(allow network-outbound (remote ip "localhost:*"))' : ''}
 ${denied.map(root => `(deny file-read* file-write* (require-all (subpath ${literal(root)})${skills.filter(dir => inside(dir, root) && dir !== root).map(dir => ` (require-not (subpath ${literal(dir)}))`).join('')}))`).join('\n')}
 (deny file-read* file-read-metadata file-write* (require-all (require-any (regex #"(^|/)(\\.env([./]|$)|credentials([./]|$)|\\.npmrc$|\\.netrc$)") (regex #"/\\.[^/]+/auth\\.json$") ${projectRoots.map(root => `(literal ${literal(path.join(root, 'auth.json'))})`).join(' ')})
   (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))
@@ -227,6 +229,8 @@ export class ManagedToolBoundary {
     const toolchains = userToolchains(userHome, this.node), developer = developerTools(), browsers = playwrightBrowsers(userHome);
     const languages = languageEnvironment({ userHome, repositoryTop: this.repositoryTop, home: this.home });
     this.packageCache = languages.cache;
+    // The Docker engine, for commands the member approves (run_with_docker).
+    this.engine = readOnly ? null : containerEngine({ userHome });
     // A skill folder opens for reading only inside the agent folders (.claude,
     // .codex, .pi, .agents) or outside the home folder's hidden entries, and
     // never when it holds a closed folder (a link to ~/.ssh, the home folder).
@@ -245,7 +249,7 @@ export class ManagedToolBoundary {
     if (this.linux) {
       const references = referenceFolders(userHome).filter(dir => !narrowed.some(root => inside(dir, root) || inside(root, dir)));
       const empty = path.join(this.temporary, 'empty'); fs.writeFileSync(empty, '', { mode: 0o400 });
-      this.linuxBase = { ...base, toolchains: [...base.toolchains, ...base.browsers], references, empty };
+      this.linuxBase = { ...base, toolchains: [...base.toolchains, ...base.browsers], references, empty, engineRoots: this.engine?.readRoots ?? [] };
       this.referenceCredentials = credentialFiles(references, { limit: 30_000 });
       this.projectCredentials = { at: 0, files: [] };
     } else {
@@ -254,11 +258,14 @@ export class ManagedToolBoundary {
       this.isolatedProfile = managedSeatbelt({ ...base, references: userHome, loopback: false });
       this.proxyPorts = proxyPorts ?? localProxyPorts(); this.proxyCheck = { at: 0, listening: Promise.resolve(false) };
       this.networkProfile = readOnly ? null : managedSeatbelt({ ...base, network: true });
+      // An approved network command that also reaches the Docker engine's socket.
+      this.dockerProfile = this.engine ? managedSeatbelt({ ...base, network: true, docker: this.engine.socket, toolchains: [...base.toolchains, ...this.engine.readRoots] }) : null;
     }
     // Every process a command starts carries this marker, also one it detaches.
     this.scope = randomUUID();
     this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers, languages,
       identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) });
+    if (this.engine) this.environment.docker = { ...this.environment.network, ...engineEnvironment(this.engine, this.home) };
     if (searchTools) provisionSearchTools(this.home, userHome);
     else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
     this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit'].includes(name) && (name !== 'bash' || commands)) : [...TOOL_NAMES];
@@ -274,7 +281,9 @@ export class ManagedToolBoundary {
       this.#tail = run.catch(() => {}); return run;
     } }));
   }
-  async invoke(name, args, signal, onUpdate, model, { network = false } = {}) {
+  async invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
+    if (docker && !this.engine) throw new Error('managed-tool-unavailable');
+    network ||= docker;
     if (this.#closed || !this.allowed.includes(name) || network && (name !== 'bash' || !this.networkAllowed)) throw new Error('managed-tool-unavailable');
     if (signal?.aborted) throw new Error('managed-tool-cancelled');
     for (const [file, digest] of this.pins) if (hash(file) !== digest) throw new Error('managed-runtime-changed');
@@ -283,14 +292,14 @@ export class ManagedToolBoundary {
     if (name !== 'bash' && typeof args?.path === 'string' && /^@?~(\/|$)/.test(args.path)) args = { ...args, path: this.userHome + args.path.replace(/^@?~/, '') };
     if (!this.linux && !network && Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
     const isolated = !this.linux && !network && await this.proxyCheck.listening;
-    const message = JSON.stringify({ name, args, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
+    const message = JSON.stringify({ name, args, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
-      const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network)]
-        : ['/usr/bin/sandbox-exec', ['-p', network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile]];
+      const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network, docker)]
+        : ['/usr/bin/sandbox-exec', ['-p', docker ? this.dockerProfile : network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile]];
       const child = spawn(sandbox, [...sandboxArgs, this.node, workerPath, this.sdkPath, this.cwd], {
         cwd: this.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'],
-        env: network ? this.environment.network : this.environment.offline,
+        env: docker ? this.environment.docker : network ? this.environment.network : this.environment.offline,
       });
       this.#children.add(child);
       const decoder = new StringDecoder('utf8');
@@ -351,11 +360,13 @@ export class ManagedToolBoundary {
   }
   // bubblewrap arguments for one command: credential files of the project are
   // looked for again every 15 seconds (a file the member just added).
-  bubblewrap(network) {
+  bubblewrap(network, docker = false) {
     if (Date.now() - this.projectCredentials.at > 15_000)
       this.projectCredentials = { at: Date.now(), files: credentialFiles([this.cwd, ...this.linuxBase.repository]) };
     const credentials = [...this.projectCredentials.files, ...(network ? [] : this.referenceCredentials)];
-    return bubblewrapArgs({ ...this.linuxBase, references: network ? [] : this.linuxBase.references, network, credentials });
+    const { engineRoots, ...base } = this.linuxBase;
+    return bubblewrapArgs({ ...base, references: network ? [] : base.references, network, credentials,
+      ...(docker ? { docker: this.engine.socket, toolchains: [...base.toolchains, ...engineRoots] } : {}) });
   }
   // Processes a command left running (`nohup … &`, a detached child) outlive
   // it with the marker in their environment. They are stopped when a turn ends

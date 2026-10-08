@@ -86,6 +86,13 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
       try { return await bash('node loopback.mjs'); }
       catch (error) { throw Error(/loopback-blocked/.test(String(error?.message)) ? 'a local proxy listens on this Mac: tests that use localhost need run_with_network' : first(String(error?.message))); }
     });
+    // run_with_docker: the engine answers through its socket, and only there.
+    await check('Docker for approved commands (run_with_docker)', false, async () => {
+      if (!boundary.engine) throw Error('no Docker engine running (Docker Desktop, Colima, OrbStack…): start it, then open a new conversation');
+      let refused = false; try { await bash('docker version --format "{{.Server.Version}}"'); } catch { refused = true; }
+      if (!refused) throw Error('a plain command reached the Docker engine');
+      return `engine ${await bash('docker version --format "{{.Server.Version}}"', { docker: true })}`;
+    });
     await check('package caches kept for the project', false, async () => { await bash('mkdir -p "$npm_config_cache" && touch "$npm_config_cache/.piagent-doctor"'); return boundary.packageCache; });
     // The languages installed on this Mac, each started once in the sandbox.
     // (macOS ships stubs for some, such as javac without a JDK: a probe decides.)

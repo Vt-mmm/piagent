@@ -8,7 +8,7 @@ import { redactSensitiveText } from "../../piagent-core/extensions/redaction-cor
 // and a bounded result preview. Every string is ANSI-stripped and redacted;
 // raw arguments and results never leave the server.
 export type ToolKind = "read" | "write" | "edit" | "command" | "search" | "list" | "web-search" | "web-fetch"
-  | "subagent" | "network" | "git" | "plan" | "other";
+  | "subagent" | "network" | "docker" | "git" | "plan" | "other";
 export type ToolSummary = { kind: ToolKind; target: string | null; detail: string | null };
 export type ToolChange = { added: number; removed: number; preview: string; truncated: boolean };
 export type ToolResult = { text: string; truncated: boolean; isError: boolean };
@@ -139,6 +139,8 @@ export function summarizeToolCall(name: unknown, input: unknown, cwd?: string): 
     }
     case "run_with_network":
       return { summary: { kind: "network", target: commandParts(args.command, cwd).target, detail: clean(args.reason, DETAIL_CHARS) } };
+    case "run_with_docker":
+      return { summary: { kind: "docker", target: commandParts(args.command, cwd).target, detail: clean(args.reason, DETAIL_CHARS) } };
     case "grep": case "find": {
       const where = [displayPath(args.path, cwd), clean(args.glob, 120)].filter(Boolean).join(" · ");
       return { summary: { kind: "search", target: clean(args.pattern, TARGET_CHARS), detail: where || null } };

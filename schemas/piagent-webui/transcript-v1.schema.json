@@ -263,7 +263,7 @@
           "additionalProperties": false,
           "required": ["kind", "target", "detail"],
           "properties": {
-            "kind": { "enum": ["read", "write", "edit", "command", "search", "list", "web-search", "web-fetch", "subagent", "network", "git", "plan", "other"] },
+            "kind": { "enum": ["read", "write", "edit", "command", "search", "list", "web-search", "web-fetch", "subagent", "network", "docker", "git", "plan", "other"] },
             "target": { "anyOf": [{ "type": "string", "maxLength": 400 }, { "type": "null" }] },
             "detail": { "anyOf": [{ "type": "string", "maxLength": 400 }, { "type": "null" }] }
           }

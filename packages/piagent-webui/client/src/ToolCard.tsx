@@ -13,6 +13,7 @@ import HourglassEmptyRounded from "@mui/icons-material/HourglassEmptyRounded";
 import LanguageRounded from "@mui/icons-material/LanguageRounded";
 import NoteAddOutlined from "@mui/icons-material/NoteAddOutlined";
 import PublicRounded from "@mui/icons-material/PublicRounded";
+import ViewInArRounded from "@mui/icons-material/ViewInArRounded";
 import SearchRounded from "@mui/icons-material/SearchRounded";
 import TerminalRounded from "@mui/icons-material/TerminalRounded";
 import TravelExploreRounded from "@mui/icons-material/TravelExploreRounded";
@@ -31,12 +32,12 @@ type Kind = NonNullable<TimelineTool["summary"]>["kind"];
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const ICONS: Record<Kind, typeof BuildOutlined> = { read: DescriptionOutlined, write: NoteAddOutlined, edit: EditOutlined, command: TerminalRounded,
   search: SearchRounded, list: FolderOpenOutlined, "web-search": TravelExploreRounded, "web-fetch": LanguageRounded, subagent: AccountTreeOutlined,
-  network: PublicRounded, git: CallSplitRounded, plan: ChecklistRounded, other: BuildOutlined };
+  network: PublicRounded, docker: ViewInArRounded, git: CallSplitRounded, plan: ChecklistRounded, other: BuildOutlined };
 const VERBS: Record<Kind, [string, string]> = { read: ["Đọc", "Read"], write: ["Tạo", "Write"], edit: ["Sửa", "Edit"], command: ["Chạy", "Run"],
   search: ["Tìm", "Search"], list: ["Xem thư mục", "List"], "web-search": ["Tìm web", "Web search"], "web-fetch": ["Đọc trang", "Fetch page"],
-  subagent: ["Subagent", "Subagent"], network: ["Chạy có mạng", "Run with network"], git: ["Git", "Git"], plan: ["Plan", "Plan"], other: ["Công cụ", "Tool"] };
+  subagent: ["Subagent", "Subagent"], network: ["Chạy có mạng", "Run with network"], docker: ["Chạy với Docker", "Run with Docker"], git: ["Git", "Git"], plan: ["Plan", "Plan"], other: ["Công cụ", "Tool"] };
 const LIVE_KINDS: Record<string, Kind> = { read: "read", write: "write", edit: "edit", apply_patch: "edit", bash: "command", run_experiment: "command", grep: "search", find: "search", ls: "list",
-  web_search: "web-search", web_fetch: "web-fetch", delegate: "subagent", subagent: "subagent", run_with_network: "network", fetch_origin: "git", update_plan: "plan" };
+  web_search: "web-search", web_fetch: "web-fetch", delegate: "subagent", subagent: "subagent", run_with_network: "network", run_with_docker: "docker", fetch_origin: "git", update_plan: "plan" };
 
 export function liveToolKind(label: string): Kind { return LIVE_KINDS[label.toLowerCase()] ?? "other"; }
 

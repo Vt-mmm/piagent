@@ -10,9 +10,10 @@ import { execFileSync } from 'node:child_process';
 //   network (run_with_network), later runs work offline;
 // - the member's own dependency caches as read-only seeds, where the tool can
 //   layer one (Go, Gradle, Maven), so what is already downloaded is reused;
-// - the Maven distributions the Maven Wrapper (./mvnw) already unpacked on
-//   this Mac, linked read-only into the project's cache, so ./mvnw runs
-//   without asking for network; one it has to download stays in the cache;
+// - the distributions the Maven Wrapper (./mvnw) and the Gradle Wrapper
+//   (./gradlew) already unpacked on this Mac, linked read-only into the
+//   project's cache, so they run without asking for network; one they have
+//   to download stays in the cache;
 // - runtimes installed in places the sandbox otherwise keeps closed (JDKs
 //   under ~/Library/Java, the Android SDK, the system gem folder, MacPorts);
 // - SwiftPM and xcodebuild, which cannot start their own sandbox inside this
@@ -82,6 +83,33 @@ function linkDistributions(source, target) {
   }
 }
 
+// The Gradle Wrapper locks <hash>/<zip>.lck and checks <zip>.ok before it
+// uses a distribution, so each <name>/<hash> is a folder of the cache with
+// the marker copied and the unpacked distribution linked.
+function linkGradleDistributions(source, target) {
+  let names = [];
+  try { names = fs.readdirSync(source, { withFileTypes: true }).filter(entry => entry.isDirectory()); } catch { return; }
+  for (const name of names) {
+    let hashes = [];
+    try { hashes = fs.readdirSync(path.join(source, name.name), { withFileTypes: true }).filter(entry => entry.isDirectory()); } catch { continue; }
+    for (const hash of hashes) {
+      const from = path.join(source, name.name, hash.name), to = path.join(target, name.name, hash.name);
+      let entries = [];
+      try { entries = fs.readdirSync(from, { withFileTypes: true }); } catch { continue; }
+      if (!entries.some(entry => entry.name.endsWith('.ok'))) continue; // not fully unpacked
+      try { fs.mkdirSync(to, { recursive: true, mode: 0o700 }); } catch { continue; }
+      for (const entry of entries) {
+        const link = path.join(to, entry.name);
+        try { fs.lstatSync(link); continue; } catch { /* not there yet */ }
+        try {
+          if (entry.isDirectory()) fs.symlinkSync(path.join(from, entry.name), link);
+          else if (entry.name.endsWith('.ok')) fs.writeFileSync(link, '', { mode: 0o600 });
+        } catch { /* best effort */ }
+      }
+    }
+  }
+}
+
 export function languageEnvironment({ userHome, repositoryTop, home }) {
   const linux = process.platform === 'linux';
   const root = linux ? path.join(process.env.XDG_CACHE_HOME || path.join(userHome, '.cache'), 'piagent/sandbox') : path.join(userHome, 'Library/Caches/Piagent/sandbox');
@@ -101,6 +129,7 @@ export function languageEnvironment({ userHome, repositoryTop, home }) {
     // here: packages the member restored are read from their own folder.
     nuget: existing(path.join(userHome, '.nuget/packages')),
     mavenWrapper: existing(path.join(userHome, '.m2/wrapper/dists')),
+    gradleWrapper: existing(path.join(userHome, '.gradle/wrapper/dists')),
   };
   const java = javaHome(userHome), android = existing(path.join(userHome, linux ? 'Android/Sdk' : 'Library/Android/sdk'));
   const readRoots = [...new Set([...Object.values(seeds), java, android, existing(path.join(userHome, 'Library/Java/JavaVirtualMachines')),
@@ -109,6 +138,8 @@ export function languageEnvironment({ userHome, repositoryTop, home }) {
   // ./mvnw looks for its distribution in MAVEN_USER_HOME/wrapper/dists/<name>/<hash>
   // (the sandbox's HOME is an empty folder per conversation).
   if (seeds.mavenWrapper) linkDistributions(seeds.mavenWrapper, at('m2/wrapper/dists'));
+  // ./gradlew: GRADLE_USER_HOME/wrapper/dists/<name>/<hash>.
+  if (seeds.gradleWrapper) linkGradleDistributions(seeds.gradleWrapper, at('gradle/wrapper/dists'));
 
   const bin = path.join(home, '.piagent/bin');
   fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
