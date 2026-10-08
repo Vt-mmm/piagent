@@ -216,7 +216,7 @@ test('Stop ends a wait for a free account; a wait that lasts too long fails with
 });
 
 // Studio admitted the request and the answer stream ended with nothing in it:
-// a named service failure, asked again twice (turn-retry.mjs) and then shown.
+// a named service failure, asked again twice (request-stream.mjs) and then shown.
 // A failure no code names is not asked again and keeps its own words,
 // redacted, in the conversation file for a later look.
 test('an empty answer stream is a named failure after two retries; an unnamed one keeps its words', { skip: !supported, timeout: 120000 }, async () => {
@@ -685,7 +685,7 @@ for (const provider of ['claude', 'codex']) test(`a ${provider} task that fails 
 });
 
 test('only a passing failure after admission is asked again by the turn retry, by code, never by words', async () => {
-  const { companyTurnRetryable, enableCompanyTurnRetry } = await import('../packages/piagent-core/managed/turn-retry.mjs');
+  const { companyTurnRetryable, enableCompanyTurnRetry } = await import('../packages/piagent-core/managed/request-stream.mjs');
   const failed = (code) => ({ stopReason: 'error', errorMessage: describeFailure('main', `503 {"error":{"code":"${code}","request_id":"${REQUEST}"}}`) });
   for (const code of ['upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable', 'connector_unavailable', 'connector_execution_failed', 'inference_unavailable'])
     assert.equal(companyTurnRetryable(failed(code)), true, code);

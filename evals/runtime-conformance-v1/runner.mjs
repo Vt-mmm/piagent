@@ -262,27 +262,23 @@ runCase("context-orphan-protocol-fail-closed", "adaptive-context-governor", () =
 });
 
 runCase("operation-pristine-retry-bounded", "webui-operation-lifecycle", () => {
-  assert.deepEqual(sessionOperationRetryPolicy(), { maximumAttempts: 1, maximumDelayMs: 8_000 });
+  assert.deepEqual(sessionOperationRetryPolicy(), { maximumAttempts: 2, maximumDelayMs: 8_000 });
   const lifecycle = new SessionOperationLifecycle({ operationRef: "operation-pristine" });
   lifecycle.observe({ type: "agent_start", operationRef: "operation-pristine" });
-  const first = lifecycle.observe({
-    type: "auto_retry_start",
-    operationRef: "operation-pristine",
-    attempt: 1,
-    delayMs: 100
-  });
+  const retry = (attempt) => lifecycle.observe({ type: "auto_retry_start", operationRef: "operation-pristine", attempt, delayMs: 100 });
+  const ended = (attempt) => lifecycle.observe({ type: "auto_retry_end", operationRef: "operation-pristine", attempt, success: false });
+  const first = retry(1);
   assert.equal(first.retry, "allowed");
   metrics.operations.pristineRetriesAllowed += 1;
-  lifecycle.observe({ type: "auto_retry_end", operationRef: "operation-pristine", attempt: 1, success: false });
-  const second = lifecycle.observe({
-    type: "auto_retry_start",
-    operationRef: "operation-pristine",
-    attempt: 2,
-    delayMs: 100
-  });
-  assert.equal(second.retry, "abort");
-  assert.equal(second.reasonCode, "automatic-retry-attempt-limit");
-  return { maximumAttempts: lifecycle.retryPolicy.maximumAttempts, firstRetry: first.retry, secondRetry: second.retry };
+  ended(1);
+  const second = retry(2);
+  assert.equal(second.retry, "allowed");
+  metrics.operations.pristineRetriesAllowed += 1;
+  ended(2);
+  const third = retry(3);
+  assert.equal(third.retry, "abort");
+  assert.equal(third.reasonCode, "automatic-retry-attempt-limit");
+  return { maximumAttempts: lifecycle.retryPolicy.maximumAttempts, firstRetry: first.retry, secondRetry: second.retry, thirdRetry: third.retry };
 });
 
 runCase("operation-replay-unsafe-and-exactly-once", "webui-operation-lifecycle", () => {

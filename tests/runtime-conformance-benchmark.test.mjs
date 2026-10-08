@@ -40,7 +40,7 @@ test("provider-free runtime conformance lane emits a complete zero-token passing
   assert.equal(receipt.metrics.context.noops, 2);
   assert.equal(receipt.metrics.context.governorProviderCalls, 0);
   assert.equal(receipt.metrics.context.toolProtocolOrphans, 0);
-  assert.equal(receipt.metrics.operations.pristineRetriesAllowed, 2);
+  assert.equal(receipt.metrics.operations.pristineRetriesAllowed, 3);
   assert.equal(receipt.metrics.operations.unsafeRetriesAllowed, 0);
   assert.equal(receipt.metrics.operations.unsafeRetriesAborted, 2);
   assert.equal(receipt.metrics.operations.duplicateTerminalSettlements, 0);

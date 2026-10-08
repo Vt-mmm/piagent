@@ -77,6 +77,10 @@ export async function startLoopbackServer(options: {
   updates?: UpdateRoutes;
   bootstrapTtlMs?: number;
   sessionTtlMs?: number;
+  // Requests a minute from one address before it has a browser session (the
+  // page, its assets, the bootstrap). A test harness opening dozens of fresh
+  // pages from one address raises it; Piagent itself never does.
+  anonymousRequestsPerMinute?: number;
 }): Promise<LoopbackServer> {
   const assets = new Map(loadStaticBundle(options.staticRoot));
   const styleNonce = randomBytes(16).toString("base64");
@@ -114,7 +118,7 @@ export async function startLoopbackServer(options: {
     if (now - rate.windowStart >= 60_000) Object.assign(rate, { windowStart: now, requests: 0, bootstrapFailures: 0 });
     rate.requests += 1; rates.set(rateKey, rate);
     while (rates.size > 128) rates.delete(rates.keys().next().value as string);
-    if (rate.requests > (browserSession ? SESSION_REQUESTS_PER_MINUTE : REQUESTS_PER_MINUTE)) return errorResponse(response, 429, "rate-limit");
+    if (rate.requests > (browserSession ? SESSION_REQUESTS_PER_MINUTE : options.anonymousRequestsPerMinute ?? REQUESTS_PER_MINUTE)) return errorResponse(response, 429, "rate-limit");
     let url: URL;
     try { url = new URL(request.url ?? "/", origin); }
     catch { return errorResponse(response, 400, "invalid-url"); }

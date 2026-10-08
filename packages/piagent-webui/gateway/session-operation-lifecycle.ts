@@ -19,7 +19,7 @@ export type SessionOperationObservation = Readonly<{
 const DEFAULT_RETRY_POLICY: SessionOperationRetryPolicy = Object.freeze({
   // Pi's provider retry is useful before a response exists, but a long retry
   // chain burns quota and keeps the browser in Working. Two automatic retries
-  // (the company turn retry's budget, turn-retry.mjs) absorb a transient
+  // (the company turn retry's budget, managed/request-stream.mjs) absorb a transient
   // failure without replaying a persistent one for long.
   maximumAttempts: 2,
   maximumDelayMs: 8_000

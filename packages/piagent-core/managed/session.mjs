@@ -13,7 +13,7 @@ import { managedThinkingLevels, nearestLevel } from './capabilities.mjs';
 import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from './native-catalog.mjs';
 import { repositoryFetchPlan, executeRepositoryFetch } from './repository-operation.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
-import { wrapRoleStreams } from './request-stream.mjs';
+import { enableCompanyTurnRetry, wrapRoleStreams } from './request-stream.mjs';
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -24,7 +24,6 @@ import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { restorePermission, permissionSetter, networkConfirmation } from './permission.mjs';
-import { enableCompanyTurnRetry } from './turn-retry.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 // Who the agent is: the model account may put another product's name in an
@@ -192,7 +191,6 @@ export class ManagedSession {
     self.extensionsResult = result.extensionsResult;
     self.session = result.session;
     self.session.managedExecution = true;
-    // A passing failure after admission is asked again by code (turn-retry.mjs).
     self.turnRetry = enableCompanyTurnRetry(self.session, settings);
     // The member's access for this conversation: ask first, or Bypass (permission.mjs).
     self.permission = restorePermission(manager); self.session.managedSetPermission = permissionSetter(self, manager);

@@ -252,7 +252,9 @@ test.beforeAll(async () => {
     ] : []).concat(processTranscript) }),
     logPreview: () => ({ state: "unavailable", preview: null, truncated: false, reasonCode: "no-log" })
   };
-  server = await startLoopbackServer({
+  // Every test opens fresh pages from one address; the suite outgrows the
+  // 120 requests a minute a page may make before it signs in.
+  server = await startLoopbackServer({ anonymousRequestsPerMinute: 1_000,
     staticRoot: path.join(root, "packages/piagent-webui/dist/client"), mode: "gateway",
     readCapabilities: () => capabilities, readSessionCatalog: () => catalog,
     readSessionLiveState: () => {

@@ -409,7 +409,7 @@ test('a broker without process reports, or a Studio that refuses one, still clos
 test('a change of a turn that stopped before its process ran is settled by the next one ("continue")', { skip: !supported, timeout: 180000 }, async () => {
   const root = project(), agent = broker({ plan: 'off', verify: 'require', review: 'off', max_fix_loops: 1 }, { review: false });
   const server = await studio({ roleOf: () => 'main', review: [],
-    // A failure that outlasts the turn retry (turn-retry.mjs: two more asks) stops the turn.
+    // A failure that outlasts the turn retry (request-stream.mjs: two more asks) stops the turn.
     main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { fail: true }, { fail: true }, { fail: true }, { tool: 'bash', input: { command: 'sh check.sh' } }, 'The check passes now.', 'Nothing else to do.'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
