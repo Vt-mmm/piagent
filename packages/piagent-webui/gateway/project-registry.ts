@@ -78,12 +78,16 @@ export class ProjectRegistry {
     if (!stat.isDirectory() || stat.isSymbolicLink() || cwd === path.parse(cwd).root) throw new Error("project-import-folder-invalid");
     const current = this.#read(), projectRef = projectRefForCwd(this.#key, cwd);
     const existing = current.projects.find((item) => item.projectRef === projectRef);
-    if (!existing) {
-      if (current.projects.length >= MAX_PROJECTS) throw new Error("project-registry-limit");
-      current.projects.push({ projectRef, cwd, label: cleanLabel(path.basename(cwd)), importedAt: now.toISOString() });
-      this.#write(current);
-    }
-    const item = existing ?? current.projects.at(-1)!;
+    // Added again: it moves to the newest place, so it outlives older folders.
+    const others = current.projects.filter((item) => item.projectRef !== projectRef);
+    const item = { projectRef, cwd, label: existing?.label ?? cleanLabel(path.basename(cwd)), importedAt: now.toISOString() };
+    // The list is the menu's memory of added folders, not where conversations
+    // live (their folders come from the sessions): a full list makes room by
+    // forgetting folders gone from the disk, then the folders added longest ago.
+    const kept = others.length < MAX_PROJECTS ? others : others.filter((other) => {
+      try { return fs.realpathSync(other.cwd) === other.cwd && fs.lstatSync(other.cwd).isDirectory(); } catch { return false; }
+    }).sort((left, right) => Date.parse(left.importedAt) - Date.parse(right.importedAt)).slice(-(MAX_PROJECTS - 1));
+    this.#write({ ...current, projects: [...kept, item] });
     return { projectRef: item.projectRef, placeRef: item.projectRef, label: item.label };
   }
 

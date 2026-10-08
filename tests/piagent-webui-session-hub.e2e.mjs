@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
@@ -12,6 +13,7 @@ import { COMPANY_MODEL_REF } from "../packages/piagent-webui/gateway/company-rel
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
 import { suggestPaths } from "../packages/piagent-webui/gateway/path-suggestions.ts";
 import { listBranches, switchBranch } from "../packages/piagent-webui/gateway/git-branches.ts";
+import { childRepositories, childRepositoryFolder } from "../packages/piagent-webui/gateway/git-repositories.ts";
 import { listAgentCommands } from "../packages/piagent-core/runtime/resources/agent-resources.mjs";
 import { WEBUI_WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
@@ -42,6 +44,8 @@ const upToDate = () => ({ ...freshUpdate(), piagent: { installed: "1.11.0", late
 let updateState = upToDate();
 // The project of "Release preparation" is a real Git repository in the branch test.
 let branchRepo = null, branchRunning = 0;
+// The project of "Review source changes" is a folder holding two repositories in the multi-repository test.
+let workspaceFolder = null;
 const updateApplies = [];
 // What an @ in a composer walks: a project (a git repository, so the search
 // runs the same without fd) and a home folder with another project inside.
@@ -287,12 +291,28 @@ test.beforeAll(async () => {
     readSessionModel: () => inspectionProvider,
     suggestPaths: (_projectRef, query) => suggestPaths({ root: mentionProject, query, home: mentionHome, fd: null }),
     listCommands: () => ({ commands: listAgentCommands({ cwd: mentionProject, home: mentionHome }) }),
-    listBranches: async (projectRef) => {
+    listBranches: async (projectRef, repository) => {
+      if (workspaceFolder && projectRef === "project_session_source_review") {
+        if (repository === null) return { repository: false, running: 0, repositories: await Promise.all(childRepositories(workspaceFolder).map(async (child) =>
+          ({ name: child.name, head: child.head, changedFiles: (await listBranches(path.join(workspaceFolder, child.name)))?.changedFiles ?? 0 }))) };
+        const folder = childRepositoryFolder(workspaceFolder, repository);
+        if (!folder) throw new Error("not-a-git-repository");
+        return { ...(await listBranches(folder)), running: 0, name: repository };
+      }
       if (!branchRepo || projectRef !== "project_session_release_prep") return null;
       const list = await listBranches(branchRepo);
       return list ? { ...list, running: branchRunning } : { repository: false, running: branchRunning };
     },
     switchBranch: async (projectRef, request) => {
+      if (workspaceFolder && projectRef === "project_session_source_review") {
+        const folder = childRepositoryFolder(workspaceFolder, request.repository);
+        if (!folder) throw new Error("not-a-git-repository");
+        const head = await switchBranch(folder, request);
+        const row = catalog.sessions.find((item) => item.sessionRef === "session_source_review");
+        row.gitRepositories = childRepositories(workspaceFolder).map((child) => ({ name: child.name, branch: child.head }));
+        row.sessionRevision = `revision_source_review_${request.repository}_${head.name}`; catalog.catalogRevision = `revision_catalog_ws_${head.name}`;
+        return { head };
+      }
       if (!branchRepo || projectRef !== "project_session_release_prep") return null;
       if (branchRunning > 0) throw new Error("branch-switch-blocked-running");
       const head = await switchBranch(branchRepo, request);
@@ -1155,6 +1175,63 @@ test("switches the project's Git branch from the header: an existing one, a new 
     await page.close();
     branchRepo = null; branchRunning = 0;
     if (saved.gitBranch) row.gitBranch = saved.gitBranch; else delete row.gitBranch;
+    row.sessionRevision = saved.sessionRevision; catalog.catalogRevision = saved.catalogRevision;
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("a folder holding several repositories shows them with their branches and switches one, as an editor's source control does", async ({ browser }) => {
+  // Outside this repository: a folder inside one is that repository.
+  const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-workspace-")));
+  const git = (cwd, ...args) => execFileSync("git", ["-c", "init.defaultBranch=main", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, stdio: "pipe" }).toString();
+  for (const name of ["FE", "BE", "docs"]) fs.mkdirSync(path.join(scratch, name));
+  for (const name of ["FE", "BE"]) { git(path.join(scratch, name), "init", "-q"); git(path.join(scratch, name), "commit", "-q", "--allow-empty", "-m", "first"); }
+  git(path.join(scratch, "FE"), "branch", "feature/login"); git(path.join(scratch, "BE"), "checkout", "-q", "-b", "develop");
+  workspaceFolder = scratch;
+  const row = catalog.sessions.find((item) => item.sessionRef === "session_source_review");
+  const saved = { gitRepositories: row.gitRepositories, sessionRevision: row.sessionRevision, catalogRevision: catalog.catalogRevision };
+  row.gitRepositories = childRepositories(scratch).map((child) => ({ name: child.name, branch: child.head }));
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole("button", { name: /^Review source changes/ }).filter({ visible: true }).first().click();
+    const header = page.getByRole("banner");
+    const chip = header.getByRole("button", { name: "2 repo Git trong sample-project" });
+    await expect(chip).toHaveText(/2 repo/);
+    await expect(page.getByRole("navigation").getByText("2 repo", { exact: true }).first()).toBeVisible();
+    await chip.click();
+    const menu = page.getByRole("dialog", { name: "Nhánh Git" });
+    await expect(menu.getByText("Repo Git", { exact: true })).toBeVisible();
+    const repos = menu.getByRole("list", { name: "Repo trong folder" });
+    await expect(repos.getByRole("button")).toHaveCount(2);
+    await expect(repos.getByRole("button", { name: /^BE/ })).toContainText("develop");
+    await expect(repos.getByRole("button", { name: /^FE/ })).toContainText("main");
+    await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/multi-repo-menu.png") });
+    // One repository: its branches, a way back, and a switch in that repository only.
+    await repos.getByRole("button", { name: /^FE/ }).click();
+    await expect(menu.getByText("sample-project / FE", { exact: true })).toBeVisible();
+    await expect(menu.getByRole("button", { name: /^feature\/login/ })).toBeVisible();
+    await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/multi-repo-branches.png") });
+    await menu.getByRole("button", { name: "Về danh sách repo" }).click();
+    await expect(menu.getByRole("list", { name: "Repo trong folder" })).toBeVisible();
+    await menu.getByRole("list", { name: "Repo trong folder" }).getByRole("button", { name: /^FE/ }).click();
+    await menu.getByRole("button", { name: /^feature\/login/ }).click();
+    await expect(menu).toHaveCount(0);
+    expect(git(path.join(scratch, "FE"), "branch", "--show-current").trim()).toBe("feature/login");
+    expect(git(path.join(scratch, "BE"), "branch", "--show-current").trim()).toBe("develop");
+    await expect(header.getByRole("button", { name: "2 repo Git trong sample-project" })).toBeVisible();
+    for (const width of [390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await header.getByRole("button", { name: "2 repo Git trong sample-project" }).click();
+      const box = await menu.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
+      await expect(menu.getByRole("list", { name: "Repo trong folder" }).getByRole("button", { name: /^FE/ })).toContainText("feature/login");
+      await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/multi-repo-menu-${width}.png`) });
+      await page.keyboard.press("Escape");
+    }
+  } finally {
+    await page.close(); workspaceFolder = null;
+    if (saved.gitRepositories) row.gitRepositories = saved.gitRepositories; else delete row.gitRepositories;
     row.sessionRevision = saved.sessionRevision; catalog.catalogRevision = saved.catalogRevision;
     fs.rmSync(scratch, { recursive: true, force: true });
   }

@@ -406,10 +406,10 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const sessions = useMemo(() => (catalog?.sessions ?? []).filter((item) => item.archived === showArchived
     && `${item.title} ${item.projectLabel} ${item.preview}`.toLowerCase().includes(query.trim().toLowerCase())), [catalog, query, showArchived]);
   const projectGroups = useMemo(() => {
-    const grouped = new Map<string, { label: string; gitBranch?: SessionRow["gitBranch"]; sessions: SessionRow[] }>();
+    const grouped = new Map<string, { label: string; gitBranch?: SessionRow["gitBranch"]; gitRepositories?: SessionRow["gitRepositories"]; sessions: SessionRow[] }>();
     for (const session of sessions) {
       const group = grouped.get(session.projectRef) ?? { label: session.projectLabel, gitBranch: session.gitBranch, sessions: [] };
-      group.gitBranch ??= session.gitBranch; group.sessions.push(session); grouped.set(session.projectRef, group);
+      group.gitBranch ??= session.gitBranch; group.gitRepositories ??= session.gitRepositories; group.sessions.push(session); grouped.set(session.projectRef, group);
     }
     return [...grouped.entries()].map(([projectRef, group]) => ({ projectRef, ...group,
       sessions: group.sessions.sort((left, right) => Number(right.pinned) - Number(left.pinned) || Date.parse(right.updatedAt) - Date.parse(left.updatedAt)) }))
@@ -621,7 +621,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       <Box sx={{ flex: 1, minWidth: 0 }}><Typography component="h1" noWrap sx={{ fontWeight: 600, fontSize: "inherit" }}>{title}</Typography>
         {view === "chat" && selected && <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ display: "flex", alignItems: "center", gap: .75, minWidth: 0 }}>
           <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", flexShrink: 3, minWidth: 24 }}>{selected.projectLabel}</Box>
-          {selected.gitBranch && <><Box component="span" aria-hidden sx={{ color: "text.disabled" }}>·</Box><BranchSwitcher projectRef={selected.projectRef} projectLabel={selected.projectLabel} branch={selected.gitBranch} locale={locale} maxWidth="45%"
+          {(selected.gitBranch || Boolean(selected.gitRepositories?.length)) && <><Box component="span" aria-hidden sx={{ color: "text.disabled" }}>·</Box><BranchSwitcher projectRef={selected.projectRef} projectLabel={selected.projectLabel} branch={selected.gitBranch} repositories={selected.gitRepositories} locale={locale} maxWidth="45%"
             onSwitched={() => void refresh()} /></>}</Typography>}</Box>
       {view === "chat" && selected && <><SessionComposerControls placement="header" session={selected} snapshot={currentInspection} locale={locale}
         onOpenChanges={() => openInspector("source")}

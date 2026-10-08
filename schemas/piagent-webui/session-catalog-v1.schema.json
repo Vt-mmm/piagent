@@ -107,6 +107,11 @@
         "gitBranch": { "type": "object", "additionalProperties": false, "required": ["name", "detached"], "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" },
           "detached": { "type": "boolean" } } },
+        "gitRepositories": { "type": "array", "maxItems": 30, "items": { "type": "object", "additionalProperties": false, "required": ["name", "branch"], "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[^\\u0000-\\u001F\\u007F/\\\\]*$" },
+          "branch": { "anyOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["name", "detached"], "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" },
+            "detached": { "type": "boolean" } } }] } } } },
         "modelLabel": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
         "thinkingLevel": { "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max", "unknown"] },
         "contextUsage": { "$ref": "#/$defs/contextUsage" },

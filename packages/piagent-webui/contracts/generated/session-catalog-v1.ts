@@ -133,6 +133,16 @@ export type SessionRow = {
     name: string;
     detached: boolean;
   };
+  /**
+   * @maxItems 30
+   */
+  gitRepositories?: {
+    name: string;
+    branch: null | {
+      name: string;
+      detached: boolean;
+    };
+  }[];
   modelLabel: string | null;
   thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "unknown";
   contextUsage: ContextUsage;

@@ -37,7 +37,7 @@ type Options = {
   listCommands?: (projectRef: string) => unknown | Promise<unknown>;
   // The project's Git branches, and a switch to one of them (or a new one);
   // null as above.
-  listBranches?: (projectRef: string) => unknown | Promise<unknown>;
+  listBranches?: (projectRef: string, repository: string | null) => unknown | Promise<unknown>;
   switchBranch?: (projectRef: string, request: unknown) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
 };
@@ -111,9 +111,12 @@ export async function routeMemberRequest(context: Context, options: Options): Pr
     const projectRef = decodeURIComponent(branches[1]);
     if (request.method === "GET") {
       if (!auth.authenticate(request)) { errorResponse(response, 401, "authentication-required"); return true; }
-      if (!CURSOR.test(projectRef)) { errorResponse(response, 400, "invalid-project-ref"); return true; }
+      const repository = url.searchParams.get("repository");
+      if (!CURSOR.test(projectRef) || repository !== null && (repository.length === 0 || repository.length > 255 || /[\x00-\x1f/\\]/.test(repository))) {
+        errorResponse(response, 400, "invalid-project-ref"); return true;
+      }
       try {
-        const value = await options.listBranches!(projectRef);
+        const value = await options.listBranches!(projectRef, repository);
         if (value === null) errorResponse(response, 404, "project-not-found"); else jsonResponse(response, 200, value);
       } catch { errorResponse(response, 503, "branches-unavailable"); }
       return true;

@@ -21,6 +21,7 @@ import {
 import { buildSessionCatalog, projectRefForCwd } from "./session-catalog.ts";
 import { suggestPaths } from "./path-suggestions.ts";
 import { GitBranchError, listBranches, switchBranch, type SwitchRequest } from "./git-branches.ts";
+import { childRepositories, childRepositoryFolder } from "./git-repositories.ts";
 import { listAgentCommands } from "../../piagent-core/runtime/resources/agent-resources.mjs";
 import { sessionRefForPath } from "../ownership/session-refs.ts";
 import { SessionMetadataStore } from "./session-metadata-store.ts";
@@ -309,25 +310,36 @@ export async function startPiagentGateway(options: {
       // The project's Git branches and a switch between them. A switch waits
       // until no conversation in the folder runs (company ones included): the
       // agent would find its files changed under it.
-      listBranches: async (projectRef) => {
+      // A folder that is not a repository answers with the repositories one
+      // level down; `repository` then names the one to read or switch.
+      listBranches: async (projectRef, repository) => {
         const root = await projectFolder(projectRef);
         if (!root) return null;
-        const [list, running] = await Promise.all([listBranches(root), runningInProject(projectRef)]);
-        return list ? { ...list, running } : { repository: false, running };
+        const folder = repository === null ? root : childRepositoryFolder(root, repository);
+        if (!folder) throw new GitBranchError("not-a-git-repository");
+        const [list, running] = await Promise.all([listBranches(folder), runningInProject(projectRef)]);
+        if (list) return { ...list, running, ...(repository === null ? {} : { name: repository }) };
+        const repositories = repository === null ? await Promise.all(childRepositories(root).map(async (child) => {
+          const branches = await listBranches(path.join(root, child.name));
+          return { name: child.name, head: child.head, changedFiles: branches?.changedFiles ?? 0 };
+        })) : [];
+        return { repository: false, running, repositories };
       },
       switchBranch: async (projectRef, request) => {
         const root = await projectFolder(projectRef);
         if (!root) return null;
-        const value = request as Partial<SwitchRequest> | null;
+        const value = request as (Partial<SwitchRequest> & { repository?: string }) | null;
         if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.branch !== "string"
-          || Object.keys(value).some((name) => !["branch", "create", "remote"].includes(name))
+          || Object.keys(value).some((name) => !["branch", "create", "remote", "repository"].includes(name))
+          || (value.repository !== undefined && typeof value.repository !== "string")
           || (value.create !== undefined && typeof value.create !== "boolean")
           || (value.remote !== undefined && value.remote !== null && typeof value.remote !== "string")) throw new GitBranchError("branch-request-invalid");
-        if (!(await listBranches(root))) throw new GitBranchError("not-a-git-repository");
+        const folder = value.repository === undefined ? root : childRepositoryFolder(root, value.repository);
+        if (!folder || !(await listBranches(folder))) throw new GitBranchError("not-a-git-repository");
         if (await runningInProject(projectRef) > 0) throw new GitBranchError("branch-switch-blocked-running");
-        const head = await switchBranch(root, { branch: value.branch, create: value.create === true, remote: value.remote ?? null });
+        const head = await switchBranch(folder, { branch: value.branch, create: value.create === true, remote: value.remote ?? null });
         events.publish("catalog.changed", { reasonCode: "git-branch-switched" });
-        return { head, branches: await listBranches(root) };
+        return { head, branches: await listBranches(folder) };
       },
       updates: { status: () => updates!.status(), check: () => updates!.check(), apply: (request) => updates!.apply(request) },
       answerSessionQuestion: (sessionRef, questionRef, answer) => company(sessionRef)

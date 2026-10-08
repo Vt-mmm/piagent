@@ -46,6 +46,18 @@ type MenuKind = "project" | "model" | "thinking" | "permission" | null;
 // Company sessions run in the company runtime behind this dashboard; while it
 // is not connected the entry explains why and offers to connect.
 const COMPANY_PROVIDER = "agent_watch_managed";
+// Why a folder could not be added, in words the member can act on.
+function importFailureText(code: string | null, status: number, locale: UiLocale): string {
+  if (code === "native-project-picker-unavailable" || code === "project-import-picker-failed")
+    return localize(locale, "Không mở được hộp chọn thư mục của máy. Thử lại; nếu vẫn lỗi, mở cuộc trò chuyện từ Terminal trong thư mục đó (pi hoặc piagent studio).",
+      "The folder picker could not open. Try again; if it still fails, start a conversation from a Terminal in that folder (pi or piagent studio).");
+  if (code === "project-import-folder-invalid")
+    return localize(locale, "Không dùng được thư mục này: thư mục gốc của ổ đĩa hoặc một liên kết (symlink). Chọn thư mục thật của project.",
+      "This folder cannot be used: a drive's root or a symbolic link. Choose the project's real folder.");
+  if (status === 429) return localize(locale, "Thao tác quá nhanh. Đợi vài giây rồi thử lại.", "Too many attempts. Wait a few seconds and try again.");
+  return localize(locale, "Không thể thêm thư mục. Thử lại; nếu vẫn lỗi, chạy piagent dashboard doctor.", "Could not add this folder. Try again; if it still fails, run piagent dashboard doctor.");
+}
+
 export function NewSessionPage({ active, defaultProjectRef, busy, error, onCancel, onCreate }: { active: boolean;
   defaultProjectRef?: string; busy: boolean; error: string | null; onCancel(): void; onCreate(value: CreateValue): Promise<void> | void }) {
   const { locale } = useUiPreferences();
@@ -125,7 +137,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       setProjectRef(result.project.projectRef); closeMenu();
     } catch (cause) {
       if (cause instanceof WebUiRequestError && cause.status === 409) setImportError(null);
-      else setImportError(localize(locale, "Không thể thêm thư mục", "Could not add this folder"));
+      else setImportError(importFailureText(cause instanceof WebUiRequestError ? cause.code : null, cause instanceof WebUiRequestError ? cause.status : 0, locale));
     } finally { setImporting(false); }
   };
   const selectFiles = (selected: FileList | null) => {

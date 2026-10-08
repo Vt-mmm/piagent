@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
+import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
+import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import CheckRounded from "@mui/icons-material/CheckRounded";
 import CloudOutlined from "@mui/icons-material/CloudOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
+import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
@@ -18,7 +21,7 @@ import Typography from "@mui/material/Typography";
 
 import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import { BranchRequestError, readProjectBranches, switchProjectBranch, type GitBranchRow, type ProjectBranches } from "./api.ts";
-import { branchTitle, GitBranchLabel } from "./GitBranchLabel.tsx";
+import { branchTitle, GitBranchIcon, GitBranchLabel } from "./GitBranchLabel.tsx";
 import { relativeTime } from "./SessionSidebar.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 
@@ -42,9 +45,16 @@ type Target = { branch: string; create?: boolean; remote?: string | null };
 // made from the current commit. A switch waits while any conversation in the
 // folder runs; Git's own refusals (changes it would overwrite) are shown as
 // Git said them.
-export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwitched, maxWidth = 220 }: { projectRef: string; projectLabel: string;
-  branch: SessionRow["gitBranch"]; locale: UiLocale; onSwitched?(): void; maxWidth?: number | string }) {
+//
+// A folder that is not a repository but holds several (front end, back end
+// and other projects side by side) shows "N repo", as an editor's source
+// control view lists the repositories it found: the menu lists them with
+// their branches, and picking one opens that repository's branches.
+export function BranchSwitcher({ projectRef, projectLabel, branch, repositories, locale, onSwitched, maxWidth = 220 }: { projectRef: string; projectLabel: string;
+  branch: SessionRow["gitBranch"]; repositories?: SessionRow["gitRepositories"]; locale: UiLocale; onSwitched?(): void; maxWidth?: number | string }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // The child repository whose branches the menu shows (a multi-repository folder).
+  const [repo, setRepo] = useState<string | null>(null);
   const [list, setList] = useState<ProjectBranches | null>(null), [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState(""), [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ code: string; detail: string | null } | null>(null);
@@ -59,20 +69,21 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
   const load = () => {
     loading.current?.abort(); const controller = new AbortController(); loading.current = controller;
     setLoadError(false);
-    readProjectBranches(projectRef, controller.signal).then((value) => { if (!controller.signal.aborted) setList(value); },
+    readProjectBranches(projectRef, repo, controller.signal).then((value) => { if (!controller.signal.aborted) setList(value); },
       () => { if (!controller.signal.aborted) setLoadError(true); });
   };
-  useEffect(() => { if (open) load(); return () => loading.current?.abort(); }, [open, projectRef]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) load(); return () => loading.current?.abort(); }, [open, projectRef, repo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Each opening reads the branches again: a stale "running" or "free" must
   // never decide what the member can press.
-  const close = () => { if (busy) return; loading.current?.abort(); setAnchor(null); setQuery(""); setError(null); setList(null); setLoadError(false); };
+  const close = () => { if (busy) return; loading.current?.abort(); setAnchor(null); setQuery(""); setError(null); setList(null); setLoadError(false); setRepo(null); };
+  const choose = (name: string | null) => { loading.current?.abort(); setList(null); setQuery(""); setError(null); setRepo(name); };
   const switchTo = async (target: Target) => {
     setBusy(target.branch); setError(null);
     try {
-      const result = await switchProjectBranch(projectRef, target);
-      if (result.head) setSwitched(result.head);
-      onSwitched?.(); setAnchor(null); setQuery(""); setList(null);
+      const result = await switchProjectBranch(projectRef, repo === null ? target : { ...target, repository: repo });
+      if (result.head && repo === null) setSwitched(result.head);
+      onSwitched?.(); setAnchor(null); setQuery(""); setList(null); setRepo(null);
     } catch (failure) {
       setError(failure instanceof BranchRequestError ? { code: failure.code, detail: failure.detail } : { code: "branch-switch-failed", detail: null });
       load();
@@ -95,21 +106,33 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
       slotProps={{ primary: { noWrap: true, sx: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12.5 } },
         secondary: { noWrap: true, sx: { fontSize: 11 } } }} /></ListItemButton>;
 
-  if (!shownBranch) return null;
+  const children = list && !list.repository ? list.repositories ?? [] : [];
+  const multi = !shownBranch && Boolean(repositories?.length);
+  if (!shownBranch && !multi) return null;
+  const buttonSx = { minWidth: 0, maxWidth, borderRadius: .75, px: .4, mx: -.4, font: "inherit", color: "inherit", justifyContent: "flex-start",
+    "&:hover": { bgcolor: "action.hover", color: "text.primary" }, "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main" } };
+  const openMenu = (event: React.MouseEvent<HTMLElement>) => { event.stopPropagation(); setAnchor(event.currentTarget); };
   return <>
-    <Tooltip describeChild title={`${branchTitle(shownBranch, locale)} · ${localize(locale, "bấm để đổi nhánh", "click to switch")}`}>
-    <ButtonBase onClick={(event) => { event.stopPropagation(); setAnchor(event.currentTarget); }} aria-haspopup="dialog" aria-expanded={open}
+    {shownBranch ? <Tooltip describeChild title={`${branchTitle(shownBranch, locale)} · ${localize(locale, "bấm để đổi nhánh", "click to switch")}`}>
+    <ButtonBase onClick={openMenu} aria-haspopup="dialog" aria-expanded={open}
       aria-label={shownBranch.detached
         ? localize(locale, `Đổi nhánh Git của ${projectLabel} (detached HEAD tại ${shownBranch.name})`, `Switch ${projectLabel}'s Git branch (detached HEAD at ${shownBranch.name})`)
         : localize(locale, `Đổi nhánh Git của ${projectLabel} (đang ở ${shownBranch.name})`, `Switch ${projectLabel}'s Git branch (on ${shownBranch.name})`)}
-      sx={{ minWidth: 0, maxWidth, borderRadius: .75, px: .4, mx: -.4, font: "inherit", color: "inherit", justifyContent: "flex-start",
-        "&:hover": { bgcolor: "action.hover", color: "text.primary" }, "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main" } }}>
+      sx={buttonSx}>
       <GitBranchLabel branch={shownBranch} locale={locale} maxWidth="100%" tooltip={false} /></ButtonBase></Tooltip>
+    : <Tooltip describeChild title={repositories!.map((item) => `${item.name} · ${item.branch?.name ?? "?"}`).join("\n")}>
+      <ButtonBase onClick={openMenu} aria-haspopup="dialog" aria-expanded={open}
+        aria-label={localize(locale, `${repositories!.length} repo Git trong ${projectLabel}`, `${repositories!.length} Git repositories in ${projectLabel}`)} sx={buttonSx}>
+        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: .4, whiteSpace: "nowrap" }}>
+          <GitBranchIcon sx={{ fontSize: "1.1em" }} />{localize(locale, `${repositories!.length} repo`, `${repositories!.length} repos`)}</Box></ButtonBase></Tooltip>}
     <Popover open={open} anchorEl={anchor} onClose={close} anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       slotProps={{ paper: { role: "dialog", "aria-label": localize(locale, "Nhánh Git", "Git branches"),
         sx: { width: "min(360px, calc(100vw - 32px))", maxHeight: "min(520px, 70vh)", display: "flex", flexDirection: "column", p: 1.25, gap: 1 } } }}>
-      <Box><Typography variant="subtitle2" sx={{ fontWeight: 650 }}>{localize(locale, "Nhánh Git", "Git branches")}</Typography>
-        <Typography variant="caption" color="text.secondary" noWrap component="div">{projectLabel}</Typography></Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: .5, minWidth: 0 }}>
+        {repo !== null && <IconButton size="small" aria-label={localize(locale, "Về danh sách repo", "Back to the repositories")} onClick={() => choose(null)}>
+          <ArrowBackRounded sx={{ fontSize: 18 }} /></IconButton>}
+        <Box sx={{ minWidth: 0 }}><Typography variant="subtitle2" sx={{ fontWeight: 650 }}>{multi && repo === null ? localize(locale, "Repo Git", "Git repositories") : localize(locale, "Nhánh Git", "Git branches")}</Typography>
+          <Typography variant="caption" color="text.secondary" noWrap component="div">{repo === null ? projectLabel : `${projectLabel} / ${repo}`}</Typography></Box></Box>
       {blocked && <Alert severity="warning" sx={{ py: 0, fontSize: 12.5 }}>{localize(locale,
         `${list!.running} cuộc trò chuyện đang chạy trong folder này. Chờ chạy xong hoặc Dừng rồi mới chuyển nhánh.`,
         `${list!.running} conversation(s) running in this folder. Wait for them to finish, or stop them, before switching.`)}</Alert>}
@@ -118,16 +141,24 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
         `${repository.changedFiles} changed file(s) come along to the new branch; Git refuses if they would be overwritten.`)}</Typography>}
       {error && <Alert severity="error" sx={{ py: 0, fontSize: 12.5 }}>{localize(locale, ...(ERRORS[error.code] ?? ["Không chuyển được nhánh.", "The branch could not be switched."]))}
         {error.detail && <Box component="pre" sx={{ m: 0, mt: .5, whiteSpace: "pre-wrap", font: "11px ui-monospace, monospace", opacity: .85 }}>{error.detail}</Box>}</Alert>}
-      <TextField inputRef={input} size="small" value={query} onChange={(event) => setQuery(event.target.value)} disabled={!repository || Boolean(busy)}
+      {!(list && !list.repository) && <TextField inputRef={input} size="small" value={query} onChange={(event) => setQuery(event.target.value)} disabled={!repository || Boolean(busy)}
         placeholder={localize(locale, "Tìm hoặc đặt tên nhánh mới", "Find a branch or name a new one")}
         slotProps={{ htmlInput: { maxLength: 200, "aria-label": localize(locale, "Tìm nhánh", "Find a branch") } }}
         onKeyDown={(event) => { if (event.key === "Enter" && typed && !blocked && !busy) {
           const match = repository?.branches.find((item) => item.name === typed);
-          void switchTo(match ? { branch: match.name, remote: match.remote } : { branch: typed, create: true }); } }} />
+          void switchTo(match ? { branch: match.name, remote: match.remote } : { branch: typed, create: true }); } }} />}
       <Box sx={{ overflowY: "auto", minHeight: 0, mx: -.5 }}>
         {!list && !loadError && <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}><CircularProgress size={18} /></Box>}
         {loadError && <Alert severity="error" sx={{ py: 0, fontSize: 12.5 }}>{localize(locale, "Không đọc được danh sách nhánh.", "The branches could not be read.")}</Alert>}
-        {list && !list.repository && <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>{localize(locale, ...ERRORS["not-a-git-repository"])}</Typography>}
+        {list && !list.repository && children.length > 0 && <List dense disablePadding aria-label={localize(locale, "Repo trong folder", "Repositories in the folder")}>
+          {children.map((child) => <ListItemButton key={child.name} dense onClick={() => choose(child.name)} sx={{ borderRadius: 1, py: .4 }}>
+            <ListItemText primary={child.name} secondary={<Box component="span" sx={{ display: "flex", alignItems: "center", gap: .5, minWidth: 0, width: "100%" }}>
+              {child.head ? <GitBranchLabel branch={child.head} locale={locale} maxWidth="100%" tooltip={false} /> : localize(locale, "chưa có commit", "no commits")}
+              {child.changedFiles > 0 && <Box component="span" sx={{ flexShrink: 0 }}>· {localize(locale, `${child.changedFiles} file đang sửa`, `${child.changedFiles} changed`)}</Box>}</Box>}
+              slotProps={{ primary: { noWrap: true, sx: { fontSize: 13, fontWeight: 600 } }, secondary: { component: "div", sx: { fontSize: 11.5, minWidth: 0 } } }} sx={{ minWidth: 0 }} />
+            <ChevronRightRounded sx={{ fontSize: 18, color: "text.disabled" }} /></ListItemButton>)}
+        </List>}
+        {list && !list.repository && children.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>{localize(locale, ...ERRORS["not-a-git-repository"])}</Typography>}
         {repository && <List dense disablePadding>
           {typed && !exact && <ListItemButton dense disabled={blocked || Boolean(busy)} onClick={() => void switchTo({ branch: typed, create: true })} sx={{ borderRadius: 1 }}>
             <ListItemIcon sx={{ minWidth: 26 }}>{busy === typed ? <CircularProgress size={14} /> : <AddRounded sx={{ fontSize: 16 }} />}</ListItemIcon>
