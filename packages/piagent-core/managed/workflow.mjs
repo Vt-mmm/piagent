@@ -76,24 +76,26 @@ export function isCheckCommand(command, declared = []) {
 // update_plan: the agent's checklist, kept as a session entry so it survives
 // compaction and "continue", and shown to the member beside the conversation.
 export const PLAN_ENTRY = 'agent-watch-plan';
-const STATUS = ['pending', 'in_progress', 'completed'];
+// "deferred": left for later at the member's word, or no longer needed: not
+// done, not open either.
+const STATUS = ['pending', 'in_progress', 'completed', 'deferred'];
 export function normalizePlan(args) {
   const plan = Array.isArray(args?.plan) ? args.plan : [];
   if (plan.length < 1 || plan.length > 30 || plan.some(p => typeof p?.step !== 'string' || !p.step.trim() || p.step.length > 200 || !STATUS.includes(p.status)))
-    throw Error('managed-plan-invalid: send 1 to 30 steps, each {step, status} with status pending, in_progress or completed.');
+    throw Error('managed-plan-invalid: send 1 to 30 steps, each {step, status} with status pending, in_progress, completed or deferred.');
   if (plan.filter(p => p.status === 'in_progress').length > 1) throw Error('managed-plan-invalid: mark at most one step in_progress.');
   return { plan: plan.map(p => ({ step: p.step.trim(), status: p.status })), explanation: typeof args.explanation === 'string' ? args.explanation.slice(0, 300) : '' };
 }
 export function currentPlan(manager) {
   return manager.getEntries().filter(e => e.type === 'custom' && e.customType === PLAN_ENTRY).at(-1)?.data ?? null;
 }
-export const unfinished = plan => !!plan?.plan?.some(p => p.status !== 'completed');
+export const unfinished = plan => !!plan?.plan?.some(p => p.status === 'pending' || p.status === 'in_progress');
 export function planText(plan) {
-  return plan?.plan?.map((p, i) => `${i + 1}. [${p.status === 'completed' ? 'x' : p.status === 'in_progress' ? '>' : ' '}] ${p.step}`).join('\n') ?? '';
+  return plan?.plan?.map((p, i) => `${i + 1}. [${p.status === 'completed' ? 'x' : p.status === 'in_progress' ? '>' : p.status === 'deferred' ? '-' : ' '}] ${p.step}`).join('\n') ?? '';
 }
 export function planTool(run) {
   return { name: 'update_plan', label: 'Plan',
-    description: 'Keep a short checklist for work with several steps. Send the whole list each time; mark the step you work on in_progress and finished steps completed. The member sees the checklist next to the conversation.',
+    description: 'Keep a short checklist for work with several steps. Send the whole list each time; mark the step you work on in_progress and finished steps completed. Mark a step deferred when the member asked to leave it for later or it is no longer needed, and say why in your answer; never mark completed a step you did not do. The member sees the checklist next to the conversation.',
     parameters: { type: 'object', properties: { explanation: { type: 'string', maxLength: 300 }, plan: { type: 'array', minItems: 1, maxItems: 30,
       items: { type: 'object', properties: { step: { type: 'string', minLength: 1, maxLength: 200 }, status: { type: 'string', enum: STATUS } }, required: ['step', 'status'], additionalProperties: false } } },
       required: ['plan'], additionalProperties: false },
@@ -108,7 +110,7 @@ export function planTool(run) {
 // The guidance a policy adds to the main agent's system prompt.
 export function workflowPrompt(policy, checks) {
   const lines = [];
-  if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with open steps sends you back to the next open step until every step is completed: if you cannot go on without the member, ask with ask_user.' : ''}`);
+  if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with pending steps sends you back to the next one until every step is completed or deferred: if you cannot go on without the member, ask with ask_user. Mark a step deferred only when the member asked to leave it for later or it is no longer needed; never mark completed a step you did not do.' : ''}`);
   if (policy.verify !== 'off') {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
     lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''}`);
@@ -245,7 +247,8 @@ export class RunProcess {
   // disagreements handed to the member ("disputed"); older versions get the
   // outcome the run would have had without that.
   report(plan, version = 1) {
-    const steps = this.planUpdated || unfinished(plan) ? plan?.plan ?? [] : [];
+    // Steps left for later are not this run's work: Studio reads done/steps.
+    const steps = (this.planUpdated || unfinished(plan) ? plan?.plan ?? [] : []).filter(p => p.status !== 'deferred');
     const fallback = this.changed ? 'interrupted' : 'no_change', count = n => Math.min(n, 1000);
     return { version, policy: { plan: this.policy.plan, verify: this.policy.verify, review: this.policy.review }, changed: this.changed,
       plan_steps: steps.length, plan_done: steps.filter(p => p.status === 'completed').length, checks: count(this.checksRun), checks_failed: count(this.checksFailed),
@@ -374,7 +377,7 @@ export async function completionGate(managed, run, signal) {
   session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome, ...(managed.base ? { head: managed.base } : {}),
     ...(settled ? {} : { paths: [...(managed.ownPaths ?? [])].slice(0, 2000) }) });
   if (!run.changed && !run.disputes.length) return;
-  const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status !== 'completed').length ?? 0 : 0;
+  const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
     ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
   const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : 'no check passed on the final code',

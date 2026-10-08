@@ -34,7 +34,7 @@ import { GitBranchLabel } from "./GitBranchLabel.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 import { toneText } from "./tone.ts";
 import { outcomeTone } from "./ProcessNote.tsx";
-import { TURN_END_TONES, turnEndLabel } from "./TurnEndNote.tsx";
+import { turnEndLabel, turnEndTone } from "./TurnEndNote.tsx";
 
 export type SessionMenuAction = "rename" | "pin" | "archive" | "unarchive" | "fork";
 
@@ -88,7 +88,7 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
       secondary={<>{company && <Box component="span" sx={{ fontWeight: 650, color: "primary.main" }}>{localize(locale, "Công ty", "Company")}<span> · </span></Box>}
         {status ?? relativeTime(session.updatedAt, locale)}
         {showProject && <span> · {session.projectLabel}</span>}
-        {end && <Box component="span" sx={toneText(TURN_END_TONES[end.state])}> · {turnEndLabel(end, locale)}</Box>}
+        {end && <Box component="span" sx={toneText(turnEndTone(end))}> · {turnEndLabel(end, locale)}</Box>}
         {outcome && <Box component="span" sx={toneText(outcomeTone(outcome))}> · {localize(locale, ...OUTCOME_SHORT[outcome])}</Box>}</>}
       slotProps={{ primary: { noWrap: true, sx: { fontSize: 13.25, fontWeight: selected ? 600 : 500 } },
         secondary: { noWrap: true, sx: { mt: .25, fontSize: 11.25 } } }} /><StateDot activity={activity} locale={locale} /></ListItemButton>

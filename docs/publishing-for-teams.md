@@ -41,7 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
-- `1.19.0`: task công ty có checklist được làm đến hết: khi main agent tự dừng giữa chừng lúc checklist còn bước (Harness bắt buộc plan), Harness tự cho làm tiếp bước kế tiếp (mỗi vòng là một run mới, dừng sau 2 vòng liên tiếp không tiến triển, tối đa 30 vòng); cuối mỗi lượt có dòng báo Hoàn thành / Dừng giữa chừng còn x/y bước / Lỗi / Bạn đã dừng, kèm nút Tiếp tục; lượt có commit vẫn được check và review.
+- `1.19.0`: task công ty có checklist được làm đến hết: khi main agent tự dừng giữa chừng lúc checklist còn bước (Harness bắt buộc plan), Harness tự cho làm tiếp bước kế tiếp (mỗi vòng là một run mới, dừng sau 2 vòng liên tiếp không tiến triển, tối đa 30 vòng); cuối mỗi lượt có dòng báo Hoàn thành / Dừng giữa chừng còn x/y bước / Lỗi / Bạn đã dừng, kèm nút Tiếp tục; bước member bảo để sau được ghi “để sau” chứ không ghi là xong; lượt có commit vẫn được check và review; run không đóng được (mất mạng, máy ngủ) kết thúc lượt là lỗi.
 - `1.18.0`: đổi nhánh Git ngay trên dashboard (bấm vào tên nhánh: chọn nhánh có sẵn hoặc tạo nhánh mới; không đổi khi có cuộc trò chuyện đang chạy trong folder); lỗi tạm thời của model sau khi Studio đã nhận (stream bị cắt, model hoặc gateway không trả lời) tự thử lại tối đa 2 lần; Claude Haiku 5.5.
 - `1.17.0`: dashboard hiện nhánh Git của project (dưới tên cuộc trò chuyện, ở thanh trạng thái và cạnh từng nhóm project); detached HEAD hiện mã commit màu cảnh báo.
 - `1.16.3`: dashboard cập nhật bằng nút xong vẫn tự kiểm tra bản mới (trước đó bị tắt tới khi khởi động lại máy).

@@ -39,6 +39,9 @@ test('policy, checks and review findings are read conservatively', () => {
   assert.throws(() => normalizePlan({ plan: [{ step: 'a', status: 'in_progress' }, { step: 'b', status: 'in_progress' }] }), /managed-plan-invalid/);
   assert.throws(() => normalizePlan({ plan: [] }), /managed-plan-invalid/);
   assert.equal(planText(normalizePlan({ plan: [{ step: 'Read', status: 'completed' }, { step: 'Fix', status: 'in_progress' }, { step: 'Test', status: 'pending' }] })), '1. [x] Read\n2. [>] Fix\n3. [ ] Test');
+  assert.equal(planText(normalizePlan({ plan: [{ step: 'Ship', status: 'deferred' }] })), '1. [-] Ship');
+  const reported = new RunProcess({ plan: 'require', verify: 'off', review: 'off', maxFixLoops: 0 }, { request: 'x', complex: false, checks: { commands: [] } }); reported.planUpdated = true;
+  assert.deepEqual([reported.report({ plan: [{ step: 'A', status: 'completed' }, { step: 'B', status: 'deferred' }] })].map(r => [r.plan_steps, r.plan_done])[0], [1, 1], 'a step left for later is not reported as open');
   const answer = 'Looks mostly fine.\n```json\n{"findings":[{"severity":"blocking","file":"a.js","line":3,"issue":"off by one","evidence":"i <= n"},{"severity":"style","issue":"x"},{"severity":"minor","issue":"naming"}],"summary":"x"}\n```';
   assert.deepEqual(reviewFindings(answer).map(f => [f.severity, f.file, f.line]), [['blocking', 'a.js', 3], ['minor', '', null]]);
   assert.equal(reviewFindings('No JSON here'), null);
@@ -297,6 +300,11 @@ test('a complex task plans before its first edit; a checklist left open goes on 
       await managed.session.prompt('Thanks');
       assert.equal(processNotes(managed).length, before);
       assert.deepEqual(turnEnds(managed).at(-1).state, 'done');
+      // "tiếp tục" asks for the open checklist even when the agent does not touch it again.
+      if (expected.end.state === 'midway') {
+        await managed.session.prompt('tiếp tục');
+        assert.deepEqual([turnEnds(managed).at(-1).state, turnEnds(managed).at(-1).planDone, turnEnds(managed).at(-1).rounds], ['midway', 1, 2]);
+      }
     } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
   }
 });

@@ -3,6 +3,7 @@ import AccountTreeOutlined from "@mui/icons-material/AccountTreeOutlined";
 import CheckBoxOutlineBlankRounded from "@mui/icons-material/CheckBoxOutlineBlankRounded";
 import CheckBoxRounded from "@mui/icons-material/CheckBoxRounded";
 import PlayCircleOutlineRounded from "@mui/icons-material/PlayCircleOutlineRounded";
+import RemoveCircleOutlineRounded from "@mui/icons-material/RemoveCircleOutlineRounded";
 import CallSplitRounded from "@mui/icons-material/CallSplitRounded";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
@@ -91,11 +92,11 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
     </Section>
     {(plan || process) && <Section title={plan ? localize(locale, `Plan · ${done}/${plan.steps.length}`, `Plan · ${done}/${plan.steps.length}`) : localize(locale, "Tiến trình", "Process")}>
       {plan && <Stack component="ol" spacing={.25} sx={{ m: 0, p: 0, listStyle: "none" }} aria-label={localize(locale, "Plan của agent", "Agent plan")}>{plan.steps.map((step, index) => {
-        const Icon = step.status === "completed" ? CheckBoxRounded : step.status === "in_progress" ? PlayCircleOutlineRounded : CheckBoxOutlineBlankRounded;
+        const Icon = step.status === "completed" ? CheckBoxRounded : step.status === "in_progress" ? PlayCircleOutlineRounded : step.status === "deferred" ? RemoveCircleOutlineRounded : CheckBoxOutlineBlankRounded;
         return <Stack component="li" key={index} direction="row" sx={{ alignItems: "flex-start", gap: .75, py: .25 }}
-          aria-label={`${step.step}: ${step.status === "completed" ? localize(locale, "xong", "done") : step.status === "in_progress" ? localize(locale, "đang làm", "in progress") : localize(locale, "chưa làm", "pending")}`}>
+          aria-label={`${step.step}: ${step.status === "completed" ? localize(locale, "xong", "done") : step.status === "in_progress" ? localize(locale, "đang làm", "in progress") : step.status === "deferred" ? localize(locale, "để sau", "left for later") : localize(locale, "chưa làm", "pending")}`}>
           <Icon sx={{ fontSize: 16, mt: .2, color: step.status === "in_progress" ? "primary.main" : "text.secondary" }} />
-          <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", ...(step.status === "completed" ? { color: "text.secondary", textDecoration: "line-through" } : {}),
+          <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", ...(step.status === "completed" ? { color: "text.secondary", textDecoration: "line-through" } : step.status === "deferred" ? { color: "text.disabled", fontStyle: "italic" } : {}),
             ...(step.status === "in_progress" ? { fontWeight: 600 } : {}) }}>{step.step}</Typography></Stack>;
       })}</Stack>}
       {process && process.outcome !== "no_change" && <Typography variant="body2" role="status" sx={{ mt: plan ? 1 : 0, ...toneText(processTone(process)) }}>

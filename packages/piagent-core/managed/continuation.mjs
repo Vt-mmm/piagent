@@ -15,6 +15,7 @@ export const TURN_END_ENTRY = 'agent-watch-turn-end';
 export const TURN_END_STATES = ['done', 'midway', 'failed', 'cancelled'];
 
 const completed = plan => plan?.plan?.filter(p => p.status === 'completed').length ?? 0;
+const deferred = plan => plan?.plan?.filter(p => p.status === 'deferred').length ?? 0;
 
 export class Continuation {
   constructor(policy) {
@@ -36,7 +37,7 @@ export class Continuation {
     if (this.idle >= IDLE_ROUNDS) { this.reason = 'idle'; return null; }
     if (this.rounds >= MAX_ROUNDS) { this.reason = 'limit'; return null; }
     this.rounds += 1;
-    const steps = plan.plan.length, done = completed(plan), open = steps - done;
+    const steps = plan.plan.length, done = completed(plan), open = steps - done - deferred(plan);
     return { customType: 'agent-watch-process', display: true,
       content: `Harness: your checklist still has ${open} open step(s) (${done}/${steps} completed):\n${planText(plan)}\nThe member asked for all of it, unless they told you to stop at this point. Continue with the next open step now and keep going until every step is completed; update the checklist with update_plan as you go. Do not stop to report progress between steps. If the member asked you to stop here (to review a plan before any change, for example) or you cannot go on without them (a decision, access, a service that is not running), ask with ask_user instead of going on. If a step is no longer needed, take it out of the checklist and say why in your final answer.`,
       details: { phase: 'continue', round: this.rounds, maxRounds: MAX_ROUNDS, planOpen: open, planDone: done, planSteps: steps, ...(this.idle ? { idle: this.idle } : {}) } };
@@ -49,7 +50,8 @@ export class Continuation {
 export function turnEnd(continuation, plan, { stopped, failure }) {
   const steps = continuation.touched ? plan?.plan?.length ?? 0 : 0, done = continuation.touched ? completed(plan) : 0;
   const state = stopped ? 'cancelled' : failure ? 'failed' : continuation.touched && unfinished(plan) ? 'midway' : 'done';
-  return { state, planSteps: steps, planDone: done, rounds: continuation.rounds,
+  const later = continuation.touched ? deferred(plan) : 0;
+  return { state, planSteps: steps, planDone: done, ...(later ? { planDeferred: later } : {}), rounds: continuation.rounds,
     ...(state === 'midway' && continuation.reason ? { reason: continuation.reason } : {}),
     ...(state === 'failed' ? { role: failure.role ?? 'main', code: String(failure.code || 'unknown').toLowerCase().replace(/[^a-z0-9_]+/g, '_').slice(0, 64) } : {}),
     at: new Date().toISOString() };
@@ -60,8 +62,22 @@ export function turnEnd(continuation, plan, { stopped, failure }) {
 // returns { result, preflight, planUpdated, changed, closeFailed }. A message the member
 // sends while a round closes (no model runs then) becomes the next round;
 // Stop ends the turn. Listeners hear "settled" once, after the last round.
+// "tiếp tục", "continue", the dashboard's Continue button: the member asks
+// for the open checklist, so it is this message's work even before the agent
+// touches it again.
+const CONTINUE = /^(tiep tuc|lam tiep|lam not|continue|go on|keep going|resume)\b/;
+export function asksToContinue(text) {
+  const normal = String(text ?? '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase().trim();
+  return normal.length <= 60 && CONTINUE.test(normal);
+}
+const fresh = (self, manager, text) => {
+  const continuation = new Continuation(workflowPolicy(self.manifest));
+  if (asksToContinue(text) && unfinished(currentPlan(manager))) continuation.touched = true;
+  return continuation;
+};
+
 export async function memberTurn(self, { manager, prompt, runRound }, text, deliver) {
-  let continuation = new Continuation(workflowPolicy(self.manifest)), result, waiting = null, ended = null;
+  let continuation = fresh(self, manager, text), result, waiting = null, ended = null;
   self.stopRequested = false; self.queued = [];
   try {
     for (let first = true; ; first = false) {
@@ -83,7 +99,7 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
         waiting = self.queued.shift(); self.stopRequested = false;
         const next = waiting; text = next.text;
         deliver = () => prompt(next.text, { ...next.options, expandPromptTemplates: false });
-        continuation = new Continuation(workflowPolicy(self.manifest));
+        continuation = fresh(self, manager, next.text);
       } else if (message) {
         text = message.content;
         deliver = () => { self.nextPurpose = 'continue'; return self.session.sendCustomMessage(message, { triggerTurn: true }); };
@@ -109,6 +125,7 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
 export function turnEndText(end) {
   if (end.state === 'cancelled') return 'Turn stopped by the member.';
   if (end.state === 'failed') return `Turn failed: ${end.role} agent, ${end.code}. Send "continue" to go on.`;
-  if (end.state === 'midway') return `Turn ended with ${end.planSteps - end.planDone} of ${end.planSteps} checklist step(s) open${end.reason === 'idle' ? `: the agent stopped ${IDLE_ROUNDS} times in a row without progress` : end.reason === 'limit' ? `: ${MAX_ROUNDS} rounds reached` : ''}. Send "continue" to go on.`;
+  if (end.state === 'midway') return `Turn ended with ${end.planSteps - end.planDone - (end.planDeferred ?? 0)} of ${end.planSteps} checklist step(s) open${end.reason === 'idle' ? `: the agent stopped ${IDLE_ROUNDS} times in a row without progress` : end.reason === 'limit' ? `: ${MAX_ROUNDS} rounds reached` : ''}. Send "continue" to go on.`;
+  if (end.planDeferred) return `Done: ${end.planDone} of ${end.planSteps} checklist steps completed, ${end.planDeferred} left for later.`;
   return end.planSteps ? `Done: all ${end.planSteps} checklist steps completed.` : 'Done.';
 }

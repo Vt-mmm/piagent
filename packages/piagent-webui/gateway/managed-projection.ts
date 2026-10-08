@@ -1,6 +1,6 @@
 import { turnEndOf } from '../shared/turn-end.ts';
 // Public managed state contains no provider/model route or credential.
-const STATUS = ['pending', 'in_progress', 'completed'];
+const STATUS = ['pending', 'in_progress', 'completed', 'deferred'];
 const OUTCOMES = ['no_change', 'interrupted', 'disputed', 'blocking_open', 'unverified', 'review_unavailable', 'unreviewed', 'clean'];
 export function managedProjection(context: any, entries: any[]) {
   if (context?.model?.provider !== 'agent_watch_managed') return {};
@@ -20,7 +20,7 @@ export function managedProjection(context: any, entries: any[]) {
   const lastUser = lastIndex(e => e.type === 'message' && e.message?.role === 'user');
   const endAt = lastIndex(e => e.type === 'custom' && e.customType === 'agent-watch-turn-end');
   const end = endAt > lastUser ? turnEndOf(entries[endAt].data) : null;
-  const turnEnd = end ? { state: end.state, planSteps: end.planSteps, planDone: end.planDone, ...(end.reason ? { reason: end.reason } : {}) } : null;
+  const turnEnd = end ? { state: end.state, planSteps: end.planSteps, planDone: end.planDone, ...(end.planDeferred ? { planDeferred: end.planDeferred } : {}), ...(end.reason ? { reason: end.reason } : {}) } : null;
   // Helpers the Harness enables (up to four); a conversation recorded before
   // that was known says two.
   const maximum = Number.isInteger(counter?.maximum) && counter.maximum >= 0 && counter.maximum <= 4 ? counter.maximum : 2;

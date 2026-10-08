@@ -20,4 +20,5 @@ export function TurnEndNote({ end, locale, onContinue }: { end: TurnEnd; locale:
 
 // The session list's short label and its tone.
 export const TURN_END_TONES: Record<TurnEnd["state"], Tone> = { done: "success", midway: "warning", failed: "error", cancelled: "info" };
-export function turnEndLabel(end: Pick<TurnEnd, "state" | "planSteps" | "planDone">, locale: UiLocale): string { return turnEndShort(end, locale); }
+export const turnEndTone = (end: Pick<TurnEnd, "state" | "planDeferred">): Tone => end.state === "done" && end.planDeferred ? "info" : TURN_END_TONES[end.state];
+export function turnEndLabel(end: Pick<TurnEnd, "state" | "planSteps" | "planDone" | "planDeferred">, locale: UiLocale): string { return turnEndShort(end, locale); }

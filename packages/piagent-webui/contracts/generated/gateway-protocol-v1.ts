@@ -279,11 +279,11 @@ export type SessionRow = {
     steps: [
       {
         step: string;
-        status: "pending" | "in_progress" | "completed";
+        status: "pending" | "in_progress" | "completed" | "deferred";
       },
       ...{
         step: string;
-        status: "pending" | "in_progress" | "completed";
+        status: "pending" | "in_progress" | "completed" | "deferred";
       }[]
     ];
   };
@@ -306,6 +306,7 @@ export type SessionRow = {
     state: "done" | "midway" | "failed" | "cancelled";
     planSteps: number;
     planDone: number;
+    planDeferred?: number;
     reason?: "idle" | "limit" | "policy";
   };
   gitBranch?: {

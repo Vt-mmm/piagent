@@ -938,6 +938,7 @@ export interface TurnEnd {
   state: "done" | "midway" | "failed" | "cancelled";
   planSteps: number;
   planDone: number;
+  planDeferred?: number;
   rounds: number;
   reason?: "idle" | "limit" | "policy";
   role?: "main" | "scout" | "research" | "verify" | "review";

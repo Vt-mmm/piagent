@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Continuation, turnEnd, turnEndText, IDLE_ROUNDS, MAX_ROUNDS } from '../packages/piagent-core/managed/continuation.mjs';
+import { Continuation, asksToContinue, turnEnd, turnEndText, IDLE_ROUNDS, MAX_ROUNDS } from '../packages/piagent-core/managed/continuation.mjs';
 import { turnEndCopy, turnEndOf, turnEndShort } from '../packages/piagent-webui/shared/turn-end.ts';
 
 // A main agent that ends its turn with checklist steps open is sent on, under
@@ -63,6 +63,25 @@ test('Stop, a failure, no checklist, a plan that is only suggested, and the roun
   assert.equal(rounds, MAX_ROUNDS); assert.equal(long.reason, 'limit');
 });
 
+// The member said to stop after some steps: the rest is left for later,
+// never marked completed, and the harness does not go on with it.
+test('steps left for later end the turn as done as asked, with the count left', () => {
+  const later = { plan: [{ step: 'STEP01', status: 'completed' }, { step: 'STEP02', status: 'completed' }, { step: 'STEP03', status: 'deferred' }, { step: 'STEP04', status: 'deferred' }] };
+  const c = new Continuation(REQUIRE); c.begin(null);
+  assert.equal(c.next({ plan: later, planUpdated: true, changed: true }), null);
+  const end = turnEnd(c, later, {});
+  assert.deepEqual([end.state, end.planDone, end.planSteps, end.planDeferred], ['done', 2, 4, 2]);
+  assert.equal(turnEndText(end), 'Done: 2 of 4 checklist steps completed, 2 left for later.');
+  const copy = turnEndCopy(turnEndOf(end), 'vi');
+  assert.deepEqual([copy.title, copy.tone, copy.continuable], ['Dừng theo yêu cầu · 2/4 bước xong, 2 bước để sau', 'info', true]);
+  assert.equal(turnEndShort(turnEndOf(end), 'vi'), 'Xong 2/4, để sau 2');
+  // A pending step beside deferred ones is still open work.
+  const mixed = { plan: [...later.plan, { step: 'STEP05', status: 'pending' }] };
+  const m = new Continuation(REQUIRE); m.begin(null);
+  assert.deepEqual([m.next({ plan: mixed, planUpdated: true }).details.planOpen], [1]);
+  assert.equal(turnEndOf({ state: 'done', planSteps: 3, planDone: 2, planDeferred: 2, rounds: 0 }), null, 'done + later beyond the steps');
+});
+
 test('the member reads whether the task is finished, and why not', () => {
   assert.equal(turnEndOf({ state: 'midway', planSteps: 3, planDone: 4, rounds: 0 }), null, 'more done than steps');
   assert.equal(turnEndOf({ state: 'paused', planSteps: 3, planDone: 1, rounds: 0 }), null);
@@ -79,4 +98,9 @@ test('the member reads whether the task is finished, and why not', () => {
   assert.equal(turnEndCopy({ state: 'cancelled', planSteps: 0, planDone: 0, rounds: 0 }, 'en').title, 'You stopped this turn');
   // The copy never names a model.
   for (const c of [copy, done, failed]) assert.doesNotMatch(c.title + c.text, /gpt|claude|sol|luna/i);
+});
+
+test('"tiếp tục" asks for the open checklist; other short messages do not', () => {
+  for (const text of ['tiếp tục', 'Tiếp tục đi em', 'tiep tuc', 'làm tiếp nhé', 'continue', 'Go on please', 'làm nốt']) assert.equal(asksToContinue(text), true, text);
+  for (const text of ['Thanks', 'cảm ơn', 'tiếp theo là gì?'.repeat(1), 'what should I continue with in the docs and the API reference and more words', '']) assert.equal(asksToContinue(text), false, text);
 });
