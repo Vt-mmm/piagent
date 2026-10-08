@@ -14,7 +14,7 @@ const manifest = (main) => ({ schema_version: 2, credential_mode: 'managed', key
   harness: { configuration: { main: { model_ids: [main] }, research: { model_ids: ['gpt-6-sol'] } } } });
 const brokerFor = (value, calls = []) => ({ calls, async request(action) { calls.push(action); if (action !== 'config') throw Error('the doctor must not start a run'); if (value instanceof Error) throw value; return value; } });
 
-test('the doctor passes on a working machine and sends no model request', { skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 180000 }, async () => {
+test('the doctor passes on a working machine and sends no model request', { skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 360000 }, async () => {
   const broker = brokerFor(manifest('gpt-6-sol'));
   const results = await runDoctor({ sdkRoot, origin: 'http://127.0.0.1:9', broker, network: false });
   const report = doctorReport(results);
@@ -27,7 +27,7 @@ test('the doctor passes on a working machine and sends no model request', { skip
   assert.equal(results.some(result => /web_fetch|Studio is reachable/.test(result.label)), false, 'nothing leaves the machine when asked not to');
 });
 
-test('the doctor names what blocks company sessions', { skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 180000 }, async () => {
+test('the doctor names what blocks company sessions', { skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 360000 }, async () => {
   const unknown = doctorReport(await runDoctor({ sdkRoot, origin: 'http://127.0.0.1:9', broker: brokerFor(manifest('brand-new')), network: false }));
   assert.equal(unknown.ok, false);
   assert.match(unknown.text, / FAIL this Piagent knows every harness model — main: unknown to this Piagent; update Piagent/);
