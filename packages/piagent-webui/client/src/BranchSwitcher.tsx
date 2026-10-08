@@ -48,7 +48,12 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
   const [list, setList] = useState<ProjectBranches | null>(null), [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState(""), [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ code: string; detail: string | null } | null>(null);
-  const loading = useRef<AbortController | null>(null);
+  const loading = useRef<AbortController | null>(null), input = useRef<HTMLInputElement | null>(null);
+  // The branch just switched to, shown until the catalog (which may come
+  // through the company Gateway) says the same.
+  const [switched, setSwitched] = useState<NonNullable<SessionRow["gitBranch"]> | null>(null);
+  useEffect(() => { setSwitched(null); }, [branch?.name, branch?.detached, projectRef]);
+  const shownBranch = switched ?? branch;
   const open = Boolean(anchor);
 
   const load = () => {
@@ -65,7 +70,8 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
   const switchTo = async (target: Target) => {
     setBusy(target.branch); setError(null);
     try {
-      await switchProjectBranch(projectRef, target);
+      const result = await switchProjectBranch(projectRef, target);
+      if (result.head) setSwitched(result.head);
       onSwitched?.(); setAnchor(null); setQuery(""); setList(null);
     } catch (failure) {
       setError(failure instanceof BranchRequestError ? { code: failure.code, detail: failure.detail } : { code: "branch-switch-failed", detail: null });
@@ -74,6 +80,8 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
   };
 
   const repository = list?.repository ? list : null;
+  // The field is disabled while the branches load; focus it once they are there.
+  useEffect(() => { if (open && repository) requestAnimationFrame(() => input.current?.focus()); }, [open, repository]);
   const typed = query.trim();
   const shown = useMemo(() => (repository?.branches ?? []).filter((item) => !typed || item.name.toLowerCase().includes(typed.toLowerCase())), [repository, typed]);
   const local = shown.filter((item) => !item.remote), remote = shown.filter((item) => item.remote);
@@ -87,16 +95,16 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
       slotProps={{ primary: { noWrap: true, sx: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12.5 } },
         secondary: { noWrap: true, sx: { fontSize: 11 } } }} /></ListItemButton>;
 
-  if (!branch) return null;
+  if (!shownBranch) return null;
   return <>
-    <Tooltip describeChild title={`${branchTitle(branch, locale)} · ${localize(locale, "bấm để đổi nhánh", "click to switch")}`}>
+    <Tooltip describeChild title={`${branchTitle(shownBranch, locale)} · ${localize(locale, "bấm để đổi nhánh", "click to switch")}`}>
     <ButtonBase onClick={(event) => { event.stopPropagation(); setAnchor(event.currentTarget); }} aria-haspopup="dialog" aria-expanded={open}
-      aria-label={branch.detached
-        ? localize(locale, `Đổi nhánh Git của ${projectLabel} (detached HEAD tại ${branch.name})`, `Switch ${projectLabel}'s Git branch (detached HEAD at ${branch.name})`)
-        : localize(locale, `Đổi nhánh Git của ${projectLabel} (đang ở ${branch.name})`, `Switch ${projectLabel}'s Git branch (on ${branch.name})`)}
+      aria-label={shownBranch.detached
+        ? localize(locale, `Đổi nhánh Git của ${projectLabel} (detached HEAD tại ${shownBranch.name})`, `Switch ${projectLabel}'s Git branch (detached HEAD at ${shownBranch.name})`)
+        : localize(locale, `Đổi nhánh Git của ${projectLabel} (đang ở ${shownBranch.name})`, `Switch ${projectLabel}'s Git branch (on ${shownBranch.name})`)}
       sx={{ minWidth: 0, maxWidth, borderRadius: .75, px: .4, mx: -.4, font: "inherit", color: "inherit", justifyContent: "flex-start",
         "&:hover": { bgcolor: "action.hover", color: "text.primary" }, "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main" } }}>
-      <GitBranchLabel branch={branch} locale={locale} maxWidth="100%" tooltip={false} /></ButtonBase></Tooltip>
+      <GitBranchLabel branch={shownBranch} locale={locale} maxWidth="100%" tooltip={false} /></ButtonBase></Tooltip>
     <Popover open={open} anchorEl={anchor} onClose={close} anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       slotProps={{ paper: { role: "dialog", "aria-label": localize(locale, "Nhánh Git", "Git branches"),
         sx: { width: "min(360px, calc(100vw - 32px))", maxHeight: "min(520px, 70vh)", display: "flex", flexDirection: "column", p: 1.25, gap: 1 } } }}>
@@ -110,7 +118,7 @@ export function BranchSwitcher({ projectRef, projectLabel, branch, locale, onSwi
         `${repository.changedFiles} changed file(s) come along to the new branch; Git refuses if they would be overwritten.`)}</Typography>}
       {error && <Alert severity="error" sx={{ py: 0, fontSize: 12.5 }}>{localize(locale, ...(ERRORS[error.code] ?? ["Không chuyển được nhánh.", "The branch could not be switched."]))}
         {error.detail && <Box component="pre" sx={{ m: 0, mt: .5, whiteSpace: "pre-wrap", font: "11px ui-monospace, monospace", opacity: .85 }}>{error.detail}</Box>}</Alert>}
-      <TextField autoFocus size="small" value={query} onChange={(event) => setQuery(event.target.value)} disabled={!repository || Boolean(busy)}
+      <TextField inputRef={input} size="small" value={query} onChange={(event) => setQuery(event.target.value)} disabled={!repository || Boolean(busy)}
         placeholder={localize(locale, "Tìm hoặc đặt tên nhánh mới", "Find a branch or name a new one")}
         slotProps={{ htmlInput: { maxLength: 200, "aria-label": localize(locale, "Tìm nhánh", "Find a branch") } }}
         onKeyDown={(event) => { if (event.key === "Enter" && typed && !blocked && !busy) {

@@ -1071,7 +1071,9 @@ test("switches the project's Git branch from the header: an existing one, a new 
 
     // A new branch from what is typed, with Enter.
     await header.getByRole("button", { name: /đang ở release\/1\.18/ }).click();
-    await menu.getByRole("textbox", { name: "Tìm nhánh" }).fill("feature/branch-menu");
+    // The search field takes typing as soon as the branches are there.
+    await expect(menu.getByRole("textbox", { name: "Tìm nhánh" })).toBeFocused();
+    await page.keyboard.type("feature/branch-menu");
     await expect(menu.getByRole("button", { name: /Tạo nhánh mới “feature\/branch-menu”/ })).toBeVisible();
     await menu.getByRole("textbox", { name: "Tìm nhánh" }).press("Enter");
     await expect(menu).toHaveCount(0);
