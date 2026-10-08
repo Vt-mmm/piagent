@@ -82,3 +82,23 @@ export async function executeRepositoryFetch(boundary,plan,signal,{transport=fet
     return {content:[{type:'text',text:`Fetched origin branches for ${plan.repository}. Working files and current branch were not changed.`}],details:{operation:'git.fetch',repository:plan.repository}};
   } finally {fs.rmSync(staging,{recursive:true,force:true});}
 }
+
+// The fetch_origin tool of a company conversation: one approved fetch of the
+// GitHub origin (Bypass fetches without asking).
+export function fetchOriginTool(self) {
+  return {name:'fetch_origin',label:'Fetch origin',description:'Request one approved GitHub origin fetch. Refreshes origin branches without changing working files. Does not expose credentials or allow arbitrary network commands.',
+    parameters:{type:'object',properties:{},additionalProperties:false},
+    execute:async(id,_args,signal,_update,ctx)=>{
+      const plan=await repositoryFetchPlan(self.boundary);
+      if(self.permission==='trusted-full-access'&&!signal?.aborted)return executeRepositoryFetch(self.boundary,plan,signal);
+      const {piApprovalBroker}=await import('../runtime/inspection/approval-broker.ts');
+      const decision=await piApprovalBroker.request({cwd:self.cwd,rawSessionId:self.session.sessionManager.getSessionId(),toolCallId:id,
+        action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'fetch_origin',rawAction:plan,
+          targetPaths:[self.cwd],provider:'github',urlOrigin:'https://github.com',requestedScope:'fetch-origin-once',
+          reason:`Fetch origin branches from ${plan.repository}`,riskClass:'low',allowConsequence:'Download origin branches once; keep the current branch and working files unchanged.',denyConsequence:'No network request or credential read.'},
+        terminalConfirm:()=>ctx?.ui?.confirm?.('Tải nhánh từ origin',`Tải các nhánh của ${plan.repository} về ${self.cwd} một lần.\n\nĐồng ý: chỉ tải nhánh; nhánh hiện tại và file đang làm không đổi.\nTừ chối: không gửi request mạng, không đọc thông tin đăng nhập.`)??Promise.resolve(false),
+        unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
+      if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
+      return executeRepositoryFetch(self.boundary,plan,signal);
+    }};
+}

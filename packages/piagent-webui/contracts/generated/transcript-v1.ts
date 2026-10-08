@@ -58,6 +58,7 @@ export type TranscriptItem = {
   model?: string;
   failure?: CompanyFailure;
   process?: HarnessProcess;
+  turnEnd?: TurnEnd;
   /**
    * @maxItems 64
    */
@@ -112,7 +113,8 @@ export interface CompanyFailure {
   local: boolean;
 }
 export interface HarnessProcess {
-  phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute";
+  phase:
+    "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue";
   outcome?:
     | "no_change"
     | "interrupted"
@@ -567,6 +569,11 @@ export interface HarnessProcess {
   reviewed?: boolean;
   blockingOpen?: number;
   planOpen?: number;
+  planDone?: number;
+  planSteps?: number;
+  round?: number;
+  maxRounds?: number;
+  idle?: number;
   planSkipped?: true;
   verifyPolicy?: "off" | "suggest" | "require";
   reviewPolicy?: "off" | "suggest" | "require";
@@ -926,6 +933,15 @@ export interface HarnessProcess {
           issue: string;
         }
       ];
+}
+export interface TurnEnd {
+  state: "done" | "midway" | "failed" | "cancelled";
+  planSteps: number;
+  planDone: number;
+  rounds: number;
+  reason?: "idle" | "limit" | "policy";
+  role?: "main" | "scout" | "research" | "verify" | "review";
+  code?: string;
 }
 export interface ToolCall {
   toolCallRef: string;

@@ -108,7 +108,7 @@ export function planTool(run) {
 // The guidance a policy adds to the main agent's system prompt.
 export function workflowPrompt(policy, checks) {
   const lines = [];
-  if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists, and a checklist left unfinished comes back to you before the turn ends.' : ''}`);
+  if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with open steps sends you back to the next open step until every step is completed: if you cannot go on without the member, ask with ask_user.' : ''}`);
   if (policy.verify !== 'off') {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
     lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''}`);
@@ -182,6 +182,11 @@ export function pendingBaseline(manager) {
   return last && last.settled === false && typeof last.digest === 'string' ? last.digest : null;
 }
 // The files that unsettled turn changed: its digest covers only those.
+// The commit that unsettled turn started from: its digest is taken against it.
+export function pendingHead(manager) {
+  const last = manager.getEntries().filter(e => e.type === 'custom' && e.customType === BASELINE_ENTRY).at(-1)?.data;
+  return last?.settled === false && typeof last.head === 'string' ? last.head : null;
+}
 export function pendingPaths(manager) {
   const last = manager.getEntries().filter(e => e.type === 'custom' && e.customType === BASELINE_ENTRY).at(-1)?.data;
   return last?.settled === false && Array.isArray(last.paths) ? last.paths.filter(p => typeof p === 'string' && p).slice(0, 2000) : [];
@@ -195,7 +200,7 @@ export const PLAN_REFUSALS = 3;
 export class RunProcess {
   constructor(policy, { request, complex, checks }) {
     Object.assign(this, { policy, request: String(request ?? ''), complex, checks, startDigest: null, mutations: 0, lastCheck: null, checksRun: 0, checksFailed: 0,
-      reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, planAsked: false, unplannedChange: false,
+      reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, unplannedChange: false,
       unknownTools: 0, changed: false, verified: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
       // Helper objections to a brief, disagreements handed to the member, the
       // claims verify marked failed, and where the harness last sent the
@@ -346,16 +351,8 @@ export async function completionGate(managed, run, signal) {
       run.claimsDone = true; run.disputes.push({ source: 'verify' });
       await note(`Harness: the main agent and the verify subagent still disagree after two rounds; the member decides.\n${list}`, { phase: 'dispute', role: 'verify', claims });
     }
-    // Plan "require": a checklist written in this turn is brought up to date
-    // once before the turn ends (models often write it and never touch it again).
-    const plan = currentPlan(session.sessionManager);
-    if (run.changed && policy.plan === 'require' && run.planUpdated && !run.planAsked && unfinished(plan)) {
-      run.planAsked = true;
-      const open = plan.plan.filter(p => p.status !== 'completed').length;
-      await send(`Harness process check: your checklist still has ${open} step(s) not marked completed:\n${planText(plan)}\nUpdate it with update_plan so it shows what was done. For a step you did not do, do it or say plainly why it is left.`,
-        { phase: 'plan', planOpen: open });
-      continue;
-    }
+    // Plan "require": a checklist left with open steps is the next round's
+    // (continuation.mjs), after this run's checks and review.
     // An objection no corrected brief followed is answered to the member, once.
     const open = run.objections.filter(o => !o.answered && !o.disputed);
     if (open.length && !run.objectionsAsked) {
@@ -374,7 +371,7 @@ export async function completionGate(managed, run, signal) {
     : policy.verify !== 'off' && !run.verified ? 'unverified' : run.reviewUnavailable ? 'review_unavailable' : policy.review !== 'off' && !run.reviewed ? 'unreviewed' : 'clean';
   run.outcome = run.legacyOutcome !== 'interrupted' && run.disputes.length ? 'disputed' : run.legacyOutcome;
   const settled = run.outcome !== 'interrupted';
-  session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome,
+  session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome, ...(managed.base ? { head: managed.base } : {}),
     ...(settled ? {} : { paths: [...(managed.ownPaths ?? [])].slice(0, 2000) }) });
   if (!run.changed && !run.disputes.length) return;
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status !== 'completed').length ?? 0 : 0;

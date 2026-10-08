@@ -34,6 +34,7 @@ import { GitBranchLabel } from "./GitBranchLabel.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 import { toneText } from "./tone.ts";
 import { outcomeTone } from "./ProcessNote.tsx";
+import { TURN_END_TONES, turnEndLabel } from "./TurnEndNote.tsx";
 
 export type SessionMenuAction = "rename" | "pin" | "archive" | "unarchive" | "fork";
 
@@ -77,13 +78,17 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
   // A busy session says what it is doing; an idle one, when it last changed.
   const status = activity === "running" ? localize(locale, "Đang chạy", "Running") : activity === "elsewhere" ? localize(locale, "Đang chạy ở nơi khác", "Running elsewhere")
     : activity === "attention" ? localize(locale, "Cần duyệt", "Needs approval") : null;
-  const outcome = company && session.managedProcess && session.managedProcess.outcome !== "no_change" ? session.managedProcess.outcome : null;
+  // How the last message ended (finished, stopped midway, failed) says more
+  // than the code process of its last round; neither while it runs.
+  const end = company && activity !== "running" && activity !== "elsewhere" ? session.managedTurnEnd ?? null : null;
+  const outcome = !end && company && session.managedProcess && session.managedProcess.outcome !== "no_change" ? session.managedProcess.outcome : null;
   return <Box sx={{ display: "flex", alignItems: "center", pr: .5 }}><ListItemButton selected={selected} onClick={onSelect}
     sx={{ minWidth: 0, alignItems: "flex-start", py: 1, px: 1.4 }}>
     <ListItemText primary={<>{session.pinned && <PushPinOutlined sx={{ fontSize: 13, mr: .5, verticalAlign: "-2px", color: "text.disabled" }} />}{session.title}</>}
       secondary={<>{company && <Box component="span" sx={{ fontWeight: 650, color: "primary.main" }}>{localize(locale, "Công ty", "Company")}<span> · </span></Box>}
         {status ?? relativeTime(session.updatedAt, locale)}
         {showProject && <span> · {session.projectLabel}</span>}
+        {end && <Box component="span" sx={toneText(TURN_END_TONES[end.state])}> · {turnEndLabel(end, locale)}</Box>}
         {outcome && <Box component="span" sx={toneText(outcomeTone(outcome))}> · {localize(locale, ...OUTCOME_SHORT[outcome])}</Box>}</>}
       slotProps={{ primary: { noWrap: true, sx: { fontSize: 13.25, fontWeight: selected ? 600 : 500 } },
         secondary: { noWrap: true, sx: { mt: .25, fontSize: 11.25 } } }} /><StateDot activity={activity} locale={locale} /></ListItemButton>

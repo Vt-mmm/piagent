@@ -13,10 +13,17 @@ const MAX_SNAPSHOT = 16 * 1024 * 1024, MAX_UNTRACKED = 2000, READ_FILE = 400_000
 const git = args => execFileSync(managedGit(), ['--no-pager', ...args], { encoding: 'utf8', maxBuffer: MAX_SNAPSHOT + 1, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' } });
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 const mode = process.argv[2];
+// The arguments after the mode: a scope file, then the commit the patch starts
+// from (the turn's starting HEAD; commits made since are part of the change).
+// While HEAD has not moved, the patch is the plain one against HEAD.
+const head = () => { try { return git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']).trim(); } catch { return ''; } };
+if (mode === 'head') { process.stdout.write(head() || 'none'); process.exit(0); }
+const extra = process.argv.slice(3), given = extra.find(a => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(a));
+const base = given && given !== head() ? given : 'HEAD';
 // "files": what each changed or new file holds now (a hash, "deleted"), so
 // the runtime can tell which files one conversation's command changed.
 if (mode === 'files') {
-  const changed = git(['diff', '--name-only', '--no-renames', '--relative', '-z', 'HEAD', '--', '.']).split('\0').filter(Boolean);
+  const changed = git(['diff', '--name-only', '--no-renames', '--relative', '-z', base, '--', '.']).split('\0').filter(Boolean);
   const fresh = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
   if (changed.length + fresh.length > MAX_UNTRACKED * 4) throw Error('review-untracked-limit');
   const print = name => {
@@ -33,11 +40,11 @@ if (mode === 'files') {
 }
 // A scope (a file the runtime wrote in this boundary's temporary directory):
 // only these paths, the ones this conversation changed, make the patch.
-const scopeName = process.argv[3];
+const scopeName = extra.find(a => a !== given);
 if (scopeName !== undefined && !/^scope-[0-9a-f-]{36}\.json$/.test(scopeName)) throw Error('review-scope-invalid');
 const scope = scopeName ? new Set(JSON.parse(fs.readFileSync(path.join(os.tmpdir(), scopeName), 'utf8'))) : null;
 if (scope && [...scope].some(p => typeof p !== 'string' || !p || path.isAbsolute(p) || p.split('/').includes('..'))) throw Error('review-scope-invalid');
-const patch = scope && !scope.size ? '' : git(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', 'HEAD', '--', ...(scope ? [...scope].sort().map(p => ':(literal)' + p) : ['.'])]);
+const patch = scope && !scope.size ? '' : git(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', base, '--', ...(scope ? [...scope].sort().map(p => ':(literal)' + p) : ['.'])]);
 const paths = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).filter(p => !scope || scope.has(p)).sort();
 if (paths.length > MAX_UNTRACKED) throw Error('review-untracked-limit');
 const untracked = paths.map(name => {
@@ -55,7 +62,7 @@ const untracked = paths.map(name => {
   if (text !== null) return { path: name, mode, contents: text, encoding: 'utf8' };
   return stat.size > BINARY_INLINE ? { path: name, mode, encoding: 'omitted', bytes: stat.size, sha256: sha256(data) } : { path: name, mode, contents: data.toString('base64'), encoding: 'base64' };
 });
-const snapshot = Buffer.from(JSON.stringify({ patch, untracked }));
+const snapshot = Buffer.from(JSON.stringify(base === 'HEAD' ? { patch, untracked } : { base, patch, untracked }));
 if (snapshot.length > MAX_SNAPSHOT) throw Error('review-patch-limit');
 // "digest": the digest and size only (is a review still current?). "file":
 // the snapshot goes to a new file in this boundary's temporary directory,

@@ -9,18 +9,22 @@ export type TimelineProcess = NonNullable<TranscriptItem["process"]>;
 export type TimelineStep = { kind: "tool"; key: string; tool: TimelineTool } | { kind: "note"; key: string; text: string }
   | { kind: "process"; key: string; process: TimelineProcess };
 export type TimelineFailure = NonNullable<TranscriptItem["failure"]>;
+export type TimelineTurnEnd = NonNullable<TranscriptItem["turnEnd"]>;
 export type TimelineTurn = {
   key: string; user: TranscriptItem; steps: TimelineStep[]; answer: string | null; failure: string | null; failureDetail: TimelineFailure | null;
   requests: number; tokens: number; model: string | null; startedAt: string | null; endedAt: string | null;
   // How the turn ended against the Harness workflow (shown after the answer).
   process: TimelineProcess | null;
+  // How the member's message ended: done, stopped with checklist steps open,
+  // failed or stopped by the member (company conversations).
+  end: TimelineTurnEnd | null;
   // Output tokens and the time the model took to produce them (each request
   // from when it was sent until its answer was stored), for tokens per second.
   outputTokens: number; generationMs: number;
 };
 
 function turnFor(user: TranscriptItem, key: string): TimelineTurn {
-  return { key, user, steps: [], answer: null, failure: null, failureDetail: null, requests: 0, tokens: 0, model: null, process: null,
+  return { key, user, steps: [], answer: null, failure: null, failureDetail: null, requests: 0, tokens: 0, model: null, process: null, end: null,
     startedAt: user.recordedAt, endedAt: null, outputTokens: 0, generationMs: 0 };
 }
 
@@ -44,7 +48,13 @@ export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] 
     // An answer the harness sent back (run checks, fix findings) becomes a
     // step; a step that asks nothing of the agent (a helper's objection, the
     // reviewer judging its answer, a disagreement for the member) leaves it the answer.
+    if (item.role === "custom" && item.turnEnd) { current.end = item.turnEnd; continue; }
     if (item.role === "custom" && item.process) {
+      // A round's status stays with its round when the harness goes on.
+      if (current.process) {
+        if (current.answer) { current.steps.push({ kind: "note", key: `${item.messageRef}:round-answer`, text: current.answer }); current.answer = null; }
+        current.steps.push({ kind: "process", key: `${item.messageRef}:round`, process: current.process }); current.process = null;
+      }
       if (item.process.phase === "final") { current.process = item.process; continue; }
       if (current.answer && !QUIET_PHASES.has(item.process.phase)) { current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer }); current.answer = null; }
       current.steps.push({ kind: "process", key: item.messageRef, process: item.process }); continue;

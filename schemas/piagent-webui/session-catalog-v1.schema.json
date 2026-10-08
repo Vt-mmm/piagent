@@ -99,6 +99,10 @@
         "managedProcess": { "type": "object", "additionalProperties": false, "required": ["outcome", "verified", "reviewed", "blockingOpen"], "properties": {
           "outcome": { "enum": ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
           "verified": { "type": "boolean" }, "reviewed": { "type": "boolean" }, "blockingOpen": { "type": "integer", "minimum": 0, "maximum": 1000 }, "planSkipped": { "const": true } } },
+        "managedTurnEnd": { "type": "object", "additionalProperties": false, "required": ["state", "planSteps", "planDone"], "properties": {
+          "state": { "enum": ["done", "midway", "failed", "cancelled"] },
+          "planSteps": { "type": "integer", "minimum": 0, "maximum": 30 }, "planDone": { "type": "integer", "minimum": 0, "maximum": 30 },
+          "reason": { "enum": ["idle", "limit", "policy"] } } },
         "gitBranch": { "type": "object", "additionalProperties": false, "required": ["name", "detached"], "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" },
           "detached": { "type": "boolean" } } },

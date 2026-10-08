@@ -18,6 +18,7 @@ import type { LiveActivity } from "./live-state-view-model.ts";
 import { compactTokens, turnSeconds, turnTokensPerSecond, type TimelineFailure, type TimelineTurn } from "./timeline-view-model.ts";
 import { liveToolKind, ToolCard } from "./ToolCard.tsx";
 import { ProcessNote } from "./ProcessNote.tsx";
+import { TurnEndNote } from "./TurnEndNote.tsx";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 
 // Its own chunk, fetched when a conversation opens (preloadMarkdown) rather
@@ -119,8 +120,8 @@ export function TurnFooter({ turn, locale }: { turn: TimelineTurn; locale: UiLoc
 // failed, or one with no answer at all (stopped, or the app or the machine
 // went down while it ran), offers to go on from the steps already taken.
 export function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineTurn; locale: UiLocale; onContinue?: () => void }) {
-  const unanswered = Boolean(onContinue) && !turn.answer && !turn.failure;
-  const agent = turn.steps.length > 0 || turn.answer || turn.failure || unanswered || turn.process;
+  const unanswered = Boolean(onContinue) && !turn.answer && !turn.failure && !turn.end;
+  const agent = turn.steps.length > 0 || turn.answer || turn.failure || unanswered || turn.process || turn.end;
   return <Stack spacing={1.5}>
     <UserBubble text={turn.user.content.text} attachments={turn.user.attachments ?? []} note={contentNote(turn.user, locale)} locale={locale} />
     {agent && <AgentBlock>
@@ -135,6 +136,7 @@ export function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineT
           "This turn has no answer: it was stopped, or the app or the machine went down while it ran. Its steps are kept; press Continue to go on.")}</Alert>}
       {turn.answer && <Box><AssistantText>{turn.answer}</AssistantText></Box>}
       {turn.process && <ProcessNote process={turn.process} locale={locale} />}
+      {turn.end && <TurnEndNote end={turn.end} locale={locale} onContinue={turn.failure ? undefined : onContinue} />}
       {turn.requests > 0 && <TurnFooter turn={turn} locale={locale} />}
     </AgentBlock>}
   </Stack>;

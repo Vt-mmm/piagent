@@ -5,6 +5,7 @@ import { looksLikeCompletionClaim } from "../../piagent-core/runtime/session/com
 import { isLightweightNonAuthorizingChangeLanguage } from "../../piagent-core/runtime/workflows/change-clarification.ts";
 import { workflowCommandPattern } from "../../piagent-core/runtime/workflows/webui-workflow.ts";
 import { hasVisibleText } from "../shared/text-visibility.ts";
+import { turnEndOf, type TurnEnd } from "../shared/turn-end.ts";
 import { effectiveStopReason } from "./message-stop-reason.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE, webUiMessageCorrelationEntry,
   type WebUiMessageCorrelation } from "../shared/message-correlation.ts";
@@ -33,11 +34,11 @@ type TranscriptItem = { messageRef: string; parentMessageRef: string | null; rol
   agentOperationId: string | null; messageRequestId?: string; turnIndex: number | null; content: TranscriptContent;
   attachments?: TranscriptAttachment[];
   toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown";
-    summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess };
+    summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess; turnEnd?: TurnEnd };
 type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
 type HarnessIssue = { kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope"; detail: string };
-type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute"; outcome?: string; loop?: number; maxLoops?: number;
-  verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
+type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue"; outcome?: string; loop?: number; maxLoops?: number;
+  verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
   findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[] };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
   revision: TranscriptRevision; eventCursor: string; state: "ready" | "unavailable"; items: TranscriptItem[];
@@ -173,7 +174,8 @@ function toolCalls(message: any, sessionRef: string, role: TranscriptItem["role"
 // agent before a code-changing turn ended, and how that turn ended.
 const PROCESS_OUTCOMES = ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"];
 // A helper's objection to its brief, a failed claim, a disagreement handed to the member.
-const PROCESS_PHASES = ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute"];
+// "continue": the harness sent the agent back to a checklist with open steps.
+const PROCESS_PHASES = ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue"];
 const ISSUE_KINDS = ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"], HELPER_ROLES = ["scout", "research", "verify", "review"];
 const POLICY_MODES = ["off", "suggest", "require"];
 function harnessProcess(details: any): HarnessProcess | null {
@@ -187,6 +189,12 @@ function harnessProcess(details: any): HarnessProcess | null {
   if (typeof details.reviewed === "boolean") out.reviewed = details.reviewed;
   if (Number.isInteger(details.blockingOpen) && details.blockingOpen >= 0) out.blockingOpen = Math.min(details.blockingOpen, 1000);
   if (Number.isInteger(details.planOpen) && details.planOpen >= 1 && details.planOpen <= 30) out.planOpen = details.planOpen;
+  const upTo = (n: unknown, low: number, high: number): n is number => Number.isInteger(n) && (n as number) >= low && (n as number) <= high;
+  if (upTo(details.planDone, 0, 30)) out.planDone = details.planDone;
+  if (upTo(details.planSteps, 1, 30)) out.planSteps = details.planSteps;
+  if (upTo(details.round, 1, 30)) out.round = details.round;
+  if (upTo(details.maxRounds, 1, 30)) out.maxRounds = details.maxRounds;
+  if (upTo(details.idle, 1, 2)) out.idle = details.idle;
   if (details.planSkipped === true) out.planSkipped = true;
   if (POLICY_MODES.includes(details.policy?.verify)) out.verifyPolicy = details.policy.verify;
   if (POLICY_MODES.includes(details.policy?.review)) out.reviewPolicy = details.policy.review;
@@ -260,6 +268,14 @@ function correlatedTranscriptItems(entries: unknown[], identity: TranscriptIdent
       // message. Invalid markers fail closed instead of leaking correlation
       // from an earlier admitted-but-undispatched operation into a later turn.
       pending = webUiMessageCorrelationEntry(entry);
+      continue;
+    }
+    // How the member's message ended: an entry, not a message the model reads.
+    if (entry?.type === "custom" && entry.customType === "agent-watch-turn-end") {
+      const turnEnd = turnEndOf(entry.data);
+      const projected = turnEnd && item({ ...entry, type: "message", message: { role: "custom", content: "" } }, identity, true);
+      if (projected) values.push({ entry, item: { ...projected, turnEnd, ...(turn ? { agentOperationId: turn.operationRef, messageRequestId: turn.messageRequestId } : {}) },
+        cursor: opaque("transcript", [identity.sessionRef, entry.id]) });
       continue;
     }
     if (entry?.type === "custom_message" && entry.customType === "agent-watch-process") {

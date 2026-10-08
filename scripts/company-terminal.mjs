@@ -11,6 +11,7 @@ import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/up
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
+import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
 
 const LOCALE = 'vi';
 const PERMISSION_STATUS = 'agent-watch-permission';
@@ -87,6 +88,20 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       const lines = processLines(message.details);
       const loud = ['dispute', 'objection'].includes(message.details?.phase) || message.details?.outcome === 'disputed';
       return lines ? box(lines.join('\n'), theme, loud ? 'warning' : message.details?.outcome === 'clean' ? 'success' : 'muted') : undefined;
+    });
+    // How the member's message ended (finished, stopped with steps open,
+    // failed, stopped), as the dashboard says it under the last answer.
+    let heard = null;
+    pi.on('session_start', async (_event, ctx) => {
+      const session = managed()?.session;
+      if (!session?.subscribe || heard === session) return;
+      heard = session;
+      session.subscribe((event) => {
+        const end = event?.type === 'managed_turn_end' ? turnEndOf(event.end) : null;
+        if (!end) return;
+        const copy = turnEndCopy(end, LOCALE);
+        ctx.ui?.notify?.(`${copy.title}. ${copy.text.replace('Bấm Tiếp tục', 'Gửi "tiếp tục"').replace('bấm Tiếp tục', 'gửi "tiếp tục"')}`, copy.tone === 'success' ? 'info' : copy.tone === 'error' ? 'error' : copy.tone === 'warning' ? 'warning' : 'info');
+      });
     });
     pi.registerMessageRenderer('agent-watch-review-status', (_message, _options, theme) =>
       box('Review đã cũ: code đổi sau khi review. Cần review lại cho thay đổi hiện tại.', theme, 'warning'));

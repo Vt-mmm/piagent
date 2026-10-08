@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+A company task with a checklist is carried to its end, and every turn says how it ended.
+
+### Changes
+
+- When the main agent ends its turn while its checklist still has open steps (it often stops between the items it was asked for: "STEP06 done, STEP07 next") and the team's Harness requires a plan, the harness sends it on to the next open step as a new run, as if the member had sent "continue": each round gets its own subagents, checks and review. It stops when every step is completed, when the member stops it or writes, when a round fails, after 2 rounds in a row that finish no step and change no code, or after 30 rounds. The model is told to ask with `ask_user` when it cannot go on without the member, and to put every item the member asked for in the checklist. Studio logs these rounds as "Harness cho làm tiếp" (`X-Agent-Purpose: continue`).
+- Every company turn ends with a line under the last answer, in the dashboard and the company Terminal: "Hoàn thành · n/n bước", "Dừng giữa chừng · còn x/y bước" (and why: two rounds without progress, the round limit, or a Harness that does not require a plan), "Lượt dừng vì lỗi" (which role) or "Bạn đã dừng lượt này", with Continue when the task is not finished. The sidebar shows the same for each conversation. The line never reaches the model.
+
+### Fixes
+
+- A turn that committed its change (`git commit`) counted as "no code changed": the code was compared with HEAD, which the commit had moved. The code is now compared with the commit the turn started from, so required checks, the review (which reads the committed change) and the process report still apply.
+
 ## v1.18.0 - 2026-10-08
 
 Switch the Git branch from the dashboard, retries for passing failures, and Claude Haiku 5.5.

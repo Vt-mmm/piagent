@@ -25,14 +25,15 @@ export function jobTitle(task, title) {
 }
 
 // The headers of one call. `owner.nextPurpose` is set by the harness when it
-// sends the main agent back (checks, review findings, a missing plan).
+// sends the main agent back (checks, review findings: "harness"; a checklist
+// with open steps: "continue").
 export function purposeHeaders(owner, runtime, role, context) {
   const messages = context?.messages ?? [], last = messages.at(-1);
   let purpose, after = '';
   if (systemText(context).startsWith(SUMMARY_PROMPT)) purpose = 'summary';
   else if (last?.role === 'toolResult') { purpose = 'tool_step'; after = afterTools(messages.findLast(m => m.role === 'assistant')); }
   else if (role !== 'main') purpose = 'brief';
-  else if (owner.nextPurpose === 'harness') { purpose = 'harness'; owner.nextPurpose = null; }
+  else if (['harness', 'continue'].includes(owner.nextPurpose)) { purpose = owner.nextPurpose; owner.nextPurpose = null; }
   else purpose = 'answer';
   const title = purpose === 'brief' ? owner.jobTitles?.get(runtime) : '';
   return { 'X-Agent-Purpose': purpose, ...(after ? { 'X-Agent-After': after } : {}), ...(title ? { 'X-Agent-Task': encodeURIComponent(title) } : {}) };

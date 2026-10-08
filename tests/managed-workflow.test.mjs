@@ -251,36 +251,78 @@ test('suggested steps never add a turn; a required check that never passes ends 
   }
 });
 
-test('a complex task plans before its first edit; an unfinished checklist comes back once before the turn ends', { skip: !supported, timeout: 180000 }, async () => {
+const turnEnds = managed => managed.session.sessionManager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-turn-end').map(e => e.data);
+const mainCloses = agent => agent.closes.filter(c => !c.role).length;
+
+test('a complex task plans before its first edit; a checklist left open goes on as a new run until it is done', { skip: !supported, timeout: 180000 }, async () => {
   const steps = [{ step: 'Change a.txt', status: 'completed' }, { step: 'Explain', status: 'in_progress' }], done = steps.map(s => ({ ...s, status: 'completed' }));
-  // The agent brings its checklist up to date when asked, or ignores the request (asked only once).
-  for (const [after, expected] of [[[{ tool: 'update_plan', input: { plan: done } }, 'Checklist updated.'], { plan: done, report: [2, 2, 'clean'], planOpen: undefined }],
-    [['Nothing to add.'], { plan: steps, report: [2, 1, 'clean'], planOpen: 1 }]]) {
+  // The agent ends its turn with a step open: the harness sends it on (a new
+  // run). It finishes the step, or answers twice in a row without progress.
+  for (const [after, expected] of [
+    [[{ tool: 'update_plan', input: { plan: done } }, 'Explained.'], { plan: done, phases: ['final', 'continue'], end: { state: 'done', planSteps: 2, planDone: 2, rounds: 1 }, runs: 2 }],
+    [['Nothing to add.', 'Still nothing.'], { plan: steps, phases: ['final', 'continue', 'continue'], end: { state: 'midway', planSteps: 2, planDone: 1, rounds: 2, reason: 'idle' }, runs: 3 }]]) {
     const root = project(), agent = broker({ plan: 'require', verify: 'off', review: 'off', max_fix_loops: 0 }, { review: false });
     const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id), review: [],
       main: [{ tool: 'write', input: { path: 'a.txt', content: 'x\n' } }, { tool: 'update_plan', input: { plan: [{ step: 'Change a.txt', status: 'in_progress' }, { step: 'Explain', status: 'pending' }] } },
-        { tool: 'write', input: { path: 'a.txt', content: 'x\n' } }, { tool: 'update_plan', input: { plan: steps } }, 'Changed.', ...after] };
+        { tool: 'write', input: { path: 'a.txt', content: 'x\n' } }, { tool: 'update_plan', input: { plan: steps } }, 'Changed a.txt; next I explain.', ...after] };
     const server = await studio(script);
     const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
     try {
+      const settled = [], told = [];
+      managed.session.subscribe(event => { if (event.type === 'agent_settled') settled.push(turnEnds(managed).length); if (event.type === 'managed_turn_end') told.push(event.end.state); });
       await managed.session.prompt('Plan the architecture migration of a.txt');
+      // One member message: listeners hear it settle once, after the last round.
+      assert.deepEqual(settled, [1]); assert.deepEqual(told, [expected.end.state]);
+      // The turn's end is an entry, not a message: the last message is the agent's answer.
+      assert.equal(managed.session.messages.at(-1).role, 'assistant');
       const results = managed.session.messages.filter(m => m.role === 'toolResult');
       assert.equal(results[0].isError, true); assert.match(JSON.stringify(results[0].content), /managed-plan-required/);
       assert.equal(results[2].isError, false);
-      assert.equal(fs.readFileSync(path.join(root, 'a.txt'), 'utf8'), 'x\n');
       const notes = processNotes(managed);
-      assert.deepEqual(notes.map(n => n.details.phase), ['plan', 'final']);
-      assert.equal(notes[0].details.planOpen, 1); assert.match(notes[0].content, /1 step\(s\) not marked completed:\n1\. \[x\] Change a\.txt\n2\. \[>\] Explain/);
-      assert.equal(notes[1].details.planOpen, expected.planOpen);
-      if (expected.planOpen) assert.match(notes[1].content, /plan: 1 step\(s\) not completed/);
+      assert.deepEqual(notes.map(n => n.details.phase), expected.phases);
+      assert.deepEqual([notes[1].details.round, notes[1].details.planOpen, notes[1].details.planDone, notes[1].details.planSteps], [1, 1, 1, 2]);
+      assert.match(notes[1].content, /1 open step\(s\) \(1\/2 completed\):\n1\. \[x\] Change a\.txt\n2\. \[>\] Explain\nThe member asked for all of it/);
+      // Each round is its own run; the round the harness starts is labelled for Studio's logs.
+      assert.equal(mainCloses(agent), expected.runs);
+      const continued = server.requests.filter(r => r.role === 'main' && /Harness: your checklist still has/.test(JSON.stringify(r.body.messages.findLast(m => m.role !== 'system'))));
+      assert.equal(continued.length, expected.runs - 1);
       const plan = managed.session.sessionManager.getEntries().filter(e => e.customType === 'agent-watch-plan').at(-1).data;
       assert.deepEqual(plan.plan, expected.plan);
-      assert.deepEqual([runReport(agent).plan_steps, runReport(agent).plan_done, runReport(agent).outcome], expected.report);
-      // A later message that changes nothing is not asked about the old checklist.
+      const [end] = turnEnds(managed);
+      assert.deepEqual({ ...end, at: undefined }, { ...expected.end, at: undefined });
+      // The turn's end is for the member: it never reaches the model.
+      assert.ok(server.requests.every(r => !/agent-watch-turn-end|Turn ended with/.test(JSON.stringify(r.body.messages))));
+      // A later message that leaves the old checklist alone is not sent on.
+      const before = processNotes(managed).length;
       await managed.session.prompt('Thanks');
-      assert.equal(processNotes(managed).length, 2);
+      assert.equal(processNotes(managed).length, before);
+      assert.deepEqual(turnEnds(managed).at(-1).state, 'done');
     } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
   }
+});
+
+// A turn that commits its change is still a code-changing turn: the change is
+// taken against the commit the turn started from.
+test('a change the agent commits during the turn is still checked and reviewed', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project(), agent = broker({ plan: 'off', verify: 'require', review: 'require', max_fix_loops: 1 });
+  const commit = { tool: 'bash', input: { command: 'git add -A && git -c user.name=Agent -c user.email=agent@example.com commit -qm fix && git log --oneline | head -1' } };
+  const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, commit, 'Committed.', { tool: 'bash', input: { command: 'sh check.sh' } }, 'Check passes.'],
+    review: ['Fine.\n```json\n{"findings":[],"summary":"clean"}\n```'] };
+  const server = await studio(script);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Make a.txt say fixed and commit it');
+    assert.match(execFileSync('git', ['-C', root, 'log', '--oneline']).toString(), /fix/);
+    assert.equal(execFileSync('git', ['-C', root, 'status', '--porcelain']).toString().trim(), '');
+    assert.deepEqual(processNotes(managed).map(n => n.details.phase), ['verify', 'final']);
+    const report = runReport(agent);
+    assert.deepEqual([report.changed, report.verified, report.reviewed, report.outcome], [true, true, true, 'clean']);
+    // The reviewer read the committed change.
+    const review = server.requests.find(r => r.role === 'review');
+    assert.match(JSON.stringify(review.body.messages), /diff against the commit the turn started from/);
+    assert.match(JSON.stringify(review.body.messages), /\+fixed/);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('edits sent with an invented plan tool are all refused; a plan sent as a JSON string is read; v2 reports count unknown tools', { skip: !supported, timeout: 180000 }, async () => {

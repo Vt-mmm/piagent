@@ -122,6 +122,12 @@ export type SessionRow = {
     blockingOpen: number;
     planSkipped?: true;
   };
+  managedTurnEnd?: {
+    state: "done" | "midway" | "failed" | "cancelled";
+    planSteps: number;
+    planDone: number;
+    reason?: "idle" | "limit" | "policy";
+  };
   gitBranch?: {
     name: string;
     detached: boolean;

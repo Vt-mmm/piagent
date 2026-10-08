@@ -111,3 +111,34 @@ test("a helper's objection, a failed claim, the reviewer judging an answer and a
   const row = managedProjection({ model: { provider: "agent_watch_managed" } }, [{ type: "custom_message", customType: "agent-watch-process", details: { phase: "final", outcome: "disputed", verified: false, reviewed: false, blockingOpen: 0 } }]);
   assert.equal(row.managedProcess.outcome, "disputed");
 });
+
+// A checklist the main agent left open is carried on by harness rounds; the
+// member's message ends with one line saying whether the task is finished.
+test("harness rounds that carry a checklist on stay in order, and the turn ends with how it ended", () => {
+  const end = (id, data) => ({ id, type: "custom", timestamp: at(), customType: "agent-watch-turn-end", data });
+  const final = (id) => note(id, "agent-watch-process", { phase: "final", outcome: "clean", verified: true, reviewed: true, blockingOpen: 0, policy: { verify: "require", review: "require" } });
+  const value = projectTranscript({ identity, revision, eventCursor: "cursor.rounds", generatedAt: "2026-10-01T09:02:00.000Z", entries: [
+    message("r1", "user", [{ type: "text", text: "Implement STEP01 to STEP22" }]),
+    message("r2", "assistant", [{ type: "text", text: "STEP01 done; next STEP02." }], { stopReason: "stop" }),
+    final("r3"),
+    note("r4", "agent-watch-process", { phase: "continue", round: 1, maxRounds: 30, planOpen: 21, planDone: 1, planSteps: 22 }),
+    message("r5", "assistant", [{ type: "text", text: "All 22 steps are done." }], { stopReason: "stop" }),
+    final("r6"),
+    end("r7", { state: "midway", planSteps: 22, planDone: 6, rounds: 2, reason: "idle", at: "x" }),
+  ] });
+  const validation = validateFixture(registry, "transcript-v1", value);
+  assert.equal(validation.valid, true, validation.errors);
+  assert.deepEqual(value.items.find(item => item.process?.phase === "continue").process, { phase: "continue", planOpen: 21, planDone: 1, planSteps: 22, round: 1, maxRounds: 30 });
+  assert.deepEqual(value.items.find(item => item.turnEnd).turnEnd, { state: "midway", planSteps: 22, planDone: 6, rounds: 2, reason: "idle" });
+  const [turn] = timelineTurns(value.items);
+  // Each round keeps its answer and its status; the last answer and the turn's end close it.
+  assert.deepEqual(turn.steps.map(step => step.kind === "note" ? step.text : step.process.phase), ["STEP01 done; next STEP02.", "final", "continue"]);
+  assert.equal(turn.answer, "All 22 steps are done."); assert.equal(turn.process.phase, "final");
+  assert.equal(turn.end.state, "midway");
+  // The session row says it too, until a newer message runs.
+  const context = { model: { provider: "agent_watch_managed" } };
+  const entries = [message("s1", "user", "go"), end("s2", { state: "failed", planSteps: 3, planDone: 1, rounds: 0, role: "main", code: "upstream_unavailable" })];
+  assert.deepEqual(managedProjection(context, entries).managedTurnEnd, { state: "failed", planSteps: 3, planDone: 1 });
+  assert.equal(managedProjection(context, [...entries, message("s3", "user", "tiếp tục")]).managedTurnEnd, undefined);
+  assert.equal(managedProjection(context, [message("s4", "user", "go"), end("s5", { state: "done", planSteps: 2, planDone: 3, rounds: 0 })]).managedTurnEnd, undefined, "malformed");
+});

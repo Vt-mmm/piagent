@@ -11,19 +11,20 @@ import { searchForRole } from './web-search.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { managedThinkingLevels, nearestLevel } from './capabilities.mjs';
 import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from './native-catalog.mjs';
-import { repositoryFetchPlan, executeRepositoryFetch } from './repository-operation.mjs';
+import { fetchOriginTool } from './repository-operation.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { enableCompanyTurnRetry, wrapRoleStreams } from './request-stream.mjs';
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stageCompaction, compactEarly, backOffFailedCompaction } from './compaction.mjs';
-import { readPatchDigest, readPatchSnapshot, readChangedFiles } from './patch-snapshot.mjs';
-import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, processEditTools } from './workflow.mjs';
+import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from './patch-snapshot.mjs';
+import { memberTurn } from './continuation.mjs';
+import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
-import { restorePermission, permissionSetter, networkConfirmation } from './permission.mjs';
+import { restorePermission, permissionSetter, networkTool } from './permission.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 // Who the agent is: the model account may put another product's name in an
@@ -106,41 +107,11 @@ export class ManagedSession {
     const model = self.installModel(self.modelRuntime, preview);
     self.wrapStreams(self.modelRuntime, 'main');
     const customTools = processEditTools(self, self.boundary.tools(api));
-    customTools.push({name:'fetch_origin',label:'Fetch origin',description:'Request one approved GitHub origin fetch. Refreshes origin branches without changing working files. Does not expose credentials or allow arbitrary network commands.',
-      parameters:{type:'object',properties:{},additionalProperties:false},
-      execute:async(id,_args,signal,_update,ctx)=>{
-        const plan=await repositoryFetchPlan(self.boundary);
-        if(self.permission==='trusted-full-access'&&!signal?.aborted)return executeRepositoryFetch(self.boundary,plan,signal);
-        const {piApprovalBroker}=await import('../runtime/inspection/approval-broker.ts');
-        const decision=await piApprovalBroker.request({cwd:self.cwd,rawSessionId:self.session.sessionManager.getSessionId(),toolCallId:id,
-          action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'fetch_origin',rawAction:plan,
-            targetPaths:[self.cwd],provider:'github',urlOrigin:'https://github.com',requestedScope:'fetch-origin-once',
-            reason:`Fetch origin branches from ${plan.repository}`,riskClass:'low',allowConsequence:'Download origin branches once; keep the current branch and working files unchanged.',denyConsequence:'No network request or credential read.'},
-          terminalConfirm:()=>ctx?.ui?.confirm?.('Tải nhánh từ origin',`Tải các nhánh của ${plan.repository} về ${self.cwd} một lần.\n\nĐồng ý: chỉ tải nhánh; nhánh hiện tại và file đang làm không đổi.\nTừ chối: không gửi request mạng, không đọc thông tin đăng nhập.`)??Promise.resolve(false),
-          unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
-        if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
-        return executeRepositoryFetch(self.boundary,plan,signal);
-      }});
+    customTools.push(fetchOriginTool(self));
     // With a research helper the web is its work: search results and pages
     // are read on its cheaper model, not in the main agent's context.
     if (!helperRoles(manifest).includes('research')) customTools.push(...self.webTools(self.modelRuntime, 'main'));
-    customTools.push({name:'run_with_network',label:'Run with network',description:'Run one shell command that needs the internet (package install, download, git pull of a public repository), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no network and cannot listen on a port. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
-      parameters:{type:'object',properties:{command:{type:'string',minLength:1,maxLength:4000},reason:{type:'string',minLength:1,maxLength:300},timeout:{type:'number',minimum:1,maximum:1800}},required:['command','reason'],additionalProperties:false},
-      execute:async(id,args,signal,onUpdate,ctx)=>{
-        // Bypass runs it without asking, unless it is one the member must confirm.
-        const confirm=await networkConfirmation(self,args.command);
-        const decision=confirm===null?{allowed:true,consume:()=>true}:await (await import('../runtime/inspection/approval-broker.ts')).piApprovalBroker.request({cwd:self.cwd,rawSessionId:self.session.sessionManager.getSessionId(),toolCallId:id,
-          action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'run_with_network',rawAction:{command:args.command},commandPreview:String(args.command),
-            targetPaths:[self.cwd],provider:'network',urlOrigin:null,requestedScope:'network-command-once',reason:(confirm==='ask'?String(args.reason):`Bypass still asks: ${confirm}. ${args.reason}`).slice(0,300),riskClass:'medium',
-            allowConsequence:'Run this exact command once, with internet access; a server it starts accepts connections while it runs.',denyConsequence:'The command does not run; the agent is told you declined.'},
-          terminalConfirm:()=>ctx?.ui?.confirm?.('Chạy lệnh có internet',`${args.command}\n\nLý do: ${args.reason}${confirm==='ask'?'':`\nBypass vẫn hỏi: ${confirm}`}\n\nĐồng ý: chạy đúng lệnh này một lần, có internet; server nó mở nhận kết nối trong lúc chạy.\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.`)??Promise.resolve(false),
-          unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
-        if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
-        let ok=false;
-        const before=await self.changedFiles();
-        try { const result=await self.boundary.invoke('bash',{command:args.command,...(args.timeout?{timeout:args.timeout}:{})},signal,onUpdate,ctx?.model,{network:true}); ok=!result?.isError; return result; }
-        finally { await self.claimChanges(before); await self.run?.afterTool('bash',args,ok,()=>self.digest()); await self.refreshReview(); }
-      }});
+    customTools.push(networkTool(self));
     // Every helper role passes the tool's schema: Pi fixes a tool's schema
     // and description when the conversation opens, so a helper a Harness
     // saved later adds must already pass it. The system prompt, rebuilt each
@@ -219,9 +190,10 @@ export class ManagedSession {
     };
     self.review = manager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-review').at(-1)?.data ?? null;
     const abort = self.session.abort.bind(self.session);
-    self.session.abort = async (...args) => { self.gateAbort?.abort(); return abort(...args); };
-    // One member message is one run, harness rounds included (checks, review,
-    // fixes after the answer): listeners hear "settled" once, when it ends.
+    self.session.abort = async (...args) => { self.gateAbort?.abort(); if (self.activePrompt) self.stopRequested = true; return abort(...args); };
+    // One member message is one turn, harness rounds included (checks, review,
+    // fixes after the answer, rounds that continue an unfinished checklist):
+    // listeners hear "settled" once, when it ends.
     const subscribe = self.session.subscribe.bind(self.session), listeners = self.listeners;
     self.session.subscribe = listener => {
       listeners.add(listener);
@@ -229,14 +201,8 @@ export class ManagedSession {
       return () => { listeners.delete(listener); off(); };
     };
     const prompt = self.session.prompt.bind(self.session);
-    self.session.prompt = async (text, options) => {
-      // An extension command (/bypass, /piagent-update) runs here, never as a turn.
-      if (/^\/\S/.test(text) && self.session.extensionRunner?.getCommand(text.slice(1).split(/\s/)[0])) return prompt(text, options);
-      // /skill:name, /command: the run sees what the member asked for in full.
-      text = self.resources.expand(text);
-      if (self.starting) await self.starting;
-      if (self.activePrompt) return prompt(text, options); // steering/follow-up keep the root
-      await self.refreshReview();
+    // One run: started for the round's request, closed with its report.
+    const runRound = async (text, deliver) => {
       const start = async () => {
         // The Harness (now possibly changed) decides which levels exist; ask
         // for the member's level, or the nearest one it offers.
@@ -282,14 +248,18 @@ export class ManagedSession {
           });
           self.run = new RunProcess(workflowPolicy(self.manifest), { request: text, complex: taskClass(text) === 'complex', checks: self.checks });
           // The files this conversation changed and has not settled: carried
-          // over from a turn that was cut, otherwise none yet.
+          // over from a turn that was cut, otherwise none yet. The code is
+          // compared with the commit the turn started from, so a commit made
+          // during the turn is still its change.
           const pending = pendingBaseline(manager);
           self.ownPaths = new Set(pending !== null ? pendingPaths(manager) : []);
+          self.base = (pending !== null ? pendingHead(manager) : null) ?? await readHead(self.boundary);
           self.run.startDigest = pending ?? await self.digest();
         } catch (error) { self.preflight = describeFailure('main', failureText(error)); }
         self.activePrompt = true;
       })();
       try { await self.starting; } finally { self.starting = null; }
+      const round = { result: undefined, preflight: !!self.preflight, planUpdated: false, changed: false };
       try {
         // The last request of a long conversation was refused as too large:
         // by the model (it no longer fits the window of the model it runs on
@@ -297,13 +267,16 @@ export class ManagedSession {
         // model) or by Studio (a body over 4 MiB, before a 1M-token window is
         // full). The older part is summarised first, so continuing fits.
         if (!self.preflight && self.refusedAsTooLong()) { try { await self.session.compact(); } catch { /* nothing to compact: the request says why */ } }
-        const result = await prompt(text, { ...options, expandPromptTemplates: false });
+        round.result = await deliver();
         if (self.run && !self.preflight) {
           self.gateAbort = new AbortController();
           try { await completionGate(self, self.run, self.gateAbort.signal); } catch { /* the answer stands; the report keeps what is known */ } finally { self.gateAbort = null; }
         }
-        return result;
+        return round;
       } finally {
+        // The round's model work is over: a member message now waits for the next round.
+        self.between = true;
+        Object.assign(round, { planUpdated: !!self.run?.planUpdated, changed: !!self.run?.changed });
         await Promise.allSettled([...self.helpers.values()]);
         // What a command left running in the background ends with the turn.
         try { await self.boundary.stopStrays(); } catch { /* best effort; the boundary stops them on close */ }
@@ -318,11 +291,20 @@ export class ManagedSession {
             catch (error) { if (!process) throw error; await self.broker.request('close'); }
             manager.appendCustomEntry('agent-watch-run', { run_id: self.grant.run_id, state: 'closed' });
           }
-        } finally {
-          self.grant = null; self.run = null; self.activePrompt = false; self.preflight = null;
-          self.notify({ type: 'agent_settled' });
-        }
+        } finally { self.grant = null; self.run = null; self.preflight = null; }
       }
+    };
+    self.session.prompt = async (text, options) => {
+      // An extension command (/bypass, /piagent-update) runs here, never as a turn.
+      if (/^\/\S/.test(text) && self.session.extensionRunner?.getCommand(text.slice(1).split(/\s/)[0])) return prompt(text, options);
+      // /skill:name, /command: the run sees what the member asked for in full.
+      text = self.resources.expand(text);
+      if (self.starting) await self.starting;
+      // Between two rounds no model runs: the message waits for the next one.
+      if (self.between) return new Promise((resolve, reject) => self.queued.push({ text, options, resolve, reject }));
+      if (self.activePrompt) return prompt(text, options); // steering/follow-up keep the root
+      await self.refreshReview();
+      return memberTurn(self, { manager, prompt, runRound }, text, () => prompt(text, { ...options, expandPromptTemplates: false }));
     };
     // Native ! commands use the same worker boundary as model bash calls.
     self.session.executeBash = async command => {
@@ -433,14 +415,14 @@ export class ManagedSession {
   // Whether this conversation changed code, and whether a check ran on it,
   // look only at the files it changed: another conversation (or the member)
   // changing other files in the same folder is not this run's change.
-  async changeDigest() { return readPatchDigest(this.boundary, this.ownPaths); }
+  async changeDigest() { return readPatchDigest(this.boundary, this.ownPaths, this.base); }
   async folderDigest() { try { return await readPatchDigest(this.boundary); } catch { return null; } }
   // What a reviewer reads: this conversation's files; before it changed any,
   // the whole folder (the member's own changes, asked to be reviewed).
   reviewScope() { return this.ownPaths.size ? this.ownPaths : null; }
-  async patchSnapshot() { return readPatchSnapshot(this.boundary, this.reviewScope()); }
-  async patchDigest() { return readPatchDigest(this.boundary, this.reviewScope()); }
-  async changedFiles() { try { return await readChangedFiles(this.boundary); } catch { return null; } }
+  async patchSnapshot() { return readPatchSnapshot(this.boundary, this.reviewScope(), this.base); }
+  async patchDigest() { return readPatchDigest(this.boundary, this.reviewScope(), this.base); }
+  async changedFiles() { try { return await readChangedFiles(this.boundary, this.base); } catch { return null; } }
   // A write or edit names its file; a command, the files it changed.
   claimPath(raw) {
     if (typeof raw !== 'string' || !raw) return;

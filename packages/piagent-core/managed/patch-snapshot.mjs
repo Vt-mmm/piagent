@@ -10,14 +10,18 @@ const MAX_SNAPSHOT = 16 * 1024 * 1024;
 
 // The worker runs inside the tool boundary; what it prints is one short line.
 // `scope`: only these paths (relative to the project) make the patch.
-async function worker(boundary, mode, scope = null) {
+// `base`: the commit the patch starts from (the turn's starting HEAD), so a
+// commit made during the turn stays part of its change; none: HEAD.
+const BASE = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
+async function worker(boundary, mode, scope = null, base = null) {
   let scopeName = null;
   if (scope) {
     scopeName = `scope-${randomUUID()}.json`;
     fs.writeFileSync(path.join(boundary.temporary, scopeName), JSON.stringify([...scope]), { mode: 0o600, flag: 'wx' });
   }
   let result;
-  try { result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} ${mode}${scopeName ? ' ' + scopeName : ''}`, timeout: 60 }); }
+  const from = typeof base === 'string' && BASE.test(base) ? ' ' + base : '';
+  try { result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} ${mode}${scopeName ? ' ' + scopeName : ''}${from}`, timeout: 60 }); }
   finally { if (scopeName) fs.rmSync(path.join(boundary.temporary, scopeName), { force: true }); }
   const text = textContent(result).trim();
   if (result.details?.truncation?.truncated || text.includes('\n')) throw Error(/review-(patch|file|untracked)-limit/.exec(text)?.[0] ?? 'managed-review-patch-unreadable');
@@ -28,14 +32,23 @@ async function worker(boundary, mode, scope = null) {
 
 // The digest of the patch a reviewer would see (diff against HEAD plus
 // untracked files): whether a review is still current. Nothing else moves.
-export async function readPatchDigest(boundary, scope = null) { return (await worker(boundary, 'digest', scope)).digest; }
+export async function readPatchDigest(boundary, scope = null, base = null) { return (await worker(boundary, 'digest', scope, base)).digest; }
+
+// The commit HEAD names now, or null (no repository, no commit yet).
+export async function readHead(boundary) {
+  try {
+    const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} head`, timeout: 60 });
+    const text = textContent(result).trim();
+    return BASE.test(text) ? text : null;
+  } catch { return null; }
+}
 
 // The patch a reviewer sees, read inside the tool boundary. The worker writes
 // it to the boundary's temporary directory and names it, with its digest, on
 // its output; the file is read once, must match that digest (a file changed
 // meanwhile never passes) and is removed.
-export async function readPatchSnapshot(boundary, scope = null) {
-  const { digest, bytes, name } = await worker(boundary, 'file', scope);
+export async function readPatchSnapshot(boundary, scope = null, base = null) {
+  const { digest, bytes, name } = await worker(boundary, 'file', scope, base);
   if (!/^review-[0-9a-f-]{36}\.json$/.test(name ?? '')) throw Error('managed-review-patch-unreadable');
   return { patch: readOnce(boundary, name, bytes, digest).toString('utf8'), digest };
 }
@@ -44,8 +57,8 @@ export async function readPatchSnapshot(boundary, scope = null) {
 // Compared before and after a command, it names the files that command
 // changed, so a conversation answers for its own changes, not for another
 // conversation's in the same folder.
-export async function readChangedFiles(boundary) {
-  const { digest, bytes, name } = await worker(boundary, 'files');
+export async function readChangedFiles(boundary, base = null) {
+  const { digest, bytes, name } = await worker(boundary, 'files', null, base);
   if (!/^files-[0-9a-f-]{36}\.json$/.test(name ?? '')) throw Error('managed-review-patch-unreadable');
   return new Map(Object.entries(JSON.parse(readOnce(boundary, name, bytes, digest).toString('utf8'))));
 }
@@ -74,6 +87,9 @@ export function reviewUnavailableReason(message) {
   return 'failed';
 }
 
+// What the diff is taken against: HEAD, or the commit the turn started from
+// (commits made during the turn are part of the change).
+const against = value => value?.base ? `diff against the commit the turn started from (${String(value.base).slice(0, 12)}), commits made since included` : 'diff against HEAD';
 // The patch as a reviewer reads it: the diff, then each new file in full.
 export function reviewText(snapshot) {
   let value;
@@ -82,7 +98,7 @@ export function reviewText(snapshot) {
     : f.mode === 'directory' ? `=== new folder ${f.path} (a repository of its own, not reviewed)`
     : f.encoding === 'omitted' ? `=== new file ${f.path} (${f.bytes} bytes, too large to review)`
     : f.encoding === 'utf8' ? `=== new file ${f.path}\n${f.contents}` : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`);
-  return `Patch snapshot ${snapshot.digest}:\n--- diff against HEAD ---\n${value.patch || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
+  return `Patch snapshot ${snapshot.digest}:\n--- ${against(value)} ---\n${value.patch || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
 }
 
 // A patch larger than one reviewer reads at once (REVIEW_PART_BYTES, about
@@ -125,7 +141,7 @@ export function reviewParts(snapshot, size = REVIEW_PART_BYTES) {
   const parts = groups.map((group, i) => {
     const files = group.sections.map(s => s.file), diff = group.sections.filter(s => s.kind === 'diff').map(s => s.text).join(''), news = group.sections.filter(s => s.kind === 'new').map(s => s.text);
     const head = groups.length === 1 ? `Patch snapshot ${snapshot.digest}.` : `Patch snapshot ${snapshot.digest}, part ${i + 1} of ${groups.length}. This part's files: ${files.join(', ')}. The other parts are reviewed separately: judge this part, and read other files only for context.`;
-    return { files, text: `${head}${skipped}\n--- diff against HEAD ---\n${diff || '(no changes to tracked files in this part)'}\n${news.length ? `--- new files ---\n${news.join('\n\n')}` : ''}` };
+    return { files, text: `${head}${skipped}\n--- ${against(value)} ---\n${diff || '(no changes to tracked files in this part)'}\n${news.length ? `--- new files ---\n${news.join('\n\n')}` : ''}` };
   });
   return { parts: parts.length ? parts : [{ files: [], text: `Patch snapshot ${snapshot.digest}: every changed file is too large to review.${skipped}` }], omitted };
 }

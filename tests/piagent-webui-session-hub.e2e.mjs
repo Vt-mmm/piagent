@@ -932,6 +932,43 @@ test("shows the agent's plan, each time the harness sent the agent back, and how
   }
 });
 
+test("says whether a company task is finished: harness rounds on an open checklist, then how the turn ended", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
+  Object.assign(target, { modelLabel: "agent-watch-auto", sessionRevision: "revision_session_source_review_turn_end",
+    managedTurnEnd: { state: "midway", planSteps: 22, planDone: 6, reason: "idle" } });
+  const base = transcriptFixture.items[0], text = (value) => ({ ...base.content, text: value, textChars: value.length });
+  processTranscript = [
+    { ...base, messageRef: "message_end_user", role: "user", recordedAt: "2026-08-14T08:00:00.000Z", content: text("Làm hết STEP01 đến STEP22 trong docs/plans"), toolCalls: [] },
+    { ...base, messageRef: "message_end_first", parentMessageRef: "message_end_user", role: "assistant", recordedAt: "2026-08-14T08:00:01.000Z", content: text("Xong STEP01, tiếp theo STEP02."), toolCalls: [] },
+    { ...base, messageRef: "message_end_continue", parentMessageRef: "message_end_user", role: "custom", recordedAt: "2026-08-14T08:00:02.000Z", content: text("Harness: your checklist still has 21 open step(s)"), toolCalls: [],
+      process: { phase: "continue", round: 1, maxRounds: 30, planOpen: 21, planDone: 1, planSteps: 22 } },
+    { ...base, messageRef: "message_end_answer", parentMessageRef: "message_end_user", role: "assistant", recordedAt: "2026-08-14T08:00:03.000Z", content: text("STEP07 cần database staging đang tắt nên em dừng ở đây."), toolCalls: [] },
+    { ...base, messageRef: "message_end_line", parentMessageRef: "message_end_user", role: "custom", recordedAt: "2026-08-14T08:00:04.000Z", content: text(""), toolCalls: [],
+      turnEnd: { state: "midway", planSteps: 22, planDone: 6, rounds: 2, reason: "idle" } }];
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, locale: "vi-VN", colorScheme: "dark", reducedMotion: "reduce" });
+      await page.goto(server.issueLaunchUrl());
+      if (width < 1200) { await page.getByRole("button", { name: "Mở điều hướng" }).click({ force: true }); }
+      // The conversation list says it before the conversation is opened.
+      await expect(page.getByText("Dừng giữa chừng 6/22").filter({ visible: true })).toBeVisible();
+      await page.getByText("Review source changes", { exact: true }).filter({ visible: true }).click();
+      await expect(page.getByText("Harness: checklist còn 21 bước (1/22 xong), cho main agent làm tiếp · vòng 1")).toBeVisible();
+      const ending = page.getByRole("status", { name: "Kết quả của lượt" });
+      await expect(ending).toContainText("Dừng giữa chừng · còn 16/22 bước");
+      await expect(ending).toContainText("Main agent dừng 2 vòng liên tiếp");
+      await expect(ending.getByRole("button", { name: "Tiếp tục" })).toBeVisible();
+      assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth));
+      await page.screenshot({ path: path.join(root, `.tmp/playwright-webui/turn-end-${width}.png`) });
+      await page.close();
+    }
+  } finally {
+    processTranscript = [];
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
+});
+
 test("shows a helper's objection to the brief and a disagreement the member has to decide", async ({ browser }) => {
   const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
   Object.assign(target, { modelLabel: "agent-watch-auto", sessionRevision: "revision_session_source_review_dispute",

@@ -4,7 +4,7 @@ import { failureRoleText, type CopyLocale, type FailureRole } from "./company-co
 
 export type ProcessCopyInput = {
   phase?: string; outcome?: string; loop?: number; maxLoops?: number; verified?: boolean; reviewed?: boolean; blockingOpen?: number;
-  planOpen?: number; planSkipped?: boolean; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; role?: FailureRole;
+  planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: boolean; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; role?: FailureRole;
   disputes?: number; unchanged?: boolean;
   findings?: Array<{ severity: string; file?: string; line?: number | null; issue: string }>;
   claims?: Array<{ claim: string }>; issues?: Array<{ kind: string; detail: string }>;
@@ -41,6 +41,8 @@ export function headlineText(process: ProcessCopyInput, locale: CopyLocale): str
   const round = process.loop && process.maxLoops ? pick(locale, ` (vòng ${process.loop}/${process.maxLoops})`, ` (round ${process.loop}/${process.maxLoops})`) : "";
   const who = failureRoleText(process.role ?? "review", locale), count = (process.findings ?? process.claims ?? process.issues ?? []).length;
   switch (process.phase) {
+    case "continue": return pick(locale, `Harness: checklist còn ${process.planOpen ?? 0} bước (${process.planDone ?? 0}/${process.planSteps ?? 0} xong), cho main agent làm tiếp · vòng ${process.round ?? 1}${process.idle ? " (vòng trước không xong thêm bước nào)" : ""}`,
+      `Harness: the checklist has ${process.planOpen ?? 0} open step(s) (${process.planDone ?? 0}/${process.planSteps ?? 0} done); sent the main agent on · round ${process.round ?? 1}${process.idle ? " (the previous round finished no step)" : ""}`);
     case "plan": return pick(locale, `Harness: plan còn ${process.planOpen ?? 0} bước chưa đánh dấu xong, yêu cầu agent cập nhật`, `Harness: ${process.planOpen ?? 0} plan step(s) not marked completed; asked the agent to update the plan`);
     case "verify": return pick(locale, `Harness: chưa có check nào pass trên code hiện tại, yêu cầu agent chạy check${round}`, `Harness: no check has passed on the current code; asked the agent to run checks${round}`);
     case "review": return pick(locale, `Harness: review tìm thấy ${count} lỗi blocking, gửi lại agent để fix hoặc giải thích${round}`, `Harness: the review found ${count} blocking issue(s); sent back to the agent to fix or answer${round}`);
