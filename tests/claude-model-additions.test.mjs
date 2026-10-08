@@ -27,11 +27,21 @@ test("reviewed addition preserves credentials, custom models and native context"
   assert.equal(added.thinkingLevelMap.off, null);
   assert.equal(added.compat.supportsTemperature, false);
   assert.equal(data.providers.agent_watch_claude.baseUrl, "http://127.0.0.1:17922");
+  // Claude Haiku 5.5 (2026-10-07): the official tiered price, five times above 100k input tokens.
+  const haiku = data.providers.anthropic.models.find(model => model.id === "claude-haiku-5-5");
+  assert.deepEqual([haiku.contextWindow, haiku.maxTokens, haiku.cost.input, haiku.cost.output, haiku.cost.cacheRead],
+    [1_000_000, 128_000, 0.1, 0.5, 0.01]);
+  assert.deepEqual(haiku.cost.tiers, [{ inputTokensAbove: 100000, input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 }]);
+  assert.equal(haiku.thinkingLevelMap.off, null);
   assert.equal(prepareClaudeModelAdditions(file), null);
 });
 test("never overwrites existing model, custom endpoint or concurrent edit", t => {
   const { file } = fixture(t);
   fs.writeFileSync(file, JSON.stringify({ providers: { anthropic: { models: [{ id: "claude-sonnet-5-5", contextWindow: 800000 }] } } }));
+  prepareClaudeModelAdditions(file).apply();
+  const kept = JSON.parse(fs.readFileSync(file)).providers.anthropic.models;
+  assert.deepEqual(kept.map(model => [model.id, model.contextWindow]), [["claude-sonnet-5-5", 800000], ["claude-haiku-5-5", 1_000_000]],
+    "an existing entry is kept as it is; only the missing model is added");
   assert.equal(prepareClaudeModelAdditions(file), null);
   fs.writeFileSync(file, JSON.stringify({ providers: { anthropic: { baseUrl: "https://example.invalid" } } }));
   assert.equal(prepareClaudeModelAdditions(file), null);
@@ -95,4 +105,14 @@ test("installed Pi sends Sonnet 5.5 adaptive request and reads a synthetic SSE r
   assert.equal(bodies[0].thinking.budget_tokens, undefined);
   assert.equal(bodies[0].temperature, undefined);
   assert.equal(bodies[0].output_config.effort, "high");
+});
+test("company sessions know Claude Haiku 5.5 although the pinned Pi does not", async () => {
+  const { nativeManagedModel } = await import("../packages/piagent-core/managed/native-catalog.mjs");
+  const runtime = { getModel: () => undefined };
+  const haiku = nativeManagedModel(runtime, "anthropic", "claude-haiku-5-5");
+  assert.deepEqual([haiku.name, haiku.contextWindow, haiku.maxTokens, haiku.cost.tiers[0].inputTokensAbove], ["Claude Haiku 5.5", 1_000_000, 128_000, 100000]);
+  haiku.cost.input = 9;
+  assert.equal(nativeManagedModel(runtime, "anthropic", "claude-haiku-5-5").cost.input, 0.1, "each caller gets its own copy");
+  const native = { id: "claude-haiku-5-5", contextWindow: 1 };
+  assert.equal(nativeManagedModel({ getModel: () => native }, "anthropic", "claude-haiku-5-5"), native, "a Pi that knows it wins");
 });

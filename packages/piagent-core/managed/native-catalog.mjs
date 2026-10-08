@@ -12,6 +12,19 @@ const sonnet55 = {
   compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true, supportsMidConvoEffort: true },
   promptCache: { short: 300, long: 3600 },
 };
+// Claude Haiku 5.5, released 2026-10-07, checked 2026-10-08: 1M context,
+// 128k output, adaptive thinking with effort; $0.10/$0.50 per 1M, cache read
+// $0.01, 5m cache write $0.125, all five times above 100k input tokens.
+// https://platform.claude.com/docs/en/models/haiku-5-5/overview
+const haiku55 = {
+  id: 'claude-haiku-5-5', provider: 'anthropic', api: 'anthropic-messages',
+  name: 'Claude Haiku 5.5', reasoning: true, input: ['text', 'image'],
+  contextWindow: 1000000, maxTokens: 128000,
+  cost: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125, tiers: [{ inputTokensAbove: 100000, input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 }] },
+  thinkingLevelMap: { off: null, minimal: null, low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
+  compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true, supportsMidConvoEffort: true },
+  promptCache: { short: 300, long: 3600 },
+};
 // GPT-6.1 Sol through Codex, checked 2026-10-01: Codex keeps the 272k window
 // of its pricing tier (the API model has 1.05M); 128k output; efforts low to
 // max, no none/minimal; $2/$10 per 1M, cached $0.10, doubled above 272k.
@@ -27,7 +40,7 @@ const sol61 = {
   compat: { supportsOpenAIGrammarTools: true, supportsAdditionalTools: true, supportsToolSearch: true, supportsMidConvoSystemMessages: true },
   inputLimits: { images: { resize: { maxWidth: 2000, maxHeight: 2000, maxBytes: 4718592, jpegQuality: 80 } } },
 };
-const GAPS = { anthropic: [sonnet55], 'openai-codex': [sol61] };
+const GAPS = { anthropic: [sonnet55, haiku55], 'openai-codex': [sol61] };
 // Studio's providers: the Claude and Codex subscriptions, or an API-key
 // vendor (DeepSeek, Kimi, GLM, MiMo, Qwen, OpenCode, Grok) whose id is Pi's
 // own provider id; Studio runs vendors as OpenAI Chat Completions.

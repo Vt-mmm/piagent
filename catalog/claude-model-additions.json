@@ -1,7 +1,10 @@
 {
   "piVersion": "0.87.1",
-  "reviewedOn": "2026-09-29",
-  "source": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+  "reviewedOn": "2026-10-08",
+  "sources": {
+    "claude-sonnet-5-5": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+    "claude-haiku-5-5": "https://platform.claude.com/docs/en/models/haiku-5-5/overview"
+  },
   "models": [
     {
       "id": "claude-sonnet-5-5",
@@ -16,6 +19,50 @@
         "output": 10,
         "cacheRead": 0.2,
         "cacheWrite": 2.5
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "off": null,
+        "minimal": null,
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      },
+      "compat": {
+        "forceAdaptiveThinking": true,
+        "supportsTemperature": false,
+        "supportsStrictTools": true
+      },
+      "promptCache": {
+        "short": 300,
+        "long": 3600
+      }
+    },
+    {
+      "id": "claude-haiku-5-5",
+      "name": "Claude Haiku 5.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.1,
+        "output": 0.5,
+        "cacheRead": 0.01,
+        "cacheWrite": 0.125,
+        "tiers": [
+          {
+            "inputTokensAbove": 100000,
+            "input": 0.5,
+            "output": 2.5,
+            "cacheRead": 0.05,
+            "cacheWrite": 0.625
+          }
+        ]
       },
       "contextWindow": 1000000,
       "maxTokens": 128000,

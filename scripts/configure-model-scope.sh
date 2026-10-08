@@ -135,6 +135,7 @@ const codexModels = [
 
 const claudeModels = [
   "anthropic/claude-haiku-4-5:low",
+  "anthropic/claude-haiku-5-5:medium",
   "anthropic/claude-sonnet-4-5:high",
   "anthropic/claude-sonnet-4-6:max",
   "anthropic/claude-sonnet-5:xhigh",
