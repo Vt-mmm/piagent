@@ -38,7 +38,7 @@ export class Continuation {
     this.rounds += 1;
     const steps = plan.plan.length, done = completed(plan), open = steps - done;
     return { customType: 'agent-watch-process', display: true,
-      content: `Harness: your checklist still has ${open} open step(s) (${done}/${steps} completed):\n${planText(plan)}\nThe member asked for all of it. Continue with the next open step now and keep going until every step is completed; update the checklist with update_plan as you go. Do not stop to report progress between steps. If you cannot go on without the member (a decision, access, a service that is not running), ask with ask_user. If a step is no longer needed, take it out of the checklist and say why in your final answer.`,
+      content: `Harness: your checklist still has ${open} open step(s) (${done}/${steps} completed):\n${planText(plan)}\nThe member asked for all of it, unless they told you to stop at this point. Continue with the next open step now and keep going until every step is completed; update the checklist with update_plan as you go. Do not stop to report progress between steps. If the member asked you to stop here (to review a plan before any change, for example) or you cannot go on without them (a decision, access, a service that is not running), ask with ask_user instead of going on. If a step is no longer needed, take it out of the checklist and say why in your final answer.`,
       details: { phase: 'continue', round: this.rounds, maxRounds: MAX_ROUNDS, planOpen: open, planDone: done, planSteps: steps, ...(this.idle ? { idle: this.idle } : {}) } };
   }
 }
