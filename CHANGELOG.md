@@ -13,6 +13,7 @@ A company task with a checklist is carried to its end, and every turn says how i
 
 ### Fixes
 
+- A company run that could not be closed (the Mac went to sleep, the network or Agent Watch went away while it ended) threw out of the turn: no answer settled and nothing said what happened. The turn now ends as failed with the reason, the conversation takes the next message, and the run is recovered or abandoned when the conversation opens again.
 - A turn that committed its change (`git commit`) counted as "no code changed": the code was compared with HEAD, which the commit had moved. The code is now compared with the commit the turn started from, so required checks, the review (which reads the committed change) and the process report still apply.
 
 ## v1.18.0 - 2026-10-08

@@ -162,7 +162,7 @@ async function studio(script) {
   return { requests, origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise(resolve => server.close(resolve)) };
 }
 const MODELS = { main: { id: 'claude-sonnet-5-5', provider_model_id: 'claude-sonnet-5-5', owned_by: 'claude' }, review: { id: 'claude-opus-5-5', provider_model_id: 'claude-opus-5-5', owned_by: 'claude' } };
-function broker(workflow, { features = ['process'], review = true, failProcessClose = false } = {}) {
+function broker(workflow, { features = ['process'], review = true, failProcessClose = false, failClose = false } = {}) {
   const authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };
   const roles = { main: randomUUID(), research: randomUUID(), review: randomUUID() }, run = randomUUID(), closes = []; let fence = 0;
   const grant = role => ({ ...authority, run_id: run, role_id: roles[role], role, fence: ++fence, provider: 'claude', model_id: MODELS[role === 'main' ? 'main' : 'review'].id,
@@ -171,7 +171,7 @@ function broker(workflow, { features = ['process'], review = true, failProcessCl
     if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: 'key', user: { id: 'member' }, revision: 'r1', ...(features ? { broker_features: features } : {}),
       models: [MODELS.main, MODELS.review], harness: { configuration: { main: { model_ids: [MODELS.main.id] }, research: null, review: review ? { model_ids: [MODELS.review.id] } : null, workflow } } };
     if (['start', 'renew', 'child'].includes(action)) return grant(args.role ?? 'main');
-    if (action === 'close') { if (args.process && failProcessClose) throw Error('managed-broker:invalidResponse'); closes.push(args); return true; }
+    if (action === 'close') { if (failClose && !args.role) throw Error('managed-broker:offline'); if (args.process && failProcessClose) throw Error('managed-broker:invalidResponse'); closes.push(args); return true; }
     throw Error('unexpected-broker-action');
   }, async dispose() {} };
 }
@@ -299,6 +299,21 @@ test('a complex task plans before its first edit; a checklist left open goes on 
       assert.deepEqual(turnEnds(managed).at(-1).state, 'done');
     } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
   }
+});
+
+// The network goes while a run closes (the Mac slept): the turn still ends,
+// as failed with the broker's code, and the conversation takes the next message.
+test('a run that cannot be closed ends the turn as failed instead of throwing', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project(), agent = broker({ plan: 'require', verify: 'off', review: 'off', max_fix_loops: 0 }, { review: false, failClose: true });
+  const steps = [{ step: 'Read', status: 'completed' }, { step: 'Explain', status: 'pending' }];
+  const server = await studio({ roleOf: () => 'main', review: [], main: [{ tool: 'update_plan', input: { plan: steps } }, 'Read it; next I explain.', 'Hello.'] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Plan the architecture migration of a.txt');
+    const [end] = turnEnds(managed);
+    assert.deepEqual([end.state, end.role, end.code, end.rounds], ['failed', 'main', 'managed_broker_offline', 0], 'no round after a failure');
+    assert.equal(processNotes(managed).filter(n => n.details.phase === 'continue').length, 0);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 // A turn that commits its change is still a code-changing turn: the change is

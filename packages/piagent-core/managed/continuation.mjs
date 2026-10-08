@@ -51,13 +51,13 @@ export function turnEnd(continuation, plan, { stopped, failure }) {
   const state = stopped ? 'cancelled' : failure ? 'failed' : continuation.touched && unfinished(plan) ? 'midway' : 'done';
   return { state, planSteps: steps, planDone: done, rounds: continuation.rounds,
     ...(state === 'midway' && continuation.reason ? { reason: continuation.reason } : {}),
-    ...(state === 'failed' ? { role: failure.role ?? 'main', code: failure.code ?? 'unknown' } : {}),
+    ...(state === 'failed' ? { role: failure.role ?? 'main', code: String(failure.code || 'unknown').toLowerCase().replace(/[^a-z0-9_]+/g, '_').slice(0, 64) } : {}),
     at: new Date().toISOString() };
 }
 
 // One member message: its round, then the rounds the harness adds while the
 // checklist has open steps. `runRound(text, deliver)` runs one Studio run and
-// returns { result, preflight, planUpdated, changed }. A message the member
+// returns { result, preflight, planUpdated, changed, closeFailed }. A message the member
 // sends while a round closes (no model runs then) becomes the next round;
 // Stop ends the turn. Listeners hear "settled" once, after the last round.
 export async function memberTurn(self, { manager, prompt, runRound }, text, deliver) {
@@ -74,7 +74,8 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
       waiting = null;
       const last = self.session.messages.findLast(m => m.role === 'assistant');
       const stopped = self.stopRequested || last?.stopReason === 'aborted';
-      const failure = round.preflight || last?.stopReason === 'error' ? { role: 'main', code: failureCode(last?.errorMessage ?? '') } : null;
+      const failure = round.preflight || last?.stopReason === 'error' ? { role: 'main', code: failureCode(last?.errorMessage ?? '') }
+        : round.closeFailed ? { role: 'main', code: round.closeFailed } : null;
       const plan = currentPlan(manager), message = continuation.next({ plan, planUpdated: round.planUpdated, changed: round.changed, stopped, failed: !!failure });
       if (self.queued.length) {
         // The member wrote while the round closed: theirs is the next round,

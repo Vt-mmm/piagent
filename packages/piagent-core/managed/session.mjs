@@ -291,7 +291,11 @@ export class ManagedSession {
             catch (error) { if (!process) throw error; await self.broker.request('close'); }
             manager.appendCustomEntry('agent-watch-run', { run_id: self.grant.run_id, state: 'closed' });
           }
-        } finally { self.grant = null; self.run = null; self.preflight = null; }
+        // A run that could not be closed (the network or Agent Watch went away)
+        // ends the turn as failed; the run stays "active" here, so reopening
+        // the conversation recovers or abandons it.
+        } catch (error) { round.closeFailed = failureCode(failureText(error)) || 'close_failed'; }
+        finally { self.grant = null; self.run = null; self.preflight = null; }
       }
     };
     self.session.prompt = async (text, options) => {

@@ -43,6 +43,10 @@ test('Stop, a failure, no checklist, a plan that is only suggested, and the roun
   const stopped = new Continuation(REQUIRE); stopped.begin(null);
   assert.equal(stopped.next({ plan: plan(1, 3), planUpdated: true, stopped: true }), null);
   assert.equal(turnEnd(stopped, plan(1, 3), { stopped: true }).state, 'cancelled');
+  // A run that could not be closed (network gone) ends the turn as failed, with a code the dashboard reads.
+  const unclosed = new Continuation(REQUIRE); unclosed.begin(null);
+  assert.equal(unclosed.next({ plan: plan(1, 3), planUpdated: true, failed: true }), null);
+  assert.deepEqual([turnEnd(unclosed, plan(1, 3), { failure: { role: 'main', code: 'managed-broker:offline' } }).code], ['managed_broker_offline']);
   const failed = new Continuation(REQUIRE); failed.begin(null);
   assert.equal(failed.next({ plan: plan(1, 3), planUpdated: true, failed: true }), null);
   assert.deepEqual([turnEnd(failed, plan(1, 3), { failure: { role: 'main', code: 'upstream_unavailable' } }).state, turnEnd(failed, plan(1, 3), { failure: { code: 'x' } }).role], ['failed', 'main']);
