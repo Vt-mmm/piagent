@@ -10,6 +10,9 @@ import { execFileSync } from 'node:child_process';
 //   network (run_with_network), later runs work offline;
 // - the member's own dependency caches as read-only seeds, where the tool can
 //   layer one (Go, Gradle, Maven), so what is already downloaded is reused;
+// - the Maven distributions the Maven Wrapper (./mvnw) already unpacked on
+//   this Mac, linked read-only into the project's cache, so ./mvnw runs
+//   without asking for network; one it has to download stays in the cache;
 // - runtimes installed in places the sandbox otherwise keeps closed (JDKs
 //   under ~/Library/Java, the Android SDK, the system gem folder, MacPorts);
 // - SwiftPM and xcodebuild, which cannot start their own sandbox inside this
@@ -62,6 +65,23 @@ case "$(basename "$0"):$1" in
 esac
 `;
 
+// Each <name>/<hash> distribution folder of the member's Maven Wrapper as a
+// link in the project's cache; one already there (linked, or downloaded by an
+// approved command) is kept.
+function linkDistributions(source, target) {
+  let names = [];
+  try { names = fs.readdirSync(source, { withFileTypes: true }).filter(entry => entry.isDirectory()); } catch { return; }
+  for (const name of names) {
+    let hashes = [];
+    try { hashes = fs.readdirSync(path.join(source, name.name), { withFileTypes: true }).filter(entry => entry.isDirectory()); } catch { continue; }
+    for (const hash of hashes) {
+      const link = path.join(target, name.name, hash.name);
+      try { fs.lstatSync(link); continue; } catch { /* not there yet */ }
+      try { fs.mkdirSync(path.dirname(link), { recursive: true, mode: 0o700 }); fs.symlinkSync(path.join(source, name.name, hash.name), link); } catch { /* best effort */ }
+    }
+  }
+}
+
 export function languageEnvironment({ userHome, repositoryTop, home }) {
   const linux = process.platform === 'linux';
   const root = linux ? path.join(process.env.XDG_CACHE_HOME || path.join(userHome, '.cache'), 'piagent/sandbox') : path.join(userHome, 'Library/Caches/Piagent/sandbox');
@@ -80,10 +100,15 @@ export function languageEnvironment({ userHome, repositoryTop, home }) {
     // .NET restores over TLS through the macOS Security framework, closed
     // here: packages the member restored are read from their own folder.
     nuget: existing(path.join(userHome, '.nuget/packages')),
+    mavenWrapper: existing(path.join(userHome, '.m2/wrapper/dists')),
   };
   const java = javaHome(userHome), android = existing(path.join(userHome, linux ? 'Android/Sdk' : 'Library/Android/sdk'));
   const readRoots = [...new Set([...Object.values(seeds), java, android, existing(path.join(userHome, 'Library/Java/JavaVirtualMachines')),
     existing('/Library/Ruby'), existing('/opt/local')].filter(Boolean))];
+
+  // ./mvnw looks for its distribution in MAVEN_USER_HOME/wrapper/dists/<name>/<hash>
+  // (the sandbox's HOME is an empty folder per conversation).
+  if (seeds.mavenWrapper) linkDistributions(seeds.mavenWrapper, at('m2/wrapper/dists'));
 
   const bin = path.join(home, '.piagent/bin');
   fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
@@ -102,6 +127,7 @@ export function languageEnvironment({ userHome, repositoryTop, home }) {
     CARGO_HOME: at('cargo'), GRADLE_USER_HOME: at('gradle'), NUGET_PACKAGES: at('nuget'), COMPOSER_CACHE_DIR: at('composer'),
     PUB_CACHE: at('pub'), GEM_HOME: at('gem'), BUNDLE_PATH: at('bundle'), CP_HOME_DIR: at('cocoapods'), PIAGENT_DERIVED_DATA: at('DerivedData'),
     DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_NOLOGO: '1', DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1',
+    MAVEN_USER_HOME: at('m2'),
     MAVEN_OPTS: [`-Dmaven.repo.local=${at('m2/repository')}`, ...(seeds.maven ? [`-Dmaven.repo.local.tail=${seeds.maven}`] : [])].join(' '),
     ...(seeds.gradle ? { GRADLE_RO_DEP_CACHE: seeds.gradle } : {}),
     ...(seeds.nuget ? { NUGET_FALLBACK_PACKAGES: seeds.nuget } : {}),
