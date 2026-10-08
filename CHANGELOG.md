@@ -2,6 +2,14 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.16.3 - 2026-10-08
+
+A dashboard updated from its own button checks for the next release again.
+
+### Fixes
+
+- The dashboard's update restarted the dashboard with update checks switched off (meant only for the install step), so after an update from the button it never checked the registry again and showed no newer release until the machine restarted. The restart now keeps checks on, and a dashboard started by an earlier release's update job turns them back on, so updating to 1.16.3 from any release fixes it.
+
 ## v1.16.2 - 2026-10-08
 
 The Terminal says what the dashboard says.

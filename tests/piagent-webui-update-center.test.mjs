@@ -110,10 +110,10 @@ function runJob(dir, { to, updaterExit = 0, binding } = {}) {
   const installedScripts = path.join(dir, "node_modules", "@piagent", "platform", "scripts");
   fs.mkdirSync(installedScripts, { recursive: true });
   const updater = path.join(dir, "updater.mjs"), dashboard = path.join(installedScripts, "piagent-dashboard.mjs");
-  fs.writeFileSync(updater, `console.log("updating", process.argv.slice(2).join(" ")); process.exit(${updaterExit});`);
+  fs.writeFileSync(updater, `console.log("updating", process.argv.slice(2).join(" "), "check=" + (process.env.PIAGENT_NO_UPDATE_CHECK ?? "on")); process.exit(${updaterExit});`);
   fs.writeFileSync(path.join(installedScripts, "control.ts"), "export const restarted: string = \"restarted\";\n");
   fs.writeFileSync(dashboard, `import { restarted } from "./control.ts";
-console.log(JSON.stringify({ state: "running", launchUrl: "http://127.0.0.1:1/#bootstrap=SECRET-LAUNCH" })); console.error(restarted, process.argv.slice(2).join(" "));`);
+console.log(JSON.stringify({ state: "running", launchUrl: "http://127.0.0.1:1/#bootstrap=SECRET-LAUNCH" })); console.error(restarted, process.argv.slice(2).join(" "), "check=" + (process.env.PIAGENT_NO_UPDATE_CHECK ?? "on"));`);
   const agentDir = path.join(dir, "agent"); fs.mkdirSync(agentDir, { recursive: true });
   if (binding) fs.writeFileSync(path.join(agentDir, "agent-watch-managed.json"), JSON.stringify(binding));
   const result = spawnSync(process.execPath, [path.join(root, "scripts", "dashboard-update-job.mjs"), "--from", "1.9.3", "--to", to,
@@ -129,7 +129,8 @@ test("the update job installs the chosen release, restarts the dashboard and rep
   let run = runJob(dir, { to: current, binding: { entrypoint: entry, entrypoint_sha256: crypto.createHash("sha256").update("old launcher").digest("hex") } });
   assert.equal(run.status, 0); assert.equal(run.job.state, "succeeded"); assert.equal(run.job.installed, current); assert.equal(run.job.bindingChanged, true);
   assert.equal(run.job.reason, undefined, `the dashboard restarted on the installed release:\n${run.log}`);
-  assert.match(run.log, new RegExp(`updating --version ${current.replaceAll(".", "\\.")}`)); assert.match(run.log, /restarted restart --json/);
+  assert.match(run.log, new RegExp(`updating --version ${current.replaceAll(".", "\\.")} check=1`)); assert.match(run.log, /restarted restart --json check=on/,
+    "the restarted dashboard checks for the next release itself");
   assert.doesNotMatch(run.log, /SECRET-LAUNCH/, "the dashboard's launch link never reaches the log");
   dir = home(); fs.writeFileSync(path.join(dir, "launcher.mjs"), "export {};\n");
   run = runJob(dir, { to: current, binding: { entrypoint: path.join(dir, "launcher.mjs"), entrypoint_sha256: crypto.createHash("sha256").update("export {};\n").digest("hex") } });

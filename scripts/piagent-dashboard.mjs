@@ -154,6 +154,18 @@ async function waitForGatewayStopped(previous, timeoutMs = 8_000) {
   throw new Error("gateway-restart-stop-timeout\nThe previous Gateway did not stop; restart refused to reuse the old process.");
 }
 
+// An update job of an earlier release restarted the dashboard with update
+// checks switched off (it meant them for its own install step only): a
+// dashboard it starts checks for releases again.
+function serveEnvironment(home = os.homedir()) {
+  const env = { ...process.env };
+  try {
+    const job = JSON.parse(fs.readFileSync(path.join(home, ".pi", "piagent-update-job.json"), "utf8"));
+    if (job?.state === "running" && job.pid === process.ppid) delete env.PIAGENT_NO_UPDATE_CHECK;
+  } catch { /* no update running */ }
+  return env;
+}
+
 async function ensureStarted() {
   // After an update the Gateway still running is the earlier release, with
   // its pages loaded: it is replaced rather than reused.
@@ -174,7 +186,7 @@ async function ensureStarted() {
     fileURLToPath(import.meta.url),
     "serve",
     ...(agentDir ? ["--agent-dir", agentDir] : [])
-  ], { cwd: process.cwd(), env: { ...process.env,
+  ], { cwd: process.cwd(), env: { ...serveEnvironment(),
     PIAGENT_PINNED_TS_TRANSFORM_ROOT: path.join(effectiveAgentDir, "npm", "node_modules", "pi-mcp-adapter") },
     detached: true, stdio: "ignore" });
   let exit = null;

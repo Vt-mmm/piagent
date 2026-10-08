@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.16.3`: dashboard cập nhật bằng nút xong vẫn tự kiểm tra bản mới (trước đó bị tắt tới khi khởi động lại máy).
 - `1.16.2`: Terminal (`pi`, `piagent studio`) hỏi "Cập nhật ngay / Để sau" khi có bản mới, `/piagent-update`; `/bypass` trong `piagent studio`; lệnh mạng hỏi kèm lý do; lỗi và ghi chú Harness trong Terminal bằng tiếng Việt. Đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình ở lần đồng bộ kế tiếp.
 - `1.16.1`: có bản mới thì dashboard mở dialog "Cập nhật ngay / Để sau" (nhắc lại sau 1 giờ); dashboard và Terminal kiểm tra bản mới mỗi giờ; tab dashboard không còn mất đăng nhập vì server Piagent khác trên máy, tab hết phiên nói cách mở lại thay vì gọi lại liên tục với 401.
 - `1.16.0`: Bypass cho cuộc trò chuyện công ty (chỉ hỏi việc bắt buộc: đẩy/gửi ra ngoài, migration, xóa không rõ đích, sudo); subagent mà Harness thêm giữa chừng dùng được ngay; phiên cá nhân "Toàn quyền" không hỏi `git add` toàn bộ.

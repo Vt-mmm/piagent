@@ -72,6 +72,9 @@ fs.writeSync(log, "\nRestarting the dashboard on the new release\n");
 // install sits under node_modules, where Node does not strip types itself.
 // --import takes a URL: a Windows path (C:\...) reads as a URL scheme.
 const loader = pathToFileURL(path.join(packageRoot, "scripts", "register-typescript-loader.mjs")).href;
+// The new dashboard checks for the next release itself: only the update step
+// runs without the check.
+const restartEnv = { ...process.env }; delete restartEnv.PIAGENT_NO_UPDATE_CHECK;
 const restart = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", loader, dashboard, "restart", "--json"],
-  { stdio: ["ignore", "ignore", log], env, timeout: 3 * 60 * 1000 });
+  { stdio: ["ignore", "ignore", log], env: restartEnv, timeout: 3 * 60 * 1000 });
 finish("succeeded", { installed, ...(bindingChanged ? { bindingChanged } : {}), ...(restart.status === 0 ? {} : { reason: "dashboard-restart-failed" }) });
