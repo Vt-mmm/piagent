@@ -66,37 +66,3 @@ export function engineEnvironment(engine, home) {
     ...(process.platform === 'darwin' ? { TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: '/var/run/docker.sock' } : {}),
   };
 }
-
-// Why an approved-in-Bypass Docker command must still be asked about: host
-// folders outside the project mounted into a container, the engine's own
-// socket, or a container given the host's processes or network. The
-// project's compose files are read for the same (a volume naming ~ or an
-// absolute path outside the project). null when none applies.
-const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml', 'compose.override.yaml', 'compose.override.yml', 'docker-compose.override.yaml', 'docker-compose.override.yml'];
-function outside(source, cwd, home) {
-  if (!source || /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(source)) return false; // a named volume
-  const expanded = source.replace(/^~(?=\/|$)/, home).replace(/^\$\{?HOME\}?(?=\/|$)/, home);
-  if (/\$/.test(expanded)) return true;
-  const resolved = path.resolve(cwd, expanded);
-  return /docker\.sock$/.test(resolved) || !(resolved === cwd || resolved.startsWith(cwd + path.sep));
-}
-export function dockerConfirmation(command, { cwd, home }) {
-  const text = String(command);
-  if (/--privileged\b|--pid[= ]host\b|--network[= ]host\b|--net[= ]host\b|--userns[= ]host\b|--cap-add\b/.test(text)) return 'the container gets the host\'s processes, network or extra privileges';
-  const mounts = [...text.matchAll(/(?:^|\s)(?:-v|--volume)(?:=|\s+)(['"]?)([^\s'"]+)\1/g)].map(match => match[2].split(':')[0]);
-  for (const match of text.matchAll(/--mount(?:=|\s+)(['"]?)([^\s'"]+)\1/g)) {
-    const source = /(?:^|,)(?:source|src)=([^,]+)/.exec(match[2])?.[1];
-    if (/(?:^|,)type=bind\b/.test(match[2])) mounts.push(source ?? '');
-  }
-  if (mounts.some(source => outside(source, cwd, home))) return 'it mounts a folder outside the project into a container';
-  if (/\bcompose\b/.test(text)) {
-    for (const name of COMPOSE_FILES) {
-      let content;
-      try { content = fs.readFileSync(path.join(cwd, name), 'utf8'); } catch { continue; }
-      if (/^\s*(privileged:\s*true|pid:\s*["']?host|network_mode:\s*["']?host)/m.test(content)) return `${name} gives a container the host's processes, network or privileges`;
-      const sources = [...content.matchAll(/^\s*-\s*["']?([^\s"':]+):[^\s]/gm), ...content.matchAll(/^\s*source:\s*["']?([^\s"']+)/gm)].map(match => match[1]);
-      if (sources.some(source => /^(\/|~|\.|\$)/.test(source) && outside(source, cwd, home))) return `${name} mounts a folder outside the project into a container`;
-    }
-  }
-  return null;
-}

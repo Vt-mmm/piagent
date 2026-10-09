@@ -1,13 +1,11 @@
-import { mustConfirm } from '../runtime/policy/bypass-policy.mjs';
-import { dockerConfirmation } from './container-engine.mjs';
 import { networkConfirmation } from './permission.mjs';
 
 // Commands that leave the plain sandbox, each after the member approves that
 // exact command: run_with_network (internet, a local server or browser) and,
 // when this machine has a Docker engine, run_with_docker (the same plus the
-// engine's socket). Bypass runs them without asking, except what must be
-// confirmed: for Docker also a container given host folders outside the
-// project, the engine's socket, or the host's processes or network.
+// engine's socket). Bypass runs both without asking (owner, 2026-10-09),
+// except what must be confirmed for any command (bypass-policy.mjs: pushes,
+// deploys, registry logins, deletes known only at run time).
 const PARAMETERS = { type: 'object', properties: { command: { type: 'string', minLength: 1, maxLength: 4000 }, reason: { type: 'string', minLength: 1, maxLength: 300 }, timeout: { type: 'number', minimum: 1, maximum: 1800 } }, required: ['command', 'reason'], additionalProperties: false };
 
 const KINDS = {
@@ -23,8 +21,7 @@ const KINDS = {
     description: 'Run one shell command that needs the Docker engine of this machine: docker, docker compose (a database or service for tests), docker build, or tests that start containers themselves (Testcontainers), after the user approves that exact command. It has internet access too. Normal bash and run_with_network cannot reach Docker. Mount only folders inside the project. Registry credentials are unavailable: public images pull, private registries and docker push do not. Containers started in the background (-d, compose up -d) keep running after the command: stop them (docker compose down) when the work is done unless the member wants them kept.',
     allow: 'Run this exact command once, with internet access and the Docker engine; a container it starts can read folders Docker shares from this machine and may keep running.',
     title: 'Chạy lệnh dùng Docker', allowText: 'chạy đúng lệnh này một lần, có internet và Docker; container nó tạo có thể đọc thư mục Docker được chia sẻ trên máy và có thể tiếp tục chạy.',
-    confirm: async (self, command) => self.permission !== 'trusted-full-access' ? 'ask'
-      : await mustConfirm(command) ?? dockerConfirmation(command, { cwd: self.cwd, home: self.boundary.userHome }),
+    confirm: (self, command) => networkConfirmation(self, command),
   },
 };
 

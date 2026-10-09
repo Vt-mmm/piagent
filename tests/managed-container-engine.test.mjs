@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { containerEngine, dockerConfirmation, engineEnvironment } from '../packages/piagent-core/managed/container-engine.mjs';
+import { containerEngine, engineEnvironment } from '../packages/piagent-core/managed/container-engine.mjs';
 import { commandTools, servicesPrompt } from '../packages/piagent-core/managed/command-tools.mjs';
 import { sandboxDiagnostic } from '../packages/piagent-core/managed/sandbox-diagnostic.mjs';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
@@ -67,32 +67,6 @@ test('the CLI gets its own configuration: no registry credentials, the plugins l
   engineEnvironment(engine, sandboxHome); // a second conversation turn finds the links there
 });
 
-test('Bypass still asks about host folders, the engine socket and host privileges', () => {
-  const cwd = path.join(base, 'shop'), home = path.join(base, 'member');
-  fs.mkdirSync(cwd, { recursive: true });
-  const ask = command => dockerConfirmation(command, { cwd, home });
-  assert.equal(ask('docker compose up -d postgres'), null);
-  assert.equal(ask('docker run --rm -v ./data:/data -v pgdata:/var/lib/postgresql/data postgres:17'), null);
-  assert.equal(ask(`docker run --rm -v ${cwd}/src:/src node:22 npm test`), null);
-  assert.equal(ask('docker build -t shop .'), null);
-  assert.match(ask('docker run --rm -v ~/.ssh:/keys alpine cat /keys/id_ed25519'), /outside the project/);
-  assert.match(ask('docker run --rm --volume=/Users:/host alpine ls /host'), /outside the project/);
-  assert.match(ask('docker run --rm -v ../other:/x alpine ls'), /outside the project/);
-  assert.match(ask('docker run --rm -v "$HOME":/h alpine ls'), /outside the project/);
-  assert.match(ask('docker run --rm --mount type=bind,source=/etc,target=/e alpine ls'), /outside the project/);
-  assert.match(ask('docker run --rm -v /var/run/docker.sock:/var/run/docker.sock docker:cli ps'), /outside the project/);
-  assert.match(ask('docker run --rm --privileged alpine true'), /privileges/);
-  assert.match(ask('docker run --rm --network host alpine true'), /network/);
-  // The project's compose file is read for the same.
-  write(path.join(cwd, 'compose.yaml'), 'services:\n  db:\n    image: postgres:17\n    ports:\n      - "5432:5432"\n    volumes:\n      - ./pg:/var/lib/postgresql/data\n      - pgdata:/data\nvolumes:\n  pgdata: {}\n');
-  assert.equal(ask('docker compose up -d'), null);
-  write(path.join(cwd, 'compose.yaml'), 'services:\n  app:\n    image: alpine\n    volumes:\n      - ~/.aws:/root/.aws:ro\n');
-  assert.match(ask('docker compose up -d'), /compose\.yaml mounts a folder outside the project/);
-  assert.equal(ask('docker ps'), null, 'a command that is not compose does not read it');
-  write(path.join(cwd, 'compose.yaml'), 'services:\n  app:\n    image: alpine\n    privileged: true\n');
-  assert.match(ask('docker compose up'), /privileges/);
-});
-
 test('a failure names the way to Docker: run_with_docker, or the engine is not running', () => {
   const refused = 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?';
   assert.match(sandboxDiagnostic(refused, { engine: true }), /^managed-docker-blocked: .*run_with_docker/);
@@ -101,7 +75,7 @@ test('a failure names the way to Docker: run_with_docker, or the engine is not r
   assert.match(sandboxDiagnostic('Could not find a valid Docker environment', { engine: true }), /^managed-docker-blocked/);
 });
 
-test('run_with_docker is offered only with an engine; Bypass runs a safe command and asks about a host folder', async () => {
+test('run_with_docker is offered only with an engine; Bypass runs it without asking, the default mode asks', async () => {
   const calls = [];
   const self = { permission: 'trusted-full-access', cwd: path.join(base, 'tools-project'), grant: {}, session: { sessionManager: { getSessionId: () => 'session' } },
     boundary: { engine: null, userHome: path.join(base, 'member'), invoke: async (...args) => { calls.push(args); return { content: [{ type: 'text', text: 'ok' }] }; } },
@@ -115,11 +89,21 @@ test('run_with_docker is offered only with an engine; Bypass runs a safe command
   await docker.execute('call_1', { command: 'docker compose up -d', reason: 'database for tests' }, undefined, undefined, {});
   assert.deepEqual(calls[0].slice(0, 2), ['bash', { command: 'docker compose up -d' }]);
   assert.deepEqual(calls[0][5], { docker: true });
+  // Bypass: no question, whatever the container mounts (owner, 2026-10-09).
+  await docker.execute('call_2', { command: 'docker run --rm -v "$HOME/.cache":/c --privileged alpine ls /c', reason: 'x' }, undefined, undefined,
+    { ui: { confirm: async () => { throw Error('Bypass asked'); } } });
+  assert.equal(calls.length, 2);
+  // What must be confirmed for any command still is (a push to a registry).
   let asked = null;
-  await assert.rejects(docker.execute('call_2', { command: 'docker run -v ~/.ssh:/k alpine ls /k', reason: 'x' }, undefined, undefined,
+  await assert.rejects(docker.execute('call_3', { command: 'docker push ghcr.io/x/y', reason: 'x' }, undefined, undefined,
     { ui: { confirm: async (title, text) => { asked = text; return false; } } }), /managed-operation-denied/);
-  assert.match(asked, /Bypass vẫn hỏi: it mounts a folder outside the project/);
-  assert.equal(calls.length, 1, 'the declined command never ran');
+  assert.match(asked, /Bypass vẫn hỏi: docker push sends to a registry/);
+  // The default mode asks before each command.
+  self.permission = 'workspace-write'; asked = null;
+  await assert.rejects(docker.execute('call_4', { command: 'docker compose up -d', reason: 'database' }, undefined, undefined,
+    { ui: { confirm: async (title, text) => { asked = title; return false; } } }), /managed-operation-denied/);
+  assert.equal(asked, 'Chạy lệnh dùng Docker');
+  assert.equal(calls.length, 2, 'declined commands never ran');
 });
 
 // The sandbox opens the engine's socket to an approved Docker command only:
