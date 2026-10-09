@@ -30,7 +30,31 @@ export const MIME_BY_EXTENSION: Record<string, DeclaredMimeType> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp"
 };
-export const supportedAttachmentAccept = Object.keys(MIME_BY_EXTENSION).map((extension) => `.${extension}`).join(",");
+// Source code and any other text a coding agent reads: sent as text/plain
+// under its own name (the model sees "index.html"), checked on the host to
+// really be text. A name with no extension (Dockerfile, Makefile, LICENSE) or
+// an extension not listed anywhere is tried as text too.
+// Binary formats the model cannot read as text, refused before the upload with
+// what to send instead.
+const BINARY_EXTENSIONS: Record<string, "sheet" | "slides" | "word" | "binary"> = {
+  xls: "sheet", xlsx: "sheet", xlsm: "sheet", numbers: "sheet", ods: "sheet",
+  ppt: "slides", pptx: "slides", key: "slides", odp: "slides", doc: "word", pages: "word", odt: "word", rtf: "word",
+  ...Object.fromEntries(["zip", "gz", "tgz", "bz2", "xz", "rar", "7z", "tar", "jar", "war", "exe", "dmg", "pkg", "msi", "deb", "rpm", "apk", "ipa",
+    "bin", "so", "dylib", "dll", "o", "a", "lib", "class", "pyc", "wasm", "node", "iso", "img", "sqlite", "sqlite3", "db", "mdb",
+    "mp3", "mp4", "m4a", "m4v", "mov", "avi", "mkv", "wav", "flac", "ogg", "webm", "aac", "woff", "woff2", "ttf", "otf", "eot",
+    "ico", "icns", "heic", "heif", "tif", "tiff", "psd", "ai", "sketch", "fig", "xd", "avif", "raw", "cr2", "nef", "dng", "blend", "fbx", "glb"]
+    .map((extension) => [extension, "binary" as const]))
+};
+export type DeclaredType = { mime: DeclaredMimeType } | { refused: "sheet" | "slides" | "word" | "binary" };
+export function declaredType(name: string): DeclaredType {
+  const dot = name.lastIndexOf("."), extension = dot > 0 || dot === 0 && name.length > 1 ? name.slice(dot + 1).toLowerCase() : "";
+  const known = MIME_BY_EXTENSION[extension];
+  if (known) return { mime: known };
+  const binary = BINARY_EXTENSIONS[extension];
+  return binary ? { refused: binary } : { mime: "text/plain" };
+}
+// The file picker offers every file; what does not fit is said by name.
+export const supportedAttachmentAccept = "";
 export const DOCUMENT_MIMES = new Set<string>(["application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
 export const MAX_ATTACHMENTS = 4;
@@ -51,12 +75,24 @@ export function attachmentDetail(item: Attachment, locale: UiLocale): string {
   return `File · ${formatSize(item.sizeBytes)}${cut}`;
 }
 
+// With text accepted, any file may be picked (code has hundreds of extensions);
+// otherwise only what the host takes.
 export function acceptAttribute(allowed: ReadonlySet<string>): string {
+  if (allowed.has("text/plain")) return "";
   return [...allowed, ...Object.entries(MIME_BY_EXTENSION).filter(([, mime]) => allowed.has(mime)).map(([extension]) => `.${extension}`)].join(",");
 }
 
 export function dragCarriesFiles(transfer: DataTransfer | null): boolean {
   return Boolean(transfer && [...transfer.types].includes("Files"));
+}
+
+function refusedText(kind: "sheet" | "slides" | "word" | "binary", locale: UiLocale): string {
+  switch (kind) {
+    case "sheet": return localize(locale, "bảng tính chưa đọc trực tiếp được; hãy xuất sang .csv rồi đính kèm.", "spreadsheets cannot be read directly; export to .csv and attach that.");
+    case "slides": return localize(locale, "file trình chiếu chưa đọc trực tiếp được; hãy xuất sang .pdf rồi đính kèm.", "slide decks cannot be read directly; export to .pdf and attach that.");
+    case "word": return localize(locale, "định dạng này chưa đọc được; hãy lưu sang .docx, .pdf hoặc .txt.", "this format cannot be read; save it as .docx, .pdf or .txt.");
+    default: return localize(locale, "file nhị phân không gửi vào chat được; hãy để file trong project để agent tự đọc bằng tool.", "binary files cannot go into the chat; keep it in the project and the agent can use its tools on it.");
+  }
 }
 
 export type StageOutcome = { attachments: Attachment[]; status: string | null };
@@ -81,8 +117,9 @@ export async function stageFiles(input: {
       `At most ${MAX_ATTACHMENTS} files per message; ${input.files.length - room} skipped.`);
   }
   for (const file of [...input.files].slice(0, room)) {
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "", declared = MIME_BY_EXTENSION[extension];
-    if (!declared) { status = `${file.name}: ${localize(locale, "loại file chưa được hỗ trợ.", "unsupported file type.")}`; continue; }
+    const type = declaredType(file.name);
+    if ("refused" in type) { status = `${file.name}: ${refusedText(type.refused, locale)}`; continue; }
+    const declared = type.mime;
     // The host publishes exactly what it will take — .pdf disappears from the
     // list on a machine without the converter, images on a model without vision
     // — so refusing here says which of those it is, before spending an upload.

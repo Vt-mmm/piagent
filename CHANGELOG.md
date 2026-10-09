@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changes
+
+- Attach any source or text file, as coding agents do: `.html`, `.css`, `.js`/`.ts`/`.tsx`, `.py`, `.go`, `.java`, `.sql`, `.xml`, `.svg`, `.toml` and any other extension, plus files without one (`Dockerfile`, `Makefile`, `LICENSE`). They are sent as text under their own name, so the model sees `index.html`; the host still checks the bytes are text and refuses a binary in disguise. The file picker offers every file. Binary formats are refused before the upload with what to send instead: spreadsheets → export to .csv, slide decks → .pdf, old Word formats → .docx/.pdf/.txt, archives, media and fonts → keep them in the project for the agent's tools.
+
 ## v1.21.1 - 2026-10-09
 
 Bypass can be turned on while a turn runs, and it stays on.

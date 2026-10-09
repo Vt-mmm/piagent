@@ -845,6 +845,36 @@ test("attaches a .docx in the dashboard composer and sends its prose to the sess
   assert.match(text, /BEGIN PIAGENT-ATTACHMENT-[0-9a-f-]{36}/);
 });
 
+test("attaches source files such as .html like a coding agent does, and says why a binary cannot go in", async ({ page }) => {
+  lastSendPayload = null; dispatchedContent = null;
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+  const input = page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]');
+  // The picker offers every file: code has hundreds of extensions.
+  assert.ok(!(await input.getAttribute("accept")), "no accept filter");
+  await input.setInputFiles({ name: "build.zip", mimeType: "application/zip", buffer: Buffer.from("PK\u0003\u0004binary") });
+  await expect(page.getByText(/build\.zip: file nhị phân không gửi vào chat được/)).toBeVisible();
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({ name: "budget.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("PK") });
+  await expect(page.getByText(/budget\.xlsx: bảng tính chưa đọc trực tiếp được; hãy xuất sang \.csv/)).toBeVisible();
+  // An unknown extension is tried as text; the host refuses bytes that are not.
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({ name: "blob.dat", mimeType: "application/octet-stream", buffer: Buffer.from([0, 159, 146, 150, 0, 255, 254, 0]) });
+  await expect(page.getByText(/blob\.dat: Nội dung file không phải văn bản/)).toBeVisible();
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles([
+    { name: "index.html", mimeType: "text/html", buffer: Buffer.from("<!doctype html><title>Landing</title><h1 id=hero>Xin chao</h1>\n") },
+    { name: "Dockerfile", mimeType: "", buffer: Buffer.from("FROM node:22-alpine\nCMD [\"node\", \"server.js\"]\n") }]);
+  await expect(page.getByText(/index\.html · File · /)).toBeVisible();
+  await expect(page.getByText(/Dockerfile · File · /)).toBeVisible();
+  await page.getByPlaceholder("Nhắn cho Piagent…").fill("Sửa tiêu đề trang");
+  await page.getByRole("button", { name: "Gửi" }).click();
+  await expect.poll(() => lastSendPayload?.attachmentRefs?.length ?? 0).toBe(2);
+  const text = (dispatchedContent ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n");
+  assert.match(text, /attached file: "index\.html"/);
+  assert.match(text, /<h1 id=hero>Xin chao<\/h1>/);
+  assert.match(text, /attached file: "Dockerfile"/);
+  assert.match(text, /FROM node:22-alpine/);
+});
+
 test("drops a document onto the new chat composer and carries it into the created session", async ({ page }) => {
   // Cleared first: an earlier test leaves its own dispatch here, and polling on a
   // stale value passes before this test has sent anything at all.
