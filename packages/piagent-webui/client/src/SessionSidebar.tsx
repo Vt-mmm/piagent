@@ -83,7 +83,7 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
     : fresh ? (activity === "failed" ? localize(locale, "Lỗi · chưa xem", "Failed · not seen") : localize(locale, "Xong · chưa xem", "Done · not seen")) : null;
   // How the last message ended (finished, stopped midway, failed) says more
   // than the code process of its last round; neither while it runs.
-  const end = company && activity !== "running" && activity !== "elsewhere" ? session.managedTurnEnd ?? null : null;
+  const end = company && !fresh && activity !== "running" && activity !== "elsewhere" ? session.managedTurnEnd ?? null : null;
   const outcome = !end && company && session.managedProcess && session.managedProcess.outcome !== "no_change" ? session.managedProcess.outcome : null;
   return <Box sx={{ display: "flex", alignItems: "center", pr: .5 }} className={activity === "attention" ? "session-item attention" : fresh ? "session-item fresh" : "session-item"}><ListItemButton selected={selected} onClick={onSelect}
     sx={{ minWidth: 0, alignItems: "flex-start", py: 1, px: 1.4 }}>

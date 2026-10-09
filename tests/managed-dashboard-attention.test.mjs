@@ -118,6 +118,10 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   await expect(toasts.filter({hasText:'Cần bạn trả lời'})).toContainText('ASKLATER the store');
   await expect(page.locator('.session-item.attention').first()).toContainText('Cần bạn trả lời');
   await expect.poll(()=>page.title()).toMatch(/^\(1\) /);
+  // Once shown, the toast is opaque: what lies under it does not show through.
+  await page.waitForTimeout(400);
+  const look=await toasts.first().evaluate(e=>{const c=getComputedStyle(e);return {opacity:c.opacity,background:c.backgroundColor};});
+  assert.equal(look.opacity,'1');assert.doesNotMatch(look.background,/rgba\(.*, 0(\.\d+)?\)$|transparent/,JSON.stringify(look));
   const box=await toasts.first().boundingBox(),width=page.viewportSize().width;
   assert.ok(box.x+box.width>width-40&&box.y<120,'toast at the top right');
   for(const [w,h] of [[390,844],[3840,2160]]){
