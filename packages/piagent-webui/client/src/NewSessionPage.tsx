@@ -32,7 +32,7 @@ import Typography from "@mui/material/Typography";
 import type { PermissionMode, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import { companyReason } from "./CompanyReconnect.tsx";
 import { connectCompany, importProjectFolder, readCompanyStatus, readSessionCreationOptions, type CompanyStatus, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
-import { dragCarriesFiles, formatSize, MAX_ATTACHMENTS, supportedAttachmentAccept } from "./attachment-intake.ts";
+import { declaredType, dragCarriesFiles, formatSize, MAX_ATTACHMENTS, refusedText, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { label } from "./view-model.ts";
@@ -142,14 +142,17 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   };
   const selectFiles = (selected: FileList | null) => {
     if (!selected?.length) return;
-    const merged = [...files]; let overflow = false;
+    const merged = [...files]; let overflow = false, refused: string | null = null;
     for (const file of [...selected]) {
       if (merged.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) continue;
+      // A binary the chat cannot read is said by name now, not after the conversation is created.
+      const type = declaredType(file.name);
+      if ("refused" in type) { refused = `${file.name}: ${refusedText(type.refused, locale)}`; continue; }
       if (merged.length === MAX_ATTACHMENTS) { overflow = true; continue; }
       merged.push(file);
     }
-    setFiles(merged); setFileError(overflow
-      ? localize(locale, `Mỗi tin nhắn nhận tối đa ${MAX_ATTACHMENTS} file.`, `Each message accepts at most ${MAX_ATTACHMENTS} files.`) : null);
+    setFiles(merged); setFileError(refused ?? (overflow
+      ? localize(locale, `Mỗi tin nhắn nhận tối đa ${MAX_ATTACHMENTS} file.`, `Each message accepts at most ${MAX_ATTACHMENTS} files.`) : null));
   };
   const canAttach = !busy && !failed && files.length < MAX_ATTACHMENTS;
   // One conversation per send: a second Enter or click while the first is

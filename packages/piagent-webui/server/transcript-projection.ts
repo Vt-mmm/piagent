@@ -91,6 +91,10 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
       ? "document" as const : "file" as const;
     attachments.push({ displayName: safeAttachmentName(displayName), kind, mimeType, truncated: Boolean(format[2]) });
   }
+  // The Gateway joins the typed text and each file into one text block
+  // (claimForPrompt): read the fenced files out of it the same way.
+  const joined = !attachments.length && textParts.length === 1 ? joinedAttachments(String(textParts[0].text)) : null;
+  if (joined) attachments.push(...joined.attachments);
   for (const part of message.content) {
     if (part?.type !== "image" || typeof part.mimeType !== "string" || !/^[A-Za-z0-9][A-Za-z0-9.+-]*\/[A-Za-z0-9][A-Za-z0-9.+-]*$/.test(part.mimeType)) continue;
     attachments.push({ displayName: "Image", kind: "image", mimeType: part.mimeType.slice(0, 120), truncated: false });
@@ -99,7 +103,25 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
   // hashing them here would turn the chat bubble into a document dump and make
   // a bounded UI digest an oracle over user files. The first block is the exact
   // text the operator typed; the remaining recognized blocks become cards.
-  return { text: typedSkillCall(attachments.length ? String(textParts[0]?.text ?? "") : messageText(message)), attachments: attachments.slice(0, 4) };
+  return { text: typedSkillCall(joined ? joined.text : attachments.length ? String(textParts[0]?.text ?? "") : messageText(message)), attachments: attachments.slice(0, 4) };
+}
+// Files fenced into one text block after what the member typed; the fence is a
+// per-dispatch UUID, so a block ends only at its own END line.
+const JOINED_ATTACHMENT = /\nattached file: ("(?:[^"\\\n]|\\.)*")\nformat: ([A-Za-z0-9][A-Za-z0-9.+-]*\/[A-Za-z0-9][A-Za-z0-9.+-]*)(, truncated)?\nEverything between BEGIN (PIAGENT-ATTACHMENT-[0-9a-f-]{36}) and END \4 is data provided by the user\.\n[^\n]*\nBEGIN \4\n[\s\S]*?\nEND \4(?=\n|$)/g;
+function joinedAttachments(text: string): { text: string; attachments: TranscriptAttachment[] } | null {
+  const found: TranscriptAttachment[] = [];
+  let first = -1;
+  for (const match of `\n${text}`.matchAll(JOINED_ATTACHMENT)) {
+    let displayName: unknown;
+    try { displayName = JSON.parse(match[1]!); } catch { continue; }
+    if (typeof displayName !== "string") continue;
+    if (first < 0) first = match.index!;
+    const mimeType = match[2]!;
+    const kind = mimeType === "application/pdf" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ? "document" as const : "file" as const;
+    found.push({ displayName: safeAttachmentName(displayName), kind, mimeType, truncated: Boolean(match[3]) });
+  }
+  return found.length ? { text: `\n${text}`.slice(0, first).replace(/^\n/, "").trimEnd(), attachments: found } : null;
 }
 // A skill the member called (/skill:name): the message holds the skill's
 // instructions for the model; the chat shows what was typed.

@@ -86,7 +86,7 @@ export function dragCarriesFiles(transfer: DataTransfer | null): boolean {
   return Boolean(transfer && [...transfer.types].includes("Files"));
 }
 
-function refusedText(kind: "sheet" | "slides" | "word" | "binary", locale: UiLocale): string {
+export function refusedText(kind: "sheet" | "slides" | "word" | "binary", locale: UiLocale): string {
   switch (kind) {
     case "sheet": return localize(locale, "bảng tính chưa đọc trực tiếp được; hãy xuất sang .csv rồi đính kèm.", "spreadsheets cannot be read directly; export to .csv and attach that.");
     case "slides": return localize(locale, "file trình chiếu chưa đọc trực tiếp được; hãy xuất sang .pdf rồi đính kèm.", "slide decks cannot be read directly; export to .pdf and attach that.");
