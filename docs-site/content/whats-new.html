@@ -1,4 +1,11 @@
 <section class="section">
+  <p class="section-kicker">v1.22.0 · 2026-10-09</p>
+  <h2 id="v1-22-0">Đính kèm được mọi file code và văn bản, như các coding agent khác</h2>
+  <p class="section-lead">Giờ bạn đính kèm được <span class="inline-code">.html</span>, <span class="inline-code">.css</span>, <span class="inline-code">.js</span>/<span class="inline-code">.ts</span>/<span class="inline-code">.tsx</span>, <span class="inline-code">.py</span>, <span class="inline-code">.go</span>, <span class="inline-code">.java</span>, <span class="inline-code">.sql</span>, <span class="inline-code">.xml</span>, <span class="inline-code">.svg</span>, <span class="inline-code">.toml</span> và bất kỳ đuôi nào khác, cả file không có đuôi như <span class="inline-code">Dockerfile</span>, <span class="inline-code">Makefile</span>. File được gửi dưới đúng tên của nó nên agent biết đó là HTML hay Python; Piagent vẫn kiểm tra nội dung đúng là văn bản. File nhị phân bị từ chối ngay kèm cách gửi khác: bảng tính thì xuất sang .csv, file trình chiếu thì .pdf, file nén, video, font thì để trong project cho agent tự đọc bằng tool.</p>
+  <p class="section-lead">Sửa lỗi: tin nhắn có file đính kèm không còn hiện hai lần (một lần kèm nguyên nội dung file) sau khi lượt xong; chỉ còn câu bạn gõ và thẻ file.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.21.1 · 2026-10-09</p>
   <h2 id="v1-21-1">Bật Bypass ngay cả khi lượt đang chạy, và Bypass được giữ</h2>
   <p class="section-lead">Sửa lỗi: bật Bypass lúc một lệnh đang chờ bạn duyệt không có tác dụng. Gateway từ chối đổi quyền khi lượt đang chạy, còn thông báo lỗi lại nằm trong bảng vừa đóng, nên trông như đã bật nhưng tải lại trang thì vẫn là “Hỏi trước”. Giờ cuộc trò chuyện công ty đổi giữa “Hỏi trước” và Bypass lúc nào cũng được, kể cả giữa lượt; quyền được đọc lại ở mỗi lệnh nên các lệnh sau làm theo lựa chọn mới. Lệnh đang chờ vẫn giữ thẻ duyệt (Cho phép hoặc Từ chối). Kết quả đổi quyền hiện thành thông báo ở trên cùng.</p>

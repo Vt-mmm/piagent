@@ -1,4 +1,11 @@
 <section class="section">
+  <p class="section-kicker">v1.22.0 · 2026-10-09</p>
+  <h2 id="v1-22-0">Attach any source or text file, as other coding agents allow</h2>
+  <p class="section-lead">You can now attach <span class="inline-code">.html</span>, <span class="inline-code">.css</span>, <span class="inline-code">.js</span>/<span class="inline-code">.ts</span>/<span class="inline-code">.tsx</span>, <span class="inline-code">.py</span>, <span class="inline-code">.go</span>, <span class="inline-code">.java</span>, <span class="inline-code">.sql</span>, <span class="inline-code">.xml</span>, <span class="inline-code">.svg</span>, <span class="inline-code">.toml</span> and any other extension, and files without one such as <span class="inline-code">Dockerfile</span> or <span class="inline-code">Makefile</span>. A file goes under its own name, so the agent knows it is HTML or Python; Piagent still checks its bytes are text. Binary files are refused at once with what to send instead: spreadsheets as .csv, slide decks as .pdf, archives, media and fonts kept in the project for the agent's tools.</p>
+  <p class="section-lead">Fix: a message with an attachment no longer shows twice (once with the file's raw contents) after its turn ends; only what you typed and the file card remain.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.21.1 · 2026-10-09</p>
   <h2 id="v1-21-1">Bypass can be turned on while a turn runs, and it stays on</h2>
   <p class="section-lead">Fix: turning on Bypass while a command waited for your approval did not take. The Gateway refused to change access while a turn ran and the error showed in a panel that had just closed, so it looked on but a reload showed “Ask first”. A company conversation now switches between Ask first and Bypass at any time, also mid-turn; access is read at each command, so the next commands follow the new choice. A command already waiting keeps its card (Allow or Deny). The result of a switch shows in a notice at the top.</p>
