@@ -2,6 +2,14 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.21.1 - 2026-10-09
+
+Bypass can be turned on while a turn runs, and it stays on.
+
+### Fixes
+
+- Turning on Bypass while a command waited for your approval did not take: the Gateway refused to change access while a turn ran, and the error showed in a panel that had just closed, so the switch looked done and a reload showed Ask first. A company conversation now switches between Ask first and Bypass at any time, also mid-turn; access is read at each command, so the next commands follow the new choice. A command already waiting keeps its card (Allow or Deny). The result of a switch shows in a notice at the top.
+
 ## v1.21.0 - 2026-10-09
 
 The agent's questions and approvals come one card at a time, other conversations announce when they finish or wait for you, and Studio logs each context compaction.

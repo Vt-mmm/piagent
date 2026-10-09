@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.21.1 · 2026-10-09</p>
+  <h2 id="v1-21-1">Bypass can be turned on while a turn runs, and it stays on</h2>
+  <p class="section-lead">Fix: turning on Bypass while a command waited for your approval did not take. The Gateway refused to change access while a turn ran and the error showed in a panel that had just closed, so it looked on but a reload showed “Ask first”. A company conversation now switches between Ask first and Bypass at any time, also mid-turn; access is read at each command, so the next commands follow the new choice. A command already waiting keeps its card (Allow or Deny). The result of a switch shows in a notice at the top.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.21.0 · 2026-10-09</p>
   <h2 id="v1-21-0">Decisions come one at a time, and you see at once which conversation finished or waits for you</h2>
   <p class="section-lead">The agent's questions and approval requests no longer stack down the page: one card shows at a time, with steps above it (“Needs your decision · 1/3”) that say who asks (the main agent or which subagent), what kind (Ask / Approve) and let you jump to another. The main agent's come first, since your answer shapes its subagents' work; then subagents in work order (scout, research, verify, review); within one agent, what was asked first. Answering one brings up the next.</p>
