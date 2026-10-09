@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.21.0 - 2026-10-09
+
+The agent's questions and approvals come one card at a time, other conversations announce when they finish or wait for you, and Studio logs each context compaction.
 
 ### Changes
 
