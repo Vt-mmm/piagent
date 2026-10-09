@@ -348,6 +348,39 @@ test('a change the agent commits during the turn is still checked and reviewed',
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+// Work committed in earlier turns: a review asked for in a turn that changed
+// nothing reads the branch's commits; one given since reads the commits
+// after it; a since HEAD does not descend from is refused with the reason.
+test('a review of work committed in earlier turns reads those commits', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'off', max_fix_loops: 0 });
+  const git = (...args) => execFileSync('git', ['-C', root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', ...args]);
+  git('switch', '-qc', 'feature'); fs.writeFileSync(path.join(root, 'a.txt'), 'fixed earlier\n'); git('commit', '-qam', 'earlier turn');
+  fs.writeFileSync(path.join(root, 'b.txt'), 'second\n'); git('add', 'b.txt'); git('commit', '-qm', 'later turn');
+  const answer = 'Read it.\n```json\n{"findings":[],"summary":"clean"}\n```';
+  const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [{ tool: 'delegate', input: { role: 'review', task: 'Review the committed work' } }, 'Reviewed.',
+      { tool: 'delegate', input: { role: 'review', task: 'Review the last commit', since: 'HEAD~1' } }, 'Reviewed again.',
+      { tool: 'delegate', input: { role: 'review', task: 'Review', since: 'no-such-branch' } }, 'Could not.'],
+    review: [answer, answer] };
+  const server = await studio(script);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Review what we committed on this branch');
+    const reviews = server.requests.filter(r => r.role === 'review').map(r => JSON.stringify(r.body.messages));
+    assert.match(reviews[0], /diff against where this branch left main/);
+    assert.match(reviews[0], /\+fixed earlier/); assert.match(reviews[0], /\+second/);
+    await managed.session.prompt('Now only the last commit');
+    const since = server.requests.filter(r => r.role === 'review').map(r => JSON.stringify(r.body.messages)).find(text => /diff against HEAD~1/.test(text));
+    assert.ok(since, 'the reviewer read the commits after HEAD~1');
+    assert.match(since, /\+second/); assert.doesNotMatch(since, /\+fixed earlier/);
+    await managed.session.prompt('And a branch that does not exist');
+    const refused = managed.session.messages.filter(m => m.role === 'toolResult' && m.toolName === 'delegate').map(m => JSON.stringify(m.content)).find(text => /managed-review-base-unknown/.test(text));
+    assert.match(refused, /no-such-branch/);
+    // Neither review stands for this turn's own change (it changed nothing).
+    assert.equal(managed.review ?? null, null);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('edits sent with an invented plan tool are all refused; a plan sent as a JSON string is read; v2 reports count unknown tools', { skip: !supported, timeout: 180000 }, async () => {
   const root = project(), agent = broker({ plan: 'require', verify: 'off', review: 'off', max_fix_loops: 0 }, { review: false, features: ['process', 'process-v2'] });
   const steps = [{ step: 'Write a.txt and b.txt', status: 'in_progress' }];

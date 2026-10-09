@@ -18,6 +18,24 @@ const mode = process.argv[2];
 // While HEAD has not moved, the patch is the plain one against HEAD.
 const head = () => { try { return git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']).trim(); } catch { return ''; } };
 if (mode === 'head') { process.stdout.write(head() || 'none'); process.exit(0); }
+// "since <ref>": the commit a reference names, when HEAD descends from it (a
+// review of the commits made since); "branch-base": where this branch left
+// the default branch (or, on it, its upstream), when commits came since.
+const commit = ref => { try { return git(['rev-parse', '--verify', '-q', '--end-of-options', `${ref}^{commit}`]).trim(); } catch { return ''; } };
+const ancestor = sha => { try { git(['merge-base', '--is-ancestor', sha, 'HEAD']); return true; } catch { return false; } };
+if (mode === 'since') {
+  const ref = process.argv[3] ?? '', sha = /^[A-Za-z0-9._\/~^@{}-]{1,200}$/.test(ref) && !ref.startsWith('-') ? commit(ref) : '';
+  process.stdout.write(sha && ancestor(sha) ? sha : 'none'); process.exit(0);
+}
+if (mode === 'branch-base') {
+  const now = head();
+  for (const ref of ['origin/HEAD', 'origin/main', 'origin/master', 'main', 'master', '@{upstream}']) {
+    const tip = commit(ref); if (!tip || !now) continue;
+    let base = ''; try { base = git(['merge-base', 'HEAD', tip]).trim(); } catch { continue; }
+    if (base && base !== now) { process.stdout.write(`${base} ${ref}`); process.exit(0); }
+  }
+  process.stdout.write('none'); process.exit(0);
+}
 const extra = process.argv.slice(3), given = extra.find(a => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(a));
 const base = given && given !== head() ? given : 'HEAD';
 // "files": what each changed or new file holds now (a hash, "deleted"), so

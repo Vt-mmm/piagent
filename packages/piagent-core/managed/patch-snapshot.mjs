@@ -43,6 +43,30 @@ export async function readHead(boundary) {
   } catch { return null; }
 }
 
+// The commit a reference names (a sha, a branch, HEAD~3) when HEAD descends
+// from it, or null: a review of the commits made since (delegate's since).
+export async function resolveReviewBase(boundary, ref) {
+  if (typeof ref !== 'string' || !/^[A-Za-z0-9._\/~^@{}-]{1,200}$/.test(ref) || ref.startsWith('-')) return null;
+  try {
+    const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} since ${quote(ref)}`, timeout: 60 });
+    const text = textContent(result).trim();
+    return BASE.test(text) ? text : null;
+  } catch { return null; }
+}
+// Where this branch left the default branch (or its upstream), when commits
+// came since: { base, ref }, or null.
+export async function readBranchBase(boundary) {
+  try {
+    const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} branch-base`, timeout: 60 });
+    const [base, ref] = textContent(result).trim().split(' ');
+    return BASE.test(base ?? '') && ref ? { base, ref } : null;
+  } catch { return null; }
+}
+// A snapshot with nothing to review: no tracked change and no new file.
+export function emptySnapshot(snapshot) {
+  try { const value = JSON.parse(snapshot.patch); return !value.patch && !(value.untracked ?? []).length; } catch { return false; }
+}
+
 // The patch a reviewer sees, read inside the tool boundary. The worker writes
 // it to the boundary's temporary directory and names it, with its digest, on
 // its output; the file is read once, must match that digest (a file changed
@@ -89,7 +113,11 @@ export function reviewUnavailableReason(message) {
 
 // What the diff is taken against: HEAD, or the commit the turn started from
 // (commits made during the turn are part of the change).
-const against = value => value?.base ? `diff against the commit the turn started from (${String(value.base).slice(0, 12)}), commits made since included` : 'diff against HEAD';
+// A review of earlier commits (`from`): since the commit the main agent named,
+// or since the branch left its default branch.
+const against = (value, from = null) => from?.kind === 'since' ? `diff against ${from.ref} (${String(value.base ?? '').slice(0, 12)}): the commits made since, and changes not committed yet`
+  : from?.kind === 'branch' ? `diff against where this branch left ${from.ref} (${String(value.base ?? '').slice(0, 12)}): the branch's commits, and changes not committed yet`
+  : value?.base ? `diff against the commit the turn started from (${String(value.base).slice(0, 12)}), commits made since included` : 'diff against HEAD';
 // The patch as a reviewer reads it: the diff, then each new file in full.
 export function reviewText(snapshot) {
   let value;
@@ -98,7 +126,7 @@ export function reviewText(snapshot) {
     : f.mode === 'directory' ? `=== new folder ${f.path} (a repository of its own, not reviewed)`
     : f.encoding === 'omitted' ? `=== new file ${f.path} (${f.bytes} bytes, too large to review)`
     : f.encoding === 'utf8' ? `=== new file ${f.path}\n${f.contents}` : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`);
-  return `Patch snapshot ${snapshot.digest}:\n--- ${against(value)} ---\n${value.patch || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
+  return `Patch snapshot ${snapshot.digest}:\n--- ${against(value, snapshot.from)} ---\n${value.patch || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
 }
 
 // A patch larger than one reviewer reads at once (REVIEW_PART_BYTES, about
@@ -141,7 +169,7 @@ export function reviewParts(snapshot, size = REVIEW_PART_BYTES) {
   const parts = groups.map((group, i) => {
     const files = group.sections.map(s => s.file), diff = group.sections.filter(s => s.kind === 'diff').map(s => s.text).join(''), news = group.sections.filter(s => s.kind === 'new').map(s => s.text);
     const head = groups.length === 1 ? `Patch snapshot ${snapshot.digest}.` : `Patch snapshot ${snapshot.digest}, part ${i + 1} of ${groups.length}. This part's files: ${files.join(', ')}. The other parts are reviewed separately: judge this part, and read other files only for context.`;
-    return { files, text: `${head}${skipped}\n--- ${against(value)} ---\n${diff || '(no changes to tracked files in this part)'}\n${news.length ? `--- new files ---\n${news.join('\n\n')}` : ''}` };
+    return { files, text: `${head}${skipped}\n--- ${against(value, snapshot.from)} ---\n${diff || '(no changes to tracked files in this part)'}\n${news.length ? `--- new files ---\n${news.join('\n\n')}` : ''}` };
   });
   return { parts: parts.length ? parts : [{ files: [], text: `Patch snapshot ${snapshot.digest}: every changed file is too large to review.${skipped}` }], omitted };
 }

@@ -4,12 +4,17 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## v1.20.0 - 2026-10-09
 
-Package installs in the company sandbox no longer ask.
+Package installs in the company sandbox no longer ask; a long subagent no longer gets its turn stopped; the review subagent reads work committed in earlier turns.
 
 ### Changes
 
 - Company sandbox: package installs from the usual registries no longer ask. A plain command reaches npm, PyPI, the Go proxy, crates.io, Maven Central, Gradle, Google's Maven, NuGet, RubyGems, Packagist, pub.dev, CocoaPods, Hex and public GitHub downloads (release assets, such as the Gradle Wrapper's distributions, and git dependencies) through a proxy that Piagent runs outside the sandbox. The proxy allows only those hosts (and the member's additions in `~/.piagent/sandbox-domains`, one host or `*.domain` per line), on ports 443 and 80, and never an IP address or a name that resolves to this machine or a private network. Any other host is refused, and the command's failure names it and points to `run_with_network`, which still asks. Registry credentials stay out of the sandbox. Subagents that only read keep no network. `piagent studio --doctor` checks npm through the proxy.
 - Maven and Gradle use the proxy too: the JVM gets the proxy settings, and Maven, which reads its proxy only from `settings.xml`, gets a settings file in the sandbox's own home. A live check ran `./mvnw test` and `./gradlew test`, each downloading its distribution, plugins and JUnit through the proxy, and the next conversation ran `./mvnw -o test` offline from the project's cache.
+
+### Fixes
+
+- A subagent that worked longer than 15 minutes (a verify running a long test suite while the main agent waited) was stopped with `managed-helper-cancelled`, and the turn ended with "Request was aborted". The dashboard stops a turn after 15 minutes without an event, and a working subagent sent none. While a subagent runs, the turn now sends a beat every minute. A turn is still limited to 6 hours, and each of the subagent's commands has its own time limit.
+- The review subagent said "no patch" when asked to review work committed in earlier turns: it read only the change since the turn began, which was nothing. It now takes `since` (a commit, a branch or `HEAD~N`) and reads the commits after it plus anything not committed yet. When the turn has changed nothing, it reads the branch's commits since it left the default branch (or, on the default branch, its unpushed commits). A `since` that HEAD does not descend from is refused with the reason. The review the harness requires still reads the turn's own change.
 
 ## v1.19.0 - 2026-10-08
 

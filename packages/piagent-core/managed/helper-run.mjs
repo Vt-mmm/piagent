@@ -8,7 +8,7 @@ import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { managedResourceLoader } from './resource-loader.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
-import { reviewParts, mergeReviews, REVIEW_PARALLEL } from './patch-snapshot.mjs';
+import { reviewParts, mergeReviews, REVIEW_PARALLEL, emptySnapshot, readBranchBase, readPatchDigest, readPatchSnapshot, resolveReviewBase } from './patch-snapshot.mjs';
 import { reviewFindings, briefIssues } from './workflow.mjs';
 import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
 import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-roles.mjs';
@@ -21,8 +21,24 @@ const textContent = result => result.content?.filter(p => p.type === 'text').map
 const HELPER_SWITCH = new Set(['upstream_rate_limited', 'session_account_not_ready_retry_later', 'session_account_unavailable_start_new_session', 'account_capacity_unavailable', 'execution_capability_unavailable']);
 const HELPER_ATTEMPTS = 2;
 
-export async function runHelper(managed, role, task, signal, harness, { verifyGrant, patiently, title }) {
-  const snapshot = role === 'review' ? await managed.patchSnapshot() : null, parts = snapshot ? reviewParts(snapshot) : null;
+// The patch a review reads: this turn's change; the commits since `since`
+// (a commit before HEAD the main agent names); or, when the turn changed
+// nothing and the main agent asked (a review of work committed in earlier
+// turns), the branch's commits since it left the default branch.
+async function reviewSnapshot(managed, harness, since) {
+  if (since) {
+    const base = await resolveReviewBase(managed.boundary, since);
+    if (!base) throw Error(`managed-review-base-unknown: "${String(since).slice(0, 80)}" is not a commit HEAD descends from in this repository; name a commit, a branch or HEAD~N`);
+    return Object.assign(await readPatchSnapshot(managed.boundary, null, base), { from: { kind: 'since', ref: since, base } });
+  }
+  const snapshot = await managed.patchSnapshot();
+  if (harness || !emptySnapshot(snapshot)) return snapshot;
+  const branch = await readBranchBase(managed.boundary);
+  return branch ? Object.assign(await readPatchSnapshot(managed.boundary, null, branch.base), { from: { kind: 'branch', ref: branch.ref, base: branch.base } }) : snapshot;
+}
+
+export async function runHelper(managed, role, task, signal, harness, { verifyGrant, patiently, title, since }) {
+  const snapshot = role === 'review' ? await reviewSnapshot(managed, harness, since) : null, parts = snapshot ? reviewParts(snapshot) : null;
   // A helper whose company model account is out of usage, or resting after
   // a refusal, starts once more: Studio then gives the new helper the next
   // model of its role that serves (an auto role's list). Helpers read and
@@ -98,15 +114,17 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
       review = mergeReviews(parts, answers, { findingsOf: reviewFindings, issuesOf: briefIssues });
       ({ reply, usage } = review);
     }
-    const stale = snapshot ? (await managed.patchDigest()) !== snapshot.digest : false;
-    const details = { role, runID: grant.run_id, tokens: usage, patchDigest: snapshot?.digest, stale };
+    const from = snapshot?.from ?? null;
+    const stale = snapshot ? (await (from ? readPatchDigest(managed.boundary, null, from.base) : managed.patchDigest())) !== snapshot.digest : false;
+    const details = { role, runID: grant.run_id, tokens: usage, patchDigest: snapshot?.digest, stale, ...(from ? { since: { kind: from.kind, ref: from.ref, base: from.base } } : {}) };
     if (snapshot) {
       // Severity-graded findings decide whether the harness sends the agent back.
       const findings = review ? review.findings : reviewFindings(reply);
       Object.assign(details, { parsed: review ? review.parsed : !!findings, findings: (findings ?? []).slice(0, 40), blocking: findings?.filter(f => f.severity === 'blocking').length ?? 0 });
       if (review) Object.assign(details, { parts: parts.parts.length, unread: parts.omitted.map(o => o.path).slice(0, 50) });
       if (managed.run) { managed.run.reviews += 1; managed.run.blocking += details.blocking; }
-      managed.review = details;
+      // A review of earlier commits is not the review of this turn's change.
+      if (!from) managed.review = details;
       managed.session.sessionManager.appendCustomEntry('agent-watch-review', details);
     }
     const verdicts = role === 'verify' ? recordVerdicts(managed.run, reply, harness, details) : '';

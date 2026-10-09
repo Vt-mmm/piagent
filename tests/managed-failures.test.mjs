@@ -704,3 +704,21 @@ test('only a passing failure after admission is asked again by the turn retry, b
   assert.equal(session._isRetryableError(failed('upstream_rate_limited')), false);
   assert.deepEqual(applied, [{ retry: { enabled: true, maxRetries: 2, baseDelayMs: 2000 } }]);
 });
+
+// A helper that works longer than the dashboard's watchdog allows a quiet turn
+// (a verify running a long suite while the main agent waits) keeps the turn
+// alive: a beat while it runs, none after it ends.
+test('a running helper beats so the turn is not stopped as idle', async () => {
+  const { ManagedSession } = await import('../packages/piagent-core/managed/session.mjs');
+  const events = [];
+  const owner = { grant: { run_id: 'r' }, manifest: { harness: { configuration: { verify: { model_ids: ['m'] } } } }, helperCalls: new Map(), helpers: new Map(), run: null,
+    helperBeatMs: 40, notify: event => events.push(event), publishHelpers() {},
+    runHelper: () => new Promise(resolve => setTimeout(() => resolve({ content: [{ type: 'text', text: 'pass' }] }), 230)) };
+  const result = await ManagedSession.prototype.delegate.call(owner, { role: 'verify', task: 'Run the suite' });
+  assert.equal(result.content[0].text, 'pass');
+  const beats = events.filter(event => event.type === 'managed_helper_progress');
+  assert.ok(beats.length >= 3, `beats while it ran: ${beats.length}`);
+  assert.deepEqual(beats[0], { type: 'managed_helper_progress', role: 'verify' });
+  await new Promise(resolve => setTimeout(resolve, 120));
+  assert.equal(events.filter(event => event.type === 'managed_helper_progress').length, beats.length, 'no beat after it ended');
+});
