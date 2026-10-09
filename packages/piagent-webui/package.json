@@ -28,7 +28,7 @@
     "@vitejs/plugin-react": "6.0.5",
     "json-schema-to-typescript": "15.0.4",
     "typescript": "7.0.2",
-    "vite": "8.2.1"
+    "vite": "8.2.2"
   },
   "engines": {
     "node": ">=22.19.0"
