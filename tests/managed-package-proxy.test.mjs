@@ -5,7 +5,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { DEFAULT_DOMAINS, PackageProxy, domainAllowed, memberDomains, privateAddress, proxyEnvironment } from '../packages/piagent-core/managed/package-proxy.mjs';
+import { DEFAULT_DOMAINS, PackageProxy, domainAllowed, mavenSettings, memberDomains, privateAddress, proxyEnvironment } from '../packages/piagent-core/managed/package-proxy.mjs';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
 
 const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pa-proxy-')));
@@ -37,7 +37,8 @@ test('host rules: exact names and *.subdomains, never IP literals; member additi
   assert.equal(domainAllowed('evil-registry.npmjs.org.attacker.net', rules), false);
   assert.equal(domainAllowed('notexample.com', rules), false);
   assert.equal(domainAllowed('127.0.0.1', ['127.0.0.1']), false);
-  assert.ok(DEFAULT_DOMAINS.includes('registry.npmjs.org') && DEFAULT_DOMAINS.includes('repo.maven.apache.org') && !DEFAULT_DOMAINS.includes('github.com'));
+  const defaults = new Set(DEFAULT_DOMAINS);
+  assert.ok(defaults.has('registry.npmjs.org') && defaults.has('repo.maven.apache.org') && defaults.has('github.com') && !defaults.has('gist.github.com') && !defaults.has('api.github.com'));
   const home = path.join(base, 'member');
   fs.mkdirSync(path.join(home, '.piagent'), { recursive: true });
   fs.writeFileSync(path.join(home, '.piagent/sandbox-domains'), '# company mirror\nnexus.company.vn\n*.jfrog.io  # artifacts\nnot a host\nhttp://x.y\n');
@@ -72,7 +73,7 @@ test('the proxy tunnels to allowed hosts only, at the address it checked, and re
 });
 
 test('plain HTTP is forwarded to allowed hosts with the Host header kept', async () => {
-  const origin = http.createServer((request, response) => response.end(`${request.method} ${request.url} host=${request.headers.host}`));
+  const origin = http.createServer((request, response) => response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ method: request.method, path: request.url, host: request.headers.host })));
   const originPort = await listen(origin);
   const proxy = new PackageProxy({ domains: ['repo.example'], ports: [originPort], isPrivate: () => false, resolve: async () => [{ address: '127.0.0.1' }] });
   closers.push(() => proxy.close());
@@ -80,7 +81,9 @@ test('plain HTTP is forwarded to allowed hosts with the Host header kept', async
   const get = url => new Promise((resolve, reject) => http.get({ host: '127.0.0.1', port, path: url, headers: { host: new URL(url).host } }, response => {
     let body = ''; response.on('data', chunk => { body += chunk; }); response.on('end', () => resolve({ status: response.statusCode, body }));
   }).on('error', reject));
-  assert.deepEqual(await get(`http://repo.example:${originPort}/maven2/x.pom?y=1`), { status: 200, body: `GET /maven2/x.pom?y=1 host=repo.example:${originPort}` });
+  const forwarded = await get(`http://repo.example:${originPort}/maven2/x.pom?y=1`);
+  assert.equal(forwarded.status, 200);
+  assert.deepEqual(JSON.parse(forwarded.body), { method: 'GET', path: '/maven2/x.pom?y=1', host: `repo.example:${originPort}` });
   const refused = await get(`http://other.example:${originPort}/`);
   assert.equal(refused.status, 403);
   assert.match(refused.body, /other\.example is not an allowed package registry/);
@@ -93,6 +96,9 @@ test('commands get the proxy in the variables package managers and the JVM read'
   assert.match(env.NO_PROXY, /localhost,127\.0\.0\.1/);
   assert.match(env.MAVEN_OPTS, /^-Dmaven\.repo\.local=\/c\/m2 -Dhttp\.proxyHost=127\.0\.0\.1 -Dhttp\.proxyPort=41234 -Dhttps\.proxyHost=127\.0\.0\.1 -Dhttps\.proxyPort=41234/);
   assert.match(env.GRADLE_OPTS, /^-Dhttp\.proxyHost=127\.0\.0\.1/);
+  assert.doesNotMatch(env.MAVEN_OPTS, /user\.home/);
+  assert.match(proxyEnvironment('http://127.0.0.1:41234', { mavenHome: '/h' }).MAVEN_OPTS, / -Duser\.home=\/h$/);
+  assert.match(mavenSettings('http://127.0.0.1:41234'), /<protocol>https<\/protocol><host>127\.0\.0\.1<\/host><port>41234<\/port>/);
 });
 
 // The real sandbox: a plain command reaches an allowed registry through the

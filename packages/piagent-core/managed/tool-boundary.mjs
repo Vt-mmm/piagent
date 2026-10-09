@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
 import { languageEnvironment } from './language-environment.mjs';
 import { containerEngine, engineEnvironment } from './container-engine.mjs';
-import { DEFAULT_DOMAINS, PackageProxy, memberDomains, proxyEnvironment } from './package-proxy.mjs';
+import { DEFAULT_DOMAINS, PackageProxy, mavenSettings, memberDomains, proxyEnvironment } from './package-proxy.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
 import { agentWatchDataDirectory } from './store.mjs';
 
@@ -310,7 +310,9 @@ export class ManagedToolBoundary {
       }
       const offline = this.environment.offline;
       for (const key of ['npm_config_fetch_retries', 'npm_config_fetch_timeout', 'PIP_RETRIES', 'PIP_TIMEOUT']) delete offline[key];
-      Object.assign(offline, proxyEnvironment(url, { mavenOpts: offline.MAVEN_OPTS, gradleOpts: offline.GRADLE_OPTS }), { GOPROXY: languages.env.network.GOPROXY });
+      const settings = path.join(this.home, '.m2/settings.xml');
+      fs.mkdirSync(path.dirname(settings), { recursive: true, mode: 0o700 }); fs.writeFileSync(settings, mavenSettings(url), { mode: 0o600 });
+      Object.assign(offline, proxyEnvironment(url, { mavenOpts: offline.MAVEN_OPTS, gradleOpts: offline.GRADLE_OPTS, mavenHome: this.home }), { GOPROXY: languages.env.network.GOPROXY });
       this.proxyUrl = url;
     } catch { await this.proxy.close().catch(() => {}); this.proxy = null; }
   }
@@ -322,7 +324,7 @@ export class ManagedToolBoundary {
       // A command that failed after the proxy refused a host: name the hosts.
       const refused = !network && !docker && this.proxy ? this.proxy.deniedSince(before) : [];
       if (!refused.length) throw error;
-      throw new Error(`managed-domain-blocked: Lệnh thường chỉ tải được từ các registry package quen thuộc (npm, PyPI, Go, crates.io, Maven, Gradle, NuGet, RubyGems, Packagist, pub.dev…). Host bị chặn: ${refused.join(', ')}. Nếu lệnh thật sự cần host này, dùng run_with_network để người dùng duyệt đúng lệnh đó.\n${String(error?.message ?? error)}`);
+      throw new Error(`managed-domain-blocked: Lệnh thường chỉ tải được từ các registry package quen thuộc (npm, PyPI, Go, crates.io, Maven, Gradle, NuGet, RubyGems, Packagist, pub.dev…) và tải về public từ GitHub. Host bị chặn: ${refused.join(', ')}. Nếu lệnh thật sự cần host này, dùng run_with_network để người dùng duyệt đúng lệnh đó.\n${String(error?.message ?? error)}`);
     }
   }
   async #invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {

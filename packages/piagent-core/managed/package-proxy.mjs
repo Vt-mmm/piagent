@@ -12,8 +12,8 @@ import { lookup } from 'node:dns/promises';
 // a private network (DNS rebinding), and connects to the address it checked.
 // Everything else is refused with 403 and remembered, so the command's
 // failure names the host and run_with_network (the member approves it).
-// Registries take no upload without a token, and tokens stay out of the
-// sandbox (.npmrc, ~/.m2/settings.xml, registry credentials).
+// Registries (and GitHub) take no upload without a token, and tokens stay
+// out of the sandbox (.npmrc, ~/.m2/settings.xml, git credentials).
 export const DEFAULT_DOMAINS = Object.freeze([
   // JavaScript
   'registry.npmjs.org', 'registry.yarnpkg.com', 'repo.yarnpkg.com', 'registry.npmmirror.com', 'jsr.io', 'npm.jsr.io', 'deno.land',
@@ -29,6 +29,10 @@ export const DEFAULT_DOMAINS = Object.freeze([
   // .NET, Ruby, PHP, Dart, Swift/CocoaPods, Elixir
   'api.nuget.org', 'globalcdn.nuget.org', 'rubygems.org', 'index.rubygems.org', 'packagist.org', 'repo.packagist.org',
   'pub.dev', 'cdn.cocoapods.org', 'repo.hex.pm', 'builds.hex.pm',
+  // Public GitHub downloads: release assets (the Gradle Wrapper's
+  // distributions redirect there), git dependencies and archives. Nothing
+  // is pushed or uploaded without a token, and none reaches the sandbox.
+  'github.com', 'codeload.github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com',
 ]);
 const PORTS = new Set([80, 443]);
 
@@ -138,7 +142,7 @@ export class PackageProxy {
     try { url = new URL(request.url); } catch { response.writeHead(400).end(); return; }
     if (url.protocol !== 'http:') { response.writeHead(400).end(); return; }
     const target = await this.#target(url.hostname, Number(url.port) || 80);
-    if (!target) { response.writeHead(403, { 'X-Piagent-Proxy': 'domain-not-allowed' }).end(`piagent: ${url.hostname} is not an allowed package registry\n`); return; }
+    if (!target) { response.writeHead(403, { 'X-Piagent-Proxy': 'domain-not-allowed', 'Content-Type': 'text/plain; charset=utf-8' }).end(`piagent: ${url.hostname} is not an allowed package registry\n`); return; }
     const headers = { ...request.headers, host: url.host }; delete headers['proxy-connection']; delete headers['proxy-authorization'];
     const outgoing = http.request(this.upstream
       ? { host: this.upstream.host, port: this.upstream.port, path: url.href, method: request.method, headers }
@@ -154,14 +158,24 @@ export class PackageProxy {
   }
 }
 
+// Maven reads its proxy only from settings.xml (not the JVM's properties):
+// a settings file in the sandbox's own home, which Maven reads as the user's
+// once MAVEN_OPTS names that home (Java takes user.home from the account,
+// not from HOME, and the member's ~/.m2 is closed here).
+export function mavenSettings(url) {
+  const { hostname, port } = new URL(url);
+  const proxy = protocol => `<proxy><id>piagent-${protocol}</id><active>true</active><protocol>${protocol}</protocol><host>${hostname}</host><port>${port}</port><nonProxyHosts>localhost|127.0.0.1</nonProxyHosts></proxy>`;
+  return `<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"><proxies>${proxy('https')}${proxy('http')}</proxies></settings>\n`;
+}
+
 // Environment a command gets for the proxy at this URL: the variables
-// package managers read, and the JVM's (Maven, Gradle) which ignore them.
-export function proxyEnvironment(url, { mavenOpts = '', gradleOpts = '' } = {}) {
+// package managers read, and the JVM's (Gradle), which ignores them.
+export function proxyEnvironment(url, { mavenOpts = '', gradleOpts = '', mavenHome = null } = {}) {
   const { hostname, port } = new URL(url);
   const jvm = `-Dhttp.proxyHost=${hostname} -Dhttp.proxyPort=${port} -Dhttps.proxyHost=${hostname} -Dhttps.proxyPort=${port} -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1`;
   return {
     HTTP_PROXY: url, HTTPS_PROXY: url, http_proxy: url, https_proxy: url, NO_PROXY: 'localhost,127.0.0.1,::1', no_proxy: 'localhost,127.0.0.1,::1',
     npm_config_proxy: url, npm_config_https_proxy: url,
-    MAVEN_OPTS: [mavenOpts, jvm].filter(Boolean).join(' '), GRADLE_OPTS: [gradleOpts, jvm].filter(Boolean).join(' '),
+    MAVEN_OPTS: [mavenOpts, jvm, mavenHome && `-Duser.home=${mavenHome}`].filter(Boolean).join(' '), GRADLE_OPTS: [gradleOpts, jvm].filter(Boolean).join(' '),
   };
 }
