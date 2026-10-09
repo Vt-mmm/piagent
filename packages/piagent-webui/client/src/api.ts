@@ -434,7 +434,7 @@ export async function stageAttachment(command: StageCommand | DiscardCommand, si
 
 // The main agent's questions to the member, waiting in a conversation.
 export type MemberQuestion = { header: string; question: string; options: Array<{ label: string; description: string }>; multiSelect: boolean };
-export type PendingQuestion = { questionRef: string; askedAt: string; questions: MemberQuestion[] };
+export type PendingQuestion = { questionRef: string; askedAt: string; role?: string; questions: MemberQuestion[] };
 export type QuestionAnswer = { skipped: true } | { answers: Array<{ selected: number[]; other?: string }> };
 
 export type PathSuggestion = { value: string; label: string; detail: string; kind: "file" | "directory" };

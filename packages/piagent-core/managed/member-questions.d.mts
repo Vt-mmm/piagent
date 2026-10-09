@@ -8,8 +8,8 @@ export const memberQuestions: {
   pulseMs: number;
   bindSurface(sessionId: string, onEvent: (event: MemberQuestionEvent) => void): () => void;
   hasSurface(sessionId: string): boolean;
-  ask(input: { sessionId: string; toolCallId: string; questions: MemberQuestion[]; signal?: AbortSignal }): Promise<MemberAnswer>;
-  pending(sessionId: string): Array<{ questionRef: string; askedAt: string; questions: MemberQuestion[] }>;
+  ask(input: { sessionId: string; toolCallId: string; questions: MemberQuestion[]; signal?: AbortSignal; role?: string }): Promise<MemberAnswer>;
+  pending(sessionId: string): Array<{ questionRef: string; askedAt: string; role: string; questions: MemberQuestion[] }>;
   answer(sessionId: string, questionRef: string, raw: unknown): { questionRef: string; state: "answered" };
 };
 export function askTool(managed: unknown): unknown;

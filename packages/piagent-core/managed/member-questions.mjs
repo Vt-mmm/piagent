@@ -85,11 +85,13 @@ class MemberQuestions {
 
   // Resolves with the normalized answer; rejects 'managed-question-cancelled'
   // when the member stops the turn or the screen goes away.
-  ask({ sessionId, toolCallId, questions, signal }) {
+  // `role` is who asks: the main agent, or a subagent role (scout, research,
+  // verify, review); the screen answers the main agent's first.
+  ask({ sessionId, toolCallId, questions, signal, role = 'main' }) {
     const key = String(sessionId), ref = `question.${crypto.randomUUID()}`;
     return new Promise((resolve, reject) => {
       if (signal?.aborted) return reject(Error('managed-question-cancelled'));
-      const entry = { ref, sessionId: key, toolCallId: String(toolCallId ?? ''), questions, askedAt: new Date().toISOString(), resolve, reject, signal };
+      const entry = { ref, sessionId: key, toolCallId: String(toolCallId ?? ''), role: String(role), questions, askedAt: new Date().toISOString(), resolve, reject, signal };
       entry.onAbort = () => this.#settle(entry, null, 'stopped');
       signal?.addEventListener('abort', entry.onAbort, { once: true });
       entry.pulse = setInterval(() => this.#emit(key, { type: 'waiting', ref }), this.pulseMs);
@@ -108,7 +110,7 @@ class MemberQuestions {
   pending(sessionId) {
     const key = String(sessionId);
     return [...this.#pending.values()].filter(e => e.sessionId === key)
-      .map(e => ({ questionRef: e.ref, askedAt: e.askedAt, questions: structuredClone(e.questions) }));
+      .map(e => ({ questionRef: e.ref, askedAt: e.askedAt, role: e.role, questions: structuredClone(e.questions) }));
   }
   answer(sessionId, questionRef, raw) {
     const entry = REF.test(String(questionRef)) ? this.#pending.get(questionRef) : null;

@@ -711,3 +711,47 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 
 @keyframes piagent-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+
+/* One decision at a time: the steps of what waits, then the current card. */
+.decision-queue { display: grid; gap: 10px; }
+.decision-steps { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.decision-steps > strong { color: var(--warning); font-size: 12px; }
+.decision-steps ol { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.decision-steps li { min-width: 0; max-width: 100%; }
+.decision-step { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 4px 10px 4px 5px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); background: var(--surface-2); font: inherit; font-size: 11px; cursor: pointer; }
+.decision-step:hover { border-color: var(--line-strong); color: var(--text); }
+.decision-step.current { border-color: var(--warning); color: var(--text); background: color-mix(in srgb, var(--warning) 12%, var(--surface-2)); }
+.decision-step:focus-visible { outline: 2px solid var(--warning); outline-offset: 2px; }
+.decision-step-number { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--bg); background: var(--muted); font-size: 10px; font-weight: 800; }
+.decision-step.current .decision-step-number { background: var(--warning); }
+.decision-step-kind { flex: none; font-weight: 750; }
+.decision-step-role { flex: none; color: var(--quiet); }
+.decision-step-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+
+/* What ended or waits in other conversations, at the top right. */
+.attention-toasts { position: fixed; top: 72px; right: 16px; z-index: 1400; display: grid; gap: 8px; width: min(360px, calc(100vw - 32px)); pointer-events: none; }
+.attention-toast { display: flex; align-items: flex-start; gap: 10px; padding: 11px 10px 11px 12px; border: 1px solid var(--line-strong); border-radius: 11px; color: var(--text);
+  background: var(--surface); box-shadow: 0 14px 36px rgba(0, 0, 0, .28); pointer-events: auto; animation: attention-in .22s ease-out; }
+.attention-toast-mark { flex: none; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: var(--positive); }
+.attention-toast.tone-error .attention-toast-mark { background: var(--danger); }
+.attention-toast.tone-neutral .attention-toast-mark { background: var(--muted); }
+.attention-toast.tone-warning { border-color: var(--warning); }
+.attention-toast.tone-warning .attention-toast-mark { background: var(--warning); animation: piagent-pulse 1.4s ease-in-out infinite; }
+.attention-toast-body { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.attention-toast-body strong { overflow: hidden; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.attention-toast-title { font-weight: 600; }
+.attention-toast-body small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.attention-toast-actions { display: flex; flex: none; align-items: center; gap: 2px; }
+.attention-open { min-height: 30px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--text); background: var(--surface-2); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.attention-close { width: 30px; height: 30px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+.attention-open:focus-visible, .attention-close:focus-visible { outline: 2px solid var(--warning); outline-offset: 2px; }
+.attention-more { margin: 0; padding: 0 4px; color: var(--muted); font-size: 11px; text-align: right; }
+@keyframes attention-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* A conversation that waits for the member glows; one that ended unseen is marked. */
+.session-item.attention { box-shadow: inset 3px 0 0 var(--warning); animation: attention-glow 2.4s ease-in-out infinite; }
+.session-item.fresh { box-shadow: inset 3px 0 0 var(--positive); }
+@keyframes attention-glow { 0%, 100% { background: transparent; } 50% { background: color-mix(in srgb, var(--warning) 9%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .attention-toast, .session-item.attention, .attention-toast.tone-warning .attention-toast-mark { animation: none; } }
+@media (max-width: 600px) { .attention-toasts { top: 68px; right: 8px; width: calc(100vw - 16px); } .decision-step-label { max-width: 150px; } }

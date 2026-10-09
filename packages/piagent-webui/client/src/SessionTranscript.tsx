@@ -10,8 +10,8 @@ import Typography from "@mui/material/Typography";
 
 import type { ApprovalSummary } from "../../contracts/generated/snapshot-v1.ts";
 import type { PiagentWebUIBoundedTranscriptProjectionV1 } from "../../contracts/generated/transcript-v1.ts";
-import { ApprovalRequestList } from "./ApprovalPanel.tsx";
-import { QuestionPanel } from "./QuestionPanel.tsx";
+import { DecisionQueue } from "./DecisionQueue.tsx";
+import { waitingQuestion } from "./attention-view-model.ts";
 import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
 import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
@@ -141,8 +141,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     </Alert>}
     {turns.map((turn, index) => <TimelineTurnView key={turn.key} turn={turn} locale={locale}
       onContinue={index === turns.length - 1 && !liveVisible && !(approvals?.pending.length) ? onContinue : undefined} />)}
-    <QuestionPanel sessionRef={sessionRef} waiting={Boolean(live && !live.complete && live.activities.some((item) => item.toolLabel === "ask_user" && item.state === "running"))} />
-    <ApprovalRequestList sessionRef={sessionRef} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
+    <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
     {liveVisible && live && <LiveTurnView user={live.user && !liveUserDuplicated ? live.user : null} attachments={live.attachments}
       activities={live.activities} assistant={live.error ? null : liveAnswer} running={!live.complete && !live.error}
       failure={live.complete && live.error && LIVE_FAILURES.has(live.error) ? live.error : null} locale={locale}

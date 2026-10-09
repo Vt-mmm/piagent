@@ -10,7 +10,11 @@ type Choice = { selected: number[]; other: string; otherOn: boolean };
 const empty = (count: number): Choice[] => Array.from({ length: count }, () => ({ selected: [], other: "", otherOn: false }));
 const answered = (c: Choice) => c.selected.length > 0 || (c.otherOn && c.other.trim().length > 0);
 
-function Card({ sessionRef, pending, locale, onDone }: { sessionRef: string; pending: PendingQuestion; locale: UiLocale; onDone(): void }) {
+// Who asks, as the card names it: the main agent or a subagent role.
+export const askerLabel = (role: string | undefined, locale: UiLocale) => !role || role === "main"
+  ? localize(locale, "Main agent", "Main agent") : localize(locale, `Subagent ${role}`, `Subagent ${role}`);
+
+export function QuestionCard({ sessionRef, pending, locale, onDone }: { sessionRef: string; pending: PendingQuestion; locale: UiLocale; onDone(): void }) {
   const [choices, setChoices] = useState<Choice[]>(() => empty(pending.questions.length));
   const [sending, setSending] = useState<"answer" | "skip" | null>(null), [error, setError] = useState("");
   const otherInputs = useRef<Array<HTMLInputElement | null>>([]), cardRef = useRef<HTMLElement | null>(null), blocks = useRef<Array<HTMLFieldSetElement | null>>([]);
@@ -61,7 +65,7 @@ function Card({ sessionRef, pending, locale, onDone }: { sessionRef: string; pen
   };
   const total = pending.questions.length;
   return <article className="question-card" ref={cardRef} tabIndex={-1} onKeyDown={keys} aria-labelledby={`question-${pending.questionRef}`}>
-    <header><div><p className="section-kicker">{localize(locale, "Main agent cần bạn quyết định", "The main agent needs your decision")}</p>
+    <header><div><p className="section-kicker">{localize(locale, `${askerLabel(pending.role, locale)} cần bạn quyết định`, `${askerLabel(pending.role, locale)} needs your decision`)}</p>
       <h2 id={`question-${pending.questionRef}`}>{total > 1 ? localize(locale, `${total} câu hỏi`, `${total} questions`) : localize(locale, "1 câu hỏi", "1 question")}</h2></div>
       <span className="question-hint">{localize(locale, "Bấm số để chọn · Enter để gửi", "Press a number to choose · Enter to send")}</span></header>
     {pending.questions.map((q, index) => {
@@ -97,11 +101,10 @@ function Card({ sessionRef, pending, locale, onDone }: { sessionRef: string; pen
   </article>;
 }
 
-// `waiting`: the running turn shows the agent's question step; the questions
-// are read then, and once when the conversation opens (a question asked
-// before this page loaded).
-export function QuestionPanel({ sessionRef, waiting }: { sessionRef: string; waiting: boolean }) {
-  const { locale } = useUiPreferences();
+// The questions waiting in a conversation. `waiting`: the running turn
+// shows the agent's question step; the questions are read then, and once when
+// the conversation opens (a question asked before this page loaded).
+export function usePendingQuestions(sessionRef: string, waiting: boolean) {
   const [pending, setPending] = useState<PendingQuestion[]>([]), [tick, setTick] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -116,9 +119,6 @@ export function QuestionPanel({ sessionRef, waiting }: { sessionRef: string; wai
     const timer = setInterval(() => setTick((n) => n + 1), pending.length ? 4000 : 1500);
     return () => clearInterval(timer);
   }, [waiting, pending.length]);
-  if (!pending.length) return null;
-  return <section className="question-stack" aria-label={localize(locale, "Câu hỏi đang chờ bạn trả lời", "Questions waiting for your answer")} aria-live="polite">
-    {pending.map((item) => <Card key={item.questionRef} sessionRef={sessionRef} pending={item} locale={locale}
-      onDone={() => setPending((all) => all.filter((value) => value.questionRef !== item.questionRef))} />)}
-  </section>;
+  const done = (questionRef: string) => setPending((all) => all.filter((value) => value.questionRef !== questionRef));
+  return { pending, done };
 }

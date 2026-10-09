@@ -35,6 +35,7 @@ import { localize, type UiLocale } from "./ui-preferences.tsx";
 import { toneText } from "./tone.ts";
 import { outcomeTone } from "./ProcessNote.tsx";
 import { turnEndLabel, turnEndTone } from "./TurnEndNote.tsx";
+import { sessionNeed } from "./attention-view-model.ts";
 
 export type SessionMenuAction = "rename" | "pin" | "archive" | "unarchive" | "fork";
 
@@ -48,6 +49,7 @@ export function relativeTime(value: string, locale: UiLocale): string {
 
 // running · needs a decision · needs recovery · failed last turn · idle
 export function sessionActivity(session: SessionRow, live?: LiveConversation): "running" | "elsewhere" | "attention" | "recovery" | "failed" | "idle" {
+  if (sessionNeed(session, live)) return "attention";
   if (live && !live.complete) return "running";
   if (session.state === "terminal-owned") return "elsewhere";
   if (session.state === "recovery-required") return "recovery";
@@ -56,13 +58,13 @@ export function sessionActivity(session: SessionRow, live?: LiveConversation): "
   return session.liveState === "running" ? "running" : "idle";
 }
 
-function StateDot({ activity, locale }: { activity: ReturnType<typeof sessionActivity>; locale: UiLocale }) {
-  const color = { running: "primary.main", elsewhere: "info.main", attention: "warning.main", recovery: "error.main", failed: "error.main", idle: "transparent" }[activity];
-  const title = { running: localize(locale, "Đang chạy", "Running"), elsewhere: localize(locale, "Đang chạy ở Terminal hoặc tiến trình khác", "Running in Terminal or another process"), attention: localize(locale, "Cần duyệt", "Needs approval"),
-    recovery: localize(locale, "Cần khôi phục", "Needs recovery"), failed: localize(locale, "Lượt cuối lỗi", "Last turn failed"), idle: "" }[activity];
-  return <Box role={activity === "idle" ? undefined : "img"} aria-label={title || undefined} title={title}
+function StateDot({ activity, locale, fresh = false, question = false }: { activity: ReturnType<typeof sessionActivity>; locale: UiLocale; fresh?: boolean; question?: boolean }) {
+  const color = { running: "primary.main", elsewhere: "info.main", attention: "warning.main", recovery: "error.main", failed: "error.main", idle: fresh ? "success.main" : "transparent" }[activity];
+  const title = { running: localize(locale, "Đang chạy", "Running"), elsewhere: localize(locale, "Đang chạy ở Terminal hoặc tiến trình khác", "Running in Terminal or another process"), attention: question ? localize(locale, "Cần bạn trả lời", "Needs your answer") : localize(locale, "Cần duyệt", "Needs approval"),
+    recovery: localize(locale, "Cần khôi phục", "Needs recovery"), failed: localize(locale, "Lượt cuối lỗi", "Last turn failed"), idle: fresh ? localize(locale, "Xong, chưa xem", "Done, not seen") : "" }[activity];
+  return <Box role={activity === "idle" && !fresh ? undefined : "img"} aria-label={title || undefined} title={title}
     sx={{ width: 8, height: 8, mt: .9, ml: .75, flexShrink: 0, borderRadius: "50%", bgcolor: color,
-      animation: activity === "running" || activity === "elsewhere" ? "piagent-pulse 1.4s ease-in-out infinite" : "none" }} />;
+      animation: activity === "running" || activity === "elsewhere" || activity === "attention" ? "piagent-pulse 1.4s ease-in-out infinite" : "none" }} />;
 }
 
 // How a company conversation's last code-changing turn ended (Harness workflow).
@@ -70,19 +72,20 @@ const OUTCOME_SHORT: Record<string, [string, string]> = { clean: ["Đủ bước
   unreviewed: ["Chưa review", "Not reviewed"], blocking_open: ["Còn lỗi blocking", "Blocking open"], review_unavailable: ["Không review được", "Review unavailable"],
   interrupted: ["Bị dừng", "Stopped"], disputed: ["Cần bạn quyết", "Needs your call"] };
 
-function SessionItem({ session, live, selected, locale, onSelect, onAction, showProject = false }: { session: SessionRow; live?: LiveConversation; selected: boolean;
-  locale: UiLocale; onSelect(): void; onAction(action: SessionMenuAction): void; showProject?: boolean }) {
+function SessionItem({ session, live, selected, locale, onSelect, onAction, showProject = false, fresh = false }: { session: SessionRow; live?: LiveConversation; selected: boolean;
+  locale: UiLocale; onSelect(): void; onAction(action: SessionMenuAction): void; showProject?: boolean; fresh?: boolean }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const choose = (action: SessionMenuAction) => { setAnchor(null); onAction(action); };
   const company = session.modelLabel === "agent-watch-auto", activity = sessionActivity(session, live);
   // A busy session says what it is doing; an idle one, when it last changed.
   const status = activity === "running" ? localize(locale, "Đang chạy", "Running") : activity === "elsewhere" ? localize(locale, "Đang chạy ở nơi khác", "Running elsewhere")
-    : activity === "attention" ? localize(locale, "Cần duyệt", "Needs approval") : null;
+    : activity === "attention" ? (sessionNeed(session, live) === "question" ? localize(locale, "Cần bạn trả lời", "Needs your answer") : localize(locale, "Cần duyệt", "Needs approval"))
+    : fresh ? (activity === "failed" ? localize(locale, "Lỗi · chưa xem", "Failed · not seen") : localize(locale, "Xong · chưa xem", "Done · not seen")) : null;
   // How the last message ended (finished, stopped midway, failed) says more
   // than the code process of its last round; neither while it runs.
   const end = company && activity !== "running" && activity !== "elsewhere" ? session.managedTurnEnd ?? null : null;
   const outcome = !end && company && session.managedProcess && session.managedProcess.outcome !== "no_change" ? session.managedProcess.outcome : null;
-  return <Box sx={{ display: "flex", alignItems: "center", pr: .5 }}><ListItemButton selected={selected} onClick={onSelect}
+  return <Box sx={{ display: "flex", alignItems: "center", pr: .5 }} className={activity === "attention" ? "session-item attention" : fresh ? "session-item fresh" : "session-item"}><ListItemButton selected={selected} onClick={onSelect}
     sx={{ minWidth: 0, alignItems: "flex-start", py: 1, px: 1.4 }}>
     <ListItemText primary={<>{session.pinned && <PushPinOutlined sx={{ fontSize: 13, mr: .5, verticalAlign: "-2px", color: "text.disabled" }} />}{session.title}</>}
       secondary={<>{company && <Box component="span" sx={{ fontWeight: 650, color: "primary.main" }}>{localize(locale, "Công ty", "Company")}<span> · </span></Box>}
@@ -91,7 +94,7 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
         {end && <Box component="span" sx={toneText(turnEndTone(end))}> · {turnEndLabel(end, locale)}</Box>}
         {outcome && <Box component="span" sx={toneText(outcomeTone(outcome))}> · {localize(locale, ...OUTCOME_SHORT[outcome])}</Box>}</>}
       slotProps={{ primary: { noWrap: true, sx: { fontSize: 13.25, fontWeight: selected ? 600 : 500 } },
-        secondary: { noWrap: true, sx: { mt: .25, fontSize: 11.25 } } }} /><StateDot activity={activity} locale={locale} /></ListItemButton>
+        secondary: { noWrap: true, sx: { mt: .25, fontSize: 11.25, ...(activity === "attention" ? { color: "warning.main", fontWeight: 650 } : fresh ? { color: activity === "failed" ? "error.main" : "success.main", fontWeight: 650 } : {}) } } }} /><StateDot activity={activity} locale={locale} fresh={fresh} question={sessionNeed(session, live) === "question"} /></ListItemButton>
     <IconButton size="small" aria-label={localize(locale, "Tùy chọn cuộc trò chuyện", "Chat options")}
       onClick={(event) => setAnchor(event.currentTarget)}><MoreHorizRounded fontSize="small" /></IconButton>
     <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} onClick={(event) => event.stopPropagation()}>
@@ -111,8 +114,13 @@ function readSet(key: string): Set<string> {
 }
 function writeSet(key: string, value: Set<string>) { try { window.localStorage.setItem(key, JSON.stringify([...value].slice(0, 500))); } catch { /* storage may be blocked */ } }
 
+const EMPTY: ReadonlySet<string> = new Set();
+// What needs the member first in the "running · needs attention" list: a
+// decision, then a turn that ended unseen, then work still running.
+const ACTIVE_ORDER: Record<string, number> = { attention: 0, recovery: 1, failed: 2, idle: 3, running: 4, elsewhere: 5 };
 export function SessionSidebar({ locale, canCreate, query, onQuery, groups, count, selectedRef, showArchived, archivedCount, settingsOpen, connection,
-  live, onNew, onSelect, onAction, onToggleArchived, onSettings, updateDot = false }: { locale: UiLocale; updateDot?: boolean; canCreate: boolean; query: string; onQuery(value: string): void;
+  live, unseen = EMPTY, onNew, onSelect, onAction, onToggleArchived, onSettings, updateDot = false }: { locale: UiLocale; updateDot?: boolean; canCreate: boolean; query: string; onQuery(value: string): void;
+  unseen?: ReadonlySet<string>;
   groups: ProjectGroup[]; count: number; selectedRef?: string; showArchived: boolean; archivedCount: number; settingsOpen: boolean;
   connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>; onNew(): void; onSelect(sessionRef: string): void;
   onAction(session: SessionRow, action: SessionMenuAction): void; onToggleArchived(): void; onSettings(): void }) {
@@ -130,7 +138,9 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
   const visible = useMemo(() => groups.map((group) => ({ ...group, sessions: group.sessions.filter((session) => kind === "all" || (kind === "company") === isCompany(session)) }))
     .filter((group) => group.sessions.length > 0), [groups, kind]);
   const shown = visible.reduce((sum, group) => sum + group.sessions.length, 0);
-  const active = showArchived ? [] : visible.flatMap((group) => group.sessions).filter((session) => sessionActivity(session, live[session.sessionRef]) !== "idle");
+  const active = showArchived ? [] : visible.flatMap((group) => group.sessions)
+    .filter((session) => sessionActivity(session, live[session.sessionRef]) !== "idle" || unseen.has(session.sessionRef))
+    .sort((left, right) => ACTIVE_ORDER[sessionActivity(left, live[left.sessionRef])] - ACTIVE_ORDER[sessionActivity(right, live[right.sessionRef])]);
   const toggle = (set: (update: (value: Set<string>) => Set<string>) => void, ref: string, persist: boolean) => set((value) => {
     const next = new Set(value); if (next.has(ref)) next.delete(ref); else next.add(ref);
     if (persist) writeSet(COLLAPSED_KEY, next);
@@ -156,7 +166,7 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
     <List component="div" sx={{ flex: 1, minHeight: 0, overflowY: "auto", py: .25 }}>
       {active.length > 0 && <Box component="section" aria-label={localize(locale, "Đang chạy hoặc cần chú ý", "Running or needing attention")} sx={{ mt: .5 }}>
         <Typography component="div" variant="caption" color="text.secondary" sx={{ px: 2, py: .55, fontWeight: 600 }}>{localize(locale, "Đang chạy · cần chú ý", "Running · needs attention")}</Typography>
-        {active.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]} showProject
+        {active.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]} showProject fresh={unseen.has(session.sessionRef)}
           selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => onSelect(session.sessionRef)} onAction={(action) => onAction(session, action)} />)}
         <Divider sx={{ mx: 2, mt: .75 }} /></Box>}
       {visible.map((group) => { const holdsSelected = group.sessions.some((session) => session.sessionRef === selectedRef);
@@ -174,7 +184,7 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
                   sx={{ display: "inline-flex", alignItems: "center", gap: .4, whiteSpace: "nowrap" }}>
                   <GitBranchIcon sx={{ fontSize: "1.1em" }} />{localize(locale, `${group.gitRepositories.length} repo`, `${group.gitRepositories.length} repos`)}</Box> : null}</Typography>
             <Typography variant="caption" color="text.disabled">{group.sessions.length}</Typography></ButtonBase>
-          {open && items.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]}
+          {open && items.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]} fresh={unseen.has(session.sessionRef)}
             selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => onSelect(session.sessionRef)} onAction={(action) => onAction(session, action)} />)}
           {open && !searching && group.sessions.length > PER_GROUP && <Button size="small" onClick={() => toggle(setExpanded, group.projectRef, false)}
             sx={{ ml: 1.5, mb: .25, fontSize: 12 }}>{all ? localize(locale, "Thu gọn", "Show less") : localize(locale, `Xem thêm ${group.sessions.length - PER_GROUP}`, `Show ${group.sessions.length - PER_GROUP} more`)}</Button>}

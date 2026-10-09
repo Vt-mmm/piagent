@@ -16,6 +16,8 @@ export type ActiveRuntime = {
   completion: Promise<void> | null;
   settling: boolean;
   approvalWaiting: boolean;
+  // A question of the agent waits for the member's answer (session-questions.ts).
+  questionWaiting?: boolean;
   unbindApproval: (() => void) | null;
   unsubscribeApproval: (() => void) | null;
   sessionManager: any | null;

@@ -43,6 +43,8 @@ import { UpdatePrompt } from "./UpdatePrompt.tsx";
 import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
 import { SessionTranscript } from "./SessionTranscript.tsx";
 import { SessionSidebar, sessionActivity, type SessionMenuAction, type ProjectGroup } from "./SessionSidebar.tsx";
+import { useAttention } from "./AttentionToasts.tsx";
+import { sessionNeed } from "./attention-view-model.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { SettingsPage, type SettingsSection } from "./SettingsPage.tsx";
@@ -73,7 +75,8 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
   const activity = sessionActivity(session, live);
   const [text, color] = activity === "running" ? [localize(locale, "Đang chạy", "Running"), "primary"] as const
     : activity === "elsewhere" ? [localize(locale, "Đang chạy ở nơi khác", "Running elsewhere"), "info"] as const
-    : activity === "attention" ? [localize(locale, "Cần duyệt", "Needs approval"), "warning"] as const
+    : activity === "attention" ? (sessionNeed(session, live) === "question" ? [localize(locale, "Cần bạn trả lời", "Needs your answer"), "warning"] as const
+      : [localize(locale, "Cần duyệt", "Needs approval"), "warning"] as const)
       : activity === "recovery" ? [localize(locale, "Cần khôi phục", "Recovery needed"), "error"] as const
         : activity === "failed" ? [localize(locale, "Lượt cuối lỗi", "Last turn failed"), "error"] as const
           : [localize(locale, "Sẵn sàng", "Ready"), "default"] as const;
@@ -444,6 +447,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     if (ref) { setLaunchProject(ref); setView("new"); }
   }, [catalog]);
   const choose = (value: string) => { setLaunchProject(null); setSelectedRef(value); setView("chat"); setMobileOpen(false); };
+  const allSessions = useMemo(() => catalog?.sessions ?? [], [catalog]);
+  const attention = useAttention({ sessions: allSessions, live, selectedRef: view === "chat" ? selectedSessionRef : undefined, onOpen: choose, locale });
   const openSettings = (section: SettingsSection) => { setSettingsSection(section); setSettingsOpen(true); };
   useDashboardShortcuts({ palette: () => setPaletteOpen(true), settings: () => openSettings("general") });
   const openInspector = (active: SessionWorkspaceId) => { setActiveInspector(active); setInspectorOpen(true); };
@@ -594,7 +599,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
 
   const sidebar = <SessionSidebar locale={locale} canCreate={canCreate} query={query} onQuery={setQuery} groups={projectGroups}
     count={sessions.length} selectedRef={view === "chat" ? selected?.sessionRef : undefined} showArchived={showArchived} archivedCount={archivedCount}
-    settingsOpen={settingsOpen} connection={connection} live={live} onSelect={choose} onAction={beginSessionAction}
+    settingsOpen={settingsOpen} connection={connection} live={live} unseen={attention.unseen} onSelect={choose} onAction={beginSessionAction}
     onNew={() => { setCreateError(null); setView("new"); setMobileOpen(false); }}
     onToggleArchived={() => { setShowArchived((value) => !value); setMobileOpen(false); }}
     updateDot={Boolean(updates.status?.updateAvailable && updates.status.installable)}
@@ -667,6 +672,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
     <UpdatePrompt locale={locale} onDetails={() => openSettings("updates")} />
+    {attention.view}
     <StatusBar locale={locale} connection={connection} running={running} session={view === "chat" ? selected : undefined}
       onBranchSwitched={() => void refresh()} onUpdates={() => openSettings("updates")} onPalette={() => setPaletteOpen(true)} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} locale={locale} />

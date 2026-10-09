@@ -10,10 +10,10 @@ import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx"
 
 type Props = { snapshot: PiagentWebUICanonicalSnapshotV1; refreshSnapshot?: () => Promise<PiagentWebUICanonicalSnapshotV1 | undefined> };
 type ListProps = { approvalRefs: string[]; sessionRef?: string; refreshSnapshot?: () => Promise<unknown> };
-type LoadState = { request?: ApprovalRequest; error?: string; deciding?: "allow" | "deny" };
+export type LoadState = { request?: ApprovalRequest; error?: string; deciding?: "allow" | "deny" };
 
-function Card({ state, setState, refreshSnapshot, locale }: { state: LoadState; setState(value: LoadState): void;
-  refreshSnapshot?: () => Promise<unknown>; locale: UiLocale }) {
+export function ApprovalCard({ state, setState, refreshSnapshot, locale, asker }: { state: LoadState; setState(value: LoadState): void;
+  refreshSnapshot?: () => Promise<unknown>; locale: UiLocale; asker?: string }) {
   const request = state.request;
   if (!request) return <article className="approval-card"><p>{state.error ?? localize(locale, "Đang tải yêu cầu phê duyệt…", "Loading approval request…")}</p></article>;
   const action = request.action, remaining = Math.max(0, Math.ceil((Date.parse(request.expiresAt) - Date.now()) / 1000));
@@ -23,7 +23,7 @@ function Card({ state, setState, refreshSnapshot, locale }: { state: LoadState; 
     catch { setState({ request, error: localize(locale, "Yêu cầu đã hết hạn, thay đổi hoặc được trả lời ở terminal. Hãy tải trạng thái mới.", "The request expired, changed, or was answered in the terminal. Refresh status.") }); }
   };
   return <article className={`approval-card risk-${action.riskClass}`} aria-labelledby={`approval-${request.approvalRef}`}>
-    <header><div><p className="section-kicker">{localize(locale, "Cần phê duyệt", "Approval required")}</p><h2 id={`approval-${request.approvalRef}`}>{action.toolName}</h2></div>
+    <header><div><p className="section-kicker">{asker ? localize(locale, `${asker} cần bạn duyệt`, `${asker} needs your approval`) : localize(locale, "Cần phê duyệt", "Approval required")}</p><h2 id={`approval-${request.approvalRef}`}>{action.toolName}</h2></div>
       <span className="approval-risk">{label(action.riskClass, locale)}</span></header>
     <p className="approval-reason">{approvalReasonText(action.reason, locale)}</p>
     {action.commandPreview && <pre className="approval-preview"><code>{action.commandPreview}</code></pre>}
@@ -41,8 +41,9 @@ function Card({ state, setState, refreshSnapshot, locale }: { state: LoadState; 
   </article>;
 }
 
-export function ApprovalRequestList({ approvalRefs: refs, sessionRef, refreshSnapshot }: ListProps) {
-  const { locale } = useUiPreferences();
+// The approval requests behind `refs`, each read once and kept with what the
+// member is doing with it.
+export function useApprovalRequests(refs: string[], sessionRef: string | undefined, locale: UiLocale) {
   const stableRefs = useMemo(() => refs, [refs.join("\0")]);
   const [states, setStates] = useState<Record<string, LoadState>>({});
   useEffect(() => {
@@ -55,10 +56,17 @@ export function ApprovalRequestList({ approvalRefs: refs, sessionRef, refreshSna
     );
     return () => controller.abort();
   }, [locale, sessionRef, stableRefs]);
+  const set = (approvalRef: string, value: LoadState) => setStates((current) => ({ ...current, [approvalRef]: value }));
+  return { refs: stableRefs, states, set };
+}
+
+export function ApprovalRequestList({ approvalRefs: refs, sessionRef, refreshSnapshot }: ListProps) {
+  const { locale } = useUiPreferences();
+  const { refs: stableRefs, states, set } = useApprovalRequests(refs, sessionRef, locale);
   if (stableRefs.length === 0) return null;
   return <section className="approval-stack" aria-label={localize(locale, "Yêu cầu phê duyệt đang chờ", "Pending approval requests")} aria-live="polite">
-    {stableRefs.map((approvalRef) => <Card key={approvalRef} state={states[approvalRef] ?? {}}
-      setState={(value) => setStates((current) => ({ ...current, [approvalRef]: value }))} refreshSnapshot={refreshSnapshot} locale={locale} />)}
+    {stableRefs.map((approvalRef) => <ApprovalCard key={approvalRef} state={states[approvalRef] ?? {}}
+      setState={(value) => set(approvalRef, value)} refreshSnapshot={refreshSnapshot} locale={locale} />)}
   </section>;
 }
 

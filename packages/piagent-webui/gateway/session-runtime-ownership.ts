@@ -6,6 +6,7 @@ type ActiveOwnership = {
   lease: SessionLeaseSnapshot;
   operationRef: string | null;
   approvalWaiting: boolean;
+  questionWaiting?: boolean;
 };
 
 export function projectSessionRuntimeOwnership(options: {
@@ -23,7 +24,7 @@ export function projectSessionRuntimeOwnership(options: {
   if (lease.state === "gateway-owned" && active && active.lease.ownerEpoch === lease.ownerEpoch
     && lease.gatewayInstanceRef === gatewayInstanceRef && active.lease.runtimeInstanceRef === lease.runtimeInstanceRef) return {
     state: "gateway-owned", liveState: active.approvalWaiting ? "waiting-approval" : active.operationRef ? "running" : "idle",
-    composerAvailable: true, needsAttention: active.approvalWaiting,
+    composerAvailable: true, needsAttention: active.approvalWaiting || Boolean(active.questionWaiting),
     owner: { kind: "gateway", ownerEpoch: lease.ownerEpoch!, gatewayInstanceRef: lease.gatewayInstanceRef!,
       runtimeInstanceRef: lease.runtimeInstanceRef!, continuity: "exact" }, reasonCode: null
   };

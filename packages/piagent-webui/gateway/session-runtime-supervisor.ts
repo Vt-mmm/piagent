@@ -146,7 +146,7 @@ export class SessionRuntimeSupervisor {
       }
       const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, messageRequestId: null, cancelWire: null,
         stream: null, unsubscribe: null, completion: null,
-        settling: false, approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null,
+        settling: false, approvalWaiting: false, questionWaiting: false, unbindApproval: null, unsubscribeApproval: null,
         sessionManager: sessionManager ?? runtime.session?.sessionManager ?? null, watchdog: null, lastSessionRevision: null };
       this.#active.set(sessionRef, active);
       this.#bindApproval(sessionRef, active);
@@ -284,7 +284,7 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef), session = active?.runtime.session, stream = active?.stream, watchdog = active?.watchdog;
     if (!active || !session || !stream || !watchdog || active.operationRef !== operationRef) throw new Error("session-operation-conflict");
     if (active.settling && !watchdog.terminating) throw new Error("session-operation-conflict");
-    active.cancelWire?.(reasonCode); active.cancelWire = null; active.settling = true; active.approvalWaiting = false;
+    active.cancelWire?.(reasonCode); active.cancelWire = null; active.settling = true; active.approvalWaiting = false; active.questionWaiting = false;
     const result = await terminateWatchedSessionOperation({ watchdog, settlement, reasonCode, forcedReasonCode, stream,
       completion: () => active.completion,
       settledCleanly: () => this.#active.get(sessionRef) === active && active.operationRef !== operationRef
@@ -301,7 +301,7 @@ export class SessionRuntimeSupervisor {
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.watchdog = null;
     const messageRequestId = active.messageRequestId;
     if (active.operationRef === operationRef) { active.operationRef = null; active.messageRequestId = null; stream.complete(null, activeSessionTask(active.info.cwd, active.info.id)?.trace?.outcome ?? null); }
-    active.stream = null; active.completion = null; active.settling = false; active.approvalWaiting = false;
+    active.stream = null; active.completion = null; active.settling = false; active.approvalWaiting = false; active.questionWaiting = false;
     this.#active.delete(sessionRef); bestEffortUnsubscribe(active.unsubscribeApproval); bestEffortUnsubscribe(active.unbindApproval);
     try { this.#leases.requireRecovery(sessionRef, active.lease.ownerEpoch!, this.#gatewayInstanceRef,
       active.lease.runtimeInstanceRef!, reasonCode); } catch { /* continuity remains fail closed */ }
@@ -312,26 +312,26 @@ export class SessionRuntimeSupervisor {
   }
   #bindApproval(sessionRef: string, active: ActiveRuntime): void {
     const authority = () => sessionApprovalAuthority(this.#key, sessionRef, active);
-    // The main agent's questions to the member are answered here too (session-questions.ts).
-    const unbindQuestions = bindSessionQuestions(active.info.id, () => active.watchdog?.progress()), unbindApproval = piApprovalBroker.bind({
+    // The main agent's questions to the member are answered here too; one waiting marks the conversation (session-questions.ts).
+    const unbindQuestions = bindSessionQuestions(active.info.id, () => active.watchdog?.progress(),
+      (waiting, reasonCode) => { active.questionWaiting = waiting; void this.#publishApprovalState(sessionRef, active, reasonCode); }), unbindApproval = piApprovalBroker.bind({
       cwd: active.info.cwd, rawSessionId: active.info.id, runtimeInstanceId: active.lease.runtimeInstanceRef!, authority });
     active.unbindApproval = () => { unbindQuestions(); unbindApproval(); };
     active.unsubscribeApproval = piApprovalBroker.subscribe(active.info.cwd, active.info.id, (event: ApprovalBrokerEvent) => {
       active.watchdog?.progress();
       const projection = piApprovalBroker.projection(active.info.cwd, active.info.id);
       active.approvalWaiting = projection.summary.state === "waiting";
-      void this.#publishApprovalState(sessionRef, active, event);
+      void this.#publishApprovalState(sessionRef, active, `approval-${event.kind}`);
     });
   }
-  async #publishApprovalState(sessionRef: string, active: ActiveRuntime, event: ApprovalBrokerEvent): Promise<void> {
+  async #publishApprovalState(sessionRef: string, active: ActiveRuntime, reasonCode: string): Promise<void> {
     try {
       const projection = await this.#readProjection?.(sessionRef);
       if (!projection || this.#active.get(sessionRef) !== active) return;
       active.lastSessionRevision = projection.sessionRevision;
       this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
         liveState: active.approvalWaiting ? "waiting-approval" : active.operationRef ? "running" : projection.liveState,
-        operationRef: active.operationRef, ...(active.messageRequestId ? { messageRequestId: active.messageRequestId } : {}),
-        reasonCode: `approval-${event.kind}` });
+        operationRef: active.operationRef, ...(active.messageRequestId ? { messageRequestId: active.messageRequestId } : {}), reasonCode });
     } catch { /* approval truth remains available through the canonical inspection route */ }
   }
   async setModel(sessionRef: string, modelRef: string): Promise<"model-changed" | "no-change"> {
