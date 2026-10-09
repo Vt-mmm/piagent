@@ -4,6 +4,7 @@ import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
 import HubRounded from "@mui/icons-material/HubRounded";
 import ModelTrainingOutlined from "@mui/icons-material/ModelTrainingOutlined";
 import ShieldOutlined from "@mui/icons-material/ShieldOutlined";
+import Alert from "@mui/material/Alert";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -16,6 +17,7 @@ import ListItemText from "@mui/material/ListItemText";
 import Popover from "@mui/material/Popover";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
+import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
@@ -58,6 +60,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const [panel, setPanel] = useState<Panel>(null), [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [options, setOptions] = useState<SessionCreationOptions>(), [optionBusy, setOptionBusy] = useState(false), [optionError, setOptionError] = useState<string | null>(null);
   const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
+  // What became of an access change, shown outside the panel (Bypass closes it for its confirmation).
+  const [permissionNotice, setPermissionNotice] = useState<{ tone: "success" | "info" | "error"; text: string } | null>(null);
   useEffect(() => {
     if (placement !== "header") return;
     const controller = new AbortController(); void readSessionCreationOptions(controller.signal).then(setOptions).catch(() => undefined);
@@ -93,8 +97,20 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const applyPermission = async (value: "read-only" | "workspace-write" | "trusted-full-access") => {
     if (!onSetPermission) return;
     setOptionBusy(true); setOptionError(null);
-    try { await onSetPermission(value); setPermissionValue(value); }
-    catch { setOptionError(localize(locale, "Chưa thể đổi quyền lúc này", "Could not change access right now")); }
+    const name = managed ? companyAccessLabel(value, locale) : label(value, locale);
+    try {
+      await onSetPermission(value); setPermissionValue(value);
+      // A command already waiting keeps its card: the change applies to the commands after it.
+      setPermissionNotice(managed && session.liveState === "waiting-approval"
+        ? { tone: "info", text: localize(locale, `Đã chuyển sang ${name}. Lệnh đang chờ vẫn cần bạn bấm Cho phép hoặc Từ chối; các lệnh sau theo ${name}.`,
+          `Switched to ${name}. The command already waiting still needs Allow or Deny; the next ones follow ${name}.`) }
+        : { tone: "success", text: localize(locale, `Đã chuyển sang ${name}.`, `Switched to ${name}.`) });
+    } catch (error) {
+      const busy = error instanceof Error && error.message === "session-runtime-busy";
+      const text = busy ? localize(locale, "Chưa đổi được quyền: lượt này đang chạy. Đổi lại sau khi lượt xong.", "Access not changed: this turn is running. Change it after the turn ends.")
+        : localize(locale, "Chưa đổi được quyền. Thử lại.", "Access not changed. Try again.");
+      setOptionError(text); setPermissionNotice({ tone: "error", text });
+    }
     finally { setOptionBusy(false); }
   };
   const changePermission = (value: "read-only" | "workspace-write" | "trusted-full-access") => {
@@ -152,7 +168,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         {!connections && <ListItem><ListItemText primary={localize(locale, "Đang đọc…", "Loading…")} /></ListItem>}</List>}
       {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(managed ? ["workspace-write", "trusted-full-access"] as const : ["read-only", "workspace-write", "trusted-full-access"] as const).map((value) =>
         <Button key={value} variant={permissionValue === value ? "contained" : "outlined"} color={value === "trusted-full-access" ? "warning" : "primary"}
-          disabled={!canSetPermission || optionBusy || session.liveState === "running"} onClick={() => changePermission(value)} sx={{ justifyContent: "flex-start" }}>
+          disabled={!canSetPermission || optionBusy || !managed && session.liveState === "running"} onClick={() => changePermission(value)} sx={{ justifyContent: "flex-start" }}>
           {managed ? companyAccessLabel(value, locale) : label(value, locale)}</Button>)}{optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}</Stack>}
       {panel === "changes" && <Box sx={{ px: .5, pt: .75 }}><Stat name={localize(locale, "Task changes", "Task changes")} value={String(source?.task?.counts.files ?? 0)} />
         <Stat name={localize(locale, "Working tree", "Working tree")} value={String(source?.workingTree.counts.files ?? 0)} />
@@ -165,6 +181,9 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
       cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
       onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); void applyPermission("trusted-full-access"); }} />
+    <Snackbar open={permissionNotice !== null} autoHideDuration={permissionNotice?.tone === "success" ? 4000 : 12000} onClose={() => setPermissionNotice(null)}
+      anchorOrigin={{ vertical: "top", horizontal: "center" }}><Alert severity={permissionNotice?.tone ?? "info"} variant="filled" onClose={() => setPermissionNotice(null)}
+      role={permissionNotice?.tone === "error" ? "alert" : "status"}>{permissionNotice?.text}</Alert></Snackbar>
   </>;
 }
 

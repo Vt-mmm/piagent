@@ -369,7 +369,7 @@ export class SessionRuntimeSupervisor {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");
-    if (active.operationRef || !session.isIdle) throw new Error("session-runtime-busy");
+    if (!session.managedExecution && (active.operationRef || !session.isIdle)) throw new Error("session-runtime-busy");
     await executePermissionCommand(session, permissionMode);
     this.#touchCreated(sessionRef);
     return "permission-changed";
