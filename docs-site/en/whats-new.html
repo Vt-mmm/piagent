@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.19.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.20.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.20.0 · 2026-10-09</p>
+  <h2 id="v1-20-0">Package installs in the company sandbox no longer ask</h2>
+  <p class="section-lead">Plain bash commands reach the usual registries: npm, PyPI, the Go proxy, crates.io, Maven Central, Gradle, NuGet, RubyGems, Packagist, pub.dev, CocoaPods and Hex, plus public GitHub downloads (such as the Gradle distribution <span class="inline-code">./gradlew</span> needs). So <span class="inline-code">npm install</span>, <span class="inline-code">pip install</span>, <span class="inline-code">go mod download</span>, <span class="inline-code">./mvnw test</span> and <span class="inline-code">./gradlew test</span> run without waiting for your approval. Piagent goes through a proxy that runs outside the sandbox: only those hosts, on ports 443 and 80, never an IP address, your machine or a private network. Any other host is refused, the error names it, and a command that needs it still goes through <span class="inline-code">run_with_network</span> for your approval. To add your company's registry, write its host name (or <span class="inline-code">*.domain</span>) in <span class="inline-code">~/.piagent/sandbox-domains</span>, one per line. Registry and git credentials still stay out of the sandbox, so nothing is pushed or published.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.19.0 · 2026-10-08</p>
   <h2 id="v1-19-0">Tasks with a checklist are carried to the end, and each turn says whether it finished</h2>

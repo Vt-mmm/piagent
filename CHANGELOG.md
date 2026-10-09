@@ -2,11 +2,14 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.20.0 - 2026-10-09
+
+Package installs in the company sandbox no longer ask.
 
 ### Changes
 
 - Company sandbox: package installs from the usual registries no longer ask. A plain command reaches npm, PyPI, the Go proxy, crates.io, Maven Central, Gradle, Google's Maven, NuGet, RubyGems, Packagist, pub.dev, CocoaPods, Hex and public GitHub downloads (release assets, such as the Gradle Wrapper's distributions, and git dependencies) through a proxy that Piagent runs outside the sandbox. The proxy allows only those hosts (and the member's additions in `~/.piagent/sandbox-domains`, one host or `*.domain` per line), on ports 443 and 80, and never an IP address or a name that resolves to this machine or a private network. Any other host is refused, and the command's failure names it and points to `run_with_network`, which still asks. Registry credentials stay out of the sandbox. Subagents that only read keep no network. `piagent studio --doctor` checks npm through the proxy.
+- Maven and Gradle use the proxy too: the JVM gets the proxy settings, and Maven, which reads its proxy only from `settings.xml`, gets a settings file in the sandbox's own home. A live check ran `./mvnw test` and `./gradlew test`, each downloading its distribution, plugins and JUnit through the proxy, and the next conversation ran `./mvnw -o test` offline from the project's cache.
 
 ## v1.19.0 - 2026-10-08
 
