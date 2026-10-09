@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
 import { languageEnvironment } from './language-environment.mjs';
 import { containerEngine, engineEnvironment } from './container-engine.mjs';
+import { DEFAULT_DOMAINS, PackageProxy, memberDomains, proxyEnvironment } from './package-proxy.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
 import { agentWatchDataDirectory } from './store.mjs';
 
@@ -39,7 +40,7 @@ function referenceRules(home, roots) {
 (deny file-read-data file-read-xattr (require-all (require-any (regex #"^${pattern(home)}/\\.") (subpath ${literal(path.join(home, 'Library'))}))${opened}))`;
 }
 
-export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false, references = null, skills = [], caches = [], loopback = true, license = null, docker = null }) {
+export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false, references = null, skills = [], caches = [], loopback = true, license = null, docker = null, proxyPort = null }) {
   // Default-deny protects Keychain/SSH agent/Watch IPC and process inspection.
   // System libraries/toolchains are read-only. Writes stay in this project and
   // a fresh temporary directory. No network exception or unsandboxed fallback.
@@ -93,13 +94,15 @@ ${referenceRules(references, readRoots)}
 (allow network-bind network-inbound (local ip "localhost:*"))
 (allow iokit-open (iokit-user-client-class "RootDomainUserClient"))
 (allow mach-register mach-lookup (global-name-regex #"^org\\.chromium\\."))
-${network ? `(allow network-outbound (remote ip))
+${proxyPort && !network ? `(allow mach-lookup (global-name "com.apple.trustd.agent") (global-name "com.apple.SecurityServer") (global-name "com.apple.ocspd"))
+(allow file-read* (subpath "/private/var/db/mds") (literal "/Library/Keychains/System.keychain") (subpath "/Library/Security/Trust Settings"))
+` : ''}${network ? `(allow network-outbound (remote ip))
 (allow network-outbound (literal "/private/var/run/mDNSResponder"))
 (allow system-socket)
 (allow mach-lookup (global-name "com.apple.dnssd.service") (global-name "com.apple.trustd.agent") (global-name "com.apple.SystemConfiguration.configd"))
 (allow mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.ocspd"))
 (allow file-read* (subpath "/private/var/db/mds") (literal "/Library/Keychains/System.keychain") (subpath "/Library/Security/Trust Settings"))${docker ? `
-(allow network-outbound (literal ${literal(docker)}))` : ''}` : loopback ? '(allow network-outbound (remote ip "localhost:*"))' : ''}
+(allow network-outbound (literal ${literal(docker)}))` : ''}` : loopback ? '(allow network-outbound (remote ip "localhost:*"))' : proxyPort ? `(allow network-outbound (remote ip "localhost:${Number(proxyPort)}"))` : ''}
 ${denied.map(root => `(deny file-read* file-write* (require-all (subpath ${literal(root)})${skills.filter(dir => inside(dir, root) && dir !== root).map(dir => ` (require-not (subpath ${literal(dir)}))`).join('')}))`).join('\n')}
 (deny file-read* file-read-metadata file-write* (require-all (require-any (regex #"(^|/)(\\.env([./]|$)|credentials([./]|$)|\\.npmrc$|\\.netrc$)") (regex #"/\\.[^/]+/auth\\.json$") ${projectRoots.map(root => `(literal ${literal(path.join(root, 'auth.json'))})`).join(' ')})
   (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))
@@ -266,6 +269,10 @@ export class ManagedToolBoundary {
     this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers, languages,
       identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) });
     if (this.engine) this.environment.docker = { ...this.environment.network, ...engineEnvironment(this.engine, this.home) };
+    // Package registries without asking (package-proxy.mjs): commands that
+    // write the project reach them through the runtime's proxy; read-only
+    // helpers keep no network at all.
+    if (!readOnly) this.proxyReady = this.startProxy(base, languages);
     if (searchTools) provisionSearchTools(this.home, userHome);
     else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
     this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit'].includes(name) && (name !== 'bash' || commands)) : [...TOOL_NAMES];
@@ -281,7 +288,44 @@ export class ManagedToolBoundary {
       this.#tail = run.catch(() => {}); return run;
     } }));
   }
+  // The proxy listens on loopback (macOS: Seatbelt opens its one port even
+  // while a local proxy closes the rest of loopback) or on a Unix socket that
+  // the worker forwards from inside the command's network namespace (Linux).
+  async startProxy(base, languages) {
+    this.proxy = new PackageProxy({ domains: [...DEFAULT_DOMAINS, ...memberDomains(this.userHome)] });
+    try {
+      let url;
+      if (this.linux) {
+        this.proxySocket = path.join(os.tmpdir(), `piagent-proxy-${randomUUID().slice(0, 8)}.sock`);
+        await this.proxy.listen(this.proxySocket);
+        url = 'http://127.0.0.1:3128';
+        this.environment.offline.PIAGENT_PROXY_SOCKET = '/run/piagent-proxy.sock';
+      } else {
+        const { port } = await this.proxy.listen();
+        url = `http://127.0.0.1:${port}`;
+        // TLS through the macOS Security framework (Go, Swift, .NET) verifies
+        // the registries' certificates with the system's trust services.
+        this.profile = managedSeatbelt({ ...base, references: this.userHome, proxyPort: port });
+        this.isolatedProfile = managedSeatbelt({ ...base, references: this.userHome, loopback: false, proxyPort: port });
+      }
+      const offline = this.environment.offline;
+      for (const key of ['npm_config_fetch_retries', 'npm_config_fetch_timeout', 'PIP_RETRIES', 'PIP_TIMEOUT']) delete offline[key];
+      Object.assign(offline, proxyEnvironment(url, { mavenOpts: offline.MAVEN_OPTS, gradleOpts: offline.GRADLE_OPTS }), { GOPROXY: languages.env.network.GOPROXY });
+      this.proxyUrl = url;
+    } catch { await this.proxy.close().catch(() => {}); this.proxy = null; }
+  }
   async invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
+    await this.proxyReady;
+    const before = this.proxy?.deniedCount ?? 0;
+    try { return await this.#invoke(name, args, signal, onUpdate, model, { network, docker }); }
+    catch (error) {
+      // A command that failed after the proxy refused a host: name the hosts.
+      const refused = !network && !docker && this.proxy ? this.proxy.deniedSince(before) : [];
+      if (!refused.length) throw error;
+      throw new Error(`managed-domain-blocked: Lệnh thường chỉ tải được từ các registry package quen thuộc (npm, PyPI, Go, crates.io, Maven, Gradle, NuGet, RubyGems, Packagist, pub.dev…). Host bị chặn: ${refused.join(', ')}. Nếu lệnh thật sự cần host này, dùng run_with_network để người dùng duyệt đúng lệnh đó.\n${String(error?.message ?? error)}`);
+    }
+  }
+  async #invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
     if (docker && !this.engine) throw new Error('managed-tool-unavailable');
     network ||= docker;
     if (this.#closed || !this.allowed.includes(name) || network && (name !== 'bash' || !this.networkAllowed)) throw new Error('managed-tool-unavailable');
@@ -365,7 +409,7 @@ export class ManagedToolBoundary {
       this.projectCredentials = { at: Date.now(), files: credentialFiles([this.cwd, ...this.linuxBase.repository]) };
     const credentials = [...this.projectCredentials.files, ...(network ? [] : this.referenceCredentials)];
     const { engineRoots, ...base } = this.linuxBase;
-    return bubblewrapArgs({ ...base, references: network ? [] : base.references, network, credentials,
+    return bubblewrapArgs({ ...base, references: network ? [] : base.references, network, credentials, proxySocket: network ? null : this.proxySocket,
       ...(docker ? { docker: this.engine.socket, toolchains: [...base.toolchains, ...engineRoots] } : {}) });
   }
   // Processes a command left running (`nohup … &`, a detached child) outlive
@@ -394,6 +438,8 @@ export class ManagedToolBoundary {
     const stopping = [...this.#children].map(child => new Promise(resolve => { child.once('close', resolve); child.managedCancel(); }));
     await Promise.all(stopping); await this.#tail;
     await this.stopStrays();
+    await this.proxyReady; await this.proxy?.close().catch(() => {});
+    if (this.proxySocket) fs.rmSync(this.proxySocket, { force: true });
     fs.rmSync(this.temporary, { recursive: true, force: true });
   }
 }

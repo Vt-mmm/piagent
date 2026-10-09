@@ -7,6 +7,21 @@ import { pathToFileURL } from 'node:url';
 // A dedicated, credential-free process already inside Seatbelt. The launch
 // profile and environment are supplied by the trusted runtime, never the LLM.
 const [sdkPath, cwd] = process.argv.slice(2);
+// Linux: the command's network namespace reaches the package proxy only
+// through the socket mounted at PIAGENT_PROXY_SOCKET; this forwards the
+// proxy address the environment names (127.0.0.1:3128) to it.
+const proxySocket = process.env.PIAGENT_PROXY_SOCKET;
+if (proxySocket) {
+  const net = await import('node:net');
+  const forward = net.createServer(client => {
+    const upstream = net.connect(proxySocket);
+    client.on('error', () => upstream.destroy()); upstream.on('error', () => client.destroy());
+    client.pipe(upstream); upstream.pipe(client);
+  });
+  forward.unref();
+  await new Promise(resolve => { forward.once('error', resolve); forward.listen(3128, '127.0.0.1', resolve); });
+  delete process.env.PIAGENT_PROXY_SOCKET;
+}
 const api = await import(pathToFileURL(sdkPath).href);
 const factories = { read: api.createReadToolDefinition, write: api.createWriteToolDefinition,
   edit: api.createEditToolDefinition, bash: api.createBashToolDefinition,

@@ -51,6 +51,13 @@ test('mounts go parent first, the project over its reference folder, masks last,
     assert.ok(joined.indexOf(`--bind ${project}`) < joined.indexOf(`--ro-bind ${base}/tmp/empty ${project}/.env`), 'masks come after mounts');
     assert.deepEqual(offline.slice(-4), ['--remount-ro', '/', '--chdir', project]);
     assert.ok(!joined.includes('/run/WSL'), 'WSL interop is never mounted');
+    // The package proxy's socket (package-proxy.mjs) and the Docker engine's, before the root turns read-only.
+    const proxySocket = path.join(base, 'tmp/proxy.sock'), docker = path.join(base, 'docker.sock');
+    write(proxySocket, ''); write(docker, '');
+    const extra = bubblewrapArgs({cwd: project, sdkRoot: path.join(base, 'sdk'), runtimeRoot: path.join(base, 'runtime'), temporary: path.join(base, 'tmp'),
+      empty: path.join(base, 'tmp/empty'), node: process.execPath, network: false, proxySocket, docker}).join(' ');
+    assert.ok(extra.includes(`--bind ${proxySocket} /run/piagent-proxy.sock`) && extra.includes(`--bind ${docker} ${docker}`));
+    assert.ok(extra.indexOf('/run/piagent-proxy.sock') < extra.indexOf('--remount-ro'));
   } finally { fs.rmSync(base, {recursive: true, force: true}); }
 });
 

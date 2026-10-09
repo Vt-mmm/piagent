@@ -52,7 +52,7 @@ export function credentialFiles(roots, { limit = SCAN_ENTRIES } = {}) {
 }
 
 const depth = file => file.split('/').length;
-export function bubblewrapArgs({ cwd, sdkRoot, runtimeRoot, temporary, empty, node, readOnly = false, repository = [], gitDirs = [], toolchains = [], skills = [], caches = [], references = [], network = false, credentials = [], docker = null }) {
+export function bubblewrapArgs({ cwd, sdkRoot, runtimeRoot, temporary, empty, node, readOnly = false, repository = [], gitDirs = [], toolchains = [], skills = [], caches = [], references = [], network = false, credentials = [], docker = null, proxySocket = null }) {
   const exists = file => { try { fs.statSync(file); return true; } catch { return false; } };
   const readable = [...new Set([sdkRoot, runtimeRoot, path.dirname(node), ...repository, ...toolchains, ...skills, ...references, ...(readOnly ? [cwd, ...gitDirs] : [])])].filter(exists);
   const writable = [...new Set([...caches, ...(readOnly ? [] : [cwd, ...gitDirs])])].filter(exists);
@@ -68,6 +68,9 @@ export function bubblewrapArgs({ cwd, sdkRoot, runtimeRoot, temporary, empty, no
     ...credentials.filter(item => exists(item.path)).flatMap(item => item.directory ? ['--tmpfs', item.path] : ['--ro-bind', empty, item.path]),
     // An approved Docker command reaches the engine's socket (run_with_docker).
     ...(docker && exists(docker) ? ['--bind', docker, docker] : []),
+    // A command without network reaches the package proxy (package-proxy.mjs)
+    // through this socket; the worker forwards 127.0.0.1:3128 to it.
+    ...(proxySocket && exists(proxySocket) ? ['--bind', proxySocket, '/run/piagent-proxy.sock'] : []),
     '--remount-ro', '/', '--chdir', cwd,
   ];
 }

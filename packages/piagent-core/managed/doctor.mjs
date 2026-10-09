@@ -66,6 +66,11 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
       let refused = false; try { await bash('curl -sS -m 5 https://example.com/ >/dev/null'); } catch { refused = true; }
       if (!refused) throw Error('a command reached the internet without approval'); return 'blocked';
     });
+    // Package registries through the runtime's proxy (package-proxy.mjs).
+    if (network) await check('package registries without approval (npm through the proxy)', false, async () => {
+      const status = await bash('curl -sS -m 15 -o /dev/null -w "%{http_code}" https://registry.npmjs.org/');
+      if (status !== '200') throw Error(`HTTP ${status}`); return 'registry.npmjs.org';
+    });
     await check('git', true, () => bash('git --version'));
     await check('git commit with the member\'s identity', false, async () => {
       await bash('git init -q . && git add -A');

@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changes
+
+- Company sandbox: package installs from the usual registries no longer ask. A plain command reaches npm, PyPI, the Go proxy, crates.io, Maven Central, Gradle, Google's Maven, NuGet, RubyGems, Packagist, pub.dev, CocoaPods and Hex through a proxy that Piagent runs outside the sandbox. The proxy allows only those hosts (and the member's additions in `~/.piagent/sandbox-domains`, one host or `*.domain` per line), on ports 443 and 80, and never an IP address or a name that resolves to this machine or a private network. Any other host is refused, and the command's failure names it and points to `run_with_network`, which still asks. Registry credentials stay out of the sandbox. Subagents that only read keep no network. `piagent studio --doctor` checks npm through the proxy.
+
 ## v1.19.0 - 2026-10-08
 
 A company task with a checklist is carried to its end, every turn says how it ended, Docker in the company sandbox, and folders that hold several repositories.

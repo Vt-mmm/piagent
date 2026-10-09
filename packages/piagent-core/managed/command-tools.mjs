@@ -13,7 +13,7 @@ const PARAMETERS = { type: 'object', properties: { command: { type: 'string', mi
 const KINDS = {
   network: {
     name: 'run_with_network', label: 'Run with network', scope: 'network-command-once', provider: 'network', riskClass: 'medium',
-    description: 'Run one shell command that needs the internet (package install, download, git pull of a public repository), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no network and cannot listen on a port. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
+    description: 'Run one shell command that needs the internet beyond the package registries bash already reaches (a download, a git dependency or git pull of a public repository, a registry the proxy refuses), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no network and cannot listen on a port. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
     allow: 'Run this exact command once, with internet access; a server it starts accepts connections while it runs.',
     title: 'Chạy lệnh có internet', allowText: 'chạy đúng lệnh này một lần, có internet; server nó mở nhận kết nối trong lúc chạy.',
     confirm: (self, command) => networkConfirmation(self, command),
