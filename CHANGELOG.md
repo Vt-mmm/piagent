@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changes
+
+- Studio logs each context compaction of a company conversation. The summary calls carry `X-Agent-Compaction` (`<id>;<reason>;<part>`, reason `threshold`, `overflow` or `manual`), and the main agent's next call carries `X-Agent-Compacted` (`<id>;<reason>;<done|failed|aborted>;<tokens before>;<tokens after>;<ms>`, Pi's own counts). Logs → Lượt agent shows "Compact context 244k → 34k · context chạm ngưỡng · 2 lượt tóm tắt". No summary text leaves the machine. Needs Studio with migration 046; an older Studio ignores the headers.
+
 ## v1.20.0 - 2026-10-09
 
 Package installs in the company sandbox no longer ask; a long subagent no longer gets its turn stopped; the review subagent reads work committed in earlier turns.

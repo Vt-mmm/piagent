@@ -17,7 +17,7 @@ import { enableCompanyTurnRetry, wrapRoleStreams } from './request-stream.mjs';
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { stageCompaction, compactEarly, backOffFailedCompaction } from './compaction.mjs';
+import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction } from './compaction.mjs';
 import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from './patch-snapshot.mjs';
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
@@ -180,7 +180,7 @@ export class ManagedSession {
       if (event?.type === 'tool_execution_end' && event.isError && textContent(event.result ?? {}) === `Tool ${event.toolName} not found`) self.run && (self.run.unknownTools += 1);
     });
     await stageCompaction(self.session, self.api, self.sdk);
-    compactEarly(settings); backOffFailedCompaction(self.session);
+    compactEarly(settings); backOffFailedCompaction(self.session); trackCompaction(self, self.session);
     self.publishHelpers();
     const setThinking=self.session.setThinkingLevel.bind(self.session);
     self.runThinking = setThinking;

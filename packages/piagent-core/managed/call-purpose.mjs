@@ -36,7 +36,26 @@ export function purposeHeaders(owner, runtime, role, context) {
   else if (['harness', 'continue'].includes(owner.nextPurpose)) { purpose = owner.nextPurpose; owner.nextPurpose = null; }
   else purpose = 'answer';
   const title = purpose === 'brief' ? owner.jobTitles?.get(runtime) : '';
-  return { 'X-Agent-Purpose': purpose, ...(after ? { 'X-Agent-After': after } : {}), ...(title ? { 'X-Agent-Task': encodeURIComponent(title) } : {}) };
+  return { 'X-Agent-Purpose': purpose, ...(after ? { 'X-Agent-After': after } : {}), ...(title ? { 'X-Agent-Task': encodeURIComponent(title) } : {}),
+    ...(role === 'main' ? compactionHeaders(owner, purpose) : {}) };
+}
+
+// The main agent's compaction (trackCompaction in compaction.mjs): each
+// summary call names it, why it ran and which part it is ("<id>;threshold;2");
+// the next other call says how it ended, with Pi's token counts before and
+// after and how long it took ("<id>;threshold;done;244039;34237;81000"), once.
+const count = n => Number.isFinite(n) && n >= 0 ? String(Math.round(n)) : '';
+export function compactionHeaders(owner, purpose) {
+  const out = {}, now = owner.compaction, ended = owner.compacted;
+  if (purpose === 'summary' && now) {
+    now.part = Math.min(now.part + 1, 999);
+    out['X-Agent-Compaction'] = `${now.id};${now.reason};${now.part}`;
+  }
+  if (purpose !== 'summary' && ended) {
+    owner.compacted = null;
+    out['X-Agent-Compacted'] = [ended.id, ended.reason, ended.outcome, count(ended.before), count(ended.after), count(ended.ms)].join(';');
+  }
+  return out;
 }
 
 // Pi folds the system prompt into a leading system message before a call

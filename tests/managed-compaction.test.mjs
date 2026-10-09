@@ -25,7 +25,8 @@ async function studio(perToken = 4) {
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8'), body = JSON.parse(raw), tokens = Math.ceil(raw.length / perToken);
-    const summary = SUMMARY.test(raw), n = requests.push({ model: body.model, tokens, summary, previous: raw.includes('<previous-summary>'), raw: summary ? raw : null });
+    const summary = SUMMARY.test(raw), n = requests.push({ model: body.model, tokens, summary, previous: raw.includes('<previous-summary>'), raw: summary ? raw : null,
+      compaction: req.headers['x-agent-compaction'], compacted: req.headers['x-agent-compacted'] });
     if (raw.length > 4 << 20) {
       requests[n - 1].refused = 'studio';
       res.writeHead(413, { 'Content-Type': 'application/json', 'X-Should-Retry': 'false' });
@@ -92,6 +93,14 @@ test('a conversation near the window is summarised inside its run and goes on', 
     assert.deepEqual(agent.calls, ['config', 'start', 'renew', 'close', 'start', 'renew', 'renew', 'close']);
     await managed.session.prompt('third');
     assert.equal(answers(managed).at(-1).stopReason, 'stop');
+    // Studio's logs: the summary call names the compaction, the next call says how it ended.
+    const [, , summarised, next] = server.requests;
+    const [id, reason, part] = summarised.compaction.split(';');
+    assert.match(id, /^[0-9a-f-]{36}$/); assert.equal(reason, 'threshold'); assert.equal(part, '1');
+    const [endId, endReason, outcome, before, after, took] = next.compacted.split(';');
+    assert.deepEqual([endId, endReason, outcome], [id, 'threshold', 'done']);
+    assert.ok(Number(before) > 250000 && Number(after) > 0 && Number(after) < Number(before) && Number(took) >= 0, next.compacted);
+    assert.ok(server.requests.filter(request => request.compacted).length === 1 && server.requests.slice(0, 2).every(request => !request.compaction));
     assert.ok(server.requests.at(-1).tokens < 150000, 'the older part is now a summary');
     assert.ok(!server.requests.some(request => request.refused));
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
@@ -115,6 +124,8 @@ test('a history longer than the new harness model\'s window is summarised in par
     assert.ok(summaries.length >= 3, `summarised in ${summaries.length} parts`);
     assert.ok(summaries.every(request => request.model === 'gpt-6-sol' && request.tokens < 272000 && !request.refused));
     assert.deepEqual(summaries.map(request => request.previous), summaries.map((_, index) => index > 0), 'each part updates the summary of the parts before');
+    assert.deepEqual(summaries.map(request => request.compaction.split(';').slice(1).join(';')), summaries.map((_, index) => `threshold;${index + 1}`), 'every part names the one compaction');
+    assert.equal(new Set(summaries.map(request => request.compaction.split(';')[0])).size, 1);
     assert.match(summaries[1].raw, /SUMMARY_\d+/);
     assert.match(summaries[0].raw, /turn 1 /); assert.match(summaries.at(-1).raw, /turn 10 /);
     assert.match(compactions(managed)[0].summary, /^SUMMARY_\d+/);

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { failureCode } from '../runtime/managed-failure.mjs';
 import { currentPlan, unfinished, planText } from './workflow.mjs';
@@ -106,4 +107,26 @@ export async function stageCompaction(session, api, sdk) {
     return withPlan({ summary: summary + formatFileOperations(readFiles, modifiedFiles), firstKeptEntryId: preparation.firstKeptEntryId,
       tokensBefore: preparation.tokensBefore, usage, details: { readFiles, modifiedFiles } });
   };
+}
+
+// What a compaction did, for Studio's logs (Logs → "Lượt agent"): its summary
+// calls name it (X-Agent-Compaction) and the main agent's next call says how
+// it ended (X-Agent-Compacted, see compactionHeaders). Pi's own token counts
+// only; no summary text leaves.
+export function trackCompaction(owner, session, now = Date.now) {
+  const run = session._runDefaultCompaction?.bind(session);
+  if (!run) throw Error('managed-sdk-version-unqualified');
+  session._runDefaultCompaction = (preparation, ...rest) => {
+    if (owner.compaction) owner.compaction.before ??= preparation?.tokensBefore;
+    return run(preparation, ...rest);
+  };
+  session.subscribe(event => {
+    if (event?.type === 'compaction_start') owner.compaction = { id: randomUUID(), reason: event.reason, part: 0, at: now() };
+    else if (event?.type === 'compaction_end' && owner.compaction) {
+      const c = owner.compaction;
+      owner.compaction = null;
+      owner.compacted = { id: c.id, reason: c.reason, outcome: event.result ? 'done' : event.aborted ? 'aborted' : 'failed',
+        before: event.result?.tokensBefore ?? c.before, after: event.result?.estimatedTokensAfter, ms: now() - c.at };
+    }
+  });
 }
