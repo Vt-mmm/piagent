@@ -44,6 +44,23 @@ export function gitOutput(cwd, args, options = {}) {
   });
 }
 
+// Found live on Windows: a project on a Windows drive seen from WSL
+// (/mnt/d/…), where Git walks the tree through a slow file system. The
+// working-tree scan is synchronous, so the company Gateway answered nobody
+// while it ran, each inspection of the page started it again, and the
+// dashboard waiting for that Gateway kept loading. With `gitTimeoutMs` (the
+// inspection passes it; completion evidence does not) a root whose scan runs
+// past the limit is recorded as unavailable and left alone for a while.
+const SLOW_GIT_ROOT_MS = 5 * 60_000;
+const slowGitRoots = new Map();
+export function isSlowGitRoot(cwd) { return (slowGitRoots.get(cwd) ?? 0) > Date.now(); }
+// True when `error` is a scan stopped at its limit; the root is then remembered as slow.
+export function noteSlowGitRoot(cwd, error) {
+  if (error?.code !== "ETIMEDOUT" && error?.signal !== "SIGKILL") return false;
+  slowGitRoots.set(cwd, Date.now() + SLOW_GIT_ROOT_MS);
+  return true;
+}
+
 export function isGitWorkingTree(cwd) {
   try {
     return gitOutput(cwd, ["rev-parse", "--is-inside-work-tree"]).trim() === "true";
