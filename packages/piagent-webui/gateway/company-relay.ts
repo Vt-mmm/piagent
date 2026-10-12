@@ -31,6 +31,13 @@ const KINDS = new Set<GatewayEventKind>(["catalog.changed", "session.changed", "
   "message.completed", "operation.settled", "tool.started", "tool.completed"]);
 const LOOPBACK = /^http:\/\/127\.0\.0\.1:\d{1,5}$/;
 const CATALOG_REUSE_MS = 5_000;
+// A company Gateway that takes the connection and never answers (found on
+// Windows/WSL) kept every list of the dashboard loading: the browser waits for
+// the catalog without a limit, and the catalog waited for the company rows.
+// A read is given this long, a change as long as a command; a Gateway that
+// missed one is left alone for a while, not asked again by every read.
+const READ_TIMEOUT_MS = 15_000, ANSWER_TIMEOUT_MS = 5_000, CHANGE_TIMEOUT_MS = 120_000, STALL_RETRY_MS = 60_000;
+const timedOut = (error: unknown) => error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 const failure = (error: unknown, fallback: string) => error instanceof Error && /^[a-z][a-z0-9:._-]{2,95}$/.test(error.message) ? error.message : fallback;
 
 export class CompanyRelay {
@@ -54,11 +61,15 @@ export class CompanyRelay {
   #retry: NodeJS.Timeout | null = null;
   #closed = false;
   #lastAttach = 0;
+  #stalledAt = 0;
+  readonly #readTimeoutMs: number;
+  readonly #answerTimeoutMs: number;
 
   constructor(options: { connector: CompanyConnector; events: GatewayEventStore; hubProject(cwd: string): string;
-    folder(projectRef: string): Promise<string | null> }) {
+    folder(projectRef: string): Promise<string | null>; readTimeoutMs?: number; answerTimeoutMs?: number }) {
     this.#connector = options.connector; this.#events = options.events;
     this.#hubProject = options.hubProject; this.#folder = options.folder;
+    this.#readTimeoutMs = options.readTimeoutMs ?? READ_TIMEOUT_MS; this.#answerTimeoutMs = options.answerTimeoutMs ?? ANSWER_TIMEOUT_MS;
   }
 
   status(): CompanyStatus {
@@ -91,9 +102,12 @@ export class CompanyRelay {
         if (!socket) throw new Error("company-gateway-stopped");
         this.#link = await this.#bootstrap(socket);
         await this.#open(this.#link);
+        // Ready only once a read is answered: the reads of the dashboard wait on it.
+        await this.#answers(this.#link);
         this.#state = "ready"; this.#fresh = false;
       } catch (error) {
         const reason = failure(error, "company-connect-failed");
+        if (reason === "company-gateway-timeout") this.#drop();
         // Agent Watch re-imports after an update on its own, so a changed
         // binding is not kept once a later attach finds nothing running.
         this.#state = "unavailable";
@@ -128,7 +142,7 @@ export class CompanyRelay {
     if (typeof launch !== "string") throw new Error("company-gateway-starting");
     const url = new URL(launch), capability = new URLSearchParams(url.hash.slice(1)).get("bootstrap");
     if (!LOOPBACK.test(url.origin) || !capability) throw new Error("company-gateway-invalid");
-    const response = await fetch(`${url.origin}/api/v1/bootstrap`, { method: "POST", redirect: "error",
+    const response = await fetch(`${url.origin}/api/v1/bootstrap`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(this.#readTimeoutMs),
       headers: { Origin: url.origin, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ capability }) });
     const cookie = response.headers.get("set-cookie")?.split(";", 1)[0], body = await response.json().catch(() => null) as { csrfToken?: unknown } | null;
     if (!response.ok || !cookie || typeof body?.csrfToken !== "string") throw new Error("company-gateway-auth-failed");
@@ -177,6 +191,33 @@ export class CompanyRelay {
     });
   }
 
+  // Lets go of a company Gateway that does not answer, without waiting for its socket to close.
+  #drop(): void {
+    this.#stalledAt = Date.now();
+    const ws = this.#ws; this.#ws = null; this.#link = null; ws?.terminate();
+    for (const [, pending] of this.#pending) { clearTimeout(pending.timer); pending.reject(new Error("company-gateway-timeout")); }
+    this.#pending.clear();
+  }
+
+  async #answers(link: Link): Promise<void> {
+    try {
+      const response = await fetch(`${link.origin}/api/v1/session-live-state`, { redirect: "error", signal: AbortSignal.timeout(this.#answerTimeoutMs),
+        headers: { Accept: "application/json", Origin: link.origin, Cookie: link.cookie } });
+      await response.arrayBuffer();
+    } catch (error) { throw timedOut(error) ? new Error("company-gateway-timeout") : error; }
+  }
+
+  // A read that was not answered in time: the company rows are left out and
+  // the Gateway is asked again later, so the dashboard's own lists keep loading.
+  #stalled(): void {
+    this.#drop();
+    this.#state = "unavailable"; this.#reason = "company-gateway-timeout";
+    this.#events.publish("catalog.changed", { reasonCode: "company-unavailable" });
+    if (this.#closed) return;
+    if (this.#retry) clearTimeout(this.#retry);
+    this.#retry = setTimeout(() => void this.connect(false), STALL_RETRY_MS); this.#retry.unref();
+  }
+
   // Reads only attach; starting the company runtime (and possibly asking for
   // Keychain access) is left to commands and the explicit connect route.
   async #ready(launch = false): Promise<Link> {
@@ -190,10 +231,18 @@ export class CompanyRelay {
   async http(method: "GET" | "POST", path: string, body?: unknown): Promise<{ status: number; value: unknown }> {
     for (let attempt = 0; ; attempt += 1) {
       const link = await this.#ready();
-      const response = await fetch(`${link.origin}${path}`, { method, redirect: "error",
-        headers: { Accept: "application/json", Origin: link.origin, Cookie: link.cookie,
-          ...(method === "POST" ? { "Content-Type": "application/json", "X-Piagent-CSRF": link.csrf } : {}) },
-        body: method === "POST" ? JSON.stringify(body) : undefined });
+      let response: Response;
+      try {
+        response = await fetch(`${link.origin}${path}`, { method, redirect: "error",
+          signal: AbortSignal.timeout(method === "GET" ? this.#readTimeoutMs : CHANGE_TIMEOUT_MS),
+          headers: { Accept: "application/json", Origin: link.origin, Cookie: link.cookie,
+            ...(method === "POST" ? { "Content-Type": "application/json", "X-Piagent-CSRF": link.csrf } : {}) },
+          body: method === "POST" ? JSON.stringify(body) : undefined });
+      } catch (error) {
+        if (!timedOut(error)) throw error;
+        if (method === "GET" && this.#link === link) this.#stalled();
+        throw new Error("company-gateway-timeout");
+      }
       if (response.status === 401 && attempt === 0) { this.#link = await this.#bootstrap(link.socket); continue; }
       // The browser's own session is not the one refused here.
       if (response.status === 401 || response.status === 403) return { status: 503, value: { error: { code: "company-auth-failed" } } };
@@ -232,7 +281,7 @@ export class CompanyRelay {
   #attachSoon(): void {
     if (this.#closed || this.#connecting || this.#state === "ready" || !this.#connector.configured()) return;
     const now = Date.now();
-    if (now - this.#lastAttach < 10_000) return;
+    if (now - this.#lastAttach < 10_000 || now - this.#stalledAt < STALL_RETRY_MS) return;
     this.#lastAttach = now; void this.connect(false);
   }
 

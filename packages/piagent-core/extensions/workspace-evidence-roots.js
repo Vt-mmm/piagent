@@ -37,7 +37,10 @@ export function gitOutput(cwd, args, options = {}) {
   return execFileSync("git", ["-C", cwd, ...args], {
     encoding: options.encoding ?? "utf8",
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "ignore"]
+    stdio: ["ignore", "pipe", "ignore"],
+    // The call blocks the whole process: a caller that serves other requests
+    // meanwhile (the Gateway's inspection) gives it a limit.
+    ...(options.timeoutMs > 0 ? { timeout: options.timeoutMs, killSignal: "SIGKILL" } : {})
   });
 }
 

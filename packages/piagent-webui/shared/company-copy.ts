@@ -14,7 +14,8 @@ export const LAUNCH_REASONS: Record<string, [string, string]> = {
   "managed-launch-binding-changed": ["Agent Watch hoặc Piagent vừa cập nhật. Nhập lại cấu hình cho Piagent trong Agent Watch (trên Windows: Kết nối Piagent trong WSL).", "Agent Watch or Piagent changed. Import the Piagent configuration again in Agent Watch (on Windows: Connect Piagent in WSL)."],
   "managed-launch-version-mismatch": ["Agent Watch đang dùng một bản Piagent khác với dashboard này. Mở Agent Watch → Studio, bấm Áp dụng cho Piagent rồi kết nối lại.", "Agent Watch points at another Piagent install than this dashboard. Open Agent Watch → Studio, apply for Piagent, then connect again."],
   "managed-launch-stale-runtime": ["Phiên công ty của bản Piagent cũ chưa dừng được. Thử kết nối lại sau ít giây.", "The company runtime from the previous Piagent did not stop yet. Connect again in a few seconds."],
-  "managed-launch-timeout": ["Phiên công ty khởi động quá lâu. Kết nối lại.", "The company runtime took too long to start. Connect again."]
+  "managed-launch-timeout": ["Phiên công ty khởi động quá lâu. Kết nối lại.", "The company runtime took too long to start. Connect again."],
+  "company-gateway-timeout": ["Phiên công ty đang chạy nhưng không trả lời. Đóng Piagent, chạy `pkill -f piagent-studio.mjs` trong Terminal (Windows: trong Ubuntu), rồi mở lại.", "The company runtime is running but does not answer. Close Piagent, run `pkill -f piagent-studio.mjs` in a terminal (Windows: in Ubuntu), then open it again."]
 };
 
 export type Copy = { title: [string, string]; text: [string, string] };

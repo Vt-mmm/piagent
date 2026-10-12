@@ -655,12 +655,12 @@ function gitHasHead(cwd) {
   }
 }
 
-function workingTreeFilesForGitRoot(cwd, observeRename, knownHead = null) {
+function workingTreeFilesForGitRoot(cwd, observeRename, knownHead = null, git = {}) {
   if (knownHead === null && !isGitWorkingTree(cwd)) return [];
   const changed = (knownHead ?? gitHasHead(cwd))
-    ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"]), observeRename)
-    : gitOutput(cwd, ["ls-files", "-z"]).split("\0").filter(Boolean);
-  const untracked = gitOutput(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
+    ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"], git), observeRename)
+    : gitOutput(cwd, ["ls-files", "-z"], git).split("\0").filter(Boolean);
+  const untracked = gitOutput(cwd, ["ls-files", "--others", "--exclude-standard", "-z"], git).split("\0").filter(Boolean);
   return [...new Set([...changed, ...untracked].map(normalizedGitPath).filter((item) => item && !item.startsWith(".pi/piagent-state/")))].sort();
 }
 
@@ -833,8 +833,20 @@ function streamedWorkingTreeFileDigest(root, file, hasHead, protectedProjectPath
   }
 }
 
+// Found live on Windows: a project on a Windows drive seen from WSL
+// (/mnt/d/…), where Git walks the tree through a slow file system. The
+// working-tree scan is synchronous, so the company Gateway answered nobody
+// while it ran, each inspection of the page started it again, and the
+// dashboard waiting for that Gateway kept loading. With `gitTimeoutMs` (the
+// inspection passes it; completion evidence does not) a root whose scan runs
+// past the limit is recorded as unavailable and left alone for a while.
+const SLOW_GIT_ROOT_MS = 5 * 60_000;
+const slowGitRoots = new Map();
+const gitScanTimedOut = (error) => error?.code === "ETIMEDOUT" || error?.signal === "SIGKILL";
+
 export function workingTreeSnapshot(cwd, options = {}) {
   const snapshot = {};
+  const gitTimeoutMs = Number.isFinite(options.gitTimeoutMs) && options.gitTimeoutMs > 0 ? options.gitTimeoutMs : 0;
   const isProtectedProjectPath = typeof options.isProtectedProjectPath === "function" ? options.isProtectedProjectPath : () => false;
   let rootDetails;
   try {
@@ -855,13 +867,17 @@ export function workingTreeSnapshot(cwd, options = {}) {
       if (paths.some((file) => file === ".pi/piagent-state" || file.startsWith(".pi/piagent-state/") || isProtectedProjectPath(prefixedGitPath(root.prefix, file))))
         paths.forEach((file) => protectedAliases.add(file));
     };
+    if (gitTimeoutMs && (slowGitRoots.get(root.cwd) ?? 0) > Date.now()) { incompleteReasons.push(`git-root-slow:${root.prefix || "."}`); continue; }
+    const deadline = gitTimeoutMs ? Date.now() + gitTimeoutMs : Infinity;
     try {
-      const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename, hasHead)) {
+      const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename, hasHead, { timeoutMs: gitTimeoutMs })) {
+        if (Date.now() > deadline) throw Object.assign(new Error("working-tree-scan-timeout"), { code: "ETIMEDOUT" });
         const projectPath = prefixedGitPath(root.prefix, file);
         snapshot[projectPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead, isProtectedProjectPath(projectPath) || protectedAliases.has(file) ? projectPath : null);
       }
-    } catch {
-      incompleteReasons.push(`git-root-enumeration-incomplete:${root.prefix || "."}`);
+    } catch (error) {
+      if (gitTimeoutMs && gitScanTimedOut(error)) { slowGitRoots.set(root.cwd, Date.now() + SLOW_GIT_ROOT_MS); incompleteReasons.push(`git-root-slow:${root.prefix || "."}`); }
+      else incompleteReasons.push(`git-root-enumeration-incomplete:${root.prefix || "."}`);
     }
   }
   if (!roots.some((root) => root.prefix === "") && roots.length > 0) {

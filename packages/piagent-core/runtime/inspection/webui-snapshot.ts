@@ -365,7 +365,9 @@ export async function buildWebUiInspectionProjection(input: {
   const identity: WebUiIdentity = { projectRef: webUiProjectRef(input.cwd), runtimeInstanceId: input.runtimeInstanceId ?? WEBUI_RUNTIME_INSTANCE_REF,
     sessionRef: webUiSessionRef(input.sessionId), taskId: input.task?.taskId ?? null, taskRunId: input.task?.taskRunId ?? null, agentOperationId: null, toolCallId: null };
   const effectiveProtectedPaths = input.protectedPaths ?? input.task?.protectedPaths ?? [];
+  // Synchronous: the Gateway answers nobody while it runs (task-state.js).
   const currentSnapshot = workingTreeSnapshot(input.cwd, {
+    gitTimeoutMs: 8_000,
     isProtectedProjectPath: (projectPath: string) => Boolean(matchesProtectedPath(projectPath, effectiveProtectedPaths))
   }) as Record<string, string>;
   const taskRevision = input.task ? webUiTaskRevision(input.task) : null;
