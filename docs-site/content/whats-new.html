@@ -1,4 +1,11 @@
 <section class="section">
+  <p class="section-kicker">v1.22.1 · 2026-10-12</p>
+  <h2 id="v1-22-1">Dashboard không còn quay mãi khi project nằm trên ổ chậm</h2>
+  <p class="section-lead">Sửa lỗi trên Windows: dashboard mở ra nhưng cứ hiện “Đang mở Piagent…”. Project nằm trên ổ Windows nhìn từ WSL (<span class="inline-code">/mnt/d/…</span>), nơi Git duyệt cây thư mục rất chậm. Phiên công ty chạy lượt quét đó mà không có giới hạn nên không trả lời ai trong lúc ấy, và dashboard chờ nó, cũng không có giới hạn. Giờ dashboard chờ phiên công ty tối đa 15 giây cho mỗi lượt đọc; quá hạn thì vẫn mở với các cuộc trò chuyện cá nhân, ghi rõ “Phiên công ty đang chạy nhưng không trả lời” kèm cách xử lý, và một phút sau hỏi lại.</p>
+  <p class="section-lead">Trang của một cuộc trò chuyện cho Git 8 giây mỗi repository để liệt kê file thay đổi. Repository nào lâu hơn thì hiện chưa có danh sách file thay đổi và được thử lại sau 5 phút. Trên Windows, nên để project trong ổ của Ubuntu (<span class="inline-code">~/projects</span>): project ở <span class="inline-code">/mnt/c</span> hay <span class="inline-code">/mnt/d</span> vẫn dùng được nhưng chậm.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.22.0 · 2026-10-09</p>
   <h2 id="v1-22-0">Đính kèm được mọi file code và văn bản, như các coding agent khác</h2>
   <p class="section-lead">Giờ bạn đính kèm được <span class="inline-code">.html</span>, <span class="inline-code">.css</span>, <span class="inline-code">.js</span>/<span class="inline-code">.ts</span>/<span class="inline-code">.tsx</span>, <span class="inline-code">.py</span>, <span class="inline-code">.go</span>, <span class="inline-code">.java</span>, <span class="inline-code">.sql</span>, <span class="inline-code">.xml</span>, <span class="inline-code">.svg</span>, <span class="inline-code">.toml</span> và bất kỳ đuôi nào khác, cả file không có đuôi như <span class="inline-code">Dockerfile</span>, <span class="inline-code">Makefile</span>. File được gửi dưới đúng tên của nó nên agent biết đó là HTML hay Python; Piagent vẫn kiểm tra nội dung đúng là văn bản. File nhị phân bị từ chối ngay kèm cách gửi khác: bảng tính thì xuất sang .csv, file trình chiếu thì .pdf, file nén, video, font thì để trong project cho agent tự đọc bằng tool.</p>

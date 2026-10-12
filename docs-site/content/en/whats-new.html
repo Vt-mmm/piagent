@@ -1,4 +1,11 @@
 <section class="section">
+  <p class="section-kicker">v1.22.1 · 2026-10-12</p>
+  <h2 id="v1-22-1">The dashboard no longer keeps loading when a project is on a slow drive</h2>
+  <p class="section-lead">Fix on Windows: the dashboard opened and kept showing “Opening Piagent…”. The project was on a Windows drive seen from WSL (<span class="inline-code">/mnt/d/…</span>), where Git walks the tree very slowly. The company runtime ran that scan without a limit and answered nobody meanwhile, and the dashboard waited for it, also without a limit. The dashboard now gives the company runtime 15 seconds per read; past that it still opens with your own conversations, says “The company runtime is running but does not answer” with what to do, and asks again a minute later.</p>
+  <p class="section-lead">A conversation's page gives Git 8 seconds per repository to list the changed files. A repository that takes longer shows no changed files yet and is tried again 5 minutes later. On Windows, keep projects in the Ubuntu file system (<span class="inline-code">~/projects</span>): a project under <span class="inline-code">/mnt/c</span> or <span class="inline-code">/mnt/d</span> works but is slow.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.22.0 · 2026-10-09</p>
   <h2 id="v1-22-0">Attach any source or text file, as other coding agents allow</h2>
   <p class="section-lead">You can now attach <span class="inline-code">.html</span>, <span class="inline-code">.css</span>, <span class="inline-code">.js</span>/<span class="inline-code">.ts</span>/<span class="inline-code">.tsx</span>, <span class="inline-code">.py</span>, <span class="inline-code">.go</span>, <span class="inline-code">.java</span>, <span class="inline-code">.sql</span>, <span class="inline-code">.xml</span>, <span class="inline-code">.svg</span>, <span class="inline-code">.toml</span> and any other extension, and files without one such as <span class="inline-code">Dockerfile</span> or <span class="inline-code">Makefile</span>. A file goes under its own name, so the agent knows it is HTML or Python; Piagent still checks its bytes are text. Binary files are refused at once with what to send instead: spreadsheets as .csv, slide decks as .pdf, archives, media and fonts kept in the project for the agent's tools.</p>

@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.22.1 - 2026-10-12
+
+A project on a slow file system (a Windows drive seen from WSL) no longer leaves the dashboard loading.
+
+### Fixes
+
+- On Windows the dashboard could open and keep showing “Opening Piagent…”. The project was on a Windows drive seen from WSL (`/mnt/d/…`), where Git walks the tree through a slow file system. The company Gateway ran that scan synchronously and without a limit, so it answered nobody meanwhile; the dashboard waited for it, also without a limit, for its conversation list, its live state and its new-chat options. The dashboard now gives a read of the company Gateway 15 seconds, counts the company runtime as connected only once a read is answered, and after a missed read shows its own conversations without the company ones and asks again a minute later. The company entry says the company runtime runs but does not answer, with what to do.
+- A conversation's page gives Git 8 seconds per repository to list the changed files. A repository that takes longer is shown without its changed files and tried again 5 minutes later, instead of stopping the Gateway for every conversation. Completion checks still wait for Git as before.
+
+Keep projects in the Ubuntu file system (`~/projects`) on Windows: a project under `/mnt/c` or `/mnt/d` works but stays slow.
+
 ## v1.22.0 - 2026-10-09
 
 Attach any source or text file, as coding agents do; a message with files shows once, as typed.
