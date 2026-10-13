@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import { ApprovalCard, useApprovalRequests } from "./ApprovalPanel.tsx";
 import { askerLabel, QuestionCard, usePendingQuestions } from "./QuestionPanel.tsx";
@@ -26,6 +26,15 @@ export function DecisionQueue({ sessionRef, waiting, approvalRefs }: { sessionRe
   const current = items.find((item) => item.key === chosen) ?? items[0];
   // The chosen one was answered or withdrawn: the next in order takes its place.
   useEffect(() => { if (chosen && !items.some((item) => item.key === chosen)) setChosen(null); }, [chosen, items.map((item) => item.key).join("\0")]);
+  // A decision that comes up (asked now, or waiting when the conversation
+  // opens) is brought into view: the queue is the end of the page, so the
+  // page goes to its end, where the composer does not cover it.
+  const shown = current?.key ?? null;
+  useLayoutEffect(() => {
+    if (!shown) return;
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight - window.innerHeight, behavior: "smooth" }));
+    return () => cancelAnimationFrame(frame);
+  }, [shown]);
   if (!current) return null;
   const index = items.indexOf(current);
   return <section className="decision-queue" aria-label={localize(locale, "Việc đang chờ bạn quyết định", "Decisions waiting for you")} aria-live="polite">

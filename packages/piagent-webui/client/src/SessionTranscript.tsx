@@ -141,10 +141,12 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     </Alert>}
     {turns.map((turn, index) => <TimelineTurnView key={turn.key} turn={turn} locale={locale}
       onContinue={index === turns.length - 1 && !liveVisible && !(approvals?.pending.length) ? onContinue : undefined} />)}
-    <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
     {liveVisible && live && <LiveTurnView user={live.user && !liveUserDuplicated ? live.user : null} attachments={live.attachments}
       activities={live.activities} assistant={live.error ? null : liveAnswer} running={!live.complete && !live.error}
       failure={live.complete && live.error && LIVE_FAILURES.has(live.error) ? live.error : null} locale={locale}
       status={<RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} />} />}
+    {/* Last, right above the composer: opening a conversation that waits on
+        the member lands on its question, however long the running turn. */}
+    <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
   </Stack>;
 }

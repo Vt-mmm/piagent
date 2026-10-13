@@ -19,9 +19,9 @@ export function QuestionCard({ sessionRef, pending, locale, onDone }: { sessionR
   const [sending, setSending] = useState<"answer" | "skip" | null>(null), [error, setError] = useState("");
   const otherInputs = useRef<Array<HTMLInputElement | null>>([]), cardRef = useRef<HTMLElement | null>(null), blocks = useRef<Array<HTMLFieldSetElement | null>>([]);
   const [active, setActive] = useState(0);
-  // The card takes the member's attention when it appears: in view, and
-  // number keys work at once.
-  useEffect(() => { cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); cardRef.current?.focus({ preventScroll: true }); }, []);
+  // The card takes the member's attention when it appears: number keys work
+  // at once. The queue brings it into view (DecisionQueue).
+  useEffect(() => { cardRef.current?.focus({ preventScroll: true }); }, []);
   const update = (index: number, next: (c: Choice) => Choice) => setChoices((all) => all.map((c, i) => i === index ? next(c) : c));
   const pick = (index: number, option: number) => update(index, (c) => {
     const multi = pending.questions[index].multiSelect;
