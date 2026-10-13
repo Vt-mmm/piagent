@@ -117,7 +117,7 @@ export function useSessionHub(): SessionHub {
         expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: null,
         payload: { projectRef: options.projectRef, placeRef: options.placeRef, modelRef: options.modelRef,
           thinkingLevel: options.thinkingLevel, workflow: options.workflow, message, messageRequestId,
-          ...(options.permissionMode ? { permissionMode: options.permissionMode } : {}),
+          ...(options.permissionMode ? { permissionMode: options.permissionMode } : {}), ...(options.fast ? { fast: true } : {}),
           ...(options.deferInitialMessage ? { deferInitialMessage: true } : {}) } });
     };
     let receipt = await submit(current);

@@ -1287,6 +1287,63 @@ test("a conversation running in the company Terminal is followed, not continued,
   }
 });
 
+// Fast mode: offered on the new chat page only where the team's Harness allows
+// it, off by default, carried by the create command so the first message
+// already runs on it; in the header it stands out while it is on.
+const FAST_SCREENSHOTS = process.env.PIAGENT_FAST_SCREENSHOT_DIR ?? null;
+test("offers Fast on the new chat page only where the Harness allows it, and shows it on in the header", async ({ browser }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target };
+  companyState = "ready"; companyModel.managedFast = true; lastCreatePayload = null;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: "vi-VN" });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(page.getByRole("heading", { name: "Hôm nay làm gì?" })).toBeVisible();
+    // A personal model: no Fast.
+    await expect(page.getByRole("button", { name: /^Fast:/ })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Model:/ }).click();
+    await page.getByRole("menu").getByRole("menuitem", { name: /agent-watch-auto/ }).click();
+    const fast = page.getByRole("button", { name: /^Fast: tắt/ });
+    await expect(fast).toBeVisible();
+    await expect(fast).toHaveAttribute("aria-pressed", "false");
+    if (FAST_SCREENSHOTS) await page.screenshot({ path: path.join(FAST_SCREENSHOTS, "fast-new-chat-off.png") });
+    await fast.click();
+    const on = page.getByRole("button", { name: /^Fast: bật/ });
+    await expect(on).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("token tính vào quota gấp 2,5 lần", { exact: false }).first()).toBeVisible();
+    await page.getByPlaceholder("Nhắn cho Piagent…").fill("Rà soát module thanh toán");
+    if (FAST_SCREENSHOTS) await page.screenshot({ path: path.join(FAST_SCREENSHOTS, "fast-new-chat.png") });
+    await page.getByRole("button", { name: "Gửi", exact: true }).click();
+    await expect.poll(() => lastCreatePayload?.fast).toBe(true);
+    assert.equal(lastCreatePayload?.modelRef, COMPANY_MODEL_REF);
+
+    // The Harness does not allow Fast: nothing is offered.
+    companyModel.managedFast = false; lastCreatePayload = null;
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await page.getByRole("button", { name: /^Model:/ }).click();
+    await page.getByRole("menu").getByRole("menuitem", { name: /agent-watch-auto/ }).click();
+    await expect(page.getByRole("button", { name: "Model: Công ty · agent-watch-auto" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Fast:/ })).toHaveCount(0);
+
+    // A company conversation on Fast: the header says so.
+    Object.assign(target, { modelLabel: "agent-watch-auto", managedFast: "on", sessionRevision: "revision_session_source_review_fast_on" });
+    catalog.catalogRevision = "revision_catalog_fast_on";
+    protocol.events.publish("catalog.changed", { catalogRevision: catalog.catalogRevision });
+    await page.getByText("Review source changes", { exact: true }).first().click();
+    const header = page.getByRole("button", { name: /^Fast đang bật/ });
+    await expect(header).toBeVisible();
+    await expect(header).toContainText("Fast: bật");
+    if (FAST_SCREENSHOTS) await page.screenshot({ path: path.join(FAST_SCREENSHOTS, "fast-header.png") });
+  } finally {
+    companyState = "unavailable"; delete companyModel.managedFast;
+    await page.close();
+    for (const key of Object.keys(target)) if (!(key in saved)) delete target[key];
+    Object.assign(target, saved);
+  }
+});
+
 test("a company conversation opened while company mode is off says so and reconnects in place", async ({ browser }) => {
   const target = catalog.sessions.find((item) => item.sessionRef === "session_source_review"), saved = { ...target }, connectsBefore = companyConnects;
   Object.assign(target, { modelLabel: "agent-watch-auto", composerAvailable: false, sessionRevision: "revision_session_source_review_company_off" });

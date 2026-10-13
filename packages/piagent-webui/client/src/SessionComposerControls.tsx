@@ -22,6 +22,7 @@ import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import { alpha, type Theme } from "@mui/material/styles";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
@@ -40,10 +41,20 @@ function Stat({ name, value }: { name: string; value: string }) {
   </Stack>;
 }
 
-function ComposerControl({ title, label: controlLabel, icon, active, badge, onClick }: { title: string; label?: string;
-  icon: React.ReactNode; active: boolean; badge?: number; onClick(event: React.MouseEvent<HTMLElement>): void }) {
+// Fast mode (fast-mode.mjs), the same words on the new chat page and in a
+// conversation's header. On, it is amber so the member sees it at a glance.
+export const fastLabel = (on: boolean, locale: UiLocale) => on ? localize(locale, "Fast: bật", "Fast: on") : localize(locale, "Fast: tắt", "Fast: off");
+export const fastHint = (locale: UiLocale) => localize(locale,
+  "Fast: main agent trả lời nhanh hơn trên model GPT (Codex); token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
+  "Fast: the main agent answers faster on GPT (Codex) models; its tokens count 2.5 times toward the quota. Model and thinking level are unchanged.");
+export const fastOnSx = { borderColor: "warning.main", color: "warning.main", fontWeight: 700,
+  bgcolor: (theme: Theme) => alpha(theme.palette.warning.main, .14), "&:hover": { bgcolor: (theme: Theme) => alpha(theme.palette.warning.main, .22), color: "warning.main" } };
+
+function ComposerControl({ title, label: controlLabel, icon, active, badge, tone, onClick }: { title: string; label?: string;
+  icon: React.ReactNode; active: boolean; badge?: number; tone?: "warning"; onClick(event: React.MouseEvent<HTMLElement>): void }) {
   const shared = { border: 1, borderColor: active ? "primary.main" : "divider", bgcolor: active ? "action.selected" : "transparent",
-    color: active ? "primary.main" : "text.secondary", borderRadius: 2, "&:hover": { bgcolor: "action.hover", color: "text.primary" } };
+    color: active ? "primary.main" : "text.secondary", borderRadius: 2, "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+    ...(active && tone === "warning" ? fastOnSx : {}) };
   const button = controlLabel ? <Button size="small" aria-label={title} onClick={onClick} startIcon={icon} sx={{ ...shared, minHeight: 34,
     minWidth: {xs:34,md:64}, maxWidth: 260, px: {xs:.75,md:1.15}, "& .MuiButton-startIcon": { mr: {xs:0,md:.65}, ml:0 }, "& .MuiButton-startIcon svg": { fontSize: 17 } }}>
     <Box component="span" sx={{ display: { xs: "none", md: "inline" }, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{controlLabel}</Box>
@@ -151,9 +162,9 @@ export function SessionComposerControls({ session, snapshot, connections, locale
       {placement === "header" && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
         label={managed ? companyAccessLabel(permissionValue, locale) : permissionValue ? label(permissionValue, locale) : localize(locale, "Quyền", "Access")}
         title={localize(locale, "Đổi quyền truy cập", "Change access level")} />}
-      {placement === "header" && managed && session.managedFast && onSetFast && <ComposerControl active={fastOn} onClick={() => void toggleFast()} icon={<BoltRounded fontSize="small" />}
-        label={fastOn ? localize(locale, "Fast: bật", "Fast: on") : localize(locale, "Fast: tắt", "Fast: off")}
-        title={fastOn ? localize(locale, "Tắt Fast (về tốc độ thường)", "Turn Fast off (standard speed)")
+      {placement === "header" && managed && session.managedFast && onSetFast && <ComposerControl active={fastOn} tone="warning" onClick={() => void toggleFast()} icon={<BoltRounded fontSize="small" />}
+        label={fastLabel(fastOn, locale)}
+        title={fastOn ? localize(locale, "Fast đang bật: bấm để tắt (về tốc độ thường). Token tính vào quota gấp 2,5 lần.", "Fast is on: click to turn it off (standard speed). Tokens count 2.5 times toward the quota.")
           : localize(locale, "Bật Fast: trả lời nhanh hơn, token tính vào quota gấp 2,5 lần", "Turn Fast on: faster answers, tokens count 2.5 times toward the quota")} />}
       {placement === "composer" && <ComposerControl active={panel === "context"} onClick={open("context")} icon={<DataUsageRounded fontSize="small" />}
         title={`Context · ${contextPercent}`} />}

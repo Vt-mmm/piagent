@@ -57,7 +57,8 @@ export type SessionCreationOptions = {
   version: "piagent-session-creation-options-v1";
   generatedAt: string;
   projects: Array<{ projectRef: string; placeRef: string; label: string; hint?: string }>;
-  models: Array<{ modelRef: string; provider: string; modelId: string; displayName: string; reasoning: boolean; imageInput: boolean | null; thinkingLevels: string[] }>;
+  models: Array<{ modelRef: string; provider: string; modelId: string; displayName: string; reasoning: boolean; imageInput: boolean | null; thinkingLevels: string[];
+    /** A company model whose Harness allows Fast mode (absent otherwise). */ managedFast?: boolean }>;
   defaultModelRef?: string | null;
   defaultThinkingLevel?: string | null;
   profiles?: Array<{ id: string; displayName: string; permissionMode: string | null }>;

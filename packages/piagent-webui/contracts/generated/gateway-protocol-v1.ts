@@ -86,6 +86,10 @@ export type CommandRequest = RequestBase & {
             modelRef: string | null;
             thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
             permissionMode?: "read-only" | "workspace-write" | "trusted-full-access";
+            /**
+             * Start a company conversation with Fast mode on, before its first message runs. Refused when the team's Harness does not allow Fast mode.
+             */
+            fast?: boolean;
             workflow?:
               | "task"
               | "scout"

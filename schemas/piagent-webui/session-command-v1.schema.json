@@ -57,6 +57,10 @@
                 "modelRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
                 "thinkingLevel": { "$ref": "#/$defs/thinkingLevel" },
                 "permissionMode": { "$ref": "#/$defs/permissionMode" },
+                "fast": {
+                  "description": "Start a company conversation with Fast mode on, before its first message runs. Refused when the team's Harness does not allow Fast mode.",
+                  "type": "boolean"
+                },
                 "workflow": { "$ref": "#/$defs/workflow" },
                 "message": { "type": "string", "minLength": 1, "maxLength": 32768, "pattern": "^[^\\u0000]*$" },
                 "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },

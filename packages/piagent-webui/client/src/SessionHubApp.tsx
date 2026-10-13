@@ -362,7 +362,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>;
   terminalActivities: Readonly<Record<string, TerminalOperationActivity[]>>;
   refresh(): Promise<Catalog | undefined>; create(value: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; workflow?: Workflow; permissionMode: PermissionMode | null; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
+    thinkingLevel: string; workflow?: Workflow; permissionMode: PermissionMode | null; fast?: boolean; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
   send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
     workflow?: Workflow }): Promise<SessionSendResult>;
   abort(session: SessionRow): Promise<unknown>;
@@ -517,13 +517,13 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   }, [inspectorOpen, activeInspector, selectedSessionRef, Boolean(currentInspection), selectedLive?.operationRef, selectedLive?.complete]);
   const canCreate = connection === "connected" && capabilities?.capabilities.sessionActions.create.status === "available";
   const createNewSession = async (value: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; workflow?: Workflow; permissionMode: PermissionMode | null; message: string; files: readonly File[] }) => {
+    thinkingLevel: string; workflow?: Workflow; permissionMode: PermissionMode | null; fast?: boolean; message: string; files: readonly File[] }) => {
     setCreatingSession(true); setCreateError(null);
     let createdSessionRef: string | null = null;
     try {
       const messageRequestId = `message-request.${crypto.randomUUID()}`, withFiles = value.files.length > 0;
       const receipt = await create({ projectRef: value.projectRef, placeRef: value.placeRef, modelRef: value.modelRef,
-        thinkingLevel: value.thinkingLevel, workflow: value.workflow, permissionMode: value.permissionMode,
+        thinkingLevel: value.thinkingLevel, workflow: value.workflow, permissionMode: value.permissionMode, fast: value.fast,
         message: value.message, messageRequestId, deferInitialMessage: withFiles });
       createdSessionRef = receipt.sessionRef;
       if (!createdSessionRef) throw new Error("session-create-result-invalid");

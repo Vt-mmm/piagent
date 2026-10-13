@@ -66,12 +66,13 @@ function validPayload(action: SessionAction, payload: Record<string, unknown>): 
     && (payload.title === null || typeof payload.title === "string" && payload.title.length >= 1 && payload.title.length <= 500
       && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(payload.title));
   const createKeys = ["projectRef", "placeRef", "modelRef", "thinkingLevel", "message", "messageRequestId"];
-  return requiredOptionalKeys(payload, createKeys, ["deferInitialMessage", "permissionMode", "workflow"])
+  return requiredOptionalKeys(payload, createKeys, ["deferInitialMessage", "permissionMode", "fast", "workflow"])
     && REF.test(String(payload.projectRef)) && REF.test(String(payload.placeRef)) && nullableRef(payload.modelRef)
     && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(payload.thinkingLevel))
     && typeof payload.message === "string" && payload.message.length >= 1 && payload.message.length <= 32_768 && !payload.message.includes("\0")
     && REF.test(String(payload.messageRequestId)) && (payload.deferInitialMessage === undefined || typeof payload.deferInitialMessage === "boolean")
     && (payload.permissionMode === undefined || ["read-only", "workspace-write", "trusted-full-access"].includes(String(payload.permissionMode)))
+    && (payload.fast === undefined || typeof payload.fast === "boolean")
     && (payload.workflow === undefined || isWebUiWorkflowId(payload.workflow));
 }
 
@@ -181,6 +182,9 @@ export class SessionCommandController {
           await this.#runtimes.setPermission(targetSessionRef, String(command.payload.permissionMode) as
             "read-only" | "workspace-write" | "trusted-full-access");
         }
+        // Fast mode chosen on the new chat page is on before the first message
+        // runs; a Harness that does not allow it refuses the create.
+        if (command.payload.fast === true) await this.#runtimes.setFast(targetSessionRef, true);
         const created = await this.#readyCatalog(), createdRow = created.sessions.find((item) => item.sessionRef === targetSessionRef);
         if (!createdRow) throw new Error("session-catalog-refresh-failed");
         observedCatalog = created; observedRow = createdRow;

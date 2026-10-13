@@ -1,7 +1,13 @@
 import { managedThinkingLevels, nearestLevel } from '../../piagent-core/managed/capabilities.mjs';
 import { ManagedBrokerClient } from '../../piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../../piagent-core/managed/session.mjs';
+import { fastAllowed } from '../../piagent-core/managed/fast-mode.mjs';
 import fs from 'node:fs';
+
+// A company model as the new chat page sees it: the thinking levels its
+// Harness allows, and whether the Harness allows Fast mode (the page shows
+// the Fast switch only then).
+export const managedModelOption=(manifest,models,model)=>({...model,managedThinkingLevels:managedThinkingLevels(manifest,models,model),managedFast:fastAllowed(manifest)});
 
 // Only called by the pinned launcher with Watch's non-secret import manifest.
 // Each web session owns its own broker; no personal auth/model/resource loader.
@@ -22,7 +28,7 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
     const { webUiModelRef } = await import('../../piagent-core/runtime/inspection/webui-snapshot.ts');
     const host=probe.api,models=probe.modelRuntime;
     const snapshot=models.getAvailableSnapshot.bind(models);
-    models.getAvailableSnapshot=()=>snapshot().map(model=>({...model,managedThinkingLevels:managedThinkingLevels(probe.manifest,models,model)}));
+    models.getAvailableSnapshot=()=>snapshot().map(model=>managedModelOption(probe.manifest,models,model));
     const factory=async(info,_instance,manager,initial)=>{
       if(initial?.modelRef && initial.modelRef!==webUiModelRef('agent_watch_managed','agent-watch-auto')) throw Error('managed-personal-switch-requires-new-session');
       const broker=newBroker();

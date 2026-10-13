@@ -1,9 +1,10 @@
-import { companyAccessLabel, companyBypassDetail } from "./SessionComposerControls.tsx";
+import { companyAccessLabel, companyBypassDetail, fastHint, fastLabel, fastOnSx } from "./SessionComposerControls.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sendsOnEnter } from "./enter-key.ts";
 import AddRounded from "@mui/icons-material/AddRounded";
 import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
+import BoltRounded from "@mui/icons-material/BoltRounded";
 import CancelRounded from "@mui/icons-material/CancelRounded";
 import BusinessRounded from "@mui/icons-material/BusinessRounded";
 import ExpandMoreRounded from "@mui/icons-material/ExpandMoreRounded";
@@ -41,7 +42,7 @@ import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, wri
 import { localize, type UiLocale, useUiPreferences } from "./ui-preferences.tsx";
 
 type CreateValue = { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; permissionMode: PermissionMode | null;
-  workflow?: Workflow; message: string; files: readonly File[] };
+  fast?: boolean; workflow?: Workflow; message: string; files: readonly File[] };
 type MenuKind = "project" | "model" | "thinking" | "permission" | null;
 // Company sessions run in the company runtime behind this dashboard; while it
 // is not connected the entry explains why and offers to connect.
@@ -68,6 +69,8 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [failed, setFailed] = useState(false), [projectRef, setProjectRef] = useState(""), [modelRef, setModelRef] = useState("");
   const [thinking, setThinking] = useState("high");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Fast mode of a company conversation, off unless the member turns it on here.
+  const [fast, setFast] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode | null>(null), [message, setMessageText] = useState(() => readDraft(NEW_CHAT_DRAFT));
   // Kept when the member opens a conversation and comes back (composer-drafts.ts).
   const setMessage = (value: string) => { setMessageText(value); writeDraft(NEW_CHAT_DRAFT, value); };
@@ -90,7 +93,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       setOptions(value);
       setProjectRef(value.projects.some((project) => project.projectRef === defaultProjectRef)
         ? defaultProjectRef! : value.projects[0]?.projectRef ?? "");
-      setModelRef(value.defaultModelRef ?? ""); setThinking(value.defaultThinkingLevel ?? "high"); setPermissionMode(null);
+      setModelRef(value.defaultModelRef ?? ""); setThinking(value.defaultThinkingLevel ?? "high"); setPermissionMode(null); setFast(false);
     }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
     setCompanyStatus(undefined);
     void readCompanyStatus(controller.signal).then((value) => { if (!controller.signal.aborted) setCompanyStatus(value); })
@@ -110,6 +113,8 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const model = options?.models.find((value) => value.modelRef === modelRef);
   const company = !managed && model?.provider === COMPANY_PROVIDER;
   const companyModels = managed ? [] : options?.models.filter((value) => value.provider === COMPANY_PROVIDER) ?? [];
+  // Shown only where the team's Harness allows Fast (the company model carries managedFast).
+  const fastAvailable = (managed || company) && model?.managedFast === true;
   const personalModels = managed ? options?.models ?? [] : options?.models.filter((value) => value.provider !== COMPANY_PROVIDER) ?? [];
   const connect = async () => {
     setConnecting(true);
@@ -162,7 +167,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
     if (creating.current || busy || !project || !message.trim()) return;
     creating.current = true;
     void Promise.resolve(onCreate({ projectRef, placeRef: project.placeRef, modelRef: modelRef || null,
-      thinkingLevel: thinking, permissionMode, message, files })).finally(() => { creating.current = false; });
+      thinkingLevel: thinking, permissionMode, ...(fastAvailable && fast ? { fast: true } : {}), message, files })).finally(() => { creating.current = false; });
   };
 
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
@@ -253,12 +258,21 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
               <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {company ? localize(locale, "Công ty · agent-watch-auto", "Company · agent-watch-auto") : model ? `${model.displayName}${model.modelRef === options?.defaultModelRef ? localize(locale, " · mặc định", " · default") : ""}`
                   : defaultModel?.displayName ?? localize(locale, "Mặc định của Pi", "Pi default")}</Box></Button>
+            {fastAvailable && <Tooltip title={fastHint(locale)} arrow>
+              <Button size="small" color="inherit" variant="outlined" startIcon={<BoltRounded />} aria-pressed={fast}
+                aria-label={`${fastLabel(fast, locale)}. ${fastHint(locale)}`} onClick={() => setFast((value) => !value)}
+                sx={{ flex: "0 0 auto", minWidth: 0, px: { xs: .75, sm: 1 }, borderRadius: 2, borderColor: "divider", color: "text.secondary",
+                  "& .MuiButton-startIcon": { mr: { xs: 0, sm: .65 }, ml: 0 }, ...(fast ? fastOnSx : {}) }}>
+                <Box component="span" sx={{ display: { xs: "none", sm: "inline" }, whiteSpace: "nowrap" }}>{fastLabel(fast, locale)}</Box></Button>
+            </Tooltip>}
             <Box sx={{ flex: 1, minWidth: 0 }} />
             <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={busy || failed || !project || !message.trim()} onClick={submit}
               sx={{ flex: "0 0 auto",
                 bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
               <SendRounded fontSize="small" /></IconButton>
-          </Stack></>}
+          </Stack>
+          {fastAvailable && fast && <Typography variant="caption" sx={{ display: "block", px: .5, pt: .75, color: "warning.main" }}>
+            {fastHint(locale)}</Typography>}</>}
         {(fileError || importError || error || failed) && <Typography role="status" color="error" variant="caption" sx={{ display: "block", px: .5, pt: 1 }}>
           {fileError ?? importError ?? error ?? localize(locale, "Không tải được lựa chọn", "Could not load choices")}</Typography>}
       </Box>

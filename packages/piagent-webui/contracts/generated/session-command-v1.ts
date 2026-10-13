@@ -20,6 +20,10 @@ export type CreateCommand = BaseCommandProperties & {
     modelRef: string | null;
     thinkingLevel: ThinkingLevel;
     permissionMode?: PermissionMode;
+    /**
+     * Start a company conversation with Fast mode on, before its first message runs. Refused when the team's Harness does not allow Fast mode.
+     */
+    fast?: boolean;
     workflow?: Workflow;
     message: string;
     messageRequestId: string;

@@ -25,6 +25,8 @@ export type SessionHubCreateOptions = {
   message: string;
   workflow?: Workflow;
   permissionMode: PermissionMode | null;
+  /** Start the company conversation with Fast mode on (only where its Harness allows it). */
+  fast?: boolean;
   messageRequestId?: string;
   deferInitialMessage?: boolean;
 };

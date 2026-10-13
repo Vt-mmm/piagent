@@ -171,7 +171,7 @@ export class ManagedSession {
     // The member's access for this conversation: ask first, or Bypass (permission.mjs).
     self.permission = restorePermission(manager); self.session.managedSetPermission = permissionSetter(self, manager);
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
-    self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null before the first run
+    self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null where the Harness does not allow it
     self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };
     // A helper's receipt (its tokens, the patch it read) is for the member's
     // eyes: the agent has the helper's answer as the tool result, and a
