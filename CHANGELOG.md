@@ -2,6 +2,15 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.24.0 - 2026-10-13
+
+Fast mode can be chosen when a company conversation starts, and the switch is easier to see.
+
+### Changes
+
+- The new chat page shows "Fast: tắt / Fast: bật" next to the company model when the team's Harness in Agent Studio allows fast mode. A conversation created with it on is on Fast before its first message runs (`session.create` carries `fast: true`); a Harness that does not allow it refuses the create with the company-policy message. Before, the switch appeared only in the header of a conversation that already existed.
+- The Fast switch in a conversation's header turns amber while on, so a member sees at a glance that its calls count 2.5 times toward the quota.
+
 ## v1.23.1 - 2026-10-13
 
 An agent's question waits at the end of the conversation, right above the composer, and is easier to read.
