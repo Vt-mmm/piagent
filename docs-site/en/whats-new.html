@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.22.1 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.23.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,14 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.23.0 · 2026-10-13</p>
+  <h2 id="v1-23-0">Fast mode for company conversations, failed tools reported to Studio</h2>
+  <p class="section-lead">Where the team's Harness in Agent Studio allows it, the dashboard shows a Fast switch in the conversation's header and the Terminal has <span class="inline-code">/fast on|off|status</span>. Every new conversation starts with it off. While on, the main agent's calls on a GPT (Codex) model ask for the priority tier: the same model and thinking level, answered faster, with Studio counting that call's tokens 2.5 times toward the key's quota. Subagents run as usual. On a Claude model or an API-key vendor model nothing is added and the turn runs at standard speed. If Studio or the provider refuses, the call is asked again once at standard speed and the conversation goes back to standard speed with a note. Needs Studio 0.26.0 and an Agent Watch that carries the Harness's <span class="inline-code">fast_mode</span>.</p>
+  <p class="section-lead">A tool that fails in a company run (Docker, a network command, a test…) is reported to Agent Studio (Logs → “Tool lỗi”) so an administrator can read why: the tool, a code, the command or path, the start and end of the error output, the OS and whether the machine has a Docker engine. Secrets are redacted and the home folder is written <span class="inline-code">~</span> before sending; no prompt, search query or subagent brief is sent, and a tool you stopped or declined is not reported.</p>
+  <p class="section-lead">Fix: after an administrator changed the Harness (for example the main agent from thinking level high to a fixed max), a new company conversation from the dashboard never sent its first message and showed “Pi received the request and the session is resyncing”. A new conversation now starts at the level its Harness allows.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.22.1 · 2026-10-12</p>
   <h2 id="v1-22-1">The dashboard no longer keeps loading when a project is on a slow drive</h2>

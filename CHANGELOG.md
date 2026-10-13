@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.23.0 - 2026-10-13
+
+Fast mode for company conversations where the Harness allows it, failed tool calls reported to Agent Studio, and new company conversations that send their first message again after a Harness change.
+
+### Changes
+
+- Fast mode for company conversations, where the team's Harness in Agent Studio allows it. The dashboard shows a Fast switch in the conversation's header and the Terminal has `/fast on|off|status`; a conversation starts with it off and keeps the member's choice. While on, the main agent's calls ask a GPT (Codex) model for the priority service tier: the same model and thinking level, answered faster, with tokens counted 2.5 times toward the key's quota by Studio. Subagents run as usual. Only the GPT models OpenAI documents for Fast get the tier: on a Claude model (whose fast mode is another protocol, billed outside a subscription) or an API-key vendor model, nothing is added and the turn runs at standard speed. A fast request that Studio or the provider refuses is asked again once without the tier, and the conversation goes back to standard speed with a note, instead of failing the turn. Without the Harness setting there is no switch, and Studio refuses the tier. Needs a Studio with migration 048 and an Agent Watch that carries the Harness's `fast_mode`.
+- A tool call that fails in a company run is reported to Agent Studio (Logs → "Tool lỗi"), so an administrator can read why Docker, a network command or a test failed on a member's machine: the tool, a code, the command or path, the start and end of the error output, the OS and whether the machine has a Docker engine. Secrets are redacted and the home folder is written `~` before anything is sent; no prompt, search query or subagent brief is sent, and a tool the member stopped or declined is not reported. Needs a Studio with migration 047; an older Studio is asked once and not again.
+
+### Fixes
+
+- After an administrator changed a team's Harness in Studio (for example the main agent from thinking level high to a fixed max), a new company conversation from the dashboard was created but its message was never sent, under the notice “Pi received the request and the session is resyncing. Do not resend it”. The new chat page still offered the levels of the Harness before; the runtime took the nearest level the new Harness allows, and the dashboard treated that difference as a create it could not confirm. A company conversation now starts at the level its Harness allows.
+
 ## v1.22.1 - 2026-10-12
 
 A project on a slow file system (a Windows drive seen from WSL) no longer leaves the dashboard loading.

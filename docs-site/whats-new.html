@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.22.1 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.23.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,14 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.23.0 · 2026-10-13</p>
+  <h2 id="v1-23-0">Fast mode cho cuộc trò chuyện công ty, tool lỗi được báo về Studio</h2>
+  <p class="section-lead">Khi Harness của team trong Agent Studio cho phép, dashboard có nút Fast ở đầu cuộc trò chuyện và Terminal có lệnh <span class="inline-code">/fast on|off|status</span>. Mỗi cuộc trò chuyện mới bắt đầu ở chế độ tắt. Khi bật, call của main agent trên model GPT (Codex) xin tier ưu tiên: cùng model và mức suy luận, trả lời nhanh hơn, và Studio tính token của call đó vào quota của key ở mức 2,5 lần. Subagent chạy như thường. Trên model Claude hay model của vendor dùng API key thì không thêm gì và lượt chạy ở tốc độ thường. Nếu Studio hay provider từ chối, call được gửi lại một lần ở tốc độ thường và cuộc trò chuyện quay về tốc độ thường kèm một ghi chú. Cần Studio 0.26.0 và Agent Watch có mang <span class="inline-code">fast_mode</span> của Harness.</p>
+  <p class="section-lead">Một tool chạy lỗi trong phiên công ty (Docker, lệnh mạng, test…) được báo về Agent Studio (Logs → “Tool lỗi”) để quản trị viên đọc được lý do: tool, mã lỗi, lệnh hoặc đường dẫn, phần đầu và cuối của output lỗi, hệ điều hành và máy có Docker engine hay không. Secret được che và thư mục home ghi là <span class="inline-code">~</span> trước khi gửi; không gửi prompt, câu tìm kiếm hay brief của subagent, và tool do bạn dừng hoặc từ chối thì không báo.</p>
+  <p class="section-lead">Sửa lỗi: sau khi quản trị viên đổi Harness (ví dụ main agent từ mức suy luận high sang max cố định), cuộc trò chuyện công ty mới tạo từ dashboard không gửi được tin nhắn đầu, chỉ hiện “Pi đã nhận yêu cầu và phiên đang đồng bộ lại”. Giờ cuộc trò chuyện mới bắt đầu ở mức mà Harness cho phép.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.22.1 · 2026-10-12</p>
   <h2 id="v1-22-1">Dashboard không còn quay mãi khi project nằm trên ổ chậm</h2>
