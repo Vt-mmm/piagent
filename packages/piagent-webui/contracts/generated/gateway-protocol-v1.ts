@@ -271,6 +271,7 @@ export type SessionRow = {
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
       ];
   managedPermission?: "workspace-write" | "trusted-full-access";
+  managedFast?: "off" | "on";
   managedPlan?: {
     /**
      * @minItems 1
@@ -395,6 +396,7 @@ export type Receipt = {
     | "session.set-model"
     | "session.set-thinking"
     | "session.set-permission"
+    | "session.set-fast"
     | "session.rename"
     | "session.pin"
     | "session.archive"
@@ -413,6 +415,7 @@ export type Receipt = {
     | "model-changed"
     | "thinking-changed"
     | "permission-changed"
+    | "fast-changed"
     | "renamed"
     | "pinned"
     | "unpinned"
@@ -560,6 +563,7 @@ export interface BaseCommandProperties {
     | "session.set-model"
     | "session.set-thinking"
     | "session.set-permission"
+    | "session.set-fast"
     | "session.rename"
     | "session.pin"
     | "session.archive"

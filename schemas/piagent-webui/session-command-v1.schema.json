@@ -29,7 +29,7 @@
         "messageType": { "const": "command" },
         "commandId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" },
-        "action": { "enum": ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.rename", "session.pin", "session.archive", "session.unarchive", "session.fork", "session.acquire", "session.release"] },
+        "action": { "enum": ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.set-fast", "session.rename", "session.pin", "session.archive", "session.unarchive", "session.fork", "session.acquire", "session.release"] },
         "requestedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
         "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
         "sessionRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
@@ -144,7 +144,7 @@
         {
           "type": "object",
           "properties": {
-            "action": { "enum": ["session.set-model", "session.set-thinking", "session.set-permission"] },
+            "action": { "enum": ["session.set-model", "session.set-thinking", "session.set-permission", "session.set-fast"] },
             "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
             "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
             "payload": {
@@ -166,6 +166,12 @@
                   "additionalProperties": false,
                   "required": ["permissionMode"],
                   "properties": { "permissionMode": { "$ref": "#/$defs/permissionMode" } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["fast"],
+                  "properties": { "fast": { "type": "boolean" } }
                 }
               ]
             }
@@ -185,6 +191,11 @@
               "if": { "properties": { "action": { "const": "session.set-permission" } }, "required": ["action"] },
               "then": { "properties": { "payload": { "type": "object", "required": ["permissionMode"],
                 "properties": { "permissionMode": { "$ref": "#/$defs/permissionMode" } } } } }
+            },
+            {
+              "if": { "properties": { "action": { "const": "session.set-fast" } }, "required": ["action"] },
+              "then": { "properties": { "payload": { "type": "object", "required": ["fast"],
+                "properties": { "fast": { "type": "boolean" } } } } }
             }
           ]
         }
@@ -290,9 +301,9 @@
         "messageType": { "const": "receipt" },
         "commandId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "idempotencyKeyDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
-        "action": { "enum": ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.rename", "session.pin", "session.archive", "session.unarchive", "session.fork", "session.acquire", "session.release"] },
+        "action": { "enum": ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.set-fast", "session.rename", "session.pin", "session.archive", "session.unarchive", "session.fork", "session.acquire", "session.release"] },
         "phase": { "enum": ["accepted", "settled", "uncertain", "rejected"] },
-        "resultCode": { "enum": ["accepted", "created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "renamed", "pinned", "unpinned", "archived", "unarchived", "forked", "acquired", "released", "no-change", "stale-revision", "owner-conflict", "recovery-required", "invalid-command", "expired", "unavailable", "effect-unknown"] },
+        "resultCode": { "enum": ["accepted", "created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "fast-changed", "renamed", "pinned", "unpinned", "archived", "unarchived", "forked", "acquired", "released", "no-change", "stale-revision", "owner-conflict", "recovery-required", "invalid-command", "expired", "unavailable", "effect-unknown"] },
         "requestedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
         "settledAt": { "anyOf": [{ "$ref": "common-v1.schema.json#/$defs/timestamp" }, { "type": "null" }] },
         "sessionRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
@@ -325,7 +336,7 @@
           "if": { "properties": { "phase": { "const": "settled" } }, "required": ["phase"] },
           "then": {
             "properties": {
-              "resultCode": { "enum": ["created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "renamed", "pinned", "unpinned", "archived", "unarchived", "forked", "acquired", "released", "no-change"] },
+              "resultCode": { "enum": ["created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "fast-changed", "renamed", "pinned", "unpinned", "archived", "unarchived", "forked", "acquired", "released", "no-change"] },
               "settledAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
               "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
               "error": { "type": "null" }
@@ -366,6 +377,10 @@
         {
           "if": { "properties": { "action": { "const": "session.set-permission" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
           "then": { "properties": { "resultCode": { "enum": ["permission-changed", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.set-fast" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["fast-changed", "no-change"] } } }
         },
         {
           "if": { "properties": { "action": { "const": "session.send" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },

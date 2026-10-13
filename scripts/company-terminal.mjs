@@ -83,6 +83,28 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
         ctx.ui.notify(PERMISSION_TEXT[session.permission] ?? PERMISSION_TEXT['workspace-write'], 'info');
       } });
 
+    // Fast mode, where the team's Harness allows it; off until the member turns it on.
+    const showFast = (ctx) => ctx.ui?.setStatus?.('agent-watch-fast', managed()?.session?.managedFastState?.() === 'on' ? 'Fast' : undefined);
+    pi.on('session_start', async (_event, ctx) => showFast(ctx));
+    pi.registerCommand('fast', {
+      description: 'Bật/tắt Fast cho cuộc trò chuyện công ty này (on, off, status); chỉ có khi Harness của team cho phép',
+      getArgumentCompletions: (prefix) => ['on', 'off', 'status'].filter((v) => v.startsWith(prefix)).map((value) => ({ value, label: value })),
+      handler: async (args, ctx) => {
+        const session = managed()?.session, state = session?.managedFastState?.();
+        if (typeof session?.managedSetFast !== 'function') { ctx.ui.notify('Cuộc trò chuyện này chưa sẵn sàng.', 'error'); return; }
+        if (!state) { ctx.ui.notify('Harness của team không cho phép Fast. Admin bật trong Agent Studio → Harness → Fast mode.', 'warning'); return; }
+        const arg = args.trim().toLowerCase();
+        if (!['', 'on', 'off', 'status'].includes(arg)) { ctx.ui.notify('Cách dùng: /fast on|off|status', 'warning'); return; }
+        if (arg === 'on' || arg === 'off') session.managedSetFast(arg === 'on');
+        else if (arg === '') session.managedSetFast(state !== 'on');
+        showFast(ctx);
+        ctx.ui.notify(session.managedFastState() === 'on'
+          ? session.managedFastServed?.() === false
+            ? 'Fast đang bật nhưng model hiện tại của main agent không hỗ trợ Fast (chỉ các model GPT qua Codex): các lượt vẫn chạy tốc độ thường, quota tính như thường.'
+            : 'Fast đang bật: main agent trả lời nhanh hơn trên model GPT, token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.'
+          : 'Fast đang tắt: các lượt chạy tốc độ thường.', 'info');
+      } });
+
     // The Harness's notes carry English for the agent; the member reads them in Vietnamese.
     pi.registerMessageRenderer('agent-watch-process', (message, _options, theme) => {
       const lines = processLines(message.details);

@@ -272,8 +272,8 @@ export function useSessionHub(): SessionHub {
     }
   }, [refresh, request]);
 
-  const setSessionOption = useCallback(async (session: SessionRow, action: "session.set-model" | "session.set-thinking" | "session.set-permission",
-    payload: { modelRef: string } | { thinkingLevel: string } | { permissionMode: "read-only" | "workspace-write" | "trusted-full-access" }) => {
+  const setSessionOption = useCallback(async (session: SessionRow, action: "session.set-model" | "session.set-thinking" | "session.set-permission" | "session.set-fast",
+    payload: { modelRef: string } | { thinkingLevel: string } | { permissionMode: "read-only" | "workspace-write" | "trusted-full-access" } | { fast: boolean }) => {
     const current = catalogRef.current, exact = current?.sessions.find((item) => item.sessionRef === session.sessionRef);
     if (!current?.catalogRevision || !exact) throw new Error("session-unavailable");
     const now = new Date(), receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
@@ -287,6 +287,7 @@ export function useSessionHub(): SessionHub {
   const setThinking = useCallback((session: SessionRow, thinkingLevel: string) => setSessionOption(session, "session.set-thinking", { thinkingLevel }), [setSessionOption]);
   const setPermission = useCallback((session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access") =>
     setSessionOption(session, "session.set-permission", { permissionMode }), [setSessionOption]);
+  const setFast = useCallback((session: SessionRow, fast: boolean) => setSessionOption(session, "session.set-fast", { fast }), [setSessionOption]);
 
   const mutateSession = useCallback(async (session: SessionRow,
     action: "session.rename" | "session.pin" | "session.archive" | "session.unarchive" | "session.fork", payload: Record<string, unknown>) => {
@@ -494,6 +495,6 @@ export function useSessionHub(): SessionHub {
       document.removeEventListener("visibilitychange", visible); };
   }, [persistCursor, refresh]);
 
-  return { catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission,
+  return { catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission, setFast,
     rename, pin, archive, unarchive, fork };
 }

@@ -11,7 +11,7 @@ const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/;
 const REASON = /^[a-z0-9][a-z0-9.-]{0,95}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
-const ACTIONS = ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.rename", "session.pin", "session.archive",
+const ACTIONS = ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.set-fast", "session.rename", "session.pin", "session.archive",
   "session.unarchive", "session.fork", "session.acquire", "session.release"] as const;
 
 export type SessionAction = typeof ACTIONS[number];
@@ -72,14 +72,14 @@ export function validSessionReceipt(value: unknown): value is Receipt {
   const settled = exactTimestamp(receipt.settledAt), evidence = typeof receipt.evidenceRef === "string" && REF.test(receipt.evidenceRef);
   if (receipt.phase === "accepted") return receipt.resultCode === "accepted" && receipt.settledAt === null && receipt.evidenceRef === null && receipt.error === null;
   if (receipt.phase === "settled") {
-    const results = ["created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "renamed", "pinned", "unpinned", "archived", "unarchived",
+    const results = ["created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "fast-changed", "renamed", "pinned", "unpinned", "archived", "unarchived",
       "forked", "acquired", "released", "no-change"];
     const actionResults: Partial<Record<SessionAction, string[]>> = {
       "session.create": ["created", "started"],
       "session.acquire": ["acquired", "no-change"], "session.release": ["released", "no-change"],
       "session.send": ["started", "queued", "steered"], "session.abort": ["aborted", "no-change"],
       "session.set-model": ["model-changed", "no-change"], "session.set-thinking": ["thinking-changed", "no-change"],
-      "session.set-permission": ["permission-changed", "no-change"], "session.rename": ["renamed", "no-change"],
+      "session.set-permission": ["permission-changed", "no-change"], "session.set-fast": ["fast-changed", "no-change"], "session.rename": ["renamed", "no-change"],
       "session.pin": ["pinned", "unpinned", "no-change"], "session.archive": ["archived", "no-change"],
       "session.unarchive": ["unarchived", "no-change"], "session.fork": ["forked"]
     };

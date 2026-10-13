@@ -134,6 +134,8 @@ async function studio(script) {
   const requests = [];
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    // Only model calls follow the script; this Studio keeps no log of failed tool calls.
+    if (req.url === '/studio/v1/managed/tool-failures') { res.writeHead(404).end(); return; }
     const body = JSON.parse(Buffer.concat(chunks)), role = script.roleOf(req.headers['x-session-id']);
     requests.push({ role, body });
     let step = script[role].shift() ?? 'Done.';

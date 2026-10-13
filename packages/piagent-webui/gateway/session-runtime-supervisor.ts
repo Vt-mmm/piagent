@@ -11,7 +11,7 @@ import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type Se
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
-import { executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
+import { executeFastCommand, executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
 import { inspectEffectiveSessionOptions, effectiveModelRef, effectiveThinkingLevel, type EffectiveSessionOptions } from "./session-effective-options.ts";
 import { launchSessionPrompt, type LaunchedSessionPrompt, type SessionSendResult } from "./session-prompt-dispatch.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../shared/message-correlation.ts";
@@ -348,22 +348,19 @@ export class SessionRuntimeSupervisor {
     const effective = effectiveModelRef(session);
     if (!effective) throw new Error("session-model-effect-unknown");
     if (effective !== modelRef) throw new Error("session-model-mismatch");
-    this.#touchCreated(sessionRef);
-    return "model-changed";
+    this.#touchCreated(sessionRef); return "model-changed";
   }
   async setThinking(sessionRef: string, thinkingLevel: string): Promise<"thinking-changed" | "no-change"> {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");
     if (active.operationRef || !session.isIdle) throw new Error("session-runtime-busy");
-    const current = effectiveThinkingLevel(session);
-    if (current === thinkingLevel) return "no-change";
+    if (effectiveThinkingLevel(session) === thinkingLevel) return "no-change";
     await session.setThinkingLevel(thinkingLevel);
     const effective = effectiveThinkingLevel(session);
     if (!effective) throw new Error("session-thinking-effect-unknown");
     if (effective !== thinkingLevel) throw new Error("session-thinking-mismatch");
-    this.#touchCreated(sessionRef);
-    return "thinking-changed";
+    this.#touchCreated(sessionRef); return "thinking-changed";
   }
   async setPermission(sessionRef: string, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<"permission-changed"> {
     await this.acquire(sessionRef);
@@ -371,8 +368,11 @@ export class SessionRuntimeSupervisor {
     if (!active || !session) throw new Error("session-runtime-unavailable");
     if (!session.managedExecution && (active.operationRef || !session.isIdle)) throw new Error("session-runtime-busy");
     await executePermissionCommand(session, permissionMode);
-    this.#touchCreated(sessionRef);
-    return "permission-changed";
+    this.#touchCreated(sessionRef); return "permission-changed";
+  }
+  async setFast(sessionRef: string, fast: boolean): Promise<"fast-changed" | "no-change"> {
+    await this.acquire(sessionRef); const changed = executeFastCommand(this.#active.get(sessionRef)?.runtime.session, fast);
+    this.#touchCreated(sessionRef); return changed ? "fast-changed" : "no-change";
   }
   async runRuntimeCommand(sessionRef: string, command: string): Promise<RuntimeCommandResult> {
     await this.acquire(sessionRef);

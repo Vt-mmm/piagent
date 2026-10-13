@@ -26,7 +26,9 @@ export function managedProjection(context: any, entries: any[]) {
   const maximum = Number.isInteger(counter?.maximum) && counter.maximum >= 0 && counter.maximum <= 4 ? counter.maximum : 2;
   // The member's access choice: "trusted-full-access" is Bypass.
   const permission = last('agent-watch-permission')?.mode === 'trusted-full-access' ? 'trusted-full-access' : 'workspace-write';
-  return {modelLabel:'agent-watch-auto', managedPermission: permission, managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
+  // Fast mode, only where the conversation's Harness allows it (fast-mode.mjs).
+  const fast = last('agent-watch-fast');
+  return {modelLabel:'agent-watch-auto', managedPermission: permission, ...(fast?.allowed === true ? {managedFast: fast.enabled === true ? 'on' as const : 'off' as const} : {}), managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),
     ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {}), ...(turnEnd ? {managedTurnEnd:turnEnd} : {})};
 }

@@ -12,6 +12,7 @@ import { reviewParts, mergeReviews, REVIEW_PARALLEL, emptySnapshot, readBranchBa
 import { reviewFindings, briefIssues } from './workflow.mjs';
 import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
 import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-roles.mjs';
+import { trackToolFailures } from './tool-failures.mjs';
 
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
 // A helper failure that another model of its role may not have: the model's
@@ -85,7 +86,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
         sessionManager: managed.api.SessionManager.inMemory(managed.cwd), noTools: 'builtin', tools: [...READ_TOOLS, ...(setup.commands ? ['bash'] : []), ...(setup.web ? ['web_search', 'web_fetch'] : [])],
         customTools: [...boundary.tools(managed.api).filter(tool => READ_TOOLS.includes(tool.name) || setup.commands && tool.name === 'bash').map(tool => countedCheck(managed, tool)),
           ...(setup.web ? managed.webTools(runtime, role) : [])], resourceLoader: managedResourceLoader(managed.api, { systemPrompt: setup.prompt }) });
-      sessions.add(session);
+      sessions.add(session); trackToolFailures(managed, session, role);
       const abort = () => void session.abort(); signal?.addEventListener('abort', abort, { once: true });
       try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + checks + extra, { expandPromptTemplates: false }); }
       finally { signal?.removeEventListener('abort', abort); }

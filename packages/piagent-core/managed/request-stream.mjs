@@ -10,6 +10,8 @@ import { describeFailure, failureCode, failureIsAdmissionRefusal, failureIsBrief
 import { CLIENT_AGENT } from './client-agent.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { purposeHeaders } from './call-purpose.mjs';
+import { sendToolFailures } from './tool-failures.mjs';
+import { declineFast, fastPayload, fastRefusal } from './fast-mode.mjs';
 
 // A caller may pass the provider's resolved auth headers (Pi's compaction and
 // branch summaries do): for this provider that is the registered placeholder
@@ -63,13 +65,17 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             const grant = await share.grant.catch((error) => { throw refused ? Error(refused) : error; });
             verifyGrant(grant, owner.manifest, role);
             if (role === 'main') owner.grant = grant;
+            // Tool calls that failed since the last request (tool-failures.mjs).
+            void sendToolFailures(owner, grant.token);
             const route = owner.routes.get(runtime);
             if (!route || grant.provider_model_id !== route.native || grant.provider !== route.provider || grant.model_id !== route.model_id || model.id !== 'agent-watch-auto') throw Error('managed-route-changed');
             const asked = Date.now();
             // The main agent names its conversation, so every turn reaches the
             // same company account and prompt cache; a helper names its role.
             const conversation = role === 'main' ? conversationSession(owner) : null;
-            const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0,
+            // Fast mode, where the member turned it on and the model serves it (fast-mode.mjs).
+            const onPayload = fastPayload(owner, role, route, options?.onPayload), fast = onPayload !== options?.onPayload;
+            const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0, onPayload,
               headers: { ...withoutCredentials(options?.headers), ...purpose, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
             // Whether Studio admitted the request is known at its first event
             // after "start": until then nothing is passed on, so a refused
@@ -79,11 +85,13 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
               if (opening && event.type === 'start') { opening.push(event); continue; }
               const code = event.type === 'error' ? failureCode(event.error?.errorMessage) : null;
               if (opening && code && !signal?.aborted && (failureIsAdmissionRefusal(code) || failureIsBriefRefusal(code) && brief < BRIEF_ASKS
-                || role === 'main' && code === ACCOUNT_GONE && rebinds < MAX_REBINDS)) { refusal = event.error; break; }
+                || role === 'main' && code === ACCOUNT_GONE && rebinds < MAX_REBINDS || fast && fastRefusal(code))) { refusal = event.error; break; }
               if (opening) { for (const held of opening) out.push(held); opening = null; wait = capacityWaitEnded(owner, wait, 'admitted'); letGo(); }
               out.push(event.type === 'error' ? { ...event, ...(signal?.aborted ? { reason: 'aborted' } : {}), error: told(event.error) } : event);
             }
             if (!refusal) { for (const held of opening ?? []) out.push(held); out.end(told(await stream.result())); return; }
+            // Refused with the fast tier: asked again at standard speed.
+            if (fast && fastRefusal(failureCode(refusal.errorMessage))) { letGo(); declineFast(owner, failureCode(refusal.errorMessage)); continue; }
             refused = String(refusal.errorMessage ?? '');
             // A lapsed or replaced grant: the next ask renews it, not this share.
             const stale = share; letGo();

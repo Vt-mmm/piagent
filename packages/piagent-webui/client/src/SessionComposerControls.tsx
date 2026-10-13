@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import BoltRounded from "@mui/icons-material/BoltRounded";
 import DataUsageRounded from "@mui/icons-material/DataUsageRounded";
 import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
 import HubRounded from "@mui/icons-material/HubRounded";
@@ -51,11 +52,11 @@ function ComposerControl({ title, label: controlLabel, icon, active, badge, onCl
     sx={{ "& .MuiBadge-badge": { height: 16, minWidth: 16, px: .4, fontSize: 9, fontWeight: 700 } }}>{button}</Badge>}</Tooltip>;
 }
 
-export function SessionComposerControls({ session, snapshot, connections, locale, onOpenChanges, canSetModel, canSetThinking, canSetPermission, onSetModel, onSetThinking, onSetPermission,
+export function SessionComposerControls({ session, snapshot, connections, locale, onOpenChanges, canSetModel, canSetThinking, canSetPermission, onSetModel, onSetThinking, onSetPermission, onSetFast,
   onConnectionsChanged, placement = "composer" }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; connections?: SessionConnections; locale: UiLocale; onOpenChanges(): void;
   canSetModel?: boolean; canSetThinking?: boolean; canSetPermission?: boolean; onSetModel?(modelRef: string): Promise<unknown>;
-  onSetThinking?(thinking: string): Promise<unknown>; onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
+  onSetThinking?(thinking: string): Promise<unknown>; onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>; onSetFast?(fast: boolean): Promise<unknown>;
   onConnectionsChanged?(value?: SessionConnections): void; placement?: "header" | "composer" }) {
   const [panel, setPanel] = useState<Panel>(null), [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [options, setOptions] = useState<SessionCreationOptions>(), [optionBusy, setOptionBusy] = useState(false), [optionError, setOptionError] = useState<string | null>(null);
@@ -94,6 +95,23 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const changeThinking = async (value: string) => { if (!onSetThinking) return; setOptionBusy(true); setOptionError(null);
     try { await onSetThinking(value); } catch { setOptionError(localize(locale, "Chưa thể đổi thinking lúc này", "Could not change thinking right now")); }
     finally { setOptionBusy(false); } };
+  // Fast mode of a company conversation: the row carries it only where the
+  // team's Harness allows it, and a conversation starts with it off.
+  const fastOn = session.managedFast === "on";
+  const toggleFast = async () => {
+    if (!onSetFast || optionBusy) return;
+    setOptionBusy(true);
+    try {
+      await onSetFast(!fastOn);
+      setPermissionNotice({ tone: "success", text: fastOn ? localize(locale, "Đã tắt Fast. Các lượt sau chạy tốc độ thường.", "Fast is off. The next calls run at standard speed.")
+        : localize(locale, "Đã bật Fast: main agent trả lời nhanh hơn trên model GPT, token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
+          "Fast is on: the main agent answers faster on GPT models, and its tokens count 2.5 times toward the quota. Model and thinking level are unchanged.") });
+    } catch (error) {
+      const refused = error instanceof Error && /managed-fast-unavailable|unavailable/.test(error.message);
+      setPermissionNotice({ tone: "error", text: refused ? localize(locale, "Harness của team không cho phép Fast.", "The team's Harness does not allow Fast.")
+        : localize(locale, "Chưa đổi được Fast. Thử lại.", "Fast not changed. Try again.") });
+    } finally { setOptionBusy(false); }
+  };
   const applyPermission = async (value: "read-only" | "workspace-write" | "trusted-full-access") => {
     if (!onSetPermission) return;
     setOptionBusy(true); setOptionError(null);
@@ -133,6 +151,10 @@ export function SessionComposerControls({ session, snapshot, connections, locale
       {placement === "header" && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
         label={managed ? companyAccessLabel(permissionValue, locale) : permissionValue ? label(permissionValue, locale) : localize(locale, "Quyền", "Access")}
         title={localize(locale, "Đổi quyền truy cập", "Change access level")} />}
+      {placement === "header" && managed && session.managedFast && onSetFast && <ComposerControl active={fastOn} onClick={() => void toggleFast()} icon={<BoltRounded fontSize="small" />}
+        label={fastOn ? localize(locale, "Fast: bật", "Fast: on") : localize(locale, "Fast: tắt", "Fast: off")}
+        title={fastOn ? localize(locale, "Tắt Fast (về tốc độ thường)", "Turn Fast off (standard speed)")
+          : localize(locale, "Bật Fast: trả lời nhanh hơn, token tính vào quota gấp 2,5 lần", "Turn Fast on: faster answers, tokens count 2.5 times toward the quota")} />}
       {placement === "composer" && <ComposerControl active={panel === "context"} onClick={open("context")} icon={<DataUsageRounded fontSize="small" />}
         title={`Context · ${contextPercent}`} />}
       {placement === "composer" && <ComposerControl active={panel === "connections"} onClick={open("connections")} icon={<HubRounded fontSize="small" />}

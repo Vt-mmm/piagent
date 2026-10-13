@@ -50,6 +50,7 @@ export type SessionHub = {
   setModel(session: SessionRow, modelRef: string): Promise<Receipt>;
   setThinking(session: SessionRow, thinkingLevel: string): Promise<Receipt>;
   setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<Receipt>;
+  setFast(session: SessionRow, fast: boolean): Promise<Receipt>;
   rename(session: SessionRow, title: string): Promise<Receipt>;
   pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
   archive(session: SessionRow): Promise<Receipt>;

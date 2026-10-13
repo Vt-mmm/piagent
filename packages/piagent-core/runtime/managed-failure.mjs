@@ -88,6 +88,7 @@ const CODES = {
   search_unavailable: ['tool', 'no web search provider answered right now; try again shortly or use web_fetch with a known address'],
   'managed-session-open-elsewhere': ['new-session', 'this conversation is running in the Piagent WebUI; continue it there or start a new one'],
   'managed-session-lease-unavailable': ['failed', 'Piagent could not record which process runs this conversation'],
+  'managed-fast-unavailable': ['policy', "the team's Harness does not allow fast mode"],
   'managed-plan-required': ['tool', 'for a complex task the Harness asks for a checklist (update_plan) before the first file edit'],
   'managed-plan-invalid': ['tool', 'the checklist was not in the expected form'],
   'managed-request-failed': ['failed', 'the request could not be sent'],
@@ -122,6 +123,8 @@ export function failureIsBriefRefusal(code) { return BRIEF_REFUSALS.has(code); }
 export function unnamedFailureText(raw) {
   return ['managed-request-failed', 'studio-request-failed'].includes(failureCode(raw)) ? redactSensitiveText(String(raw ?? '')).text.slice(0, 600) : null;
 }
+// Any text that leaves this machine for Studio's logs, with secrets redacted.
+export function redactedText(raw) { return redactSensitiveText(String(raw ?? '')).text; }
 // The sentence alone, for a status line that already says who is waiting.
 export function failureReason(code) { return (CODES[code] ?? CODES['managed-request-failed'])[1]; }
 // A failure Studio never saw: nothing was sent, so it is not a model request.

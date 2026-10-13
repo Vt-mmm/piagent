@@ -14,6 +14,8 @@ import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from 
 import { fetchOriginTool } from './repository-operation.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { enableCompanyTurnRetry, wrapRoleStreams } from './request-stream.mjs';
+import { trackToolFailures } from './tool-failures.mjs';
+import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -168,12 +170,15 @@ export class ManagedSession {
     self.turnRetry = enableCompanyTurnRetry(self.session, settings);
     // The member's access for this conversation: ask first, or Bypass (permission.mjs).
     self.permission = restorePermission(manager); self.session.managedSetPermission = permissionSetter(self, manager);
+    // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
+    self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null before the first run
+    self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };
     // A helper's receipt (its tokens, the patch it read) is for the member's
     // eyes: the agent has the helper's answer as the tool result, and a
     // receipt in its context reads as a message from the member.
     const context = self.session.agent.transformContext;
     self.session.agent.transformContext = async (messages, signal) => (context ? await context(messages, signal) : messages)
-      .filter(m => !(m.role === 'custom' && m.customType === 'agent-watch-helper-receipt'));
+      .filter(m => !(m.role === 'custom' && ['agent-watch-helper-receipt', 'agent-watch-fast-notice'].includes(m.customType)));
     // A call to a tool that does not exist (a model inventing a name) is
     // answered by Pi before any hook; the run counts them for its report.
     self.session.subscribe(event => {
@@ -181,6 +186,7 @@ export class ManagedSession {
     });
     await stageCompaction(self.session, self.api, self.sdk);
     compactEarly(settings); backOffFailedCompaction(self.session); trackCompaction(self, self.session);
+    trackToolFailures(self, self.session);
     self.publishHelpers();
     const setThinking=self.session.setThinkingLevel.bind(self.session);
     self.runThinking = setThinking;
@@ -353,6 +359,7 @@ export class ManagedSession {
     this.blocked = this.scope && sameMember(this.scope, scope) ? null : 'managed-session-scope-changed';
     if (this.blocked) throw Error(this.blocked);
     if (!sameKey(this.scope, scope)) { this.session.sessionManager.appendCustomEntry('agent-watch-scope', scope); this.scope = scope; }
+    if (this.session) recordFast(this, this.session.sessionManager);
     this.session?.setActiveToolsByName(this.session.getActiveToolNames()); // the new Harness workflow and helpers reach the prompt
   }
   async digest() { try { return await this.changeDigest(); } catch { return null; } }

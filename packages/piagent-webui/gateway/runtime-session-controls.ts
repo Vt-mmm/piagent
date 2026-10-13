@@ -32,6 +32,15 @@ export async function executePermissionCommand(session: any,
   if (!profile || profile.mode !== permissionMode || profile.warning) throw new Error("session-permission-unavailable");
 }
 
+// Fast mode of a company conversation, where its Harness allows it. Like the
+// permission, the runtime reads it at each request, so it may change mid-turn.
+// True when the conversation's setting changed.
+export function executeFastCommand(session: any, fast: boolean): boolean {
+  if (!session) throw new Error("session-runtime-unavailable");
+  if (!session.managedExecution || typeof session.managedSetFast !== "function") throw new Error("managed-fast-unavailable");
+  return session.managedSetFast(fast) === true;
+}
+
 export async function executeRuntimeCommand(session: any, command: string): Promise<{
   outputs: RuntimeCommandOutput[];
   modelCallObserved: boolean;

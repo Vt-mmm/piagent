@@ -13,7 +13,7 @@ import { SessionMetadataStore } from "./session-metadata-store.ts";
 const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/;
 const IDEMPOTENCY = /^[A-Za-z0-9_-]{22,96}$/;
-const ACTIONS: SessionAction[] = ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.rename", "session.pin", "session.archive",
+const ACTIONS: SessionAction[] = ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.set-fast", "session.rename", "session.pin", "session.archive",
   "session.unarchive", "session.fork", "session.acquire", "session.release"];
 
 type SessionCommand = SessionCommandIdentity & {
@@ -58,6 +58,7 @@ function validPayload(action: SessionAction, payload: Record<string, unknown>): 
     && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(payload.thinkingLevel));
   if (action === "session.set-permission") return exactKeys(payload, ["permissionMode"])
     && ["read-only", "workspace-write", "trusted-full-access"].includes(String(payload.permissionMode));
+  if (action === "session.set-fast") return exactKeys(payload, ["fast"]) && typeof payload.fast === "boolean";
   if (action === "session.rename") return exactKeys(payload, ["title"]) && typeof payload.title === "string"
     && payload.title.length >= 1 && payload.title.length <= 500 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(payload.title);
   if (action === "session.pin") return exactKeys(payload, ["pinned"]) && typeof payload.pinned === "boolean";
@@ -160,7 +161,7 @@ export class SessionCommandController {
     let deferredDispatch: Pick<SessionSendResult, "dispatch" | "cancel"> | null = null;
     let observedCatalog = current, observedRow = row;
     try {
-      let resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
+      let resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "fast-changed" | "permission-changed"
         | "renamed" | "pinned" | "unpinned" | "archived" | "unarchived" | "forked" | "no-change",
         operationRef: string | null = null;
       if (command.action === "session.create") {
@@ -228,6 +229,8 @@ export class SessionCommandController {
       } else if (command.action === "session.set-permission") {
         resultCode = await this.#runtimes.setPermission(command.sessionRef!, String(command.payload.permissionMode) as
           "read-only" | "workspace-write" | "trusted-full-access");
+      } else if (command.action === "session.set-fast") {
+        resultCode = await this.#runtimes.setFast(command.sessionRef!, command.payload.fast === true);
       } else if (command.action === "session.rename") {
         resultCode = await this.#runtimes.rename(command.sessionRef!, String(command.payload.title).trim());
       } else if (command.action === "session.fork") {
@@ -320,7 +323,7 @@ export class SessionCommandController {
       sessionRevisionAfter: row?.sessionRevision ?? null, deduplicated: false };
   }
   #settled(command: SessionCommand, catalog: Catalog, row: SessionRow,
-    resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
+    resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "fast-changed" | "permission-changed"
       | "renamed" | "pinned" | "unpinned" | "archived" | "unarchived" | "forked" | "no-change",
     operationRef: string | null): Receipt {
     return { ...this.#base(command, catalog, row), operationRef, phase: "settled", resultCode, settledAt: this.#now().toISOString(),

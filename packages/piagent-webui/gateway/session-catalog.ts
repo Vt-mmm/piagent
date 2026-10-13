@@ -49,7 +49,7 @@ function catalogRef(key: Buffer, namespace: string, value: string): string {
 }
 
 export type SessionOwnerProjection = Pick<SessionRow, "state" | "liveState" | "composerAvailable" | "needsAttention" | "owner" | "reasonCode">;
-export type SessionOptionProjection = Pick<SessionRow, "modelLabel" | "thinkingLevel" | "managedHelpers" | "managedThinkingLevels" | "managedPermission" | "managedPlan" | "managedProcess" | "managedTurnEnd">;
+export type SessionOptionProjection = Pick<SessionRow, "modelLabel" | "thinkingLevel" | "managedHelpers" | "managedThinkingLevels" | "managedPermission" | "managedFast" | "managedPlan" | "managedProcess" | "managedTurnEnd">;
 
 function display(value: unknown, maximum: number, fallback: string): string {
   const clean = redactSensitiveText(String(value ?? "")).text
@@ -135,6 +135,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
       active: ownership?.liveState === 'idle' ? 0 : ownership?.liveState === 'running' || ownership?.liveState === 'waiting-approval' ? sessionOptions.managedHelpers.active : null}} : {}),
     ...(sessionOptions?.managedThinkingLevels ? {managedThinkingLevels:sessionOptions.managedThinkingLevels} : {}),
     ...(sessionOptions?.managedPermission ? {managedPermission:sessionOptions.managedPermission} : {}),
+    ...(sessionOptions?.managedFast ? {managedFast:sessionOptions.managedFast} : {}),
     ...(sessionOptions?.managedPlan ? {managedPlan:sessionOptions.managedPlan} : {}),
     ...(sessionOptions?.managedProcess ? {managedProcess:sessionOptions.managedProcess} : {}),
     ...(sessionOptions?.managedTurnEnd ? {managedTurnEnd:sessionOptions.managedTurnEnd} : {}),
@@ -146,7 +147,7 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
       ? { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "released" }
       : ownership?.owner ?? { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "unknown" },
     sessionRevision: revision(key, [info.path, info.modified.toISOString(), info.messageCount, info.name ?? null, metadata?.revision ?? null,
-      sessionOptions?.modelLabel ?? null, sessionOptions?.thinkingLevel ?? "unknown", sessionOptions?.managedHelpers, sessionOptions?.managedThinkingLevels, sessionOptions?.managedPermission ?? null, sessionOptions?.managedPlan, sessionOptions?.managedProcess, sessionOptions?.managedTurnEnd,
+      sessionOptions?.modelLabel ?? null, sessionOptions?.thinkingLevel ?? "unknown", sessionOptions?.managedHelpers, sessionOptions?.managedThinkingLevels, sessionOptions?.managedPermission ?? null, sessionOptions?.managedFast ?? null, sessionOptions?.managedPlan, sessionOptions?.managedProcess, sessionOptions?.managedTurnEnd,
       gitBranch, gitRepositories,
       metadata?.archived ? "archived" : ownership ? [ownership.state, ownership.liveState, ownership.owner.kind,
         ownership.owner.ownerEpoch, ownership.owner.runtimeInstanceRef, ownership.reasonCode] : "offline"]),

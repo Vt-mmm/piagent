@@ -34,7 +34,12 @@ export function inspectEffectiveSessionOptions(session: any, modelRef: string | 
     thinkingLevel: null, reasonCode: "session-thinking-effect-unknown" };
   if (modelRef && effectiveModel !== modelRef) return { state: "mismatch", modelRef: effectiveModel,
     thinkingLevel: effectiveThinking, reasonCode: "session-model-mismatch" };
-  if (effectiveThinking !== thinkingLevel) return { state: "mismatch", modelRef: effectiveModel,
+  // A company conversation thinks at a level its Harness allows. The new chat
+  // page can still offer the levels of the Harness before an administrator
+  // changed it (high, when the Harness now fixes max): the runtime takes the
+  // nearest allowed level, and that is the conversation's level, not a create
+  // that failed. Refusing it left the message unsent under a "resyncing" notice.
+  if (effectiveThinking !== thinkingLevel && session?.managedExecution !== true) return { state: "mismatch", modelRef: effectiveModel,
     thinkingLevel: effectiveThinking, reasonCode: "session-thinking-mismatch" };
   return { state: "confirmed", modelRef: effectiveModel, thinkingLevel: effectiveThinking, reasonCode: null };
 }

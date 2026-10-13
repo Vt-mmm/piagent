@@ -357,7 +357,7 @@ function EmptyHub({ locale, canCreate, onNew }: { locale: UiLocale; canCreate: b
   </Stack>;
 }
 
-export function SessionHubApp({ catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission,
+export function SessionHubApp({ catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission, setFast,
   rename, pin, archive, unarchive, fork }: { catalog?: Catalog;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>;
   terminalActivities: Readonly<Record<string, TerminalOperationActivity[]>>;
@@ -369,6 +369,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     restart(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;
     setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
+    setFast(session: SessionRow, fast: boolean): Promise<unknown>;
     rename(session: SessionRow, title: string): Promise<Receipt>; pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
     archive(session: SessionRow): Promise<Receipt>; unarchive(session: SessionRow): Promise<Receipt>;
     fork(session: SessionRow, title: string | null): Promise<Receipt> }) {
@@ -634,7 +635,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
         canSetThinking={connection === "connected" && capabilities?.capabilities.sessionActions.setThinking.status === "available"}
         canSetPermission={connection === "connected" && capabilities?.capabilities.sessionActions.setPermission.status === "available"}
         onSetModel={(modelRef) => setModel(selected, modelRef)} onSetThinking={(value) => setThinking(selected, value)}
-        onSetPermission={(value) => setPermission(selected, value)} />
+        onSetPermission={(value) => setPermission(selected, value)} onSetFast={(value) => setFast(selected, value)} />
         <Box sx={{display:{xs:'none',sm:'block'}}}><WorkStatus session={selected} live={selectedLive} locale={locale} /></Box><Tooltip title="Source Changes"><IconButton aria-label={localize(locale, "Mở Source Changes Inspector", "Open Source Changes Inspector")}
           onClick={() => openInspector("source")}><DifferenceRounded fontSize="small" /></IconButton></Tooltip>
         <Tooltip title={localize(locale, "Khung Workspace: thay đổi, ngữ cảnh, subagent", "Workspace panel: changes, context, subagents")}>

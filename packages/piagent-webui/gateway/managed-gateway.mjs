@@ -1,4 +1,4 @@
-import { managedThinkingLevels } from '../../piagent-core/managed/capabilities.mjs';
+import { managedThinkingLevels, nearestLevel } from '../../piagent-core/managed/capabilities.mjs';
 import { ManagedBrokerClient } from '../../piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../../piagent-core/managed/session.mjs';
 import fs from 'node:fs';
@@ -30,7 +30,9 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
       try {
         runtime=await ManagedSession.create({sdkRoot:config.sdk_root,cwd:info.cwd,origin:config.origin,broker,agentDir,
           sessionManager:manager??host.SessionManager.open(info.path),protectedRoots:[configPath,agentDir],renewBroker:newBroker,bindingRevision});
-        if(initial) runtime.session.setThinkingLevel(initial.thinkingLevel);
+        // The page may still offer the levels of the Harness before an administrator
+        // changed it: the conversation takes the nearest level the Harness allows now.
+        if(initial) runtime.session.setThinkingLevel(nearestLevel(initial.thinkingLevel,managedThinkingLevels(runtime.manifest,runtime.modelRuntime,runtime.session.model)));
         await runtime.session.bindExtensions({mode:'rpc',uiContext:rpcUiContext()});
         return {session:runtime.session,dispose:()=>runtime.dispose()};
       } catch(error) { if(runtime) await runtime.dispose(); else await broker.dispose(); throw error; }

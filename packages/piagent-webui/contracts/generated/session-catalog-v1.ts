@@ -91,6 +91,7 @@ export type SessionRow = {
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
       ];
   managedPermission?: "workspace-write" | "trusted-full-access";
+  managedFast?: "off" | "on";
   managedPlan?: {
     /**
      * @minItems 1
