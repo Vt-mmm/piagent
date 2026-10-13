@@ -17,6 +17,7 @@ A company conversation no longer gives up when the machine lacks something: the 
 ### Fixes
 
 - A turn that only read repositories through `git -C <folder> …` (status, log, reflog, `remote -v`, rev-list…) in a folder that is not itself a repository was counted as a code change, so the Harness asked for checks three times on a turn that changed nothing. Git's options before the command are read now, and `./mvnw … compile`/`package` and `./gradlew build` count as checks.
+- `fetch_origin` stopped a repository with many branches after 60 seconds (a team repository of 92 branches takes about two minutes) and failed with `managed-repository-fetch-failed`; the download now has ten minutes.
 - `wget: Failed to fetch` (how `./mvnw` downloads its Maven) is read as a blocked download and points to `run_with_network`, instead of a bare exit code.
 
 ## v1.24.0 - 2026-10-13

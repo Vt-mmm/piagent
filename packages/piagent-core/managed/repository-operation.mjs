@@ -39,12 +39,12 @@ export async function repositoryFetchPlan(boundary, folder) {
   return Object.freeze({...githubRemote(url),cwd});
 }
 
-function command(binary,args,{cwd,env,signal,secret='',limit=1024*1024}={}) {
+function command(binary,args,{cwd,env,signal,secret='',limit=1024*1024,timeoutMs=60000}={}) {
   return new Promise((resolve,reject)=>{
     if(signal?.aborted) return reject(Error('managed-operation-cancelled'));
     const child=spawn(binary,args,{cwd,env,stdio:['ignore','pipe','pipe']});let output='',size=0,failed=false;
     const abort=()=>{failed=true;child.kill('SIGKILL')};signal?.addEventListener('abort',abort,{once:true});
-    const timer=setTimeout(abort,60000);timer.unref();
+    const timer=setTimeout(abort,timeoutMs);timer.unref();
     child.stdout.on('data',chunk=>{size+=chunk.length;if(size>limit)abort();else output+=chunk});
     // Credential helpers and Git diagnostics are never relayed to model context.
     child.stderr.on('data',()=>{});child.on('error',()=>{failed=true});
@@ -55,6 +55,9 @@ function command(binary,args,{cwd,env,signal,secret='',limit=1024*1024}={}) {
   });
 }
 
+// Every branch of a repository with many (a team's 90 branches took two
+// minutes): ten minutes, as long as a command may run.
+const FETCH_MS=10*60*1000;
 export async function fetchRepositoryBundle(plan, destination, signal) {
   // This private process sees only fixed arguments and an empty bare repo. It
   // never executes a command, hook, helper, filter or config from the project.
@@ -77,7 +80,7 @@ export async function fetchRepositoryBundle(plan, destination, signal) {
     await command(git,['init','--bare','--quiet',temporary],{cwd:temporary,env,signal});
     if(hash(git)!==gitHash)throw Error('managed-runtime-changed');
     const authentication=token?{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'http.https://github.com/.extraheader',GIT_CONFIG_VALUE_0:'Authorization: Basic '+Buffer.from('x-access-token:'+token).toString('base64')}:{};
-    await command(git,['-c','credential.helper=','-c','core.hooksPath=/dev/null','-c','http.followRedirects=false','-c','protocol.allow=never','-c','protocol.https.allow=always','fetch','--quiet','--no-tags','--no-recurse-submodules','--depth=100',plan.url,'+refs/heads/*:refs/heads/*'],{cwd:temporary,env:{...env,...authentication},signal,secret:token});
+    await command(git,['-c','credential.helper=','-c','core.hooksPath=/dev/null','-c','http.followRedirects=false','-c','protocol.allow=never','-c','protocol.https.allow=always','fetch','--quiet','--no-tags','--no-recurse-submodules','--depth=100',plan.url,'+refs/heads/*:refs/heads/*'],{cwd:temporary,env:{...env,...authentication},signal,secret:token,timeoutMs:FETCH_MS});
     // A self-contained bundle cannot be shallow. Do not silently fetch an
     // unbounded history; export fetched objects as a local bare repository.
     fs.cpSync(temporary,destination,{recursive:true,errorOnExist:true,force:false});
@@ -95,7 +98,7 @@ export async function executeRepositoryFetch(boundary,plan,signal,{transport=fet
     const rechecked=await repositoryFetchPlan(boundary,path.relative(boundary.cwd,plan.cwd));
     if(rechecked.url!==plan.url)throw Error('managed-operation-scope-changed');
     // Import is sandboxed. Malicious repo hooks/config cannot reach credentials.
-    await boundary.invoke('bash',{command:`git -C ${quote(plan.cwd)} -c core.hooksPath=/dev/null -c protocol.allow=never -c protocol.file.allow=always fetch --no-tags --no-recurse-submodules --no-write-fetch-head --update-shallow ${quote(staging)} '+refs/heads/*:refs/remotes/origin/*'`,timeout:30},signal);
+    await boundary.invoke('bash',{command:`git -C ${quote(plan.cwd)} -c core.hooksPath=/dev/null -c protocol.allow=never -c protocol.file.allow=always fetch --no-tags --no-recurse-submodules --no-write-fetch-head --update-shallow ${quote(staging)} '+refs/heads/*:refs/remotes/origin/*'`,timeout:120},signal);
     return {content:[{type:'text',text:`Fetched origin branches for ${plan.repository}. Working files and current branch were not changed.`}],details:{operation:'git.fetch',repository:plan.repository}};
   } finally {fs.rmSync(staging,{recursive:true,force:true});}
 }
