@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.24.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.25.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.25.0 · 2026-10-13</p>
+  <h2 id="v1-25-0">When the machine lacks something, the agent asks, and an approved command runs</h2>
+  <p class="section-lead">A company conversation no longer stops at “Java or Docker is missing here”. A missing runtime (a JDK, the Node version the project needs), your sign-in (git pull/push, a private registry) or a file outside the project: the agent requests <strong>run_on_host</strong>, one command that runs on your machine, outside the sandbox, once you approve it (Bypass asks too). Docker installed but not running: the agent requests <strong>start_docker</strong>, waits for the engine and carries on in the same conversation. What only you can do (a sudo password, an installer, a sign-in) comes as a question with the steps and “Done, continue / Skip”. <code>fetch_origin</code> fetches a repository inside a folder of several repositories, and a turn that only read through <code>git -C</code> is no longer counted as a code change.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.24.0 · 2026-10-13</p>
   <h2 id="v1-24-0">Choose Fast when a company conversation starts</h2>

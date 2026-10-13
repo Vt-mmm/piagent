@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.25.0 · 2026-10-13</p>
+  <h2 id="v1-25-0">When the machine lacks something, the agent asks, and an approved command runs</h2>
+  <p class="section-lead">A company conversation no longer stops at “Java or Docker is missing here”. A missing runtime (a JDK, the Node version the project needs), your sign-in (git pull/push, a private registry) or a file outside the project: the agent requests <strong>run_on_host</strong>, one command that runs on your machine, outside the sandbox, once you approve it (Bypass asks too). Docker installed but not running: the agent requests <strong>start_docker</strong>, waits for the engine and carries on in the same conversation. What only you can do (a sudo password, an installer, a sign-in) comes as a question with the steps and “Done, continue / Skip”. <code>fetch_origin</code> fetches a repository inside a folder of several repositories, and a turn that only read through <code>git -C</code> is no longer counted as a code change.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.24.0 · 2026-10-13</p>
   <h2 id="v1-24-0">Choose Fast when a company conversation starts</h2>
   <p class="section-lead">Where the team's Harness allows fast mode, the new chat page shows <strong>Fast: off / Fast: on</strong> next to the company model. Turned on before sending, the conversation runs on Fast from its first message: the main agent answers faster on GPT (Codex) models, its tokens count 2.5 times toward the quota, and the model and thinking level are unchanged. The Fast switch in a conversation's header turns amber while on.</p>

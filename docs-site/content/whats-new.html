@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.25.0 · 2026-10-13</p>
+  <h2 id="v1-25-0">Thiếu môi trường thì agent xin quyền, duyệt xong là chạy</h2>
+  <p class="section-lead">Cuộc trò chuyện công ty không còn dừng ở “máy thiếu Java/Docker, em không làm được”. Máy thiếu runtime (JDK, Node đúng version…), cần tài khoản của bạn (git pull/push, registry riêng) hay cần ghi ra ngoài project, agent xin <strong>run_on_host</strong>: đúng một lệnh chạy trên máy bạn, ngoài sandbox, sau khi bạn duyệt (Bypass cũng hỏi). Docker đã cài mà chưa bật thì agent xin <strong>start_docker</strong>, chờ Docker chạy rồi làm tiếp ngay trong cuộc trò chuyện đó. Việc chỉ bạn làm được (mật khẩu sudo, trình cài, đăng nhập) thì agent hỏi kèm các bước và lựa chọn “Đã xong, làm tiếp / Bỏ qua”. <code>fetch_origin</code> fetch được repo nằm trong folder chứa nhiều repo, và lượt chỉ đọc bằng <code>git -C</code> không còn bị Harness coi là có sửa code.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.24.0 · 2026-10-13</p>
   <h2 id="v1-24-0">Chọn Fast ngay khi tạo cuộc trò chuyện công ty</h2>
   <p class="section-lead">Khi Harness của team cho phép Fast, trang “Cuộc trò chuyện mới” có nút <strong>Fast: tắt / Fast: bật</strong> ngay cạnh model công ty. Bật trước khi gửi thì cuộc trò chuyện chạy Fast từ tin nhắn đầu tiên: main agent trả lời nhanh hơn trên model GPT (Codex), token tính vào quota gấp 2,5 lần, model và mức suy luận không đổi. Nút Fast ở đầu cuộc trò chuyện chuyển màu vàng khi đang bật để dễ nhận ra.</p>

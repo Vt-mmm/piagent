@@ -2,6 +2,23 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.25.0 - 2026-10-13
+
+A company conversation no longer gives up when the machine lacks something: the agent asks for the approval that makes the command run, and once the member approves it runs, outside the sandbox when it has to.
+
+### Changes
+
+- `run_on_host`: one command the member approves runs on their machine, outside the sandbox, as them (their files, Keychain and sign-ins), for what the sandbox blocks and no other tool covers: installing a runtime the project needs (`brew install openjdk@21`, `brew install node@22`), `git pull`/`git push` with the member's sign-in, a private registry, a file outside the project. It always asks, Bypass included, and says what Bypass would still have asked about. It runs in a login shell without Piagent's own environment and with no input; a command that needs the member's password (`sudo`, an installer) or an interactive sign-in is not run: the agent asks the member with `ask_user` (the exact steps, "done, continue" or "skip") and carries on after the answer. What it installed is looked up again at once, so a JDK installed through Homebrew (`openjdk@N`, which macOS does not list) is the next command's `JAVA_HOME`.
+- `start_docker`: when Docker is installed but not running, the agent asks to start it (Docker Desktop, OrbStack, Rancher Desktop or Colima on macOS; Docker Desktop from WSL; rootless Docker or Podman on Linux) and waits until the engine answers; `run_with_docker` then works in the same conversation. Bypass starts it without asking. Before, a conversation opened while Docker was off had no `run_with_docker` until a new conversation, and an engine that stopped answering ended the turn with "tell the member".
+- `run_with_docker` is offered whenever the Docker CLI is installed; a stopped engine (Docker Desktop leaves its socket file behind) is found before anything is asked.
+- Every sandbox failure now names the way on instead of "report it and stop": a missing runtime or wrong version (`Unable to locate a Java Runtime`, `command not found`, `invalid target release`, Node `engines`) → `run_on_host` to install it; the member's sign-in (`could not read Username`, `Permission denied (publickey)`, `E401`, a private image) → `fetch_origin` or `run_on_host`; a blocked write outside the project or Keychain → `run_on_host`; Docker stopped → `start_docker`; a host the approved network still cannot reach (VPN, offline) → a question to the member. The Harness check request and the process prompt ask for that approval instead of telling the agent not to install or start anything.
+- `fetch_origin` takes `path`, the repository folder inside the conversation folder, for a workspace folder that holds several repositories; a folder that is not a repository says so and names `path`.
+
+### Fixes
+
+- A turn that only read repositories through `git -C <folder> …` (status, log, reflog, `remote -v`, rev-list…) in a folder that is not itself a repository was counted as a code change, so the Harness asked for checks three times on a turn that changed nothing. Git's options before the command are read now, and `./mvnw … compile`/`package` and `./gradlew build` count as checks.
+- `wget: Failed to fetch` (how `./mvnw` downloads its Maven) is read as a blocked download and points to `run_with_network`, instead of a bare exit code.
+
 ## v1.24.0 - 2026-10-13
 
 Fast mode can be chosen when a company conversation starts, and the switch is easier to see.
