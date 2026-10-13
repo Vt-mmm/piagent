@@ -1,4 +1,11 @@
 <section class="section">
+  <p class="section-kicker">v1.23.1 · 2026-10-13</p>
+  <h2 id="v1-23-1">Câu hỏi của agent luôn nằm cuối cuộc trò chuyện</h2>
+  <p class="section-lead">Câu hỏi và yêu cầu duyệt trước đây hiện phía trên lượt đang chạy, nên lượt chạy dài đẩy câu hỏi khỏi màn hình: mở một cuộc trò chuyện đang chờ bạn thì chỉ thấy activity. Giờ chúng luôn nằm cuối cuộc trò chuyện, ngay trên ô nhập, và trang tự cuộn tới khi có câu hỏi mới hoặc khi bạn mở cuộc trò chuyện đang chờ.</p>
+  <p class="section-lead">Thẻ câu hỏi dễ đọc hơn: chữ câu hỏi và đáp án lớn hơn, đáp án thoáng hơn, số của đáp án đang chọn được tô đậm. Ở giao diện sáng, nút “Để agent tự quyết” là nút viền thay vì nút đen nổi hơn cả “Gửi câu trả lời”.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.23.0 · 2026-10-13</p>
   <h2 id="v1-23-0">Fast mode cho cuộc trò chuyện công ty, tool lỗi được báo về Studio</h2>
   <p class="section-lead">Khi Harness của team trong Agent Studio cho phép, dashboard có nút Fast ở đầu cuộc trò chuyện và Terminal có lệnh <span class="inline-code">/fast on|off|status</span>. Mỗi cuộc trò chuyện mới bắt đầu ở chế độ tắt. Khi bật, call của main agent trên model GPT (Codex) xin tier ưu tiên: cùng model và mức suy luận, trả lời nhanh hơn, và Studio tính token của call đó vào quota của key ở mức 2,5 lần. Subagent chạy như thường. Trên model Claude hay model của vendor dùng API key thì không thêm gì và lượt chạy ở tốc độ thường. Nếu Studio hay provider từ chối, call được gửi lại một lần ở tốc độ thường và cuộc trò chuyện quay về tốc độ thường kèm một ghi chú. Cần Studio 0.26.0 và Agent Watch có mang <span class="inline-code">fast_mode</span> của Harness.</p>

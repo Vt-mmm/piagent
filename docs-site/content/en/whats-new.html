@@ -1,4 +1,11 @@
 <section class="section">
+  <p class="section-kicker">v1.23.1 · 2026-10-13</p>
+  <h2 id="v1-23-1">An agent's question waits at the end of the conversation</h2>
+  <p class="section-lead">Questions and approval requests used to show above the running turn, so a long turn pushed them out of view: opening a conversation that waited on you showed its activity. They now come last in the conversation, right above the composer, and the page goes to them when one comes up or when you open a conversation that is waiting.</p>
+  <p class="section-lead">The question card reads more easily: larger question and option text, roomier options, the chosen option's number filled in. In the light theme “Let the agent decide” is an outline button instead of a black one that outweighed “Send answer”.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.23.0 · 2026-10-13</p>
   <h2 id="v1-23-0">Fast mode for company conversations, failed tools reported to Studio</h2>
   <p class="section-lead">Where the team's Harness in Agent Studio allows it, the dashboard shows a Fast switch in the conversation's header and the Terminal has <span class="inline-code">/fast on|off|status</span>. Every new conversation starts with it off. While on, the main agent's calls on a GPT (Codex) model ask for the priority tier: the same model and thinking level, answered faster, with Studio counting that call's tokens 2.5 times toward the key's quota. Subagents run as usual. On a Claude model or an API-key vendor model nothing is added and the turn runs at standard speed. If Studio or the provider refuses, the call is asked again once at standard speed and the conversation goes back to standard speed with a note. Needs Studio 0.26.0 and an Agent Watch that carries the Harness's <span class="inline-code">fast_mode</span>.</p>

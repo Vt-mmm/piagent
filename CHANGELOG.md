@@ -2,6 +2,15 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.23.1 - 2026-10-13
+
+An agent's question waits at the end of the conversation, right above the composer, and is easier to read.
+
+### Fixes
+
+- A question or approval request was drawn above the running turn, so a long turn pushed it out of view: opening a conversation that waited on the member showed its activity, not the question. Questions and approvals now come last in the conversation, right above the composer, and the page goes to them when one comes up or the conversation opens with one waiting.
+- The question card reads more easily: larger question and option text, roomier options, the chosen option's number filled in. In the light theme "Let the agent decide" is an outline button instead of a black one that outweighed "Send answer".
+
 ## v1.23.0 - 2026-10-13
 
 Fast mode for company conversations where the Harness allows it, failed tool calls reported to Agent Studio, and new company conversations that send their first message again after a Harness change.
