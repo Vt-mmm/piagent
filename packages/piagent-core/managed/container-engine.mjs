@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 // The Docker engine a company command may use once the member approves it
@@ -65,4 +66,43 @@ export function engineEnvironment(engine, home) {
     // Docker Desktop and Colima name it /var/run/docker.sock.
     ...(process.platform === 'darwin' ? { TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: '/var/run/docker.sock' } : {}),
   };
+}
+
+// The Docker CLI on this machine, engine running or not.
+export const dockerCli = (paths = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/Applications/Docker.app/Contents/Resources/bin']) =>
+  paths.map(dir => real(path.join(dir, 'docker'))).find(Boolean) ?? null;
+
+// Whether the engine behind a socket answers (Docker Desktop leaves its
+// socket file in place when it quits).
+export function engineAlive(socket, timeoutMs = 2000) {
+  return new Promise(resolve => {
+    let reply = '';
+    const done = value => { clearTimeout(timer); connection.destroy(); resolve(value); };
+    const connection = net.createConnection(socket, () => connection.write('GET /_ping HTTP/1.0\r\nHost: docker\r\n\r\n'));
+    const timer = setTimeout(() => done(false), timeoutMs);
+    connection.on('data', chunk => { reply += chunk; if (/\r\n\r\nOK/.test(reply)) done(true); });
+    connection.on('error', () => done(false)); connection.on('end', () => done(/\r\n\r\nOK/.test(reply)));
+  });
+}
+
+// How start_docker starts an engine the member installed: the app (Docker
+// Desktop, OrbStack, Rancher Desktop) or Colima on macOS, the user service on
+// Linux. Null when none is installed, or only the system service is (that
+// needs the member's password).
+export function engineLauncher({ userHome, platform = process.platform, exists = fs.existsSync } = {}) {
+  if (platform === 'darwin') {
+    for (const app of ['Docker', 'OrbStack', 'Rancher Desktop']) {
+      const bundle = [`/Applications/${app}.app`, path.join(userHome, `Applications/${app}.app`)].find(exists);
+      if (bundle) return { label: app === 'Docker' ? 'Docker Desktop' : app, command: '/usr/bin/open', args: ['-g', '-a', bundle] };
+    }
+    const colima = ['/opt/homebrew/bin/colima', '/usr/local/bin/colima'].find(exists);
+    return colima ? { label: 'Colima', command: colima, args: ['start'] } : null;
+  }
+  // WSL2: Docker Desktop is a Windows app that serves this distribution.
+  const desktop = '/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe';
+  if (exists('/proc/sys/fs/binfmt_misc/WSLInterop') && exists(desktop))
+    return { label: 'Docker Desktop', command: '/mnt/c/Windows/System32/cmd.exe', args: ['/c', 'start', '""', 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'] };
+  const units = [path.join(userHome, '.config/systemd/user/docker.service'), '/usr/lib/systemd/user/docker.service', '/usr/lib/systemd/user/podman.socket'];
+  const unit = units.find(exists);
+  return unit ? { label: unit.endsWith('podman.socket') ? 'Podman' : 'Docker (rootless)', command: '/usr/bin/systemctl', args: ['--user', 'start', path.basename(unit)] } : null;
 }

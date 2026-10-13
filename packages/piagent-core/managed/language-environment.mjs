@@ -43,8 +43,14 @@ function javaHome(userHome) {
   }
   try {
     const home = execFileSync('/usr/libexec/java_home', [], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], env: { HOME: userHome, PATH: '/usr/bin:/bin' } }).trim();
-    return existing(home);
-  } catch { return null; }
+    if (existing(home)) return existing(home);
+  } catch { /* none registered with macOS */ }
+  // A JDK macOS does not list: Homebrew's openjdk formulas (keg-only, what
+  // run_on_host installs without a password), SDKMAN's current Java.
+  const kegs = ['/opt/homebrew/opt', '/usr/local/opt'].flatMap(dir => {
+    try { return fs.readdirSync(dir).filter(name => /^openjdk(@\d+)?$/.test(name)).map(name => path.join(dir, name, 'libexec/openjdk.jdk/Contents/Home')); } catch { return []; }
+  }).sort((a, b) => (/openjdk\//.test(b) - /openjdk\//.test(a)) || Number(/@(\d+)/.exec(b)?.[1] ?? 0) - Number(/@(\d+)/.exec(a)?.[1] ?? 0));
+  return [...kegs, path.join(userHome, '.sdkman/candidates/java/current')].map(existing).find(Boolean) ?? null;
 }
 
 // SwiftPM and xcodebuild start sandbox-exec for package manifests and

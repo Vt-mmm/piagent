@@ -58,10 +58,13 @@ export function repositoryChecks(agentsFiles, cwd, top = cwd) {
 }
 // A command that verifies code: a declared check, or a known test, type,
 // lint or build runner. Text tools that merely mention one do not count.
-const RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|lint|typecheck|type-check|check|build|verify)\b|\bnode\s+--test\b|\b(tsc|vitest|jest|eslint|biome|ruff|mypy|pyright|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest|mypy)\b|\bgo\s+(test|vet|build)\b|\bcargo\s+(test|check|clippy|build)\b|\bswift\s+(test|build)\b|\bxcodebuild\b.*\b(test|build)\b|\bmake\s+(test|check|lint)\b|\b(gradle|gradlew|mvn)\b.*\b(test|check|verify)\b|\bdotnet\s+(test|build)\b|\bdeno\s+(test|check|lint)\b/;
+const RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|lint|typecheck|type-check|check|build|verify)\b|\bnode\s+--test\b|\b(tsc|vitest|jest|eslint|biome|ruff|mypy|pyright|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest|mypy)\b|\bgo\s+(test|vet|build)\b|\bcargo\s+(test|check|clippy|build)\b|\bswift\s+(test|build)\b|\bxcodebuild\b.*\b(test|build)\b|\bmake\s+(test|check|lint)\b|\b(gradle|gradlew|mvn|mvnw)\b.*\b(test|check|verify|compile|package|build)\b|\bdotnet\s+(test|build)\b|\bdeno\s+(test|check|lint)\b/;
 // A command that only reads: each part starts with a reading tool and nothing
-// is written to a file. Anything else may change files.
-const READER = /^(ls|cat|head|tail|wc|grep|egrep|rg|find|fd|sed|awk|cut|sort|uniq|tr|echo|printf|pwd|which|stat|file|du|df|tree|jq|diff|cmp|basename|dirname|realpath|date|true|cd|git\s+(status|diff|log|show|branch|ls-files|rev-parse|blame))\b/;
+// is written to a file. Anything else may change files. Git may name the
+// repository first (git -C <folder>): a workspace folder holding several
+// repositories is read that way.
+const GIT_READ = String.raw`git(\s+(-C\s+('[^']*'|"[^"]*"|\S+)|-c\s+\S+|--no-pager))*\s+(status|diff|log|show|branch|ls-files|rev-parse|rev-list|blame|describe|shortlog|cat-file|for-each-ref|reflog(?!\s+(expire|delete))|remote(\s+(-v|--verbose|show|get-url)\b|$))`;
+const READER = new RegExp(String.raw`^(ls|cat|head|tail|wc|grep|egrep|rg|find|fd|sed|awk|cut|sort|uniq|tr|echo|printf|pwd|which|stat|file|du|df|tree|jq|diff|cmp|basename|dirname|realpath|date|true|cd|${GIT_READ})(\b|$)`);
 export function isReadOnlyCommand(command) {
   const text = String(command ?? '').trim();
   if (!text || />(?!>|\s*&\d|\s*\/dev\/null)|\btee\b|\bsed\s+(-[a-zA-Z]*i|--in-place)|\s-(delete|exec|execdir|fprint|ok)\b|\bxargs\b|\$\(|`/.test(text)) return false;
@@ -117,7 +120,7 @@ export function workflowPrompt(policy, checks) {
   }
   if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix, or to answer when a finding is wrong: the reviewer then judges your answer, and a disagreement that remains goes to the member.'
     : '- Review: before you finish a code change, ask the review helper (delegate role "review") to review the patch, then fix blocking findings.');
-  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\nEnd-to-end tests that start a local server and a browser run through run_with_network, which the user approves. If a step cannot be done here (a check needs a database or another service), say so plainly; do not try to install or start services to get around the sandbox.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.` : '';
+  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\nEnd-to-end tests that start a local server and a browser run through run_with_network, which the user approves. If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), do not stop there: request the approval that makes it run (run_with_network, run_with_docker, start_docker, or run_on_host to install what is missing) or ask the member with ask_user; never install or start anything without that approval.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.` : '';
 }
 
 // Every helper checks the brief it was given: it may object with evidence, it
@@ -292,7 +295,7 @@ export async function completionGate(managed, run, signal) {
       if (policy.verify === 'require' && !run.verified && !verifyGaveUp) {
         run.fixLoops += 1;
         const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
-        await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run here (it needs a database, a service or the network) or fails for a reason unrelated to your change, say so plainly instead of trying to install or start services.`,
+        await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), request the approval that makes it run (run_with_network, run_with_docker, start_docker, run_on_host) or ask the member with ask_user, then run it; install or start nothing without that approval. If it fails for a reason unrelated to your change, say so plainly.`,
           { phase: 'verify', loop: run.fixLoops, maxLoops: policy.maxFixLoops, lastCheckFailed: run.lastCheck?.ok === false });
         continue;
       }

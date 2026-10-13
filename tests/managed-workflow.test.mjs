@@ -32,7 +32,7 @@ test('policy, checks and review findings are read conservatively', () => {
     assert.deepEqual(repositoryChecks(agents, dir), { source: 'agents', commands: ['npm test', 'npm run typecheck', 'go test ./...'] });
     assert.equal(repositoryChecks([], dir).source, 'detected');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  for (const command of ['npm test', 'cd web && npm run lint', 'node --test tests/a.test.mjs', 'npx tsc --noEmit', 'go test ./internal/...', 'swift build', 'python3 -m pytest -q', './check.sh'])
+  for (const command of ['npm test', 'cd web && npm run lint', 'node --test tests/a.test.mjs', 'npx tsc --noEmit', 'go test ./internal/...', 'swift build', 'python3 -m pytest -q', './check.sh', 'cd api && ./mvnw -q -DskipTests compile', './gradlew build'])
     assert.equal(isCheckCommand(command, ['./check.sh']), true, command);
   for (const command of ['ls', 'grep -rn "npm test" .', 'echo go test', 'git commit -m "npm test"', 'cat package.json'])
     assert.equal(isCheckCommand(command), false, command);
@@ -83,6 +83,11 @@ test('outside git only commands that only read leave the code unchanged', async 
   for (const command of ['ls -la', 'cat notes.txt', 'grep -rn foo src | head -20', 'sed -n 1,40p a.js', 'git status --short && git diff --stat', 'rg auth src 2>/dev/null', 'cat a 2>&1 | tail -5', 'cd src && ls'])
     assert.equal(isReadOnlyCommand(command), true, command);
   for (const command of ["printf 'x\\n' > a.txt", 'echo x >> log', 'sed -i s/a/b/ f', 'find . -name x -delete', 'cat a | tee b', 'npm install', 'node build.mjs', 'ls; rm -rf dist', 'echo $(touch x)', 'grep a f > out.txt', 'cat a 1>out', 'ls 2>err.txt', 'ls | xargs rm', ''])
+    assert.equal(isReadOnlyCommand(command), false, command);
+  // A workspace folder of several repositories is read with git -C.
+  for (const command of ['git -C api status -sb && git -C api remote -v', "git -C 'my repo' log -8 origin/dev 2>&1", 'git --no-pager -C api reflog show -4 refs/remotes/origin/dev', 'git -C api rev-list --count main..origin/main', 'git -c color.ui=never -C api show --stat HEAD | head -40', 'git -C api remote'])
+    assert.equal(isReadOnlyCommand(command), true, command);
+  for (const command of ['git -C api checkout dev', 'git -C api pull', 'git -C api remote add up x', 'git -C api reflog expire --all', 'git -c user.name=x -C api commit -m y', 'git -C api fetch origin'])
     assert.equal(isReadOnlyCommand(command), false, command);
   const policy = { plan: 'off', verify: 'off', review: 'off', maxFixLoops: 0 }, run = () => new RunProcess(policy, { request: 'x', complex: false, checks: { commands: [] } });
   const outside = run();

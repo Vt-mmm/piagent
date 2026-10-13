@@ -37,7 +37,7 @@ test('sandbox denial has actionable reason, ordinary tool failures are not misla
  // A build wrapper fetching its distribution (mvnw, gradlew) points there too.
  assert.match(sandboxDiagnostic('curl: Failed to fetch https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.14/apache-maven-3.9.14-bin.zip'),/^managed-network-blocked:.*run_with_network/);
  assert.match(sandboxDiagnostic('java.net.UnknownHostException: services.gradle.org'),/^managed-network-blocked:/);
- assert.match(sandboxDiagnostic('npm error code ENOTFOUND',{network:true}),/^managed-network-unreachable:.*Không xin duyệt lại/);
+ assert.match(sandboxDiagnostic('npm error code ENOTFOUND',{network:true}),/^managed-network-unreachable:.*ask_user/);
 });
 test('doctor distinguishes same-version old installations without executing them',()=>{
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'pi-installations-'));

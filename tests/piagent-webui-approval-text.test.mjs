@@ -19,4 +19,10 @@ test("a push needing approval reads as plain Vietnamese, unknown text stays as w
   assert.equal(approvalConsequenceText("The command does not run; the agent is told you declined.", "en"), "The command does not run; the agent is told you declined.");
   assert.equal(approvalConsequenceText("Run this exact command once, with internet access; a server it starts accepts connections while it runs.", "vi"), "Chạy đúng lệnh này một lần, có mạng; server mà lệnh mở nhận kết nối trong lúc chạy.");
   assert.equal(approvalConsequenceText("Something new.", "vi"), "Something new.");
+  // Outside the sandbox and starting Docker read plainly too.
+  assert.equal(approvalScopeText({ requestedScope: "host-command-once" }, "vi"), "Đúng một lệnh, chạy trên máy bạn (ngoài sandbox)");
+  assert.equal(approvalScopeText({ requestedScope: "start-docker-once" }, "vi"), "Mở Docker trên máy");
+  assert.match(approvalConsequenceText("Run this exact command once on this machine, outside the sandbox, as you: it can read and change your files and use your sign-ins.", "vi"), /^Chạy đúng lệnh này một lần trên máy bạn, ngoài sandbox/);
+  assert.equal(approvalConsequenceText("Start OrbStack on this machine; it keeps running after the conversation.", "vi"), "Mở OrbStack trên máy; nó vẫn chạy sau cuộc trò chuyện.");
+  assert.equal(approvalConsequenceText("Start OrbStack on this machine; it keeps running after the conversation.", "en"), "Start OrbStack on this machine; it keeps running after the conversation.");
 });

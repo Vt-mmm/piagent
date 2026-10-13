@@ -16,10 +16,27 @@ export function githubRemote(value) {
   return {repository:`${match[1]}/${match[2]}`,url:`https://github.com/${match[1]}/${match[2]}.git`};
 }
 
-export async function repositoryFetchPlan(boundary) {
-  const result=await boundary.invoke('bash',{command:'git config --local --get remote.origin.url',timeout:5});
-  const remote=githubRemote(text(result));
-  return Object.freeze({...remote,cwd:boundary.cwd});
+// The repository is the conversation folder, or a folder inside it (a
+// workspace folder holding several repositories).
+export function repositoryFolder(cwd, folder) {
+  if (folder === undefined || folder === null || folder === '' || folder === '.') return cwd;
+  if (typeof folder !== 'string' || path.isAbsolute(folder) || folder.length > 500) throw Error('managed-repository-path-invalid: path is a folder inside the conversation folder, such as "api".');
+  const dir = path.resolve(cwd, folder);
+  let real;
+  try { real = fs.realpathSync(dir); } catch { throw Error(`managed-repository-not-found: ${folder} does not exist.`); }
+  const top = fs.realpathSync(cwd);
+  if (real !== top && !real.startsWith(top + path.sep)) throw Error('managed-repository-path-invalid: path is a folder inside the conversation folder.');
+  return real;
+}
+
+export async function repositoryFetchPlan(boundary, folder) {
+  const cwd=repositoryFolder(boundary.cwd,folder);
+  let url='';
+  try { url=text(await boundary.invoke('bash',{command:`git -C ${quote(cwd)} config --local --get remote.origin.url`,timeout:5})); } catch { url=''; }
+  if (!url || /^fatal:|Command exited with code/m.test(url)) throw Error(cwd===boundary.cwd
+    ? 'managed-repository-not-found: the conversation folder is not a Git repository. Pass path: the repository folder inside it, such as "api".'
+    : `managed-repository-not-found: ${folder} is not a Git repository with an origin remote.`);
+  return Object.freeze({...githubRemote(url),cwd});
 }
 
 function command(binary,args,{cwd,env,signal,secret='',limit=1024*1024}={}) {
@@ -70,15 +87,15 @@ export async function fetchRepositoryBundle(plan, destination, signal) {
 }
 
 export async function executeRepositoryFetch(boundary,plan,signal,{transport=fetchRepositoryBundle}={}) {
-  const current=await repositoryFetchPlan(boundary);
+  const current=await repositoryFetchPlan(boundary,path.relative(boundary.cwd,plan.cwd));
   if(current.url!==plan.url||current.cwd!==plan.cwd)throw Error('managed-operation-scope-changed');
   const staging=path.join(boundary.temporary,'approved-origin-'+Date.now());
   try {
     await transport(plan,staging,signal);
-    const rechecked=await repositoryFetchPlan(boundary);
+    const rechecked=await repositoryFetchPlan(boundary,path.relative(boundary.cwd,plan.cwd));
     if(rechecked.url!==plan.url)throw Error('managed-operation-scope-changed');
     // Import is sandboxed. Malicious repo hooks/config cannot reach credentials.
-    await boundary.invoke('bash',{command:`git -c core.hooksPath=/dev/null -c protocol.allow=never -c protocol.file.allow=always fetch --no-tags --no-recurse-submodules --no-write-fetch-head --update-shallow ${quote(staging)} '+refs/heads/*:refs/remotes/origin/*'`,timeout:30},signal);
+    await boundary.invoke('bash',{command:`git -C ${quote(plan.cwd)} -c core.hooksPath=/dev/null -c protocol.allow=never -c protocol.file.allow=always fetch --no-tags --no-recurse-submodules --no-write-fetch-head --update-shallow ${quote(staging)} '+refs/heads/*:refs/remotes/origin/*'`,timeout:30},signal);
     return {content:[{type:'text',text:`Fetched origin branches for ${plan.repository}. Working files and current branch were not changed.`}],details:{operation:'git.fetch',repository:plan.repository}};
   } finally {fs.rmSync(staging,{recursive:true,force:true});}
 }
@@ -86,17 +103,17 @@ export async function executeRepositoryFetch(boundary,plan,signal,{transport=fet
 // The fetch_origin tool of a company conversation: one approved fetch of the
 // GitHub origin (Bypass fetches without asking).
 export function fetchOriginTool(self) {
-  return {name:'fetch_origin',label:'Fetch origin',description:'Request one approved GitHub origin fetch. Refreshes origin branches without changing working files. Does not expose credentials or allow arbitrary network commands.',
-    parameters:{type:'object',properties:{},additionalProperties:false},
-    execute:async(id,_args,signal,_update,ctx)=>{
-      const plan=await repositoryFetchPlan(self.boundary);
+  return {name:'fetch_origin',label:'Fetch origin',description:'Request one approved GitHub origin fetch. Refreshes origin branches without changing working files. Does not expose credentials or allow arbitrary network commands. When the conversation folder holds several repositories, pass path: the repository folder inside it. Use this instead of git fetch, which has no GitHub sign-in here.',
+    parameters:{type:'object',properties:{path:{type:'string',maxLength:500,description:'Repository folder inside the conversation folder, such as "api"; omit when the conversation folder is the repository.'}},additionalProperties:false},
+    execute:async(id,args,signal,_update,ctx)=>{
+      const plan=await repositoryFetchPlan(self.boundary,args?.path);
       if(self.permission==='trusted-full-access'&&!signal?.aborted)return executeRepositoryFetch(self.boundary,plan,signal);
       const {piApprovalBroker}=await import('../runtime/inspection/approval-broker.ts');
       const decision=await piApprovalBroker.request({cwd:self.cwd,rawSessionId:self.session.sessionManager.getSessionId(),toolCallId:id,
         action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'fetch_origin',rawAction:plan,
-          targetPaths:[self.cwd],provider:'github',urlOrigin:'https://github.com',requestedScope:'fetch-origin-once',
+          targetPaths:[plan.cwd],provider:'github',urlOrigin:'https://github.com',requestedScope:'fetch-origin-once',
           reason:`Fetch origin branches from ${plan.repository}`,riskClass:'low',allowConsequence:'Download origin branches once; keep the current branch and working files unchanged.',denyConsequence:'No network request or credential read.'},
-        terminalConfirm:()=>ctx?.ui?.confirm?.('Tải nhánh từ origin',`Tải các nhánh của ${plan.repository} về ${self.cwd} một lần.\n\nĐồng ý: chỉ tải nhánh; nhánh hiện tại và file đang làm không đổi.\nTừ chối: không gửi request mạng, không đọc thông tin đăng nhập.`)??Promise.resolve(false),
+        terminalConfirm:()=>ctx?.ui?.confirm?.('Tải nhánh từ origin',`Tải các nhánh của ${plan.repository} về ${plan.cwd} một lần.\n\nĐồng ý: chỉ tải nhánh; nhánh hiện tại và file đang làm không đổi.\nTừ chối: không gửi request mạng, không đọc thông tin đăng nhập.`)??Promise.resolve(false),
         unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
       if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
       return executeRepositoryFetch(self.boundary,plan,signal);

@@ -8,7 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
 import { languageEnvironment } from './language-environment.mjs';
-import { containerEngine, engineEnvironment } from './container-engine.mjs';
+import { containerEngine, dockerCli, engineEnvironment } from './container-engine.mjs';
 import { DEFAULT_DOMAINS, PackageProxy, mavenSettings, memberDomains, proxyEnvironment } from './package-proxy.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
 import { agentWatchDataDirectory } from './store.mjs';
@@ -229,11 +229,6 @@ export class ManagedToolBoundary {
     // A repository above the home folder (a dotfiles repo) is never opened:
     // neither read as a monorepo nor writable through its git directory.
     const gitDirs = repo && (repo.top === this.cwd || allowedRoot(repo.top)) ? [...new Set([repo.gitDir, repo.commonDir])].filter(dir => !inside(dir, this.cwd) && allowedRoot(dir)) : [];
-    const toolchains = userToolchains(userHome, this.node), developer = developerTools(), browsers = playwrightBrowsers(userHome);
-    const languages = languageEnvironment({ userHome, repositoryTop: this.repositoryTop, home: this.home });
-    this.packageCache = languages.cache;
-    // The Docker engine, for commands the member approves (run_with_docker).
-    this.engine = readOnly ? null : containerEngine({ userHome });
     // A skill folder opens for reading only inside the agent folders (.claude,
     // .codex, .pi, .agents) or outside the home folder's hidden entries, and
     // never when it holds a closed folder (a link to ~/.ssh, the home folder).
@@ -241,41 +236,73 @@ export class ManagedToolBoundary {
     const skills = [...new Set(skillFolders.flatMap(dir => { try { return [fs.realpathSync(dir)]; } catch { return []; } }))]
       .filter(dir => dir !== '/' && !/[\x00-\x1f\x7f]/.test(dir) && !narrowed.some(root => inside(root, dir)) && !inside(userHome, dir)
         && (!inside(dir, userHome) || agentFolders.some(root => inside(dir, root)) || !path.relative(userHome, dir).startsWith('.')));
-    const base = { cwd: this.cwd, sdkRoot: this.sdkRoot, runtimeRoot: this.runtimeRoot, temporary: this.temporary, node: this.node,
-      denied: narrowed, readOnly, repository, gitDirs, toolchains: [...toolchains.roots, ...languages.readRoots], developer: developer.roots,
-      browsers: browsers ? [browsers] : [], skills, caches: languages.writeRoots, license: developerLicense() };
     this.userHome = userHome;
     // Only for commands the user approved (run_with_network); credentials stay
     // denied, and so do reference folders: what a command with network can
     // read is the project, not the member's other files.
     this.networkAllowed = !readOnly;
+    // Every process a command starts carries this marker, also one it detaches.
+    this.scope = randomUUID();
+    this.setup = { narrowed, readOnly, repository, gitDirs, skills, identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) };
     if (this.linux) {
-      const references = referenceFolders(userHome).filter(dir => !narrowed.some(root => inside(dir, root) || inside(root, dir)));
-      const empty = path.join(this.temporary, 'empty'); fs.writeFileSync(empty, '', { mode: 0o400 });
-      this.linuxBase = { ...base, toolchains: [...base.toolchains, ...base.browsers], references, empty, engineRoots: this.engine?.readRoots ?? [] };
-      this.referenceCredentials = credentialFiles(references, { limit: 30_000 });
+      this.references = referenceFolders(userHome).filter(dir => !narrowed.some(root => inside(dir, root) || inside(root, dir)));
+      this.empty = path.join(this.temporary, 'empty'); fs.writeFileSync(this.empty, '', { mode: 0o400 });
+      this.referenceCredentials = credentialFiles(this.references, { limit: 30_000 });
       this.projectCredentials = { at: 0, files: [] };
-    } else {
-      this.profile = managedSeatbelt({ ...base, references: userHome });
-      // The same without loopback, while a local proxy listens (localProxyListening).
-      this.isolatedProfile = managedSeatbelt({ ...base, references: userHome, loopback: false });
-      this.proxyPorts = proxyPorts ?? localProxyPorts(); this.proxyCheck = { at: 0, listening: Promise.resolve(false) };
+    } else { this.proxyPorts = proxyPorts ?? localProxyPorts(); this.proxyCheck = { at: 0, listening: Promise.resolve(false) }; }
+    this.#configure();
+    // Package registries without asking (package-proxy.mjs): commands that
+    // write the project reach them through the runtime's proxy; read-only
+    // helpers keep no network at all.
+    if (!readOnly) this.proxyReady = this.startProxy();
+    if (searchTools) provisionSearchTools(this.home, userHome);
+    else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
+    this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit'].includes(name) && (name !== 'bash' || commands)) : [...TOOL_NAMES];
+  }
+  // What the machine offers commands: toolchains, the JDK, the Docker engine.
+  // Looked up again after the member installs or starts something
+  // (run_on_host, start_docker), so the conversation sees it without a restart.
+  #configure() {
+    const { narrowed, readOnly, repository, gitDirs, skills, identity } = this.setup, userHome = this.userHome;
+    const toolchains = userToolchains(userHome, this.node), developer = developerTools(), browsers = playwrightBrowsers(userHome);
+    const languages = languageEnvironment({ userHome, repositoryTop: this.repositoryTop, home: this.home });
+    this.packageCache = languages.cache; this.languages = languages;
+    // The Docker engine, for commands the member approves (run_with_docker).
+    this.engine = readOnly ? null : containerEngine({ userHome });
+    this.dockerCli = readOnly ? null : this.engine?.cli ?? dockerCli();
+    const base = this.base = { cwd: this.cwd, sdkRoot: this.sdkRoot, runtimeRoot: this.runtimeRoot, temporary: this.temporary, node: this.node,
+      denied: narrowed, readOnly, repository, gitDirs, toolchains: [...toolchains.roots, ...languages.readRoots], developer: developer.roots,
+      browsers: browsers ? [browsers] : [], skills, caches: languages.writeRoots, license: developerLicense() };
+    if (this.linux) this.linuxBase = { ...base, toolchains: [...base.toolchains, ...base.browsers], references: this.references, empty: this.empty, engineRoots: this.engine?.readRoots ?? [] };
+    else {
       this.networkProfile = readOnly ? null : managedSeatbelt({ ...base, network: true });
       // An approved network command that also reaches the Docker engine's socket.
       this.dockerProfile = this.engine ? managedSeatbelt({ ...base, network: true, docker: this.engine.socket, toolchains: [...base.toolchains, ...this.engine.readRoots] }) : null;
     }
-    // Every process a command starts carries this marker, also one it detaches.
-    this.scope = randomUUID();
-    this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers, languages,
-      identity: identity !== undefined ? identity : gitIdentity(this.git, this.cwd) });
+    this.environment = toolEnvironment({ git: this.git, node: this.node, home: this.home, temporary: this.temporary, toolchains, developer, scope: this.scope, browsers, languages, identity });
     if (this.engine) this.environment.docker = { ...this.environment.network, ...engineEnvironment(this.engine, this.home) };
-    // Package registries without asking (package-proxy.mjs): commands that
-    // write the project reach them through the runtime's proxy; read-only
-    // helpers keep no network at all.
-    if (!readOnly) this.proxyReady = this.startProxy(base, languages);
-    if (searchTools) provisionSearchTools(this.home, userHome);
-    else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
-    this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit'].includes(name) && (name !== 'bash' || commands)) : [...TOOL_NAMES];
+    this.#applyProxy();
+  }
+  // Plain commands' profile and environment, with the package proxy once it listens.
+  #applyProxy() {
+    const port = this.proxyUrl && !this.linux ? Number(new URL(this.proxyUrl).port) : null;
+    if (!this.linux) {
+      // TLS through the macOS Security framework (Go, Swift, .NET) verifies
+      // the registries' certificates with the system's trust services.
+      this.profile = managedSeatbelt({ ...this.base, references: this.userHome, ...(port ? { proxyPort: port } : {}) });
+      // The same without loopback, while a local proxy listens (localProxyListening).
+      this.isolatedProfile = managedSeatbelt({ ...this.base, references: this.userHome, loopback: false, ...(port ? { proxyPort: port } : {}) });
+    }
+    if (!this.proxyUrl) return;
+    const offline = this.environment.offline;
+    for (const key of ['npm_config_fetch_retries', 'npm_config_fetch_timeout', 'PIP_RETRIES', 'PIP_TIMEOUT']) delete offline[key];
+    Object.assign(offline, proxyEnvironment(this.proxyUrl, { mavenOpts: offline.MAVEN_OPTS, gradleOpts: offline.GRADLE_OPTS, mavenHome: this.home }), { GOPROXY: this.languages.env.network.GOPROXY },
+      this.linux ? { PIAGENT_PROXY_SOCKET: '/run/piagent-proxy.sock' } : {});
+  }
+  // Looks the machine up again; true when the Docker engine is there now.
+  refreshEnvironment() {
+    if (!this.#closed) this.#configure();
+    return Boolean(this.engine);
   }
   tools(api) {
     const factories = { read: api.createReadToolDefinition, write: api.createWriteToolDefinition,
@@ -291,7 +318,7 @@ export class ManagedToolBoundary {
   // The proxy listens on loopback (macOS: Seatbelt opens its one port even
   // while a local proxy closes the rest of loopback) or on a Unix socket that
   // the worker forwards from inside the command's network namespace (Linux).
-  async startProxy(base, languages) {
+  async startProxy() {
     this.proxy = new PackageProxy({ domains: [...DEFAULT_DOMAINS, ...memberDomains(this.userHome)] });
     try {
       let url;
@@ -299,21 +326,10 @@ export class ManagedToolBoundary {
         this.proxySocket = path.join(os.tmpdir(), `piagent-proxy-${randomUUID().slice(0, 8)}.sock`);
         await this.proxy.listen(this.proxySocket);
         url = 'http://127.0.0.1:3128';
-        this.environment.offline.PIAGENT_PROXY_SOCKET = '/run/piagent-proxy.sock';
-      } else {
-        const { port } = await this.proxy.listen();
-        url = `http://127.0.0.1:${port}`;
-        // TLS through the macOS Security framework (Go, Swift, .NET) verifies
-        // the registries' certificates with the system's trust services.
-        this.profile = managedSeatbelt({ ...base, references: this.userHome, proxyPort: port });
-        this.isolatedProfile = managedSeatbelt({ ...base, references: this.userHome, loopback: false, proxyPort: port });
-      }
-      const offline = this.environment.offline;
-      for (const key of ['npm_config_fetch_retries', 'npm_config_fetch_timeout', 'PIP_RETRIES', 'PIP_TIMEOUT']) delete offline[key];
+      } else url = `http://127.0.0.1:${(await this.proxy.listen()).port}`;
       const settings = path.join(this.home, '.m2/settings.xml');
       fs.mkdirSync(path.dirname(settings), { recursive: true, mode: 0o700 }); fs.writeFileSync(settings, mavenSettings(url), { mode: 0o600 });
-      Object.assign(offline, proxyEnvironment(url, { mavenOpts: offline.MAVEN_OPTS, gradleOpts: offline.GRADLE_OPTS, mavenHome: this.home }), { GOPROXY: languages.env.network.GOPROXY });
-      this.proxyUrl = url;
+      this.proxyUrl = url; this.#applyProxy();
     } catch { await this.proxy.close().catch(() => {}); this.proxy = null; }
   }
   async invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
