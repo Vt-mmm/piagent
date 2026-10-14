@@ -283,9 +283,10 @@ export async function completionGate(managed, run, signal) {
   for (let step = 0; step < 16; step += 1) {
     digest = await digestOf();
     run.changed = run.startDigest !== null && digest !== null ? digest !== run.startDigest : run.mutations > 0;
+    // A check that passed still counts when the turn was cut off after it.
+    if (run.changed) run.verified = run.verifiedOn(digest);
     if (stopped()) { interrupted = run.changed; break; }
     if (run.changed) {
-      run.verified = run.verifiedOn(digest);
       const reviewDigest = managed.review ? await reviewDigestOf() : null;
       const review = managed.review, fresh = !!review && !review.stale && reviewDigest !== null && review.patchDigest === reviewDigest;
       run.reviewed = fresh;

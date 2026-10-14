@@ -18,7 +18,7 @@ const DOCKER_DAEMON = /Cannot connect to the Docker daemon|connect to the docker
 // version the project asks for).
 const TOOLCHAIN = /Unable to locate a Java Runtime|No Java runtime present|JAVA_HOME is not (?:set|defined correctly)|(?:^|\n)\S*?(?:ba|z)?sh: (?:line \d+: )?[\w.+-]+: command not found|zsh: command not found: [\w.+-]+|xcrun: error: (?:unable to find utility|invalid active developer path)|env: '?[\w.+-]+'?: No such file or directory|Unsupported class file major version|invalid target release: \d+|release version \d+ not supported|requires? (?:at least )?Java \d+|The engine "node" is incompatible|Unsupported engine/i;
 // The member's sign-in, which the sandbox does not have.
-const SIGN_IN = /could not read (?:Username|Password) for|terminal prompts disabled|Authentication failed for|Permission denied \(publickey|Host key verification failed|ENEEDAUTH|E401|401 Unauthorized|requires authentication|denied: requested access to the resource is denied|pull access denied/i;
+const SIGN_IN = /could not read (?:Username|Password) for|terminal prompts disabled|Authentication failed for|Permission denied \(publickey|Host key verification failed|\bENEEDAUTH\b|\bE401\b|\b401 Unauthorized|requires authentication|denied: requested access to the resource is denied|pull access denied/i;
 
 export function sandboxDiagnostic(message, { network = false, isolated = false, docker = false, engine = false } = {}) {
   const text=String(message);

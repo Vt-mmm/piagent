@@ -39,6 +39,8 @@ export async function repositoryFetchPlan(boundary, folder) {
   return Object.freeze({...githubRemote(url),cwd});
 }
 
+// Git's own error stays out of model context; the way on does not.
+const FETCH_FAILED='managed-repository-fetch-failed: fetch_origin không tải được nhánh từ GitHub (repo cần quyền mà tài khoản gh trên máy không có, gh chưa đăng nhập, mạng lỗi hoặc tải quá lâu). Dùng run_on_host để member duyệt chạy git fetch trên máy bằng tài khoản của họ (ví dụ git -C <thư mục repo> fetch origin <nhánh>).';
 function command(binary,args,{cwd,env,signal,secret='',limit=1024*1024,timeoutMs=60000}={}) {
   return new Promise((resolve,reject)=>{
     if(signal?.aborted) return reject(Error('managed-operation-cancelled'));
@@ -49,7 +51,7 @@ function command(binary,args,{cwd,env,signal,secret='',limit=1024*1024,timeoutMs
     // Credential helpers and Git diagnostics are never relayed to model context.
     child.stderr.on('data',()=>{});child.on('error',()=>{failed=true});
     child.on('close',code=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);
-      if(failed||code!==0) reject(Error(signal?.aborted?'managed-operation-cancelled':'managed-repository-fetch-failed'));
+      if(failed||code!==0) reject(Error(signal?.aborted?'managed-operation-cancelled':FETCH_FAILED));
       else resolve(secret?output.replaceAll(secret,'[REDACTED]'):output);
     });
   });

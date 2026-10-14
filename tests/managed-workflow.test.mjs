@@ -531,6 +531,21 @@ test('a change of a turn that stopped before its process ran is settled by the n
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+// The 13/10 release session: the build passed, then the next model request
+// was cut off. The report said "no check passed" although one had.
+test('a check that passed before the turn was cut off is still reported as passed', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project(), agent = broker({ plan: 'off', verify: 'require', review: 'off', max_fix_loops: 1 }, { review: false });
+  const server = await studio({ roleOf: () => 'main', review: [],
+    main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'bash', input: { command: 'sh check.sh' } }, { fail: true }, { fail: true }, { fail: true }] });
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
+  try {
+    await managed.session.prompt('Make a.txt say fixed');
+    const report = runReport(agent);
+    assert.deepEqual([report.outcome, report.changed, report.verified], ['interrupted', true, true]);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('a patch above the shell output limit is still reviewed; a review that cannot run says why', { skip: !supported, timeout: 180000 }, async () => {
   const root = project(), agent = broker({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 1 });
   const big = Array.from({ length: 1400 }, (_, i) => `export const value${i} = "${'x'.repeat(30)} ${i}";`).join('\n') + '\n';
