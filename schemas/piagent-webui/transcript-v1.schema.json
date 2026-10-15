@@ -157,7 +157,19 @@
       "additionalProperties": false,
       "required": ["phase"],
       "properties": {
-        "phase": { "enum": ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue"] },
+        "phase": { "enum": ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"] },
+        "undo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result", "restored", "removed", "files"],
+          "properties": {
+            "result": { "enum": ["done", "refused", "busy", "none", "failed"] },
+            "restored": { "type": "integer", "minimum": 0, "maximum": 100000 },
+            "removed": { "type": "integer", "minimum": 0, "maximum": 100000 },
+            "files": { "type": "array", "maxItems": 5, "items": { "type": "string", "maxLength": 300 } },
+            "more": { "type": "boolean" }
+          }
+        },
         "outcome": { "enum": ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
         "role": { "enum": ["scout", "research", "verify", "review"] },
         "by": { "enum": ["main", "harness"] },

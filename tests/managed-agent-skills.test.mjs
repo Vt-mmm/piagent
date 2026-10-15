@@ -10,12 +10,13 @@ import {agentResourcePaths, listAgentCommands} from '../packages/piagent-core/ru
 import {expandCommand} from '../packages/piagent-core/managed/agent-skills.mjs';
 import {ManagedToolBoundary} from '../packages/piagent-core/managed/tool-boundary.mjs';
 import {ManagedSession} from '../packages/piagent-core/managed/session.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Skills and commands a member keeps for coding agents (the project's
 // .claude/.codex/.agents/.pi folders and the same in the home folder) are
 // Piagent's too: listed to the model, expanded from /name, and readable in
 // the company sandbox where they are installed, nothing else of those folders.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const write = (file, text) => { fs.mkdirSync(path.dirname(file), {recursive: true}); fs.writeFileSync(file, text); };
 const text = (result) => (result?.content ?? []).map((part) => part.text ?? '').join('');
 

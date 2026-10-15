@@ -9,10 +9,11 @@ import {chromium,expect} from '@playwright/test';
 import '../scripts/register-typescript-loader.mjs';
 import {startManagedGateway} from '../packages/piagent-webui/gateway/managed-gateway.mjs';
 import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-socket.ts';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Studio refusing a turn (here the connector's 503) must end the turn in the
 // company WebUI with a visible reason, and the next message must still go out.
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 test('managed WebUI shows a Studio refusal instead of an endless wait and accepts the next message', {skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:60000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-inference-error-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const requests=[];let gateway,browser;

@@ -142,3 +142,26 @@ test("harness rounds that carry a checklist on stay in order, and the turn ends 
   assert.equal(managedProjection(context, [...entries, message("s3", "user", "tiếp tục")]).managedTurnEnd, undefined);
   assert.equal(managedProjection(context, [message("s4", "user", "go"), end("s5", { state: "done", planSteps: 2, planDone: 3, rounds: 0 })]).managedTurnEnd, undefined, "malformed");
 });
+
+// /undo from the WebUI: a note, checked like the others, says what came back.
+test("an /undo note reaches the timeline validated, redacted and worded in both languages", async () => {
+  const { headlineText } = await import("../packages/piagent-webui/shared/process-copy.ts");
+  const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
+  const value = projectTranscript({ identity, revision, eventCursor: "cursor.undo", generatedAt: "2026-10-01T09:03:00.000Z", entries: [
+    message("u1", "user", [{ type: "text", text: "Rename the cart total" }]),
+    message("u2", "assistant", [{ type: "text", text: "Renamed." }], { stopReason: "stop" }),
+    note("u3", "agent-watch-process", { phase: "undo", undo: { result: "done", restored: 2, removed: 1, files: ["src/cart.js", `notes-${secret}.md`], more: true, extra: "dropped" } }),
+    note("u4", "agent-watch-process", { phase: "undo", undo: { result: "invented", restored: 1, removed: 0, files: [] } }),
+  ] });
+  const validation = validateFixture(registry, "transcript-v1", value);
+  assert.equal(validation.valid, true, validation.errors);
+  const undos = value.items.filter(item => item.process?.phase === "undo").map(item => item.process);
+  assert.equal(undos.length, 2);
+  assert.deepEqual(undos[0].undo.files[0], "src/cart.js"); assert.equal(undos[0].undo.restored, 2); assert.equal(undos[0].undo.more, true);
+  assert.ok(!JSON.stringify(undos[0]).includes(secret), "file names are redacted");
+  assert.equal("extra" in undos[0].undo, false);
+  assert.equal(undos[1].undo, undefined, "an unknown result is left out");
+  assert.match(headlineText(undos[0], "vi"), /^Đã hoàn tác lượt trước: 2 file trả về như trước, 1 file lượt đó tạo đã xoá \(src\/cart\.js, .*\)\. Gửi \/undo lần nữa/);
+  assert.match(headlineText(undos[0], "en"), /^Undid the last turn: 2 file\(s\) restored, 1 file\(s\) it created removed/);
+  assert.match(headlineText({ phase: "undo", undo: { result: "refused", restored: 0, removed: 0, files: ["a.txt"] } }, "en"), /^Not undone: .*\(a\.txt\)/);
+});

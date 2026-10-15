@@ -15,6 +15,7 @@ import { buildSessionLiveState } from "../../packages/piagent-webui/gateway/sess
 import { gatewayProfileState, readOrCreateCatalogKey } from "../../packages/piagent-webui/gateway/profile-state.ts";
 import { ProjectRegistry } from "../../packages/piagent-webui/gateway/project-registry.ts";
 import { startLoopbackServer } from "../../packages/piagent-webui/server/loopback-server.ts";
+import { hostPackage } from "../../packages/piagent-core/managed/pi-host.mjs";
 
 const model = { id: "fixture", name: "Offline scripted fixture", api: "fixture", provider: "fixture", baseUrl: "",
   reasoning: false, input: ["text"], contextWindow: 128000, maxTokens: 16000,
@@ -37,8 +38,8 @@ export async function launchScriptedProductionGateway({ repositoryRoot, workspac
   Object.assign(metrics, { scriptedTurns: 0, unexpectedTurns: 0, authCalls: 0, providerRegistrations: 0,
     disposes: 0, gatewayCloses: 0, commands: 0, declaredTurns: [] });
   const host = await loadPinnedPiHost(expectedPiVersion), hostRoot = installedPiHostRoot();
-  const { AssistantMessageEventStream } = await import(pathToFileURL(path.join(hostRoot,
-    "node_modules/@earendil-works/pi-ai/dist/utils/event-stream.js")).href);
+  const { AssistantMessageEventStream } = await import(pathToFileURL(path.join(hostPackage(hostRoot, "@earendil-works/pi-ai"),
+    "dist/utils/event-stream.js")).href);
   const sessionDir = path.join(agentDir, "sessions");
   fs.mkdirSync(sessionDir, { recursive: true, mode: 0o700 });
   const modelRuntime = {

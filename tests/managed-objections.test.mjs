@@ -11,10 +11,11 @@ import { briefIssues, RunProcess } from '../packages/piagent-core/managed/workfl
 import { memberRequest, anchorText, beforeDelegate, relayObjection } from '../packages/piagent-core/managed/objections.mjs';
 import { HELPER_SETUP, helperPrompt } from '../packages/piagent-core/managed/helper-roles.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // A helper may object to its brief with evidence; the main agent decides and
 // answers; the same disagreement a second time goes to the member.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 
 test('objections are read from the helper answer; the member request reaches back over short follow-ups', () => {

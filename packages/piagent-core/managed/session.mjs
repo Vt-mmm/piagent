@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { ManagedToolBoundary } from './tool-boundary.mjs';
+import { ManagedToolBoundary, PI_HOST_VERSION, hostPackage } from './tool-boundary.mjs';
 import { ensureSearchTools, trustSystemCertificates } from './toolchain.mjs';
 import { inlineExtensions, managedResourceLoader, projectInstructions } from './resource-loader.mjs';
 import { fetchPublicPage, fetchLimits } from './web-fetch.mjs';
@@ -91,10 +91,10 @@ export class ManagedSession {
   // the conversation enrolls again before its next run.
   static async create({ sdkRoot, cwd, origin, broker, protectedRoots = [], agentDir, sessionManager, renewBroker = null, bindingRevision = null, terminalExtensions = [] }) {
     const sdk = fs.realpathSync(sdkRoot);
-    if (JSON.parse(fs.readFileSync(path.join(sdk, 'package.json'))).version !== '0.87.1') throw Error('managed-sdk-version-unqualified');
+    if (JSON.parse(fs.readFileSync(path.join(sdk, 'package.json'))).version !== PI_HOST_VERSION) throw Error('managed-sdk-version-unqualified');
     await trustSystemCertificates();
     const api = await import(pathToFileURL(path.join(sdk, 'dist/index.js')));
-    const ai = await import(pathToFileURL(path.join(sdk, 'node_modules/@earendil-works/pi-ai/dist/index.js')));
+    const ai = await import(pathToFileURL(path.join(hostPackage(sdk, '@earendil-works/pi-ai'), 'dist/index.js')));
     const manifest = usable(await patiently(() => broker.request('config'), 3));
     const self = new ManagedSession(); Object.assign(self, { sdk, cwd: fs.realpathSync(cwd), origin: safeOrigin(origin), broker, api, ai, manifest, protectedRoots, helpers: new Map(), helperCalls: new Map(), ownPaths: new Set(), listeners: new Set(), capacityWaits: new Set(), routes: new WeakMap(), grant: null,
       renewBroker, bindingRevision, bindingSeen: bindingRevision?.() ?? null, preflight: null, blocked: null });

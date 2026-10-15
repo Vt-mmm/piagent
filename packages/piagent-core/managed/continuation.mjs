@@ -1,3 +1,4 @@
+import { checkpointsOf } from './checkpoints.mjs';
 import { unfinished, planText, currentPlan, workflowPolicy } from './workflow.mjs';
 import { failureCode } from '../runtime/managed-failure.mjs';
 
@@ -77,6 +78,13 @@ const fresh = (self, manager, text) => {
 };
 
 export async function memberTurn(self, { manager, prompt, runRound }, text, deliver) {
+  // /undo from the WebUI (the Terminal has its own command): the last turn's
+  // files go back, said in a note, with no model request (checkpoints.mjs).
+  if (/^\s*\/undo\s*$/.test(text)) {
+    const { text: content, ...undo } = await checkpointsOf(self).undo();
+    await self.session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details: { phase: 'undo', undo } }, { triggerTurn: false });
+    return;
+  }
   let continuation = fresh(self, manager, text), result, waiting = null, ended = null;
   self.stopRequested = false; self.queued = [];
   try {

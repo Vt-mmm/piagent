@@ -6,7 +6,8 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession, taskClass } from '../packages/piagent-core/managed/session.mjs';
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
+const sdkRoot = piSdkRoot();
 
 test('short prompts do not require helpers or a workflow', () => {
   for (const text of ['alo 123', 'hi', 'hello', '2 + 2?', 'cảm ơn']) assert.equal(taskClass(text), 'simple');

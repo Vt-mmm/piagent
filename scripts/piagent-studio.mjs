@@ -14,12 +14,13 @@ const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest
 process.removeAllListeners('warning');
 process.on('warning', warning => { if (warning.name !== 'ExperimentalWarning') process.stderr.write(`${warning.name}: ${warning.message}\n`); });
 const args = process.argv.slice(2), flags = new Map();
-if (args.includes('--help')) { console.log('piagent studio [--web [--no-open] | --serve | --check | --doctor | --prompt <text>] [--config <Agent Watch configuration>] [--project <folder>]\nDefaults: the configuration imported into ~/.pi/agent and the current project. Personal sessions remain under pi / piagent dashboard.'); process.exit(0); }
+if (args.includes('--help')) { console.log('piagent studio [--web [--no-open] | --serve | --check | --doctor | --prompt <text> [--json]] [--config <Agent Watch configuration>] [--project <folder>]\nDefaults: the configuration imported into ~/.pi/agent and the current project. Personal sessions remain under pi / piagent dashboard.\n--json with --prompt writes the event stream of `pi --mode json` (JSONL on stdout; failures on stderr, exit 1).'); process.exit(0); }
 for (let i = 0; i < args.length; i++) {
-  if (['--check', '--doctor', '--web', '--serve', '--no-open'].includes(args[i])) { flags.set(args[i], true); continue; }
+  if (['--check', '--doctor', '--web', '--serve', '--no-open', '--json'].includes(args[i])) { flags.set(args[i], true); continue; }
   if (!['--config', '--project', '--prompt'].includes(args[i]) || flags.has(args[i]) || !args[i + 1]) throw Error('managed-launch-arguments');
   flags.set(args[i], args[++i]);
 }
+if (flags.has('--json') && !flags.has('--prompt')) throw Error('managed-launch-arguments');
 const home = os.homedir();
 // Do this before importing the SDK: it must not discover personal keys, Node
 // preload hooks, proxy overrides or provider endpoints from an ambient shell.
@@ -133,11 +134,23 @@ try {
   const host = await api.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: api.SessionManager.create(cwd, path.join(agentDir, 'sessions')) });
   if (flags.get('--check')) console.log('agent-watch-auto: connected; native context; isolated tools; no inference sent.');
   else if (flags.has('--prompt')) {
-    current.session.subscribe(event => {
-      if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') process.stdout.write(event.assistantMessageEvent.delta);
-      if (event.type === 'message_end' && ['agent-watch-helper-receipt','agent-watch-review-status'].includes(event.message?.customType)) process.stderr.write(String(event.message.content) + '\n');
-    });
-    await current.session.prompt(flags.get('--prompt')); process.stdout.write('\n');
+    if (flags.has('--json')) {
+      // The event stream of `pi --mode json`, from Pi's own serializer: the
+      // session header, then every session event as one JSON line. Company
+      // events (managed_helpers, the Harness's agent-watch-process notes)
+      // come in the same stream.
+      const { toJsonEvent } = await import(pathToFileURL(path.join(config.sdk_root, 'dist/modes/json-event.js')).href);
+      const header = current.session.sessionManager.getHeader?.();
+      if (header) process.stdout.write(JSON.stringify(header) + '\n');
+      current.session.subscribe(event => process.stdout.write(JSON.stringify(toJsonEvent(event)) + '\n'));
+      await current.session.prompt(flags.get('--prompt'));
+    } else {
+      current.session.subscribe(event => {
+        if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') process.stdout.write(event.assistantMessageEvent.delta);
+        if (event.type === 'message_end' && ['agent-watch-helper-receipt','agent-watch-review-status'].includes(event.message?.customType)) process.stderr.write(String(event.message.content) + '\n');
+      });
+      await current.session.prompt(flags.get('--prompt')); process.stdout.write('\n');
+    }
     const last=current.session.messages.filter(message=>message.role==='assistant').at(-1);
     if (last?.stopReason === 'error') {
       // Already says who failed and why, ending in its stable [code].

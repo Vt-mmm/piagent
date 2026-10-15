@@ -9,11 +9,12 @@ import {chromium,expect} from '@playwright/test';
 import '../scripts/register-typescript-loader.mjs';
 import {startManagedGateway} from '../packages/piagent-webui/gateway/managed-gateway.mjs';
 import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-socket.ts';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // A command that needs the internet is shown to the user for approval in the
 // company WebUI; once allowed it runs with network (here a loopback fixture),
 // and its output returns to the model.
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 test('run_with_network asks the user in the company WebUI and runs the approved command with network',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:60000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-network-approval-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const registry=http.createServer((_req,res)=>res.end('REGISTRY_REACHED'));await new Promise(r=>registry.listen(0,'127.0.0.1',r));

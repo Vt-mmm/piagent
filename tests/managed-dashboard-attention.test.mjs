@@ -13,6 +13,7 @@ import {startPiagentGateway} from '../packages/piagent-webui/gateway/gateway-ser
 import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-socket.ts';
 import {gatewayProfileState} from '../packages/piagent-webui/gateway/profile-state.ts';
 import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Several things wait for the member: inside one conversation the questions
 // and approvals come one card at a time (the main agent's first), and what
@@ -21,7 +22,7 @@ import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
 // fixtures; the company Gateway runs the conversations as in production.
 const root=path.resolve(import.meta.dirname,'..');
 const expectedPiVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).peerDependencies['@earendil-works/pi-coding-agent'];
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const Q_STORE=[{header:'Kho',question:'Lưu giỏ hàng ở đâu?',options:[{label:'LocalStorage',description:'Mất khi đổi máy'},{label:'Server',description:'Cần API mới'}]}];
 const Q_COLOR=[{header:'Màu',question:'Màu nút chính?',options:[{label:'Xanh'},{label:'Đỏ'}]}];
 

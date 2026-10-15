@@ -6,8 +6,9 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 const REQUEST = 'c17783c2-e134-4715-be3f-b03d9b57efe2';
 const MODELS = { sol: { id: 'gpt-6-sol', provider_model_id: 'gpt-6-sol', owned_by: 'codex' },

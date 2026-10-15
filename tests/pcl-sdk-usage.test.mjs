@@ -9,13 +9,14 @@ import { readTaskUsage } from "../packages/piagent-core/runtime/product/task-usa
 import { registerAdaptiveContextGovernor, auditToolProtocol } from "../packages/piagent-core/runtime/session/adaptive-context-governor.ts";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { appendContextTelemetry } from "../packages/piagent-core/extensions/context-engine.js";
+import { hostPackage } from "../packages/piagent-core/managed/pi-host.mjs";
 
 const sdkRoot = process.env.PIAGENT_REAL_PI_HOST || "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent";
 test("pinned SDK hook dispatch, real read tool, repeated terminal and cold telemetry readback reconcile two tasks", { skip: !fs.existsSync(path.join(sdkRoot, "dist/index.js")) }, async (t) => {
   const expected = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url))).peerDependencies["@earendil-works/pi-coding-agent"];
   assert.equal(JSON.parse(fs.readFileSync(path.join(sdkRoot, "package.json"))).version, expected);
   const host = await import(pathToFileURL(path.join(sdkRoot, "dist/index.js")));
-  const ai = await import(pathToFileURL(path.join(sdkRoot, "node_modules/@earendil-works/pi-ai/dist/index.js")));
+  const ai = await import(pathToFileURL(path.join(hostPackage(sdkRoot, "@earendil-works/pi-ai"), "dist/index.js")));
   const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pcl-sdk-usage-")));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   fs.writeFileSync(path.join(cwd, "example.txt"), "test-owned source\n");

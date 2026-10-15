@@ -10,13 +10,14 @@ import '../scripts/register-typescript-loader.mjs';
 import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-socket.ts';
 import {gatewayProfileState} from '../packages/piagent-webui/ownership/profile-state.ts';
 import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Agent Watch's "Mở Piagent → WebUI" runs `piagent-studio.mjs --web`. The
 // dashboard usually already runs this key's company Gateway (`--serve`); the
 // button used to fail with managed-launch-failed. It now opens a browser
 // session on the running Gateway for the chosen project.
 const root = path.resolve(import.meta.dirname, '..');
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const sha = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const studioScript = fs.realpathSync(path.join(root, 'scripts/piagent-studio.mjs'));
 

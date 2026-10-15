@@ -4,12 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
+import { piSdkRoot } from "./helpers/pi-sdk.mjs";
 
 // The packaged test-audit skill: Pi loads it from the package's skill folder as
 // a model-invocable skill, and its text names no other project or product.
 const root = path.resolve(import.meta.dirname, "..");
 const skillDir = path.join(root, "packages", "piagent-core", "skills", "test-audit");
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), ".pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent");
+const sdkRoot = piSdkRoot();
 
 test("Pi loads test-audit from the package as a model-invocable skill", { skip: !fs.existsSync(sdkRoot) }, async () => {
   const { loadSkillsFromDir } = await import(pathToFileURL(path.join(sdkRoot, "dist", "index.js")).href);

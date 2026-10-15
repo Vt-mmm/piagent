@@ -114,7 +114,33 @@ export interface CompanyFailure {
 }
 export interface HarnessProcess {
   phase:
-    "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue";
+    | "plan"
+    | "verify"
+    | "review"
+    | "final"
+    | "objection"
+    | "answer"
+    | "claims"
+    | "rejudge"
+    | "dispute"
+    | "continue"
+    | "undo";
+  undo?: {
+    result: "done" | "refused" | "busy" | "none" | "failed";
+    restored: number;
+    removed: number;
+    /**
+     * @maxItems 5
+     */
+    files:
+      | []
+      | [string]
+      | [string, string]
+      | [string, string, string]
+      | [string, string, string, string]
+      | [string, string, string, string, string];
+    more?: boolean;
+  };
   outcome?:
     | "no_change"
     | "interrupted"

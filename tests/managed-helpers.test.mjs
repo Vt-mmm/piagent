@@ -8,8 +8,9 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 const deferred = () => { let resolve; const promise = new Promise(r => resolve = r); return {promise, resolve}; };
 const content = result => result.content.filter(x => x.type === 'text').map(x => x.text).join('\n');

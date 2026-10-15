@@ -89,7 +89,8 @@ import path from 'node:path';
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 
 async function company(script) {

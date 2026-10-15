@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import { networkConfirmation } from './permission.mjs';
 import { engineAlive, engineLauncher } from './container-engine.mjs';
 import { MEMBER_ONLY, memberOnlyReason, runHostCommand } from './host-command.mjs';
+import { processTools } from './background-process.mjs';
+import { checkpointsOf } from './checkpoints.mjs';
 
 // Commands that leave the plain sandbox, each after the member approves that
 // exact command: run_with_network (internet, a local server or browser),
@@ -15,7 +17,7 @@ const PARAMETERS = { type: 'object', properties: { command: { type: 'string', mi
 const KINDS = {
   network: {
     name: 'run_with_network', label: 'Run with network', scope: 'network-command-once', provider: 'network', riskClass: 'medium',
-    description: 'Run one shell command that needs the internet beyond the package registries bash already reaches (a download site or registry the package proxy refuses), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no network and cannot listen on a port. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
+    description: 'Run one shell command that needs the internet beyond the package registries bash already reaches (a download site or registry the package proxy refuses), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no internet; on macOS it reaches servers on this Mac and runs Playwright\'s Chromium against them, except while a local proxy listens. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
     allow: 'Run this exact command once, with internet access; a server it starts accepts connections while it runs.',
     title: 'Chạy lệnh có internet', allowText: 'chạy đúng lệnh này một lần, có internet; server nó mở nhận kết nối trong lúc chạy.',
     confirm: (self, command) => networkConfirmation(self, command),
@@ -68,6 +70,7 @@ function commandTool(self, kind) {
         allowConsequence: spec.allow, denyConsequence: 'The command does not run; the agent is told you declined.' },
       { title: spec.title, body: `${args.command}\n\nLý do: ${args.reason}${confirm === 'ask' ? '' : `\nBypass vẫn hỏi: ${confirm}`}\n\nĐồng ý: ${spec.allowText}\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.` });
       let ok = false;
+      if (self.run) await checkpointsOf(self).take();
       const before = await self.changedFiles();
       try {
         const result = kind === 'host' ? await runHostCommand({ command: args.command, cwd: self.cwd, userHome: self.boundary.userHome, timeout: args.timeout, signal, onUpdate })
@@ -110,7 +113,7 @@ function startDockerTool(self, { wait = 180_000, every = 2000, launcher: found =
 
 export function commandTools(self, options) {
   const docker = self.boundary.engine || self.boundary.dockerCli;
-  return [commandTool(self, 'network'), ...(docker ? [commandTool(self, 'docker')] : []), startDockerTool(self, options), commandTool(self, 'host')];
+  return [commandTool(self, 'network'), ...(docker ? [commandTool(self, 'docker')] : []), startDockerTool(self, options), commandTool(self, 'host'), ...processTools(self)];
 }
 
 // What the system prompt says about services and what the sandbox blocks: it

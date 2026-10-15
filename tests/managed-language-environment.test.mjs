@@ -7,13 +7,14 @@ import {execFileSync} from 'node:child_process';
 import {test} from 'node:test';
 import {languageEnvironment} from '../packages/piagent-core/managed/language-environment.mjs';
 import {ManagedToolBoundary} from '../packages/piagent-core/managed/tool-boundary.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // What tests of the common languages need in the company sandbox: package
 // caches kept per project, the member's caches as read-only seeds, runtimes
 // installed under ~/Library, SwiftPM and xcodebuild without their own
 // sandbox, and servers on this Mac (a test's own server, a local database)
 // unless a local proxy would carry a command to the internet.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const text = (result) => (result?.content ?? []).map((part) => part.text ?? '').join('');
 const write = (file, value = 'x\n') => { fs.mkdirSync(path.dirname(file), {recursive: true}); fs.writeFileSync(file, value); };
 // Where caches, the Android SDK and pnpm's settings live on this platform.

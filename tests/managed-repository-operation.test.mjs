@@ -6,7 +6,8 @@ import {execFileSync} from 'node:child_process';
 import {test} from 'node:test';
 import {ManagedToolBoundary} from '../packages/piagent-core/managed/tool-boundary.mjs';
 import {repositoryFetchPlan,repositoryFolder,executeRepositoryFetch,githubRemote} from '../packages/piagent-core/managed/repository-operation.mjs';
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
+const sdkRoot = piSdkRoot();
 test('repository operation accepts only a credential-free GitHub origin',()=>{
   assert.deepEqual(githubRemote('git@github.com:owner/repo.git'),{repository:'owner/repo',url:'https://github.com/owner/repo.git'});
   assert.equal(githubRemote('https://github.com/owner/repo').repository,'owner/repo');

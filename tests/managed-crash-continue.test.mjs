@@ -8,12 +8,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
 import { ensureWebUiBuild } from './helpers/piagent-webui-build.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // A member's machine goes down (or the Gateway is killed) while a task runs.
 // After it comes back the conversation must be there, say that the turn has
 // no answer, and go on with one click, from the steps already taken.
 const R = path.resolve(import.meta.dirname, '..');
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const sha = f => createHash('sha256').update(fs.readFileSync(f)).digest('hex'), studioScript = fs.realpathSync(path.join(R, 'scripts/piagent-studio.mjs'));
 
 test('a conversation interrupted by a crash is listed again and continues with one click', { skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 180000 }, async () => {

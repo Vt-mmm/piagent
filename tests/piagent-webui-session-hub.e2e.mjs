@@ -1711,8 +1711,10 @@ test("/ at the start of a message offers the project's and the member's commands
   const composer = page.getByPlaceholder("Nhắn cho Piagent…"), list = page.getByRole("listbox", { name: "Lệnh và skill" });
   await composer.fill("");
   await composer.pressSequentially("/");
-  await expect(list.getByRole("option")).toHaveCount(3);
+  // The project's and the member's commands and skills, with the conversation's own (Piagent) commands.
   await expect(list.getByRole("option", { name: /\/review.*\[focus\].*Review the staged changes.*\.claude/ })).toBeVisible();
+  await expect(list.getByRole("option", { name: /\/model.*Đổi model.*Piagent/ })).toBeVisible();
+  await expect(list.getByRole("option", { name: /^\/undo/ })).toHaveCount(0);
   await expect(list.getByRole("option", { name: /\/skill:pdf.*~\/\.codex/ })).toBeVisible();
   await composer.pressSequentially("dep");
   await expect(list.getByRole("option")).toHaveCount(1);
@@ -1727,6 +1729,55 @@ test("/ at the start of a message offers the project's and the member's commands
   await composer.pressSequentially("checkout /tmp");
   await expect(list).toHaveCount(0);
   await composer.fill("");
+});
+
+test("a company conversation offers its own /undo among the commands; a personal one does not", async ({ page }) => {
+  const target = catalog.sessions.find((item) => item.sessionRef === "session_release_prep"), saved = { ...target };
+  Object.assign(target, { modelLabel: "agent-watch-auto", sessionRevision: "revision_session_release_prep_undo" });
+  try {
+    const sendsBefore = sessionSendAttempts;
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole("button", { name: /Release prep/ }).first().click();
+    const composer = page.getByPlaceholder("Nhắn cho Piagent…"), list = page.getByRole("listbox", { name: "Lệnh và skill" });
+    await composer.fill("");
+    await composer.pressSequentially("/");
+    await expect(list.getByRole("option", { name: /\/undo.*Hoàn tác file mà lượt trước của agent đã sửa.*Piagent/ })).toBeVisible();
+    await expect(list.getByRole("option", { name: /^\/model/ })).toHaveCount(0);
+    await composer.pressSequentially("und");
+    await expect(list.getByRole("option")).toHaveCount(1);
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("/undo ");
+    expect(sessionSendAttempts).toBe(sendsBefore);
+    await composer.fill("");
+  } finally { Object.assign(target, saved); }
+});
+
+test("a / command runs in the conversation without a model request; /help lists the shortcuts; ⌘⇧O opens a new chat", async ({ page }) => {
+  const sendsBefore = sessionSendAttempts, renamesBefore = observedSessionActions.filter((action) => action === "session.rename").length;
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  const composer = page.getByPlaceholder("Nhắn cho Piagent…");
+  await composer.fill("/name Chuẩn bị phát hành");
+  await composer.press("Escape"); // closes the suggestions; Enter then runs the command
+  await composer.press("Enter");
+  await expect(page.getByRole("alert").filter({ hasText: "Đã đổi tên thành “Chuẩn bị phát hành”." })).toBeVisible();
+  await expect.poll(() => observedSessionActions.filter((action) => action === "session.rename").length).toBe(renamesBefore + 1);
+  await expect(composer).toHaveValue("");
+  // A usage note keeps what was typed.
+  await composer.fill("/thinking nhanh");
+  await composer.press("Escape"); await composer.press("Enter");
+  await expect(page.getByRole("alert").filter({ hasText: "Cách dùng: /thinking" })).toBeVisible();
+  await expect(composer).toHaveValue("/thinking nhanh");
+  await composer.fill("/help");
+  await composer.press("Escape"); await composer.press("Enter");
+  const help = page.getByRole("alert").filter({ hasText: "/help — Danh sách lệnh / và phím tắt" });
+  await expect(help).toContainText("⌘⇧O — Cuộc trò chuyện mới");
+  await expect(help).toContainText("Esc — Dừng lượt đang chạy");
+  expect(sessionSendAttempts).toBe(sendsBefore);
+  const newChat = page.getByRole("heading", { name: /Cuộc trò chuyện mới|New chat/ });
+  await expect(newChat).toHaveCount(0);
+  await page.keyboard.press("ControlOrMeta+Shift+O");
+  await expect(newChat.first()).toBeVisible();
 });
 
 test("a tab that lost its browser session says how to open Piagent again and stops polling", async ({ page }) => {

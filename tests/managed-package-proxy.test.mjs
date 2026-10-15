@@ -7,6 +7,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { DEFAULT_DOMAINS, PackageProxy, domainAllowed, mavenSettings, memberDomains, privateAddress, proxyEnvironment } from '../packages/piagent-core/managed/package-proxy.mjs';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pa-proxy-')));
 const closers = [];
@@ -104,7 +105,7 @@ test('commands get the proxy in the variables package managers and the JVM read'
 // The real sandbox: a plain command reaches an allowed registry through the
 // proxy, is refused another host with its name in the failure, and still
 // reaches it while a local proxy closes the rest of loopback (macOS).
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const online = process.env.PIAGENT_TEST_ONLINE === '1' || (!process.env.CI && fs.existsSync(path.join(sdkRoot, 'dist/index.js')));
 test('a plain command installs from a registry without approval and is refused other hosts', { skip: process.platform !== 'darwin' || !online, timeout: 120000 }, async () => {
   const cwd = path.join(base, 'shop'); fs.mkdirSync(cwd, { recursive: true });

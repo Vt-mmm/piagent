@@ -8,6 +8,7 @@ export type ProcessCopyInput = {
   disputes?: number; unchanged?: boolean;
   findings?: Array<{ severity: string; file?: string; line?: number | null; issue: string }>;
   claims?: Array<{ claim: string }>; issues?: Array<{ kind: string; detail: string }>;
+  undo?: { result: string; restored: number; removed: number; files: string[]; more?: boolean };
 };
 const pick = (locale: CopyLocale, vi: string, en: string) => locale === "vi" ? vi : en;
 const SEVERITY: Record<string, [string, string]> = { blocking: ["blocking", "blocking"], major: ["major", "major"], minor: ["minor", "minor"] };
@@ -51,6 +52,15 @@ export function headlineText(process: ProcessCopyInput, locale: CopyLocale): str
     case "claims": return pick(locale, `Harness: ${who} đánh fail ${count} claim, gửi lại main agent`, `Harness: ${who} marked ${count} claim(s) as failed; sent back to the main agent`);
     case "rejudge": return process.role === "verify" ? pick(locale, `Harness: ${who} check lại các claim cùng câu trả lời của main agent`, `Harness: ${who} checks the claims again with the main agent's answer`)
       : pick(locale, `Harness: main agent giải thích thay vì fix, ${who} xem xét lại lời giải thích`, `Harness: the main agent answered instead of fixing; ${who} judges the answer`);
+    case "undo": {
+      const u = process.undo, files = u?.files?.length ? ` (${u.files.join(", ")})` : "";
+      if (u?.result === "done") return pick(locale, `Đã hoàn tác lượt trước: ${u.restored} file trả về như trước, ${u.removed} file lượt đó tạo đã xoá${files}.${u.more ? " Gửi /undo lần nữa để hoàn tác lượt trước nữa." : ""} Commit trong lượt đó vẫn giữ.`,
+        `Undid the last turn: ${u.restored} file(s) restored, ${u.removed} file(s) it created removed${files}.${u.more ? " Send /undo again to undo the turn before." : ""} Commits made in that turn stay.`);
+      if (u?.result === "refused") return pick(locale, `Không hoàn tác: file lượt trước đã sửa lại bị đổi tiếp sau đó${files}; hoàn tác sẽ ghi đè thay đổi đó.`, `Not undone: a file the last turn changed was changed again since${files}; undoing would overwrite that change.`);
+      if (u?.result === "busy") return pick(locale, "Đang có một lượt chạy: chờ nó xong (hoặc dừng nó) rồi /undo.", "A turn is running: wait for it (or stop it), then /undo.");
+      if (u?.result === "none") return pick(locale, "Không có lượt nào để hoàn tác (chỉ áp dụng cho project là git repository, từ khi mở cuộc trò chuyện).", "There is no turn to undo (git repositories only, since the conversation opened).");
+      return pick(locale, "Không đọc được trạng thái project; không hoàn tác.", "The project's state could not be read; nothing was undone.");
+    }
     case "dispute": return pick(locale, `Main agent và ${who} vẫn conflict sau 2 lượt, bạn quyết định`, `The main agent and the ${who} still disagree after two rounds; your call`);
     default: return "";
   }

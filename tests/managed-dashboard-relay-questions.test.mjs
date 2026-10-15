@@ -13,6 +13,7 @@ import {startPiagentGateway} from '../packages/piagent-webui/gateway/gateway-ser
 import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-socket.ts';
 import {gatewayProfileState} from '../packages/piagent-webui/gateway/profile-state.ts';
 import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // The main agent of a company conversation asks the member a question, and
 // the member answers it in the personal dashboard: the question and the
@@ -22,7 +23,7 @@ import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
 // refused with the company Gateway's reason. Studio and the broker are fixtures.
 const root=path.resolve(import.meta.dirname,'..');
 const expectedPiVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).peerDependencies['@earendil-works/pi-coding-agent'];
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const QUESTIONS=[{header:'Kho',question:'Lưu giỏ hàng ở đâu?',options:[{label:'LocalStorage',description:'Mất khi đổi máy'},{label:'Server',description:'Cần API mới'}]}];
 
 test('a company agent question is shown and answered in the personal dashboard through the relay',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:150000},async()=>{

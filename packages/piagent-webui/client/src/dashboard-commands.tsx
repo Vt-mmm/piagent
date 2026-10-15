@@ -14,7 +14,7 @@ export function dashboardCommands(input: {
 }): PaletteCommand[] {
   const { locale, actions } = input, group = localize(locale, "Lệnh", "Commands"), mod = modifierKey();
   const commands: PaletteCommand[] = [];
-  if (input.canCreate) commands.push({ id: "new-chat", group, label: localize(locale, "Cuộc trò chuyện mới", "New chat"), keywords: "new create tạo", run: actions.newChat });
+  if (input.canCreate) commands.push({ id: "new-chat", group, label: localize(locale, "Cuộc trò chuyện mới", "New chat"), hint: `${mod} ⇧ O`, keywords: "new create tạo", run: actions.newChat });
   if (input.update.available && input.update.latest) commands.push({ id: "update-now", group, label: localize(locale, `Cập nhật Piagent ${input.update.latest}`, `Update Piagent ${input.update.latest}`),
     keywords: "update upgrade nâng cấp phiên bản version", run: () => actions.settings("updates") });
   commands.push({ id: "check-updates", group, label: localize(locale, "Kiểm tra cập nhật", "Check for updates"), keywords: "update version phiên bản pi piagent", run: actions.checkUpdates });

@@ -479,6 +479,43 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     await supervisor.close();
   });
 
+  it("a new message from another page while a turn streams waits for that turn instead of being refused", async (t) => {
+    const { root, key } = state(t), target = info(root, "second-page-session.jsonl");
+    const sessionRef = sessionRefForPath(key, target.path), events = new GatewayEventStore();
+    const listeners = new Set(), followUps = []; let release;
+    const emit = (event) => { for (const listener of listeners) listener(event); };
+    const session = {
+      isIdle: true, isStreaming: false,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      async prompt() {
+        this.isIdle = false; this.isStreaming = true; emit({ type: "agent_start" });
+        await new Promise((resolve) => { release = resolve; });
+        emit({ type: "message_end", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Done." }] } });
+        this.isIdle = true; this.isStreaming = false; emit({ type: "agent_settled" });
+      },
+      async followUp(message) { followUps.push(message); }
+    };
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_second_page", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [target], events,
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    supervisor.setProjectionReader(async () => ({ sessionRevision: "revision_second_page", liveState: "idle" }));
+    const started = await supervisor.send(sessionRef, { delivery: "new-operation", message: "First page.", expectedOperationRef: null }, "revision_second_page_a");
+    await waitFor(() => typeof release === "function");
+    // The second page knows no operation: its message joins the running turn.
+    assert.deepEqual(await supervisor.send(sessionRef, { delivery: "new-operation", message: "Second page.", expectedOperationRef: null }, "revision_second_page_b"),
+      { resultCode: "queued", operationRef: started.operationRef });
+    assert.deepEqual(followUps, ["Second page."]);
+    release(); release = null;
+    await waitFor(() => supervisor.currentOperation(sessionRef) === null);
+    // Once the turn is over, a message starts a turn of its own again.
+    const next = await supervisor.send(sessionRef, { delivery: "new-operation", message: "Later.", expectedOperationRef: null }, "revision_second_page_c");
+    assert.notEqual(next.operationRef, started.operationRef);
+    await waitFor(() => typeof release === "function"); release();
+    await waitFor(() => supervisor.currentOperation(sessionRef) === null);
+    assert.deepEqual(followUps, ["Second page."], "the later message was a turn, not a follow-up");
+    await supervisor.close();
+  });
+
   it("does not request composite evidence for ordinary turns and withholds success when composite settlement blocks", async (t) => {
     const { root, key } = state(t), cwd = path.join(root, "project"); fs.mkdirSync(cwd);
     const makeSession = () => {

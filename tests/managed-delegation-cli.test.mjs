@@ -6,7 +6,8 @@ import http from 'node:http';
 import {spawn,execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {test} from 'node:test';
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
+const sdkRoot = piSdkRoot();
 test('production CLI executes both delegated roles from a native tool response with a clean environment',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:120000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-delegation-cli-'))),project=path.join(root,'project');fs.mkdirSync(project);
  execFileSync('/usr/bin/git',['init','-q',project]);fs.writeFileSync(path.join(project,'README.md'),'before\n');execFileSync('/usr/bin/git',['-C',project,'add','.']);execFileSync('/usr/bin/git',['-C',project,'-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-qm','baseline']);fs.writeFileSync(path.join(project,'README.md'),'after\n');
@@ -38,6 +39,17 @@ test('production CLI executes both delegated roles from a native tool response w
   const result=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Run both helpers'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>text+=b);p.on('error',reject);p.on('close',code=>resolve({code,text}));});
   assert.equal(result.code,0,result.text);assert.match(result.text,/DELEGATION_OK/);
   assert.deepEqual(requests.map(r=>r.role).sort(),['main','main','research','review'],JSON.stringify(requests.filter(r=>r.role==='main').at(-1)?.body.messages.at(-1)));
+  // --json: the event stream of `pi --mode json`, one JSON object per line on stdout.
+  const json=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Answer once more','--json'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let out='',err='';p.stdout.on('data',b=>out+=b);p.stderr.on('data',b=>err+=b);p.on('error',reject);p.on('close',code=>resolve({code,out,err}));});
+  assert.equal(json.code,0,json.err);
+  const events=json.out.split('\n').filter(Boolean).map(line=>JSON.parse(line));
+  assert.equal(events[0].type,'session');
+  for(const type of ['agent_start','message_end','turn_end','agent_end','agent_settled'])assert.ok(events.some(e=>e.type===type),type);
+  assert.ok(events.some(e=>e.type==='message_end'&&e.message.role==='assistant'&&JSON.stringify(e.message.content).includes('DELEGATION_OK')));
+  assert.ok(events.filter(e=>e.type==='message_update').every(e=>!('message' in e)&&!('partial' in e.assistantMessageEvent)),'deltas only, as Pi writes them');
+  const refused=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--json'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir()},stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>text+=b);p.on('error',reject);p.on('close',code=>resolve({code,text}));});
+  assert.notEqual(refused.code,0);assert.match(refused.text,/managed-launch-arguments/,'--json needs --prompt');
+  const beforeInteractive=requests.length;
   const interactive=await new Promise((resolve,reject)=>{
    // macOS script requires its own stdin to be a tty. Python's pty opens an
    // actual controlling terminal and keeps this acceptance independent of CUA.
@@ -54,7 +66,10 @@ try:
    if not data:break
    text+=data
    if not ready and b'agent-watch-auto' in text:
-    ready=True;os.write(fd,b'\\x03');time.sleep(.15);os.write(fd,b'\\x03')
+    ready=True
+    # The CLI may already be gone when ^C arrives: a closed terminal is that exit, not a failure.
+    try:os.write(fd,b'\\x03');time.sleep(.15);os.write(fd,b'\\x03')
+    except OSError:pass
   done,status=os.waitpid(pid,os.WNOHANG)
   if done:break
  else:os.kill(pid,signal.SIGKILL)
@@ -69,6 +84,6 @@ sys.exit(0 if ready else 1)`;
   });
   assert.equal(interactive.code,0,interactive.text);
   assert.match(interactive.text,/INTERACTIVE_READY/);
-  assert.equal(requests.length,4,'opening and closing the interactive CLI must not infer');
+  assert.equal(requests.length,beforeInteractive,'opening and closing the interactive CLI must not infer');
  }finally{await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});fs.rmSync(sessions,{recursive:true,force:true});}
 });

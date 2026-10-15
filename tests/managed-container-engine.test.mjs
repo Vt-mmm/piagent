@@ -9,6 +9,7 @@ import { containerEngine, engineEnvironment } from '../packages/piagent-core/man
 import { commandTools, servicesPrompt } from '../packages/piagent-core/managed/command-tools.mjs';
 import { sandboxDiagnostic } from '../packages/piagent-core/managed/sandbox-diagnostic.mjs';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Unix socket paths are short (104 bytes on macOS): the fixture lives in /tmp.
 const base = fs.realpathSync(fs.mkdtempSync(path.join(process.platform === 'darwin' ? '/tmp' : os.tmpdir(), 'pa-engine-')));
@@ -81,7 +82,8 @@ test('run_with_docker is offered with Docker on the machine; Bypass runs it with
   const self = { permission: 'trusted-full-access', cwd: path.join(base, 'tools-project'), grant: {}, session: { sessionManager: { getSessionId: () => 'session' } },
     boundary: { engine: null, dockerCli: null, userHome: path.join(base, 'member'), refreshEnvironment: () => Boolean(self.boundary.engine), invoke: async (...args) => { calls.push(args); return { content: [{ type: 'text', text: 'ok' }] }; } },
     changedFiles: async () => [], claimChanges: async () => {}, refreshReview: async () => {} };
-  assert.deepEqual(commandTools(self).map(tool => tool.name), ['run_with_network', 'start_docker', 'run_on_host']);
+  // Background processes (background-process.mjs) are offered where the macOS sandbox runs them.
+  assert.deepEqual(commandTools(self).map(tool => tool.name), ['run_with_network', 'start_docker', 'run_on_host', ...(process.platform === 'darwin' ? ['start_process', 'process_output', 'stop_process'] : [])]);
   assert.match(servicesPrompt(self.boundary), /Docker is not installed.*ask_user/);
   self.boundary.dockerCli = '/usr/local/bin/docker';
   assert.match(servicesPrompt(self.boundary), /installed but not running.*start_docker/);
@@ -116,7 +118,7 @@ test('run_with_docker is offered with Docker on the machine; Bypass runs it with
 
 // The sandbox opens the engine's socket to an approved Docker command only:
 // a plain command and an approved network command are refused.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const cli = ['/usr/local/bin/docker', '/opt/homebrew/bin/docker', '/usr/bin/docker'].some(file => fs.existsSync(file));
 test('only an approved Docker command reaches the engine socket', { skip: process.platform !== 'darwin' || !fs.existsSync(path.join(sdkRoot, 'dist/index.js')) || !cli, timeout: 60000 }, async () => {
   const home = path.join(base, 'live'), cwd = path.join(base, 'live-project');

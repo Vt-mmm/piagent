@@ -8,11 +8,12 @@ import { writeUpdateCache } from '../packages/piagent-core/extensions/update-che
 import { pendingUpdate, readSnooze, registerTerminalUpdateOffer, snoozeUpdate, SNOOZE_MS } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
 import { companyTerminalExtension, failureLines, processLines } from '../scripts/company-terminal.mjs';
 import { launchReasonText } from '../packages/piagent-webui/shared/company-copy.ts';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // The Terminal says what the dashboard says: a new release is asked about
 // (Update now / Later for an hour), Bypass can be chosen, Harness notes and
 // failures read in Vietnamese.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const home = () => fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-parity-'));
 // `npm test` switches update checks off for every other test; these turn them on.
 const checksOn = (t) => { const before = process.env.PIAGENT_NO_UPDATE_CHECK; delete process.env.PIAGENT_NO_UPDATE_CHECK;

@@ -7,8 +7,9 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 const MODELS = { sol: { id: 'gpt-6.1-sol', provider_model_id: 'gpt-6.1-sol', owned_by: 'codex' }, sonnet: { id: 'claude-sonnet-5-5', provider_model_id: 'claude-sonnet-5-5', owned_by: 'claude' } };
 

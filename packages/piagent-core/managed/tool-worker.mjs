@@ -43,7 +43,9 @@ input.on('line', async line => {
       : await factories[message.name](cwd, options).execute('managed-tool', message.args, controller.signal,
         update => emit({ update }), { cwd, model: message.model });
     // Successful output is returned verbatim; the sandbox note is only added to
-    // failures (Pi tools throw on denial and on a non-zero shell exit).
+    // failures. Pi 0.87 throws on denial and on a non-zero shell exit; Pi 1.x
+    // returns an isError result with the same text instead: read as the throw.
+    if (result?.isError === true) throw new Error((result.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('\n') || 'managed-worker-failed');
     emit({ result });
   } catch (error) { emit({ error: sandboxDiagnostic(error instanceof Error ? error.message : 'managed-worker-failed', { network, isolated, docker, engine }) }); }
   finally { if (active) { input.close(); process.stdin.destroy(); } }

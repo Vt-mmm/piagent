@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { reviewUnavailableReason } from './patch-snapshot.mjs';
 import { failureCode } from '../runtime/managed-failure.mjs';
+import { TsDiagnostics } from './ts-diagnostics.mjs';
+import { checkpointsOf } from './checkpoints.mjs';
 
 // The process layer of the company harness: a plan for multi-step work, the
 // repository's checks after a code change, an independent review of the patch.
@@ -120,7 +122,7 @@ export function workflowPrompt(policy, checks) {
   }
   if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix, or to answer when a finding is wrong: the reviewer then judges your answer, and a disagreement that remains goes to the member.'
     : '- Review: before you finish a code change, ask the review helper (delegate role "review") to review the patch, then fix blocking findings.');
-  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\nEnd-to-end tests that start a local server and a browser run through run_with_network, which the user approves. If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), do not stop there: request the approval that makes it run (run_with_network, run_with_docker, start_docker, or run_on_host to install what is missing) or ask the member with ask_user; never install or start anything without that approval.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.` : '';
+  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\n${process.platform === 'darwin' ? 'End-to-end and UI checks run in bash with the project\'s Playwright (@playwright/test; add it with npm when the project lacks it) and the browsers installed on this Mac, against a server the test or start_process starts; while a local proxy listens they need run_with_network. When Playwright\'s browsers are missing, ask with run_on_host to run `npx playwright install chromium`.' : 'End-to-end tests that start a local server and a browser run through run_with_network, which the user approves.'} If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), do not stop there: request the approval that makes it run (run_with_network, run_with_docker, start_docker, or run_on_host to install what is missing) or ask the member with ask_user; never install or start anything without that approval.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.${process.platform === 'darwin' ? ' A dev server, watcher or local service you need across turns runs with start_process (read it with process_output, stop it with stop_process).' : ''}` : '';
 }
 
 // Every helper checks the brief it was given: it may object with evidence, it
@@ -380,6 +382,7 @@ export async function completionGate(managed, run, signal) {
   const settled = run.outcome !== 'interrupted';
   session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome, ...(managed.base ? { head: managed.base } : {}),
     ...(settled ? {} : { paths: [...(managed.ownPaths ?? [])].slice(0, 2000) }) });
+  if (run.checkpoint) await checkpointsOf(managed).finish(run);
   if (!run.changed && !run.disputes.length) return;
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
@@ -408,6 +411,8 @@ export function processEditTools(session, tools) {
       // Which files this conversation changes: a write or edit names its
       // file; a command that may write is compared before and after.
       const before = tool.name === 'bash' && !isReadOnlyCommand(args[1]?.command) ? await session.changedFiles?.() : null;
+      // The turn's checkpoint, before its first change (/undo; checkpoints.mjs).
+      if (session.run && session.boundary?.invoke && (tool.name !== 'bash' || !isReadOnlyCommand(args[1]?.command))) await checkpointsOf(session).take();
       let ok = false;
       try {
         // A command that ran and failed may come back as an error result
@@ -415,6 +420,9 @@ export function processEditTools(session, tools) {
         let result;
         try { result = await execute(...args); ok = !result?.isError; }
         finally { if (tool.name === 'bash') await session.claimChanges?.(before); else if (ok) session.claimPath?.(args[1]?.path); }
+        // The file's TypeScript errors right after the change (ts-diagnostics.mjs).
+        const note = ok && tool.name !== 'bash' && session.boundary?.spawnSandboxed ? await (session.tsDiagnostics ??= new TsDiagnostics(session.boundary)).check(args[1]?.path) : '';
+        if (note) result = { ...result, content: [...(result.content ?? []), { type: 'text', text: note }] };
         if (watch && session.run) {
           const digest = await session.digest();
           if (digest !== null && digest !== session.run.startDigest) {

@@ -11,11 +11,12 @@ import {searchResultText, searchThroughPool, searchThroughStudio} from '../packa
 import {projectInstructions} from '../packages/piagent-core/managed/resource-loader.mjs';
 import {fallbackFind, fallbackGrep, globToRegExp} from '../packages/piagent-core/managed/search-fallback.mjs';
 import net from 'node:net';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Coding-agent work inside the company sandbox, without provider or internet
 // traffic: code search, commits, monorepos, network only after approval, web
 // page reads limited to public addresses, and search through Studio.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const searchTools = ['rg', 'fd'].every((name) => [path.join(os.homedir(), '.pi/agent/bin', name), `/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`].some((file) => fs.existsSync(file)));
 const text = (result) => (result?.content ?? []).map((part) => part.text ?? '').join('');
 

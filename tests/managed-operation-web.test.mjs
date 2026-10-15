@@ -11,8 +11,9 @@ import '../scripts/register-typescript-loader.mjs';
 import {startManagedGateway} from '../packages/piagent-webui/gateway/managed-gateway.mjs';
 import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-socket.ts';
 import {piApprovalBroker} from '../packages/piagent-core/runtime/inspection/approval-broker.ts';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 test('managed WebUI presents a scoped Git operation; denial resumes chat without fetching', {skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:120000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-operation-web-'))),project=path.join(root,'project');fs.mkdirSync(project);
  execFileSync('/usr/bin/git',['init','-q',project]);execFileSync('/usr/bin/git',['-C',project,'remote','add','origin','git@github.com:fixture/approval-test.git']);

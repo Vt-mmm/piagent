@@ -6,10 +6,11 @@ import path from 'node:path';
 import net from 'node:net';
 import { after, test as nodeTest } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
+import { ManagedToolBoundary, hostPackage } from '../packages/piagent-core/managed/tool-boundary.mjs';
 import { managedResourceLoader } from '../packages/piagent-core/managed/resource-loader.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 // The boundary runs Pi's own tools in the macOS sandbox: without the installed
 // Pi SDK (CI runners) or off macOS there is nothing to exercise.
 const supported=process.platform==='darwin'&&fsSync.existsSync(path.join(sdkRoot,'dist/index.js'));
@@ -58,7 +59,7 @@ test('project resources never load and custom tool ownership survives SDK reload
  const loader=managedResourceLoader(api,{systemPrompt:'Company policy fixture'});
  assert.deepEqual(loader.getAgentsFiles(),{agentsFiles:[]});assert.deepEqual(loader.getExtensions().extensions,[]);
  assert.throws(()=>loader.extendResources({}),/disabled/);
- const {getModel}=await import(pathToFileURL(path.join(sdkRoot,'node_modules/@earendil-works/pi-ai/dist/compat.js')).href);
+ const {getModel}=await import(pathToFileURL(path.join(hostPackage(sdkRoot,'@earendil-works/pi-ai'),'dist/compat.js')).href);
  const agentDir=path.join(base,'session');await fs.mkdir(agentDir);
  const {session}=await api.createAgentSession({cwd,agentDir,model:getModel('anthropic','claude-sonnet-4-5'),resourceLoader:loader,
   tools:boundary.allowed,customTools:boundary.tools(api),sessionManager:api.SessionManager.inMemory(cwd),
@@ -138,10 +139,21 @@ test('a command may listen on this Mac, with or without approval', async () => {
  assert.match(await listen('127.0.0.1', false), /127\.0\.0\.1 LISTEN/);
 });
 // Playwright's Chromium against a server the command starts, with or without
-// approval while no local proxy listens. Opt-in: needs a project with
-// @playwright/test and its browser installed
-// (PIAGENT_TEST_PLAYWRIGHT_PROJECT=<that project>).
-const playwrightProject = process.env.PIAGENT_TEST_PLAYWRIGHT_PROJECT;
+// approval while no local proxy listens. The project is
+// PIAGENT_TEST_PLAYWRIGHT_PROJECT, else one made here with this repository's
+// own @playwright/test when this Mac has Playwright's browsers (the company
+// prompt tells the agent this works without approval).
+async function ownPlaywrightProject() {
+  const modules = path.resolve(import.meta.dirname, '../node_modules');
+  if (!supported || !fsSync.existsSync(path.join(modules, '@playwright/test')) || !fsSync.existsSync(path.join(os.homedir(), 'Library/Caches/ms-playwright'))) return null;
+  const project = path.join(base, 'playwright-project');
+  await fs.mkdir(path.join(project, 'node_modules/@playwright'), { recursive: true });
+  await fs.writeFile(path.join(project, 'package.json'), '{"type":"module"}');
+  // Copied, not linked: a command with network reads only the project.
+  for (const name of ['@playwright/test', 'playwright', 'playwright-core']) await fs.cp(path.join(modules, name), path.join(project, 'node_modules', name), { recursive: true });
+  return project;
+}
+const playwrightProject = process.env.PIAGENT_TEST_PLAYWRIGHT_PROJECT ?? await ownPlaywrightProject();
 test('an approved network command can drive Playwright\'s Chromium against a local server', { skip: !playwrightProject, timeout: 120000 }, async () => {
  const probe = path.join(playwrightProject, '.piagent-sandbox-probe.mjs');
  await fs.writeFile(probe, "import http from 'node:http';import {chromium} from '@playwright/test';const s=http.createServer((q,r)=>r.end('<h1 id=x>sandbox ok</h1>'));await new Promise(r=>s.listen(0,'127.0.0.1',r));try{const b=await chromium.launch();const p=await b.newPage();await p.goto('http://127.0.0.1:'+s.address().port+'/');console.log('PAGE '+await p.textContent('#x'));await b.close()}finally{s.close()}\n");

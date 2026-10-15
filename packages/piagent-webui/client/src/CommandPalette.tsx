@@ -28,12 +28,13 @@ export function matchCommands(commands: PaletteCommand[], query: string, limit =
   return commands.filter((command) => matchesWords(`${command.label} ${command.keywords ?? ""} ${command.group}`, query)).slice(0, limit);
 }
 
-// ⌘K opens the palette and ⌘, opens Settings, from anywhere in the page.
-export function useDashboardShortcuts(actions: { palette(): void; settings(): void }) {
+// ⌘K opens the palette, ⌘, opens Settings and ⌘⇧O a new chat, from anywhere in the page.
+export function useDashboardShortcuts(actions: { palette(): void; settings(): void; newChat?(): void }) {
   const latest = useRef(actions); latest.current = actions;
   useEffect(() => {
     const listener = (event: globalThis.KeyboardEvent) => {
-      if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.shiftKey) { if (event.key.toLowerCase() === "o" && latest.current.newChat) { event.preventDefault(); latest.current.newChat(); } return; }
       if (event.key.toLowerCase() === "k") { event.preventDefault(); latest.current.palette(); }
       else if (event.key === ",") { event.preventDefault(); latest.current.settings(); }
     };

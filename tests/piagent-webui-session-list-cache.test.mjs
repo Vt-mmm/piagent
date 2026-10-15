@@ -6,8 +6,9 @@ import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 
 import { cachedSessionLister } from "../packages/piagent-webui/gateway/session-list-cache.ts";
+import { piSdkRoot } from "./helpers/pi-sdk.mjs";
 
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), ".pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent");
+const sdkRoot = piSdkRoot();
 const supported = fs.existsSync(path.join(sdkRoot, "dist/index.js"));
 
 function session(file, { id, cwd, at, messages, name }) {

@@ -8,6 +8,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { developerLicense, developerTools, managedGit, searchToolPath, userToolchains } from './toolchain.mjs';
 import { languageEnvironment } from './language-environment.mjs';
+import { PI_HOST_VERSION, hostPackage } from './pi-host.mjs';
+export { PI_HOST_VERSION, hostPackage };
 import { containerEngine, dockerCli, engineEnvironment } from './container-engine.mjs';
 import { DEFAULT_DOMAINS, PackageProxy, mavenSettings, memberDomains, proxyEnvironment } from './package-proxy.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
@@ -205,8 +207,8 @@ export class ManagedToolBoundary {
     this.runtimeRoot = fs.realpathSync(path.dirname(workerPath));
     this.sdkPath = path.join(this.sdkRoot, 'dist/index.js');
     this.git = managedGit();
-    if (JSON.parse(fs.readFileSync(path.join(this.sdkRoot, 'package.json'), 'utf8')).version !== '0.87.1') throw new Error('managed-sdk-version-unqualified');
-    const workerModules = ['search-fallback.mjs', 'sandbox-diagnostic.mjs'].map(name => path.join(this.runtimeRoot, name));
+    if (JSON.parse(fs.readFileSync(path.join(this.sdkRoot, 'package.json'), 'utf8')).version !== PI_HOST_VERSION) throw new Error('managed-sdk-version-unqualified');
+    const workerModules = ['search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs'].map(name => path.join(this.runtimeRoot, name));
     this.pins = new Map([this.node, this.git, workerPath, ...workerModules, this.sdkPath].map(file => [file, hash(file)]));
     const userHome = fs.realpathSync(home ?? os.homedir());
     if ([userHome, '/', this.sdkRoot, this.runtimeRoot].includes(this.cwd)
@@ -270,7 +272,10 @@ export class ManagedToolBoundary {
     // The Docker engine, for commands the member approves (run_with_docker).
     this.engine = readOnly ? null : containerEngine({ userHome });
     this.dockerCli = readOnly ? null : this.engine?.cli ?? dockerCli();
-    const base = this.base = { cwd: this.cwd, sdkRoot: this.sdkRoot, runtimeRoot: this.runtimeRoot, temporary: this.temporary, node: this.node,
+    // What the host loads: its own folder, and the node_modules its
+    // dependencies were hoisted to when they are not nested in it (Pi 1.x).
+    const ai = hostPackage(this.sdkRoot, '@earendil-works/pi-ai'), hostRoot = inside(fs.realpathSync(ai), this.sdkRoot) ? this.sdkRoot : fs.realpathSync(path.dirname(path.dirname(ai)));
+    const base = this.base = { cwd: this.cwd, sdkRoot: hostRoot, runtimeRoot: this.runtimeRoot, temporary: this.temporary, node: this.node,
       denied: narrowed, readOnly, repository, gitDirs, toolchains: [...toolchains.roots, ...languages.readRoots], developer: developer.roots,
       browsers: browsers ? [browsers] : [], skills, caches: languages.writeRoots, license: developerLicense() };
     if (this.linux) this.linuxBase = { ...base, toolchains: [...base.toolchains, ...base.browsers], references: this.references, empty: this.empty, engineRoots: this.engine?.readRoots ?? [] };
@@ -436,28 +441,50 @@ export class ManagedToolBoundary {
   async stopStrays() {
     // On Linux a command's processes end with it (its own PID namespace).
     if (this.#children.size || this.linux) return 0;
-    const marker = `PIAGENT_TOOL_SCOPE=${this.scope}`, find = () => {
-      try {
-        return execFileSync('/bin/ps', ['-axwwE', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 << 20, timeout: 5000 }).split('\n')
-          .filter(row => row.includes(marker)).map(row => Number(row.trim().split(/\s+/)[0])).filter(pid => Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid);
-      } catch { return []; }
-    };
-    const strays = find();
-    for (const pid of strays) try { process.kill(pid, 'SIGTERM'); } catch {}
-    for (let waited = 0; strays.length && waited < 2000; waited += 100) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      if (!find().length) break;
-    }
-    for (const pid of find()) try { process.kill(pid, 'SIGKILL'); } catch {}
-    return strays.length;
+    return stopMarked(`PIAGENT_TOOL_SCOPE=${this.scope}`);
   }
+  // A process the agent keeps running across turns (background-process.mjs):
+  // the plain command sandbox and environment, marked as this conversation's
+  // background process instead of the turn's, so stopStrays leaves it.
+  async spawnBackground(command, key) { return this.spawnSandboxed(['/bin/bash', '-c', command], key); }
+  // `argv` in the plain command sandbox; stdin 'pipe' for a process that
+  // answers requests (ts-diagnostics.mjs).
+  async spawnSandboxed(argv, key, { stdin = 'ignore' } = {}) {
+    if (this.#closed || this.linux || !this.allowed.includes('bash') || !/^[0-9a-f-]{36}$/.test(key)) throw new Error('managed-tool-unavailable');
+    for (const [file, digest] of this.pins) if (hash(file) !== digest) throw new Error('managed-runtime-changed');
+    if (Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
+    const isolated = await this.proxyCheck.listening, { PIAGENT_TOOL_SCOPE: _turn, ...env } = this.environment.offline;
+    const child = spawn('/usr/bin/sandbox-exec', ['-p', isolated ? this.isolatedProfile : this.profile, ...argv],
+      { cwd: this.cwd, detached: true, stdio: [stdin, 'pipe', 'pipe'], env: { ...env, PIAGENT_PROCESS_SCOPE: `${this.scope}:${key}` } });
+    return { child, isolated };
+  }
+  stopBackground(key) { return stopMarked(`PIAGENT_PROCESS_SCOPE=${this.scope}:${key}`); }
   async dispose() {
     this.#closed = true;
     const stopping = [...this.#children].map(child => new Promise(resolve => { child.once('close', resolve); child.managedCancel(); }));
     await Promise.all(stopping); await this.#tail;
-    await this.stopStrays();
+    await this.background?.dispose(); await this.stopStrays(); if (!this.linux) await stopMarked(`PIAGENT_PROCESS_SCOPE=${this.scope}:`);
     await this.proxyReady; await this.proxy?.close().catch(() => {});
     if (this.proxySocket) fs.rmSync(this.proxySocket, { force: true });
     fs.rmSync(this.temporary, { recursive: true, force: true });
   }
+}
+
+// Stops every process whose environment carries `marker` (ps -E), then
+// whatever is left after two seconds.
+async function stopMarked(marker) {
+  const find = () => {
+    try {
+      return execFileSync('/bin/ps', ['-axwwE', '-o', 'pid=,command='], { encoding: 'utf8', maxBuffer: 64 << 20, timeout: 5000 }).split('\n')
+        .filter(row => row.includes(marker)).map(row => Number(row.trim().split(/\s+/)[0])).filter(pid => Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid);
+    } catch { return []; }
+  };
+  const found = find();
+  for (const pid of found) try { process.kill(pid, 'SIGTERM'); } catch {}
+  for (let waited = 0; found.length && waited < 2000; waited += 100) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (!find().length) break;
+  }
+  for (const pid of find()) try { process.kill(pid, 'SIGKILL'); } catch {}
+  return found.length;
 }

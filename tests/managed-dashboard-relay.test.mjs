@@ -14,13 +14,14 @@ import {requestGatewayControl} from '../packages/piagent-webui/gateway/control-s
 import {gatewayProfileState} from '../packages/piagent-webui/gateway/profile-state.ts';
 import {loadPinnedPiHost} from '../packages/piagent-webui/gateway/pi-host.ts';
 import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // The personal dashboard shows a company session in its own list and page:
 // the company Gateway runs in its own process (as `piagent studio --serve`
 // does) and the dashboard relays to it. Studio and the broker are fixtures.
 const root=path.resolve(import.meta.dirname,'..');
 const expectedPiVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).peerDependencies['@earendil-works/pi-coding-agent'];
-const sdkRoot=process.env.PI_MANAGED_TEST_SDK??path.join(os.homedir(),'.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const assistant=(text)=>({role:'assistant',content:[{type:'text',text}],api:'fixture',provider:'fixture',model:'fixture',
  usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'stop',timestamp:Date.now()});
 

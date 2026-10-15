@@ -7,6 +7,7 @@ import test from "node:test";
 import { PiSessionStreamAdapter } from "../packages/piagent-webui/extension/session-stream-adapter.ts";
 import { classifyPreUsageFailure } from "../packages/piagent-core/benchmark/benchmark-transport-evidence.js";
 import { createWebUiSchemaRegistry } from "./helpers/piagent-webui-schema-registry.mjs";
+import { hostPackage } from "../packages/piagent-core/managed/pi-host.mjs";
 
 const snapshot = { state: "ready", identity: { projectRef: "project.activity", runtimeInstanceId: "runtime.activity",
   sessionRef: "session.activity", taskId: null, taskRunId: null, agentOperationId: "operation.activity", toolCallId: null },
@@ -103,7 +104,7 @@ test("actual pinned Pi consumes partial tool calls then aborts once without exac
   const expectedVersion = JSON.parse(fs.readFileSync(path.join(repo, "package.json"))).peerDependencies["@earendil-works/pi-coding-agent"];
   assert.equal(JSON.parse(fs.readFileSync(path.join(hostRoot, "package.json"))).version, expectedVersion);
   const host = await import(pathToFileURL(path.join(hostRoot, "dist/index.js")));
-  const ai = path.join(hostRoot, "node_modules/@earendil-works/pi-ai/dist");
+  const ai = path.join(hostPackage(hostRoot, "@earendil-works/pi-ai"), "dist");
   const { AssistantMessageEventStream } = await import(pathToFileURL(path.join(ai, "utils/event-stream.js")));
   const { getModel } = await import(pathToFileURL(path.join(ai, "compat.js")));
   const model = getModel("openai-codex", "gpt-5.6-luna");

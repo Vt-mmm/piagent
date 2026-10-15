@@ -7,11 +7,12 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { backOffFailedCompaction, compactEarly, compactionTrigger } from '../packages/piagent-core/managed/compaction.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Long tasks: a company conversation shrinks by summary before it outgrows the
 // model it runs on, including after the harness moved it to a model with a
 // smaller window, and after the model refused a request as too long.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 const WINDOW = { 'gpt-6-sol': 272000, 'claude-sonnet-5-5': 1000000 };
 const SUMMARY = /context summarization assistant/;
@@ -111,8 +112,10 @@ test('a history longer than the new harness model\'s window is summarised in par
   let revision = 'r1', current = broker(authority, 'sonnet');
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current, bindingRevision: () => revision });
   try {
-    // 290k tokens on a 1M-token model: under the 300k trigger, nothing to summarise yet.
-    for (let turn = 1; turn <= 11; turn++) await managed.session.prompt(words(`turn ${turn}`, 26500));
+    // About 295k tokens on a 1M-token model: under the 300k trigger, nothing to
+    // summarise yet. The system prompt and tools take about 8k of it; 26.5k a
+    // turn left a few hundred tokens of room, so any longer prompt crossed 300k.
+    for (let turn = 1; turn <= 11; turn++) await managed.session.prompt(words(`turn ${turn}`, 26000));
     assert.equal(compactions(managed).length, 0);
     assert.ok(server.requests.at(-1).tokens > 272000);
     // The harness moves to a 272k model. One summary request of the older

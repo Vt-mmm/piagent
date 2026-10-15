@@ -13,6 +13,7 @@ import { SessionRuntimeSupervisor } from "../packages/piagent-webui/gateway/sess
 import { SessionLeaseStore } from "../packages/piagent-webui/gateway/session-lease-store.ts";
 import { sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { GatewayEventStore } from "../packages/piagent-webui/gateway/gateway-events.ts";
+import { hostPackage } from "../packages/piagent-core/managed/pi-host.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const hostRoot = process.env.PIAGENT_REAL_PI_HOST;
@@ -29,7 +30,7 @@ async function actualFixture(t, behavior = {}) {
   const cwd = path.join(root, "project"), custody = path.join(root, "custody");
   fs.mkdirSync(cwd, { mode: 0o700 }); fs.mkdirSync(custody, { mode: 0o700 });
   const host = await import(pathToFileURL(path.join(hostRoot, "dist/index.js")));
-  const aiRoot = path.join(hostRoot, "node_modules/@earendil-works/pi-ai/dist");
+  const aiRoot = path.join(hostPackage(hostRoot, "@earendil-works/pi-ai"), "dist");
   const { AssistantMessageEventStream } = await import(pathToFileURL(path.join(aiRoot, "utils/event-stream.js")));
   const { getModel } = await import(pathToFileURL(path.join(aiRoot, "compat.js")));
   const model = getModel("openai-codex", "gpt-5.6-luna");

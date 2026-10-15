@@ -6,13 +6,14 @@ import http from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {test} from 'node:test';
 import {ManagedSession} from '../packages/piagent-core/managed/session.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Studio binds a conversation to one company account; the provider's prompt
 // cache lives there (Claude) or follows prompt_cache_key (Codex). The main
 // agent names its conversation on every turn, although each turn is a new
 // run with a new role. When Studio says the account is gone, the next
 // generation of the name lets it bind the conversation elsewhere.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 
 test('turns of one conversation share its session name; a gone account moves it once', {skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 60000}, async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-conversation-')));

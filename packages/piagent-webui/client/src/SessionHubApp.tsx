@@ -28,7 +28,7 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { PermissionMode, Receipt, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
-import { readSessionConnections, readSessionInspectionSnapshot, stageSessionAttachment,
+import { readSessionConnections, readSessionCreationOptions, readSessionInspectionSnapshot, stageSessionAttachment,
   type SessionConnections } from "./api.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import { acceptAttribute, attachmentDetail, discardAttachment, dragCarriesFiles, MAX_ATTACHMENTS,
@@ -38,6 +38,8 @@ import { NewSessionPage } from "./NewSessionPage.tsx";
 import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
 import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { SessionComposerControls } from "./SessionComposerControls.tsx";
+import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
+import { conversationCommands, matchConversationCommand, type CommandNotice, type CommandResult, type ConversationCommandContext } from "./conversation-commands.ts";
 import { SessionExpired, useSessionLost } from "./SessionExpired.tsx";
 import { UpdatePrompt } from "./UpdatePrompt.tsx";
 import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
@@ -85,8 +87,9 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
 
 type KeptComposer = { attachments: Attachment[]; messageRequestId: string; sendUnconfirmed: boolean };
 
-function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector }: { session: SessionRow;
+function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector, commandActions }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
+  commandActions: Omit<ConversationCommandContext["actions"], "stop">;
   send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<SessionSendResult>;
   abort(): Promise<unknown>; restart(): Promise<unknown>; canRestart: boolean; onInspector(value: SessionWorkspaceId): void }) {
   // One composer per conversation (the hub keys it by session): what was typed,
@@ -94,7 +97,29 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   const sessionRef = session.sessionRef, kept = readComposerMemory<KeptComposer>(sessionRef);
   const [draft, setDraftText] = useState(() => readDraft(sessionRef)), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
   const setDraft = (value: string) => { setDraftText(value); writeDraft(sessionRef, value); };
-  const mentions = useComposerSuggestions({ projectRef: session.projectRef, value: draft, locale, onChange: (value) => { setDraft(value); setSendNotice(null); } });
+  // The Terminal's / commands, run here through the buttons' session commands (conversation-commands.ts).
+  const company = session.modelLabel === "agent-watch-auto", running = Boolean(live && !live.complete);
+  const commands = conversationCommands({ locale, company, running, pinned: session.pinned, fast: session.managedFast === "on" || session.managedFast === "off" ? session.managedFast : null,
+    thinkingLevels: session.managedThinkingLevels ?? (company ? [] : ["off", "minimal", "low", "medium", "high", "xhigh", "max"]),
+    loadModels: () => readSessionCreationOptions().then((options) => options.models.map((model) => ({ modelRef: model.modelRef, label: model.displayName }))),
+    actions: { ...commandActions, stop: abort } });
+  const builtIns = commands.map((command) => ({ kind: "command" as const, name: command.name, argumentHint: command.argumentHint, origin: "piagent" as const,
+    scope: "project" as const, description: command.description }));
+  const [commandNotice, setCommandNotice] = useState<CommandNotice | null>(null);
+  const [pendingCommand, setPendingCommand] = useState<Extract<CommandResult, { confirm: unknown }>["confirm"] | null>(null);
+  // Esc stops a running turn (the composer is locked meanwhile); ⌘/ opens the / commands.
+  useEffect(() => {
+    const listener = (event: globalThis.KeyboardEvent) => {
+      if (event.isComposing || pendingCommand) return;
+      if (event.key === "Escape" && running && !event.metaKey && !event.ctrlKey) { event.preventDefault(); void abort(); }
+      else if (event.key === "/" && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && canSend) {
+        event.preventDefault(); setDraft("/"); requestAnimationFrame(() => { const input = mentions.inputRef.current; input?.focus(); input?.setSelectionRange(1, 1); });
+      }
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  });
+  const mentions = useComposerSuggestions({ projectRef: session.projectRef, value: draft, locale, builtIns, onChange: (value) => { setDraft(value); setSendNotice(null); } });
   const [attachments, setAttachments] = useState<Attachment[]>(() => kept?.attachments ?? []);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [messageRequestId, setMessageRequestId] = useState(() => kept?.messageRequestId ?? `message-request.${crypto.randomUUID()}`);
@@ -168,6 +193,13 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   const sendingNow = useRef(false);
   const submit = async () => {
     const message = draft; if (!message.trim() || submitting || sendUnconfirmed || sendingNow.current) return;
+    const matched = attachments.length === 0 ? matchConversationCommand(message, commands) : null;
+    if (matched) {
+      setSendNotice(null); setCommandNotice(null);
+      const result = await matched.command.run(matched.argument);
+      if ("confirm" in result) { setPendingCommand(result.confirm); setDraft(""); return; }
+      if (!("send" in result)) { setCommandNotice(result); if (result.tone !== "warning") setDraft(""); return; }
+    }
     sendingNow.current = true; setSubmitting(true); setSendNotice(null);
     const staged = attachments.map((item) => item.attachmentRef);
     try {
@@ -286,6 +318,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             onDelete={submitting || sendUnconfirmed || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
             deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
         </Stack>}
+        {commandNotice && <Alert severity={commandNotice.tone} onClose={() => setCommandNotice(null)} sx={{ mb: .75, whiteSpace: "pre-line" }}>{commandNotice.text}</Alert>}
         <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft}
           inputRef={mentions.inputRef} {...mentions.inputProps}
           onChange={(event) => { setDraft(event.target.value); setSendNotice(null); mentions.track(event); }}
@@ -300,6 +333,9 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
           placeholder={localize(locale, "Nhắn cho Piagent… (@ để chọn file, folder)", "Message Piagent… (@ for files and folders)")} variant="standard"
           slotProps={{ input: { disableUnderline: true }, htmlInput: mentions.htmlInput }} />
         {mentions.menu}
+        <ActionConfirmationDialog open={pendingCommand !== null} title={pendingCommand?.title ?? ""} description={pendingCommand?.description ?? ""}
+          confirmLabel={pendingCommand?.confirmLabel ?? ""} cancelLabel={localize(locale, "Huỷ", "Cancel")} onCancel={() => setPendingCommand(null)}
+          onConfirm={() => { const command = pendingCommand; setPendingCommand(null); if (command) void command.run().then(setCommandNotice); }} />
         <Collapse in={advancedOpen} id="piagent-message-options">
           <Box sx={{ mt: .65, p: .85, borderRadius: 2, bgcolor: "action.hover" }}>
             <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale}
@@ -451,7 +487,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const allSessions = useMemo(() => catalog?.sessions ?? [], [catalog]);
   const attention = useAttention({ sessions: allSessions, live, selectedRef: view === "chat" ? selectedSessionRef : undefined, onOpen: choose, locale });
   const openSettings = (section: SettingsSection) => { setSettingsSection(section); setSettingsOpen(true); };
-  useDashboardShortcuts({ palette: () => setPaletteOpen(true), settings: () => openSettings("general") });
+  useDashboardShortcuts({ palette: () => setPaletteOpen(true), settings: () => openSettings("general"), newChat: () => { if (canCreate) { setCreateError(null); setView("new"); } } });
   const openInspector = (active: SessionWorkspaceId) => { setActiveInspector(active); setInspectorOpen(true); };
   const refreshInspection = async () => {
     const requestedSessionRef = selectedSessionRefRef.current;
@@ -652,6 +688,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       {view === "new" ? <NewSessionPage active defaultProjectRef={launchProject ?? selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
         onCreate={(value) => createNewSession(value)} />
         : selected ? <Conversation key={selected.sessionRef} session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
+            commandActions={{ setModel: (modelRef) => setModel(selected, modelRef), setThinking: (level) => setThinking(selected, level), setFast: (on) => setFast(selected, on),
+              setPermission: (value) => setPermission(selected, value), rename: (title) => rename(selected, title), fork: () => fork(selected, null), pin: (on) => pin(selected, on),
+              archive: () => archive(selected), newChat: () => { setCreateError(null); setView("new"); }, openChanges: () => openInspector("source"), openSettings: () => openSettings("general") }}
             canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"
               && (!selectedLive || selectedLive.complete)
               && !["required", "restarting", "failed"].includes(String(live[selected.sessionRef]?.runtimeRecovery))}

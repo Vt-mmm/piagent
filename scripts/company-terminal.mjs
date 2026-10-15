@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 
 import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
+import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
@@ -81,6 +82,17 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
         if (mode && mode !== session.permission) session.session.managedSetPermission(mode);
         showPermission(ctx);
         ctx.ui.notify(PERMISSION_TEXT[session.permission] ?? PERMISSION_TEXT['workspace-write'], 'info');
+      } });
+
+    // /undo: the files the last turn changed go back to how they were before
+    // it, unless one changed again since (checkpoints.mjs).
+    pi.registerCommand('undo', {
+      description: 'Hoàn tác file mà lượt trước của agent đã sửa (project là git repository)',
+      handler: async (_args, ctx) => {
+        const session = managed();
+        if (!session?.boundary) { ctx.ui.notify('Cuộc trò chuyện này chưa sẵn sàng.', 'error'); return; }
+        try { ctx.ui.notify((await checkpointsOf(session).undo()).text, 'info'); }
+        catch (error) { ctx.ui.notify(`Không hoàn tác được: ${String(error?.message ?? error).slice(0, 300)}`, 'error'); }
       } });
 
     // Fast mode, where the team's Harness allows it; off until the member turns it on.

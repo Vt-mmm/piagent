@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { ManagedToolBoundary } from './tool-boundary.mjs';
+import { ManagedToolBoundary, PI_HOST_VERSION, hostPackage } from './tool-boundary.mjs';
 import { ensureSearchTools } from './toolchain.mjs';
 import { nativeManagedModel, piProvider } from './native-catalog.mjs';
 import { fetchPublicPage } from './web-fetch.mjs';
@@ -28,9 +28,9 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
     catch (error) { results.push({ label, required, ok: false, detail: first(error?.message ?? error) }); }
   };
   const sdk = fs.realpathSync(sdkRoot);
-  await check('Pi host 0.87.1', true, () => {
+  await check(`Pi host ${PI_HOST_VERSION}`, true, () => {
     const version = JSON.parse(fs.readFileSync(path.join(sdk, 'package.json'), 'utf8')).version;
-    if (version !== '0.87.1') throw Error(`found ${version}; company sessions need 0.87.1`);
+    if (version !== PI_HOST_VERSION) throw Error(`found ${version}; company sessions need ${PI_HOST_VERSION}`);
     return sdk;
   });
   await check('search tools (ripgrep, fd)', true, async () => { await ensureSearchTools(sdk); return 'ready'; });
@@ -115,7 +115,7 @@ export async function runDoctor({ sdkRoot, origin, broker, network = true }) {
       return `key "${manifest.key_label ?? manifest.key_id}"`;
     });
     if (manifest) await check('this Piagent knows every harness model', true, async () => {
-      const api = await import(pathToFileURL(path.join(sdk, 'dist/index.js'))), ai = await import(pathToFileURL(path.join(sdk, 'node_modules/@earendil-works/pi-ai/dist/index.js')));
+      const api = await import(pathToFileURL(path.join(sdk, 'dist/index.js'))), ai = await import(pathToFileURL(path.join(hostPackage(sdk, '@earendil-works/pi-ai'), 'dist/index.js')));
       const runtime = await api.ModelRuntime.create({ credentials: new ai.InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
       const roles = Object.entries(manifest.harness.configuration ?? {}).filter(([, role]) => role?.model_ids?.length);
       for (const [role, value] of roles) for (const id of value.model_ids) {

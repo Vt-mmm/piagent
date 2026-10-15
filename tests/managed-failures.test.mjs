@@ -10,8 +10,9 @@ import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { capacityDelayMs } from '../packages/piagent-core/managed/request-stream.mjs';
 import { describeFailure, failureKind, failureIsAdmissionRefusal, failureIsBriefRefusal, failureText, parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { ManagedBrokerClient } from '../packages/piagent-core/managed/broker-client.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 const REQUEST = 'c17783c2-e134-4715-be3f-b03d9b57efe2';
 

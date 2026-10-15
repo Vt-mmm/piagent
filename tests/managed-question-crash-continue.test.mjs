@@ -8,13 +8,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
 import { ensureWebUiBuild } from './helpers/piagent-webui-build.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // The Gateway goes down while the main agent waits for the member's answer.
 // After it comes back the conversation goes on with one click: the question
 // that was never answered reaches the model as having no result, the agent
 // asks again, and the member's answer reaches it.
 const R = path.resolve(import.meta.dirname, '..');
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const sha = f => createHash('sha256').update(fs.readFileSync(f)).digest('hex'), studioScript = fs.realpathSync(path.join(R, 'scripts/piagent-studio.mjs'));
 const QUESTIONS = [{ header: 'Phạm vi', question: 'Sửa cả màn hình admin không?', options: [{ label: 'Chỉ trang khách' }, { label: 'Cả admin' }] }];
 

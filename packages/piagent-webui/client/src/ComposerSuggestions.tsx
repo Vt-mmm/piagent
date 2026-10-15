@@ -26,7 +26,7 @@ function commandItems(commands: AgentCommand[], query: string, locale: UiLocale)
   const wanted = fold(query.replace(/^skill:/, ""));
   const rank = (command: AgentCommand) => fold(command.name).startsWith(wanted) ? 0 : fold(command.name).includes(wanted) ? 1
     : fold(command.description).includes(wanted) ? 2 : 3;
-  const where = (command: AgentCommand) => `${command.scope === "user" ? "~/" : ""}.${command.origin === "pi" ? "pi" : command.origin}`;
+  const where = (command: AgentCommand) => command.origin === "piagent" ? "Piagent" : `${command.scope === "user" ? "~/" : ""}.${command.origin === "pi" ? "pi" : command.origin}`;
   return commands.filter((command) => rank(command) < 3 && (!query.startsWith("skill:") || command.kind === "skill"))
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).slice(0, LIMIT)
     .map((command) => ({ key: `${command.kind}:${command.name}`, icon: command.kind,
@@ -35,8 +35,9 @@ function commandItems(commands: AgentCommand[], query: string, locale: UiLocale)
       apply: (text, at) => applyCommand(text, at, command) }));
 }
 
-export function useComposerSuggestions({ projectRef, value, onChange, locale }: { projectRef: string | null | undefined; value: string;
-  onChange(value: string): void; locale: UiLocale }): {
+// `builtIns`: commands of the conversation itself (a company conversation's /undo), listed with the project's.
+export function useComposerSuggestions({ projectRef, value, onChange, locale, builtIns = [] }: { projectRef: string | null | undefined; value: string;
+  onChange(value: string): void; locale: UiLocale; builtIns?: AgentCommand[] }): {
   inputRef: React.RefObject<HTMLTextAreaElement | null>; menu: ReactNode; onKeyDown(event: KeyboardEvent): boolean;
   // The caret, after every change and move; focus opens and closes the menu.
   track(event: SyntheticEvent): void; inputProps: { onFocus(): void; onBlur(): void };
@@ -78,7 +79,7 @@ export function useComposerSuggestions({ projectRef, value, onChange, locale }: 
     return () => controller.abort();
   }, [wantsCommands, projectRef]);
   const items = !live ? null : mode === "path" ? paths?.items ?? null
-    : commands && commands.projectRef === projectRef ? commandItems(commands.list, live.query, locale) : null;
+    : commands && commands.projectRef === projectRef ? commandItems([...builtIns, ...commands.list.filter((c) => !builtIns.some((b) => b.name === c.name))], live.query, locale) : null;
   useEffect(() => { setActive(0); }, [mode, live?.query]);
   const open = Boolean(focused && live && items && inputRef.current);
   const suggestions = open ? items! : [];

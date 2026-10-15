@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { memberId, resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Agent Watch gives every key its own slot. Conversations must not split with
 // it: one store per member per Studio on the machine, whichever key is held.
@@ -60,7 +61,7 @@ test('slots from before stores existed are adopted by who started their conversa
 
 // The real launcher, a broker that answers per slot, and a Studio fixture.
 const repo = path.resolve(import.meta.dirname, '..');
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const sha = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const studioScript = fs.realpathSync(path.join(repo, 'scripts/piagent-studio.mjs'));
 function launch(home, args) {

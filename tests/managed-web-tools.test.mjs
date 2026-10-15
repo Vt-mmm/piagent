@@ -6,12 +6,13 @@ import http from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {test} from 'node:test';
 import {ManagedSession} from '../packages/piagent-core/managed/session.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // One company turn where the model searches the web: the company search pool
 // is asked first; this Studio has none, so the search is a separate Studio
 // request with the provider's search tool. The answer returns to the model as
 // a tool result, and the project's AGENTS.md is in the instructions.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 
 test('a company turn can search the web through Studio and sees the project instructions', {skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 60000}, async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-web-tools-')));

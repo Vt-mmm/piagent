@@ -2,6 +2,7 @@ import { managedThinkingLevels, nearestLevel } from '../../piagent-core/managed/
 import { ManagedBrokerClient } from '../../piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../../piagent-core/managed/session.mjs';
 import { fastAllowed } from '../../piagent-core/managed/fast-mode.mjs';
+import { PI_HOST_VERSION } from '../../piagent-core/managed/pi-host.mjs';
 import fs from 'node:fs';
 
 // A company model as the new chat page sees it: the thinking levels its
@@ -43,7 +44,7 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
         return {session:runtime.session,dispose:()=>runtime.dispose()};
       } catch(error) { if(runtime) await runtime.dispose(); else await broker.dispose(); throw error; }
     };
-    const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:'0.87.1',managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null}});
+    const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:PI_HOST_VERSION,managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null}});
     return gateway;
   } finally { if(probe) await probe.dispose(); else await probeBroker.dispose(); }
 }

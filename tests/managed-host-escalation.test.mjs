@@ -40,7 +40,9 @@ test('every environment failure names an approval or a question, never a stop', 
   // ./mvnw downloading its Maven with wget (the 13/10 failures in Studio's log).
   assert.match(sandboxDiagnostic('wget: Failed to fetch https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.14/apache-maven-3.9.14-bin.tar.gz'), /^managed-network-blocked:.*run_with_network/);
   // The member's sign-in: fetch_origin, else run_on_host.
-  for (const text of ["fatal: could not read Username for 'https://github.com': Device not configured", 'git@github.com: Permission denied (publickey).', 'npm error code E401', 'pull access denied for acme/api'])
+  for (const text of ["fatal: could not read Username for 'https://github.com': Device not configured", 'git@github.com: Permission denied (publickey).', 'npm error code E401', 'pull access denied for acme/api',
+    // gh and ssh-agent have no sign-in in the sandbox: "gh auth login" there cannot work.
+    'You are not logged into any GitHub hosts. To log in, run: gh auth login', 'To get started with GitHub CLI, please run:  gh auth login', 'Could not open a connection to your authentication agent.'])
     assert.match(sandboxDiagnostic(text, { network: true }), /^managed-credentials-unavailable: .*fetch_origin.*run_on_host/, text);
   // A blocked write outside the project, Keychain: run_on_host.
   assert.match(sandboxDiagnostic('touch: /Users/a/Library/x: Operation not permitted'), /^managed-sandbox-denied: .*run_on_host/);
@@ -49,6 +51,9 @@ test('every environment failure names an approval or a question, never a stop', 
   assert.match(sandboxDiagnostic('Cannot connect to the Docker daemon at unix:///x.sock', { network: true, docker: true }), /^managed-docker-unreachable: .*start_docker/);
   assert.match(sandboxDiagnostic('Cannot connect to the Docker daemon at unix:///x.sock'), /^managed-docker-unavailable: .*start_docker/);
   assert.match(sandboxDiagnostic('npm error code ENOTFOUND', { network: true }), /^managed-network-unreachable: .*ask_user/);
+  // A local proxy listens: a test's own localhost server is out of reach, and node --test prints only "fetch failed".
+  assert.match(sandboxDiagnostic("not ok 1 - own server\n  error: 'fetch failed'", { isolated: true }), /^managed-loopback-blocked:.*run_with_network/);
+  assert.doesNotMatch(sandboxDiagnostic("error: 'fetch failed'"), /managed-loopback-blocked/, 'only while a local proxy listens');
   for (const text of [java, 'zsh: command not found: pnpm', 'npm error code E401', 'touch: /x: Operation not permitted', 'Cannot connect to the Docker daemon'])
     assert.doesNotMatch(sandboxDiagnostic(text, { network: true, docker: true }), /Không xin duyệt lại|báo người dùng|Không tự chạy lại/);
 });

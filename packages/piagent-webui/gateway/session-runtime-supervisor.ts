@@ -218,8 +218,8 @@ export class SessionRuntimeSupervisor {
     expectedOperationRef: string | null; messageRequestId?: string; images?: unknown[] }, sessionRevision: string, options: { deferDispatch?: boolean } = {}):
   Promise<SessionSendResult> {
     await this.acquire(sessionRef);
-    const active = this.#active.get(sessionRef), session = active?.runtime.session;
-    if (!active || !session) throw new Error("session-runtime-unavailable");
+    const active = this.#active.get(sessionRef), session = active?.runtime.session; if (!active || !session) throw new Error("session-runtime-unavailable");
+    if (payload.delivery === "new-operation" && payload.expectedOperationRef === null && active.operationRef && !active.settling && session.isStreaming && !active.runtime.beginWireOperation) payload = { ...payload, delivery: "follow-up", expectedOperationRef: active.operationRef }; // a message from another tab waits for the running turn, as in the Terminal
     if (payload.delivery !== "new-operation") {
       if (active.runtime.beginWireOperation) throw new Error("provider-wire-queued-input-unsupported");
       if (!active.operationRef || active.operationRef !== payload.expectedOperationRef || active.settling || !session.isStreaming) throw new Error("session-operation-conflict");

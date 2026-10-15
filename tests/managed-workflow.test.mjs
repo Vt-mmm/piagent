@@ -9,11 +9,12 @@ import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { workflowPolicy, declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, normalizePlan, planText, planTool, reviewFindings, workflowPrompt, RunProcess } from '../packages/piagent-core/managed/workflow.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
+import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // The Harness workflow: a plan for multi-step work, the repository's checks
 // after a code change, an independent review of the final patch. "require"
 // is enforced by the harness before a code-changing turn ends.
-const sdkRoot = process.env.PI_MANAGED_TEST_SDK ?? path.join(os.homedir(), '.pi/npm-global/lib/node_modules/@earendil-works/pi-coding-agent');
+const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 
 test('policy, checks and review findings are read conservatively', () => {

@@ -37,9 +37,10 @@ type TranscriptItem = { messageRef: string; parentMessageRef: string | null; rol
     summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess; turnEnd?: TurnEnd };
 type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
 type HarnessIssue = { kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope"; detail: string };
-type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue"; outcome?: string; loop?: number; maxLoops?: number;
+type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue" | "undo"; outcome?: string; loop?: number; maxLoops?: number;
   verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
-  findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[] };
+  findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[];
+  undo?: { result: "done" | "refused" | "busy" | "none" | "failed"; restored: number; removed: number; files: string[]; more?: boolean } };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
   revision: TranscriptRevision; eventCursor: string; state: "ready" | "unavailable"; items: TranscriptItem[];
   page: { beforeCursor: string | null; nextBeforeCursor: string | null; hasOlder: boolean; limit: number; truncated: boolean }; reasonCode: string | null };
@@ -197,7 +198,8 @@ function toolCalls(message: any, sessionRef: string, role: TranscriptItem["role"
 const PROCESS_OUTCOMES = ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"];
 // A helper's objection to its brief, a failed claim, a disagreement handed to the member.
 // "continue": the harness sent the agent back to a checklist with open steps.
-const PROCESS_PHASES = ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue"];
+// "undo": the member's /undo put the last turn's files back (checkpoints.mjs).
+const PROCESS_PHASES = ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"];
 const ISSUE_KINDS = ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"], HELPER_ROLES = ["scout", "research", "verify", "review"];
 const POLICY_MODES = ["off", "suggest", "require"];
 function harnessProcess(details: any): HarnessProcess | null {
@@ -233,6 +235,10 @@ function harnessProcess(details: any): HarnessProcess | null {
     .map((i: any) => ({ kind: i.kind, detail: safeText(i.detail).full.slice(0, 400) }));
   if (Array.isArray(details.claims)) out.claims = details.claims.filter((c: any) => typeof c?.claim === "string" && c.claim.trim()).slice(0, 10)
     .map((c: any) => ({ claim: safeText(c.claim).full.slice(0, 500) }));
+  const count = (n: unknown) => Number.isInteger(n) && (n as number) >= 0 ? Math.min(n as number, 100000) : 0;
+  if (details.phase === "undo" && ["done", "refused", "busy", "none", "failed"].includes(details.undo?.result)) out.undo = { result: details.undo.result,
+    restored: count(details.undo.restored), removed: count(details.undo.removed), ...(details.undo.more === true ? { more: true } : {}),
+    files: (Array.isArray(details.undo.files) ? details.undo.files : []).filter((f: unknown) => typeof f === "string" && f).slice(0, 5).map((f: string) => safeText(f).full.slice(0, 300)) };
   return out;
 }
 function role(message: any): TranscriptItem["role"] | null {

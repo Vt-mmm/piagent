@@ -8,6 +8,7 @@ import test from "node:test";
 import { registerSessionWaitTool } from "../packages/piagent-core/runtime/registration/session-wait-tool.ts";
 import { SESSION_WAIT_ENTRY } from "../packages/piagent-core/runtime/tools/session-wait.ts";
 import { auditToolProtocol } from "../packages/piagent-core/runtime/session/adaptive-context-governor.ts";
+import { hostPackage } from "../packages/piagent-core/managed/pi-host.mjs";
 
 const sdkRoot = process.env.PIAGENT_REAL_PI_HOST || "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent";
 for (const abort of [false, true]) test(`installed SDK wait ${abort ? "abort" : "elapsed"} makes no model call while pending and survives cold readback`,
@@ -15,7 +16,7 @@ for (const abort of [false, true]) test(`installed SDK wait ${abort ? "abort" : 
     const expected = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url))).peerDependencies["@earendil-works/pi-coding-agent"];
     assert.equal(JSON.parse(fs.readFileSync(path.join(sdkRoot, "package.json"))).version, expected);
     const host = await import(pathToFileURL(path.join(sdkRoot, "dist/index.js")));
-    const ai = await import(pathToFileURL(path.join(sdkRoot, "node_modules/@earendil-works/pi-ai/dist/index.js")));
+    const ai = await import(pathToFileURL(path.join(hostPackage(sdkRoot, "@earendil-works/pi-ai"), "dist/index.js")));
     const { Type } = await import(pathToFileURL(createRequire(path.join(sdkRoot, "package.json")).resolve("typebox")));
     const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-wait-sdk-")));
     t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
