@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.25.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.26.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.26.0 · 2026-10-15</p>
+  <h2 id="v1-26-0">Dashboard / commands and shortcuts, /undo, dev servers across turns</h2>
+  <p class="section-lead">Company conversations work the way you work in an editor. Type <span class="inline-code">/</span> in the dashboard for the Terminal's commands (<span class="inline-code">/name</span>, <span class="inline-code">/fork</span>, <span class="inline-code">/thinking</span>, <span class="inline-code">/bypass</span>, <span class="inline-code">/undo</span>, <span class="inline-code">/help</span>…); they run in the dashboard and are never sent to the model. Shortcuts: ⌘⇧O new chat, ⌘/ the commands, Esc stops the turn. <span class="inline-code">/undo</span> puts back the files the agent's last turn changed, one turn at a time, and never overwrites a file you changed since. The agent keeps a dev server up across turns (<span class="inline-code">start_process</span>), sees the TypeScript errors of the file it just changed, and <span class="inline-code">piagent studio --prompt … --json</span> writes the <span class="inline-code">pi --mode json</span> stream.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.25.0 · 2026-10-13</p>
   <h2 id="v1-25-0">When the machine lacks something, the agent asks, and an approved command runs</h2>

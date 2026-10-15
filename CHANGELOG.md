@@ -2,6 +2,33 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.26.0 - 2026-10-15
+
+Company conversations work the way a developer works in an editor: the Terminal's `/` commands and shortcuts in the dashboard, `/undo` for the agent's last turn, dev servers that stay up across turns, type errors right after an edit. The Harness is now tested where it runs.
+
+### Changes
+
+- Dashboard `/` commands, run in the dashboard and never sent to the model: `/new`, `/fork`, `/name`, `/pin`, `/archive`, `/stop`, `/thinking`, `/model` and `/permission` (personal), `/undo`, `/fast` and `/bypass` (company), `/changes`, `/settings`, `/help`. Full access and Bypass still ask for confirmation. Shortcuts: ⌘⇧O new chat, ⌘/ the `/` commands, Esc stops the running turn.
+- `/undo` (company Terminal and dashboard): the files the agent's last turn changed go back, one turn at a time; it refuses while a turn runs and when a file was changed again since, and never touches the member's index, HEAD or commits. Git repositories only.
+- `start_process`, `process_output`, `stop_process` (macOS): a dev server, watcher or local service runs across turns in the plain sandbox, without network, until stopped, the conversation closes or 4 hours pass.
+- After a write or edit of a TypeScript or JavaScript file the agent gets that file's errors from the project's own TypeScript (5 and 6 through a language service, 7 through its native `tsc`); a syntax error elsewhere that stops `tsc` is named instead of reported as clean.
+- `piagent studio --prompt <text> --json` writes the event stream of `pi --mode json`.
+- A message sent from another tab while a turn runs waits for that turn instead of being refused.
+- The prompt and `run_with_network` no longer send end-to-end tests to approval on macOS: Playwright's Chromium runs in the plain sandbox against a server on the Mac.
+- Ready for Pi 1.2.0 (the pin stays 0.87.1): `@earendil-works/pi-ai` is found where Pi 1.x hoists it, the sandbox reads it there, and Pi 1.x's error results read as the failures they are.
+
+### Fixes
+
+- A test's own localhost server blocked while a local proxy listens printed only `fetch failed`; the agent is now told to use `run_with_network`.
+- `gh` and SSH without a sign-in in the sandbox no longer point the agent at `gh auth login`; they name `run_on_host`.
+- `fetch_origin` stopped a repository with many branches after 60 seconds (a team repository of 92 branches takes about two minutes) and failed with `managed-repository-fetch-failed`; the download now has ten minutes.
+- A turn cut off after a check had passed (the next model request interrupted) reported "no check passed on the final code"; the passed check now counts. A failed `fetch_origin` names `run_on_host` as the way on. `E401` and `ENEEDAUTH` are matched as whole words.
+
+### Tests and documentation
+
+- The end-to-end Harness tests skipped wherever the Pi host was not under `~/.pi/npm-global`, CI included; they now find it in the npm global root. `docs/harness-conformance.md` maps every Harness setting to who enforces it and the tests that prove it, and a test keeps that page true.
+- `docs/company-dev-commands.md`: what runs in a company session without asking, what names its approval, the dashboard commands and the headless mode.
+
 ## v1.25.0 - 2026-10-13
 
 A company conversation no longer gives up when the machine lacks something: the agent asks for the approval that makes the command run, and once the member approves it runs, outside the sandbox when it has to.
@@ -17,8 +44,6 @@ A company conversation no longer gives up when the machine lacks something: the 
 ### Fixes
 
 - A turn that only read repositories through `git -C <folder> …` (status, log, reflog, `remote -v`, rev-list…) in a folder that is not itself a repository was counted as a code change, so the Harness asked for checks three times on a turn that changed nothing. Git's options before the command are read now, and `./mvnw … compile`/`package` and `./gradlew build` count as checks.
-- `fetch_origin` stopped a repository with many branches after 60 seconds (a team repository of 92 branches takes about two minutes) and failed with `managed-repository-fetch-failed`; the download now has ten minutes.
-- A turn cut off after a check had passed (the next model request interrupted) reported "no check passed on the final code"; the passed check now counts. A failed `fetch_origin` names `run_on_host` as the way on. `E401` and `ENEEDAUTH` are matched as whole words.
 - `wget: Failed to fetch` (how `./mvnw` downloads its Maven) is read as a blocked download and points to `run_with_network`, instead of a bare exit code.
 
 ## v1.24.0 - 2026-10-13

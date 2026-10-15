@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.26.0 · 2026-10-15</p>
+  <h2 id="v1-26-0">Lệnh / và phím tắt trên dashboard, /undo, dev server chạy qua nhiều lượt</h2>
+  <p class="section-lead">Cuộc trò chuyện công ty làm việc như trong editor. Gõ <span class="inline-code">/</span> trên dashboard để dùng lệnh của Terminal (<span class="inline-code">/name</span>, <span class="inline-code">/fork</span>, <span class="inline-code">/thinking</span>, <span class="inline-code">/bypass</span>, <span class="inline-code">/undo</span>, <span class="inline-code">/help</span>…), lệnh chạy ngay trên dashboard và không gửi cho model; phím tắt ⌘⇧O chat mới, ⌘/ mở lệnh, Esc dừng lượt. <span class="inline-code">/undo</span> trả file mà lượt trước của agent đã sửa về như cũ, từng lượt một, và không đụng file bạn đã sửa sau đó. Agent giữ được dev server qua nhiều lượt (<span class="inline-code">start_process</span>), thấy ngay lỗi TypeScript của file vừa sửa, và <span class="inline-code">piagent studio --prompt … --json</span> xuất luồng sự kiện như <span class="inline-code">pi --mode json</span>.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.25.0 · 2026-10-13</p>
   <h2 id="v1-25-0">Thiếu môi trường thì agent xin quyền, duyệt xong là chạy</h2>
   <p class="section-lead">Cuộc trò chuyện công ty không còn dừng ở “máy thiếu Java/Docker, em không làm được”. Máy thiếu runtime (JDK, Node đúng version…), cần tài khoản của bạn (git pull/push, registry riêng) hay cần ghi ra ngoài project, agent xin <strong>run_on_host</strong>: đúng một lệnh chạy trên máy bạn, ngoài sandbox, sau khi bạn duyệt (Bypass cũng hỏi). Docker đã cài mà chưa bật thì agent xin <strong>start_docker</strong>, chờ Docker chạy rồi làm tiếp ngay trong cuộc trò chuyện đó. Việc chỉ bạn làm được (mật khẩu sudo, trình cài, đăng nhập) thì agent hỏi kèm các bước và lựa chọn “Đã xong, làm tiếp / Bỏ qua”. <code>fetch_origin</code> fetch được repo nằm trong folder chứa nhiều repo, và lượt chỉ đọc bằng <code>git -C</code> không còn bị Harness coi là có sửa code.</p>
