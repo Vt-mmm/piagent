@@ -405,11 +405,11 @@ export class SessionRuntimeSupervisor {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session?.sessionManager) throw new Error("session-runtime-unavailable");
-    if (active.operationRef || !session.isIdle) throw new Error("session-runtime-busy");
+    // One appended entry the turn neither reads nor waits on, so no busy check: renamed mid-turn, as Pi's own /name is.
     const current = String(session.sessionManager.getSessionName?.() ?? "").trim();
     if (current === title.trim()) return "no-change";
     session.sessionManager.appendSessionInfo(title);
-    this.#touchCreated(sessionRef);
+    const created = this.#created.get(sessionRef); if (created) created.name = title; this.#touchCreated(sessionRef); // listed from memory until its first message
     return "renamed";
   }
   async fork(sessionRef: string, entryRef: string | null, title: string | null): Promise<string> {

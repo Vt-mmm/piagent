@@ -291,12 +291,12 @@ export function useSessionHub(): SessionHub {
 
   const mutateSession = useCallback(async (session: SessionRow,
     action: "session.rename" | "session.pin" | "session.archive" | "session.unarchive" | "session.fork", payload: Record<string, unknown>) => {
-    const current = catalogRef.current, exact = current?.sessions.find((item) => item.sessionRef === session.sessionRef);
-    if (!current?.catalogRevision || !exact) throw new Error("session-unavailable");
-    const now = new Date(), receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
-      commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action, requestedAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
-      expectedCatalogRevision: current.catalogRevision, expectedSessionRevision: exact.sessionRevision, payload });
+    const submit = (snapshot?: Catalog) => { const exact = snapshot?.sessions.find((item) => item.sessionRef === session.sessionRef);
+      if (!snapshot?.catalogRevision || !exact) throw new Error("session-unavailable"); const now = new Date(); return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command", commandId: opaque("command"),
+        idempotencyKey: opaque("idempotency"), action, requestedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
+        sessionRef: session.sessionRef, expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision, payload }); };
+    // A running turn changes its conversation after every step; a new title depends on none of it, so a rename is sent again against the latest.
+    let receipt = await submit(catalogRef.current); for (let retry = 0; action === "session.rename" && revisionStale(receipt) && retry < 2; retry++) receipt = await submit(await refresh());
     if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
     await refresh(); return receipt;
   }, [refresh, request]);

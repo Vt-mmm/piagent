@@ -630,7 +630,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
         if (receipt.sessionRef) { setSelectedRef(receipt.sessionRef); setView("chat"); }
       }
       setSessionAction(null);
-    } catch (error) { setActionError(error instanceof Error ? error.message : "session-action-failed"); }
+    } catch (error) { setActionError(sessionActionFailureText(sessionAction.kind, error instanceof Error ? error.message : "session-action-failed", locale)); }
     finally { setActionBusy(false); }
   };
 
@@ -746,4 +746,23 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
           {localize(locale, "Đóng", "Close")}</Button></Stack></Stack>
     </Dialog>
   </Box>;
+}
+
+// Why rename, fork or archive did not happen, in words; the code stays at the
+// end for support.
+const SESSION_ACTION_FAILURES: Record<string, [string, string]> = {
+  "session-revision-stale": ["Cuộc trò chuyện vừa thay đổi trong lúc gửi. Bấm Xác nhận lần nữa.", "The chat changed while this was sent. Select Confirm again."],
+  "session-runtime-busy": ["Cuộc trò chuyện đang bận. Thử lại khi lượt này xong.", "The chat is busy. Try again when this turn ends."],
+  "session-runtime-unavailable": ["Cuộc trò chuyện chưa mở được. Mở lại cuộc trò chuyện rồi thử lại.", "The chat is not open. Open it again and retry."],
+  "session-unavailable": ["Không còn thấy cuộc trò chuyện này trong danh sách. Tải lại trang rồi thử lại.", "This chat is no longer in the list. Reload the page and retry."],
+  "session-archived": ["Cuộc trò chuyện đã được lưu trữ. Bỏ lưu trữ trước.", "The chat is archived. Unarchive it first."],
+  "session-command-expired": ["Yêu cầu chờ quá lâu nên đã hết hạn. Thử lại.", "The request waited too long and expired. Try again."],
+  "gateway-command-response-timeout": ["Piagent chưa trả lời. Xem lại danh sách trước khi thử lại.", "Piagent did not answer. Check the list before trying again."],
+};
+const SESSION_ACTION_FAILED: Record<"rename" | "fork" | "archive", [string, string]> = {
+  rename: ["Chưa đổi được tên", "Could not rename"], fork: ["Chưa tạo được nhánh", "Could not fork"], archive: ["Chưa lưu trữ được", "Could not archive"],
+};
+function sessionActionFailureText(kind: "rename" | "fork" | "archive", code: string, locale: UiLocale): string {
+  const known = SESSION_ACTION_FAILURES[code];
+  return `${localize(locale, ...SESSION_ACTION_FAILED[kind])}: ${known ? localize(locale, ...known) : localize(locale, "thử lại.", "try again.")} (${code})`;
 }
