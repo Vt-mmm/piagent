@@ -27,7 +27,7 @@ import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { restorePermission, permissionSetter } from './permission.mjs';
-import { commandTools, servicesPrompt } from './command-tools.mjs';
+import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 export const HELPER_BEAT_MS = 60_000;
@@ -132,14 +132,14 @@ export class ManagedSession {
       return { content: [{ type: 'text', text: `Plan updated: ${plan.plan.filter(p => p.status === 'completed').length}/${plan.plan.length} steps completed.` }], details: { plan: plan.plan } };
     }));
     // The member decides what the request leaves open: numbered options, or their own words.
-    customTools.push(askTool(self));
+    customTools.push(askTool(self), ...memoryToolsFor(self, agentDir)); // team memory's tools, once Studio answered memory here (memory.mjs)
     const agentsFiles = projectInstructions(self.cwd, self.boundary.repositoryTop);
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, terminalExtensions) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
-    const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd);
+    const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir);
     const scope = scopeOf(self.origin, manifest);
     const prior = manager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-scope').at(-1)?.data;
     // Under another member or another Studio a conversation still opens and
@@ -263,7 +263,7 @@ export class ManagedSession {
           const pending = pendingBaseline(manager);
           self.ownPaths = new Set(pending !== null ? pendingPaths(manager) : []);
           self.base = (pending !== null ? pendingHead(manager) : null) ?? await readHead(self.boundary);
-          self.run.startDigest = pending ?? await self.digest();
+          self.run.startDigest = pending ?? await self.digest(); await openRound(self, manager, text); // sends what waited; a new conversation gets the team brief
         } catch (error) { self.preflight = describeFailure('main', failureText(error)); }
         self.activePrompt = true;
       })();
@@ -286,7 +286,7 @@ export class ManagedSession {
         // The round's model work is over: a member message now waits for the next round.
         self.between = true;
         Object.assign(round, { planUpdated: !!self.run?.planUpdated, changed: !!self.run?.changed });
-        await Promise.allSettled([...self.helpers.values()]);
+        await Promise.allSettled([...self.helpers.values()]); await closeRound(self); // the round goes to team memory while its run token is valid
         // What a command left running in the background ends with the turn.
         try { await self.boundary.stopStrays(); } catch { /* best effort; the boundary stops them on close */ }
         await self.refreshReview();
