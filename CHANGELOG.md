@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.26.1 - 2026-10-16
+
+A conversation is renamed while its turn runs.
+
+### Fixes
+
+- Renaming a conversation from its menu while a turn ran (a company conversation in particular) showed `session-revision-stale` and kept the old name: the turn changes the conversation after every step, and the Gateway refused a rename while busy. The rename now lands mid-turn, the dashboard sends it again against the conversation as it is now, and a rename, fork or archive that still fails says why in words, with the code at the end.
+
+### Tests
+
+- `tests/managed-rename-web.test.mjs`: a company conversation is renamed from its menu while idle and while its turn runs, then with `/name`, and the name survives a reload.
+
 ## v1.26.0 - 2026-10-15
 
 Company conversations work the way a developer works in an editor: the Terminal's `/` commands and shortcuts in the dashboard, `/undo` for the agent's last turn, dev servers that stay up across turns, type errors right after an edit. The Harness is now tested where it runs.

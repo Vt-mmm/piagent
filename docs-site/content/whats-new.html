@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.26.1 · 2026-10-16</p>
+  <h2 id="v1-26-1">Đổi tên cuộc trò chuyện được cả khi lượt đang chạy</h2>
+  <p class="section-lead">Đổi tên từ menu của cuộc trò chuyện trong lúc lượt đang chạy (nhất là cuộc trò chuyện công ty) từng hiện <span class="inline-code">session-revision-stale</span> và giữ tên cũ. Giờ tên mới được ghi ngay giữa lượt; nếu đổi tên, tạo nhánh hay lưu trữ vẫn không được, hộp thoại nói lý do bằng lời.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.26.0 · 2026-10-15</p>
   <h2 id="v1-26-0">Lệnh / và phím tắt trên dashboard, /undo, dev server chạy qua nhiều lượt</h2>
   <p class="section-lead">Cuộc trò chuyện công ty làm việc như trong editor. Gõ <span class="inline-code">/</span> trên dashboard để dùng lệnh của Terminal (<span class="inline-code">/name</span>, <span class="inline-code">/fork</span>, <span class="inline-code">/thinking</span>, <span class="inline-code">/bypass</span>, <span class="inline-code">/undo</span>, <span class="inline-code">/help</span>…), lệnh chạy ngay trên dashboard và không gửi cho model; phím tắt ⌘⇧O chat mới, ⌘/ mở lệnh, Esc dừng lượt. <span class="inline-code">/undo</span> trả file mà lượt trước của agent đã sửa về như cũ, từng lượt một, và không đụng file bạn đã sửa sau đó. Agent giữ được dev server qua nhiều lượt (<span class="inline-code">start_process</span>), thấy ngay lỗi TypeScript của file vừa sửa, và <span class="inline-code">piagent studio --prompt … --json</span> xuất luồng sự kiện như <span class="inline-code">pi --mode json</span>.</p>
