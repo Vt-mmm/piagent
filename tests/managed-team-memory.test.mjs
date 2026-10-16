@@ -63,6 +63,7 @@ async function studio() {
       const op = req.url.slice('/v1/memory/'.length), body = JSON.parse(raw);
       state.memory.push({ op, body, auth: req.headers.authorization });
       if (state.mode === 'off') { res.writeHead(204); res.end(); return; }
+      if (state.mode === 'absent') { res.writeHead(404); res.end(); return; }
       if (op === 'retain' && state.retainStatus !== 200) { res.writeHead(state.retainStatus, { 'Content-Type': 'application/json' }); res.end('{"error":{"code":"memory_unavailable"}}'); return; }
       const answers = { brief: { text: 'Team memory for x:\n- [2026-10-01] RULE_CENTS: money is integer cents.', facts: 1, pages: ['Key decisions and rationale'], git_head: null, retain_sessions: true },
         retain: { status: 'accepted' }, git: { status: 'accepted' }, search: { text: 'SEARCH_HIT' }, page: { markdown: '# PAGE' } };
@@ -149,6 +150,18 @@ test('a new conversation opens with the team brief, and every round goes back to
     const at = server.state.model.length;
     await managed.session.prompt('Off three');
     assert.ok(!server.state.model[at].tools.includes('memory_search'));
+  } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a Studio without team memory (404) is asked once per conversation, and nothing waits in the outbox', { skip: !supported, timeout: 60000 }, async () => {
+  const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-agent-')), server = await studio();
+  server.state.mode = 'absent';
+  const managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin: server.origin, broker: broker({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 }), agentDir });
+  try {
+    await managed.session.prompt('one'); await managed.session.prompt('two');
+    assert.deepEqual(server.state.memory.map(m => m.op), ['brief']);
+    assert.equal(server.state.model.length, 2);
+    assert.ok(!fs.existsSync(path.join(agentDir, 'memory-outbox.jsonl')));
   } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -82,7 +82,8 @@ export class TeamMemory {
     const response = await this.fetchImpl(`${this.origin}/v1/memory/${op}`, { method: 'POST', signal: AbortSignal.timeout(timeout),
       headers: { Authorization: `Bearer ${grant.token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id },
       body: JSON.stringify(body) });
-    if (response.status === 204) { this.offUntil = this.now() + OFF_MS; this.#remember(false); return null; }
+    // 204: memory is off for the team; 404: a Studio without team memory.
+    if (response.status === 204 || response.status === 404) { this.offUntil = this.now() + OFF_MS; this.#remember(false); return null; }
     if (!response.ok) throw Error(`memory-${op}-${response.status}`);
     this.#remember(true);
     return response.json();

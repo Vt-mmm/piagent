@@ -21,6 +21,8 @@ test('managed WebUI presents a scoped Git operation; denial resumes chat without
  const originalRequest=piApprovalBroker.request.bind(piApprovalBroker);
  piApprovalBroker.request=(args)=>{diagnostics.push(piApprovalBroker.projection(args.cwd,args.rawSessionId));const result=originalRequest(args);diagnostics.push(piApprovalBroker.projection(args.cwd,args.rawSessionId));return result;};
  const server=http.createServer(async(req,res)=>{
+  // A Studio without team memory (managed/memory.mjs) answers its routes 404.
+  if(req.url.startsWith('/v1/memory/')){res.writeHead(404);res.end();return;}
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_fixture_'+requests.length,object:'response',status:'in_progress',model:body.model,output:[]};emit({type:'response.created',response});
