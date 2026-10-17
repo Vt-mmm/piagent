@@ -13,7 +13,7 @@ import { reviewFindings, briefIssues } from './workflow.mjs';
 import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
 import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-roles.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
-import { helperMemoryTools } from './memory.mjs';
+import { helperMemoryTools, renewer } from './memory.mjs';
 
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
 // A helper failure that another model of its role may not have: the model's
@@ -75,7 +75,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     const model = managed.installModel(runtime, grant); managed.wrapStreams(runtime, role);
     // Studio's logs name the job by its title (the brief's first line without one).
     (managed.jobTitles ??= new WeakMap()).set(runtime, jobTitle(task, title));
-    const setup = HELPER_SETUP[role], memory = helperMemoryTools(managed, () => grant);
+    const setup = HELPER_SETUP[role], memory = helperMemoryTools(managed, () => grant, renewer(managed, role, g => verifyGrant(g, managed.manifest, role)));
     boundary = new ManagedToolBoundary({ cwd: managed.cwd, sdkRoot: managed.sdk, protectedRoots: managed.protectedRoots, readOnly: true, commands: setup.commands });
     const checks = role === 'verify' ? `\n\nRepository checks: ${managed.checks.commands.length ? managed.checks.commands.map(c => '`' + c + '`').join(', ') : 'none declared or detected; choose the tests, type check or build that cover the claims'}.` : '';
     // One helper session answers the brief (with one part of the patch for a

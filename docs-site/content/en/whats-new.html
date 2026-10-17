@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.27.1 · 2026-10-17</p>
+  <h2 id="v1-27-1">Team memory keeps working while the agent calls the model</h2>
+  <p class="section-lead">A model request renews its run token and voids the one before, so the commits sent right after the brief, and a <span class="inline-code">memory_search</span> beside a request, were refused by Studio (401): the repository’s commits never reached memory. A memory call refused this way now renews the token (shared with that role’s requests, as web search does) and asks once more. Needs Agent Studio 0.27.1 (0.27.0 was withdrawn).</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.27.0 · 2026-10-17</p>
   <h2 id="v1-27-0">Team memory: company agents remember what the team settled in each repository</h2>
   <p class="section-lead">With team memory turned on in Agent Studio 0.27.0, a new company conversation opens with a short brief from the team's memory of the repository (decisions, rules, work in progress from earlier conversations and commits). Every round is kept for the team (secrets redacted); the agent and its helpers search it with <span class="inline-code">memory_search</span>. A memory outage or a team without memory never fails or slows a turn.</p>

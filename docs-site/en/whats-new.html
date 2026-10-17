@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.27.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.27.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.27.1 · 2026-10-17</p>
+  <h2 id="v1-27-1">Team memory keeps working while the agent calls the model</h2>
+  <p class="section-lead">A model request renews its run token and voids the one before, so the commits sent right after the brief, and a <span class="inline-code">memory_search</span> beside a request, were refused by Studio (401): the repository’s commits never reached memory. A memory call refused this way now renews the token (shared with that role’s requests, as web search does) and asks once more. Needs Agent Studio 0.27.1 (0.27.0 was withdrawn).</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.27.0 · 2026-10-17</p>
   <h2 id="v1-27-0">Team memory: company agents remember what the team settled in each repository</h2>

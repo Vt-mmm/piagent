@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { repoKey, turnRecord, MEMORY_ENTRY } from '../packages/piagent-core/managed/memory.mjs';
+import { repoKey, turnRecord, MEMORY_ENTRY, TeamMemory } from '../packages/piagent-core/managed/memory.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Team memory in company conversations (memory.mjs): the brief opens a new
@@ -92,6 +92,23 @@ function repository() {
   fs.writeFileSync(path.join(root, 'b.txt'), 'b'); run('add', '.'); run('commit', '-qm', 'Add refunds');
   return { root, head: run('rev-parse', 'HEAD').toString().trim() };
 }
+
+test('a memory call whose token a model request renewed asks again once with a renewed token', async () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-renew-'));
+  execFileSync('git', ['-C', work, 'init', '-q']); execFileSync('git', ['-C', work, 'remote', 'add', 'origin', 'git@github.com:acme/shop.git']);
+  const seen = [];
+  const fetchImpl = async (_url, init) => { const token = init.headers.Authorization.slice(7); seen.push(token);
+    return token === 'live' ? new Response(JSON.stringify({ text: 'cents only' }), { status: 200 }) : new Response('{}', { status: 401 }); };
+  let renewals = 0;
+  const memory = new TeamMemory({ origin: 'http://studio.test', cwd: work, stateDir: null, conversationId: 'c', fetchImpl, renew: async () => { renewals++; return { token: 'live', role_id: 'r' }; } });
+  assert.equal(await memory.search({ token: 'voided', role_id: 'r' }, 'money'), 'cents only');
+  assert.deepEqual(seen, ['voided', 'live']); assert.equal(renewals, 1);
+  // A token that stays refused is not asked forever.
+  const stuck = new TeamMemory({ origin: 'http://studio.test', cwd: work, stateDir: null, conversationId: 'c', fetchImpl, renew: async () => ({ token: 'voided', role_id: 'r' }) });
+  seen.length = 0;
+  assert.match(await stuck.search({ token: 'voided', role_id: 'r' }, 'money'), /did not answer/);
+  assert.deepEqual(seen, ['voided']);
+});
 
 test('a new conversation opens with the team brief, and every round goes back to memory', { skip: !supported, timeout: 120000 }, async () => {
   const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-agent-')), server = await studio(), authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };

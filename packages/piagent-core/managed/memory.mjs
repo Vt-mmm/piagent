@@ -11,6 +11,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { CLIENT_AGENT } from './client-agent.mjs';
 import { redactedText } from '../runtime/managed-failure.mjs';
+import { shareGrant, releaseGrant } from './grant-share.mjs';
 
 export const MEMORY_ENTRY = 'agent-watch-memory';
 const BRIEF_MS = 5_000, WRITE_MS = 4_000, GIT_MS = 6_000, TOOL_MS = 10_000;
@@ -55,7 +56,8 @@ export function turnRecord(messages, changedFiles = []) {
 }
 
 export class TeamMemory {
-  constructor({ origin, cwd, stateDir, conversationId, fetchImpl = fetch, now = () => Date.now() }) {
+  constructor({ origin, cwd, stateDir, conversationId, renew = null, fetchImpl = fetch, now = () => Date.now() }) {
+    this.renew = renew;
     Object.assign(this, { origin, cwd, stateDir, conversationId, fetchImpl, now, repo: undefined, offUntil: 0, retain: true, pendingGit: null, briefed: false });
     this.outboxPath = stateDir ? path.join(stateDir, 'memory-outbox.jsonl') : null;
     this.knownPath = stateDir ? path.join(stateDir, 'memory-known.json') : null;
@@ -78,10 +80,18 @@ export class TeamMemory {
   }
   get active() { return this.now() >= this.offUntil; }
 
-  async #post(grant, op, body, timeout) {
-    const response = await this.fetchImpl(`${this.origin}/v1/memory/${op}`, { method: 'POST', signal: AbortSignal.timeout(timeout),
-      headers: { Authorization: `Bearer ${grant.token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id },
+  async #post(grant, op, body, timeout, renew = this.renew) {
+    const send = g => this.fetchImpl(`${this.origin}/v1/memory/${op}`, { method: 'POST', signal: AbortSignal.timeout(timeout),
+      headers: { Authorization: `Bearer ${g.token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT, 'X-Session-Id': g.role_id },
       body: JSON.stringify(body) });
+    let response = await send(grant);
+    // Every model request renews its role's token and voids the one before, so
+    // a memory call beside one (the commits after the brief, a search) can
+    // carry a dead token: renew once, the way a web search does, and ask again.
+    if (response.status === 401 && renew) {
+      const fresh = await renew(grant).catch(() => null);
+      if (fresh?.token && fresh.token !== grant.token) response = await send(fresh);
+    }
     // 204: memory is off for the team; 404: a Studio without team memory.
     if (response.status === 204 || response.status === 404) { this.offUntil = this.now() + OFF_MS; this.#remember(false); return null; }
     if (!response.ok) throw Error(`memory-${op}-${response.status}`);
@@ -160,15 +170,15 @@ export class TeamMemory {
     for (const item of left) if (this.active) this.#queue(item);
   }
 
-  async search(grant, query) {
+  async search(grant, query, renew) {
     if (!grant || !(await this.repository())) return 'Team memory is not available for this folder (no origin remote).';
-    try { return (await this.#post(grant, 'search', { repo_key: this.repo, query }, TOOL_MS))?.text ?? 'Team memory is off for this team.'; }
+    try { return (await this.#post(grant, 'search', { repo_key: this.repo, query }, TOOL_MS, renew ?? this.renew))?.text ?? 'Team memory is off for this team.'; }
     catch { return 'Team memory did not answer; go on without it.'; }
   }
-  async page(grant, name) {
+  async page(grant, name, renew) {
     if (!grant || !(await this.repository())) return 'Team memory is not available for this folder (no origin remote).';
     try {
-      const page = await this.#post(grant, 'page', { repo_key: this.repo, name }, TOOL_MS);
+      const page = await this.#post(grant, 'page', { repo_key: this.repo, name }, TOOL_MS, renew ?? this.renew);
       return page ? (page.markdown?.trim() || `The page "${name}" has no content yet.`) : 'Team memory is off for this team.';
     } catch { return `No knowledge page named "${name}", or team memory did not answer.`; }
   }
@@ -177,15 +187,21 @@ export class TeamMemory {
 export const PAGE_NAMES = ['Component map', 'Core concepts', 'Conventions and patterns', 'Key decisions and rationale', 'Initiatives and work in progress'];
 
 // The agent's memory tools; helpers get only the search, on their own run.
-export function memoryTools(self, { pages = true, grant = () => self.grant } = {}) {
+// A fresh token for a role, shared with that role's requests running beside it.
+export const renewer = (owner, role, verify) => async () => {
+  const share = shareGrant(owner, role);
+  try { const grant = await share.grant; verify?.(grant); if (role === 'main') owner.grant = grant; return grant; }
+  finally { releaseGrant(owner, role, share); }
+};
+export function memoryTools(self, { pages = true, grant = () => self.grant, renew } = {}) {
   const tools = [{ name: 'memory_search', label: 'Team memory',
     description: 'Search the team memory of this repository: decisions, rules and conventions from the team\'s earlier conversations and commits, and its knowledge pages. Use it before asking the member something the team may already have settled. Memory is a record of the past: check what it says against the code.',
     parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 2000 } }, required: ['query'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.search(grant(), args.query) }], details: {} }) }];
+    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.search(grant(), args.query, renew) }], details: {} }) }];
   if (pages) tools.push({ name: 'memory_page', label: 'Team knowledge page',
     description: `Read one knowledge page the team memory keeps for this repository: ${PAGE_NAMES.join(', ')}.`,
     parameters: { type: 'object', properties: { name: { type: 'string', enum: PAGE_NAMES } }, required: ['name'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.page(grant(), args.name) }], details: {} }) });
+    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.page(grant(), args.name, renew) }], details: {} }) });
   return tools;
 }
 
@@ -200,14 +216,14 @@ export const hasBrief = manager => manager.getEntries().some(e => (e.type === 'c
 // The managed session's three hooks (session.mjs): the memory and its tools
 // when the conversation opens, a round's start once its run is granted, and
 // a round's end while its run token is still valid. None can fail a turn.
-export function attachMemory(self, manager, agentDir) {
-  self.memory = new TeamMemory({ origin: self.origin, cwd: self.cwd, stateDir: agentDir ?? null, conversationId: manager.getSessionId() });
+export function attachMemory(self, manager, agentDir, verify) {
+  self.memory = new TeamMemory({ origin: self.origin, cwd: self.cwd, stateDir: agentDir ?? null, conversationId: manager.getSessionId(), renew: renewer(self, 'main', verify) });
   return self.memory;
 }
 export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin) ? memoryTools(self) : [];
 // A helper (scout, research, verify, review) reads the team memory with its own run token; it never writes.
-export const helperMemoryTools = (managed, grant) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin)
-  ? memoryTools(managed, { pages: false, grant }) : [];
+export const helperMemoryTools = (managed, grant, renew) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin)
+  ? memoryTools(managed, { pages: false, grant, renew }) : [];
 export async function openRound(self, manager, text) {
   self.roundStart = self.session.messages.length;
   try {

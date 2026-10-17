@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.27.1 - 2026-10-17
+
+Team memory keeps working while the agent runs: commits and memory searches no longer fail beside a model request.
+
+### Fixes
+
+- Every model request renews its role's run token and voids the one before, so the commits sent right after the brief, and a `memory_search` made beside a request, went out on a dead token and Studio refused them (401): in a real company conversation the repository's commits never reached memory. A memory call Studio refuses this way now renews the token (shared with that role's requests, as web search does) and asks once more. Found in the acceptance run on Agent Studio 0.27.1 (0.27.0 was withdrawn).
+
+### Tests
+
+- `tests/managed-team-memory.test.mjs`: a memory call on a voided token asks again once with a renewed one, and a token that stays refused is not asked forever.
+
 ## v1.27.0 - 2026-10-17
 
 Team memory: company agents remember what the team settled in each repository.

@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.27.1 · 2026-10-17</p>
+  <h2 id="v1-27-1">Team memory chạy ổn cả khi agent đang gọi model</h2>
+  <p class="section-lead">Một lời gọi model làm mới token của run và huỷ token cũ, nên các commit gửi ngay sau bản tóm tắt và lệnh <span class="inline-code">memory_search</span> chạy cạnh một request bị Studio từ chối (401): commit của repo không vào được memory. Giờ lời gọi memory bị từ chối như vậy sẽ làm mới token (dùng chung với các request của role đó, như web search) rồi gửi lại một lần. Cần Agent Studio 0.27.1 (bản 0.27.0 đã rút lại).</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.27.0 · 2026-10-17</p>
   <h2 id="v1-27-0">Team memory: agent công ty nhớ những gì team đã chốt trong từng repo</h2>
   <p class="section-lead">Khi team bật memory trên Agent Studio 0.27.0, cuộc trò chuyện công ty mới mở đầu bằng một bản tóm tắt ngắn từ memory của team về repo (quyết định, quy tắc, việc đang làm, rút từ hội thoại và commit trước đó). Mỗi lượt được lưu lại cho team (đã lọc secret); agent và subagent tìm được trong memory bằng <span class="inline-code">memory_search</span>. Memory lỗi hay tắt không bao giờ làm hỏng hay chậm một lượt.</p>

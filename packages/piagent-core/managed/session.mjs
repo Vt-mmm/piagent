@@ -139,7 +139,7 @@ export class ManagedSession {
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, terminalExtensions) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
-    const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir);
+    const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main'));
     const scope = scopeOf(self.origin, manifest);
     const prior = manager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-scope').at(-1)?.data;
     // Under another member or another Studio a conversation still opens and
