@@ -176,9 +176,8 @@ export class TeamMemory {
 
 export const PAGE_NAMES = ['Component map', 'Core concepts', 'Conventions and patterns', 'Key decisions and rationale', 'Initiatives and work in progress'];
 
-// The agent's memory tools; helpers get only the search.
-export function memoryTools(self, { pages = true } = {}) {
-  const grant = () => self.grant;
+// The agent's memory tools; helpers get only the search, on their own run.
+export function memoryTools(self, { pages = true, grant = () => self.grant } = {}) {
   const tools = [{ name: 'memory_search', label: 'Team memory',
     description: 'Search the team memory of this repository: decisions, rules and conventions from the team\'s earlier conversations and commits, and its knowledge pages. Use it before asking the member something the team may already have settled. Memory is a record of the past: check what it says against the code.',
     parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 2000 } }, required: ['query'], additionalProperties: false },
@@ -206,6 +205,9 @@ export function attachMemory(self, manager, agentDir) {
   return self.memory;
 }
 export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin) ? memoryTools(self) : [];
+// A helper (scout, research, verify, review) reads the team memory with its own run token; it never writes.
+export const helperMemoryTools = (managed, grant) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin)
+  ? memoryTools(managed, { pages: false, grant }) : [];
 export async function openRound(self, manager, text) {
   self.roundStart = self.session.messages.length;
   try {

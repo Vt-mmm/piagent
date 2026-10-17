@@ -174,3 +174,63 @@ test('a folder without an origin remote sends nothing to memory', { skip: !suppo
     assert.equal(server.state.model.length, 1);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('a helper reads team memory with its own run token, and only reads', { skip: !supported, timeout: 120000 }, async () => {
+  const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-agent-'));
+  const authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };
+  const roles = { main: randomUUID(), research: randomUUID() }, token = role => `as_run_${roles[role]}_${'x'.repeat(43)}`;
+  const models = [{ id: 'main-model', provider_model_id: 'claude-sonnet-5-5', owned_by: 'claude' }, { id: 'helper-model', provider_model_id: 'claude-haiku-5-5', owned_by: 'claude' }];
+  const broker = { async request(action, args = {}) {
+    if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: 'key-a', user: { id: 'member-1' }, revision: 'r1', models,
+      harness: { configuration: { main: { model_ids: ['main-model'] }, research: { model_ids: ['helper-model'] } } } };
+    if (action === 'close') return true;
+    const role = args.role ?? 'main';
+    return { ...authority, run_id: 'run-1', role_id: roles[role], role, fence: 1, provider: 'claude', model_id: role === 'main' ? 'main-model' : 'helper-model',
+      provider_model_id: role === 'main' ? 'claude-sonnet-5-5' : 'claude-haiku-5-5', effort: 'medium', token: token(role) };
+  }, async dispose() {} };
+  const memory = [], helperTools = [];
+  let helperTurns = 0;
+  const server = http.createServer(async (req, res) => {
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    if (req.url.startsWith('/v1/memory/')) {
+      memory.push({ op: req.url.slice(11), auth: req.headers.authorization });
+      const answers = { brief: { text: '', facts: 0, pages: [], git_head: null, retain_sessions: true }, search: { text: 'HELPER_MEMORY_HIT' } };
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(answers[req.url.slice(11)] ?? { status: 'accepted' })); return;
+    }
+    const helper = req.headers['x-session-id'] === roles.research;
+    if (helper) helperTools.push((body.tools ?? []).map(t => t.name));
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const emit = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    emit({ type: 'message_start', message: { id: 'm', type: 'message', role: 'assistant', content: [], model: body.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } } });
+    if (helper && helperTurns++ === 0) {
+      emit({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'memory_search', input: {} } });
+      emit({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"query":"money rule"}' } });
+      emit({ type: 'content_block_stop', index: 0 });
+      emit({ type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 5 } });
+    } else {
+      emit({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+      emit({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: helper ? 'HELPER_DONE' : 'MAIN_DONE' } });
+      emit({ type: 'content_block_stop', index: 0 });
+      emit({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 5 } });
+    }
+    emit({ type: 'message_stop' }); res.end();
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  fs.writeFileSync(path.join(agentDir, 'memory-known.json'), JSON.stringify({ origin, at: Date.now() }));
+  const managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin, broker, agentDir });
+  try {
+    const prompt = managed.session.prompt('Start');
+    // While the main round runs, its research helper reads the team memory.
+    while (!managed.grant) await new Promise(r => setTimeout(r, 20));
+    const answer = await managed.delegate({ role: 'research', task: 'What does the team memory say about money?' });
+    await prompt;
+    assert.ok(helperTools[0].includes('memory_search'), helperTools[0].join(','));
+    assert.ok(!helperTools[0].includes('memory_page'));
+    const search = memory.find(m => m.op === 'search');
+    assert.equal(search?.auth, `Bearer ${token('research')}`, 'the helper searches on its own run token');
+    assert.ok(!memory.some(m => m.op === 'retain' && m.auth === `Bearer ${token('research')}`), 'a helper never writes memory');
+    assert.match(JSON.stringify(answer), /HELPER_DONE/);
+  } finally { await managed.dispose(); await new Promise(resolve => server.close(resolve)); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
+});
