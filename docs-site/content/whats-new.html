@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.0 · 2026-10-17</p>
+  <h2 id="v1-28-0">Team memory v2: ghi mỗi lượt đúng một lần, tóm tắt lại sau compaction</h2>
+  <p class="section-lead">Với Agent Studio 0.28.0, mỗi lượt của cuộc trò chuyện công ty có mã riêng và được ghi vào outbox trước khi gửi, nên mất phản hồi, máy tắt ngang hay hai phiên cùng lúc cũng không làm memory rút kiến thức hai lần. Sau compaction, agent nhận lại bản tóm tắt mới cho yêu cầu gần nhất. Mỗi lượt kèm tối đa ba lần “check fail → sửa → pass” quan sát được (không đoán nguyên nhân). Bản tóm tắt rỗng không bị hỏi lại mỗi lượt, cuối lượt chờ tối đa 4,5 giây khi engine không trả lời, và trên Studio 0.27.x memory vẫn được ghi.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.27.1 · 2026-10-17</p>
   <h2 id="v1-27-1">Team memory chạy ổn cả khi agent đang gọi model</h2>
   <p class="section-lead">Một lời gọi model làm mới token của run và huỷ token cũ, nên các commit gửi ngay sau bản tóm tắt và lệnh <span class="inline-code">memory_search</span> chạy cạnh một request bị Studio từ chối (401): commit của repo không vào được memory. Giờ lời gọi memory bị từ chối như vậy sẽ làm mới token (dùng chung với các request của role đó, như web search) rồi gửi lại một lần. Cần Agent Studio 0.27.1 (bản 0.27.0 đã rút lại).</p>

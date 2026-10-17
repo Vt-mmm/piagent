@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.27.1 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.28.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,12 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.28.0 · 2026-10-17</p>
+  <h2 id="v1-28-0">Team memory v2: ghi mỗi lượt đúng một lần, tóm tắt lại sau compaction</h2>
+  <p class="section-lead">Với Agent Studio 0.28.0, mỗi lượt của cuộc trò chuyện công ty có mã riêng và được ghi vào outbox trước khi gửi, nên mất phản hồi, máy tắt ngang hay hai phiên cùng lúc cũng không làm memory rút kiến thức hai lần. Sau compaction, agent nhận lại bản tóm tắt mới cho yêu cầu gần nhất. Mỗi lượt kèm tối đa ba lần “check fail → sửa → pass” quan sát được (không đoán nguyên nhân). Bản tóm tắt rỗng không bị hỏi lại mỗi lượt, cuối lượt chờ tối đa 4,5 giây khi engine không trả lời, và trên Studio 0.27.x memory vẫn được ghi.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.27.1 · 2026-10-17</p>
   <h2 id="v1-27-1">Team memory chạy ổn cả khi agent đang gọi model</h2>

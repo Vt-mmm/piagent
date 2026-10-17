@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.28.0`: team memory v2 (cần Agent Studio 0.28.0 để có mã lượt, outbox và số đo; trên 0.27.x vẫn ghi memory kiểu cũ): mỗi lượt vào memory đúng một lần, tóm tắt lại sau compaction, kèm tối đa ba lần check fail → pass quan sát được.
 - `1.27.1`: team memory gửi được commit và tìm kiếm cả khi agent đang gọi model (trước đó token bị làm mới nên Studio trả 401); cần Agent Studio 0.27.1.
 - `1.27.0`: team memory cho cuộc trò chuyện công ty (Agent Studio 0.27.0): mở đầu bằng bản tóm tắt từ memory của team về repo, mỗi lượt được lưu lại (đã lọc secret), agent và subagent tìm trong memory bằng `memory_search`; memory lỗi hay tắt không làm hỏng lượt.
 - `1.26.1`: đổi tên cuộc trò chuyện được cả khi lượt đang chạy (trước đó menu báo `session-revision-stale` và giữ tên cũ); lỗi đổi tên, tạo nhánh, lưu trữ hiện bằng lời.

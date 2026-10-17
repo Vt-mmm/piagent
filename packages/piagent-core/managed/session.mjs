@@ -27,7 +27,7 @@ import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { restorePermission, permissionSetter } from './permission.mjs';
-import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound } from './memory.mjs';
+import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 export const HELPER_BEAT_MS = 60_000;
@@ -177,16 +177,16 @@ export class ManagedSession {
     // eyes: the agent has the helper's answer as the tool result, and a
     // receipt in its context reads as a message from the member.
     const context = self.session.agent.transformContext;
-    self.session.agent.transformContext = async (messages, signal) => (context ? await context(messages, signal) : messages)
+    self.session.agent.transformContext = async (messages, signal) => (await prepareMemoryContext(self,
+      context ? await context(messages, signal) : messages, signal))
       .filter(m => !(m.role === 'custom' && ['agent-watch-helper-receipt', 'agent-watch-fast-notice'].includes(m.customType)));
-    // A call to a tool that does not exist (a model inventing a name) is
-    // answered by Pi before any hook; the run counts them for its report.
+    // Pi answers unknown tools before hooks; count those failures in the run report.
     self.session.subscribe(event => {
       if (event?.type === 'tool_execution_end' && event.isError && textContent(event.result ?? {}) === `Tool ${event.toolName} not found`) self.run && (self.run.unknownTools += 1);
     });
     await stageCompaction(self.session, self.api, self.sdk);
     compactEarly(settings); backOffFailedCompaction(self.session); trackCompaction(self, self.session);
-    trackToolFailures(self, self.session);
+    trackToolFailures(self, self.session); trackMemoryLessons(self);
     self.publishHelpers();
     const setThinking=self.session.setThinkingLevel.bind(self.session);
     self.runThinking = setThinking;
@@ -315,7 +315,7 @@ export class ManagedSession {
       if (self.starting) await self.starting;
       // Between two rounds no model runs: the message waits for the next one.
       if (self.between) return new Promise((resolve, reject) => self.queued.push({ text, options, resolve, reject }));
-      if (self.activePrompt) return prompt(text, options); // steering/follow-up keep the root
+      if (self.activePrompt) { self.memoryTurn?.users.push(text); return prompt(text, options); } // steering/follow-up keep the root
       await self.refreshReview();
       return memberTurn(self, { manager, prompt, runRound }, text, () => prompt(text, { ...options, expandPromptTemplates: false }));
     };

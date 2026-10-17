@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.27.1 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.28.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.28.0 · 2026-10-17</p>
+  <h2 id="v1-28-0">Team memory v2: each round once, a fresh brief after compaction</h2>
+  <p class="section-lead">With Agent Studio 0.28.0, each company round has its own ID and is written to an outbox before it is sent, so a lost acknowledgement, a crash or two sessions at once never extract it twice. After compaction the agent gets a fresh brief for the latest request. A round carries up to three observed “check failed → change → passed” recoveries (no guessed cause). An empty brief is not asked again every round, a round closes within 4.5 seconds when the engine does not answer, and on Studio 0.27.x memory still grows.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.27.1 · 2026-10-17</p>
   <h2 id="v1-27-1">Team memory keeps working while the agent calls the model</h2>

@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.0 · 2026-10-17</p>
+  <h2 id="v1-28-0">Team memory v2: each round once, a fresh brief after compaction</h2>
+  <p class="section-lead">With Agent Studio 0.28.0, each company round has its own ID and is written to an outbox before it is sent, so a lost acknowledgement, a crash or two sessions at once never extract it twice. After compaction the agent gets a fresh brief for the latest request. A round carries up to three observed “check failed → change → passed” recoveries (no guessed cause). An empty brief is not asked again every round, a round closes within 4.5 seconds when the engine does not answer, and on Studio 0.27.x memory still grows.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.27.1 · 2026-10-17</p>
   <h2 id="v1-27-1">Team memory keeps working while the agent calls the model</h2>
   <p class="section-lead">A model request renews its run token and voids the one before, so the commits sent right after the brief, and a <span class="inline-code">memory_search</span> beside a request, were refused by Studio (401): the repository’s commits never reached memory. A memory call refused this way now renews the token (shared with that role’s requests, as web search does) and asks once more. Needs Agent Studio 0.27.1 (0.27.0 was withdrawn).</p>

@@ -2,6 +2,27 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.28.0 - 2026-10-17
+
+Team memory lifecycle v2: every round reaches memory once, the brief comes back after compaction, and observed check recoveries are kept.
+
+### Features
+
+- With Agent Studio 0.28.0, each company round has a stable event ID, its time and its key, written to a private per-Studio/key outbox before it is sent; a lost acknowledgement, a crash or two sessions at once never extract a round twice, and a round is never sent under another key. Retries back off and stop after 30 attempts or 30 days. Older JSONL outboxes are left untouched.
+- After a successful compaction the agent gets a fresh brief for the latest request before its next model call, and the conversation keeps exactly one brief.
+- A round also carries up to three observed check recoveries (a check that failed, a change, the same check passing; redacted, with both tool calls), never a guessed cause, a rerun alone, a narrowed or skipped test run.
+- Counters per round (brief, searches, pages, helper searches, lessons, outbox retries) go to Studio for its System page; never a prompt or tool output.
+
+### Fixes
+
+- A brief that comes back empty, or fails, is not asked again every round of the same context (30 and 5 minutes; compaction asks again).
+- Closing a round (backlog, retain, counters) stays within 4.5 seconds when the memory engine does not answer.
+- On an Agent Studio 0.27.x, rounds still go to memory in the old body, so either release order keeps memory growing.
+
+### Tests
+
+- `tests/managed-memory-outbox.test.mjs`, `tests/managed-memory-context.test.mjs`, `tests/managed-memory-lessons.test.mjs`, and new cases in `tests/managed-team-memory.test.mjs`: durable outbox and claims, compaction refresh and branch entry IDs, lesson evidence rules, empty/failed brief pause, v1 body, close budget.
+
 ## v1.27.1 - 2026-10-17
 
 Team memory keeps working while the agent runs: commits and memory searches no longer fail beside a model request.

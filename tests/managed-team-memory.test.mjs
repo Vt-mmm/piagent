@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { repoKey, turnRecord, MEMORY_ENTRY, TeamMemory } from '../packages/piagent-core/managed/memory.mjs';
+import { memoryScope, scopeID } from '../packages/piagent-core/managed/memory-outbox.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Team memory in company conversations (memory.mjs): the brief opens a new
@@ -55,7 +56,7 @@ function broker(authority) {
 
 // Studio: the model answers ANSWER_n; memory follows `memory.mode`.
 async function studio() {
-  const state = { mode: 'on', retainStatus: 200, model: [], memory: [] };
+  const state = { mode: 'on', countTokens: false, retainStatus: 200, model: [], memory: [] };
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8');
@@ -65,14 +66,14 @@ async function studio() {
       if (state.mode === 'off') { res.writeHead(204); res.end(); return; }
       if (state.mode === 'absent') { res.writeHead(404); res.end(); return; }
       if (op === 'retain' && state.retainStatus !== 200) { res.writeHead(state.retainStatus, { 'Content-Type': 'application/json' }); res.end('{"error":{"code":"memory_unavailable"}}'); return; }
-      const answers = { brief: { text: 'Team memory for x:\n- [2026-10-01] RULE_CENTS: money is integer cents.', facts: 1, pages: ['Key decisions and rationale'], git_head: null, retain_sessions: true },
-        retain: { status: 'accepted' }, git: { status: 'accepted' }, search: { text: 'SEARCH_HIT' }, page: { markdown: '# PAGE' } };
+      const answers = { brief: { protocol_version: 2, text: 'Team memory for x:\n- [2026-10-01] RULE_CENTS: money is integer cents.', facts: 1, pages: ['Key decisions and rationale'], git_head: null, retain_sessions: true },
+        telemetry: { status: 'recorded' }, retain: { status: 'pending', event_id: body.event_id, operation_id: randomUUID() }, git: { status: 'accepted' }, search: { text: 'SEARCH_HIT' }, page: { markdown: '# PAGE' } };
       res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(answers[op])); return;
     }
     const body = JSON.parse(raw), n = state.model.push({ raw, tools: (body.tools ?? []).map(t => t.name) });
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const emit = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-    emit({ type: 'message_start', message: { id: `msg_${n}`, type: 'message', role: 'assistant', content: [], model: body.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 0 } } });
+    emit({ type: 'message_start', message: { id: `msg_${n}`, type: 'message', role: 'assistant', content: [], model: body.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: state.countTokens ? Math.ceil(raw.length / 4) : 10, output_tokens: 0 } } });
     emit({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
     emit({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: `ANSWER_${n}` } });
     emit({ type: 'content_block_stop', index: 0 });
@@ -110,6 +111,36 @@ test('a memory call whose token a model request renewed asks again once with a r
   assert.deepEqual(seen, ['voided']);
 });
 
+test('a v1 Studio gets the round in its old body, and closing a round stays within its budget', async () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-v1-'));
+  execFileSync('git', ['-C', work, 'init', '-q']); execFileSync('git', ['-C', work, 'remote', 'add', 'origin', 'git@github.com:acme/shop.git']);
+  const bodies = [];
+  const v1 = new TeamMemory({ origin: 'http://studio.test', cwd: work, stateDir: null, conversationId: 'c1',
+    fetchImpl: async (url, init) => { bodies.push([url, JSON.parse(init.body)]); return new Response('{"status":"accepted"}', { status: 200 }); } });
+  v1.protocol = 1;
+  await v1.afterRound({ token: 't', role_id: 'r' }, [{ role: 'user', content: 'money is integer cents' }, { role: 'assistant', content: [{ type: 'text', text: 'noted' }] }], []);
+  assert.equal(bodies.length, 1); assert.match(bodies[0][0], /\/v1\/memory\/retain$/);
+  assert.deepEqual(Object.keys(bodies[0][1]).sort(), ['conversation_id', 'repo_key', 'text']);
+  // An engine that never answers: the backlog and the write are cut at the close budget.
+  let calls = 0;
+  const hang = (_url, init) => { calls++; return new Promise((_resolve, reject) => { if (init.signal.aborted) reject(init.signal.reason); else init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }); }); };
+  const slow = new TeamMemory({ origin: 'http://studio.test', cwd: work, stateDir: null, conversationId: 'c2', fetchImpl: hang });
+  slow.protocol = 1; slow.background = new Promise(() => {});
+  const started = Date.now();
+  await slow.afterRound({ token: 't', role_id: 'r' }, [{ role: 'user', content: 'x' }], [], {}, AbortSignal.timeout(300));
+  assert.ok(Date.now() - started < 1500, `closed after ${Date.now() - started} ms`);
+  assert.equal(calls, 0, 'nothing is sent once the close budget is spent');
+  // No backlog, a write that never answers: cut at the budget too.
+  slow.background = null; const again = Date.now();
+  await slow.afterRound({ token: 't', role_id: 'r' }, [{ role: 'user', content: 'x' }], [], {}, AbortSignal.timeout(300));
+  assert.equal(calls, 1); assert.ok(Date.now() - again < 1500, `write cut after ${Date.now() - again} ms`);
+  let telemetry = 0;
+  const late = new TeamMemory({ origin: 'http://studio.test', cwd: work, stateDir: null, conversationId: 'c3', fetchImpl: async () => { telemetry++; return new Response('{}'); } });
+  late.protocol = 2; late.repo = 'github.com/acme/shop';
+  await late.reportTurn({ token: 't', role_id: 'r' }, { id: 'e', at: new Date().toISOString(), scope: null }, 'answered', 100);
+  assert.equal(telemetry, 0);
+});
+
 test('a new conversation opens with the team brief, and every round goes back to memory', { skip: !supported, timeout: 120000 }, async () => {
   const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-agent-')), server = await studio(), authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };
   fs.mkdirSync(path.join(agentDir, 'sessions'));
@@ -120,7 +151,7 @@ test('a new conversation opens with the team brief, and every round goes back to
     assert.ok(!server.state.model[0].tools.includes('memory_search'));
     assert.match(server.state.model[0].raw, /RULE_CENTS: money is integer cents/);
     assert.ok(server.state.model[0].raw.indexOf('RULE_CENTS') < server.state.model[0].raw.indexOf('How do we store money?'), 'the brief comes before the member\'s message');
-    const ops = server.state.memory.map(m => m.op);
+    const ops = server.state.memory.filter(m => m.op !== 'telemetry').map(m => m.op);
     assert.deepEqual(ops, ['brief', 'git', 'retain']);
     const [brief, git, retain] = server.state.memory;
     assert.equal(brief.body.repo_key, 'github.com/acme/shop');
@@ -131,19 +162,27 @@ test('a new conversation opens with the team brief, and every round goes back to
     assert.equal(retain.body.conversation_id, managed.session.sessionManager.getSessionId());
     assert.match(retain.body.text, /^Member: How do we store money\?\n\nAgent: ANSWER_1$/);
 
+    const metrics = server.state.memory.find(m => m.op === 'telemetry').body;
+    assert.equal(metrics.event_id, retain.body.event_id);
+    assert.equal(metrics.counters.brief_nonempty, 1);
+    assert.ok(metrics.counters.brief_exposed_requests > 0);
+    assert.equal(metrics.outcome, 'answered');
+    assert.doesNotMatch(JSON.stringify(metrics), /RULE_CENTS|How do we store|ANSWER_1/);
+
     // The next round: no second brief, no second git, its own retain.
     await managed.session.prompt('And refunds?');
-    assert.deepEqual(server.state.memory.map(m => m.op), ['brief', 'git', 'retain', 'retain']);
+    assert.deepEqual(server.state.memory.filter(m => m.op !== 'telemetry').map(m => m.op), ['brief', 'git', 'retain', 'retain']);
     assert.equal((server.state.model[1].raw.match(/RULE_CENTS/g) ?? []).length, 1, 'the brief stays once in the conversation');
 
     // Memory down: the round still answers, its record waits and goes with the next round.
     server.state.retainStatus = 503;
     await managed.session.prompt('Third question');
     assert.match(managed.session.messages.findLast(m => m.role === 'assistant').content[0].text, /^ANSWER_/);
-    assert.equal(fs.readFileSync(path.join(agentDir, 'memory-outbox.jsonl'), 'utf8').split('\n').filter(Boolean).length, 1);
+    assert.equal(managed.memory.outbox.files().length, 1);
     server.state.retainStatus = 200;
+    managed.memory.now = () => Date.now() + 10000; managed.memory.outbox.now = managed.memory.now;
     await managed.session.prompt('Fourth question');
-    assert.ok(!fs.existsSync(path.join(agentDir, 'memory-outbox.jsonl')));
+    assert.equal(managed.memory.outbox.files().length, 0);
     const retained = server.state.memory.filter(m => m.op === 'retain').map(m => m.body.text.split('\n')[0]);
     assert.deepEqual(retained.slice(-3), ['Member: Third question', 'Member: Third question', 'Member: Fourth question']);
     await managed.dispose();
@@ -176,9 +215,9 @@ test('a Studio without team memory (404) is asked once per conversation, and not
   const managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin: server.origin, broker: broker({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 }), agentDir });
   try {
     await managed.session.prompt('one'); await managed.session.prompt('two');
-    assert.deepEqual(server.state.memory.map(m => m.op), ['brief']);
+    assert.deepEqual(server.state.memory.filter(m => m.op !== 'telemetry').map(m => m.op), ['brief']);
     assert.equal(server.state.model.length, 2);
-    assert.ok(!fs.existsSync(path.join(agentDir, 'memory-outbox.jsonl')));
+    assert.equal(managed.memory.outbox.files().length, 0);
   } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -235,7 +274,7 @@ test('a helper reads team memory with its own run token, and only reads', { skip
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  fs.writeFileSync(path.join(agentDir, 'memory-known.json'), JSON.stringify({ origin, at: Date.now() }));
+  fs.writeFileSync(path.join(agentDir, 'memory-known.json'), JSON.stringify({ origin, scope: scopeID(memoryScope(origin, await broker.request('config'))), at: Date.now() }));
   const managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin, broker, agentDir });
   try {
     const prompt = managed.session.prompt('Start');
@@ -250,4 +289,27 @@ test('a helper reads team memory with its own run token, and only reads', { skip
     assert.ok(!memory.some(m => m.op === 'retain' && m.auth === `Bearer ${token('research')}`), 'a helper never writes memory');
     assert.match(JSON.stringify(answer), /HELPER_DONE/);
   } finally { await managed.dispose(); await new Promise(resolve => server.close(resolve)); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test('real managed compaction refreshes the brief and keeps the final answer under the original event', { skip: !supported, timeout: 120000 }, async () => {
+  const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-compact-')), server = await studio();
+  server.state.countTokens = true;
+  const managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin: server.origin, broker: broker({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 }), agentDir });
+  try {
+    await managed.session.prompt('Implement integer cents. ' + 'synthetic task context '.repeat(29000));
+    await managed.session.prompt('Verify invoice rounding. ' + 'synthetic task context '.repeat(29000));
+    assert.ok(managed.session.sessionManager.getBranch().some(e => e.type === 'compaction'));
+    const second = server.state.memory.filter(m => m.op === 'retain')[1];
+    assert.match(second.body.text, /Agent: ANSWER_2/);
+    assert.ok(second.body.event_id);
+    await managed.session.prompt('Continue the invoice task');
+    const briefs = server.state.memory.filter(m => m.op === 'brief');
+    assert.equal(briefs.length, 2);
+    assert.match(briefs[1].body.prompt, /Continue the invoice task/);
+    const next = server.state.model.at(-1);
+    assert.equal((next.raw.match(/RULE_CENTS/g) ?? []).length, 1);
+    const telemetry = server.state.memory.filter(m => m.op === 'telemetry').at(-1);
+    assert.equal(telemetry.body.counters.brief_refreshes, 1);
+  } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root,agentDir]) fs.rmSync(dir,{recursive:true,force:true}); }
 });
