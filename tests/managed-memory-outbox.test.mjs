@@ -85,3 +85,9 @@ test('a failed first handshake still queues the turn, then v2 confirmation drain
  online=true;await memory.beforeRound({token:'a'},'next task',false);await memory.background;
  assert.equal(memory.outbox.files().length,0);assert.equal(writes.length,1);
 });
+
+test('the scope carries Studio-style lower-case key and user IDs from an upper-case manifest', () => {
+  const scope = memoryScope('https://studio.invalid', { key_id: '36006E46-7893-4B75-A75B-D182DD600AC0', user: { id: '0F8103A3-0000-4000-8000-000000000001' }, authority: { studio_instance_id: 's', dataset_epoch: 'e', auth_generation: 1 } });
+  assert.equal(scope.key_id, '36006e46-7893-4b75-a75b-d182dd600ac0');
+  assert.equal(scope.user_id, '0f8103a3-0000-4000-8000-000000000001');
+});

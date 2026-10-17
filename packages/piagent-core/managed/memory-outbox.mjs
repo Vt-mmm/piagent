@@ -9,7 +9,8 @@ const LIMIT = 2 * 1024 * 1024, LEASE_MS = 60_000;
 export function memoryScope(origin, manifest) {
   const a = manifest?.authority;
   if (!manifest?.key_id || !manifest?.user?.id || !a?.studio_instance_id || !a?.dataset_epoch || !Number.isInteger(a.auth_generation)) return null;
-  return { origin, key_id: manifest.key_id, user_id: manifest.user.id, studio_instance_id: a.studio_instance_id, dataset_epoch: a.dataset_epoch, auth_generation: a.auth_generation };
+  // Agent Watch encodes UUIDs in upper case; Studio's are lower case.
+  return { origin, key_id: String(manifest.key_id).toLowerCase(), user_id: String(manifest.user.id).toLowerCase(), studio_instance_id: a.studio_instance_id, dataset_epoch: a.dataset_epoch, auth_generation: a.auth_generation };
 }
 export const scopeID = scope => scope ? createHash('sha256').update(JSON.stringify(scope)).digest('hex') : null;
 

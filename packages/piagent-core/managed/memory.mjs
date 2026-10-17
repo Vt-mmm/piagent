@@ -318,7 +318,8 @@ export async function prepareMemoryContext(self, messages, signal, exposure = tr
   const active = scopedBrief(messages, scope, generation);
   const cached = self.memoryBrief?.generation === generation && self.memoryBrief.scope === scope && manager.getBranch().some(e => e.id === self.memoryBrief.branchEntry) ? self.memoryBrief.message : null;
   let selected = active ?? cached;
-  const pause = self.memoryBriefPause, paused = pause?.scope === scope && pause.generation === generation && Date.now() < pause.until;
+  // Until Studio has answered a brief once (protocol unknown) every round asks: the outbox can only drain after that handshake.
+  const pause = self.memoryBriefPause, paused = memory.protocol > 0 && pause?.scope === scope && pause.generation === generation && Date.now() < pause.until;
   if (!selected && !paused && self.memoryAttempt !== `${self.memoryTurn?.id}:${generation}`) {
     self.memoryAttempt = `${self.memoryTurn?.id}:${generation}`; memory.briefed = false;
     const previous = manager.getBranch().filter(e => e.type === 'message' && e.message.role === 'user').map(e => textOf(e.message.content)).findLast(t => t.trim().length > 40);

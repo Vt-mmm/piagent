@@ -57,15 +57,20 @@ test('branching away from a cached refresh cannot leak that branch into a new ta
  assert.equal(requests.length,2);assert.doesNotMatch(JSON.stringify(prepared),/A only|RULE_1/);
 });
 test('an empty or failed brief is not asked again every round of the same context',{skip:!SessionManager},async()=>{
- const {self,manager,requests}=fixture();
+ const {self,manager,requests}=fixture();self.memory.protocol=2;
  self.memory.beforeRound=async(_g,prompt)=>{requests.push(prompt);self.memory.lastBrief='empty';return {text:'',facts:0,pages:[]};};
  for(const t of ['first task','second task','third task'])await openRound(self,manager,t);
  assert.equal(requests.length,1);
  // A new context (successful compaction) asks again.
  const kept=manager.appendMessage(answer('done'));manager.appendCompaction('summary',kept,1000);
  await prepareMemoryContext(self,self.session.messages);assert.equal(requests.length,2);
- const failing=fixture();
+ const failing=fixture();failing.self.memory.protocol=2;
  failing.self.memory.beforeRound=async(_g,prompt)=>{failing.requests.push(prompt);failing.self.memory.lastBrief='error';return null;};
  await openRound(failing.self,failing.manager,'one');await openRound(failing.self,failing.manager,'two');
  assert.equal(failing.requests.length,1);
+ // Before the first handshake the outbox cannot drain, so a failed brief is asked again next round.
+ const fresh=fixture();fresh.self.memory.protocol=0;
+ fresh.self.memory.beforeRound=async(_g,prompt)=>{fresh.requests.push(prompt);fresh.self.memory.lastBrief='error';return null;};
+ await openRound(fresh.self,fresh.manager,'one');await openRound(fresh.self,fresh.manager,'two');
+ assert.equal(fresh.requests.length,2);
 });
