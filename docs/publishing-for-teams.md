@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.27.0`: team memory cho cuộc trò chuyện công ty (Agent Studio 0.27.0): mở đầu bằng bản tóm tắt từ memory của team về repo, mỗi lượt được lưu lại (đã lọc secret), agent và subagent tìm trong memory bằng `memory_search`; memory lỗi hay tắt không làm hỏng lượt.
 - `1.26.1`: đổi tên cuộc trò chuyện được cả khi lượt đang chạy (trước đó menu báo `session-revision-stale` và giữ tên cũ); lỗi đổi tên, tạo nhánh, lưu trữ hiện bằng lời.
 - `1.26.0`: lệnh `/` và phím tắt của Terminal trên dashboard (chạy ngay trên dashboard, không gửi cho model; ⌘⇧O, ⌘/, Esc); `/undo` hoàn tác file của lượt trước (từ chối khi file đã bị sửa tiếp); `start_process` giữ dev server qua nhiều lượt; lỗi TypeScript của file vừa sửa; `piagent studio --prompt … --json`; tin nhắn từ tab khác chờ lượt đang chạy; sẵn sàng cho Pi 1.2.0 (pin vẫn 0.87.1); test end-to-end của Harness chạy được trên CI.
 - `1.25.0`: thiếu môi trường thì agent xin quyền và duyệt xong là chạy: `run_on_host` chạy đúng một lệnh trên máy member, ngoài sandbox (cài JDK/Node, git pull/push bằng tài khoản member, registry riêng; luôn hỏi, Bypass cũng hỏi; lệnh cần mật khẩu hay đăng nhập thì hỏi member qua `ask_user`), `start_docker` mở Docker rồi dùng `run_with_docker` ngay trong cuộc trò chuyện, mọi lỗi sandbox chỉ ra bước xin quyền thay vì “báo người dùng”; `fetch_origin` nhận `path` cho folder nhiều repo; lượt chỉ đọc bằng `git -C` không còn bị coi là sửa code.

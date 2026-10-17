@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.27.0 - 2026-10-17
+
+Team memory: company agents remember what the team settled in each repository.
+
+### Features
+
+- With Agent Studio 0.27.0 and team memory turned on for the team, a new company conversation opens with a short brief from the team's memory of the repository (decisions, rules, work in progress from earlier conversations and commits), kept in the conversation so the prompt cache holds. Every round goes back to memory on the run's token before the run closes (the member's words, the final answer, the files changed; never tool output), redacted; new commits are sent once when HEAD moved.
+- `memory_search` and `memory_page` for the main agent, and a read-only `memory_search` for helpers (scout, research, verify, review) on their own run token, once Studio has answered memory on this Mac.
+- Memory never fails or slows a turn: every call is bounded, a round Studio did not take waits in a small outbox and goes with the next round, and a Studio or team without memory (204/404) means no memory traffic for 30 minutes and no memory tools.
+
+### Tests
+
+- `tests/managed-team-memory.test.mjs`: the brief opens a conversation and stays once, rounds and commits go back on the run token, the outbox drains after an outage, 204/404 turn memory off, a folder without an origin remote sends nothing, a helper searches on its own token and never writes.
+
 ## v1.26.1 - 2026-10-16
 
 A conversation is renamed while its turn runs.
