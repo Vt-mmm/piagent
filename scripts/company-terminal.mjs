@@ -15,6 +15,12 @@ import { headlineText, outcomeText, processItems } from '../packages/piagent-web
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
 
 const LOCALE = 'vi';
+export const HELP_TEXT = [
+  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass on|off|status quyền lệnh cần internet · /fast on|off|status (khi Harness cho phép) · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
+  'Pi: /session thông tin cuộc trò chuyện · /resume mở cuộc trò chuyện công ty khác · /new cuộc mới · /compact nén ngữ cảnh · /tree, /fork nhánh · /name đặt tên · /copy, /export · /hotkeys toàn bộ phím tắt · /quit thoát.',
+  'Phím: ! <lệnh> chạy shell · Esc dừng lượt đang chạy · Ctrl+C xoá ô nhập, hai lần để thoát · Ctrl+O xem thêm.',
+  'Mở lại sau: piagent studio --project <thư mục>, rồi /resume. Đừng mở cuộc trò chuyện công ty bằng pi cá nhân.',
+].join('\n');
 const PERMISSION_STATUS = 'agent-watch-permission';
 const ASK = 'Hỏi trước (mặc định)', BYPASS = 'Bypass: chỉ hỏi việc bắt buộc';
 const PERMISSION_TEXT = {
@@ -116,6 +122,12 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
             : 'Fast đang bật: main agent trả lời nhanh hơn trên model GPT, token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.'
           : 'Fast đang tắt: các lượt chạy tốc độ thường.', 'info');
       } });
+
+    // /help is answered here, as on the dashboard: no model request (Pi has no
+    // /help of its own, so the text would otherwise go to the agent).
+    pi.registerCommand('help', {
+      description: 'Lệnh và phím tắt của Terminal công ty (không gửi model)',
+      handler: async (_args, ctx) => ctx.ui.notify(HELP_TEXT, 'info') });
 
     // The Harness's notes carry English for the agent; the member reads them in Vietnamese.
     pi.registerMessageRenderer('agent-watch-process', (message, _options, theme) => {

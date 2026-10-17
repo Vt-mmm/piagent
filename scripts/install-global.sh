@@ -781,6 +781,17 @@ if [[ "$WITH_HERDR" == true ]]; then
   fi
 fi
 
+# Personal Pi must not load Piagent twice (an extension path into another
+# Piagent copy beside the package) or keep old Agent Watch company providers:
+# Pi refuses to start, or personal Pi reaches Studio outside the Harness.
+echo
+echo "Personal Pi configuration:"
+if [[ "$DRY_RUN" == true ]]; then
+  print_cmd node "$PLATFORM_ROOT/scripts/personal-pi-config.mjs" repair
+else
+  node "$PLATFORM_ROOT/scripts/personal-pi-config.mjs" repair || echo "WARN: could not check the personal Pi configuration; run: node \"$PLATFORM_ROOT/scripts/personal-pi-config.mjs\" check" >&2
+fi
+
 echo
 echo "Installed packages:"
 if [[ "$DRY_RUN" == true ]]; then

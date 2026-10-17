@@ -2,6 +2,24 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.28.1 - 2026-10-18
+
+The company Terminal and personal Pi stop stepping on each other.
+
+### Fixes
+
+- Personal Pi no longer refuses to start when Piagent is loaded twice. An extension path into another Piagent copy (beside the Piagent Pi package) registered every Piagent tool twice ("Tool … conflicts with …") and `pi` exited without an answer. `piagent-update` and the installer now remove such entries, with a backup; `piagent-doctor` reports them as an error.
+- Old Agent Watch company entries in personal Pi are cleaned up once the machine has a managed company binding: the `agent_watch_*` providers (a direct key read from Agent Watch), a default model or model list that names them, and the old session-header extension. They sent personal Pi to Studio outside the team's Harness, or failed. The member's own settings, models and packages stay; every changed file is backed up first.
+- `piagent-update --check` reports the installed Pi package version and any personal Pi conflict, instead of "Everything is on the target release" while the package was older.
+- Personal Pi refuses to continue a company conversation (one in Agent Watch's store or carrying its run entries): it would have gone on with personal models, keys and settings. It says to open it with `piagent studio --project <folder>` and `/resume`.
+- The company Terminal says how to reopen a conversation with `piagent studio --project <folder>` and `/resume` when it closes, instead of Pi's `pi --session-dir …`.
+- `/help` in the company Terminal lists its commands and shortcuts without a model request (it used to go to the agent, which even started a review).
+- Stopping `piagent` from outside (a script, an editor, a timeout) stops the company run under it too; it used to keep running in the background.
+
+### Tests
+
+- `tests/personal-pi-config.test.mjs`, new cases in `tests/terminal-parity.test.mjs` and `tests/update-global.test.mjs`.
+
 ## v1.28.0 - 2026-10-17
 
 Team memory lifecycle v2: every round reaches memory once, the brief comes back after compaction, and observed check recoveries are kept.

@@ -70,6 +70,10 @@ const warnings = [];
 const { piagentInstallations } = await import(pathToFileURL(path.join(platformRoot, "scripts/piagent-installations.mjs")).href);
 const installations = piagentInstallations();
 if(installations.length>1) warnings.push("Multiple Piagent installations detected. Use the pinned Watch launcher; other PATHs may run an older build: "+installations.map(i=>`${i.version} [${i.fingerprint}] ${i.root}`).join("; "));
+// Personal Pi loading Piagent twice does not start; old company providers send it to Studio outside the Harness.
+const { inspect: inspectPersonalPi } = await import(pathToFileURL(path.join(platformRoot, "scripts/personal-pi-config.mjs")).href);
+for (const finding of inspectPersonalPi(process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "", ".pi", "agent")).findings)
+  (finding.kind === "duplicate-extensions" ? errors : warnings).push(`personal Pi: ${finding.text} Fix: piagent-update`);
 const { verifyCapabilityLock } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "capability-core.js")).href);
 
 function exists(rel) {

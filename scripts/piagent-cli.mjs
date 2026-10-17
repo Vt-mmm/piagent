@@ -158,8 +158,16 @@ child.once("error", (error) => {
   process.exit(1);
 });
 
+// A command stopped from outside (a script, an editor, a timeout) stops its
+// child too, rather than leaving a company run going in the background. A
+// terminal's Ctrl+C already reaches the whole process group: the launcher just
+// stays until the child has finished.
+for (const signal of ["SIGTERM", "SIGHUP"]) process.on(signal, () => { try { child.kill(signal); } catch { /* already gone */ } });
+process.on("SIGINT", () => {});
+
 child.once("exit", (code, signal) => {
   if (signal) {
+    process.removeAllListeners(signal);
     process.kill(process.pid, signal);
     return;
   }

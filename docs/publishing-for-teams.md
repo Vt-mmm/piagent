@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.28.1`: `piagent-update` tự dọn cấu hình Pi cá nhân gây xung đột (Piagent bị nạp hai lần, provider công ty cũ của Agent Watch), Pi cá nhân không mở cuộc trò chuyện công ty, Terminal công ty có `/help` tại chỗ và hướng dẫn mở lại bằng `piagent studio`. Member nào báo CLI "ăn cấu hình cũ" thì chạy `piagent-update`.
 - `1.28.0`: team memory v2 (cần Agent Studio 0.28.0 để có mã lượt, outbox và số đo; trên 0.27.x vẫn ghi memory kiểu cũ): mỗi lượt vào memory đúng một lần, tóm tắt lại sau compaction, kèm tối đa ba lần check fail → pass quan sát được.
 - `1.27.1`: team memory gửi được commit và tìm kiếm cả khi agent đang gọi model (trước đó token bị làm mới nên Studio trả 401); cần Agent Studio 0.27.1.
 - `1.27.0`: team memory cho cuộc trò chuyện công ty (Agent Studio 0.27.0): mở đầu bằng bản tóm tắt từ memory của team về repo, mỗi lượt được lưu lại (đã lọc secret), agent và subagent tìm trong memory bằng `memory_search`; memory lỗi hay tắt không làm hỏng lượt.

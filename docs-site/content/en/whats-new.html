@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.1 · 2026-10-18</p>
+  <h2 id="v1-28-1">The company Terminal and personal Pi stop stepping on each other</h2>
+  <p class="section-lead">Personal Pi no longer fails to start when Piagent is loaded twice (an extension pointing into another Piagent copy): <span class="inline-code">piagent-update</span> and the installer remove it (with a backup) and <span class="inline-code">piagent-doctor</span> reports it. Old Agent Watch company entries in personal Pi (<span class="inline-code">agent_watch_*</span> providers, a default model naming them) are cleaned up once the machine has a company binding. Personal Pi no longer continues a company conversation and says to open it with <span class="inline-code">piagent studio</span>; the company Terminal says how to reopen it, answers <span class="inline-code">/help</span> itself (no model request) and stops fully when stopped from outside.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.28.0 · 2026-10-17</p>
   <h2 id="v1-28-0">Team memory v2: each round once, a fresh brief after compaction</h2>
   <p class="section-lead">With Agent Studio 0.28.0, each company round has its own ID and is written to an outbox before it is sent, so a lost acknowledgement, a crash or two sessions at once never extract it twice. After compaction the agent gets a fresh brief for the latest request. A round carries up to three observed “check failed → change → passed” recoveries (no guessed cause). An empty brief is not asked again every round, a round closes within 4.5 seconds when the engine does not answer, and on Studio 0.27.x memory still grows.</p>

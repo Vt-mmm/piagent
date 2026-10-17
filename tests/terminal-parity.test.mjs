@@ -127,3 +127,13 @@ test('/bypass switches the conversation between ask first and Bypass, and the fo
   const view = renderers.get('agent-watch-process')({ details: { phase: 'final', outcome: 'disputed', disputes: 1, unchanged: true } }, { expanded: false, outputPad: 1 }, theme);
   assert.match(view.render(120).join('\n'), /Main agent và subagent conflict, bạn quyết định/);
 });
+
+test('/help is answered in the Terminal without a model request, and names how to reopen a company conversation', { skip: !fs.existsSync(sdkRoot) }, async (t) => {
+  checksOn(t);
+  const { pi, commands } = fakePi();
+  await companyTerminalExtension({ managed: () => null, packageRoot: path.resolve('.'), sdkRoot })(pi);
+  const ui = fakeUi([]);
+  await commands.get('help').handler('', ui.ctx);
+  const text = ui.notices.at(-1).message;
+  for (const command of ['/undo', '/bypass', '/fast', '/resume', '/hotkeys', 'piagent studio --project']) assert.ok(text.includes(command), command);
+});

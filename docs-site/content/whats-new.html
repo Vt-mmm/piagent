@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.1 · 2026-10-18</p>
+  <h2 id="v1-28-1">Terminal công ty và Pi cá nhân không còn giẫm chân nhau</h2>
+  <p class="section-lead">Pi cá nhân không còn chết khi Piagent bị nạp hai lần (extension trỏ vào một bản Piagent khác): <span class="inline-code">piagent-update</span> và installer tự gỡ (có backup), <span class="inline-code">piagent-doctor</span> báo lỗi. Các mục công ty cũ của Agent Watch trong Pi cá nhân (provider <span class="inline-code">agent_watch_*</span>, model mặc định trỏ vào đó) được dọn khi máy đã dùng binding công ty. Pi cá nhân không tiếp tục cuộc trò chuyện công ty nữa và chỉ cách mở bằng <span class="inline-code">piagent studio</span>; Terminal công ty cũng hướng dẫn mở lại đúng cách, trả lời <span class="inline-code">/help</span> tại chỗ (không gửi model), và dừng hẳn khi bị dừng từ bên ngoài.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.28.0 · 2026-10-17</p>
   <h2 id="v1-28-0">Team memory v2: ghi mỗi lượt đúng một lần, tóm tắt lại sau compaction</h2>
   <p class="section-lead">Với Agent Studio 0.28.0, mỗi lượt của cuộc trò chuyện công ty có mã riêng và được ghi vào outbox trước khi gửi, nên mất phản hồi, máy tắt ngang hay hai phiên cùng lúc cũng không làm memory rút kiến thức hai lần. Sau compaction, agent nhận lại bản tóm tắt mới cho yêu cầu gần nhất. Mỗi lượt kèm tối đa ba lần “check fail → sửa → pass” quan sát được (không đoán nguyên nhân). Bản tóm tắt rỗng không bị hỏi lại mỗi lượt, cuối lượt chờ tối đa 4,5 giây khi engine không trả lời, và trên Studio 0.27.x memory vẫn được ghi.</p>

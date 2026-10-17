@@ -162,6 +162,10 @@ try {
     // (updating Pi breaks the Agent Watch import), no package-update, catalog or
     // install-telemetry calls. Search tools were provisioned above.
     process.env.PI_OFFLINE = '1'; process.env.PI_SKIP_VERSION_CHECK = '1';
+    // Pi's exit line names `pi --session-dir …`, which would open this company
+    // conversation in personal Pi; name the company Terminal instead.
+    const write = process.stdout.write.bind(process.stdout), project = /^[\w./~:-]+$/.test(cwd) ? cwd : `'${cwd.replaceAll("'", "'\\''")}'`;
+    process.stdout.write = (chunk, ...rest) => write(typeof chunk === 'string' && chunk.includes('To resume this session:') ? `Mở lại cuộc trò chuyện này: piagent studio --project ${project}, rồi /resume\n` : chunk, ...rest);
     await new api.InteractiveMode(host, { verbose: false }).run();
   }
   }

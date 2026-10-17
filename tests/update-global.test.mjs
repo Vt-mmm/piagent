@@ -65,6 +65,12 @@ function stageGlobalInstall({
     path.join(repositoryRoot, "scripts/update-global.mjs"),
     path.join(platformRoot, "scripts/update-global.mjs")
   );
+  fs.copyFileSync(path.join(repositoryRoot, "scripts/personal-pi-config.mjs"), path.join(platformRoot, "scripts/personal-pi-config.mjs"));
+  // Personal Pi with the Piagent package of this helper version installed.
+  const piPackage = path.join(root, ".pi", "agent", "git", "github.com", "Vt-mmm", "piagent");
+  fs.mkdirSync(piPackage, { recursive: true });
+  fs.writeFileSync(path.join(piPackage, "package.json"), JSON.stringify({ name: "@piagent/platform", version: helperVersion }));
+  fs.writeFileSync(path.join(root, ".pi", "agent", "settings.json"), JSON.stringify({ packages: [`git:github.com/Vt-mmm/piagent@v${helperVersion}`] }));
   fs.writeFileSync(
     path.join(platformRoot, "package.json"),
     `${JSON.stringify({ name: "@piagent/platform", version: helperVersion }, undefined, 2)}\n`

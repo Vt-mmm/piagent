@@ -24,6 +24,7 @@ import { extractShellWritePathCandidates } from "./shell-write-targets.js";
 import { isProjectMutatingShellCommand } from "./readonly-inline-inspection.ts";
 import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
 import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
+import { registerCompanySessionGuard } from "./company-session-guard.ts";
 import {
   extractDocument,
   resolveDocumentPath,
@@ -3459,6 +3460,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const modelSelectionProvenance = new ModelSelectionProvenanceTracker();
   const serviceTierRuntime = new ServiceTierRuntime({ environmentValue: process.env.PIAGENT_FAST_MODE });
   const trajectoryRuntime = new TrajectoryRuntime();
+  registerCompanySessionGuard(pi);
 
   pi.on("model_select", (event, ctx) => {
     modelSelectionProvenance.observeModelSelection(ctx.sessionManager.getSessionId(), event.source);
