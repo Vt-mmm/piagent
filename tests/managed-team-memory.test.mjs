@@ -112,6 +112,9 @@ test('a memory call whose token a model request renewed asks again once with a r
 });
 
 test('a v1 Studio gets the round in its old body, and closing a round stays within its budget', async () => {
+  // AbortSignal.timeout timers do not hold the event loop; a running gateway does, so the test holds it too.
+  const alive = setInterval(() => {}, 50);
+  try {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-v1-'));
   execFileSync('git', ['-C', work, 'init', '-q']); execFileSync('git', ['-C', work, 'remote', 'add', 'origin', 'git@github.com:acme/shop.git']);
   const bodies = [];
@@ -139,6 +142,7 @@ test('a v1 Studio gets the round in its old body, and closing a round stays with
   late.protocol = 2; late.repo = 'github.com/acme/shop';
   await late.reportTurn({ token: 't', role_id: 'r' }, { id: 'e', at: new Date().toISOString(), scope: null }, 'answered', 100);
   assert.equal(telemetry, 0);
+  } finally { clearInterval(alive); }
 });
 
 test('a new conversation opens with the team brief, and every round goes back to memory', { skip: !supported, timeout: 120000 }, async () => {
