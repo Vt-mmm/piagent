@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
+import { memoryOn } from '../packages/piagent-core/managed/memory.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
@@ -27,6 +28,78 @@ const PERMISSION_TEXT = {
   'workspace-write': 'Hỏi trước: mọi lệnh cần internet đều hỏi bạn.',
   'trusted-full-access': 'Bypass: lệnh cần internet chạy luôn; vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài, chạy migration, xoá không rõ đích hoặc dùng sudo.',
 };
+
+const EFFORT = { off: 'Tắt', minimal: 'Tối thiểu', low: 'Thấp', medium: 'Trung bình', high: 'Cao', xhigh: 'Rất cao', max: 'Tối đa' };
+export const effortText = (level) => EFFORT[level] ?? level ?? '';
+
+// What the team's Harness decides for this conversation, as the header and
+// footer say it. `last` is the main agent's latest run (its model and
+// effort); before the first run, the Harness's first main model and its effort.
+export function harnessSummary(managed, { last = null, version = null } = {}) {
+  const manifest = managed?.manifest, config = manifest?.harness?.configuration ?? {};
+  const review = config.workflow?.review !== 'off' && config.review?.model_ids?.[0] || null;
+  const fast = managed?.session?.managedFastState?.() ?? null;
+  return {
+    team: manifest?.user?.team_name || null,
+    model: last?.model_id || config.main?.model_ids?.[0] || null,
+    effort: last?.effort || config.main?.effort || managed?.session?.state?.thinkingLevel || null,
+    review, permission: managed?.permission === 'trusted-full-access' ? 'Bypass' : 'Hỏi trước',
+    fast: fast === null ? null : fast === 'on', memory: managed ? memoryOn(managed) : false, version,
+  };
+}
+export function headerText(summary) {
+  return ['Piagent công ty', summary.team && `team ${summary.team}`,
+    summary.model && `main ${summary.model}${summary.effort ? ` (${effortText(summary.effort)})` : ''}`,
+    summary.review && `review ${summary.review}`, summary.permission,
+    summary.fast !== null && `Fast ${summary.fast ? 'bật' : 'tắt'}`, `memory ${summary.memory ? 'bật' : 'tắt'}`, summary.version].filter(Boolean).join(' · ');
+}
+export const HEADER_KEYS = 'Esc dừng lượt · Ctrl+C xoá ô nhập, hai lần để thoát · / lệnh · ! shell · Ctrl+O xem thêm · /help';
+
+// Pi's own commands that the company Terminal answers itself. /share and
+// /bug would send the conversation and code outside the company; the others
+// pick what the team's Harness decides. Keys that do the same (Ctrl+L,
+// Ctrl+P, Shift+Tab) answer the same.
+const ADMIN = 'Admin đổi trong Agent Studio → Harness.';
+export function companyCommandText(name, summary = {}) {
+  const main = summary.model ? ` (main ${summary.model}${summary.effort ? `, ${effortText(summary.effort)}` : ''})` : '';
+  switch (name) {
+    case 'share': return '/share bị tắt trong cuộc trò chuyện công ty: lệnh này đăng toàn bộ hội thoại lên GitHub Gist, ra ngoài công ty. Cần lưu lại thì dùng /export (file trên máy này).';
+    case 'bug': return '/bug bị tắt trong cuộc trò chuyện công ty: báo cáo gửi hội thoại và code cho nhà phát triển Pi, ra ngoài công ty. Gặp lỗi, gửi admin của team mã lỗi trong [ ] và giờ xảy ra.';
+    case 'login': case 'logout': return 'Cuộc trò chuyện công ty dùng tài khoản AI của team qua Agent Watch: không cần /login hay /logout. Tài khoản và API key cá nhân chỉ dùng trong pi cá nhân.';
+    case 'model': case 'scoped-models': return `Model do Harness của team quyết định${main}; Terminal không chọn model. ${ADMIN}`;
+    case 'thinking': return `Mức suy luận do Harness của team quyết định${main}. ${ADMIN}`;
+    case 'settings': return `Cài đặt của cuộc trò chuyện công ty (compaction, retry…) do Harness quyết định. Phím tắt: /hotkeys. ${ADMIN}`;
+    default: return null;
+  }
+}
+// Pi's commands in the / suggestions say what they do here. They stay listed:
+// with one hidden, Enter on "/bug" would pick the nearest other match (a
+// skill) and send it to the agent.
+const SUGGESTION_TEXT = { share: 'Tắt trong cuộc trò chuyện công ty', bug: 'Tắt trong cuộc trò chuyện công ty',
+  login: 'Không dùng: tài khoản của team qua Agent Watch', logout: 'Không dùng: tài khoản của team qua Agent Watch',
+  model: 'Harness của team quyết định model', 'scoped-models': 'Harness của team quyết định model',
+  thinking: 'Harness của team quyết định mức suy luận', settings: 'Harness của team quyết định', changelog: 'Có gì mới trong Piagent' };
+export function companySuggestions(suggestions) {
+  if (!suggestions?.items || !String(suggestions.prefix ?? '').startsWith('/')) return suggestions;
+  return { ...suggestions, items: suggestions.items.map((item) => {
+    const text = SUGGESTION_TEXT[String(item.value ?? '').replace(/^\//, '').trim()];
+    return text ? { ...item, description: text } : item;
+  }) };
+}
+
+// /changelog: the newest Piagent releases from the installed CHANGELOG.md.
+export function whatsNewMarkdown(changelog, count = 3) {
+  const sections = String(changelog ?? '').split(/^(?=## v\d)/m).filter((part) => part.startsWith('## v')).slice(0, count);
+  return sections.length ? sections.map((part) => part.trim()).join('\n\n') : 'Chưa có ghi chú phát hành.';
+}
+
+// The plan as a checklist, as the dashboard's Plan card shows it.
+export function planLines(plan) {
+  const steps = Array.isArray(plan) ? plan : [];
+  const mark = { completed: '☑', in_progress: '☐', deferred: '⊘', pending: '☐' };
+  return [`Plan · ${steps.filter((p) => p.status === 'completed').length}/${steps.length} bước xong`,
+    ...steps.map((p) => `  ${mark[p.status] ?? '☐'} ${p.step}${p.status === 'in_progress' ? '  ← đang làm' : p.status === 'deferred' ? '  (để sau)' : ''}`)];
+}
 
 // A harness note's details, in the shape the shared copy reads.
 export function processInput(details) {
@@ -51,6 +124,93 @@ export function failureLines(errorMessage) {
   if (!failure) return null;
   const copy = companyFailureText(`company-${failure.kind}`, failure.code, LOCALE);
   return copy ? `${copy.title}: ${copy.text} [${failure.code}]` : null;
+}
+
+const tokens = (n) => n < 1000 ? String(n) : n < 10000 ? `${(n / 1000).toFixed(1)}k` : n < 1e6 ? `${Math.round(n / 1000)}k` : `${(n / 1e6).toFixed(1)}M`;
+// Pi's footer without the USD cost (company accounts are not billed per
+// conversation) and with the Harness's main model and effort on the right.
+export function footerLines({ session, summary, footerData, theme, width, truncateToWidth, visibleWidth }) {
+  const dim = (text) => theme.fg('dim', text);
+  if (!session) return [truncateToWidth(dim(headerText(summary)), width, dim('...'))];
+  const home = process.env.HOME;
+  let where = session.sessionManager.getCwd();
+  if (home && (where === home || where.startsWith(home + '/'))) where = '~' + where.slice(home.length);
+  const branch = footerData?.getGitBranch?.(), name = session.sessionManager.getSessionName?.();
+  if (branch) where += ` (${branch})`;
+  if (name) where += ` • ${name}`;
+  const sum = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  for (const entry of session.sessionManager.getEntries()) {
+    const usage = entry.type === 'usage' ? entry.usage : entry.type === 'message' && ['assistant', 'toolResult'].includes(entry.message?.role) ? entry.message.usage : null;
+    if (usage) for (const key of Object.keys(sum)) sum[key] += Number(usage[key]) || 0;
+  }
+  const context = session.getContextUsage?.(), window = context?.contextWindow ?? session.state?.model?.contextWindow ?? 0;
+  const percent = context?.percent ?? 0, shown = context?.percent == null ? '?' : percent.toFixed(1);
+  const parts = [sum.input && `↑${tokens(sum.input)}`, sum.output && `↓${tokens(sum.output)}`, sum.cacheRead && `R${tokens(sum.cacheRead)}`, sum.cacheWrite && `W${tokens(sum.cacheWrite)}`].filter(Boolean);
+  const ctxText = `${shown === '?' ? '?' : shown + '%'}/${tokens(window)} (auto)`;
+  let left = [...parts, ctxText].join(' ');
+  const right = summary.model ? `main ${summary.model}${summary.effort ? ` • ${effortText(summary.effort)}` : ''}` : '';
+  if (visibleWidth(left) > width) left = truncateToWidth(left, width, '...');
+  const room = width - visibleWidth(left) - 2;
+  const tail = room > 0 && right ? truncateToWidth(right, room, '') : '';
+  const pad = tail ? ' '.repeat(Math.max(2, width - visibleWidth(left) - visibleWidth(tail))) : '';
+  const loud = percent > 90 ? 'error' : percent > 70 ? 'warning' : null;
+  const stats = loud ? dim(left.slice(0, left.length - ctxText.length)) + theme.fg(loud, left.slice(left.length - ctxText.length)) : dim(left);
+  const lines = [truncateToWidth(dim(where), width, dim('...')), stats + dim(pad + tail)];
+  const statuses = footerData?.getExtensionStatuses?.();
+  if (statuses?.size) lines.push(truncateToWidth([...statuses.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, text]) => String(text).replace(/\s+/g, ' ').trim()).join(' '), width, dim('...')));
+  return lines;
+}
+
+// The update_plan tool drawn as a checklist (set on the session's tool definition).
+export async function companyToolRenderers(sdkRoot) {
+  const require = createRequire(path.join(sdkRoot, 'package.json'));
+  const { Text } = await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href);
+  return { update_plan: {
+    renderCall: (_args, theme) => new Text(theme.fg('toolTitle', theme.bold('Plan')), 0, 0),
+    renderResult: (result, _options, theme) => {
+      const plan = result?.details?.plan;
+      if (!Array.isArray(plan)) return new Text(theme.fg('toolOutput', (result?.content ?? []).map((c) => c.text ?? '').join('\n')), 0, 0);
+      const [head, ...steps] = planLines(plan);
+      return new Text([theme.fg('toolOutput', head), ...steps.map((line, i) => theme.fg(plan[i].status === 'completed' ? 'success' : plan[i].status === 'in_progress' ? 'accent' : 'muted', line))].join('\n'), 0, 0);
+    } } };
+}
+
+// Pi's InteractiveMode for the company Terminal. Pi runs its own commands
+// before an extension's (and shows its /bug hint after errors) with no hook
+// for either, so the few it must not run are answered here.
+export async function companyInteractiveMode(api, { sdkRoot, packageRoot, summary = () => ({}) }) {
+  const require = createRequire(path.join(sdkRoot, 'package.json'));
+  const { Markdown, Spacer } = await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href);
+  const changelog = () => { try { return fs.readFileSync(path.join(packageRoot, 'CHANGELOG.md'), 'utf8'); } catch { return ''; } };
+  return companyMode(api.InteractiveMode, { summary, whatsNew: () => whatsNewMarkdown(changelog()), components: { Markdown, Spacer, DynamicBorder: api.DynamicBorder } });
+}
+export function companyMode(Base, { summary, whatsNew, components }) {
+  const say = (mode, name, tone = 'warning') => mode.showExtensionNotify(companyCommandText(name, summary()), tone);
+  return class CompanyInteractiveMode extends Base {
+    async handleShareCommand() { say(this, 'share'); }
+    async handleBugCommand() { say(this, 'bug'); }
+    suggestBugReport() {}
+    crashReportInstructions() { return 'Lần sau mở lại: piagent studio, rồi /resume. Gửi admin của team giờ xảy ra lỗi.'; }
+    async handleLoginCommand() { say(this, 'login', 'info'); }
+    async showOAuthSelector() { say(this, 'logout', 'info'); }
+    async handleModelCommand() { say(this, 'model', 'info'); }
+    showModelSelector() { say(this, 'model', 'info'); }
+    showModelsSelector() { say(this, 'scoped-models', 'info'); }
+    async cycleModel() { say(this, 'model', 'info'); }
+    handleThinkingCommand() { say(this, 'thinking', 'info'); }
+    cycleThinkingLevel() { say(this, 'thinking', 'info'); }
+    showSettingsSelector() { say(this, 'settings', 'info'); }
+    // Pi's own release notes are not Piagent's.
+    getChangelogForDisplay() { return undefined; }
+    handleChangelogCommand() {
+      const { Markdown, Spacer, DynamicBorder } = components;
+      this.chatContainer.addChild(new Spacer(1));
+      if (DynamicBorder) this.chatContainer.addChild(new DynamicBorder());
+      this.chatContainer.addChild(new Markdown(`# Có gì mới trong Piagent\n\n${whatsNew()}`, 1, 1, this.getMarkdownThemeWithSettings()));
+      if (DynamicBorder) this.chatContainer.addChild(new DynamicBorder());
+      this.ui.requestRender();
+    }
+  };
 }
 
 export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindingChanged = () => false }) {
@@ -128,6 +288,38 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     pi.registerCommand('help', {
       description: 'Lệnh và phím tắt của Terminal công ty (không gửi model)',
       handler: async (_args, ctx) => ctx.ui.notify(HELP_TEXT, 'info') });
+
+    // The company header, footer and / suggestions; Pi resets extension UI on
+    // every session switch, so they are set again on each session_start.
+    let last = null;
+    const summary = () => {
+      const grant = managed()?.grant;
+      if (grant?.model_id) last = { model_id: grant.model_id, effort: grant.effort };
+      return harnessSummary(managed(), { last, version: installed });
+    };
+    pi.on('session_start', async (_event, ctx) => {
+      const ui = ctx.ui;
+      if (!ctx.hasUI || ui?.[Symbol.for('piagent.webui.gateway-runtime-ui.v1')]) return;
+      const { Text, truncateToWidth, visibleWidth } = await components();
+      ui.setHeader?.((_tui, theme) => ({ invalidate() {},
+        render: (width) => new Text(`${theme.bold(theme.fg('accent', headerText(summary())))}\n${theme.fg('dim', HEADER_KEYS)}`, 1, 0).render(width) }));
+      ui.setFooter?.((_tui, theme, footerData) => ({ invalidate() {},
+        render: (width) => footerLines({ session: managed()?.session, summary: summary(), footerData, theme, width, truncateToWidth, visibleWidth }) }));
+      ui.addAutocompleteProvider?.((current) => ({ ...current, triggerCharacters: current.triggerCharacters,
+        getSuggestions: async (...args) => companySuggestions(await current.getSuggestions(...args)),
+        applyCompletion: (...args) => current.applyCompletion(...args),
+        ...(current.shouldTriggerFileCompletion && { shouldTriggerFileCompletion: (...args) => current.shouldTriggerFileCompletion(...args) }) }));
+    });
+    // While a question waits for the member, the loader says so instead of "Working".
+    pi.on('tool_execution_start', async (event, ctx) => {
+      if (event?.toolName !== 'ask_user') return;
+      ctx.ui?.setWorkingMessage?.('Đang chờ bạn trả lời');
+      ctx.ui?.setWorkingIndicator?.({ frames: ['?'] });
+    });
+    pi.on('tool_execution_end', async (event, ctx) => {
+      if (event?.toolName !== 'ask_user') return;
+      ctx.ui?.setWorkingMessage?.(); ctx.ui?.setWorkingIndicator?.();
+    });
 
     // The Harness's notes carry English for the agent; the member reads them in Vietnamese.
     pi.registerMessageRenderer('agent-watch-process', (message, _options, theme) => {

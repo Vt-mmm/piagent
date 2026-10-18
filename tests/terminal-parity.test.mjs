@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 import { writeUpdateCache } from '../packages/piagent-core/extensions/update-check.js';
 import { pendingUpdate, readSnooze, registerTerminalUpdateOffer, snoozeUpdate, SNOOZE_MS } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
-import { companyTerminalExtension, failureLines, processLines } from '../scripts/company-terminal.mjs';
+import { companyCommandText, companyMode, companySuggestions, companyTerminalExtension, companyToolRenderers, failureLines, footerLines, harnessSummary, headerText, planLines, processLines, whatsNewMarkdown } from '../scripts/company-terminal.mjs';
 import { launchReasonText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
@@ -136,4 +138,104 @@ test('/help is answered in the Terminal without a model request, and names how t
   await commands.get('help').handler('', ui.ctx);
   const text = ui.notices.at(-1).message;
   for (const command of ['/undo', '/bypass', '/fast', '/resume', '/hotkeys', 'piagent studio --project']) assert.ok(text.includes(command), command);
+});
+
+// The Terminal's own UI (header, footer, Pi commands that would leave the
+// company or pick what the Harness decides), as audited on 2026-10-18.
+const manifest = { user: { team_name: 'Test Quý' }, harness: { configuration: { fast_mode: true, workflow: { review: 'require' },
+  main: { model_ids: ['gpt-6-astra', 'gpt-6-sol'], effort: 'xhigh' }, review: { model_ids: ['gpt-6-sol'], effort: 'high' } } } };
+const plainTheme = { fg: (_c, t) => t, bg: (_c, t) => t, bold: (t) => t };
+
+test('the header names the team, the Harness models and effort, permission, Fast, memory and the release', () => {
+  const managed = { manifest, permission: 'workspace-write', session: { managedFastState: () => 'off', state: { thinkingLevel: 'medium' } } };
+  const before = harnessSummary(managed, { version: '1.28.3' });
+  assert.equal(headerText(before), 'Piagent công ty · team Test Quý · main gpt-6-astra (Rất cao) · review gpt-6-sol · Hỏi trước · Fast tắt · memory tắt · 1.28.3');
+  // After a run: the model and effort Studio granted; Bypass and Fast as switched.
+  Object.assign(managed, { permission: 'trusted-full-access' }); managed.session.managedFastState = () => 'on';
+  assert.match(headerText(harnessSummary(managed, { last: { model_id: 'gpt-6-sol', effort: 'high' } })), /main gpt-6-sol \(Cao\) · review gpt-6-sol · Bypass · Fast bật/);
+  // No Fast switch where the Harness does not allow it; no review when the workflow has none.
+  const plain = { manifest: { harness: { configuration: { workflow: { review: 'off' }, main: { model_ids: ['m'] }, review: { model_ids: ['r'] } } } }, session: { managedFastState: () => null, state: { thinkingLevel: 'high' } } };
+  assert.equal(headerText(harnessSummary(plain)), 'Piagent công ty · main m (Cao) · Hỏi trước · memory tắt');
+});
+
+test('the footer drops the USD cost and shows the Harness main model and effort before the first run', async () => {
+  const { truncateToWidth, visibleWidth } = await import(pathToFileURL(createRequire(path.join(sdkRoot, 'package.json')).resolve('@earendil-works/pi-tui')).href);
+  const usage = { input: 6900, output: 116, cacheRead: 5600, cacheWrite: 0, cost: { total: 0.243 } };
+  const session = { state: { model: { contextWindow: 272000 } }, getContextUsage: () => ({ percent: 2.5, contextWindow: 272000 }),
+    sessionManager: { getCwd: () => '/work/shop', getSessionName: () => undefined, getEntries: () => [{ type: 'message', message: { role: 'assistant', usage } }] } };
+  const footerData = { getGitBranch: () => 'main', getExtensionStatuses: () => new Map([['agent-watch-permission', 'Bypass']]) };
+  const lines = footerLines({ session, summary: harnessSummary({ manifest, session: { state: { thinkingLevel: 'medium' } } }), footerData, theme: plainTheme, width: 100, truncateToWidth, visibleWidth });
+  assert.equal(lines[0], '/work/shop (main)');
+  assert.match(lines[1], /^↑6\.9k ↓116 R5\.6k 2\.5%\/272k \(auto\) +main gpt-6-astra • Rất cao$/);
+  assert.equal(visibleWidth(lines[1]), 100);
+  assert.doesNotMatch(lines.join('\n'), /\$|medium/);
+  assert.equal(lines[2], 'Bypass');
+}, { skip: !fs.existsSync(sdkRoot) });
+
+test('/share and /bug are refused, the Harness answers /login, /model, /thinking and /settings, /changelog is Piagent\'s', () => {
+  const summary = { model: 'gpt-6-astra', effort: 'xhigh' };
+  assert.match(companyCommandText('share', summary), /^\/share bị tắt .*GitHub Gist.*\/export/);
+  assert.match(companyCommandText('bug', summary), /^\/bug bị tắt .*ra ngoài công ty/);
+  assert.match(companyCommandText('login', summary), /tài khoản AI của team qua Agent Watch/);
+  for (const name of ['model', 'scoped-models', 'thinking']) assert.match(companyCommandText(name, summary), /Harness của team quyết định \(main gpt-6-astra, Rất cao\)/);
+  assert.match(companyCommandText('settings', summary), /Harness quyết định/);
+  assert.equal(companyCommandText('resume', summary), null);
+  // They stay in the / list (a hidden one would let Enter pick a skill instead), in the company's words.
+  const listed = companySuggestions({ prefix: '/s', items: [{ value: 'share', label: 'share', description: 'Share session as a secret GitHub gist' }, { value: 'session', label: 'session', description: 'Show session info' }, { value: 'skill:debug', label: 'skill:debug' }] });
+  assert.deepEqual(listed.items.map((item) => [item.value, item.description]), [['share', 'Tắt trong cuộc trò chuyện công ty'], ['session', 'Show session info'], ['skill:debug', undefined]]);
+  const args = { prefix: 'gp', items: [{ value: 'model', label: 'model' }] };
+  assert.equal(companySuggestions(args), args);
+  // Newest releases first, from the installed CHANGELOG.md.
+  const notes = whatsNewMarkdown(fs.readFileSync('CHANGELOG.md', 'utf8'), 2);
+  assert.match(notes, /^## v\d+\.\d+\.\d+/);
+  assert.equal(notes.match(/^## v/gm).length, 2);
+  assert.equal(whatsNewMarkdown(''), 'Chưa có ghi chú phát hành.');
+});
+
+test('the company InteractiveMode answers Pi\'s commands and keys itself and never suggests /bug', () => {
+  const notices = [], added = [];
+  class Base {
+    chatContainer = { addChild: (child) => added.push(child) };
+    ui = { requestRender() {} };
+    showExtensionNotify(message, tone) { notices.push({ message, tone }); }
+    getMarkdownThemeWithSettings() { return 'md-theme'; }
+  }
+  class Markdown { constructor(text) { this.text = text; } }
+  class Spacer {}
+  const Mode = companyMode(Base, { summary: () => ({ model: 'gpt-6-astra', effort: 'xhigh' }), whatsNew: () => '## v9.9.9', components: { Markdown, Spacer } });
+  const mode = new Mode();
+  mode.handleShareCommand(); mode.handleBugCommand(); mode.suggestBugReport();
+  mode.handleLoginCommand(); mode.showOAuthSelector('logout'); mode.showModelSelector(); mode.cycleModel('forward'); mode.cycleThinkingLevel(); mode.showSettingsSelector();
+  assert.deepEqual(notices.map((n) => n.tone), ['warning', 'warning', 'info', 'info', 'info', 'info', 'info', 'info']);
+  assert.match(notices[0].message, /^\/share bị tắt/);
+  assert.match(notices.at(-1).message, /Harness quyết định/);
+  assert.equal(mode.getChangelogForDisplay(), undefined);
+  assert.doesNotMatch(mode.crashReportInstructions(), /\/bug/);
+  mode.handleChangelogCommand();
+  assert.equal(added.find((child) => child instanceof Markdown).text, '# Có gì mới trong Piagent\n\n## v9.9.9');
+});
+
+test('the methods the company InteractiveMode replaces exist in the pinned Pi', { skip: !fs.existsSync(sdkRoot) }, async () => {
+  const { InteractiveMode } = await import(pathToFileURL(path.join(sdkRoot, 'dist/index.js')).href);
+  const Mode = companyMode(InteractiveMode, { summary: () => ({}), whatsNew: () => '', components: {} });
+  const own = Object.getOwnPropertyNames(Mode.prototype).filter((name) => name !== 'constructor');
+  for (const name of [...own, 'showExtensionNotify', 'getMarkdownThemeWithSettings']) assert.equal(typeof InteractiveMode.prototype[name], 'function', name);
+});
+
+test('a question waiting for the member replaces "Working", and the plan is a checklist', { skip: !fs.existsSync(sdkRoot) }, async (t) => {
+  checksOn(t);
+  const { pi, emit } = fakePi();
+  await companyTerminalExtension({ managed: () => null, packageRoot: path.resolve('.'), sdkRoot })(pi);
+  const loader = [];
+  const ctx = { hasUI: true, ui: { setWorkingMessage: (m) => loader.push(['message', m]), setWorkingIndicator: (o) => loader.push(['indicator', o]) } };
+  await emit('tool_execution_start', { toolName: 'bash' }, ctx);
+  await emit('tool_execution_start', { toolName: 'ask_user' }, ctx);
+  await emit('tool_execution_end', { toolName: 'ask_user' }, ctx);
+  assert.deepEqual(loader, [['message', 'Đang chờ bạn trả lời'], ['indicator', { frames: ['?'] }], ['message', undefined], ['indicator', undefined]]);
+  const plan = [{ step: 'Tạo note.txt', status: 'completed' }, { step: 'Kiểm tra', status: 'in_progress' }, { step: 'Docs', status: 'deferred' }, { step: 'Push', status: 'pending' }];
+  assert.deepEqual(planLines(plan), ['Plan · 1/4 bước xong', '  ☑ Tạo note.txt', '  ☐ Kiểm tra  ← đang làm', '  ⊘ Docs  (để sau)', '  ☐ Push']);
+  const { update_plan: renderer } = await companyToolRenderers(sdkRoot);
+  const view = renderer.renderResult({ content: [{ type: 'text', text: 'Plan updated: 1/4 steps completed.' }], details: { plan } }, {}, plainTheme);
+  assert.deepEqual(view.render(80).map((line) => line.trimEnd()), planLines(plan));
+  assert.match(renderer.renderResult({ content: [{ type: 'text', text: 'managed-plan-invalid' }] }, {}, plainTheme).render(80).join(''), /managed-plan-invalid/);
 });
