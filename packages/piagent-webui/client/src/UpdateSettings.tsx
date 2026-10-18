@@ -118,8 +118,8 @@ export function UpdateSettings() {
         `Updating to Piagent ${job?.to}… When done, the dashboard opens in a new tab; this tab can be closed.`)}</Alert>}
       {!running && outcome && <Alert severity={outcome.severity}>{outcome.text}</Alert>}
       {!running && job?.bindingChanged && <Alert severity="warning">{localize(locale,
-        "Bản mới đổi trình khởi chạy công ty: mở Agent Watch và kết nối lại key công ty để tiếp tục dùng chế độ công ty.",
-        "The new release changed the company launcher: open Agent Watch and connect the company key again to keep company mode.")}</Alert>}
+        "Bản mới đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình trong vài phút (cần Agent Watch đang chạy), rồi chế độ công ty dùng lại được.",
+        "The new release changed the company launcher: Agent Watch updates the configuration within a few minutes (it must be running), then company mode works again.")}</Alert>}
       {error && <Alert severity="error" role="alert">{updateErrorText(locale, error)}</Alert>}
       {status?.installable && status.updateAvailable && !running && <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, gap: 1.5 }}>
         <Button variant="contained" size="large" startIcon={applying ? <CircularProgress size={16} color="inherit" /> : <SystemUpdateAltRounded />}

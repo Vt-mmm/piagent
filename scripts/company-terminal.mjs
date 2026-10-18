@@ -68,7 +68,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     };
 
     registerTerminalUpdateOffer(pi, { installed, packageRoot, restart: 'piagent studio',
-      afterUpdate: () => bindingChanged() ? 'Bản mới đổi trình khởi chạy công ty: mở Agent Watch → Studio và nhập lại cấu hình cho Piagent trước khi mở lại.' : null });
+      afterUpdate: () => bindingChanged() ? 'Bản mới đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình (cần Agent Watch đang chạy); piagent studio chờ việc này khi mở lại.' : null });
 
     // Ask first or Bypass, kept with the conversation like the dashboard's switch.
     const showPermission = (ctx) => ctx.ui?.setStatus?.(PERMISSION_STATUS, managed()?.permission === 'trusted-full-access' ? 'Bypass' : undefined);

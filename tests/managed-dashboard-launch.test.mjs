@@ -90,3 +90,11 @@ test('the dashboard and the company Gateway are always the same Piagent release'
     assert.match(fs.readFileSync(path.join(updated.home, 'started'), 'utf8'), /--serve$/);
   } finally { try { await control.close(); } catch {} }
 });
+
+test('the dashboard keeps waiting while the entrypoint waits for Agent Watch to rebind', async () => {
+  const {home, agent} = fixture({entry: `process.stderr.write('Agent Watch đang cập nhật cấu hình cho bản Piagent mới… [managed-binding-wait]\\n');
+setTimeout(() => process.stdout.write('Agent Watch Auto: ready\\n'), 1500);`});
+  assert.match(await ensureCompanyGateway(agent, home, 500), /\.sock$/);
+  const plain = fixture({entry: `setTimeout(() => process.stdout.write('Agent Watch Auto: ready\\n'), 1500);`});
+  await assert.rejects(ensureCompanyGateway(plain.agent, plain.home, 500), /managed-launch-timeout/);
+});

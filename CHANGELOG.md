@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Fixes
+
+- Right after a Piagent update, `piagent studio` no longer fails with `managed-launch-binding-changed` while Agent Watch has not rewritten the company binding yet. When only the launcher's hash differs and the launcher was installed after the binding, it waits up to 90 s for the new binding ("Agent Watch đang cập nhật cấu hình…", or "Agent Watch không chạy" when the app is not open) and then runs on it; every pinned path and hash is checked again first. Any other difference still fails at once. The dashboard's company start waits as long.
+- When the wait runs out, the reason says whether Agent Watch is running (`managed-binding-update-pending`, `managed-binding-watch-not-running`). The update notes in the Terminal and the dashboard no longer tell members to import the configuration again by hand.
+
+### Tests
+
+- `tests/managed-binding-wait.test.mjs`, a new case in `tests/managed-dashboard-launch.test.mjs`.
+
 ## v1.28.1 - 2026-10-18
 
 The company Terminal and personal Pi stop stepping on each other.

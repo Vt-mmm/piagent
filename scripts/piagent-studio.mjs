@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ManagedBrokerClient } from '../packages/piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { agentWatchDataDirectory, interopEnvironment, resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
+import { agentWatchRunning, awaitRebind, bindingMismatch, installedAfterBinding } from '../packages/piagent-core/managed/binding-wait.mjs';
 
 const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 // Node's experimental-feature notices (type stripping, SQLite) are not
@@ -30,18 +31,32 @@ Object.assign(process.env, clean);
 let broker, current, gateway, hold;
 try {
   const configPath = fs.realpathSync(flags.get('--config') ?? path.join(home,'.pi/agent/agent-watch-managed.json'));
-  if (!fs.statSync(configPath).isFile() || fs.statSync(configPath).size > 16384) throw Error('managed-config-invalid');
-  const config = JSON.parse(fs.readFileSync(configPath));
+  const readConfig = () => {
+    if (!fs.statSync(configPath).isFile() || fs.statSync(configPath).size > 16384) throw Error('managed-config-invalid');
+    return JSON.parse(fs.readFileSync(configPath));
+  };
+  let config = readConfig();
   // Agent Watch rewrites this when the key or its harness changes.
   const bindingRevision = () => { try { return String(JSON.parse(fs.readFileSync(configPath, 'utf8')).configuration_revision ?? '') || null; } catch { return null; } };
   // --serve backs the personal dashboard: no browser, no project of its own.
   // Its startup probe runs in an empty private folder that is never listed.
   const serve = flags.has('--serve');
   if (serve && (flags.has('--project') || flags.has('--web') || flags.has('--check') || flags.has('--prompt'))) throw Error('managed-launch-arguments');
-  if (config.schema_version !== 1 || config.model !== 'agent-watch-auto' || !/^[a-f0-9]{64}$/.test(config.profile_id)
-    || config.entrypoint !== fs.realpathSync(fileURLToPath(import.meta.url)) || config.node !== fs.realpathSync(process.execPath)
-    || digest(config.entrypoint) !== config.entrypoint_sha256 || digest(config.node) !== config.node_sha256
-    || digest(config.broker) !== config.broker_sha256) throw Error('managed-launch-binding-changed');
+  const running = { self: fs.realpathSync(fileURLToPath(import.meta.url)), node: fs.realpathSync(process.execPath) };
+  const mismatch = bindingMismatch(config, running);
+  // Right after a Piagent update only the launcher's hash differs until Agent
+  // Watch writes the new binding: wait for it. Nothing runs before every
+  // pinned path and hash matches again.
+  if (mismatch === 'entrypoint' && installedAfterBinding(configPath, config.entrypoint)) {
+    const watch = () => agentWatchRunning(config.broker);
+    const rebound = await awaitRebind({ running: watch,
+      current: () => { try { const next = readConfig(); return bindingMismatch(next, running) === null ? next : null; } catch { return null; } },
+      waiting: state => process.stderr.write(state === false
+        ? 'Piagent vừa cập nhật nhưng Agent Watch không chạy. Mở Agent Watch; Piagent tự tiếp tục khi cấu hình được cập nhật… [managed-binding-wait]\n'
+        : 'Agent Watch đang cập nhật cấu hình cho bản Piagent mới… [managed-binding-wait]\n') });
+    if (!rebound) throw Error(watch() === false ? 'managed-binding-watch-not-running' : 'managed-binding-update-pending');
+    config = rebound;
+  } else if (mismatch) throw Error('managed-launch-binding-changed');
   // What company sessions need on this machine, checked with the real sandbox
   // and broker; no conversation, no model request.
   if (flags.has('--doctor')) {

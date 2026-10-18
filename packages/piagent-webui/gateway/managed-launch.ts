@@ -17,6 +17,7 @@ type Binding = { file: string; profile: string; node: string; entrypoint: string
 
 const CLEAN_ENV = { PATH: "/usr/bin:/bin", LANG: "en_US.UTF-8", TERM: "xterm-256color", ...interopEnvironment() };
 const READY = /^Agent Watch Auto: ready$/m;
+const BINDING_WAIT = /\[managed-binding-wait\]$/m, BINDING_WAIT_MS = 95_000;
 const sha256 = (file: string) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const HEX64 = /^[a-f0-9]{64}$/;
 
@@ -130,8 +131,12 @@ async function start(agentDir: string, home: string, timeoutMs: number): Promise
     child.once("exit", () => { exited = true; }); child.once("error", () => { exited = true; }); child.unref();
   } finally { fs.closeSync(fd); }
   try {
-    for (const started = Date.now(); Date.now() - started < timeoutMs;) {
+    // Right after an update the entrypoint waits (up to 90 s) for Agent Watch
+    // to write the new binding; give it that long before timing out.
+    let limit = timeoutMs;
+    for (const started = Date.now(); Date.now() - started < limit;) {
       const text = fs.readFileSync(log, "utf8");
+      if (limit === timeoutMs && BINDING_WAIT.test(text)) limit = timeoutMs + BINDING_WAIT_MS;
       // The launch may just have pointed this slot at the member's store.
       if (READY.test(text)) return controlSocket(home, pinned.profile);
       if (exited) throw new Error(text.match(/Agent Watch: (managed-[a-z:_-]+)\./)?.[1] ?? "managed-launch-failed");
