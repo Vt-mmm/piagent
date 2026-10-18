@@ -7,13 +7,14 @@ import { fileURLToPath } from "node:url";
 import { requestGatewayControl } from "./control-socket.ts";
 import { gatewayProfileState } from "./profile-state.ts";
 import { agentWatchDataDirectory, interopEnvironment, storedSlot } from "../../piagent-core/managed/store.mjs";
+import { agentWatchRunning, awaitRebind, bindingMismatch, brokerUpdatedAfterBinding } from "../../piagent-core/managed/binding-wait.mjs";
 
 // The personal dashboard shows company sessions but never runs them: it starts
 // the pinned managed entrypoint (its own process and Gateway, `--serve`) the
 // way Agent Watch's launcher does, then relays to it. Grants stay inside that
 // process; this process only reads the public binding.
 export type ManagedLaunchStatus = { schemaVersion: 1; version: "piagent-managed-launch-status-v1"; available: boolean; model: "agent-watch-auto" };
-type Binding = { file: string; profile: string; node: string; entrypoint: string; broker: string; brokerSha256: string };
+type Binding = { file: string; profile: string; node: string; entrypoint: string; broker: string; brokerSha256: string; config: Record<string, unknown> };
 
 const CLEAN_ENV = { PATH: "/usr/bin:/bin", LANG: "en_US.UTF-8", TERM: "xterm-256color", ...interopEnvironment() };
 const READY = /^Agent Watch Auto: ready$/m;
@@ -41,7 +42,7 @@ function binding(agentDir: string): Binding | null {
     const absolute = (entry: unknown) => typeof entry === "string" && path.isAbsolute(entry);
     if (value?.schema_version !== 1 || value.model !== "agent-watch-auto" || !HEX64.test(String(value.profile_id))
       || !absolute(value.node) || !absolute(value.entrypoint) || !absolute(value.broker) || !HEX64.test(String(value.broker_sha256))) return null;
-    return { file, profile: value.profile_id, node: value.node, entrypoint: value.entrypoint, broker: value.broker, brokerSha256: value.broker_sha256 };
+    return { file, profile: value.profile_id, node: value.node, entrypoint: value.entrypoint, broker: value.broker, brokerSha256: value.broker_sha256, config: value };
   } catch { return null; }
 }
 
@@ -116,6 +117,17 @@ async function start(agentDir: string, home: string, timeoutMs: number): Promise
       if (Date.now() - started > 15_000) throw new Error("managed-launch-stale-runtime");
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
+  }
+  // Right after an Agent Watch update only the broker's hash differs until
+  // Watch writes the new binding (up to ~70 s after it relaunches): wait for
+  // it, as the entrypoint does, then start over on the new binding. The
+  // broker never runs while any pinned hash differs.
+  const pins = (next: Binding) => bindingMismatch(next.config, { self: next.entrypoint, node: next.node });
+  if (pins(pinned) === "broker" && brokerUpdatedAfterBinding(pinned.file, pinned.broker)) {
+    const rebound = await awaitRebind({ running: () => agentWatchRunning(pinned.broker),
+      current: () => { const next = binding(agentDir); return next && pins(next) === null ? next : null; } });
+    if (!rebound) throw new Error(agentWatchRunning(pinned.broker) === false ? "managed-binding-watch-not-running" : "managed-binding-update-pending");
+    return start(agentDir, home, timeoutMs);
   }
   await authorize(pinned);
   // Startup failures are reported on stderr as `Agent Watch: managed-…`; the
