@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.3 · 2026-10-18</p>
+  <h2 id="v1-28-3">Agent Watch updating itself no longer interrupts the company Terminal</h2>
+  <p class="section-lead">Right after Agent Watch updates itself, <span class="inline-code">piagent studio</span> and the dashboard wait for Watch to write the configuration again (as after a Piagent update) instead of failing with <span class="inline-code">managed-launch-binding-changed</span> for about a minute; every hash is still checked before anything runs.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.28.2 · 2026-10-18</p>
   <h2 id="v1-28-2">No more “binding changed” right after an update</h2>
   <p class="section-lead">Right after a Piagent update, <span class="inline-code">piagent studio</span> no longer fails with <span class="inline-code">managed-launch-binding-changed</span> while Agent Watch has not rewritten its configuration: it waits up to 90 seconds (“Agent Watch đang cập nhật cấu hình…”, or says Agent Watch is not running), checks every hash again, then runs. Members no longer import the configuration again by hand.</p>

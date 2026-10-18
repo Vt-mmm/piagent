@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.28.3 - 2026-10-18
+
+Agent Watch updating itself no longer breaks `piagent studio` for a minute.
+
+### Fixes
+
+- Right after Agent Watch updates itself (Sparkle replaces the app), the broker's hash differs from the company binding until Watch writes it again (46–71 s after launch on 0.15.6), and `piagent studio` failed with `managed-launch-binding-changed`. When only the broker's hash differs and the broker is still Agent Watch's own executable (bundle id and `CFBundleExecutable` checked, macOS only), replaced after the binding was written, `piagent studio` and the dashboard now wait for the new binding as they do after a Piagent update; every pinned path and hash is checked again first.
+
+### Tests
+
+- New cases in `tests/managed-binding-wait.test.mjs`.
+
 ## v1.28.2 - 2026-10-18
 
 No more "managed-launch-binding-changed" right after an update.

@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.3 · 2026-10-18</p>
+  <h2 id="v1-28-3">Agent Watch tự cập nhật không còn làm gián đoạn Terminal công ty</h2>
+  <p class="section-lead">Ngay sau khi Agent Watch tự cập nhật, <span class="inline-code">piagent studio</span> và dashboard chờ Watch ghi lại cấu hình (như sau khi Piagent cập nhật) thay vì báo <span class="inline-code">managed-launch-binding-changed</span> trong khoảng một phút; mọi mã băm vẫn được kiểm lại trước khi chạy.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.28.2 · 2026-10-18</p>
   <h2 id="v1-28-2">Không còn lỗi “binding changed” ngay sau khi cập nhật</h2>
   <p class="section-lead">Ngay sau khi Piagent cập nhật, <span class="inline-code">piagent studio</span> không còn báo <span class="inline-code">managed-launch-binding-changed</span> trong lúc Agent Watch chưa ghi lại cấu hình: nó chờ tối đa 90 giây (“Agent Watch đang cập nhật cấu hình…”, hoặc báo Agent Watch không chạy), kiểm lại mọi mã băm rồi chạy tiếp. Member không phải nhập lại cấu hình bằng tay.</p>

@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.28.3`: ngay sau khi Agent Watch tự cập nhật, `piagent studio` và dashboard chờ Watch ghi lại cấu hình thay vì báo lỗi.
 - `1.28.2`: ngay sau khi cập nhật, `piagent studio` chờ Agent Watch ghi lại cấu hình (tối đa 90 giây) thay vì báo `managed-launch-binding-changed`.
 - `1.28.1`: `piagent-update` tự dọn cấu hình Pi cá nhân gây xung đột (Piagent bị nạp hai lần, provider công ty cũ của Agent Watch), Pi cá nhân không mở cuộc trò chuyện công ty, Terminal công ty có `/help` tại chỗ và hướng dẫn mở lại bằng `piagent studio`. Member nào báo CLI "ăn cấu hình cũ" thì chạy `piagent-update`.
 - `1.28.0`: team memory v2 (cần Agent Studio 0.28.0 để có mã lượt, outbox và số đo; trên 0.27.x vẫn ghi memory kiểu cũ): mỗi lượt vào memory đúng một lần, tóm tắt lại sau compaction, kèm tối đa ba lần check fail → pass quan sát được.
