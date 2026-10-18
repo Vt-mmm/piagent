@@ -296,9 +296,7 @@ export class ManagedSession {
             // the newest version the broker advertises.
             const features = self.manifest.broker_features ?? [];
             const process = self.run && features.includes('process') ? self.run.report(currentPlan(manager), features.includes('process-v3') ? 3 : features.includes('process-v2') ? 2 : 1) : null;
-            // Only a refused report is closed again without it; a close Studio
-            // could not confirm (unreachable, busy) ends the turn as failed.
-            try { await self.broker.request('close', process ? { process } : {}); }
+            try { await self.broker.request('close', process ? { process } : {}); } // only a refused report closes again without it; an unconfirmed close fails the turn
             catch (error) { if (!process || String(error?.message) !== 'managed-broker:invalidResponse') throw error; await self.broker.request('close'); }
             manager.appendCustomEntry('agent-watch-run', { run_id: self.grant.run_id, state: 'closed' });
           }
