@@ -349,6 +349,9 @@ export function attachMemory(self, manager, agentDir, verify) {
 export function trackMemoryLessons(self) {
   self.session.subscribe(event => { try { self.memoryTurn?.checks?.event(event); } catch { /* optional evidence */ } });
 }
+// Whether this conversation has team memory now: Studio answered memory for
+// this key recently and has not switched it off since (the Terminal's header).
+export const memoryOn = self => !!self?.memory?.stateDir && self.memory.active && TeamMemory.known(self.memory.stateDir, self.origin, memoryScope(self.origin, self.manifest));
 export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self) : [];
 // A helper (scout, research, verify, review) reads the team memory with its own run token; it never writes.
 export const helperMemoryTools = (managed, grant, renew) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin, memoryScope(managed.origin, managed.manifest))

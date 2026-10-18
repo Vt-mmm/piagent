@@ -134,7 +134,8 @@ try {
   // at the same time. One the WebUI is running is refused.
   const { holdManagedSession } = await import('../packages/piagent-webui/ownership/managed-terminal-lease.ts');
   // The Terminal's own commands and words (updates, Bypass, Harness notes): company-terminal.mjs.
-  const { companyTerminalExtension } = await import('./company-terminal.mjs');
+  const { companyTerminalExtension, companyToolRenderers, companyInteractiveMode, harnessSummary } = await import('./company-terminal.mjs');
+  const toolRenderers = await companyToolRenderers(config.sdk_root);
   const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const terminal = companyTerminalExtension({ managed: () => current, packageRoot, sdkRoot: config.sdk_root,
     bindingChanged: () => { try { return digest(config.entrypoint) !== config.entrypoint_sha256; } catch { return true; } } });
@@ -147,6 +148,8 @@ try {
     if (current) { broker = current.broker; await current.session.abort(); await Promise.allSettled([...current.helpers.values()]); await broker.request('close'); current.session.dispose(); await current.boundary.dispose(); }
     current = await ManagedSession.create({ sdkRoot: config.sdk_root, cwd, origin: config.origin, broker, agentDir, sessionManager,
       protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal] });
+    // The plan is drawn as a checklist here; Pi keeps this definition object.
+    for (const [name, draw] of Object.entries(toolRenderers)) Object.assign(current.session.getToolDefinition(name) ?? {}, draw);
     return { session: current.session, extensionsResult: current.extensionsResult, services: current.services, diagnostics: [] };
   };
   const host = await api.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: api.SessionManager.create(cwd, path.join(agentDir, 'sessions')) });
@@ -183,8 +186,13 @@ try {
     // Pi's exit line names `pi --session-dir …`, which would open this company
     // conversation in personal Pi; name the company Terminal instead.
     const write = process.stdout.write.bind(process.stdout), project = /^[\w./~:-]+$/.test(cwd) ? cwd : `'${cwd.replaceAll("'", "'\\''")}'`;
-    process.stdout.write = (chunk, ...rest) => write(typeof chunk === 'string' && chunk.includes('To resume this session:') ? `Mở lại cuộc trò chuyện này: piagent studio --project ${project}, rồi /resume\n` : chunk, ...rest);
-    await new api.InteractiveMode(host, { verbose: false }).run();
+    // Pi's "Model scope: agent-watch-auto (Ctrl+P to cycle)" line names a
+    // model nobody picks; the company header says what the Harness runs.
+    process.stdout.write = (chunk, ...rest) => typeof chunk === 'string' && chunk.includes('Model scope: ') ? true
+      : write(typeof chunk === 'string' && chunk.includes('To resume this session:') ? `Mở lại cuộc trò chuyện này: piagent studio --project ${project}, rồi /resume\n` : chunk, ...rest);
+    // /share, /bug, /login, /model, /thinking, /settings and /changelog: company-terminal.mjs.
+    const CompanyMode = await companyInteractiveMode(api, { sdkRoot: config.sdk_root, packageRoot, summary: () => harnessSummary(current) });
+    await new CompanyMode(host, { verbose: false }).run();
   }
   }
 } catch (error) {

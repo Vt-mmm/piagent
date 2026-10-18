@@ -2,6 +2,23 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+The company Terminal (`piagent studio`) shows what the team's Harness runs and keeps company conversations inside the company.
+
+### Changes
+
+- `/share` (a GitHub Gist) and `/bug` (a report to Pi's developers) are refused in the company Terminal with a notice, and Pi's "/bug sends a report to the developers" hint after errors is no longer shown: both sent company conversations and code outside the company.
+- `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking` and `/settings`, and the keys that do the same (Ctrl+L, Ctrl+P, Shift+Tab), say that the team's Harness decides instead of opening Pi's pickers. They stay in the `/` list with Vietnamese descriptions (hiding one let Enter pick a skill and send it to the agent). `/changelog` shows Piagent's latest release notes instead of Pi's.
+- A company header replaces Pi's startup header and the "Model scope: agent-watch-auto (Ctrl+P to cycle)" line: team, Harness main model and effort, review model, Ask first or Bypass, Fast, memory, release.
+- The footer shows the Harness's main model and effort before the first run (it said "medium" while the Harness ran xhigh) and no USD cost.
+- While `ask_user` waits for the member, the loader reads "Đang chờ bạn trả lời" instead of "Working".
+- The plan is drawn as a checklist with each step (☑ done, ☐ open, ⊘ deferred) instead of "Plan updated: 1/3 steps completed". Personal `pi` is unchanged.
+
+### Tests
+
+- New cases in `tests/terminal-parity.test.mjs` and `tests/managed-agent-skills.test.mjs`; checked in the real TUI through a pty.
+
 ## v1.28.3 - 2026-10-18
 
 Agent Watch updating itself no longer breaks `piagent studio` for a minute.

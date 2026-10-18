@@ -25,6 +25,12 @@ A command stops after 10 minutes, and what it leaves running stops when the turn
 
 In a git repository, `/undo` in the company Terminal puts back the files the agent's last turn changed (edited, deleted or created), and `/undo` again goes one turn further back. It refuses while a turn runs, and when a file the turn changed was changed again since, so the member's own edit is never overwritten. The member's index (staged changes), HEAD and commits are not touched; a commit made in the turn stays. Files `.gitignore` excludes are not part of the checkpoint, and checkpoints last as long as the conversation is open.
 
+## The company Terminal's screen
+
+`piagent studio` opens with a company header instead of Pi's: the team, the Harness's main model and effort, the review model, Ask first or Bypass, Fast (where the Harness allows it), team memory and the Piagent release. The footer shows the Harness's main model and effort from the start (the granted ones after a run) and no USD cost. While `ask_user` waits for the member the loader reads "Đang chờ bạn trả lời", and the plan is drawn as a checklist (☑ done, ☐ open, ⊘ deferred).
+
+Pi commands that would send the conversation outside the company are refused with a notice: `/share` (a GitHub Gist) and `/bug` (a report to Pi's developers); Pi's "/bug sends a report" hint after errors is not shown. `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking`, `/settings` and the keys that do the same (Ctrl+L, Ctrl+P, Shift+Tab) say that the team's Harness decides. `/changelog` shows Piagent's latest release notes. Personal `pi` is unchanged.
+
 ## Commands in the dashboard
 
 The dashboard composer takes the Terminal's `/` commands. Typing `/` lists them with the project's commands and skills; a command runs in the dashboard through the same session commands as the buttons and is never sent to the model (`/undo` excepted: the company runtime answers it). `/help` lists them all.

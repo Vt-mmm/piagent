@@ -147,6 +147,11 @@ test('a Terminal command (/bypass) runs in the company session without starting 
   const terminal = (pi) => pi.registerCommand('bypass', {description: 'test', handler: async (args) => { ran.push(args); }});
   const managed = await ManagedSession.create({sdkRoot, cwd: repo, origin: 'http://127.0.0.1:9', broker, terminalExtensions: [terminal]});
   try {
+    // piagent studio draws the plan by setting renderers on Pi's definition object, which Pi keeps.
+    const renderResult = () => ({render: () => ['plan'], invalidate() {}});
+    Object.assign(managed.session.getToolDefinition('update_plan'), {renderResult});
+    managed.session.setActiveToolsByName(managed.session.getActiveToolNames());
+    assert.equal(managed.session.getToolDefinition('update_plan').renderResult, renderResult);
     await managed.session.prompt('/bypass on');
     assert.deepEqual(ran, ['on']);
     assert.equal(actions.includes('start'), false, 'no Studio run was started for a Terminal command');

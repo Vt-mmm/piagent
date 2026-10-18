@@ -135,6 +135,8 @@ Các command này đến từ package `piagent-core`; tất cả chạy ngay và
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/piagent-mcp` | Xem/quản trị MCP trong Pi. | Menu MCP, không gọi model. |
 | `/piagent-update` | Kiểm tra bản Piagent mới ngay (Terminal tự hỏi mỗi giờ, giữa các lượt). | Hỏi "Cập nhật ngay / Để sau"; cập nhật xong nhắc mở lại `pi` hoặc `piagent studio`. Không gọi model. |
+| `/share`, `/bug` | Trong `piagent studio`: bị tắt, chỉ báo lý do. | Hai lệnh này đưa hội thoại và code ra ngoài công ty (GitHub Gist, báo cáo cho nhà phát triển Pi). Dùng `/export` để lưu file trên máy. |
+| `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking`, `/settings` | Trong `piagent studio`: chỉ báo "Harness của team quyết định" (Ctrl+L, Ctrl+P, Shift+Tab cũng vậy). | Model, mức suy luận và cài đặt do Harness trong Agent Studio quyết định; tài khoản là của team qua Agent Watch. `/changelog` hiện "Có gì mới" của Piagent. |
 | `/bypass [on\|off\|status]` | Chỉ trong `piagent studio`: bật/tắt Bypass cho cuộc trò chuyện công ty (giống công tắc trên dashboard). | Bypass: lệnh cần internet chạy luôn, vẫn hỏi việc bắt buộc (đẩy/gửi ra ngoài, migration, xoá không rõ đích, sudo). Footer hiện "Bypass". Không gọi model. |
 
 `/piagent-inspector` không thêm bước bắt buộc nào. Panel bốn dòng tự hiện sát
