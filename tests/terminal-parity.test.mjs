@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 import { writeUpdateCache } from '../packages/piagent-core/extensions/update-check.js';
 import { pendingUpdate, readSnooze, registerTerminalUpdateOffer, snoozeUpdate, SNOOZE_MS } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
-import { companyCommandText, companyMode, companySuggestions, companyTerminalExtension, companyToolRenderers, failureLines, footerLines, harnessSummary, headerText, planLines, processLines, whatsNewMarkdown } from '../scripts/company-terminal.mjs';
+import { companyCommandText, companyMode, companySuggestions, companyTerminalExtension, companyToolRenderers, failureLines, footerLines, harnessSummary, headerText, planLines, processLines, whatsNewMarkdown , argumentCompletions, turnStats, memoryResultLines } from '../scripts/company-terminal.mjs';
 import { launchReasonText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
@@ -231,11 +231,30 @@ test('a question waiting for the member replaces "Working", and the plan is a ch
   await emit('tool_execution_start', { toolName: 'bash' }, ctx);
   await emit('tool_execution_start', { toolName: 'ask_user' }, ctx);
   await emit('tool_execution_end', { toolName: 'ask_user' }, ctx);
-  assert.deepEqual(loader, [['message', 'Đang chờ bạn trả lời'], ['indicator', { frames: ['?'] }], ['message', undefined], ['indicator', undefined]]);
+  assert.deepEqual(loader, [['message', 'Đang chờ bạn trả lời'], ['indicator', { frames: ['?'] }], ['message', 'Đang làm…'], ['indicator', undefined]]);
   const plan = [{ step: 'Tạo note.txt', status: 'completed' }, { step: 'Kiểm tra', status: 'in_progress' }, { step: 'Docs', status: 'deferred' }, { step: 'Push', status: 'pending' }];
   assert.deepEqual(planLines(plan), ['Plan · 1/4 bước xong', '  ☑ Tạo note.txt', '  ☐ Kiểm tra  ← đang làm', '  ⊘ Docs  (để sau)', '  ☐ Push']);
   const { update_plan: renderer } = await companyToolRenderers(sdkRoot);
   const view = renderer.renderResult({ content: [{ type: 'text', text: 'Plan updated: 1/4 steps completed.' }], details: { plan } }, {}, plainTheme);
   assert.deepEqual(view.render(80).map((line) => line.trimEnd()), planLines(plan));
   assert.match(renderer.renderResult({ content: [{ type: 'text', text: 'managed-plan-invalid' }] }, {}, plainTheme).render(80).join(''), /managed-plan-invalid/);
+});
+
+test('a complete argument runs on the first Enter; a partial one is completed', () => {
+  const complete = argumentCompletions(['on', 'off', 'status']);
+  assert.deepEqual(complete('status'), []);
+  assert.deepEqual(complete('st').map((c) => c.value), ['status']);
+  assert.deepEqual(complete('o').map((c) => c.value), ['on', 'off']);
+});
+
+test('a turn ends with its requests, tokens, time and output speed; memory results stay short', () => {
+  const t0 = Date.parse('2026-10-18T10:00:00Z');
+  const messages = [{ role: 'user', content: 'old', timestamp: t0 - 999_000 }, { role: 'assistant', usage: { totalTokens: 5, output: 1 } },
+    { role: 'user', content: 'task', timestamp: t0 },
+    { role: 'assistant', usage: { totalTokens: 40_000, output: 300 } }, { role: 'toolResult' }, { role: 'assistant', usage: { totalTokens: 27_000, output: 900 } }];
+  assert.equal(turnStats(messages, t0 + 78_000), '2 request · 67k token · 1 phút 18 giây · 15 tok/s');
+  assert.equal(turnStats([{ role: 'user', content: 'x', timestamp: t0 }], t0 + 5000), null);
+  const text = ['Memories (past notes):', '- a', '- b', '- c', '- d', '- e'].join('\n');
+  assert.deepEqual(memoryResultLines(text), ['Memories (past notes):', '- a', '- b', '… 5 ghi chú, 3 dòng nữa (Ctrl+O để xem hết)']);
+  assert.equal(memoryResultLines(text, true).length, 6);
 });

@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
@@ -16,6 +17,45 @@ import { headlineText, outcomeText, processItems } from '../packages/piagent-web
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
 
 const LOCALE = 'vi';
+
+const WORKING = 'Đang làm…';
+
+// A typed value that is already complete offers nothing, so the first Enter runs the command.
+export const argumentCompletions = (values) => (prefix) => {
+  const typed = String(prefix ?? '').trim();
+  return values.includes(typed) ? [] : values.filter((v) => v.startsWith(typed)).map((value) => ({ value, label: value }));
+};
+
+const compactTokens = (n) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+const textOf = (content) => typeof content === 'string' ? content : Array.isArray(content) ? content.filter((p) => p?.type === 'text').map((p) => p.text ?? '').join('\n') : '';
+
+// Model requests, tokens, time and output speed of the member's last message,
+// as the dashboard writes them under a turn.
+export function turnStats(messages, now = Date.now()) {
+  const list = Array.isArray(messages) ? messages : [];
+  const start = list.findLastIndex((m) => m?.role === 'user');
+  if (start < 0) return null;
+  const answers = list.slice(start + 1).filter((m) => m?.role === 'assistant');
+  if (!answers.length) return null;
+  const tokens = answers.reduce((n, m) => n + (m.usage?.totalTokens ?? 0), 0), output = answers.reduce((n, m) => n + (m.usage?.output ?? 0), 0);
+  const began = Number(list[start].timestamp) || null, seconds = began ? Math.max(0, Math.round((now - began) / 1000)) : null;
+  const parts = [`${answers.length} request`];
+  if (tokens) parts.push(`${compactTokens(tokens)} token`);
+  if (seconds) parts.push(seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút ${seconds % 60} giây`);
+  if (seconds && output) parts.push(`${Math.round(output / seconds)} tok/s`);
+  return parts.join(' · ');
+}
+
+// Team memory results stay short in the transcript (Ctrl+O shows all).
+export function memoryResultLines(text, expanded = false) {
+  const lines = String(text ?? '').split('\n').map((l) => l.trimEnd()).filter((l) => l.trim());
+  if (expanded || lines.length <= 4) return lines;
+  const facts = lines.filter((l) => /^\s*-\s/.test(l)).length;
+  return [...lines.slice(0, 3), `… ${facts ? `${facts} ghi chú, ` : ''}${lines.length - 3} dòng nữa (Ctrl+O để xem hết)`];
+}
+
+const branchOf = (cwd) => new Promise((resolve) => execFile('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000 },
+  (error, out) => resolve(error ? null : String(out).trim() || null)));
 export const HELP_TEXT = [
   'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass on|off|status quyền lệnh cần internet · /fast on|off|status (khi Harness cho phép) · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
   'Pi: /session thông tin cuộc trò chuyện · /resume mở cuộc trò chuyện công ty khác · /new cuộc mới · /compact nén ngữ cảnh · /tree, /fork nhánh · /name đặt tên · /copy, /export · /hotkeys toàn bộ phím tắt · /quit thoát.',
@@ -165,7 +205,10 @@ export function footerLines({ session, summary, footerData, theme, width, trunca
 export async function companyToolRenderers(sdkRoot) {
   const require = createRequire(path.join(sdkRoot, 'package.json'));
   const { Text } = await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href);
-  return { update_plan: {
+  const memory = (title) => ({
+    renderCall: (args, theme) => new Text(theme.fg('toolTitle', theme.bold(title)) + (args?.query || args?.name ? theme.fg('muted', ` ${args.query ?? args.name}`) : ''), 0, 0),
+    renderResult: (result, options, theme) => new Text(theme.fg('toolOutput', memoryResultLines((result?.content ?? []).map((c) => c.text ?? '').join('\n'), options?.expanded).join('\n')), 0, 0) });
+  return { memory_search: memory('Team memory'), memory_page: memory('Trang kiến thức'), update_plan: {
     renderCall: (_args, theme) => new Text(theme.fg('toolTitle', theme.bold('Plan')), 0, 0),
     renderResult: (result, _options, theme) => {
       const plan = result?.details?.plan;
@@ -235,7 +278,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     pi.on('session_start', async (_event, ctx) => showPermission(ctx));
     pi.registerCommand('bypass', {
       description: 'Bật/tắt Bypass cho cuộc trò chuyện công ty này (on, off, hoặc để trống để chọn)',
-      getArgumentCompletions: (prefix) => ['on', 'off', 'status'].filter((v) => v.startsWith(prefix)).map((value) => ({ value, label: value })),
+      getArgumentCompletions: argumentCompletions(['on', 'off', 'status']),
       handler: async (args, ctx) => {
         const session = managed();
         if (typeof session?.session?.managedSetPermission !== 'function') { ctx.ui.notify('Cuộc trò chuyện này chưa sẵn sàng.', 'error'); return; }
@@ -266,7 +309,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     pi.on('session_start', async (_event, ctx) => showFast(ctx));
     pi.registerCommand('fast', {
       description: 'Bật/tắt Fast cho cuộc trò chuyện công ty này (on, off, status); chỉ có khi Harness của team cho phép',
-      getArgumentCompletions: (prefix) => ['on', 'off', 'status'].filter((v) => v.startsWith(prefix)).map((value) => ({ value, label: value })),
+      getArgumentCompletions: argumentCompletions(['on', 'off', 'status']),
       handler: async (args, ctx) => {
         const session = managed()?.session, state = session?.managedFastState?.();
         if (typeof session?.managedSetFast !== 'function') { ctx.ui.notify('Cuộc trò chuyện này chưa sẵn sàng.', 'error'); return; }
@@ -318,7 +361,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     });
     pi.on('tool_execution_end', async (event, ctx) => {
       if (event?.toolName !== 'ask_user') return;
-      ctx.ui?.setWorkingMessage?.(); ctx.ui?.setWorkingIndicator?.();
+      ctx.ui?.setWorkingMessage?.(WORKING); ctx.ui?.setWorkingIndicator?.();
     });
 
     // The Harness's notes carry English for the agent; the member reads them in Vietnamese.
@@ -334,11 +377,16 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       const session = managed()?.session;
       if (!session?.subscribe || heard === session) return;
       heard = session;
+      const showBranch = async () => { const branch = await branchOf(managed()?.cwd ?? ctx.cwd); ctx.ui?.setStatus?.('agent-watch-branch', branch ? `⎇ ${branch}` : undefined); };
+      ctx.ui?.setWorkingMessage?.(WORKING);
+      void showBranch();
       session.subscribe((event) => {
+        if (event?.type === 'managed_helpers') ctx.ui?.setStatus?.('agent-watch-helpers', event.active ? `Subagent ${event.active}/${event.maximum}` : undefined);
         const end = event?.type === 'managed_turn_end' ? turnEndOf(event.end) : null;
         if (!end) return;
-        const copy = turnEndCopy(end, LOCALE);
-        ctx.ui?.notify?.(`${copy.title}. ${copy.text.replace('Bấm Tiếp tục', 'Gửi "tiếp tục"').replace('bấm Tiếp tục', 'gửi "tiếp tục"')}`, copy.tone === 'success' ? 'info' : copy.tone === 'error' ? 'error' : copy.tone === 'warning' ? 'warning' : 'info');
+        const copy = turnEndCopy(end, LOCALE), stats = turnStats(session.messages);
+        ctx.ui?.notify?.(`${copy.title}. ${copy.text.replace('Bấm Tiếp tục', 'Gửi "tiếp tục"').replace('bấm Tiếp tục', 'gửi "tiếp tục"')}${stats ? `\n${stats}` : ''}`, copy.tone === 'success' ? 'info' : copy.tone === 'error' ? 'error' : copy.tone === 'warning' ? 'warning' : 'info');
+        void showBranch();
       });
     });
     pi.registerMessageRenderer('agent-watch-review-status', (_message, _options, theme) =>

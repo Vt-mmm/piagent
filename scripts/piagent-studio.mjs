@@ -23,6 +23,8 @@ for (let i = 0; i < args.length; i++) {
 }
 if (flags.has('--json') && !flags.has('--prompt')) throw Error('managed-launch-arguments');
 const home = os.homedir();
+// Joining Agent Watch takes a few seconds; keys typed before the Terminal draws are lost, so say so.
+if (!['--check', '--prompt', '--serve', '--doctor', '--web'].some((f) => flags.has(f)) && process.stderr.isTTY) process.stderr.write('Piagent công ty: đang kết nối Agent Watch, chờ ô nhập hiện ra rồi gõ…\n');
 // Do this before importing the SDK: it must not discover personal keys, Node
 // preload hooks, proxy overrides or provider endpoints from an ambient shell.
 const clean = { PATH: '/usr/bin:/bin', HOME: home, LANG: 'en_US.UTF-8', TERM: process.env.TERM || 'xterm-256color', ...interopEnvironment() };
