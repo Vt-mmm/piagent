@@ -146,16 +146,16 @@ const manifest = { user: { team_name: 'Test Quý' }, harness: { configuration: {
   main: { model_ids: ['gpt-6-astra', 'gpt-6-sol'], effort: 'xhigh' }, review: { model_ids: ['gpt-6-sol'], effort: 'high' } } } };
 const plainTheme = { fg: (_c, t) => t, bg: (_c, t) => t, bold: (t) => t };
 
-test('the header names the team, the Harness models and effort, permission, Fast, memory and the release', () => {
+test('the header names the team, the roles and effort (never a model), permission, Fast, memory and the release', () => {
   const managed = { manifest, permission: 'workspace-write', session: { managedFastState: () => 'off', state: { thinkingLevel: 'medium' } } };
   const before = harnessSummary(managed, { version: '1.28.3' });
-  assert.equal(headerText(before), 'Piagent công ty · team Test Quý · main gpt-6-astra (Rất cao) · review gpt-6-sol · Hỏi trước · Fast tắt · memory tắt · 1.28.3');
+  assert.equal(headerText(before), 'Piagent công ty · team Test Quý · Main agent (Rất cao) · Subagent review bật · Hỏi trước · Fast tắt · memory tắt · 1.28.3');
   // After a run: the model and effort Studio granted; Bypass and Fast as switched.
   Object.assign(managed, { permission: 'trusted-full-access' }); managed.session.managedFastState = () => 'on';
-  assert.match(headerText(harnessSummary(managed, { last: { model_id: 'gpt-6-sol', effort: 'high' } })), /main gpt-6-sol \(Cao\) · review gpt-6-sol · Bypass · Fast bật/);
+  assert.match(headerText(harnessSummary(managed, { last: { effort: 'high' } })), /Main agent \(Cao\) · Subagent review bật · Bypass · Fast bật/);
   // No Fast switch where the Harness does not allow it; no review when the workflow has none.
   const plain = { manifest: { harness: { configuration: { workflow: { review: 'off' }, main: { model_ids: ['m'] }, review: { model_ids: ['r'] } } } }, session: { managedFastState: () => null, state: { thinkingLevel: 'high' } } };
-  assert.equal(headerText(harnessSummary(plain)), 'Piagent công ty · main m (Cao) · Hỏi trước · memory tắt');
+  assert.equal(headerText(harnessSummary(plain)), 'Piagent công ty · Main agent (Cao) · Hỏi trước · memory tắt');
 });
 
 test('the footer drops the USD cost and shows the Harness main model and effort before the first run', async () => {
@@ -166,18 +166,18 @@ test('the footer drops the USD cost and shows the Harness main model and effort 
   const footerData = { getGitBranch: () => 'main', getExtensionStatuses: () => new Map([['agent-watch-permission', 'Bypass']]) };
   const lines = footerLines({ session, summary: harnessSummary({ manifest, session: { state: { thinkingLevel: 'medium' } } }), footerData, theme: plainTheme, width: 100, truncateToWidth, visibleWidth });
   assert.equal(lines[0], '/work/shop (main)');
-  assert.match(lines[1], /^↑6\.9k ↓116 R5\.6k 2\.5%\/272k \(auto\) +main gpt-6-astra • Rất cao$/);
+  assert.match(lines[1], /^↑6\.9k ↓116 R5\.6k 2\.5%\/272k \(auto\) +Main agent • Rất cao$/);
   assert.equal(visibleWidth(lines[1]), 100);
   assert.doesNotMatch(lines.join('\n'), /\$|medium/);
   assert.equal(lines[2], 'Bypass');
 }, { skip: !fs.existsSync(sdkRoot) });
 
 test('/share and /bug are refused, the Harness answers /login, /model, /thinking and /settings, /changelog is Piagent\'s', () => {
-  const summary = { model: 'gpt-6-astra', effort: 'xhigh' };
+  const summary = { effort: 'xhigh' };
   assert.match(companyCommandText('share', summary), /^\/share bị tắt .*GitHub Gist.*\/export/);
   assert.match(companyCommandText('bug', summary), /^\/bug bị tắt .*ra ngoài công ty/);
   assert.match(companyCommandText('login', summary), /tài khoản AI của team qua Agent Watch/);
-  for (const name of ['model', 'scoped-models', 'thinking']) assert.match(companyCommandText(name, summary), /Harness của team quyết định \(main gpt-6-astra, Rất cao\)/);
+  for (const name of ['model', 'scoped-models', 'thinking']) assert.match(companyCommandText(name, summary), /Harness của team quyết định \(Main agent: Rất cao\)/);
   assert.match(companyCommandText('settings', summary), /Harness quyết định/);
   assert.equal(companyCommandText('resume', summary), null);
   // They stay in the / list (a hidden one would let Enter pick a skill instead), in the company's words.
@@ -202,7 +202,7 @@ test('the company InteractiveMode answers Pi\'s commands and keys itself and nev
   }
   class Markdown { constructor(text) { this.text = text; } }
   class Spacer {}
-  const Mode = companyMode(Base, { summary: () => ({ model: 'gpt-6-astra', effort: 'xhigh' }), whatsNew: () => '## v9.9.9', components: { Markdown, Spacer } });
+  const Mode = companyMode(Base, { summary: () => ({ effort: 'xhigh' }), whatsNew: () => '## v9.9.9', components: { Markdown, Spacer } });
   const mode = new Mode();
   mode.handleShareCommand(); mode.handleBugCommand(); mode.suggestBugReport();
   mode.handleLoginCommand(); mode.showOAuthSelector('logout'); mode.showModelSelector(); mode.cycleModel('forward'); mode.cycleThinkingLevel(); mode.showSettingsSelector();
@@ -257,4 +257,18 @@ test('a turn ends with its requests, tokens, time and output speed; memory resul
   const text = ['Memories (past notes):', '- a', '- b', '- c', '- d', '- e'].join('\n');
   assert.deepEqual(memoryResultLines(text), ['Memories (past notes):', '- a', '- b', '… 5 ghi chú, 3 dòng nữa (Ctrl+O để xem hết)']);
   assert.equal(memoryResultLines(text, true).length, 6);
+});
+
+test('the company Terminal never shows a model id: header, footer, command answers, Pi warnings', async () => {
+  const { harnessSummary, headerText, companyCommandText, companyWarning } = await import('../scripts/company-terminal.mjs');
+  const ids = ['gpt-6-astra', 'gpt-6-sol', 'claude-haiku-5-5'];
+  const managed = { manifest: { user: { team_name: 'T' }, harness: { configuration: {
+    main: { model_ids: ids.slice(0, 2), effort: 'xhigh' }, review: { model_ids: [ids[2]] } } } } };
+  const summary = harnessSummary(managed, { last: { model_id: ids[1], effort: 'high' } });
+  const shown = [JSON.stringify(summary), headerText(summary),
+    ...['model', 'scoped-models', 'thinking', 'settings'].map((n) => companyCommandText(n, summary)),
+    companyWarning('Could not restore model agent_watch_managed/gpt-6-astra'),
+    companyWarning('pi crashed on 10/18/2026, 9:39:57 PM (read EIO). Run /bug to report it; the crash details are attached automatically.')].join('\n');
+  for (const id of ids) assert.ok(!shown.includes(id), id);
+  assert.ok(!shown.includes('/bug'));
 });

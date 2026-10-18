@@ -1,6 +1,7 @@
 <section class="section">
   <p class="section-kicker">v1.30.1 · 2026-10-18</p>
-  <h2 id="v1-30-1">Opening the home folder gives the real reason</h2>
+  <h2 id="v1-30-1">No model names in the company Terminal; the home folder gives the real reason</h2>
+  <p class="section-lead">The company Terminal's header, footer and /model and /thinking answers show roles and effort only (<span class="inline-code">Main agent (Rất cao) · Subagent review bật</span>), never the Harness's model names. Pi's crash notice no longer points at /bug, which is off in company conversations.</p>
   <p class="section-lead">Running <span class="inline-code">piagent studio</span> in the home folder (<span class="inline-code">~</span>) used to fail with <span class="inline-code">managed-launch-binding-changed</span> (“Agent Watch or Piagent changed”) although nothing had changed. The company Piagent does not open a folder that holds the company configuration, so it now says so and how to open it: go to a project folder and run it again, or <span class="inline-code">piagent studio --project ~/your-project</span>.</p>
 </section>
 

@@ -4,15 +4,16 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## v1.30.1 - 2026-10-18
 
-Running the company Terminal in the home folder says why it cannot open there.
+The company Terminal no longer shows model names, and the home folder says why it cannot open there.
 
 ### Fixes
 
+- The company Terminal showed the Harness's model ids (header `main gpt-… · review gpt-…`, footer, and the /model and /thinking answers). A member sees roles only: `Main agent (Rất cao) · Subagent review bật`, footer `Main agent • Rất cao`. Pi's start-up warnings are reworded too: the crash notice no longer points at /bug (off in company conversations) and "Could not restore model …" no longer names one.
 - `piagent studio` in the home folder (or any folder that holds `~/.pi/agent/agent-watch-managed.json`) failed with `managed-launch-binding-changed`, which reads "Agent Watch or Piagent changed; import the configuration again", although nothing had changed. The refusal stays (a project's tools must not reach the company configuration); it now reports `managed-project-contains-config` with what to do: open a project folder, or `piagent studio --project <folder>`. The dashboard shows the same words.
 
 ### Tests
 
-- New case in `tests/managed-binding-wait.test.mjs`.
+- New case in `tests/managed-binding-wait.test.mjs`; `tests/terminal-parity.test.mjs` checks that no model id reaches the header, footer, command answers or Pi's warnings.
 
 ## v1.30.0 - 2026-10-18
 

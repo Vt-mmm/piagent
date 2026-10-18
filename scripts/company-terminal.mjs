@@ -73,15 +73,15 @@ const EFFORT = { off: 'Tắt', minimal: 'Tối thiểu', low: 'Thấp', medium: 
 export const effortText = (level) => EFFORT[level] ?? level ?? '';
 
 // What the team's Harness decides for this conversation, as the header and
-// footer say it. `last` is the main agent's latest run (its model and
-// effort); before the first run, the Harness's first main model and its effort.
+// footer say it: roles and effort only. A member never sees which model a
+// role runs on, so no model id leaves this function. `last` is the main
+// agent's latest run (its effort); before the first run, the Harness's effort.
 export function harnessSummary(managed, { last = null, version = null } = {}) {
   const manifest = managed?.manifest, config = manifest?.harness?.configuration ?? {};
-  const review = config.workflow?.review !== 'off' && config.review?.model_ids?.[0] || null;
+  const review = config.workflow?.review !== 'off' && Boolean(config.review?.model_ids?.length);
   const fast = managed?.session?.managedFastState?.() ?? null;
   return {
     team: manifest?.user?.team_name || null,
-    model: last?.model_id || config.main?.model_ids?.[0] || null,
     effort: last?.effort || config.main?.effort || managed?.session?.state?.thinkingLevel || null,
     review, permission: managed?.permission === 'trusted-full-access' ? 'Bypass' : 'Hỏi trước',
     fast: fast === null ? null : fast === 'on', memory: managed ? memoryOn(managed) : false, version,
@@ -89,8 +89,8 @@ export function harnessSummary(managed, { last = null, version = null } = {}) {
 }
 export function headerText(summary) {
   return ['Piagent công ty', summary.team && `team ${summary.team}`,
-    summary.model && `main ${summary.model}${summary.effort ? ` (${effortText(summary.effort)})` : ''}`,
-    summary.review && `review ${summary.review}`, summary.permission,
+    `Main agent${summary.effort ? ` (${effortText(summary.effort)})` : ''}`,
+    summary.review && 'Subagent review bật', summary.permission,
     summary.fast !== null && `Fast ${summary.fast ? 'bật' : 'tắt'}`, `memory ${summary.memory ? 'bật' : 'tắt'}`, summary.version].filter(Boolean).join(' · ');
 }
 export const HEADER_KEYS = 'Esc dừng lượt · Ctrl+C xoá ô nhập, hai lần để thoát · / lệnh · ! shell · Ctrl+O xem thêm · /help';
@@ -101,7 +101,7 @@ export const HEADER_KEYS = 'Esc dừng lượt · Ctrl+C xoá ô nhập, hai l�
 // Ctrl+P, Shift+Tab) answer the same.
 const ADMIN = 'Admin đổi trong Agent Studio → Harness.';
 export function companyCommandText(name, summary = {}) {
-  const main = summary.model ? ` (main ${summary.model}${summary.effort ? `, ${effortText(summary.effort)}` : ''})` : '';
+  const main = summary.effort ? ` (Main agent: ${effortText(summary.effort)})` : '';
   switch (name) {
     case 'share': return '/share bị tắt trong cuộc trò chuyện công ty: lệnh này đăng toàn bộ hội thoại lên GitHub Gist, ra ngoài công ty. Cần lưu lại thì dùng /export (file trên máy này).';
     case 'bug': return '/bug bị tắt trong cuộc trò chuyện công ty: báo cáo gửi hội thoại và code cho nhà phát triển Pi, ra ngoài công ty. Gặp lỗi, gửi admin của team mã lỗi trong [ ] và giờ xảy ra.';
@@ -168,7 +168,7 @@ export function failureLines(errorMessage) {
 
 const tokens = (n) => n < 1000 ? String(n) : n < 10000 ? `${(n / 1000).toFixed(1)}k` : n < 1e6 ? `${Math.round(n / 1000)}k` : `${(n / 1e6).toFixed(1)}M`;
 // Pi's footer without the USD cost (company accounts are not billed per
-// conversation) and with the Harness's main model and effort on the right.
+// conversation) and with the main agent's effort on the right (never its model).
 export function footerLines({ session, summary, footerData, theme, width, truncateToWidth, visibleWidth }) {
   const dim = (text) => theme.fg('dim', text);
   if (!session) return [truncateToWidth(dim(headerText(summary)), width, dim('...'))];
@@ -188,7 +188,7 @@ export function footerLines({ session, summary, footerData, theme, width, trunca
   const parts = [sum.input && `↑${tokens(sum.input)}`, sum.output && `↓${tokens(sum.output)}`, sum.cacheRead && `R${tokens(sum.cacheRead)}`, sum.cacheWrite && `W${tokens(sum.cacheWrite)}`].filter(Boolean);
   const ctxText = `${shown === '?' ? '?' : shown + '%'}/${tokens(window)} (auto)`;
   let left = [...parts, ctxText].join(' ');
-  const right = summary.model ? `main ${summary.model}${summary.effort ? ` • ${effortText(summary.effort)}` : ''}` : '';
+  const right = `Main agent${summary.effort ? ` • ${effortText(summary.effort)}` : ''}`;
   if (visibleWidth(left) > width) left = truncateToWidth(left, width, '...');
   const room = width - visibleWidth(left) - 2;
   const tail = room > 0 && right ? truncateToWidth(right, room, '') : '';
@@ -227,6 +227,15 @@ export async function companyInteractiveMode(api, { sdkRoot, packageRoot, summar
   const changelog = () => { try { return fs.readFileSync(path.join(packageRoot, 'CHANGELOG.md'), 'utf8'); } catch { return ''; } };
   return companyMode(api.InteractiveMode, { summary, whatsNew: () => whatsNewMarkdown(changelog()), components: { Markdown, Spacer, DynamicBorder: api.DynamicBorder } });
 }
+// Pi's own warnings, as the company Terminal says them: the crash notice
+// without /bug, and no model id ("Could not restore model p/id").
+export function companyWarning(message) {
+  const text = String(message ?? '');
+  const crash = /^\S+ crashed on (.+?) \((.*)\)\. Run \/bug/s.exec(text);
+  if (crash) return `Lần trước Piagent công ty dừng bất thường (${crash[1]}, ${crash[2]}). Cuộc trò chuyện vẫn còn: /resume để mở lại. Nếu lặp lại, gửi admin của team giờ xảy ra.`;
+  if (/^Could not restore model /.test(text)) return 'Cuộc trò chuyện này chạy theo Harness hiện tại của team.';
+  return text;
+}
 export function companyMode(Base, { summary, whatsNew, components }) {
   const say = (mode, name, tone = 'warning') => mode.showExtensionNotify(companyCommandText(name, summary()), tone);
   return class CompanyInteractiveMode extends Base {
@@ -234,6 +243,8 @@ export function companyMode(Base, { summary, whatsNew, components }) {
     async handleBugCommand() { say(this, 'bug'); }
     suggestBugReport() {}
     crashReportInstructions() { return 'Lần sau mở lại: piagent studio, rồi /resume. Gửi admin của team giờ xảy ra lỗi.'; }
+    // Pi's start-up warnings point at /bug (off here) or name a model.
+    showWarning(message) { super.showWarning(companyWarning(message)); }
     async handleLoginCommand() { say(this, 'login', 'info'); }
     async showOAuthSelector() { say(this, 'logout', 'info'); }
     async handleModelCommand() { say(this, 'model', 'info'); }
@@ -337,7 +348,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     let last = null;
     const summary = () => {
       const grant = managed()?.grant;
-      if (grant?.model_id) last = { model_id: grant.model_id, effort: grant.effort };
+      if (grant?.effort) last = { effort: grant.effort };
       return harnessSummary(managed(), { last, version: installed });
     };
     pi.on('session_start', async (_event, ctx) => {
