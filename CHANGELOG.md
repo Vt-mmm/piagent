@@ -2,7 +2,7 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.29.0 - 2026-10-18
 
 The company Terminal (`piagent studio`) shows what the team's Harness runs and keeps company conversations inside the company.
 
@@ -15,9 +15,14 @@ The company Terminal (`piagent studio`) shows what the team's Harness runs and k
 - While `ask_user` waits for the member, the loader reads "Đang chờ bạn trả lời" instead of "Working".
 - The plan is drawn as a checklist with each step (☑ done, ☐ open, ⊘ deferred) instead of "Plan updated: 1/3 steps completed". Personal `pi` is unchanged.
 
+### Fixes
+
+- Stop while a command runs no longer breaks the next message. Stop used to renew the run's token once more after the tool was cancelled, then close the run, and close it again without its report when that failed. With Agent Studio 0.28.1 and Agent Watch 0.15.7 / Windows 0.1.14, a stopped request ends before renewing, a close Studio could not confirm is not sent again, and the next message starts a new run instead of failing with `managed-broker:serverUnavailable`.
+
 ### Tests
 
 - New cases in `tests/terminal-parity.test.mjs` and `tests/managed-agent-skills.test.mjs`; checked in the real TUI through a pty.
+- `tests/managed-failures.test.mjs`: Stop during a real sandboxed command sends no renew; a close Studio cannot confirm is not sent again, and the next turn works.
 
 ## v1.28.3 - 2026-10-18
 
