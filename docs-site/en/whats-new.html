@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.30.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.30.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.30.1 · 2026-10-18</p>
+  <h2 id="v1-30-1">Opening the home folder gives the real reason</h2>
+  <p class="section-lead">Running <span class="inline-code">piagent studio</span> in the home folder (<span class="inline-code">~</span>) used to fail with <span class="inline-code">managed-launch-binding-changed</span> (“Agent Watch or Piagent changed”) although nothing had changed. The company Piagent does not open a folder that holds the company configuration, so it now says so and how to open it: go to a project folder and run it again, or <span class="inline-code">piagent studio --project ~/your-project</span>.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.30.0 · 2026-10-18</p>
   <h2 id="v1-30-0">Large contexts over slow links; the company Terminal reads like the dashboard</h2>

@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.30.1 · 2026-10-18</p>
+  <h2 id="v1-30-1">Opening the home folder gives the real reason</h2>
+  <p class="section-lead">Running <span class="inline-code">piagent studio</span> in the home folder (<span class="inline-code">~</span>) used to fail with <span class="inline-code">managed-launch-binding-changed</span> (“Agent Watch or Piagent changed”) although nothing had changed. The company Piagent does not open a folder that holds the company configuration, so it now says so and how to open it: go to a project folder and run it again, or <span class="inline-code">piagent studio --project ~/your-project</span>.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.30.0 · 2026-10-18</p>
   <h2 id="v1-30-0">Large contexts over slow links; the company Terminal reads like the dashboard</h2>
   <p class="section-lead">Long conversations (contexts up to about 1 MB) go to Studio gzip-compressed when Studio supports it (Agent Studio 0.28.2), about 3x smaller; with Studio 0.28.2 a slow upload that keeps sending is no longer cut at 15 seconds. The company Terminal adds a turn summary (requests, tokens, time, speed), shows running subagents and the git branch in the footer, keeps memory results short, reads “Đang làm…”, runs /bypass and /fast on one Enter and says it is joining Agent Watch at launch.</p>

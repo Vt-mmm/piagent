@@ -83,7 +83,9 @@ try {
   }
   const agentDir = path.join(root, store);
   const cwd = serve ? path.join(agentDir, 'probe') : fs.realpathSync(flags.get('--project') || process.cwd());
-  if (configPath.startsWith(cwd + path.sep)) throw Error('managed-launch-binding-changed');
+  // A project folder that holds the company configuration (the home folder,
+  // ~/.pi) would put it in reach of the project's tools: refuse, and say so.
+  if (configPath.startsWith(cwd + path.sep)) throw Error('managed-project-contains-config');
   fs.mkdirSync(agentDir, { recursive: true, mode: 0o700 }); fs.chmodSync(agentDir, 0o700);
   if (serve) { fs.mkdirSync(cwd, { recursive: true, mode: 0o700 }); fs.chmodSync(cwd, 0o700); }
   await import('./register-typescript-loader.mjs');

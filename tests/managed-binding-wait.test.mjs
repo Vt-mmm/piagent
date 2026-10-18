@@ -191,3 +191,10 @@ test('the dashboard waits for Agent Watch to rebind after its own update before 
   assert.match(await started, /\.sock$/);
   assert.match(fs.readFileSync(ran, 'utf8'), /managed-authorize/);
 });
+
+test('a project folder holding the company configuration is named as such, not as an update', () => {
+  const source = fs.readFileSync(studioScript, 'utf8');
+  assert.match(source, /configPath\.startsWith\(cwd \+ path\.sep\)\) throw Error\('managed-project-contains-config'\)/);
+  assert.match(launchReasonText('managed-project-contains-config', 'vi'), /thư mục home ~.*piagent studio --project/s);
+  assert.doesNotMatch(launchReasonText('managed-project-contains-config', 'vi'), /cập nhật/);
+});
