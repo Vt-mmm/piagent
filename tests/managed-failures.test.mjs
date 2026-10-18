@@ -723,3 +723,49 @@ test('a running helper beats so the turn is not stopped as idle', async () => {
   await new Promise(resolve => setTimeout(resolve, 120));
   assert.equal(events.filter(event => event.type === 'managed_helper_progress').length, beats.length, 'no beat after it ended');
 });
+
+// Stop while a sandboxed command runs: Pi's loop asks the model once more with
+// the cancelled result, and that ask must not renew the grant of a run that is
+// about to close (it used to send a renew to Studio at the moment of Stop).
+// A close Studio cannot confirm (503) ends the turn as failed; it is not sent
+// again without the report, which only a refused report needs.
+test('Stop during a command sends no renew; a close Studio cannot confirm is not sent again', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-')));
+  const authority = authorityOf(), agent = broker(authority);
+  let step = 0;
+  const server = await studio((req, res, body) => {
+    step += 1;
+    if (step !== 1) return false;
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const emit = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`), args = JSON.stringify({ command: 'sleep 30' });
+    emit({ type: 'message_start', message: { id: 'msg_fixture', type: 'message', role: 'assistant', content: [], model: body.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 12, output_tokens: 0 } } });
+    emit({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_fixture', name: 'bash', input: {} } });
+    emit({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: args } });
+    emit({ type: 'content_block_stop', index: 0 }); emit({ type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 9 } }); emit({ type: 'message_stop' });
+    res.end(); return true;
+  });
+  const request = agent.request.bind(agent);
+  let closes = 0;
+  const reports = [];
+  agent.request = async (action, args) => {
+    if (action === 'close') reports.push(!!args?.process);
+    if (action === 'close' && ++closes === 1) { agent.calls.push(action); throw Error('managed-broker:serverUnavailable'); }
+    const out = await request(action, args);
+    return action === 'config' ? { ...out, broker_features: ['process'] } : out;
+  };
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  let stopAt = null;
+  managed.session.subscribe(event => {
+    if (event.type === 'tool_execution_start' && stopAt === null) { stopAt = agent.calls.length; setTimeout(() => void managed.session.abort(), 300); }
+  });
+  try {
+    await managed.session.prompt('Run sleep 30');
+    assert.notEqual(stopAt, null, 'the command started');
+    assert.deepEqual(agent.calls.slice(stopAt), ['close'], 'after Stop: one close, no renew, no close without the report');
+    assert.equal(server.requests.length, 1, 'nothing reaches the model after Stop');
+    await managed.session.prompt('again');
+    assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
+    assert.deepEqual(agent.calls.slice(stopAt), ['close', 'start', 'renew', 'close'], 'the next message is a new run');
+    assert.deepEqual(reports, [true, true], 'each run closes once, with its report');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});

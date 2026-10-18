@@ -47,6 +47,10 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
         try {
           if (role === 'main' && owner.preflight) throw Error(owner.preflight);
           if (!owner.grant || model.provider !== provider) throw Error('managed-run-required');
+          // Pi asks once more after Stop cut a tool call (its loop goes on
+          // with the cancelled result): that ask ends here, without renewing
+          // the grant of a run that is about to close.
+          if (signal?.aborted) throw Error('managed-request-aborted');
           // Studio's answer to a failed request is a machine code: say who
           // failed and why, in words. Only an admission refusal is asked again.
           // A request the member stopped ended, it did not fail; the provider may
