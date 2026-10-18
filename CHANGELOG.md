@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.28.2 - 2026-10-18
+
+No more "managed-launch-binding-changed" right after an update.
 
 ### Fixes
 

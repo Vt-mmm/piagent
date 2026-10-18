@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.28.2 · 2026-10-18</p>
+  <h2 id="v1-28-2">Không còn lỗi “binding changed” ngay sau khi cập nhật</h2>
+  <p class="section-lead">Ngay sau khi Piagent cập nhật, <span class="inline-code">piagent studio</span> không còn báo <span class="inline-code">managed-launch-binding-changed</span> trong lúc Agent Watch chưa ghi lại cấu hình: nó chờ tối đa 90 giây (“Agent Watch đang cập nhật cấu hình…”, hoặc báo Agent Watch không chạy), kiểm lại mọi mã băm rồi chạy tiếp. Member không phải nhập lại cấu hình bằng tay.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.28.1 · 2026-10-18</p>
   <h2 id="v1-28-1">Terminal công ty và Pi cá nhân không còn giẫm chân nhau</h2>
   <p class="section-lead">Pi cá nhân không còn chết khi Piagent bị nạp hai lần (extension trỏ vào một bản Piagent khác): <span class="inline-code">piagent-update</span> và installer tự gỡ (có backup), <span class="inline-code">piagent-doctor</span> báo lỗi. Các mục công ty cũ của Agent Watch trong Pi cá nhân (provider <span class="inline-code">agent_watch_*</span>, model mặc định trỏ vào đó) được dọn khi máy đã dùng binding công ty. Pi cá nhân không tiếp tục cuộc trò chuyện công ty nữa và chỉ cách mở bằng <span class="inline-code">piagent studio</span>; Terminal công ty cũng hướng dẫn mở lại đúng cách, trả lời <span class="inline-code">/help</span> tại chỗ (không gửi model), và dừng hẳn khi bị dừng từ bên ngoài.</p>
