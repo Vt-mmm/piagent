@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.30.0 - 2026-10-18
+
+Large conversations reach Studio from slow connections, and the company Terminal reads like the dashboard.
+
+### Changes
+
+- Model calls go to Studio gzip-compressed once Studio says it accepts them (Agent Studio 0.28.2, `X-Studio-Accept-Encoding: gzip`): bodies of 64 KiB or more, about 3x smaller (a 200k-token Codex context is about 1 MB; encrypted reasoning does not compress). With Studio 0.28.2 a slow upload that keeps sending is no longer cut at 15 s.
+- Company Terminal: each turn's end notice adds requests, tokens, time and output speed; the footer shows `Subagent n/m` while helpers run and the git branch; `memory_search` and `memory_page` results stay short (Ctrl+O shows all); "Working" reads "Đang làm…"; `/bypass status` and `/fast on` run on the first Enter; `piagent studio` says it is joining Agent Watch before the Terminal draws.
+
+### Tests
+
+- `tests/managed-compressed-fetch.test.mjs`; new cases in `tests/terminal-parity.test.mjs`.
+
 ## v1.29.0 - 2026-10-18
 
 The company Terminal (`piagent studio`) shows what the team's Harness runs and keeps company conversations inside the company.

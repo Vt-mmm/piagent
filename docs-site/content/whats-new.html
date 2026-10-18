@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.30.0 · 2026-10-18</p>
+  <h2 id="v1-30-0">Context lớn đi qua mạng chậm; Terminal công ty gọn như dashboard</h2>
+  <p class="section-lead">Cuộc trò chuyện dài (context lớn tới khoảng 1 MB) gửi lên Studio được nén gzip khi Studio hỗ trợ (Agent Studio 0.28.2), nhỏ hơn khoảng 3 lần; cùng Studio 0.28.2, mạng chậm nhưng vẫn đang gửi không còn bị cắt sau 15 giây. Terminal công ty có dòng tóm tắt cuối lượt (request, token, thời gian, tốc độ), hiện Subagent đang chạy và branch git ở thanh dưới, thu gọn kết quả memory, ghi “Đang làm…”, chạy /bypass và /fast với một lần Enter, và báo đang kết nối Agent Watch lúc mở.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.29.0 · 2026-10-18</p>
   <h2 id="v1-29-0">Terminal công ty có giao diện riêng; dừng lượt không còn làm hỏng cuộc trò chuyện</h2>
   <p class="section-lead">Terminal công ty (<span class="inline-code">piagent studio</span>) giờ có phần đầu riêng: team, model và mức suy luận theo Harness, quyền, Fast, memory. Thanh dưới hiện đúng mức suy luận, không hiện chi phí USD; plan hiện thành checklist; lúc chờ bạn trả lời câu hỏi thì ghi “Đang chờ bạn trả lời”. <span class="inline-code">/share</span> và <span class="inline-code">/bug</span> bị chặn vì gửi hội thoại công ty ra ngoài; <span class="inline-code">/login</span>, <span class="inline-code">/model</span>, <span class="inline-code">/thinking</span>… báo Harness của team quyết định. Dừng một lượt khi lệnh đang chạy không còn làm hỏng các lượt sau (cùng Agent Studio 0.28.1, Agent Watch 0.15.7).</p>
