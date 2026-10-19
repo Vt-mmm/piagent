@@ -1785,8 +1785,12 @@ test("a tab that lost its browser session says how to open Piagent again and sto
   await expect(page.getByText("Review source changes", { exact: true }).filter({ visible: true })).toBeVisible();
   // The Gateway restarted or another launch replaced the cookie: every read is now refused.
   await page.context().clearCookies();
-  await page.getByRole("button", { name: "Làm mới" }).click();
-  await expect(page.getByRole("heading", { name: "Tab này đã hết phiên đăng nhập" })).toBeVisible();
+  // A background poll may be refused first and replace the page (and the
+  // button) with the expired screen: either way ends there.
+  const expired = page.getByRole("heading", { name: "Tab này đã hết phiên đăng nhập" });
+  const clicked = page.getByRole("button", { name: "Làm mới" }).click().catch(() => undefined);
+  await Promise.race([expired.waitFor(), clicked]);
+  await expect(expired).toBeVisible();
   await expect(page.getByText("piagent dashboard", { exact: true })).toBeVisible();
   const reads = [];
   page.on("request", (request) => { if (request.url().includes("/api/v1/")) reads.push(request.url()); });
