@@ -56,7 +56,7 @@ function broker(authority) {
 
 // Studio: the model answers ANSWER_n; memory follows `memory.mode`.
 async function studio() {
-  const state = { mode: 'on', countTokens: false, retainStatus: 200, model: [], memory: [] };
+  const state = { mode: 'on', countTokens: false, retainStatus: 200, model: [], memory: [], protocol: 2 };
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8');
@@ -66,8 +66,8 @@ async function studio() {
       if (state.mode === 'off') { res.writeHead(204); res.end(); return; }
       if (state.mode === 'absent') { res.writeHead(404); res.end(); return; }
       if (op === 'retain' && state.retainStatus !== 200) { res.writeHead(state.retainStatus, { 'Content-Type': 'application/json' }); res.end('{"error":{"code":"memory_unavailable"}}'); return; }
-      const answers = { brief: { protocol_version: 2, text: 'Team memory for x:\n- [2026-10-01] RULE_CENTS: money is integer cents.', facts: 1, pages: ['Key decisions and rationale'], git_head: null, retain_sessions: true },
-        telemetry: { status: 'recorded' }, retain: { status: 'pending', event_id: body.event_id, operation_id: randomUUID() }, git: { status: 'accepted' }, search: { text: 'SEARCH_HIT' }, page: { markdown: '# PAGE' } };
+      const answers = { brief: { protocol_version: state.protocol, text: 'Team memory for x:\n- [2026-10-01] RULE_CENTS: money is integer cents.', facts: 1, pages: ['Key decisions and rationale'], git_head: null, retain_sessions: true },
+        telemetry: { status: 'recorded' }, retain: { status: 'pending', event_id: body.event_id, operation_id: randomUUID() }, git: { status: 'accepted' }, search: { text: 'SEARCH_HIT' }, page: { markdown: '# PAGE' }, ask: { text: 'ASK_ANSWER' } };
       res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(answers[op])); return;
     }
     const body = JSON.parse(raw), n = state.model.push({ raw, tools: (body.tools ?? []).map(t => t.name) });
@@ -225,13 +225,14 @@ test('a Studio without team memory (404) is asked once per conversation, and not
   } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a folder without an origin remote sends nothing to memory', { skip: !supported, timeout: 60000 }, async () => {
+test('a folder without a repository only tells Studio so, once, and sends nothing else to memory', { skip: !supported, timeout: 60000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-plain-')), server = await studio();
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: broker({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 }) });
   try {
     await managed.session.prompt('hello');
-    assert.equal(server.state.memory.length, 0);
-    assert.equal(server.state.model.length, 1);
+    await managed.session.prompt('again');
+    assert.deepEqual(server.state.memory.map(m => [m.op, m.body.repo_key, m.body.folder]), [['brief', '', 'not_a_repository']]);
+    assert.equal(server.state.model.length, 2);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -316,4 +317,25 @@ test('real managed compaction refreshes the brief and keeps the final answer und
     const telemetry = server.state.memory.filter(m => m.op === 'telemetry').at(-1);
     assert.equal(telemetry.body.counters.brief_refreshes, 1);
   } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root,agentDir]) fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('a Studio that speaks memory protocol 3 gives the next conversation memory_ask and the work context', { skip: !supported, timeout: 120000 }, async () => {
+  const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-ask-')), server = await studio(), authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };
+  fs.mkdirSync(path.join(agentDir, 'sessions'));
+  server.state.protocol = 3;
+  let managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin: server.origin, broker: broker(authority), agentDir });
+  try {
+    await managed.session.prompt('First conversation');
+    assert.ok(!server.state.model[0].tools.includes('memory_ask'));
+    assert.equal(server.state.memory[0].body.context, undefined, 'the first brief does not know the protocol yet');
+    const retain = server.state.memory.find(m => m.op === 'retain').body;
+    assert.deepEqual(retain.checks, { passed: 0, failed: 0, final: 'none' });
+    assert.equal(retain.context.branch, execFileSync('git', ['-C', repo.root, 'rev-parse', '--abbrev-ref', 'HEAD']).toString().trim());
+    await managed.dispose();
+    managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin: server.origin, broker: broker(authority), agentDir });
+    const at = server.state.model.length, sent = server.state.memory.length;
+    await managed.session.prompt('Second conversation');
+    assert.ok(server.state.model[at].tools.includes('memory_ask') && server.state.model[at].tools.includes('memory_search'));
+    assert.ok(server.state.memory[sent].body.context?.branch, 'the brief carries the branch');
+  } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
 });

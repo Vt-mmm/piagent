@@ -206,9 +206,9 @@ export async function companyToolRenderers(sdkRoot) {
   const require = createRequire(path.join(sdkRoot, 'package.json'));
   const { Text } = await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href);
   const memory = (title) => ({
-    renderCall: (args, theme) => new Text(theme.fg('toolTitle', theme.bold(title)) + (args?.query || args?.name ? theme.fg('muted', ` ${args.query ?? args.name}`) : ''), 0, 0),
+    renderCall: (args, theme) => new Text(theme.fg('toolTitle', theme.bold(title)) + (args?.query || args?.name || args?.question ? theme.fg('muted', ` ${args.query ?? args.name ?? args.question}`) : ''), 0, 0),
     renderResult: (result, options, theme) => new Text(theme.fg('toolOutput', memoryResultLines((result?.content ?? []).map((c) => c.text ?? '').join('\n'), options?.expanded).join('\n')), 0, 0) });
-  return { memory_search: memory('Team memory'), memory_page: memory('Trang kiến thức'), update_plan: {
+  return { memory_search: memory('Team memory'), memory_page: memory('Trang kiến thức'), memory_ask: memory('Hỏi team memory'), update_plan: {
     renderCall: (_args, theme) => new Text(theme.fg('toolTitle', theme.bold('Plan')), 0, 0),
     renderResult: (result, _options, theme) => {
       const plan = result?.details?.plan;

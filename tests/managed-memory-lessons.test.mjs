@@ -45,3 +45,20 @@ test('secret redaction precedes byte clipping, including long multiline keys',()
  const record=turnRecord([{role:'user',content:key},{role:'assistant',content:'Checked answer'}]);
  assert.doesNotMatch(record,/SYNTHETIC_PRIVATE_MATERIAL|BEGIN PRIVATE KEY/);assert.match(record,/Checked answer/);
 });
+
+test('a check cut to its tail counts, judged by its output, as the same check as without the tail',()=>{
+ const c=new CheckLessons();run(c,'npm test 2>&1 | tail -n 40','FAIL money rounding\n1 failed');
+ assert.equal(c.failed,1,'a piped failure exits 0 (tail) yet counts as failed');assert.equal(c.summary.final,'failed');
+ edit(c);run(c,'npm test | tail -20','Tests: 3 passed');
+ assert.equal(c.lessons.length,1);assert.match(c.lessons[0].line,/npm test 2>&1 \| tail -n 40 failed .*npm test \| tail -20 passed/);
+ assert.deepEqual(c.summary,{passed:1,failed:1,final:'passed'});
+ // Only tail/cat: grep or head can hide the failure; other pipelines stay out.
+ run(c,'npm test | grep PASS','3 passed');run(c,'npm test | head -5','3 passed');run(c,'npm test | tail -5 | sort','3 passed');
+ assert.equal(c.passed,1);
+ // A tail of passing output with zero failures is a pass.
+ const d=new CheckLessons();run(d,'./mvnw test 2>&1 | tail -n 30','Tests run: 4, Failures: 0, Errors: 0\nBUILD SUCCESS');
+ assert.deepEqual(d.summary,{passed:1,failed:0,final:'passed'});
+ assert.deepEqual(new CheckLessons().summary,{passed:0,failed:0,final:'none'});
+ // A flaky rerun with another tail length is no recovery.
+ const e=new CheckLessons();run(e,'npm test 2>&1 | tail -40','1 failed');run(e,'npm test 2>&1 | tail -80','3 passed');assert.equal(e.lessons.length,0);
+});

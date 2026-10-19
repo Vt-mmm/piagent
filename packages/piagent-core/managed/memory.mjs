@@ -4,7 +4,7 @@
 // Optional network work uses bounded deadlines and the shared run-token owner.
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { MemoryOutbox, memoryScope, scopeID } from './memory-outbox.mjs';
 import { execFile } from 'node:child_process';
 import { CheckLessons } from './memory-lessons.mjs';
@@ -19,6 +19,13 @@ const OFF_MS = 30 * 60_000, KNOWN_MS = 7 * 24 * 3600_000;
 // the same context; closing a round (retain + telemetry) stays within CLOSE_MS.
 const EMPTY_BRIEF_MS = 30 * 60_000, FAILED_BRIEF_MS = 5 * 60_000, CLOSE_MS = 4_500;
 const MAX_TURN = 30 * 1024, MAX_COMMITS = 300, MAX_GIT_BODY = 60 * 1024, MAX_COMMIT_BODY = 2_000;
+// A folder that holds several repositories (front end, back end…) gets the
+// memory of each, at most MAX_REPOS; a round is written to the ones it touched.
+const MAX_REPOS = 6, MAX_ROUND_REPOS = 3, ASK_MS = 50_000;
+// Studio protocol 3 (Agent Studio 0.30): rounds and commits carry where the
+// work happened and how its checks ended; memory_ask. Older Studios refuse
+// unknown fields, so these are sent only once Studio has said it speaks 3.
+export const PROTOCOL = 3;
 
 // The repository's identity: its origin remote without scheme, user, port
 // or ".git", lower case ("github.com/acme/shop"). null: no memory here.
@@ -35,8 +42,81 @@ export function repoKey(remote) {
   return /^[a-z0-9][a-z0-9._-]*\/[a-z0-9._/-]+$/.test(s) && s.length <= 200 && !s.includes('..') ? s : null;
 }
 
-const git = (cwd, args, timeout = 3_000, signal) => new Promise(resolve => execFile('git', ['-C', cwd, ...args], { timeout, signal, maxBuffer: 4 << 20, encoding: 'utf8' },
-  (error, stdout) => resolve(error ? null : stdout)));
+// Memory only reads (remote, branch, log, status). A repository another user
+// owns (a Windows drive seen from WSL, a shared checkout) makes git refuse
+// with "dubious ownership"; the read is retried trusting that one folder.
+const gitOnce = (cwd, args, timeout, signal) => new Promise(resolve => execFile('git', ['-C', cwd, ...args], { timeout, signal, maxBuffer: 4 << 20, encoding: 'utf8' },
+  (error, stdout, stderr) => resolve(error ? { out: null, err: String(stderr ?? '') } : { out: stdout })));
+export const git = async (cwd, args, timeout = 3_000, signal) => {
+  const first = await gitOnce(cwd, args, timeout, signal);
+  if (first.out !== null || !/dubious ownership/i.test(first.err)) return first.out;
+  return (await gitOnce(cwd, ['-c', `safe.directory=${cwd}`, ...args], timeout, signal)).out
+    ?? (await gitOnce(cwd, ['-c', 'safe.directory=*', ...args], timeout, signal)).out;
+};
+
+// The repository at dir: its key, its top folder and the name the folder
+// gives it. reason says why there is none: not_a_repository, no_origin
+// (no remote at all) or unsupported_remote (a remote repoKey cannot read).
+export async function repositoryAt(dir, name = '', signal) {
+  const top = (await git(dir, ['rev-parse', '--show-toplevel'], 3_000, signal))?.trim();
+  if (!top) return { reason: 'not_a_repository' };
+  let remote = (await git(dir, ['remote', 'get-url', 'origin'], 3_000, signal))?.trim();
+  if (!remote) {
+    // No origin: a repository with exactly one remote is known by it.
+    const remotes = (await git(dir, ['remote'], 3_000, signal))?.split('\n').map(r => r.trim()).filter(Boolean) ?? [];
+    if (remotes.length !== 1) return { reason: 'no_origin' };
+    remote = (await git(dir, ['remote', 'get-url', remotes[0]], 3_000, signal))?.trim();
+  }
+  const key = repoKey(remote);
+  return key ? { key, dir: top, name } : { reason: 'unsupported_remote' };
+}
+
+// The repositories memory can use in cwd: the folder's own, or else the
+// ones one level down. folder is the reason when there is none.
+export async function findRepositories(cwd, signal) {
+  const own = await repositoryAt(cwd, '', signal);
+  if (own.key) return { repos: [own], folder: null };
+  if (own.reason !== 'not_a_repository') return { repos: [], folder: own.reason };
+  let names = [];
+  try {
+    names = fs.readdirSync(cwd, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+      .map(e => e.name).filter(n => fs.existsSync(path.join(cwd, n, '.git'))).sort().slice(0, 40);
+  } catch { /* unreadable folder */ }
+  const repos = [], seen = new Set();
+  let reason = 'not_a_repository';
+  for (const name of names) {
+    if (repos.length >= MAX_REPOS) break;
+    const r = await repositoryAt(path.join(cwd, name), name, signal);
+    if (r.key && !seen.has(r.key)) { seen.add(r.key); repos.push(r); } else if (r.reason && r.reason !== 'not_a_repository') reason = r.reason;
+  }
+  return { repos, folder: repos.length ? null : reason };
+}
+
+// Top-level folders of a set of repository-relative paths.
+const topDirs = (files, max = 8) => [...new Set(files.map(f => String(f).split('/')).filter(p => p.length > 1 && p[0] && !p[0].startsWith('.')).map(p => p[0]))].slice(0, max);
+// A stable event per extra repository of one round, so a retry is a duplicate.
+const eventFor = (id, key, i) => {
+  if (!i) return id;
+  const h = createHash('sha256').update(`${id}\0${key}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${'89ab'[parseInt(h[16], 16) & 3]}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+};
+// Changes a commit made that leave memories about a file stale.
+function commitChanges(lines) {
+  const changes = [], files = [];
+  const unbrace = s => { const m = /^(.*)\{(.*) => (.*)\}(.*)$/.exec(s); return m ? [`${m[1]}${m[2]}${m[4]}`.replace(/\/\//g, '/'), `${m[1]}${m[3]}${m[4]}`.replace(/\/\//g, '/')] : s.split(' => '); };
+  for (const line of lines) {
+    let m;
+    if ((m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line))) {
+      const [from, to = from] = unbrace(m[3]); files.push(to);
+      const added = Number(m[1]), deleted = Number(m[2]);
+      if (deleted >= 30 && deleted >= added * 0.7 && from === to) changes.push({ path: to, kind: 'rewritten' });
+    } else if ((m = /^ delete mode \d+ (.+)$/.exec(line))) changes.push({ path: m[1], kind: 'deleted' });
+    else if ((m = /^ rename (.+) \(\d+%\)$/.exec(line))) changes.push({ path: unbrace(m[1])[0], kind: 'renamed' });
+    else if ((m = /^ rewrite (.+) \(\d+%\)$/.exec(line))) changes.push({ path: m[1], kind: 'rewritten' });
+  }
+  const unique = new Map(changes.filter(c => c.path && c.path.length <= 300).map(c => [c.path, c]));
+  return { dirs: topDirs(files), changes: [...unique.values()].slice(0, 20) };
+}
 
 const textOf = content => typeof content === 'string' ? content : Array.isArray(content) ? content.filter(p => p?.type === 'text').map(p => p.text).join('\n') : '';
 
@@ -77,9 +157,9 @@ function bounded(promise, signal, late = () => {}) {
 }
 
 export class TeamMemory {
-  constructor({ origin, cwd, stateDir, conversationId, scope = () => null, lease = null, renew = null, fetchImpl = fetch, now = () => Date.now() }) {
+  constructor({ origin, cwd, stateDir, conversationId, scope = () => null, lease = null, renew = null, fetchImpl = fetch, now = () => Date.now(), changed = () => [] }) {
     this.renew = renew; this.scope = scope; this.lease = lease; this.protocol = 0; this.background = null; this.stats = {};
-    Object.assign(this, { origin, cwd, stateDir, conversationId, fetchImpl, now, repo: undefined, offUntil: 0, retain: true, briefed: false });
+    Object.assign(this, { origin, cwd, stateDir, conversationId, fetchImpl, now, changed, repo: undefined, repos: undefined, folder: null, heads: {}, offUntil: 0, retain: true, briefed: false });
     this.syncScope();
     this.knownPath = stateDir ? path.join(stateDir, 'memory-known.json') : null;
   }
@@ -96,22 +176,32 @@ export class TeamMemory {
 
   // Memory answered for this Studio recently: the conversation gets the
   // memory tools (their schema is fixed when it opens).
-  static known(stateDir, origin, scope, now = Date.now()) {
-    try { const k = JSON.parse(fs.readFileSync(path.join(stateDir, 'memory-known.json'), 'utf8')); return k.origin === origin && k.scope === scopeID(scope) && !!k.scope && now - k.at < KNOWN_MS; }
-    catch { return false; }
+  static #known(stateDir, origin, scope, now) {
+    try { const k = JSON.parse(fs.readFileSync(path.join(stateDir, 'memory-known.json'), 'utf8')); return k.origin === origin && k.scope === scopeID(scope) && !!k.scope && now - k.at < KNOWN_MS ? k : null; }
+    catch { return null; }
   }
+  static known(stateDir, origin, scope, now = Date.now()) { return !!TeamMemory.#known(stateDir, origin, scope, now); }
+  // The memory protocol that Studio last answered with on this Mac (0: unknown).
+  static knownProtocol(stateDir, origin, scope, now = Date.now()) { return stateDir ? TeamMemory.#known(stateDir, origin, scope, now)?.protocol ?? 0 : 0; }
   #remember(on) {
     if (!this.knownPath) return;
-    try { if (on) fs.writeFileSync(this.knownPath, JSON.stringify({ origin: this.origin, scope: this.scopeHash, at: this.now() })); else fs.rmSync(this.knownPath, { force: true }); } catch { /* best effort */ }
+    try { if (on) fs.writeFileSync(this.knownPath, JSON.stringify({ origin: this.origin, scope: this.scopeHash, at: this.now(), protocol: this.protocol || undefined })); else fs.rmSync(this.knownPath, { force: true }); } catch { /* best effort */ }
   }
+  // What this Studio speaks: from this conversation's brief, else from the last one on this Mac.
+  get speaks() { return this.protocol || TeamMemory.knownProtocol(this.stateDir, this.origin, this.scope(), this.now()); }
 
-  async repository() {
-    if (this.repo === undefined) this.repo = repoKey(await git(this.cwd, ['remote', 'get-url', 'origin']));
-    return this.repo;
+  // The repositories memory uses here; this.repo is the first (the folder's own).
+  async repositories() {
+    if (this.repos) return this.repos;
+    if (typeof this.repo === 'string') return (this.repos = [{ key: this.repo, dir: this.cwd, name: '' }]);
+    const found = await findRepositories(this.cwd);
+    this.repos = found.repos; this.folder = found.folder; this.repo = found.repos[0]?.key ?? null;
+    return this.repos;
   }
+  async repository() { await this.repositories(); return this.repo; }
   get active() { return this.now() >= this.offUntil; }
 
-  async #post(grant, op, body, timeout, renew = this.renew, signal) {
+  async #post(grant, op, body, timeout, renew = this.renew, signal, { remember = true, offOnMissing = true } = {}) {
     const expectedScope = this.scopeHash;
     const deadline = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
     const send = async g => {
@@ -133,6 +223,8 @@ export class TeamMemory {
         const fresh = await bounded(renew(grant), deadline).catch(() => null);
         if (fresh?.token && fresh.token !== grant.token) response = await send(fresh);
       }
+      // An operation an older Studio does not have (404) is not memory being off.
+      if (response.status === 404 && !offOnMissing) return null;
       if (response.status === 204 || response.status === 404) {
         // Old servers use 204 for retain opt-out as well as global off.
         if (op !== 'retain' || this.protocol >= 2) { this.offUntil = this.now() + OFF_MS; this.#remember(false); }
@@ -142,47 +234,109 @@ export class TeamMemory {
       if (!response.ok) {
         const error = Error(`memory-${op}-${response.status}`); error.status = response.status; throw error;
       }
-      this.#remember(true);
-      return response.json();
+      const answer = await response.json();
+      if (op === 'brief' && Number.isInteger(answer?.protocol_version)) this.protocol = answer.protocol_version;
+      if (remember) this.#remember(true);
+      return answer;
     } finally { held?.release(); }
+  }
+
+  // Where the member works in a repository now: its branch and the top
+  // folders of the files this conversation changed or the working tree holds.
+  async #context(repo, signal) {
+    const branch = (await git(repo.dir, ['rev-parse', '--abbrev-ref', 'HEAD'], 2_000, signal))?.trim();
+    const own = this.#repoFiles(repo, [...(this.changed() ?? [])]);
+    const status = (await git(repo.dir, ['status', '--porcelain', '--untracked-files=no'], 2_000, signal)) ?? '';
+    const pending = status.split('\n').map(l => l.slice(3).split(' -> ').at(-1)?.trim()).filter(Boolean);
+    const paths = topDirs([...own, ...pending]);
+    return { ...(branch && branch !== 'HEAD' ? { branch: branch.slice(0, 100) } : {}), ...(paths.length ? { paths } : {}) };
+  }
+  // The conversation's changed files (relative to cwd) that lie in repo, relative to its top.
+  #repoFiles(repo, files) {
+    return files.map(f => path.relative(repo.dir, path.resolve(this.cwd, String(f)))).filter(f => f && !f.startsWith('..') && !path.isAbsolute(f)).map(f => f.split(path.sep).join('/'));
+  }
+  // A brief, search or ask body for one repository; context only for protocol 3.
+  async #body(repo, fields, signal) {
+    const body = { repo_key: repo.key, ...fields };
+    if (this.speaks >= PROTOCOL) { const context = await this.#context(repo, signal).catch(() => ({})); if (Object.keys(context).length) body.context = context; }
+    return body;
+  }
+  // The repositories a question or a round is about: those it names (by folder
+  // or repository name) when the folder holds several, else all of them.
+  #about(text, max = MAX_ROUND_REPOS) {
+    const repos = this.repos ?? [];
+    if (repos.length <= 1) return repos;
+    const t = String(text ?? '').toLowerCase();
+    const named = repos.filter(r => t.includes(r.name.toLowerCase()) || t.includes(r.key.split('/').at(-1)));
+    return (named.length ? named : repos).slice(0, max);
+  }
+  #pick(repository) {
+    const repos = this.repos ?? [];
+    if (!repository) return null;
+    const want = String(repository).toLowerCase().replace(/\/+$/, '');
+    return repos.find(r => r.name.toLowerCase() === want || r.key === want || r.key.split('/').at(-1) === want) ?? null;
+  }
+
+  // A folder memory cannot use is told to Studio once, so its admins can see it.
+  async #reportFolder(grant) {
+    if (this.folderReported || !this.folder) return;
+    this.folderReported = true;
+    try { await this.#post(grant, 'brief', { repo_key: '', prompt: '', folder: this.folder }, BRIEF_MS, this.renew, undefined, { remember: false }); } catch { /* older Studio: 400 */ }
   }
 
   async beforeRound(grant, prompt, hasBrief) {
     this.syncScope();
-    if (!grant || !this.active || !(await this.repository())) return null;
+    if (!grant || !this.active) return null;
+    const repos = await this.repositories();
+    if (!repos.length) { await this.#reportFolder(grant); return null; }
     if ((hasBrief || this.briefed) && this.protocol) { this.startBackground(grant); return null; }
     this.count('brief_attempts');
-    let brief;
     this.lastBrief = 'error';
-    try { brief = await this.#post(grant, 'brief', { repo_key: this.repo, prompt: String(prompt ?? '').slice(0, 2000) }, BRIEF_MS); }
-    catch { this.count('brief_errors'); return null; }
-    this.lastBrief = !brief ? 'off' : brief.text?.trim() ? 'ok' : 'empty';
-    if (!brief) return null;
-    this.briefed = true; this.protocol = brief.protocol_version ?? 1;
-    this.retain = brief.retain_sessions !== false;
-    this.count('brief_successes'); if (brief.text?.trim()) this.count('brief_nonempty');
-    this.startBackground(grant, brief.git_head ?? null);
-    return { text: typeof brief.text === 'string' ? brief.text : '', facts: brief.facts ?? 0, pages: Array.isArray(brief.pages) ? brief.pages : [] };
+    const ask = String(prompt ?? '').slice(0, 2000);
+    const answers = await Promise.allSettled(repos.map(async r => [r, await this.#post(grant, 'brief', await this.#body(r, { prompt: ask }), BRIEF_MS)]));
+    const ok = answers.filter(a => a.status === 'fulfilled').map(a => a.value);
+    if (!ok.length) { this.count('brief_errors'); return null; }
+    const answered = ok.filter(([, b]) => b);
+    this.lastBrief = !answered.length ? 'off' : answered.some(([, b]) => b.text?.trim()) ? 'ok' : 'empty';
+    if (!answered.length) return null;
+    this.briefed = true; this.protocol = Math.min(...answered.map(([, b]) => b.protocol_version ?? 1));
+    this.retain = answered.every(([, b]) => b.retain_sessions !== false);
+    this.count('brief_successes'); if (this.lastBrief === 'ok') this.count('brief_nonempty');
+    const heads = {};
+    for (const [r, b] of answered) heads[r.key] = b.git_head ?? null;
+    this.startBackground(grant, heads);
+    const several = repos.length > 1, pages = new Set(), parts = [];
+    let facts = 0;
+    for (const [r, b] of answered) {
+      facts += b.facts ?? 0; (Array.isArray(b.pages) ? b.pages : []).forEach(p => pages.add(p));
+      const text = typeof b.text === 'string' ? b.text.trim() : '';
+      if (text) parts.push(several ? `Repository ${r.name}/ (${r.key}):\n${text}` : text);
+    }
+    return { text: parts.join('\n\n'), facts, pages: [...pages] };
   }
 
-  startBackground(grant, gitHead = undefined) {
+  startBackground(grant, heads = undefined) {
     if (this.background || !this.active) return;
     // One deadline for the whole backlog, not one deadline per old event.
     const signal = AbortSignal.timeout(WRITE_MS);
-    this.background = Promise.allSettled([
-      this.#drain(grant, signal),
-      ...(gitHead !== undefined ? [this.#sendGit(grant, gitHead, AbortSignal.timeout(GIT_MS))] : []),
-    ]).finally(() => { this.background = null; });
+    const git = heads === undefined ? [] : (this.repos ?? []).filter(r => r.key in heads).map(r => this.#sendGit(grant, r, heads[r.key], AbortSignal.timeout(GIT_MS)));
+    this.background = Promise.allSettled([this.#drain(grant, signal), ...git]).finally(() => { this.background = null; });
   }
 
-  async #sendGit(grant, known, signal) {
-    const head = (await git(this.cwd, ['rev-parse', 'HEAD'], 3000, signal))?.trim();
+  async #sendGit(grant, repo, known, signal) {
+    const head = (await git(repo.dir, ['rev-parse', 'HEAD'], 3000, signal))?.trim();
     if (!/^[0-9a-f]{40}$/.test(head ?? '') || head === known) return;
-    const range = known && (await git(this.cwd, ['merge-base', '--is-ancestor', known, head], 3000, signal).then(out => out !== null)) ? [`${known}..${head}`] : [head];
-    const log = await git(this.cwd, ['log', `-n${MAX_COMMITS}`, '--no-merges', '--format=%H%x1f%cI%x1f%s%x1f%b%x1e', ...range], 5_000, signal);
+    const range = known && (await git(repo.dir, ['merge-base', '--is-ancestor', known, head], 3000, signal).then(out => out !== null)) ? [`${known}..${head}`] : [head];
+    const v3 = this.protocol >= PROTOCOL;
+    // Protocol 3 adds the files each commit touched: folders for tags, deletions/renames/rewrites for staleness.
+    const log = await git(repo.dir, ['log', `-n${MAX_COMMITS}`, '--no-merges', ...(v3 ? ['-M', '--numstat', '--summary'] : []), '--format=%x1e%H%x1f%cI%x1f%s%x1f%b%x1d', ...range], 5_000, signal);
     if (!log) return;
-    const commits = log.split('\x1e').map(r => r.trim()).filter(Boolean).map(r => { const [sha, date, subject, body = ''] = r.split('\x1f'); return { sha, date, subject, body: body.trim().slice(0, MAX_COMMIT_BODY) }; })
-      .filter(c => /^[0-9a-f]{40}$/.test(c.sha) && c.subject?.trim() && c.date);
+    const commits = log.split('\x1e').map(r => r.trim()).filter(Boolean).map(r => {
+      const [meta, files = ''] = r.split('\x1d'), [sha, date, subject, body = ''] = meta.split('\x1f');
+      const commit = { sha, date, subject, body: body.trim().slice(0, MAX_COMMIT_BODY) };
+      if (v3) { const { dirs, changes } = commitChanges(files.split('\n')); if (dirs.length) commit.dirs = dirs; if (changes.length) commit.changes = changes; }
+      return commit;
+    }).filter(c => /^[0-9a-f]{40}$/.test(c.sha) && c.subject?.trim() && c.date);
     if (!commits.length) return;
     // Oldest first, in calls under the body cap; the head is recorded with the last.
     commits.reverse();
@@ -191,8 +345,17 @@ export class TeamMemory {
       while (i < commits.length && (bytes += Buffer.byteLength(JSON.stringify(commits[i]))) < MAX_GIT_BODY) batch.push(commits[i++]);
       if (!batch.length) batch.push(commits[i++]);
       const last = i >= commits.length;
-      if (!(await this.#post(grant, 'git', { repo_key: this.repo, head: last ? head : batch.at(-1).sha, commits: batch }, GIT_MS, this.renew, signal))) return;
+      if (!(await this.#post(grant, 'git', { repo_key: repo.key, head: last ? head : batch.at(-1).sha, commits: batch }, GIT_MS, this.renew, signal))) return;
     }
+  }
+
+  // The repositories a round goes to: those its changed files are in, else
+  // those it names, else (a folder with several) all of them, at most three.
+  #targets(changedFiles, messages) {
+    const repos = this.repos ?? [];
+    if (repos.length <= 1) return repos;
+    const touched = repos.filter(r => this.#repoFiles(r, [...changedFiles]).length);
+    return touched.length ? touched.slice(0, MAX_ROUND_REPOS) : this.#about(messages.map(m => textOf(m.content)).join('\n'));
   }
 
   // Persist before sending. The same event ID and source identity survive
@@ -200,26 +363,45 @@ export class TeamMemory {
   async afterRound(grant, messages, changedFiles, event = {}, signal) {
     // The backlog started with the round may still run; wait for it only within the close budget.
     if (this.background) await (signal ? Promise.race([this.background, new Promise(done => signal.addEventListener('abort', done, { once: true }))]) : this.background);
-    if (!grant || !this.active || !this.retain || !(await this.repository())) return;
-    const text = turnRecord(messages, changedFiles, event.lessons ?? []);
-    if (!text) return;
+    if (!grant || !this.active || !this.retain || !(await this.repositories()).length) return;
+    const targets = this.#targets(changedFiles ?? [], messages);
+    this.lastTargets = targets;
     const deadline = signal ? AbortSignal.any([signal, AbortSignal.timeout(WRITE_MS)]) : AbortSignal.timeout(WRITE_MS);
+    const several = (this.repos ?? []).length > 1;
+    // The record names files as the member sees them; protocol 3 also sends them relative to the repository's top.
+    const filesOf = r => several ? this.#repoFiles(r, [...(changedFiles ?? [])]) : [...(changedFiles ?? [])];
+    const checks = event.checks?.summary ?? null;
     // A v1 Studio (0.27.x) takes the round in its old body, best effort and
     // without the outbox: it refuses unknown fields and has no event identity.
     if (this.protocol === 1) {
-      if (deadline.aborted) return;
-      try { if (await this.#post(grant, 'retain', { repo_key: this.repo, conversation_id: this.conversationId, text }, WRITE_MS, this.renew, deadline)) this.count('accepted'); } catch { /* memory is optional */ }
+      for (const r of targets) {
+        const text = turnRecord(messages, filesOf(r), event.lessons ?? []);
+        if (!text || deadline.aborted) return;
+        try { if (await this.#post(grant, 'retain', { repo_key: r.key, conversation_id: this.conversationId, text }, WRITE_MS, this.renew, deadline)) this.count('accepted'); } catch { /* memory is optional */ }
+      }
       return;
     }
     const source = event.scope ?? this.scope();
     if (!source?.key_id) return;
-    const item = { repo_key: this.repo, conversation_id: this.conversationId, text,
-      event_id: event.id ?? randomUUID(), source_key_id: source.key_id, occurred_at: event.at ?? new Date(this.now()).toISOString() };
-    const box = new MemoryOutbox(this.stateDir, source, this.now);
-    if (!box.put(item)) { this.count('queue_rejected'); return; }
-    this.count('queued');
+    const box = new MemoryOutbox(this.stateDir, source, this.now), id = event.id ?? randomUUID();
+    let queued = false;
+    for (const [i, r] of targets.entries()) {
+      const files = filesOf(r), text = turnRecord(messages, files, event.lessons ?? []);
+      if (!text) return;
+      const item = { repo_key: r.key, conversation_id: this.conversationId, text,
+        event_id: eventFor(id, r.key, i), source_key_id: source.key_id, occurred_at: event.at ?? new Date(this.now()).toISOString() };
+      if (this.protocol >= PROTOCOL) {
+        const context = await this.#context(r, deadline).catch(() => ({}));
+        if (Object.keys(context).length) item.context = context;
+        const own = this.#repoFiles(r, [...(changedFiles ?? [])]);
+        if (own.length) item.files = own.slice(0, 12).map(f => String(f).slice(0, 200));
+        if (checks) item.checks = checks;
+      }
+      if (!box.put(item)) { this.count('queue_rejected'); continue; }
+      this.count('queued'); queued = true;
+    }
     // A rebind cannot send the old round using the new key.
-    if (scopeID(source) !== scopeID(this.scope())) return;
+    if (!queued || scopeID(source) !== scopeID(this.scope())) return;
     await this.#drain(grant, deadline);
   }
 
@@ -236,7 +418,9 @@ export class TeamMemory {
       let outcome = 'retry';
       try {
         if (claim.record.attempts) this.count('write_retries');
-        const ack = await this.#post(grant, 'retain', claim.record.item, WRITE_MS, this.renew, signal);
+        // A round queued for protocol 3 meets a Studio that went back to 2: send the fields 2 knows.
+        const item = this.protocol >= PROTOCOL ? claim.record.item : (({ context, files, checks, ...v2 }) => v2)(claim.record.item);
+        const ack = await this.#post(grant, 'retain', item, WRITE_MS, this.renew, signal);
         if (!ack || ack.status === 'retain_disabled') { this.retain = false; outcome = 'discard'; }
         else if (ack.event_id === claim.record.item.event_id && ack.operation_id && ['pending','processing','completed','failed','cancelled','unknown'].includes(ack.status)) {
           outcome = 'ack'; this.count('accepted'); if (ack.duplicate) this.count('duplicates');
@@ -247,28 +431,58 @@ export class TeamMemory {
   }
 
   async reportTurn(grant, turn, outcome, timeout = 2000) {
-    if (timeout < 250 || !grant || !this.active || this.protocol < 2 || !this.repo || scopeID(turn.scope) !== scopeID(this.scope())) return;
+    const repo = this.lastTargets?.[0]?.key ?? this.repo;
+    if (timeout < 250 || !grant || !this.active || this.protocol < 2 || !repo || scopeID(turn.scope) !== scopeID(this.scope())) return;
     // Counters only. Missing delivery stays unknown; it is never counted as
     // a control conversation. Retain opt-out does not disable measurement.
-    const body = { repo_key: this.repo, event_id: turn.id, source_key_id: turn.scope.key_id,
+    const body = { repo_key: repo, event_id: turn.id, source_key_id: turn.scope.key_id,
       conversation_id: this.conversationId, counters: { ...this.stats }, outcome,
       duration_ms: Math.min(604800000, Math.max(0, Date.now() - Date.parse(turn.at))) };
     try { await this.#post(grant, 'telemetry', body, timeout); } catch { /* best effort, no prompt data */ }
   }
 
-  async search(grant, query, renew) {
-    if (!grant || !(await this.repository())) return 'Team memory is not available for this folder (no origin remote).';
-    this.count(renew?.role && renew.role !== 'main' ? 'helper_search_calls' : 'search_calls');
-    try { return (await this.#post(grant, 'search', { repo_key: this.repo, query }, TOOL_MS, renew ?? this.renew))?.text ?? 'Team memory is off for this team.'; }
-    catch { return 'Team memory did not answer; go on without it.'; }
+  // The tools' answers, one per repository when the folder holds several.
+  async #each(repos, run) {
+    const out = await Promise.all(repos.map(async r => [r, await run(r)]));
+    return out.length === 1 ? out[0][1] : out.map(([r, text]) => `## ${r.name}/ (${r.key})\n${text}`).join('\n\n');
   }
-  async page(grant, name, renew) {
-    if (!grant || !(await this.repository())) return 'Team memory is not available for this folder (no origin remote).';
+  #none(repository) {
+    if (!(this.repos ?? []).length) return 'Team memory is not available for this folder (no repository with a remote).';
+    return `No repository named "${repository}" here; this folder has: ${this.repos.map(r => r.name || r.key).join(', ')}.`;
+  }
+
+  async search(grant, query, renew, repository) {
+    if (!grant || !(await this.repositories()).length) return this.#none();
+    const picked = repository ? this.#pick(repository) : null;
+    if (repository && !picked && this.repos.length > 1) return this.#none(repository);
+    this.count(renew?.role && renew.role !== 'main' ? 'helper_search_calls' : 'search_calls');
+    return this.#each(picked ? [picked] : this.#about(query), async r => {
+      try { return (await this.#post(grant, 'search', await this.#body(r, { query }), TOOL_MS, renew ?? this.renew))?.text ?? 'Team memory is off for this team.'; }
+      catch { return 'Team memory did not answer; go on without it.'; }
+    });
+  }
+  async page(grant, name, renew, repository) {
+    if (!grant || !(await this.repositories()).length) return this.#none();
+    const picked = repository ? this.#pick(repository) : this.repos[0];
+    if (!picked) return this.#none(repository);
     this.count('page_calls');
     try {
-      const page = await this.#post(grant, 'page', { repo_key: this.repo, name }, TOOL_MS, renew ?? this.renew);
+      const page = await this.#post(grant, 'page', { repo_key: picked.key, name }, TOOL_MS, renew ?? this.renew);
       return page ? (page.markdown?.trim() || `The page "${name}" has no content yet.`) : 'Team memory is off for this team.';
     } catch { return `No knowledge page named "${name}", or team memory did not answer.`; }
+  }
+  // memory_ask: one synthesized answer with its sources (Studio protocol 3).
+  async ask(grant, question, renew, repository) {
+    if (!grant || !(await this.repositories()).length) return this.#none();
+    const picked = repository ? this.#pick(repository) : null;
+    if (repository && !picked && this.repos.length > 1) return this.#none(repository);
+    this.count(renew?.role && renew.role !== 'main' ? 'helper_ask_calls' : 'ask_calls');
+    return this.#each(picked ? [picked] : this.#about(question, 2), async r => {
+      try {
+        const answer = await this.#post(grant, 'ask', await this.#body(r, { question }), ASK_MS, renew ?? this.renew, undefined, { offOnMissing: false });
+        return answer?.text ?? 'This Studio cannot answer memory_ask yet; use memory_search.';
+      } catch { return 'Team memory did not answer; use memory_search or go on without it.'; }
+    });
   }
 }
 
@@ -286,15 +500,20 @@ export const renewer = (owner, role, verify) => {
   const renew = async () => { const held = await lease(); try { return held.grant; } finally { held.release(); } };
   renew.lease = lease; renew.role = role; return renew;
 };
-export function memoryTools(self, { pages = true, grant = () => self.grant, renew } = {}) {
+export function memoryTools(self, { pages = true, ask = false, grant = () => self.grant, renew } = {}) {
+  const repository = { type: 'string', maxLength: 200, description: 'Only in a folder that holds several repositories: the repository\'s folder name. Leave it out to use the ones the question is about.' };
   const tools = [{ name: 'memory_search', label: 'Team memory',
-    description: 'Search the team memory of this repository: decisions, rules and conventions from the team\'s earlier conversations and commits, and its knowledge pages. Use it before asking the member something the team may already have settled. Memory is a record of the past: check what it says against the code.',
-    parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 2000 } }, required: ['query'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.search(grant(), args.query, renew) }], details: {} }) }];
+    description: 'Search the team memory of this repository: the team rules, decisions and conventions from the team\'s earlier conversations and commits, and its knowledge pages. Use it before asking the member something the team may already have settled. Team rules always apply and override recalled notes. Notes are a record of the past: check them against the code; "claim, unverified" means an agent said it worked without a passing check, "stale" that its files changed since.',
+    parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 2000 }, repository }, required: ['query'], additionalProperties: false },
+    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.search(grant(), args.query, renew, args.repository) }], details: {} }) }];
+  if (ask) tools.push({ name: 'memory_ask', label: 'Ask team memory',
+    description: 'Ask the team memory one question that needs a synthesized answer ("why is the eKYC order locked?", "what did we decide about refunds?"). It answers from the team\'s notes under the team rules and lists its sources; slower than memory_search (up to a minute), so use memory_search for a quick lookup. Check the answer against the code before acting on it.',
+    parameters: { type: 'object', properties: { question: { type: 'string', minLength: 1, maxLength: 2000 }, repository }, required: ['question'], additionalProperties: false },
+    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.ask(grant(), args.question, renew, args.repository) }], details: {} }) });
   if (pages) tools.push({ name: 'memory_page', label: 'Team knowledge page',
     description: `Read one knowledge page the team memory keeps for this repository: ${PAGE_NAMES.join(', ')}.`,
-    parameters: { type: 'object', properties: { name: { type: 'string', enum: PAGE_NAMES } }, required: ['name'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.page(grant(), args.name, renew) }], details: {} }) });
+    parameters: { type: 'object', properties: { name: { type: 'string', enum: PAGE_NAMES }, repository }, required: ['name'], additionalProperties: false },
+    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.page(grant(), args.name, renew, args.repository) }], details: {} }) });
   return tools;
 }
 
@@ -343,7 +562,7 @@ export async function prepareMemoryContext(self, messages, signal, exposure = tr
 // when the conversation opens, a round's start once its run is granted, and
 // a round's end while its run token is still valid. None can fail a turn.
 export function attachMemory(self, manager, agentDir, verify) {
-  self.memory = new TeamMemory({ origin: self.origin, cwd: self.cwd, stateDir: agentDir ?? null, conversationId: manager.getSessionId(), scope: () => memoryScope(self.origin, self.manifest), renew: renewer(self, 'main', verify) });
+  self.memory = new TeamMemory({ origin: self.origin, cwd: self.cwd, stateDir: agentDir ?? null, conversationId: manager.getSessionId(), scope: () => memoryScope(self.origin, self.manifest), renew: renewer(self, 'main', verify), changed: () => self.ownPaths ?? [] });
   return self.memory;
 }
 export function trackMemoryLessons(self) {
@@ -352,10 +571,12 @@ export function trackMemoryLessons(self) {
 // Whether this conversation has team memory now: Studio answered memory for
 // this key recently and has not switched it off since (the Terminal's header).
 export const memoryOn = self => !!self?.memory?.stateDir && self.memory.active && TeamMemory.known(self.memory.stateDir, self.origin, memoryScope(self.origin, self.manifest));
-export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self) : [];
+// memory_ask needs a Studio that answered with protocol 3 (an older one has no /v1/memory/ask).
+const speaksAsk = (dir, origin, manifest) => TeamMemory.knownProtocol(dir, origin, memoryScope(origin, manifest)) >= PROTOCOL;
+export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self, { ask: speaksAsk(agentDir, self.origin, self.manifest) }) : [];
 // A helper (scout, research, verify, review) reads the team memory with its own run token; it never writes.
 export const helperMemoryTools = (managed, grant, renew) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin, memoryScope(managed.origin, managed.manifest))
-  ? memoryTools(managed, { pages: false, grant, renew }) : [];
+  ? memoryTools(managed, { pages: false, ask: speaksAsk(managed.memory.stateDir, managed.origin, managed.manifest), grant, renew }) : [];
 export async function openRound(self, manager, text) {
   if (!self.memory) return;
   self.memory.stats = {};
