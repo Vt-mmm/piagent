@@ -4,13 +4,15 @@
 // Optional network work uses bounded deadlines and the shared run-token owner.
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { MemoryOutbox, memoryScope, scopeID } from './memory-outbox.mjs';
-import { execFile } from 'node:child_process';
 import { CheckLessons } from './memory-lessons.mjs';
 import { CLIENT_AGENT } from './client-agent.mjs';
 import { redactedText } from '../runtime/managed-failure.mjs';
-import { shareGrant, releaseGrant } from './grant-share.mjs';
+import { git, repoKey, repositoryAt, findRepositories, topDirs, eventFor, commitChanges } from './memory-repos.mjs';
+import { PAGE_NAMES, renewer, memoryTools } from './memory-tools.mjs';
+
+export { git, repoKey, repositoryAt, findRepositories, PAGE_NAMES, renewer, memoryTools };
 
 export const MEMORY_ENTRY = 'agent-watch-memory';
 const BRIEF_MS = 5_000, WRITE_MS = 4_000, GIT_MS = 6_000, TOOL_MS = 10_000;
@@ -19,104 +21,12 @@ const OFF_MS = 30 * 60_000, KNOWN_MS = 7 * 24 * 3600_000;
 // the same context; closing a round (retain + telemetry) stays within CLOSE_MS.
 const EMPTY_BRIEF_MS = 30 * 60_000, FAILED_BRIEF_MS = 5 * 60_000, CLOSE_MS = 4_500;
 const MAX_TURN = 30 * 1024, MAX_COMMITS = 300, MAX_GIT_BODY = 60 * 1024, MAX_COMMIT_BODY = 2_000;
-// A folder that holds several repositories (front end, back end…) gets the
-// memory of each, at most MAX_REPOS; a round is written to the ones it touched.
-const MAX_REPOS = 6, MAX_ROUND_REPOS = 3, ASK_MS = 50_000;
+// A round is written to at most three of a folder's repositories (memory-repos.mjs).
+const MAX_ROUND_REPOS = 3, ASK_MS = 50_000;
 // Studio protocol 3 (Agent Studio 0.30): rounds and commits carry where the
 // work happened and how its checks ended; memory_ask. Older Studios refuse
 // unknown fields, so these are sent only once Studio has said it speaks 3.
 export const PROTOCOL = 3;
-
-// The repository's identity: its origin remote without scheme, user, port
-// or ".git", lower case ("github.com/acme/shop"). null: no memory here.
-export function repoKey(remote) {
-  let s = String(remote ?? '').trim();
-  if (!s) return null;
-  const scp = /^[\w.-]+@([^:/]+):(.+)$/.exec(s); // git@github.com:acme/shop.git
-  if (scp) s = `${scp[1]}/${scp[2]}`;
-  else {
-    try { const u = new URL(s); if (!['http:', 'https:', 'ssh:', 'git:'].includes(u.protocol)) return null; s = `${u.hostname}${u.pathname}`; }
-    catch { return null; }
-  }
-  s = s.toLowerCase().replace(/\.git\/?$/, '').replace(/\/+$/, '').replace(/\/{2,}/g, '/');
-  return /^[a-z0-9][a-z0-9._-]*\/[a-z0-9._/-]+$/.test(s) && s.length <= 200 && !s.includes('..') ? s : null;
-}
-
-// Memory only reads (remote, branch, log, status). A repository another user
-// owns (a Windows drive seen from WSL, a shared checkout) makes git refuse
-// with "dubious ownership"; the read is retried trusting that one folder.
-const gitOnce = (cwd, args, timeout, signal) => new Promise(resolve => execFile('git', ['-C', cwd, ...args], { timeout, signal, maxBuffer: 4 << 20, encoding: 'utf8' },
-  (error, stdout, stderr) => resolve(error ? { out: null, err: String(stderr ?? '') } : { out: stdout })));
-export const git = async (cwd, args, timeout = 3_000, signal) => {
-  const first = await gitOnce(cwd, args, timeout, signal);
-  if (first.out !== null || !/dubious ownership/i.test(first.err)) return first.out;
-  return (await gitOnce(cwd, ['-c', `safe.directory=${cwd}`, ...args], timeout, signal)).out
-    ?? (await gitOnce(cwd, ['-c', 'safe.directory=*', ...args], timeout, signal)).out;
-};
-
-// The repository at dir: its key, its top folder and the name the folder
-// gives it. reason says why there is none: not_a_repository, no_origin
-// (no remote at all) or unsupported_remote (a remote repoKey cannot read).
-export async function repositoryAt(dir, name = '', signal) {
-  const top = (await git(dir, ['rev-parse', '--show-toplevel'], 3_000, signal))?.trim();
-  if (!top) return { reason: 'not_a_repository' };
-  let remote = (await git(dir, ['remote', 'get-url', 'origin'], 3_000, signal))?.trim();
-  if (!remote) {
-    // No origin: a repository with exactly one remote is known by it.
-    const remotes = (await git(dir, ['remote'], 3_000, signal))?.split('\n').map(r => r.trim()).filter(Boolean) ?? [];
-    if (remotes.length !== 1) return { reason: 'no_origin' };
-    remote = (await git(dir, ['remote', 'get-url', remotes[0]], 3_000, signal))?.trim();
-  }
-  const key = repoKey(remote);
-  return key ? { key, dir: top, name } : { reason: 'unsupported_remote' };
-}
-
-// The repositories memory can use in cwd: the folder's own, or else the
-// ones one level down. folder is the reason when there is none.
-export async function findRepositories(cwd, signal) {
-  const own = await repositoryAt(cwd, '', signal);
-  if (own.key) return { repos: [own], folder: null };
-  if (own.reason !== 'not_a_repository') return { repos: [], folder: own.reason };
-  let names = [];
-  try {
-    names = fs.readdirSync(cwd, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
-      .map(e => e.name).filter(n => fs.existsSync(path.join(cwd, n, '.git'))).sort().slice(0, 40);
-  } catch { /* unreadable folder */ }
-  const repos = [], seen = new Set();
-  let reason = 'not_a_repository';
-  for (const name of names) {
-    if (repos.length >= MAX_REPOS) break;
-    const r = await repositoryAt(path.join(cwd, name), name, signal);
-    if (r.key && !seen.has(r.key)) { seen.add(r.key); repos.push(r); } else if (r.reason && r.reason !== 'not_a_repository') reason = r.reason;
-  }
-  return { repos, folder: repos.length ? null : reason };
-}
-
-// Top-level folders of a set of repository-relative paths.
-const topDirs = (files, max = 8) => [...new Set(files.map(f => String(f).split('/')).filter(p => p.length > 1 && p[0] && !p[0].startsWith('.')).map(p => p[0]))].slice(0, max);
-// A stable event per extra repository of one round, so a retry is a duplicate.
-const eventFor = (id, key, i) => {
-  if (!i) return id;
-  const h = createHash('sha256').update(`${id}\0${key}`).digest('hex');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${'89ab'[parseInt(h[16], 16) & 3]}${h.slice(17, 20)}-${h.slice(20, 32)}`;
-};
-// Changes a commit made that leave memories about a file stale.
-function commitChanges(lines) {
-  const changes = [], files = [];
-  const unbrace = s => { const m = /^(.*)\{(.*) => (.*)\}(.*)$/.exec(s); return m ? [`${m[1]}${m[2]}${m[4]}`.replace(/\/\//g, '/'), `${m[1]}${m[3]}${m[4]}`.replace(/\/\//g, '/')] : s.split(' => '); };
-  for (const line of lines) {
-    let m;
-    if ((m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line))) {
-      const [from, to = from] = unbrace(m[3]); files.push(to);
-      const added = Number(m[1]), deleted = Number(m[2]);
-      if (deleted >= 30 && deleted >= added * 0.7 && from === to) changes.push({ path: to, kind: 'rewritten' });
-    } else if ((m = /^ delete mode \d+ (.+)$/.exec(line))) changes.push({ path: m[1], kind: 'deleted' });
-    else if ((m = /^ rename (.+) \(\d+%\)$/.exec(line))) changes.push({ path: unbrace(m[1])[0], kind: 'renamed' });
-    else if ((m = /^ rewrite (.+) \(\d+%\)$/.exec(line))) changes.push({ path: m[1], kind: 'rewritten' });
-  }
-  const unique = new Map(changes.filter(c => c.path && c.path.length <= 300).map(c => [c.path, c]));
-  return { dirs: topDirs(files), changes: [...unique.values()].slice(0, 20) };
-}
 
 const textOf = content => typeof content === 'string' ? content : Array.isArray(content) ? content.filter(p => p?.type === 'text').map(p => p.text).join('\n') : '';
 
@@ -486,37 +396,6 @@ export class TeamMemory {
       } catch { return 'Team memory did not answer; use memory_search or go on without it.'; }
     });
   }
-}
-
-export const PAGE_NAMES = ['Component map', 'Core concepts', 'Conventions and patterns', 'Key decisions and rationale', 'Initiatives and work in progress'];
-
-// The agent's memory tools; helpers get only the search, on their own run.
-// A fresh token for a role, shared with that role's requests running beside it.
-export const renewer = (owner, role, verify) => {
-  const lease = async () => {
-    const share = shareGrant(owner, role);
-    try { const grant = await share.grant; verify?.(grant); if (role === 'main') owner.grant = grant;
-      return { grant, release: () => releaseGrant(owner, role, share) };
-    } catch (error) { releaseGrant(owner, role, share); throw error; }
-  };
-  const renew = async () => { const held = await lease(); try { return held.grant; } finally { held.release(); } };
-  renew.lease = lease; renew.role = role; return renew;
-};
-export function memoryTools(self, { pages = true, ask = false, grant = () => self.grant, renew } = {}) {
-  const repository = { type: 'string', maxLength: 200, description: 'Only in a folder that holds several repositories: the repository\'s folder name. Leave it out to use the ones the question is about.' };
-  const tools = [{ name: 'memory_search', label: 'Team memory',
-    description: 'Search the team memory of this repository: the team rules, decisions and conventions from the team\'s earlier conversations and commits, and its knowledge pages. Use it before asking the member something the team may already have settled. Team rules always apply and override recalled notes. Notes are a record of the past: check them against the code; "claim, unverified" means an agent said it worked without a passing check, "stale" that its files changed since.',
-    parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 2000 }, repository }, required: ['query'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.search(grant(), args.query, renew, args.repository) }], details: {} }) }];
-  if (ask) tools.push({ name: 'memory_ask', label: 'Ask team memory',
-    description: 'Ask the team memory one question that needs a synthesized answer ("why is the eKYC order locked?", "what did we decide about refunds?"). It answers from the team\'s notes under the team rules and lists its sources; slower than memory_search (up to a minute), so use memory_search for a quick lookup. Check the answer against the code before acting on it.',
-    parameters: { type: 'object', properties: { question: { type: 'string', minLength: 1, maxLength: 2000 }, repository }, required: ['question'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.ask(grant(), args.question, renew, args.repository) }], details: {} }) });
-  if (pages) tools.push({ name: 'memory_page', label: 'Team knowledge page',
-    description: `Read one knowledge page the team memory keeps for this repository: ${PAGE_NAMES.join(', ')}.`,
-    parameters: { type: 'object', properties: { name: { type: 'string', enum: PAGE_NAMES }, repository }, required: ['name'], additionalProperties: false },
-    execute: async (_id, args) => ({ content: [{ type: 'text', text: await self.memory.page(grant(), args.name, renew, args.repository) }], details: {} }) });
-  return tools;
 }
 
 // The brief as the conversation keeps it: a custom message the member does
