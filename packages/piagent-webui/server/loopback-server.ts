@@ -112,6 +112,7 @@ export async function startLoopbackServer(options: {
     // Charging every tab and every prior launch to one localhost IP lets a
     // refresh or an unauthenticated local process lock out the active operator.
     const browserSession = auth.authenticate(request, now);
+    if (browserSession && auth.renew(browserSession, now)) response.setHeader("Set-Cookie", auth.cookieHeader(browserSession));
     const rateKey = browserSession ? `${remote}:${browserSession.id}` : `remote:${remote}`;
     for (const [key, value] of rates) if (now - value.windowStart >= 60_000) rates.delete(key);
     const rate = rates.get(rateKey) ?? { windowStart: now, requests: 0, bootstrapFailures: 0 };

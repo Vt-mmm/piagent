@@ -20,20 +20,23 @@ function cookie(request: IncomingMessage, name: string): string | null {
   return null;
 }
 
-export type BrowserSession = { id: string; csrf: string; expiresAt: number };
+export type BrowserSession = { id: string; csrf: string; expiresAt: number; startedAt: number };
 
 export class SessionAuthority {
   readonly #initialBootstrap: string;
   readonly #bootstrapTtlMs: number;
   readonly #sessionTtlMs: number;
+  readonly #sessionMaxMs: number;
   readonly #cookieSigningKey = randomBytes(32);
   #cookieName = SESSION_COOKIE;
   #bootstraps = new Map<string, number>();
   #sessions = new Map<string, BrowserSession>();
 
-  constructor(options: { now?: number; bootstrapTtlMs?: number; sessionTtlMs?: number } = {}) {
+  constructor(options: { now?: number; bootstrapTtlMs?: number; sessionTtlMs?: number; sessionMaxMs?: number } = {}) {
     this.#bootstrapTtlMs = options.bootstrapTtlMs ?? 60_000;
+    // 8 hours unused; a tab in use is renewed (renew), up to 7 days.
     this.#sessionTtlMs = options.sessionTtlMs ?? 8 * 60 * 60_000;
+    this.#sessionMaxMs = options.sessionMaxMs ?? 7 * 24 * 60 * 60_000;
     this.#initialBootstrap = this.issueBootstrapCapability(options.now ?? Date.now());
   }
 
@@ -59,7 +62,7 @@ export class SessionAuthority {
     const match = [...this.#bootstraps].find(([value, createdAt]) => now <= createdAt + this.#bootstrapTtlMs && equal(candidate, value));
     if (!match) return null;
     this.#bootstraps.delete(match[0]);
-    const session = { id: randomUUID(), csrf: secret(), expiresAt: now + this.#sessionTtlMs };
+    const session = { id: randomUUID(), csrf: secret(), expiresAt: now + this.#sessionTtlMs, startedAt: now };
     this.#sessions.set(session.id, session);
     return session;
   }
@@ -77,6 +80,16 @@ export class SessionAuthority {
       return null;
     }
     return session;
+  }
+
+  // A session ended 8 hours after its launch even while its tab was in use:
+  // a turn that ran or hung that long ended on the expired screen. An open
+  // tab asks every minute, so past half its time a request moves the expiry
+  // on, within the cap; true when the caller must send the cookie again.
+  renew(session: BrowserSession, now = Date.now()): boolean {
+    const next = Math.min(now + this.#sessionTtlMs, session.startedAt + this.#sessionMaxMs);
+    if (next - session.expiresAt < this.#sessionTtlMs / 2) return false;
+    session.expiresAt = next; return true;
   }
 
   authorizeMutation(request: IncomingMessage, now = Date.now()): BrowserSession | null {

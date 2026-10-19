@@ -484,6 +484,30 @@ describe("Piagent WebUI local auth and static boundaries", () => {
     assert.equal(expired.exchange(expired.bootstrapCapability, 111), null);
   });
 
+  // Owner report 2026-10-19: a tab in use ended on the expired screen 8 hours
+  // after its launch (a turn had hung that long).
+  it("renews a session in use, past half its time, within the cap", async () => {
+    const authority = new SessionAuthority({ now: 100, bootstrapTtlMs: 10, sessionTtlMs: 20, sessionMaxMs: 50 });
+    const session = authority.exchange(authority.bootstrapCapability, 105), cookie = { headers: { cookie: authority.cookieHeader(session).split(";", 1)[0] } };
+    assert.equal(authority.renew(session, 110), false, "early in its time nothing changes");
+    assert.equal(authority.renew(session, 116), true); assert.equal(session.expiresAt, 136);
+    assert.equal(authority.authenticate(cookie, 130)?.id, session.id, "used past its first expiry");
+    assert.equal(authority.renew(session, 134), true); assert.equal(session.expiresAt, 154);
+    assert.equal(authority.renew(session, 150), false, "never past the cap"); assert.equal(session.expiresAt, 154);
+    assert.equal(authority.authenticate(cookie, 156), null);
+
+    const server = await start({ sessionTtlMs: 400 });
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const signedIn = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const renewed = await request(server.origin, "/api/v1/browser-session", { headers: { Cookie: signedIn } });
+    assert.equal(renewed.status, 200);
+    assert.match(renewed.headers["set-cookie"]?.[0] ?? "", /; Max-Age=\d+/, "the tab gets its cookie again");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.equal((await request(server.origin, "/api/v1/browser-session", { headers: { Cookie: signedIn } })).status, 200, "still signed in past the first 400 ms");
+  });
+
   it("rejects symlinks, unsupported assets and oversized static files before serving", () => {
     const symlinkRoot = staticRoot();
     fs.symlinkSync(path.join(symlinkRoot, "index.html"), path.join(symlinkRoot, "assets/link.js"));

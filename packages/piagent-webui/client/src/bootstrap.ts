@@ -60,7 +60,7 @@ export function bootstrapBrowserSession(): Promise<BootstrapState> {
   return bootstrapPromise;
 }
 
-// Browser sessions live in the Gateway's memory: a restart, the 8-hour expiry
+// Browser sessions live in the Gateway's memory: a restart, 8 hours unused
 // or an older launch of another local server leaves this tab without one, and
 // only a new launch link can sign it in again. A refused read is confirmed
 // against the session endpoint once, then every poll stops and the page says so.

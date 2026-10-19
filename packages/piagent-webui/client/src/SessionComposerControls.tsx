@@ -85,10 +85,11 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const sourceCount = source?.workingTree.counts.files ?? 0;
   const permission = snapshot?.session.permissionProfile as { state?: string; value?: string | null } | undefined;
   const [permissionValue, setPermissionValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
-  useEffect(() => { setPermissionValue(null); }, [session.sessionRef]);
-  useEffect(() => { if (permission?.state === "known") setPermissionValue(permission.value ?? null); }, [permission?.state, permission?.value]);
-  // A company conversation keeps its own choice: ask first, or Bypass.
-  useEffect(() => { if (session.managedPermission) setPermissionValue(session.managedPermission); }, [session.managedPermission]);
+  // A company conversation keeps its own choice: ask first, or Bypass. Read
+  // again for every conversation: the next one may have the same choice, and
+  // an effect keyed on the choice alone would leave the reset of the switch.
+  useEffect(() => { setPermissionValue(session.managedPermission ?? (permission?.state === "known" ? permission.value ?? null : null)); },
+    [session.sessionRef, session.managedPermission, permission?.state, permission?.value]);
   const snapshotContext = snapshot?.usage.context;
   const contextKnown = snapshotContext?.state === "known";
   const contextTokens = contextKnown ? snapshotContext.tokens : session.contextUsage.usedTokens;

@@ -21,8 +21,8 @@ export function SessionExpired({ locale }: { locale: UiLocale }) {
   return <Stack role="alert" spacing={2} sx={{ minHeight: "100vh", alignItems: "center", justifyContent: "center", px: 2, textAlign: "center" }}>
     <Typography variant="h6" component="h1">{localize(locale, "Tab này đã hết phiên đăng nhập", "This tab is no longer signed in")}</Typography>
     <Typography color="text.secondary" sx={{ maxWidth: 520 }}>{localize(locale,
-      "Piagent vừa khởi động lại, phiên đã quá 8 giờ, hoặc tab được mở từ một link cũ. Các cuộc trò chuyện vẫn còn nguyên — mở lại Piagent để vào tiếp.",
-      "Piagent restarted, the session is older than 8 hours, or this tab came from an old link. Your conversations are kept — open Piagent again to continue.")}</Typography>
+      "Piagent vừa khởi động lại, tab không được dùng quá 8 giờ, hoặc tab được mở từ một link cũ. Các cuộc trò chuyện vẫn còn nguyên — mở lại Piagent để vào tiếp.",
+      "Piagent restarted, this tab was unused for over 8 hours, or this tab came from an old link. Your conversations are kept — open Piagent again to continue.")}</Typography>
     <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
       <Box component="code" sx={{ px: 1.5, py: .75, borderRadius: 1, bgcolor: "action.hover", fontSize: ".9rem" }}>{COMMAND}</Box>
       <Button size="small" variant="outlined" onClick={copy}>{copied ? localize(locale, "Đã chép", "Copied") : localize(locale, "Chép lệnh", "Copy command")}</Button>

@@ -185,8 +185,9 @@ function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?:
   const [value, setValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
-  useEffect(() => { setValue(null); }, [session?.sessionRef]);
-  useEffect(() => { if (permission?.state === "known") setValue(permission.value ?? null); }, [permission?.state, permission?.value]);
+  // A company conversation's choice is on its row (ask first, or Bypass).
+  useEffect(() => { setValue(session?.managedPermission ?? (permission?.state === "known" ? permission.value ?? null : null)); },
+    [session?.sessionRef, session?.managedPermission, permission?.state, permission?.value]);
   const apply = async (mode: "read-only" | "workspace-write" | "trusted-full-access") => {
     if (!onSetPermission) return;
     setBusy(true); setError(null);

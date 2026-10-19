@@ -274,12 +274,12 @@ export function useSessionHub(): SessionHub {
 
   const setSessionOption = useCallback(async (session: SessionRow, action: "session.set-model" | "session.set-thinking" | "session.set-permission" | "session.set-fast",
     payload: { modelRef: string } | { thinkingLevel: string } | { permissionMode: "read-only" | "workspace-write" | "trusted-full-access" } | { fast: boolean }) => {
-    const current = catalogRef.current, exact = current?.sessions.find((item) => item.sessionRef === session.sessionRef);
-    if (!current?.catalogRevision || !exact) throw new Error("session-unavailable");
-    const now = new Date(), receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
-      commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action, requestedAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
-      expectedCatalogRevision: current.catalogRevision, expectedSessionRevision: exact.sessionRevision, payload });
+    const submit = (snapshot?: Catalog) => { const exact = snapshot?.sessions.find((item) => item.sessionRef === session.sessionRef);
+      if (!snapshot?.catalogRevision || !exact) throw new Error("session-unavailable"); const now = new Date(); return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+        commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action, requestedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
+        sessionRef: session.sessionRef, expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision, payload }); };
+    // A turn changes its conversation after every step and as it ends; access and Fast depend on none of it, so they are sent again against the latest.
+    let receipt = await submit(catalogRef.current); for (let retry = 0; ["session.set-permission", "session.set-fast"].includes(action) && revisionStale(receipt) && retry < 2; retry++) receipt = await submit(await refresh());
     if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
     await refresh(); return receipt;
   }, [refresh, request]);
