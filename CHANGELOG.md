@@ -2,12 +2,13 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## v1.34.0 - 2026-10-20
+## v1.34.1 - 2026-10-20
 
 Piagent asks Studio what it serves, helpers report how their work ended, and Agent Watch learns when a conversation needs you (Agent Studio 0.34, Agent Watch 0.15.9 / Windows 0.1.15).
 
 ### Changes
 
+- v1.34.0 was tagged but never published: its lockfile named a lightningcss version that does not exist. v1.34.1 is the same release with the lockfile fixed.
 - **Studio capabilities.** Piagent asks `GET /v1/capabilities` (Agent Studio 0.34+) once an hour per Studio and key, and keeps the answer in `~/.pi/agent/studio-capabilities.json`. A newer operation is used only when Studio lists it; an older Studio (404) keeps today's behaviour. `memory_ask` is offered unless the list leaves `memory.ask.v1` out.
 - **Structured delegation.** `delegate` takes five optional fields beside the brief: target, change, constraints, ownership and acceptance. They head the helper's brief.
 - **Helper settlements.** Each helper attempt reports once, with its own run token, how it ended: succeeded (answered in the form its role needs), failed, cancelled, or unverifiable (no verdicts or findings, or a stale review). The main agent reads `Outcome: …` first; the receipt line says done, failed, stopped or unverifiable. Studio shows each attempt's ending in Logs → Lượt agent and reads an attempt without a report as unverifiable.
