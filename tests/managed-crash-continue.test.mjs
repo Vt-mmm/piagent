@@ -83,6 +83,11 @@ test('a conversation interrupted by a crash is listed again and continues with o
     await expect(page.getByText('RESUMED_OK', { exact: true }).first()).toBeVisible({ timeout: 30000 });
     await expect(page.getByText(/Lượt này chưa có câu trả lời/)).toHaveCount(0);
     assert.equal(requests, 3, 'the continuation is one new request, nothing is replayed');
+    // The company Gateway writes the conversation's state where Agent Watch reads it: the member's ~/.pi/agent/status/company.
+    const statusDir = path.join(home, '.pi/agent/status/company');
+    await until(() => fs.existsSync(statusDir) && fs.readdirSync(statusDir).some(f => f.endsWith('.json')), 10000, 'company status file');
+    const status = JSON.parse(fs.readFileSync(path.join(statusDir, fs.readdirSync(statusDir).find(f => f.endsWith('.json'))), 'utf8'));
+    assert.equal(status.company, true); assert.match(status.title, /Read notes\.txt/); assert.doesNotMatch(JSON.stringify(status), /FIXTURE_NOTE|RESUMED_OK/);
     assert.match(sent.at(-1), /FIXTURE_NOTE[\s\S]*tiếp tục/, 'the model gets the tool result from before the crash, then the new message');
     // The run that was open is recovered (or left behind) by the broker; no second run is started blindly.
     assert.match(fs.readFileSync(log, 'utf8'), /recover/);

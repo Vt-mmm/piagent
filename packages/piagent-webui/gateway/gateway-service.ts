@@ -1,6 +1,7 @@
 import { managedProjection } from './managed-projection.ts';
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
@@ -230,7 +231,10 @@ export async function startPiagentGateway(options: {
     const hubCatalog = relay ? async () => relay!.merge(await readCatalog()) : readCatalog;
     const company = (sessionRef: unknown) => !!relay?.owns(sessionRef);
     // Each conversation's state for Agent Watch (agent-status-files.ts): this Gateway's own conversations only.
-    statusFiles = new AgentStatusFiles(path.join(state.agentDir, "status", options.managed ? "company" : "dashboard"), async () => { const catalog = await readCatalog(); if (catalog.state !== "ready") throw new Error("catalog-not-ready"); return catalog; }, () => Boolean(options.managed)); statusFiles.start();
+    // Agent Watch reads the member's ~/.pi/agent/status. The dashboard's
+    // agentDir is that folder; the company Gateway's is its private session
+    // folder under Agent Watch, so it writes to the member's folder instead.
+    statusFiles = new AgentStatusFiles((options.managed ? path.join(os.homedir(), ".pi", "agent", "status", "company") : path.join(state.agentDir, "status", "dashboard")), async () => { const catalog = await readCatalog(); if (catalog.state !== "ready") throw new Error("catalog-not-ready"); return catalog; }, () => Boolean(options.managed)); statusFiles.start();
     const projectFolder = async (projectRef: string) => projects.resolve(projectRef)
       ?? (await runtimes!.listSessions()).find((info) => typeof info.cwd === "string" && projectRefForCwd(key, info.cwd) === projectRef)?.cwd
       ?? (relay ? (await relay.folders()).find((folder) => projectRefForCwd(key, folder) === projectRef) : undefined);
