@@ -146,7 +146,7 @@ test('protocol 3 fields go only to a Studio that speaks 3; commits carry folders
   }
 });
 
-test('memory_ask: offered only by a Studio that speaks 3, sends the question with its context, and a 404 does not turn memory off', async t => {
+test('memory_ask: sends the question with its context, and a 404 does not turn memory off', async t => {
   const root = temp(t);
   repo(root, 'git@github.com:acme/shop.git');
   const s = studio(3), stateDir = temp(t);

@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.31.1 - 2026-10-19
+
+`memory_ask` is there from the first conversation after an update.
+
+### Fixes
+
+- `memory_ask` was offered only when this Mac had last heard memory protocol 3 from Studio, which it records at the end of a conversation; the first company conversation after Agent Studio 0.30.0 arrived had no `memory_ask`. It is now offered whenever the conversation has team memory; on a Studio without `/v1/memory/ask` it says to use `memory_search`, and memory stays on.
+
+### Tests
+
+- `tests/managed-team-memory.test.mjs`, `tests/managed-memory-p1.test.mjs` updated.
+
 ## v1.31.0 - 2026-10-19
 
 Team memory follows the work: team rules first, the current branch and folders preferred, and `memory_ask` answers with sources (Agent Studio 0.30.0).

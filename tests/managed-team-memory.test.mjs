@@ -322,14 +322,15 @@ test('real managed compaction refreshes the brief and keeps the final answer und
   } finally { await managed.dispose(); await server.close(); for (const dir of [repo.root,agentDir]) fs.rmSync(dir,{recursive:true,force:true}); }
 });
 
-test('a Studio that speaks memory protocol 3 gives the next conversation memory_ask and the work context', { skip: !supported, timeout: 120000 }, async () => {
+test('a conversation with team memory gets memory_ask, and protocol 3 brings the work context', { skip: !supported, timeout: 120000 }, async () => {
   const repo = repository(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-ask-')), server = await studio(), authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };
   fs.mkdirSync(path.join(agentDir, 'sessions'));
   server.state.protocol = 3;
   let managed = await ManagedSession.create({ sdkRoot, cwd: repo.root, origin: server.origin, broker: broker(authority), agentDir });
   try {
     await managed.session.prompt('First conversation');
-    assert.ok(!server.state.model[0].tools.includes('memory_ask'));
+    // The very first conversation does not know yet that this key has memory (no memory tools at all).
+    assert.ok(!server.state.model[0].tools.includes('memory_search'));
     assert.equal(server.state.memory[0].body.context, undefined, 'the first brief does not know the protocol yet');
     const retain = server.state.memory.find(m => m.op === 'retain').body;
     assert.deepEqual(retain.checks, { passed: 0, failed: 0, final: 'none' });

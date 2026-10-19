@@ -452,12 +452,15 @@ export function trackMemoryLessons(self) {
 // Whether this conversation has team memory now: Studio answered memory for
 // this key recently and has not switched it off since (the Terminal's header).
 export const memoryOn = self => !!self?.memory?.stateDir && self.memory.active && TeamMemory.known(self.memory.stateDir, self.origin, memoryScope(self.origin, self.manifest));
-// memory_ask needs a Studio that answered with protocol 3 (an older one has no /v1/memory/ask).
-const speaksAsk = (dir, origin, manifest) => TeamMemory.knownProtocol(dir, origin, memoryScope(origin, manifest)) >= PROTOCOL;
-export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self, { ask: speaksAsk(agentDir, self.origin, self.manifest) }) : [];
+// memory_ask is offered whenever the conversation has team memory. The
+// protocol this Mac last heard was recorded before a Studio upgrade, so it
+// cannot decide; on a Studio without /v1/memory/ask the tool says to use
+// memory_search instead (ask() does not turn memory off on a 404).
+const speaksAsk = () => true;
+export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self, { ask: speaksAsk() }) : [];
 // A helper (scout, research, verify, review) reads the team memory with its own run token; it never writes.
 export const helperMemoryTools = (managed, grant, renew) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin, memoryScope(managed.origin, managed.manifest))
-  ? memoryTools(managed, { pages: false, ask: speaksAsk(managed.memory.stateDir, managed.origin, managed.manifest), grant, renew }) : [];
+  ? memoryTools(managed, { pages: false, ask: speaksAsk(), grant, renew }) : [];
 export async function openRound(self, manager, text) {
   if (!self.memory) return;
   self.memory.stats = {};
