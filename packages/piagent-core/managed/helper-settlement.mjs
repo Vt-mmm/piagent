@@ -80,13 +80,18 @@ export function failedSettlement(role, error, signal, spec = {}) {
 
 // Sends the report with the attempt's own token; never fails the helper.
 export async function settleHelper(managed, grant, report, fetchImpl = (...args) => globalThis.fetch(...args)) {
-  if (!report || !grant?.token || !hasCapability(managed, 'managed.settle.v1')) return false;
+  if (!report || !hasCapability(managed, 'managed.settle.v1')) return false;
+  let held = null;
   try {
+    // Studio replaces a role's token at each renewal: a lease gives the
+    // current one (the attempt's first token may be stale by now).
+    if (typeof grant === 'function') { held = await grant(); grant = held.grant; }
+    if (!grant?.token) return false;
     const response = await fetchImpl(`${managed.origin}/v1/managed/settle`, { method: 'POST', signal: AbortSignal.timeout(3_000),
       headers: { Authorization: `Bearer ${grant.token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT }, body: JSON.stringify(report) });
     void response.body?.cancel?.().catch(() => {});
     return response.ok;
-  } catch { return false; }
+  } catch { return false; } finally { held?.release(); }
 }
 
 export const OUTCOME_WORDS = { succeeded: 'done', failed: 'failed', cancelled: 'stopped', unverifiable: 'unverifiable' };

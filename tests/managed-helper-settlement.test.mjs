@@ -45,6 +45,12 @@ test('sent with the attempt token, only to a Studio that lists managed.settle.v1
   assert.deepEqual(sent, [{ url: 'http://s/v1/managed/settle', auth: 'Bearer as_run_t', body: report }]);
   const failing = async () => { throw Error('offline'); };
   assert.equal(await settleHelper({ origin: 'http://s', capabilities: new Set(['managed.settle.v1']) }, { token: 'as_run_t' }, report, failing), false, 'never fails the helper');
+  // A lease gives the role's current token (Studio replaced the first one at a renewal) and is released after.
+  let released = 0; sent.length = 0;
+  const lease = async () => ({ grant: { token: 'as_run_renewed' }, release: () => { released += 1; } });
+  assert.equal(await settleHelper({ origin: 'http://s', capabilities: new Set(['managed.settle.v1']) }, lease, report, fetchImpl), true);
+  assert.equal(sent[0].auth, 'Bearer as_run_renewed'); assert.equal(released, 1);
+  assert.equal(await settleHelper({ origin: 'http://s', capabilities: new Set(['managed.settle.v1']) }, async () => { throw Error('closed'); }, report, fetchImpl), false, 'a lease that fails never fails the helper');
 });
 
 test('the delegate tool takes the five task fields and puts them at the head of the brief', () => {

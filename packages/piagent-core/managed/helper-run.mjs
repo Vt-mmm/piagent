@@ -71,12 +71,13 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
   } catch (error) { throw Error(`managed-helper-failed: ${describeFailure(role, failureText(error))}`); }
   let boundary, report = null;
   const sessions = new Set(), spec = managed.helperSpecs?.get(role) ?? {};
+  const renew = renewer(managed, role, g => verifyGrant(g, managed.manifest, role));
   try {
     const runtime = await managed.api.ModelRuntime.create({ credentials: new managed.ai.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false, allowModelNetwork: false });
     const model = managed.installModel(runtime, grant); managed.wrapStreams(runtime, role);
     // Studio's logs name the job by its title (the brief's first line without one).
     (managed.jobTitles ??= new WeakMap()).set(runtime, jobTitle(task, title));
-    const setup = HELPER_SETUP[role], memory = helperMemoryTools(managed, () => grant, renewer(managed, role, g => verifyGrant(g, managed.manifest, role)));
+    const setup = HELPER_SETUP[role], memory = helperMemoryTools(managed, () => grant, renew);
     boundary = new ManagedToolBoundary({ cwd: managed.cwd, sdkRoot: managed.sdk, protectedRoots: managed.protectedRoots, readOnly: true, commands: setup.commands });
     const checks = role === 'verify' ? `\n\nRepository checks: ${managed.checks.commands.length ? managed.checks.commands.map(c => '`' + c + '`').join(', ') : 'none declared or detected; choose the tests, type check or build that cover the claims'}.` : '';
     // One helper session answers the brief (with one part of the patch for a
@@ -141,7 +142,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
   } catch (error) { report = failedSettlement(role, error, signal, spec); throw error; }
   finally {
     for (const session of sessions) session.dispose(); await boundary?.dispose();
-    await settleHelper(managed, grant, report); // with the attempt's own token, before its role closes
+    await settleHelper(managed, renew.lease, report); // with the role's current token, before it closes
     await managed.broker.request('close', { role });
   }
 }

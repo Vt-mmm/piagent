@@ -20,7 +20,7 @@ test('production CLI executes both delegated roles from a native tool response w
   // Studio 0.34+: the capabilities this fixture serves, and each helper's report of how its attempt ended.
   if(req.url==='/v1/capabilities'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({capabilities:['capabilities.v1','managed.settle.v1','Not A Name']}));}
   if(req.url==='/v1/managed/settle'){settled.push({token:req.headers.authorization,report:JSON.parse(Buffer.concat(chunks))});res.writeHead(200,{'Content-Type':'application/json'});return res.end('{}');}
-  const body=JSON.parse(Buffer.concat(chunks)),role=Object.keys(roles).find(r=>roles[r]===req.headers['x-session-id']);requests.push({role,body});
+  const body=JSON.parse(Buffer.concat(chunks)),role=Object.keys(roles).find(r=>roles[r]===req.headers['x-session-id']);requests.push({role,body,auth:req.headers.authorization});
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   if(role==='research'){
    const item={id:'msg_research',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'RESEARCH_OK',annotations:[]}]},response={id:'resp_research',object:'response',model:body.model,status:'in_progress',output:[]};
@@ -37,7 +37,7 @@ test('production CLI executes both delegated roles from a native tool response w
  const profileID=createHash('sha256').update(root).digest('hex'),sessions=path.join(os.homedir(),'Library/Application Support/AgentWatch/ManagedSessions',profileID);
  try{
   assert.equal(fs.existsSync(sessions),false);const broker=path.join(root,'broker');
-  fs.writeFileSync(broker,`#!${process.execPath}\nimport readline from 'node:readline';const manifest=${JSON.stringify(manifest)},roles=${JSON.stringify(roles)},authority=${JSON.stringify(authority)};let fence=0;for await(const line of readline.createInterface({input:process.stdin})){const q=JSON.parse(line),role=q.role??'main',m=manifest.models[role==='research'?1:0];process.stdout.write(JSON.stringify({id:q.id,result:q.action==='config'?manifest:q.action==='close'?true:{...authority,run_id:'${runID}',role_id:roles[role],role,fence:++fence,token:'as_run_'+roles[role]+'_${'x'.repeat(43)}',provider:m.owned_by,model_id:m.id,provider_model_id:m.id,effort:q.effort??'medium'}})+'\\n');}`,{mode:0o700});
+  fs.writeFileSync(broker,`#!${process.execPath}\nimport readline from 'node:readline';const manifest=${JSON.stringify(manifest)},roles=${JSON.stringify(roles)},authority=${JSON.stringify(authority)};let fence=0;for await(const line of readline.createInterface({input:process.stdin})){const q=JSON.parse(line),role=q.role??'main',m=manifest.models[role==='research'?1:0];process.stdout.write(JSON.stringify({id:q.id,result:q.action==='config'?manifest:q.action==='close'?true:{...authority,run_id:'${runID}',role_id:roles[role],role,fence:++fence,token:'as_run_'+roles[role]+'_'+String(fence).padStart(43,'0'),provider:m.owned_by,model_id:m.id,provider_model_id:m.id,effort:q.effort??'medium'}})+'\\n');}`,{mode:0o700});
   const entry=fs.realpathSync(path.resolve('scripts/piagent-studio.mjs')),node=fs.realpathSync(process.execPath),hash=f=>createHash('sha256').update(fs.readFileSync(f)).digest('hex');
   const file=path.join(root,'config.json');fs.writeFileSync(file,JSON.stringify({schema_version:1,model:'agent-watch-auto',profile_id:profileID,origin:`http://127.0.0.1:${server.address().port}`,node,entrypoint:entry,node_sha256:hash(node),entrypoint_sha256:hash(entry),sdk_root:sdkRoot,broker,broker_sha256:hash(broker)}));
   const result=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Run both helpers'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>text+=b);p.on('error',reject);p.on('close',code=>resolve({code,text}));});
@@ -46,6 +46,10 @@ test('production CLI executes both delegated roles from a native tool response w
   // Each helper reported its ending once, with its own run token: research answered; review answered without its findings JSON.
   assert.deepEqual(settled.map(s=>[s.token.slice('Bearer as_run_'.length,'Bearer as_run_'.length+36),s.report.outcome]).sort(),[[roles.research,'succeeded'],[roles.review,'unverifiable']].sort());
   assert.match(settled.find(s=>s.report.outcome==='succeeded').report.summary,/RESEARCH_OK/);
+  // Studio replaces a role's token at each renewal: the report goes with the role's current token, newer than any its requests used.
+  const fenceOf=auth=>Number(auth.slice(-43));
+  for(const role of ['research','review']){const used=requests.filter(r=>r.role===role).map(r=>fenceOf(r.auth));assert.ok(used.length>0,role);
+   assert.ok(fenceOf(settled.find(s=>s.token.includes(roles[role])).token)>Math.max(...used),role+' settled with a renewed token');}
   // --json: the event stream of `pi --mode json`, one JSON object per line on stdout.
   const json=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Answer once more','--json'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let out='',err='';p.stdout.on('data',b=>out+=b);p.stderr.on('data',b=>err+=b);p.on('error',reject);p.on('close',code=>resolve({code,out,err}));});
   assert.equal(json.code,0,json.err);
