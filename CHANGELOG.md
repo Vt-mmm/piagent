@@ -2,6 +2,23 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.31.0 - 2026-10-19
+
+Team memory follows the work: team rules first, the current branch and folders preferred, and `memory_ask` answers with sources (Agent Studio 0.30.0).
+
+### Changes
+
+- Memory protocol 3: each round carries its work context (branch, top-level folders touched, files changed, checks and their result, commit changes). Studio 0.30.0 tags memories with branch and folders, prefers them in the brief and `memory_search`, and marks an agent's "fixed/done" as a claim until a check passes (verified) or git removes the files it named (stale).
+- The brief starts with the team's rules ("Luật của team"), which override recalled memories.
+- New tool `memory_ask` (main agent and helpers, read-only): asks Studio to answer a question from team memory with its sources; off (204/404) when Studio has no memory.
+- A folder with several repositories uses each repository's memory; a repository whose only remote is not named `origin` works; git's "dubious ownership" (often on WSL) is retried; a folder with no repository is reported to Studio instead of turning memory off silently.
+- Check results from piped commands (`cmd | tail`) now count as lessons.
+- Older Studio (0.27–0.29) keeps working: protocol 3 fields are sent only when Studio says it reads them.
+
+### Tests
+
+- `tests/managed-memory-p1.test.mjs`; new cases in `tests/managed-team-memory.test.mjs` and `tests/managed-memory-lessons.test.mjs`.
+
 ## v1.30.1 - 2026-10-18
 
 The company Terminal no longer shows model names, and the home folder says why it cannot open there.

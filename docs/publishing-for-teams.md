@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.31.0`: memory của team có luật của team, ưu tiên branch/thư mục đang làm, claim/verified, tool `memory_ask` (cần Agent Studio 0.30.0).
 - `1.30.1`: Terminal công ty không còn hiện tên model (chỉ Main agent/Subagent); mở `piagent studio` ở thư mục home báo rõ cần vào thư mục dự án (trước đây báo nhầm “Agent Watch hoặc Piagent vừa cập nhật”).
 - `1.30.0`: nén gzip phần thân yêu cầu lớn khi Studio hỗ trợ (cần Agent Studio 0.28.2 để có tác dụng); Terminal công ty có dòng tóm tắt lượt, Subagent và branch ở thanh dưới, thu gọn kết quả memory.
 - `1.29.0`: Terminal công ty có phần đầu, thanh dưới và checklist plan riêng; chặn `/share`, `/bug`; các lệnh chọn model/đăng nhập báo Harness quyết định; dừng lượt giữa lệnh không còn làm hỏng các lượt sau (cần Agent Studio 0.28.1 và Agent Watch 0.15.7 / Windows 0.1.14).
