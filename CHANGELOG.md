@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.34.3 - 2026-10-20
+
+Agent Watch notifies for company conversations.
+
+### Fixes
+
+- **Company conversation states reach Agent Watch.** The company Gateway wrote each conversation's state under its private session folder, while Agent Watch reads the member's `~/.pi/agent/status`; company conversations never notified. They are now written to `~/.pi/agent/status/company`. Found in the live check: the state went from waiting for an answer to done, in the wrong folder.
+
+### Tests
+
+- `tests/managed-crash-continue.test.mjs` checks the company Gateway writes the conversation's state, without its prompt or answer, under the member's `~/.pi/agent/status/company`.
+
 ## v1.34.2 - 2026-10-20
 
 Helper outcomes reach Studio.
