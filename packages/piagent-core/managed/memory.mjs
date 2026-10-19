@@ -277,9 +277,11 @@ export class TeamMemory {
     return repos.find(r => r.name.toLowerCase() === want || r.key === want || r.key.split('/').at(-1) === want) ?? null;
   }
 
-  // A folder memory cannot use is told to Studio once, so its admins can see it.
+  // A folder memory cannot use is told to Studio once, so its admins can see
+  // it; only where Studio has answered memory on this Mac (a member of a team
+  // without memory sends nothing it does not need).
   async #reportFolder(grant) {
-    if (this.folderReported || !this.folder) return;
+    if (this.folderReported || !this.folder || !this.stateDir || !TeamMemory.known(this.stateDir, this.origin, this.scope(), this.now())) return;
     this.folderReported = true;
     try { await this.#post(grant, 'brief', { repo_key: '', prompt: '', folder: this.folder }, BRIEF_MS, this.renew, undefined, { remember: false }); } catch { /* older Studio: 400 */ }
   }

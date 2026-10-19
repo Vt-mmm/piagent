@@ -103,12 +103,16 @@ test('a repository whose only remote is not called origin is still known; a fold
   const odd = temp(t);
   repo(odd, 'file:///srv/git/app');
   assert.equal((await findRepositories(odd)).folder, 'unsupported_remote');
-  const s = studio();
-  const memory = new TeamMemory({ origin: 'http://studio.test', cwd: bare, stateDir: temp(t), conversationId: 'conversation-m2', scope, fetchImpl: s.fetchImpl });
+  const s = studio(), stateDir = temp(t);
+  const fresh = new TeamMemory({ origin: 'http://studio.test', cwd: bare, stateDir, conversationId: 'conversation-m0', scope, fetchImpl: s.fetchImpl });
+  assert.equal(await fresh.beforeRound(grant, 'hello', false), null);
+  assert.equal(s.calls.length, 0, 'a Mac Studio never answered memory on reports nothing');
+  fs.writeFileSync(path.join(stateDir, 'memory-known.json'), JSON.stringify({ origin: 'http://studio.test', scope: scopeID(scope()), at: Date.now(), protocol: 3 }));
+  const memory = new TeamMemory({ origin: 'http://studio.test', cwd: bare, stateDir, conversationId: 'conversation-m2', scope, fetchImpl: s.fetchImpl });
   assert.equal(await memory.beforeRound(grant, 'hello', false), null);
   assert.equal(await memory.beforeRound(grant, 'again', false), null);
   assert.deepEqual(s.calls.map(c => [c.op, c.body.repo_key, c.body.folder]), [['brief', '', 'no_origin']]);
-  assert.equal(TeamMemory.known(memory.stateDir, 'http://studio.test', scope()), false, 'the report does not offer memory tools');
+  assert.equal(TeamMemory.knownProtocol(memory.stateDir, 'http://studio.test', scope()), 3, 'the report leaves what this Mac knows alone');
 });
 
 test('protocol 3 fields go only to a Studio that speaks 3; commits carry folders and stale-making changes', async t => {

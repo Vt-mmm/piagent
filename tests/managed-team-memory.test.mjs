@@ -226,14 +226,17 @@ test('a Studio without team memory (404) is asked once per conversation, and not
 });
 
 test('a folder without a repository only tells Studio so, once, and sends nothing else to memory', { skip: !supported, timeout: 60000 }, async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-plain-')), server = await studio();
-  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: broker({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 }) });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-plain-')), server = await studio(), agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-memory-agent-'));
+  const authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 }, agent = broker(authority);
+  // Studio answered memory on this Mac before (another folder): the folder is reported.
+  fs.writeFileSync(path.join(agentDir, 'memory-known.json'), JSON.stringify({ origin: server.origin, scope: scopeID(memoryScope(server.origin, await agent.request('config'))), at: Date.now(), protocol: 3 }));
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent, agentDir });
   try {
     await managed.session.prompt('hello');
     await managed.session.prompt('again');
     assert.deepEqual(server.state.memory.map(m => [m.op, m.body.repo_key, m.body.folder]), [['brief', '', 'not_a_repository']]);
     assert.equal(server.state.model.length, 2);
-  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+  } finally { await managed.dispose(); await server.close(); for (const dir of [root, agentDir]) fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a helper reads team memory with its own run token, and only reads', { skip: !supported, timeout: 120000 }, async () => {
