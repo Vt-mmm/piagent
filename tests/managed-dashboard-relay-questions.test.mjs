@@ -34,7 +34,7 @@ test('a company agent question is shown and answered in the personal dashboard t
  const bodies=[];let child,personal,browser,output='';
  // Studio: a turn asking for "ASK" gets an ask_user call; once the tool
  // result is in the conversation the model says it saw the answer.
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));bodies.push(body);
   const flat=JSON.stringify(body.messages??[]),answered=flat.includes('"tool_result"'),asking=!answered&&flat.includes('ASK');
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);

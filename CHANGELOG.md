@@ -2,6 +2,22 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.34.0 - 2026-10-20
+
+Piagent asks Studio what it serves, helpers report how their work ended, and Agent Watch learns when a conversation needs you (Agent Studio 0.34, Agent Watch 0.15.9 / Windows 0.1.15).
+
+### Changes
+
+- **Studio capabilities.** Piagent asks `GET /v1/capabilities` (Agent Studio 0.34+) once an hour per Studio and key, and keeps the answer in `~/.pi/agent/studio-capabilities.json`. A newer operation is used only when Studio lists it; an older Studio (404) keeps today's behaviour. `memory_ask` is offered unless the list leaves `memory.ask.v1` out.
+- **Structured delegation.** `delegate` takes five optional fields beside the brief: target, change, constraints, ownership and acceptance. They head the helper's brief.
+- **Helper settlements.** Each helper attempt reports once, with its own run token, how it ended: succeeded (answered in the form its role needs), failed, cancelled, or unverifiable (no verdicts or findings, or a stale review). The main agent reads `Outcome: …` first; the receipt line says done, failed, stopped or unverifiable. Studio shows each attempt's ending in Logs → Lượt agent and reads an attempt without a report as unverifiable.
+- **Review on the diff.** In Agent Inspector → Source Changes, click a line number to comment that line. Comments on any number of files go into the conversation's composer as one message with a `file:line` anchor and the code of each line; a comment whose line has changed since is marked. The review helper's findings (blocking, major, minor) show under the line they name, and findings without a line under the file.
+- **Conversation states for Agent Watch.** The dashboard and the company runtime write each conversation's state (working, waiting for an approval or an answer, done, stopped, failed) under `~/.pi/agent/status/`. A file holds the conversation's title and project name, never its preview, prompt or answer. Agent Watch 0.15.9 (macOS) and 0.1.15 (Windows) turn it into notifications.
+
+### Tests
+
+- `tests/managed-studio-capabilities.test.mjs`, `tests/managed-helper-settlement.test.mjs`, `tests/piagent-webui-agent-status-files.test.mjs`, `tests/piagent-webui-line-review.test.mjs`; `tests/piagent-webui-session-hub.e2e.mjs` comments two files and sends them; `tests/managed-delegation-cli.test.mjs` checks both helpers' settlements through the production CLI.
+
 ## v1.33.0 - 2026-10-20
 
 Company and personal sessions run on Pi 1.3.0 (from 0.87.1).

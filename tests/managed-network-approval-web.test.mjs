@@ -20,7 +20,7 @@ test('run_with_network asks the user in the company WebUI and runs the approved 
  const registry=http.createServer((_req,res)=>res.end('REGISTRY_REACHED'));await new Promise(r=>registry.listen(0,'127.0.0.1',r));
  const command=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/left-pad`;
  const requests=[];let gateway,browser;
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_'+requests.length,object:'response',status:'in_progress',model:body.model,output:[]};emit({type:'response.created',response});
@@ -71,7 +71,7 @@ test('Bypass runs network commands without asking but still asks before git push
  const download=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/left-pad`,push='git push origin main';
  const requests=[];let gateway,browser;
  const call=(command,reason)=>{const args=JSON.stringify({command,reason});return {id:'fc_'+requests.length,type:'function_call',call_id:'call_'+requests.length,name:'run_with_network',arguments:args,status:'completed'};};
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_'+requests.length,object:'response',status:'in_progress',model:body.model,output:[]};emit({type:'response.created',response});
@@ -127,7 +127,7 @@ test('Bypass turned on while a command waits applies to the next commands and su
  const first=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/first`,second=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/second`;
  const requests=[];let gateway,browser;
  const call=(command,reason)=>{const args=JSON.stringify({command,reason});return {id:'fc_'+requests.length,type:'function_call',call_id:'call_'+requests.length,name:'run_with_network',arguments:args,status:'completed'};};
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_'+requests.length,object:'response',status:'in_progress',model:body.model,output:[]};emit({type:'response.created',response});

@@ -77,7 +77,7 @@ test('launching under a member\'s second key keeps writing to the store of the f
   const project = path.join(home, 'project'); fs.mkdirSync(project);
   const agent = path.join(home, '.pi/agent'); fs.mkdirSync(agent, { recursive: true });
   const sessions = [];
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => { if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
     for await (const _ of req); sessions.push(req.headers['x-session-id']);
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const emit = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);

@@ -31,7 +31,7 @@ test('a company session is created, answered and listed inside the personal dash
  const project=path.join(temp,'shop-project'),companyAgent=path.join(temp,'company-agent'),personalAgent=path.join(temp,'personal-agent'),probe=path.join(companyAgent,'probe');
  for(const dir of [project,probe,personalAgent])fs.mkdirSync(dir,{recursive:true});
  const requests=[];let child,personal,browser;
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_fixture',object:'response',status:'in_progress',model:body.model,output:[]};emit({type:'response.created',response});

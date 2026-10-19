@@ -23,7 +23,7 @@ test('a conversation interrupted by a crash is listed again and continues with o
   fs.writeFileSync(path.join(project, 'notes.txt'), 'FIXTURE_NOTE\n');
   const agent = path.join(home, '.pi/agent'); fs.mkdirSync(agent, { recursive: true });
   let hold = true, requests = 0; const sent = [];
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => { if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
     const chunks = []; for await (const c of req) chunks.push(c); const body = JSON.parse(Buffer.concat(chunks)); requests++; sent.push(JSON.stringify(body.input));
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const emit = e => res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);

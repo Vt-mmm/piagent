@@ -57,7 +57,7 @@ function broker(authority) {
 // Studio: the model answers ANSWER_n; memory follows `memory.mode`.
 async function studio() {
   const state = { mode: 'on', countTokens: false, retainStatus: 200, model: [], memory: [], protocol: 2 };
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => { if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8');
     if (req.url.startsWith('/v1/memory/')) {
@@ -254,7 +254,7 @@ test('a helper reads team memory with its own run token, and only reads', { skip
   }, async dispose() {} };
   const memory = [], helperTools = [];
   let helperTurns = 0;
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => { if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
     if (req.url.startsWith('/v1/memory/')) {

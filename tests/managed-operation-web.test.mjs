@@ -20,7 +20,7 @@ test('managed WebUI presents a scoped Git operation; denial resumes chat without
  const requests=[];let gateway,browser;const diagnostics=[];
  const originalRequest=piApprovalBroker.request.bind(piApprovalBroker);
  piApprovalBroker.request=(args)=>{diagnostics.push(piApprovalBroker.projection(args.cwd,args.rawSessionId));const result=originalRequest(args);diagnostics.push(piApprovalBroker.projection(args.cwd,args.rawSessionId));return result;};
- const server=http.createServer(async(req,res)=>{
+ const server=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   // A Studio without team memory (managed/memory.mjs) answers its routes 404.
   if(req.url.startsWith('/v1/memory/')){res.writeHead(404);res.end();return;}
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);

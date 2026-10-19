@@ -20,7 +20,7 @@ const sdkRoot = piSdkRoot();
 test('every Bypass conversation shows Bypass, after switching and after a reload',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-bypass-switch-'))),project=path.join(root,'project');fs.mkdirSync(project);
  let gateway,browser,count=0;
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   for await(const _ of req);count++;
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_'+count,object:'response',status:'in_progress',model:'gpt-6-sol',output:[]};emit({type:'response.created',response});

@@ -44,7 +44,7 @@ test('production CLI executes both delegated roles from a native tool response w
   assert.equal(result.code,0,result.text);assert.match(result.text,/DELEGATION_OK/);
   assert.deepEqual(requests.map(r=>r.role).sort(),['main','main','research','review'],JSON.stringify(requests.filter(r=>r.role==='main').at(-1)?.body.messages.at(-1)));
   // Each helper reported its ending once, with its own run token: research answered; review answered without its findings JSON.
-  assert.deepEqual(settled.map(s=>[s.token.slice('Bearer as_run_'.length,'Bearer as_run_'.length+36),s.report.outcome]).sort(),[[roles.research,'succeeded'],[roles.review,'unverifiable']]);
+  assert.deepEqual(settled.map(s=>[s.token.slice('Bearer as_run_'.length,'Bearer as_run_'.length+36),s.report.outcome]).sort(),[[roles.research,'succeeded'],[roles.review,'unverifiable']].sort());
   assert.match(settled.find(s=>s.report.outcome==='succeeded').report.summary,/RESEARCH_OK/);
   // --json: the event stream of `pi --mode json`, one JSON object per line on stdout.
   const json=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Answer once more','--json'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let out='',err='';p.stdout.on('data',b=>out+=b);p.stderr.on('data',b=>err+=b);p.on('error',reject);p.on('close',code=>resolve({code,out,err}));});

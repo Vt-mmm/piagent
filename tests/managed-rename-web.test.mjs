@@ -18,7 +18,7 @@ const sdkRoot = piSdkRoot();
 test('a company conversation is renamed while idle and while its turn runs',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-rename-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const requests=[];let gateway,browser,releaseSlow;
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   // The second answer waits until the test has renamed the conversation.
   if(requests.length===2) await new Promise(r=>{releaseSlow=r;});

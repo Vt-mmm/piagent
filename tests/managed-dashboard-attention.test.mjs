@@ -35,7 +35,7 @@ test('questions come one at a time and other conversations announce what they ne
 // Studio: "ASK2" gets two ask_user calls in one answer (Pi runs them side
  // by side, so both wait at once); "LATER" answers after a pause; "ASKLATER"
  // asks after that pause; once the tool results are in, the model says so.
- const studio=http.createServer(async(req,res)=>{
+ const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));bodies.push(body);
   const flat=JSON.stringify(body.messages??[]),answered=flat.includes('"tool_result"');
   const two=!answered&&flat.includes('ASK2'),one=!answered&&flat.includes('ASKLATER');
