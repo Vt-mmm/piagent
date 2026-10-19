@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.32.1 · 2026-10-19</p>
+  <h2 id="v1-32-1">Bypass được giữ sau khi tải lại, tab đang dùng không bị đăng xuất</h2>
+  <p class="section-lead">Bật Bypass ngay sau khi agent trả lời có lúc bị Gateway từ chối vì cuộc trò chuyện vừa thay đổi, nên tải lại trang vẫn thấy “Hỏi trước”; giờ lệnh được gửi lại theo trạng thái mới nhất. Mở một cuộc trò chuyện khác cũng đang Bypass không còn hiện nhầm “Hỏi trước”. Phiên đăng nhập trên trình duyệt không còn hết hạn đúng 8 giờ sau khi mở khi tab vẫn đang dùng (lượt chạy hoặc treo lâu không còn bị đẩy ra màn hình hết phiên); chỉ tab bỏ không quá 8 giờ mới phải mở lại, và tối đa 7 ngày.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.32.0 · 2026-10-19</p>
   <h2 id="v1-32-0">Lượt bị lỗi hoặc bấm Stop được dừng cả ở Studio</h2>
   <p class="section-lead">Khi một lượt trả lời lỗi giữa chừng hoặc member bấm Stop, Piagent báo Studio dừng lượt đó, để tài khoản của cuộc trò chuyện rảnh ngay cho lượt sau. Trước đây, qua Cloudflare, Studio có thể không biết kết nối đã đứt và tiếp tục stream tới 10 phút, khiến các lượt thử lại bị báo “tài khoản đang bận”. Cần Agent Studio 0.32.0.</p>

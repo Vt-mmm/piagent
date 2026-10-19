@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.32.1`: Bypass được giữ sau khi tải lại; tab đang dùng không còn bị đăng xuất sau 8 giờ.
 - `1.32.0`: lượt lỗi hoặc bấm Stop được dừng cả ở Studio (cần Agent Studio 0.32.0).
 - `1.31.1`: `memory_ask` có ngay trong cuộc trò chuyện đầu tiên sau khi cập nhật.
 - `1.31.0`: memory của team có luật của team, ưu tiên branch/thư mục đang làm, claim/verified, tool `memory_ask` (cần Agent Studio 0.30.0).

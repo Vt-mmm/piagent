@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.32.1 · 2026-10-19</p>
+  <h2 id="v1-32-1">Bypass is kept after a reload, and a tab in use stays signed in</h2>
+  <p class="section-lead">Turning on Bypass right after the agent answered was sometimes refused by the Gateway because the conversation had just changed, so a reload still showed “Ask first”; the change is now sent again against the latest state. Opening another conversation that is also in Bypass no longer shows “Ask first” by mistake. The browser sign-in no longer ends exactly 8 hours after launch while the tab is in use (a long or hung turn no longer lands on the expired screen); only a tab unused for 8 hours has to be opened again, and at most 7 days.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.32.0 · 2026-10-19</p>
   <h2 id="v1-32-0">A failed or stopped answer ends at Studio too</h2>
   <p class="section-lead">When an answer fails mid-stream or the member presses Stop, Piagent tells Studio to end that request, so the conversation's account is free for the next one. Before, behind Cloudflare, Studio might never learn the connection dropped and kept streaming for up to 10 minutes, and retries were refused as “account busy”. Needs Agent Studio 0.32.0.</p>

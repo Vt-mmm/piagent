@@ -2,6 +2,21 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.32.1 - 2026-10-19
+
+Bypass is kept after a reload, and a tab in use stays signed in.
+
+### Fixes
+
+- Turning on Bypass (or Fast) right after a reply was refused by the Gateway as `session-revision-stale`: the turn had changed the conversation once more as it ended, so nothing changed and a reload showed "Hỏi trước". Access and Fast are now sent again against the latest revision, like a rename.
+- Opening another conversation that was also in Bypass showed "Hỏi trước": the access button was reset for the switch and only followed a change of the choice. The button and Settings → Access now follow the open conversation.
+- A browser session ended 8 hours after its launch even while its tab was in use, so a long or hung turn ended on the expired screen. A request past half the session's time now renews it and sends the cookie again, up to 7 days; only a tab unused for 8 hours signs out.
+
+### Tests
+
+- `tests/managed-bypass-switch-reload.test.mjs`: two company conversations turned to Bypass right after their replies, switched between and reloaded, all show Bypass.
+- `tests/piagent-webui-loopback-server.test.mjs`: a session in use is renewed past half its time, within the cap, and the tab gets its cookie again.
+
 ## v1.32.0 - 2026-10-19
 
 A company stream that fails or is stopped ends at Studio too, so the conversation's account is free for the next request (Agent Studio 0.32.0).

@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.32.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.32.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.32.1 · 2026-10-19</p>
+  <h2 id="v1-32-1">Bypass is kept after a reload, and a tab in use stays signed in</h2>
+  <p class="section-lead">Turning on Bypass right after the agent answered was sometimes refused by the Gateway because the conversation had just changed, so a reload still showed “Ask first”; the change is now sent again against the latest state. Opening another conversation that is also in Bypass no longer shows “Ask first” by mistake. The browser sign-in no longer ends exactly 8 hours after launch while the tab is in use (a long or hung turn no longer lands on the expired screen); only a tab unused for 8 hours has to be opened again, and at most 7 days.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.32.0 · 2026-10-19</p>
   <h2 id="v1-32-0">A failed or stopped answer ends at Studio too</h2>
