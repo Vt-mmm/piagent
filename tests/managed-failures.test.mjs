@@ -769,3 +769,41 @@ test('Stop during a command sends no renew; a close Studio cannot confirm is not
     assert.deepEqual(reports, [true, true], 'each run closes once, with its report');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+// Behind Cloudflare, Studio may never learn that a stream ended here: a
+// failed stream or Stop ends the request at Studio by its id, with the
+// role's token, so the conversation's account is free for the next ask.
+test('a stream that fails here or is stopped is ended at Studio by its request id', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-')); let mode = 'cut';
+  const ids = [], cancels = [];
+  const server = await studio((req, res, body) => {
+    if (req.url.startsWith('/v1/requests/')) { cancels.push({ path: req.url, auth: req.headers.authorization }); res.writeHead(202, { 'Content-Type': 'application/json' }); res.end('{"status":"cancelling"}'); return true; }
+    if (mode === 'ok') return false;
+    const id = randomUUID(); ids.push(id);
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'X-Request-ID': id });
+    const emit = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    emit({ type: 'message_start', message: { id: 'msg_fixture', type: 'message', role: 'assistant', content: [], model: body.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 12, output_tokens: 0 } } });
+    emit({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+    const timer = setInterval(() => emit({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '+#+#ullugit ' } }), 20);
+    res.on('close', () => clearInterval(timer));
+    if (mode === 'cut') { mode = 'ok'; setTimeout(() => res.socket.destroy(), 200); }
+    return true;
+  });
+  const authority = authorityOf(), agent = broker(authority);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
+  const settle = async () => { for (let i = 0; i < 100 && cancels.length < ids.length; i += 1) await new Promise(resolve => setTimeout(resolve, 20)); };
+  try {
+    await managed.session.prompt('hello');
+    assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
+    await settle();
+    assert.deepEqual(cancels.map(c => c.path), [`/v1/requests/${ids[0]}/cancel`], 'the cut stream is ended at Studio');
+    assert.match(cancels[0].auth, new RegExp(`^Bearer as_run_${agent.roles.main}_`), 'with the main role\'s token');
+    mode = 'stop';
+    managed.session.subscribe(event => { if (event.type === 'message_update' && mode === 'stop') { mode = 'ok'; setTimeout(() => void managed.session.abort(), 100); } });
+    await managed.session.prompt('again');
+    assert.equal(last(managed).stopReason, 'aborted');
+    await settle();
+    assert.deepEqual(cancels.map(c => c.path), ids.map(id => `/v1/requests/${id}/cancel`), 'a stopped stream is ended at Studio');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});

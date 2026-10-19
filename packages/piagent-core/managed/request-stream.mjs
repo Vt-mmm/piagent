@@ -80,7 +80,11 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             const conversation = role === 'main' ? conversationSession(owner) : null;
             // Fast mode, where the member turned it on and the model serves it (fast-mode.mjs).
             const onPayload = fastPayload(owner, role, route, options?.onPayload), fast = onPayload !== options?.onPayload;
-            const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0, onPayload, fetch: (owner.compressedFetch ??= compressedFetch(owner, options?.fetch)),
+            // Studio's id for this request, from its answer's headers: a
+            // stream that ends here without an answer is ended there too.
+            let studioRequest = null;
+            const onResponse = (response, at) => { studioRequest = studioRequestID(response?.headers); return options?.onResponse?.(response, at); };
+            const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0, onPayload, onResponse, fetch: (owner.compressedFetch ??= compressedFetch(owner, options?.fetch)),
               headers: { ...withoutCredentials(options?.headers), ...purpose, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
             // Whether Studio admitted the request is known at its first event
             // after "start": until then nothing is passed on, so a refused
@@ -94,7 +98,12 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
               if (opening) { for (const held of opening) out.push(held); opening = null; wait = capacityWaitEnded(owner, wait, 'admitted'); letGo(); }
               out.push(event.type === 'error' ? { ...event, ...(signal?.aborted ? { reason: 'aborted' } : {}), error: told(event.error) } : event);
             }
-            if (!refusal) { for (const held of opening ?? []) out.push(held); out.end(told(await stream.result())); return; }
+            if (!refusal) {
+              for (const held of opening ?? []) out.push(held);
+              const result = await stream.result();
+              if (result?.stopReason === 'error' || result?.stopReason === 'aborted') void endAtStudio(owner, studioRequest, grant.token, options?.fetch);
+              out.end(told(result)); return;
+            }
             // Refused with the fast tier: asked again at standard speed.
             if (fast && fastRefusal(failureCode(refusal.errorMessage))) { letGo(); declineFast(owner, failureCode(refusal.errorMessage)); continue; }
             refused = String(refusal.errorMessage ?? '');
@@ -129,6 +138,26 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
       return out;
     };
   }
+}
+
+// Studio learns that a member's stream ended (it failed here, or Stop) only
+// when the connection closes, and behind Cloudflare it may never learn it:
+// on 2026-10-19 a degenerate answer streamed on for ten minutes after the
+// member's request had failed, and the conversation's account stayed busy,
+// so every ask again was refused. The request is ended at Studio by its id.
+// Fire and forget: a Studio without this (404) or out of reach changes
+// nothing, and a newer Studio also ends a role's abandoned request when the
+// role asks again.
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function studioRequestID(headers) {
+  const id = String(headers?.['x-request-id'] ?? '').trim();
+  return REQUEST_ID.test(id) ? id : null;
+}
+export function endAtStudio(owner, requestID, token, fetchImpl = (...args) => globalThis.fetch(...args)) {
+  if (!requestID || !token || !owner?.origin) return Promise.resolve(false);
+  return fetchImpl(`${owner.origin}/v1/requests/${requestID}/cancel`, { method: 'POST', signal: AbortSignal.timeout(10_000),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT }, body: '{}' })
+    .then(response => { void response.body?.cancel?.().catch(() => {}); return response.status === 202; }, () => false);
 }
 
 // Studio binds a conversation to one company account (session_bindings): the
@@ -201,7 +230,7 @@ function capacityStatus(owner) {
 }
 
 // A company answer that failed for a passing reason after Studio admitted it
-// (the model's stream was cut or came back empty, the model or Studio's
+// (the model's stream was cut, came back empty or ran past its output limit, the model or Studio's
 // gateway did not answer, Studio could not be reached) is asked again by Pi's
 // own turn retry: up to twice, 2 then 4 s apart, with the failed attempt left
 // out of what the model sees. Tools run only after a whole answer, so nothing
@@ -211,7 +240,7 @@ function capacityStatus(owner) {
 // run) fails at once, as before. Pi decides by the words of an error, which
 // for a company failure would match "rate limited" or "timeout" in sentences
 // that must not be retried; here it decides by Studio's code only.
-export const TURN_RETRY_CODES = new Set(['upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable',
+export const TURN_RETRY_CODES = new Set(['upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable', 'output_limit_exceeded',
   'connector_unavailable', 'connector_execution_failed', 'inference_unavailable', 'studio-unreachable']);
 export const TURN_RETRY = { maxRetries: 2, baseDelayMs: 2_000 };
 

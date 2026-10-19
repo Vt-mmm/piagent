@@ -52,6 +52,11 @@ const CODES = {
   managed_service_unavailable: ['service', 'Studio could not start the run'],
   upstream_interrupted: ['service', 'the model response was interrupted'],
   upstream_incomplete: ['service', 'the model returned no response'],
+  // Studio ended the stream: the model wrote past the request's output limit
+  // (a degenerate answer), or the request was ended for the member.
+  output_limit_exceeded: ['service', 'the model kept writing past its output limit and was stopped'],
+  client_cancelled: ['service', 'the request was ended at Studio'],
+  superseded: ['service', 'the request was replaced by a newer one'],
   upstream_timeout: ['service', 'the model did not answer in time'],
   upstream_unavailable: ['service', 'the model provider is not answering'],
   upstream_auth_required: ['account', "the company's model account has to sign in again in Studio"],
