@@ -2,6 +2,19 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.32.0 - 2026-10-19
+
+A company stream that fails or is stopped ends at Studio too, so the conversation's account is free for the next request (Agent Studio 0.32.0).
+
+### Fixes
+
+- When a company model stream ends with an error or the member presses Stop, Piagent asks Studio to end that request (`POST /v1/requests/{id}/cancel`, using Studio's `X-Request-ID`, the role's own token, fire and forget, 10 s). Behind Cloudflare a dropped connection may never reach Studio: on 2026-10-19 a degenerate answer kept streaming there for 10 minutes and every retry of that conversation was refused as "account busy". An older Studio answers 404 and nothing changes.
+- New failure words for Studio's `output_limit_exceeded`, `client_cancelled` and `superseded` (roles only, never model names); `output_limit_exceeded` is asked again by the company turn retry.
+
+### Tests
+
+- `tests/managed-failures.test.mjs`: a stream cut mid-answer and a stream stopped with Stop are both ended at Studio with the role's token.
+
 ## v1.31.1 - 2026-10-19
 
 `memory_ask` is there from the first conversation after an update.

@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.32.0 · 2026-10-19</p>
+  <h2 id="v1-32-0">A failed or stopped answer ends at Studio too</h2>
+  <p class="section-lead">When an answer fails mid-stream or the member presses Stop, Piagent tells Studio to end that request, so the conversation's account is free for the next one. Before, behind Cloudflare, Studio might never learn the connection dropped and kept streaming for up to 10 minutes, and retries were refused as “account busy”. Needs Agent Studio 0.32.0.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.31.1 · 2026-10-19</p>
   <h2 id="v1-31-1">memory_ask right after an update</h2>
   <p class="section-lead">The first company conversation after Studio moved to 0.30.0 had no <span class="inline-code">memory_ask</span>. The tool is now there whenever the conversation has team memory; on an older Studio it says to use <span class="inline-code">memory_search</span>.</p>
