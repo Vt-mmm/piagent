@@ -35,6 +35,7 @@ import type { ContextInjectionItem } from "../session/runtime-state.ts";
 import { isUncertainSendContinuation } from "../session/uncertain-send-continuation.ts";
 import {
   compactManagedProjectInstructions,
+  customRunSystemPrompt,
   rewriteLegacyProjectInstructions
 } from "../session/system-prompt.ts";
 import { PIAGENT_TOOL_NAMES } from "../tools/tool-groups.ts";
@@ -51,6 +52,8 @@ import type { AgentStartHookDependencies } from "./agent-start-types.ts";
 
 export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStartHookDependencies): void {
   pi.on("before_agent_start", async (event, ctx) => {
+    // Pi 1.2+ also runs this for a custom-message run (no prompt): same system prompt, no turn or task.
+    if ((event as { messageType?: string }).messageType === "custom") return customRunSystemPrompt(event.systemPrompt, dependencies.activeTask(ctx));
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
     const query = event.prompt;
     const signal = classifyContextTask(query);

@@ -440,7 +440,7 @@ test('a helper the harness adds while the member works is offered in the same co
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('GPT-6.1 Sol, newer than the bundled Pi catalog, runs with its reviewed window and effort', { skip: !supported, timeout: 120000 }, async () => {
+test('GPT-6.1 Sol runs with its reviewed 272k window and effort, also on a host whose catalog says 500k', { skip: !supported, timeout: 120000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
   const server = await studio(), authority = authorityOf();
   let revision = 'r1', current = broker(authority, { main: 'sonnet', knows: ['sonnet', 'sol61'] });

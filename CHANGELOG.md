@@ -2,6 +2,28 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.33.0 - 2026-10-20
+
+Company and personal sessions run on Pi 1.3.0 (from 0.87.1).
+
+### Changes
+
+- **Pi host 1.3.0.** `piagent-setup` and `piagent-update` install Pi Coding Agent 1.3.0. What it brings to Piagent: a tool call whose arguments are malformed JSON is refused and shown to the model instead of running with the fields parsed before the error; gateway errors such as "Unable to forward upstream stream" are retried; internal Pi packages are pinned to exact versions; a resumed session keeps its active tools; switching model drops the previous model's thinking; the terminal reports its state with OSC 7501 (working, waiting for a dialog or sign-in, done, error).
+- Your personal `pi` command is also 1.3.0 after the update. Pi 1.2.0 changed theme `$schema` references and `models.json` overrides of the `kimi-coding` base URL must end in `/v1`.
+- After the update, Agent Watch writes a new binding by itself while it runs; `piagent studio` waits for it.
+- GPT-6.1 Sol keeps its reviewed 272k window in company sessions (Pi 1.3.0's catalog says 500k, which Codex prices at twice the rate above 272k).
+- The three `brace-expansion` advisories accepted until 2026-10-31 are gone: Pi 1.3.0 installs `brace-expansion` 5.0.12.
+
+### Fixes
+
+- Pi 1.2+ calls `before_agent_start` also for a run that a custom message starts (no prompt). Piagent's personal runtime now gives such a run the same system prompt and starts no turn, task or context pack for it.
+
+### Tests
+
+- `tests/runtime-session-modules.test.mjs`: a custom-message run records no turn, opens no index and creates no task (fails without the fix).
+- `tests/managed-failures.test.mjs`: Sol keeps 272k on a host whose catalog says 500k.
+- `tests/runtime-advisories.test.mjs` checks the exception rules on a fixture list.
+
 ## v1.32.1 - 2026-10-19
 
 Bypass is kept after a reload, and a tab in use stays signed in.

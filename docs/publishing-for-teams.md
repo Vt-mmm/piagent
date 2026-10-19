@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.33.0`: chạy trên Pi 1.3.0 (từ 0.87.1); `pi` cá nhân cũng lên 1.3.0; Agent Watch tự ghi lại binding.
 - `1.32.1`: Bypass được giữ sau khi tải lại; tab đang dùng không còn bị đăng xuất sau 8 giờ.
 - `1.32.0`: lượt lỗi hoặc bấm Stop được dừng cả ở Studio (cần Agent Studio 0.32.0).
 - `1.31.1`: `memory_ask` có ngay trong cuộc trò chuyện đầu tiên sau khi cập nhật.

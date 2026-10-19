@@ -36,7 +36,7 @@ ordinary `release-defaults` treatment.
 
 ## Supported runtime matrix
 
-All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.87.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
+All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `1.3.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
 | Surface | Status for v1.8.0 | Rollout guidance |
 |---|---|---|
@@ -152,8 +152,8 @@ Use this flow when the team needs both terminal commands and the Pi package:
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
-npm install -g --ignore-scripts @piagent/platform@1.32.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0
+npm install -g --ignore-scripts @piagent/platform@1.33.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -179,7 +179,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.32.1
+pi install git:github.com/Vt-mmm/piagent@v1.33.0
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -244,7 +244,7 @@ Running it from a git checkout is refused rather than replacing that checkout's 
 The same sequence by hand, which must keep this order because `piagent-install` fails against a host that does not match the version it pins and does not install one itself:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -475,5 +475,5 @@ Re-running the workflow from a branch instead skips publishing, because the publ
 - Do not publish local trust files, OAuth tokens, `auth.json`, sessions, caches, or `.env` files.
 - Review the resolved commit SHA before rollout; tag resolution improves reproducibility but is not signed package provenance by itself.
 - `npm audit --audit-level=high` covers this repository's helper dependency tree. `npm run audit:runtime` separately builds the exact optional Pi host and pinned add-on dependency tree and blocks unaccepted moderate, high, or critical findings so stale or permissive peer resolution cannot hide deployed runtime risk.
-- The only accepted runtime findings are listed in `scripts/runtime-advisory-exceptions.json`. Each entry is an owner decision for one advisory at one package path, with a reason and an end day at most 60 days after the decision. The same advisory elsewhere, any other advisory, and an expired entry still block, and the audit prints every accepted entry. For 1.9.0 (decided 2026-10-02, ends 2026-10-31) these are three denial-of-service advisories in `brace-expansion` 5.0.9, which every published Pi host pins through its npm-shrinkwrap. Remove them when a Pi host carries `brace-expansion` 5.0.12 or later.
+- The only accepted runtime findings are listed in `scripts/runtime-advisory-exceptions.json`. Each entry is an owner decision for one advisory at one package path, with a reason and an end day at most 60 days after the decision. The same advisory elsewhere, any other advisory, and an expired entry still block, and the audit prints every accepted entry. The list is empty since Pi 1.3.0: the three `brace-expansion` denial-of-service advisories accepted for 1.9.0 (decided 2026-10-02) are fixed by the `brace-expansion` 5.0.12 that Pi 1.3.0 installs.
 - Run doctor after install, update, or rollback so package source, project profile, protected paths, and share policy are checked together.

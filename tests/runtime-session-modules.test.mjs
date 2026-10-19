@@ -1445,6 +1445,14 @@ describe("runtime session modules", () => {
     const start = handlers.get("before_agent_start");
     const event = (prompt) => ({ prompt, systemPrompt: "stable system prompt", systemPromptOptions: { cwd: ctx.cwd, selectedTools: [] } });
 
+    // Pi 1.2+: a run started by a custom message reaches the hook without a prompt.
+    const turnsBefore = telemetry.length;
+    assert.equal(await start({ messageType: "custom", message: { customType: "agent-watch-process", content: "x" }, systemPrompt: "stable system prompt", systemPromptOptions: { cwd: ctx.cwd, selectedTools: [] } }, ctx), undefined,
+      "a custom-message run keeps the system prompt");
+    assert.equal(telemetry.length, turnsBefore, "a custom-message run records no prompt turn");
+    assert.deepEqual(indexedPrompts, [], "a custom-message run opens no repository index");
+    assert.deepEqual(intakePrompts, [], "a custom-message run creates no task");
+
     const clarification = "Vậy bây giờ a cần test hay em có thể fix ngay";
     assert.equal(await start(event(clarification), ctx), undefined,
       "the host keeps the original conversational prompt when Piagent injects nothing");

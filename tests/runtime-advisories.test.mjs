@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,10 +28,16 @@ function advisory(name, severity, id) {
   };
 }
 
-function run(input, today) {
+// The exception rules are tested on a fixture list, so the real list can be empty.
+const fixtureExceptions = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "advisory-exceptions-")), "exceptions.json");
+fs.writeFileSync(fixtureExceptions, JSON.stringify({ version: 1, exceptions: [{ id: "GHSA-qhr7-859c-m2p7", package: "brace-expansion",
+  node: "node_modules/@earendil-works/pi-coding-agent/node_modules/brace-expansion", decided: "2026-10-02", until: "2026-10-31",
+  reason: "Fixture: a denial-of-service advisory pinned by a host shrinkwrap, accepted until an end day." }] }));
+
+function run(input, today, exceptions = fixtureExceptions) {
   try {
     const stdout = execFileSync(process.execPath, [scriptPath], { input, encoding: "utf8",
-      env: { ...process.env, ...(today ? { PIAGENT_ADVISORY_TODAY: today } : {}) } });
+      env: { ...process.env, PIAGENT_ADVISORY_EXCEPTIONS: exceptions, ...(today ? { PIAGENT_ADVISORY_TODAY: today } : {}) } });
     return { code: 0, stdout, stderr: "" };
   } catch (error) {
     return { code: error.status ?? 1, stdout: error.stdout ?? "", stderr: error.stderr ?? "" };

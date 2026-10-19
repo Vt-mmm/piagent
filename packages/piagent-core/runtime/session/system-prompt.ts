@@ -168,3 +168,17 @@ export function buildSemanticCompactionInstructions(task?: TaskContract): string
     "Do not convert assumptions into facts. Mark unknowns explicitly. After compaction, re-read current files before editing."
   ].join("\n"), task);
 }
+
+// The system prompt a run started by a custom message gets (Pi 1.2+ calls
+// before_agent_start for it without a prompt): the one user runs get, so the
+// prompt cache holds; no turn, task or context pack starts.
+export function customRunSystemPrompt(
+  systemPrompt: string,
+  task: { trace: { outcome?: string }; intakeMode?: string } | undefined
+): { systemPrompt: string } | undefined {
+  const rewritten = rewriteLegacyProjectInstructions(systemPrompt).systemPrompt;
+  const effective = task?.trace.outcome === "pending" && task.intakeMode === "runtime"
+    ? compactManagedProjectInstructions(rewritten, "automatic").systemPrompt
+    : rewritten;
+  return effective !== systemPrompt ? { systemPrompt: effective } : undefined;
+}

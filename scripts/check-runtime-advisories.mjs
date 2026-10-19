@@ -45,7 +45,8 @@ if (report.auditReportVersion !== 2) {
   process.exit(1);
 }
 
-const { exceptions } = JSON.parse(fs.readFileSync(new URL("./runtime-advisory-exceptions.json", import.meta.url), "utf8"));
+// PIAGENT_ADVISORY_EXCEPTIONS points the tests at a fixture list.
+const { exceptions } = JSON.parse(fs.readFileSync(process.env.PIAGENT_ADVISORY_EXCEPTIONS || new URL("./runtime-advisory-exceptions.json", import.meta.url), "utf8"));
 // A test seam for the day exceptions are judged on; the gate uses today (UTC).
 const today = process.env.PIAGENT_ADVISORY_TODAY ?? new Date().toISOString().slice(0, 10);
 

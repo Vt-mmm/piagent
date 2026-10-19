@@ -1,4 +1,4 @@
-// Reviewed gaps in Pi 0.87.1's bundled catalog. Never infer context/output
+// Reviewed gaps in Pi's bundled catalog (written for 0.87.1). Never infer context/output
 // limits for an unknown future model.
 // Claude Sonnet 5.5, checked 2026-09-30:
 // https://platform.claude.com/docs/en/models/overview
@@ -49,7 +49,14 @@ export const isVendor = provider => typeof provider === 'string' && provider !==
 export function piProvider(provider) { return provider === 'claude' ? 'anthropic' : provider === 'codex' ? 'openai-codex' : provider; }
 export function studioAPI(provider) { return provider === 'claude' ? 'anthropic-messages' : provider === 'codex' ? 'openai-responses' : 'openai-completions'; }
 export function studioPath(provider) { return provider === 'claude' ? '/claude' : provider === 'codex' ? '/v1' : '/openai/v1'; }
+// Reviewed limits that win over a newer host catalog. Pi 1.3.0 gives Sol the
+// 500k window Codex now allows; company sessions keep 272k, the window of
+// Codex's base price (doubled above it), so a host update changes no cost.
+const CAPS = { 'openai-codex': { 'gpt-6.1-sol': 272000 } };
 export function nativeManagedModel(runtime, provider, id) {
   const gap = GAPS[provider]?.find(model => model.id === id);
-  return runtime.getModel(provider, id) ?? (gap ? structuredClone(gap) : undefined);
+  const model = runtime.getModel(provider, id);
+  if (!model) return gap ? structuredClone(gap) : undefined;
+  const cap = CAPS[provider]?.[id];
+  return cap && model.contextWindow > cap ? { ...model, contextWindow: cap } : model;
 }

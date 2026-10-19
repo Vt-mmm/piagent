@@ -641,8 +641,8 @@ if (!rootPkg.pi.subagents?.agents?.length) {
   throw new Error("root package.json missing pi.subagents.agents");
 }
 const expectedPeers = {
-  "@earendil-works/pi-ai": "0.87.1",
-  "@earendil-works/pi-coding-agent": "0.87.1",
+  "@earendil-works/pi-ai": "1.3.0",
+  "@earendil-works/pi-coding-agent": "1.3.0",
   typebox: "1.3.27"
 };
 for (const [name, version] of Object.entries(expectedPeers)) {
