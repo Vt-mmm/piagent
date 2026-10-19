@@ -15,6 +15,12 @@ export function managedProjection(context: any, entries: any[]) {
   const final = entries.filter(e => e.type === 'custom_message' && e.customType === 'agent-watch-process' && e.details?.phase === 'final').at(-1)?.details;
   const process = final && OUTCOMES.includes(final.outcome) ? { outcome: final.outcome, verified: final.verified === true, reviewed: final.reviewed === true,
     blockingOpen: Number.isInteger(final.blockingOpen) && final.blockingOpen >= 0 ? Math.min(final.blockingOpen, 1000) : 0, ...(final.planSkipped === true ? { planSkipped: true as const } : {}) } : null;
+  // The review helper's findings on the last reviewed patch (workflow.mjs), shown on the diff.
+  const reviewed = last('agent-watch-review'), severities = ['blocking', 'major', 'minor'];
+  const findings = Array.isArray(reviewed?.findings) ? reviewed.findings.filter((f: any) => severities.includes(f?.severity) && typeof f.file === 'string' && f.file.trim()
+    && typeof f.issue === 'string' && f.issue.trim()).slice(0, 40).map((f: any) => ({ severity: f.severity, file: f.file.trim().slice(0, 300),
+    line: Number.isSafeInteger(f.line) && f.line > 0 ? f.line : null, issue: f.issue.trim().slice(0, 500) })) : null;
+  const review = findings ? { stale: reviewed.stale === true, findings } : null;
   // How the member's last message ended, unless a newer message is running.
   const lastIndex = (match: (e: any) => boolean) => { for (let i = entries.length - 1; i >= 0; i -= 1) if (match(entries[i])) return i; return -1; };
   const lastUser = lastIndex(e => e.type === 'message' && e.message?.role === 'user');
@@ -30,5 +36,5 @@ export function managedProjection(context: any, entries: any[]) {
   const fast = last('agent-watch-fast');
   return {modelLabel:'agent-watch-auto', managedPermission: permission, ...(fast?.allowed === true ? {managedFast: fast.enabled === true ? 'on' as const : 'off' as const} : {}), managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),
-    ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {}), ...(turnEnd ? {managedTurnEnd:turnEnd} : {})};
+    ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {}), ...(turnEnd ? {managedTurnEnd:turnEnd} : {}), ...(review ? {managedReview:review} : {})};
 }

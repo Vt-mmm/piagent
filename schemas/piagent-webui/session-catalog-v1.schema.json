@@ -99,6 +99,11 @@
         "managedProcess": { "type": "object", "additionalProperties": false, "required": ["outcome", "verified", "reviewed", "blockingOpen"], "properties": {
           "outcome": { "enum": ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
           "verified": { "type": "boolean" }, "reviewed": { "type": "boolean" }, "blockingOpen": { "type": "integer", "minimum": 0, "maximum": 1000 }, "planSkipped": { "const": true } } },
+        "managedReview": { "type": "object", "additionalProperties": false, "required": ["stale", "findings"], "properties": {
+          "stale": { "type": "boolean" },
+          "findings": { "type": "array", "maxItems": 40, "items": { "type": "object", "additionalProperties": false, "required": ["severity", "file", "line", "issue"], "properties": {
+            "severity": { "enum": ["blocking", "major", "minor"] }, "file": { "type": "string", "minLength": 1, "maxLength": 300 },
+            "line": { "type": ["integer", "null"], "minimum": 1 }, "issue": { "type": "string", "minLength": 1, "maxLength": 500 } } } } } },
         "managedTurnEnd": { "type": "object", "additionalProperties": false, "required": ["state", "planSteps", "planDone"], "properties": {
           "state": { "enum": ["done", "midway", "failed", "cancelled"] },
           "planSteps": { "type": "integer", "minimum": 0, "maximum": 30 }, "planDone": { "type": "integer", "minimum": 0, "maximum": 30 },

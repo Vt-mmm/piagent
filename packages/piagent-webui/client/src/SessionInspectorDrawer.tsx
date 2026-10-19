@@ -21,12 +21,14 @@ import { useTheme } from "@mui/material/styles";
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import { ActivityPanel } from "./ActivityPanel.tsx";
 import { SessionAgentWorkspace, type SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
+import type { ReviewFinding } from "./line-review.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
 
 const INSPECTOR_WIDTH = "min(44vw, 860px)";
 
-export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, terminalActivities, liveActivities, onClose, onActive, refresh }: { open: boolean;
+export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, terminalActivities, liveActivities, onClose, onActive, refresh, findings, onSendComments }: { open: boolean;
+  findings?: readonly ReviewFinding[]; onSendComments?: (text: string) => void;
   active: SessionWorkspaceId; snapshot?: PiagentWebUICanonicalSnapshotV1; state: "idle" | "loading" | "ready" | "error";
   sessionRef?: string; terminalActivities?: readonly TerminalOperationActivity[]; liveActivities?: readonly LiveActivity[];
   onClose(): void; onActive(value: SessionWorkspaceId): void;
@@ -65,6 +67,6 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
         <Button variant="outlined" onClick={() => void refresh()}>{localize(locale, "Thử lại", "Try again")}</Button></Stack>
         : <Box sx={{ p: active === "source" ? { xs: 1, md: 1.5 } : { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: active === "source" ? "none" : 1500, mx: "auto", width: "100%" }}>
           <SessionAgentWorkspace active={active} snapshot={snapshot} sessionRef={sessionRef} terminalActivities={terminalActivities}
-            liveActivities={liveActivities} refresh={refresh} /></Box>}
+            liveActivities={liveActivities} refresh={refresh} findings={findings} onSendComments={onSendComments} /></Box>}
   </Drawer>;
 }

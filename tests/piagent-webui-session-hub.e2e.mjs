@@ -46,6 +46,8 @@ let updateState = upToDate();
 let branchRepo = null, branchRunning = 0;
 // The project of "Review source changes" is a folder holding two repositories in the multi-repository test.
 let workspaceFolder = null;
+// A second changed file, for the line review test.
+let secondSourceFile = false;
 const updateApplies = [];
 // What an @ in a composer walks: a project (a git repository, so the search
 // runs the same without fd) and a home folder with another project inside.
@@ -218,8 +220,15 @@ test.beforeAll(async () => {
     snapshot: () => inspectionSnapshot,
     sourceChanges: (view) => ({ ...sourceFixture, view, bases: view === "task"
       ? { taskBaselineDigest: "sha256:" + "a".repeat(64), headOid: null, indexDigest: null, workingTreeDigest: null }
-      : sourceFixture.bases }),
-    diff: () => JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/diff-v1.valid.json"), "utf8")),
+      : sourceFixture.bases, ...(secondSourceFile ? { files: [...sourceFixture.files, { ...sourceFixture.files[0], fileRef: "file_02", path: "api/refund.go" }] } : {}) }),
+    diff: (_view, fileRef) => {
+      const value = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/diff-v1.valid.json"), "utf8"));
+      if (fileRef !== "file_02") return value;
+      const added = value.hunks[0].lines[1];
+      return { ...value, file: { ...value.file, fileRef: "file_02", path: "api/refund.go" }, hunks: [{ ...value.hunks[0], lines: [
+        { ...added, lineRef: "line_02_1", newLineNumber: 1, text: "func refund(c int64) {" },
+        { ...added, lineRef: "line_02_2", newLineNumber: 2, text: "\tamount := float64(c) / 100" }] }] };
+    },
     review: () => JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/review-state-v1.valid.json"), "utf8")),
     sourceMutation: () => JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/source-mutation-v1.valid.json"), "utf8")),
     sourceRevert: () => JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/source-revert-v1.valid.json"), "utf8")),
@@ -1815,4 +1824,57 @@ test("the update dialog waits for running conversations, then updates in one cli
     await expect(page.getByRole("dialog", { name: "Cài đặt" }).getByText(/Đang cập nhật lên Piagent 1\.11\.0…/)).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Có bản Piagent mới: 1.11.0" })).toHaveCount(0);
   } finally { updateState = upToDate(); await page.close(); }
+});
+
+test("comments lines of two files on the diff, shows the review helper's findings inline, and sends the comments as one message", async ({ page }) => {
+  const row = catalog.sessions.find((item) => item.sessionRef === "session_release_prep");
+  row.managedReview = { stale: false, findings: [
+    { severity: "blocking", file: "./src/example.ts", line: 1, issue: "The value changed without a test." },
+    { severity: "minor", file: "api/refund.go", line: null, issue: "Name the cents constant." }] };
+  row.sessionRevision = "revision_release_prep_review"; catalog.catalogRevision = "revision_catalog_line_review"; secondSourceFile = true;
+  const errors = []; page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(server.issueLaunchUrl());
+    // Earlier tests add conversations; open this one from the sidebar.
+    await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+    await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
+    await page.getByRole("tab", { name: /Source Changes/ }).click();
+    await expect(page.getByRole("button", { name: /src\/example\.ts/ })).toHaveAttribute("aria-pressed", "true");
+    // The review helper's finding sits under the line it names.
+    const finding = page.getByRole("note").filter({ hasText: "The value changed without a test." });
+    await expect(finding).toContainText("Review · Chặn");
+    await page.getByRole("button", { name: "Comment dòng 1" }).last().click();
+    await page.getByRole("textbox", { name: "Comment cho dòng này" }).fill("Keep the old value or add a test.");
+    await page.getByRole("button", { name: "Lưu comment" }).click();
+    await expect(page.locator(".line-comment").filter({ hasText: "Keep the old value or add a test." })).toBeVisible();
+    await page.getByRole("button", { name: /api\/refund\.go/ }).click();
+    // A finding without a line is shown for the whole file.
+    await expect(page.getByRole("note").filter({ hasText: "Name the cents constant." })).toBeVisible();
+    await page.getByRole("button", { name: "Comment dòng 2" }).click();
+    await page.getByRole("textbox", { name: "Comment cho dòng này" }).fill("Money must stay in integer cents.");
+    await page.getByRole("button", { name: "Lưu comment" }).click();
+    const bar = page.getByRole("region", { name: "Comment chờ gửi" });
+    await expect(bar).toContainText("2 comment chờ gửi");
+    if (process.env.PIAGENT_SHOTS_DIR) await page.screenshot({ path: path.join(process.env.PIAGENT_SHOTS_DIR, "webui-line-review.png") });
+    await bar.getByRole("button", { name: "Đưa vào ô chat" }).click();
+    const expected = ["Review comment trên diff (2). Xử lý từng comment đúng file và dòng:",
+      "1. api/refund.go:2\n```\n\tamount := float64(c) / 100\n```\nMoney must stay in integer cents.",
+      "2. src/example.ts:1\n```\nexport const value = 2;\n```\nKeep the old value or add a test."].join("\n\n");
+    const composer = page.getByPlaceholder("Nhắn cho Piagent…");
+    await expect(composer).toHaveValue(expected);
+    await expect(composer).toBeFocused();
+    await expect(page.getByText("Agent Inspector", { exact: true })).toBeHidden();
+    if (process.env.PIAGENT_SHOTS_DIR) await page.screenshot({ path: path.join(process.env.PIAGENT_SHOTS_DIR, "webui-line-review-composer.png") });
+    await page.getByRole("button", { name: "Gửi" }).click();
+    await expect.poll(() => lastSendPayload?.message).toBe(expected);
+    // Sent comments are gone from the review.
+    await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
+    await page.getByRole("tab", { name: /Source Changes/ }).click();
+    await expect(page.getByRole("region", { name: "Comment chờ gửi" })).toHaveCount(0);
+    assert.deepEqual(errors, []);
+  } finally {
+    delete row.managedReview; secondSourceFile = false;
+  }
 });

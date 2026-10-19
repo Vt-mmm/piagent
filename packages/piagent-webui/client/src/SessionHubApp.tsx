@@ -85,6 +85,14 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
   return <Chip size="small" variant="outlined" color={color} label={text} />;
 }
 
+const COMPOSER_APPENDED = "piagent-composer-appended";
+// Adds text to a conversation's draft, after what is already typed.
+function appendToComposer(sessionRef: string, text: string) {
+  const current = readDraft(sessionRef);
+  writeDraft(sessionRef, current.trim() ? `${current.trimEnd()}\n\n${text}` : text);
+  window.dispatchEvent(new CustomEvent(COMPOSER_APPENDED, { detail: sessionRef }));
+}
+
 type KeptComposer = { attachments: Attachment[]; messageRequestId: string; sendUnconfirmed: boolean };
 
 function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector, commandActions }: { session: SessionRow;
@@ -120,6 +128,12 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     return () => window.removeEventListener("keydown", listener);
   });
   const mentions = useComposerSuggestions({ projectRef: session.projectRef, value: draft, locale, builtIns, onChange: (value) => { setDraft(value); setSendNotice(null); } });
+  // Line comments from the Source review land in this draft (appendToComposer).
+  useEffect(() => {
+    const appended = (event: Event) => { if ((event as CustomEvent<string>).detail !== sessionRef) return; setDraftText(readDraft(sessionRef));
+      requestAnimationFrame(() => mentions.inputRef.current?.focus()); };
+    window.addEventListener(COMPOSER_APPENDED, appended); return () => window.removeEventListener(COMPOSER_APPENDED, appended);
+  }, [sessionRef]);
   const [attachments, setAttachments] = useState<Attachment[]>(() => kept?.attachments ?? []);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [messageRequestId, setMessageRequestId] = useState(() => kept?.messageRequestId ?? `message-request.${crypto.randomUUID()}`);
@@ -710,7 +724,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={currentInspection} state={currentInspectionState} sessionRef={selectedSessionRef}
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
-      onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
+      onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection}
+      findings={selected?.managedReview?.findings} onSendComments={selected && selected.composerAvailable
+        ? (text) => { appendToComposer(selected.sessionRef, text); setInspectorOpen(false); } : undefined} />
     <UpdatePrompt locale={locale} onDetails={() => openSettings("updates")} />
     {attention.view}
     <StatusBar locale={locale} connection={connection} running={running} session={view === "chat" ? selected : undefined}

@@ -759,3 +759,30 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 @keyframes attention-glow { 0%, 100% { background: transparent; } 50% { background: color-mix(in srgb, var(--warning) 9%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .attention-toast, .session-item.attention, .attention-toast.tone-warning .attention-toast-mark { animation: none; } }
 @media (max-width: 600px) { .attention-toasts { top: 68px; right: 8px; width: calc(100vw - 16px); } .decision-step-label { max-width: 150px; } }
+/* Line comments and review findings on the diff (LineReview.tsx). */
+.line-comment-anchor { width: 100%; padding: 0; border: 0; color: inherit; background: none; font: inherit; text-align: right; cursor: pointer; }
+.line-comment-anchor:hover, .line-comment-anchor:focus-visible { color: var(--amber); text-decoration: underline; }
+.line-notes { display: grid; gap: 6px; padding: 7px 12px 8px 102px; border-block: 1px solid var(--line); background: var(--surface); font-size: 11px; line-height: 1.5; min-width: max-content; max-width: 100%; }
+.split-code .line-notes { padding-left: 54px; }
+.file-findings { padding-left: 12px; margin: 10px 0; }
+.line-finding { display: grid; gap: 2px; padding: 6px 9px; border-left: 3px solid #e3a33f; border-radius: 4px; background: rgba(227,163,63,.09); white-space: normal; max-width: 760px; }
+.line-finding.severity-blocking { border-left-color: #ff6874; background: rgba(255,104,116,.10); }
+.line-finding.severity-minor { border-left-color: #6f9fe0; background: rgba(111,159,224,.09); }
+.line-finding strong { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.line-comment { display: flex; gap: 10px; align-items: baseline; padding: 6px 9px; border-left: 3px solid var(--amber); border-radius: 4px; background: rgba(239,189,120,.08); white-space: pre-wrap; max-width: 760px; }
+.line-comment span { flex: 1; }
+.line-comment button, .line-comment-editor button, .line-comment-actions button { padding: 3px 9px; border: 1px solid var(--line-strong); border-radius: 6px; color: inherit; background: transparent; font-size: 11px; cursor: pointer; }
+.line-comment-editor { display: grid; gap: 6px; max-width: 760px; }
+.line-comment-editor textarea { width: 100%; min-width: 320px; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: 6px; color: inherit; background: var(--background, transparent); font: inherit; resize: vertical; }
+.line-comment-editor > div, .line-comment-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.line-comment-editor button[type=submit], .line-comment-actions .primary { border-color: var(--amber); color: #1b1408; background: var(--amber); font-weight: 650; }
+.line-comment-editor button:disabled { opacity: .5; cursor: not-allowed; }
+.line-comment-bar { display: grid; gap: 8px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); font-size: 12px; }
+.line-comment-bar > div:first-child { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.line-comment-bar small { color: var(--amber); }
+.line-comment-bar ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; max-height: 160px; overflow: auto; }
+.line-comment-bar li { display: flex; gap: 8px; min-width: 0; color: var(--muted); }
+.line-comment-bar li code { flex-shrink: 0; color: inherit; }
+.line-comment-bar li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-comment-bar li.changed { opacity: .7; }
+.line-comment-bar li em { color: var(--amber); font-style: normal; }

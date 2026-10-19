@@ -28,6 +28,8 @@ import { createSourceMutationCommand } from "./source-mutation-command.ts";
 import { createSourceRevertCommand } from "./source-revert-command.ts";
 import { createSourceOpenCommand } from "./source-open-command.ts";
 import { tokenizeDiffLine } from "./diff-syntax.ts";
+import { CommentBar, FileFindings, LineAnchor, LineNotes, LineReviewContext, type LineReviewValue } from "./LineReview.tsx";
+import { commentKey, readComments, reviewMessage, upsertComment, writeComments, type LineComment, type LineSide, type ReviewFinding } from "./line-review.ts";
 import { activeFileRef, currentSourceDocument, fileStats, localizedSourceTabs, provenanceLabel, relatedEvidence,
   sourceDiffMatchesSnapshot, sourceDocumentMatchesSnapshot, sourceSnapshotRevisionKey, sourceSummary,
   sourceDetailUnavailableNeedsRecovery,
@@ -140,14 +142,18 @@ function HighlightedLine({ text, path }: { text: string; path: string }) {
 
 function DiffLine({ line, side, path }: { line: PiagentWebUIBoundedFileDiffV1["hunks"][number]["lines"][number];
   side: "inline" | "split"; path: string }) {
-  const old = line.oldLineNumber ?? "";
-  const next = line.newLineNumber ?? "";
-  if (side === "inline") return <div className={`diff-line diff-${line.kind}`}><span>{old}</span><span>{next}</span><b>{line.marker}</b>
-    <code><HighlightedLine text={line.text} path={path} /></code></div>;
+  // A removed line is commented by its old number, any other by its new one.
+  const anchor: LineSide = line.kind === "deleted" ? "old" : "new";
+  const number = anchor === "old" ? line.oldLineNumber ?? null : line.newLineNumber ?? null;
+  const old = anchor === "old" ? <LineAnchor path={path} side="old" line={number} code={line.text} /> : <span>{line.oldLineNumber ?? ""}</span>;
+  const next = anchor === "new" ? <LineAnchor path={path} side="new" line={number} code={line.text} /> : <span>{line.newLineNumber ?? ""}</span>;
+  const notes = <LineNotes path={path} side={anchor} line={number} />;
+  if (side === "inline") return <><div className={`diff-line diff-${line.kind}`}>{old}{next}<b>{line.marker}</b>
+    <code><HighlightedLine text={line.text} path={path} /></code></div>{notes}</>;
   const left = line.kind === "added" ? "" : line.text;
   const right = line.kind === "deleted" ? "" : line.text;
-  return <div className={`split-line diff-${line.kind}`}><span>{old}</span><code><HighlightedLine text={left} path={path} /></code>
-    <span>{next}</span><code><HighlightedLine text={right} path={path} /></code></div>;
+  return <><div className={`split-line diff-${line.kind}`}>{old}<code><HighlightedLine text={left} path={path} /></code>
+    {next}<code><HighlightedLine text={right} path={path} /></code></div>{notes}</>;
 }
 
 function DiffViewer({ state, review, mutation, revert, reviewEnabled, reviewBusy, reviewError, mutationEnabled, mutationBusy, mutationError,
@@ -228,14 +234,20 @@ function DiffViewer({ state, review, mutation, revert, reviewEnabled, reviewBusy
           line={line} side={mode} path={diff.file.path} />)}</div>
         {diff.unchangedRegions[index] && <div className="unchanged-region">… {diff.unchangedRegions[index].lineCount} {localize(locale, "dòng không đổi đã thu gọn", "unchanged lines collapsed")} …</div>}
       </section>)}
+      <FileFindings path={diff.file.path} shownLines={new Set(diff.hunks.flatMap((hunk) => hunk.lines.map((line) => line.newLineNumber).filter((n): n is number => typeof n === "number")))} />
       {diff.truncation.truncated && <div className="diff-fallback"><strong>{localize(locale, "Diff đã rút gọn", "Diff truncated")}</strong><span>{localize(locale, "Còn", "Another")} {diff.truncation.omittedLines} {localize(locale, "dòng chưa hiển thị.", "lines are not shown.")}</span></div>}
     </Box>
   );
 }
 
-export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { snapshot: PiagentWebUICanonicalSnapshotV1;
-  refreshSnapshot?: () => Promise<PiagentWebUICanonicalSnapshotV1 | undefined>; sessionRef?: string }) {
+export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef, findings, onSendComments }: { snapshot: PiagentWebUICanonicalSnapshotV1;
+  refreshSnapshot?: () => Promise<PiagentWebUICanonicalSnapshotV1 | undefined>; sessionRef?: string;
+  findings?: readonly ReviewFinding[]; onSendComments?: (text: string) => void }) {
   const { locale } = useUiPreferences();
+  const [comments, setCommentList] = useState<LineComment[]>(() => sessionRef ? readComments(sessionRef) : []);
+  const [editing, setEditing] = useState<{ key: string; path: string; side: LineSide; line: number; code: string } | null>(null);
+  useEffect(() => { setCommentList(sessionRef ? readComments(sessionRef) : []); setEditing(null); }, [sessionRef]);
+  const setComments = useCallback((next: LineComment[]) => { setCommentList(next); if (sessionRef) writeComments(sessionRef, next); }, [sessionRef]);
   const hasTaskView = Boolean(snapshot.task && snapshot.sourceChanges.task?.state !== "unavailable" && snapshot.sourceChanges.task?.revision);
   const availableTabs = useMemo(() => localizedSourceTabs(locale), [locale]);
   const [view, setView] = useState<View>(() => hasTaskView ? "task" : "working-tree");
@@ -347,6 +359,17 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
     : diff.requestKey !== detailRequestKey ? { state: "loading" }
     : (diffMismatch || diffLoadError) && detailMismatchRecovering ? { state: "loading" }
     : diffMismatch || diffLoadError ? { state: "error" } : diff;
+  // Line comments and review findings: only in a conversation that takes them.
+  const shownDiff = presentedDiff.state === "ready" ? presentedDiff.value : undefined;
+  const shownLines = new Map<string, string>();
+  for (const line of shownDiff?.hunks.flatMap((hunk) => hunk.lines) ?? []) {
+    const side: LineSide = line.kind === "deleted" ? "old" : "new", number = side === "old" ? line.oldLineNumber : line.newLineNumber;
+    if (typeof number === "number" && shownDiff) shownLines.set(commentKey(shownDiff.file.path, side, number), line.text);
+  }
+  const lineReview: LineReviewValue | null = sessionRef && onSendComments ? { locale, findings, comments, editing: editing?.key ?? null,
+    open: (path, side, line, code) => setEditing({ key: commentKey(path, side, line), path, side, line, code }),
+    save: (text) => { if (editing) setComments(upsertComment(comments, { path: editing.path, side: editing.side, line: editing.line, code: editing.code, text })); setEditing(null); },
+    cancel: () => setEditing(null), remove: (key) => setComments(comments.filter((c) => commentKey(c.path, c.side, c.line) !== key)) } : null;
   const presentedReview: LoadState<PiagentWebUIDigestBoundSelectedFileReviewStateV1> = !detailCurrent ? { state: "idle" }
     : !expectsReview ? { state: "idle" } : review.requestKey !== detailRequestKey ? { state: "loading" }
     : detailMismatchRecovering ? { state: "loading" }
@@ -807,6 +830,8 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
         deterministicEnabled={deterministicSummaryEnabled} modelEnabled={modelSummaryEnabled}
         onGenerate={() => { void generateCommitSummary(); }} onCopy={() => { void copyCommitSummary(); }}
         onModel={() => setModelSummaryConfirmation(true)} />}
+      {lineReview && <CommentBar comments={comments} lines={shownLines} linesPath={shownDiff?.file.path} locale={locale}
+        onSend={() => { onSendComments?.(reviewMessage(comments, locale === "en")); setComments([]); }} onClear={() => setComments([])} />}
       <Box className="source-body" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(286px, 330px) minmax(0, 1fr)" }, flex: 1, minHeight: 620 }}>
         <Box className="file-panel" id="source-tabpanel" role="tabpanel" aria-labelledby={`source-tab-${view}`} sx={{ minWidth: 0, borderRight: { md: 1 }, borderBottom: { xs: 1, md: 0 }, borderColor: "divider", bgcolor: "background.default" }}>
           <Box className="file-panel-meta" sx={{ minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, px: 1.5, borderBottom: 1, borderColor: "divider" }}>
@@ -827,7 +852,7 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
             {active?.state === "ready" && files.length === 0 && <div className="files-empty">{localize(locale, "Không có thay đổi trong view này.", "No changes in this view.")}</div>}
           </Box>
         </Box>
-        <DiffViewer state={presentedDiff} review={presentedReview} mutation={presentedMutation} revert={presentedRevert}
+        <LineReviewContext.Provider value={lineReview}><DiffViewer state={presentedDiff} review={presentedReview} mutation={presentedMutation} revert={presentedRevert}
           reviewEnabled={reviewEnabled} reviewBusy={reviewBusy} reviewError={reviewError}
           mutationEnabled={mutationEnabled} mutationBusy={mutationBusy} mutationError={mutationError}
           revertEnabled={revertEnabled} revertBusy={revertBusy} openEnabled={openEnabled} openBusy={openBusy} openStatus={openStatus}
@@ -835,7 +860,7 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
           mode={mode} onMode={setMode} onReview={(value) => { void markReview(value); }}
           onMutation={(hunkRefs) => { void mutateSource(hunkRefs); }} onRevert={(hunkRef) => { void requestRevert(hunkRef); }}
           onOpen={() => { void openInVSCode(); }} onRetry={detailCurrent && refreshSnapshot
-            ? () => beginDetailRecovery(true) : undefined} locale={locale} />
+            ? () => beginDetailRecovery(true) : undefined} locale={locale} /></LineReviewContext.Provider>
       </Box>
       {visibleSourceActionWarning && <div className="source-action-warning" role="status">{visibleSourceActionWarning}</div>}
       {revertError && <div className="source-revert-error" role="status">{revertError}</div>}

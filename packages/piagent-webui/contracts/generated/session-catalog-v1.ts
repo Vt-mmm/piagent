@@ -123,6 +123,18 @@ export type SessionRow = {
     blockingOpen: number;
     planSkipped?: true;
   };
+  managedReview?: {
+    stale: boolean;
+    /**
+     * @maxItems 40
+     */
+    findings: {
+      severity: "blocking" | "major" | "minor";
+      file: string;
+      line: number | null;
+      issue: string;
+    }[];
+  };
   managedTurnEnd?: {
     state: "done" | "midway" | "failed" | "cancelled";
     planSteps: number;
