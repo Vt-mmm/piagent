@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.34.2 - 2026-10-20
+
+Helper outcomes reach Studio.
+
+### Fixes
+
+- **Helper settlements are recorded.** A helper sent its report with the first token of its attempt, which Studio had already replaced at a renewal, so Studio refused it (401) and no outcome was recorded in 1.34.1. The report now goes with the role's current token, taken the same way the helper's own requests take theirs. Found in the live check on Agent Studio 0.35.0.
+
+### Tests
+
+- `tests/managed-delegation-cli.test.mjs` gives each renewal a new token and checks each report goes with a token newer than any the helper's requests used; `tests/managed-helper-settlement.test.mjs` covers the lease.
+
 ## v1.34.1 - 2026-10-20
 
 Piagent asks Studio what it serves, helpers report how their work ended, and Agent Watch learns when a conversation needs you (Agent Studio 0.34, Agent Watch 0.15.9 / Windows 0.1.15).

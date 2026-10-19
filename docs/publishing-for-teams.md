@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.34.2`: helper gửi kết quả cho Studio bằng token hiện tại của nó (bản 1.34.1 dùng token đầu tiên, đã bị thay khi gia hạn, nên Studio không ghi nhận).
 - `1.34.1`: hỏi Studio những gì nó hỗ trợ (capability); helper báo kết quả (xong, lỗi, đã dừng, chưa rõ); trạng thái từng cuộc trò chuyện cho Agent Watch báo khi cần bạn; comment theo dòng trên diff. (`1.34.0` được tag nhưng không phát hành.)
 - `1.33.0`: chạy trên Pi 1.3.0 (từ 0.87.1); `pi` cá nhân cũng lên 1.3.0; Agent Watch tự ghi lại binding.
 - `1.32.1`: Bypass được giữ sau khi tải lại; tab đang dùng không còn bị đăng xuất sau 8 giờ.
