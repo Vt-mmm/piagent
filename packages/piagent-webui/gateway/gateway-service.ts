@@ -42,6 +42,7 @@ import { pickNativeProjectFolders } from "./native-project-picker.ts";
 import { CompanyRelay, type CompanyConnector } from "./company-relay.ts";
 import { ProviderAuthBroker } from "./provider-auth-broker.ts";
 import { McpAuthBroker } from "./mcp-auth-broker.ts";
+import { AgentStatusFiles } from "./agent-status-files.ts";
 import type { ScopedBrokerRouter, RuntimeFactory } from "./session-runtime-factory.ts";
 
 function unavailable(reasonCode: string) {
@@ -120,6 +121,7 @@ export async function startPiagentGateway(options: {
   let attachments: SessionAttachmentRegistry | null = null;
   let relay: CompanyRelay | null = null;
   let updates: UpdateCenter | null = null;
+  let statusFiles: AgentStatusFiles | null = null;
   let closing: Promise<void> | null = null;
   let settleWait: (() => void) | null = null;
   const waited = new Promise<void>((resolve) => { settleWait = resolve; });
@@ -128,7 +130,7 @@ export async function startPiagentGateway(options: {
     if (closing) return await closing;
     closing = (async () => {
       removeGatewayDescriptor(state, gatewayInstanceRef);
-      relay?.close(); updates?.close();
+      relay?.close(); updates?.close(); statusFiles?.stop();
       await loopback?.close().catch(() => undefined);
       // Staged bytes are private temp files. Closing deletes them rather than
       // leaving a directory per session behind for the TTL sweep that will never
@@ -227,6 +229,8 @@ export async function startPiagentGateway(options: {
     // Every revision the browser sees and sends back is the merged one.
     const hubCatalog = relay ? async () => relay!.merge(await readCatalog()) : readCatalog;
     const company = (sessionRef: unknown) => !!relay?.owns(sessionRef);
+    // Each conversation's state for Agent Watch (agent-status-files.ts): this Gateway's own conversations only.
+    statusFiles = new AgentStatusFiles(path.join(state.agentDir, "status", options.managed ? "company" : "dashboard"), async () => { const catalog = await readCatalog(); if (catalog.state !== "ready") throw new Error("catalog-not-ready"); return catalog; }, () => Boolean(options.managed)); statusFiles.start();
     const projectFolder = async (projectRef: string) => projects.resolve(projectRef)
       ?? (await runtimes!.listSessions()).find((info) => typeof info.cwd === "string" && projectRefForCwd(key, info.cwd) === projectRef)?.cwd
       ?? (relay ? (await relay.folders()).find((folder) => projectRefForCwd(key, folder) === projectRef) : undefined);

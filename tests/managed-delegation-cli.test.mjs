@@ -11,12 +11,16 @@ const sdkRoot = piSdkRoot();
 test('production CLI executes both delegated roles from a native tool response with a clean environment',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:120000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-delegation-cli-'))),project=path.join(root,'project');fs.mkdirSync(project);
  execFileSync('/usr/bin/git',['init','-q',project]);fs.writeFileSync(path.join(project,'README.md'),'before\n');execFileSync('/usr/bin/git',['-C',project,'add','.']);execFileSync('/usr/bin/git',['-C',project,'-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-qm','baseline']);fs.writeFileSync(path.join(project,'README.md'),'after\n');
- const roles=Object.fromEntries(['main','research','review'].map(r=>[r,randomUUID()])),requests=[];
+ const roles=Object.fromEntries(['main','research','review'].map(r=>[r,randomUUID()])),requests=[],settled=[];
  const authority={studio_instance_id:randomUUID(),dataset_epoch:randomUUID(),auth_generation:1},runID=randomUUID();
  const models=[{id:'claude-sonnet-5-5',provider_model_id:'claude-sonnet-5-5',owned_by:'claude',max_output_tokens:16384},{id:'gpt-6-luna',provider_model_id:'gpt-6-luna',owned_by:'codex',max_output_tokens:16384}];
  const manifest={schema_version:2,credential_mode:'managed',authority,key_id:randomUUID(),models,harness:{configuration:{main:{model_ids:[models[0].id]},research:{model_ids:[models[1].id]},review:{model_ids:[models[0].id]}}}};
  const server=http.createServer(async(req,res)=>{
-  const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks)),role=Object.keys(roles).find(r=>roles[r]===req.headers['x-session-id']);requests.push({role,body});
+  const chunks=[];for await(const c of req)chunks.push(c);
+  // Studio 0.34+: the capabilities this fixture serves, and each helper's report of how its attempt ended.
+  if(req.url==='/v1/capabilities'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({capabilities:['capabilities.v1','managed.settle.v1','Not A Name']}));}
+  if(req.url==='/v1/managed/settle'){settled.push({token:req.headers.authorization,report:JSON.parse(Buffer.concat(chunks))});res.writeHead(200,{'Content-Type':'application/json'});return res.end('{}');}
+  const body=JSON.parse(Buffer.concat(chunks)),role=Object.keys(roles).find(r=>roles[r]===req.headers['x-session-id']);requests.push({role,body});
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   if(role==='research'){
    const item={id:'msg_research',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'RESEARCH_OK',annotations:[]}]},response={id:'resp_research',object:'response',model:body.model,status:'in_progress',output:[]};
@@ -39,6 +43,9 @@ test('production CLI executes both delegated roles from a native tool response w
   const result=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Run both helpers'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>text+=b);p.on('error',reject);p.on('close',code=>resolve({code,text}));});
   assert.equal(result.code,0,result.text);assert.match(result.text,/DELEGATION_OK/);
   assert.deepEqual(requests.map(r=>r.role).sort(),['main','main','research','review'],JSON.stringify(requests.filter(r=>r.role==='main').at(-1)?.body.messages.at(-1)));
+  // Each helper reported its ending once, with its own run token: research answered; review answered without its findings JSON.
+  assert.deepEqual(settled.map(s=>[s.token.slice('Bearer as_run_'.length,'Bearer as_run_'.length+36),s.report.outcome]).sort(),[[roles.research,'succeeded'],[roles.review,'unverifiable']]);
+  assert.match(settled.find(s=>s.report.outcome==='succeeded').report.summary,/RESEARCH_OK/);
   // --json: the event stream of `pi --mode json`, one JSON object per line on stdout.
   const json=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--prompt','Answer once more','--json'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),TERM:'dumb'},stdio:['ignore','pipe','pipe']});let out='',err='';p.stdout.on('data',b=>out+=b);p.stderr.on('data',b=>err+=b);p.on('error',reject);p.on('close',code=>resolve({code,out,err}));});
   assert.equal(json.code,0,json.err);

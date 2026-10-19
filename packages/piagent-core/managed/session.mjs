@@ -24,7 +24,7 @@ import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from '
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { beforeDelegate } from './objections.mjs';
-import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs';
+import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { restorePermission, permissionSetter } from './permission.mjs';
 import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
@@ -123,9 +123,9 @@ export class ManagedSession {
     // turn, names the Harness's current helpers; delegate refuses one the
     // Harness does not have.
     const roles = helperRoles(manifest);
-    if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles),
-      parameters: { type: 'object', properties: { role: { type: 'string', enum: HELPER_ROLES }, title: { type: 'string', maxLength: 120, description: 'One line naming the job, for the company logs (for example "Find where login tokens are stored").' }, task: { type: 'string', minLength: 1, maxLength: 12000 }, since: { type: 'string', maxLength: 200, description: 'Review only: the commit, branch or HEAD~N the work to review started from (work committed in earlier turns).' } }, required: ['role', 'task'], additionalProperties: false },
-      execute: (_id, args, signal) => self.delegate(args, signal) });
+    if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles) + SPEC_PROMPT,
+      parameters: delegateParameters(), // the brief and its structured fields (helper-settlement.mjs)
+      execute: (_id, args, signal) => self.delegate(delegateArgs(self, args), signal) });
     customTools.push(planTool(async plan => {
       self.session.sessionManager.appendCustomEntry(PLAN_ENTRY, { ...plan, at: new Date().toISOString() });
       if (self.run) self.run.planUpdated = true;

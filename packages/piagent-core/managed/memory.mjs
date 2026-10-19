@@ -7,7 +7,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { MemoryOutbox, memoryScope, scopeID } from './memory-outbox.mjs';
 import { CheckLessons } from './memory-lessons.mjs';
-import { CLIENT_AGENT } from './client-agent.mjs';
+import { CLIENT_AGENT } from './client-agent.mjs'; import { knownCapabilities, refreshCapabilities } from './studio-capabilities.mjs';
 import { redactedText } from '../runtime/managed-failure.mjs';
 import { git, repoKey, repositoryAt, findRepositories, topDirs, eventFor, commitChanges } from './memory-repos.mjs';
 import { PAGE_NAMES, renewer, memoryTools } from './memory-tools.mjs';
@@ -452,15 +452,15 @@ export function trackMemoryLessons(self) {
 // Whether this conversation has team memory now: Studio answered memory for
 // this key recently and has not switched it off since (the Terminal's header).
 export const memoryOn = self => !!self?.memory?.stateDir && self.memory.active && TeamMemory.known(self.memory.stateDir, self.origin, memoryScope(self.origin, self.manifest));
-// memory_ask is offered whenever the conversation has team memory. The
-// protocol this Mac last heard was recorded before a Studio upgrade, so it
-// cannot decide; on a Studio without /v1/memory/ask the tool says to use
-// memory_search instead (ask() does not turn memory off on a 404).
-const speaksAsk = () => true;
-export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self, { ask: speaksAsk() }) : [];
+// memory_ask is offered unless this Studio listed its capabilities without
+// memory.ask.v1 (studio-capabilities.mjs). With no list heard (a Studio older
+// than 0.34) it is offered; on a Studio without /v1/memory/ask the tool says
+// to use memory_search instead (ask() does not turn memory off on a 404).
+const speaksAsk = (self, agentDir) => knownCapabilities(agentDir ?? self.memory?.stateDir, self.origin, self.manifest)?.has('memory.ask.v1') ?? true;
+export const memoryToolsFor = (self, agentDir) => agentDir && TeamMemory.known(agentDir, self.origin, memoryScope(self.origin, self.manifest)) ? memoryTools(self, { ask: speaksAsk(self, agentDir) }) : [];
 // A helper (scout, research, verify, review) reads the team memory with its own run token; it never writes.
 export const helperMemoryTools = (managed, grant, renew) => managed.memory?.stateDir && TeamMemory.known(managed.memory.stateDir, managed.origin, memoryScope(managed.origin, managed.manifest))
-  ? memoryTools(managed, { pages: false, ask: speaksAsk(), grant, renew }) : [];
+  ? memoryTools(managed, { pages: false, ask: speaksAsk(managed), grant, renew }) : [];
 export async function openRound(self, manager, text) {
   if (!self.memory) return;
   self.memory.stats = {};
@@ -475,7 +475,7 @@ export async function openRound(self, manager, text) {
     if (fresh && !scopedBrief(messages, self.memory.scopeHash)) {
       await self.session.sendCustomMessage({ customType: MEMORY_ENTRY, content: fresh.content, details: fresh.details, display: false }, { triggerTurn: false });
     }
-    self.memory.startBackground(self.grant);
+    self.memory.startBackground(self.grant); if (self.memory.stateDir) void refreshCapabilities(self, self.grant, { agentDir: self.memory.stateDir });
   } catch { /* memory is optional */ }
 }
 export async function closeRound(self) {

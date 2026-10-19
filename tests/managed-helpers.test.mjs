@@ -214,7 +214,9 @@ test('scout and verify helpers run with their own tools and only when the Harnes
     await assert.rejects(managed.delegate({role:'research',task:'Look this up'}), /managed-helper-not-configured: the company Harness has no research subagent; use scout, verify/);
     await assert.rejects(managed.delegate({role:'planner',task:'Plan'}), /managed-helper-unavailable/);
     const scouted=await managed.delegate({role:'scout',task:'Where is the check declared?'});
-    assert.equal(content(scouted),'Scout fixture result');
+    // The main agent reads how the attempt ended first, then the answer.
+    assert.equal(content(scouted),'Outcome: succeeded.\n\nScout fixture result');
+    assert.equal(scouted.details.outcome,'succeeded');
     const executableTools = body => (body.tools??[]).filter(t=>t.name!=='__pi_deferred_placeholder__').map(t=>t.name).sort();
     // Scout reads the project only: no commands, no web.
     assert.deepEqual(executableTools(requests.find(r=>r.role==='scout').body),['find','grep','ls','read']);
@@ -238,7 +240,7 @@ test('scout and verify helpers run with their own tools and only when the Harnes
     mainRelease.resolve(); await prompt;
     const receipts=managed.session.sessionManager.getEntries().filter(e=>e.type==='custom_message'&&e.customType==='agent-watch-helper-receipt').map(e=>e.content);
     assert.equal(receipts.length,3);
-    assert.match(receipts[0],/^Scout: \d+ tokens\.$/); assert.match(receipts[1],/^Verify: \d+ tokens · 1 pass, 1 unverifiable\.$/);
+    assert.match(receipts[0],/^Scout: \d+ tokens · done\.$/); assert.match(receipts[1],/^Verify: \d+ tokens · 1 pass, 1 unverifiable · done\.$/);
     assert.deepEqual(calls.filter(c=>c.action==='child').map(c=>c.role),['scout','verify','verify']);
     assert.deepEqual(calls.filter(c=>c.action==='close'&&c.role).map(c=>c.role),['scout','verify','verify']);
   } finally {

@@ -14,6 +14,7 @@ import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
 import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-roles.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
 import { helperMemoryTools, renewer } from './memory.mjs';
+import { answeredSettlement, failedSettlement, settleHelper, OUTCOME_WORDS } from './helper-settlement.mjs';
 
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
 // A helper failure that another model of its role may not have: the model's
@@ -68,8 +69,8 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     try { verifyGrant(grant, managed.manifest, role); }
     catch (error) { try { await managed.broker.request('close', { role }); } catch { /* closes with the run */ } throw error; }
   } catch (error) { throw Error(`managed-helper-failed: ${describeFailure(role, failureText(error))}`); }
-  let boundary;
-  const sessions = new Set();
+  let boundary, report = null;
+  const sessions = new Set(), spec = managed.helperSpecs?.get(role) ?? {};
   try {
     const runtime = await managed.api.ModelRuntime.create({ credentials: new managed.ai.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false, allowModelNetwork: false });
     const model = managed.installModel(runtime, grant); managed.wrapStreams(runtime, role);
@@ -130,10 +131,17 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
       managed.session.sessionManager.appendCustomEntry('agent-watch-review', details);
     }
     const verdicts = role === 'verify' ? recordVerdicts(managed.run, reply, harness, details) : '';
+    report = answeredSettlement(role, reply, details, spec); details.outcome = report.outcome;
     await managed.session.sendCustomMessage({ customType: 'agent-watch-helper-receipt', display: true,
-      content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${verdicts}${review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''}.`, details }, { triggerTurn: false });
+      content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${verdicts}${review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
     // An objection to the brief comes with the answer; a stale review has none to act on.
     const objection = stale ? '' : await relayObjection(managed, role, reply, harness);
-    return { content: [{ type: 'text', text: stale ? 'Review is stale: the patch changed during review. Obtain a new review for the current patch.' : reply + objection }], details };
-  } finally { for (const session of sessions) session.dispose(); await boundary?.dispose(); await managed.broker.request('close', { role }); }
+    const ending = `Outcome: ${report.outcome}${report.outcome === 'unverifiable' ? ` (${report.summary})` : ''}.\n\n`;
+    return { content: [{ type: 'text', text: ending + (stale ? 'Review is stale: the patch changed during review. Obtain a new review for the current patch.' : reply + objection) }], details };
+  } catch (error) { report = failedSettlement(role, error, signal, spec); throw error; }
+  finally {
+    for (const session of sessions) session.dispose(); await boundary?.dispose();
+    await settleHelper(managed, grant, report); // with the attempt's own token, before its role closes
+    await managed.broker.request('close', { role });
+  }
 }
