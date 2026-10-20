@@ -1,6 +1,7 @@
 import { checkpointsOf } from './checkpoints.mjs';
 import { unfinished, planText, currentPlan, workflowPolicy } from './workflow.mjs';
 import { failureCode } from '../runtime/managed-failure.mjs';
+import { resumeMessage } from './studio-link.mjs';
 
 // A main agent often ends its turn between the steps of its own checklist
 // ("STEP06 done, STEP07 next"), though the member asked for all of them.
@@ -97,10 +98,20 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
       if (first) result = round.result; else waiting?.resolve(round.result);
       waiting = null;
       const last = self.session.messages.findLast(m => m.role === 'assistant');
-      const stopped = self.stopRequested || last?.stopReason === 'aborted';
+      let stopped = self.stopRequested || last?.stopReason === 'aborted';
       const failure = round.preflight || last?.stopReason === 'error' ? { role: 'main', code: failureCode(last?.errorMessage ?? '') }
         : round.closeFailed ? { role: 'main', code: round.closeFailed } : null;
-      const plan = currentPlan(manager), message = continuation.next({ plan, planUpdated: round.planUpdated, changed: round.changed, stopped, failed: !!failure });
+      // A round cut because Studio or the way to it stopped answering (an
+      // update overnight) goes on once Studio is back, however long that
+      // takes; Stop ends the wait (studio-link.mjs).
+      let resume = null;
+      if (failure && !stopped && !self.queued.length && self.studioLink?.waits(failure.code)) {
+        try { const back = await self.studioLink.waitUntilBack({ phase: 'continue', code: failure.code, conversation: manager.getSessionId?.() ?? null }); resume = back && resumeMessage(back, failure.code); }
+        catch { /* stopped while waiting */ }
+        stopped ||= self.stopRequested;
+        if (round.planUpdated) continuation.touched = true;
+      }
+      const plan = currentPlan(manager), message = resume && !stopped ? resume : continuation.next({ plan, planUpdated: round.planUpdated, changed: round.changed, stopped, failed: !!failure });
       if (self.queued.length) {
         // The member wrote while the round closed: theirs is the next round,
         // a new request (Stop before it applied to the round before).

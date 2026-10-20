@@ -18,12 +18,14 @@ export function bestEffortUnsubscribe(unsubscribe: (() => void) | null): void {
 }
 
 // A silent tool/provider gets 15 minutes. Any observed host event refreshes that
-// allowance, while the six-hour ceiling prevents an endless stream of progress
-// events from retaining runtime authority forever. Cleanup itself is separately
-// bounded so Stop and watchdog recovery cannot inherit the original hang.
+// allowance, while the 24-hour ceiling prevents an endless stream of progress
+// events from retaining runtime authority forever (a checklist left running
+// overnight, waiting out a Studio update, takes 10 hours and more). Cleanup
+// itself is separately bounded so Stop and watchdog recovery cannot inherit
+// the original hang.
 const DEFAULT_POLICY: SessionOperationDeadlinePolicy = Object.freeze({
   inactivityTimeoutMs: 15 * 60_000,
-  maximumDurationMs: 6 * 60 * 60_000,
+  maximumDurationMs: 24 * 60 * 60_000,
   terminationTimeoutMs: 5_000,
   projectionTimeoutMs: 2_500
 });

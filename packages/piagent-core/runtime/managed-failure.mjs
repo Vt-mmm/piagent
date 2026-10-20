@@ -98,6 +98,9 @@ const CODES = {
   'managed-plan-invalid': ['tool', 'the checklist was not in the expected form'],
   'managed-request-failed': ['failed', 'the request could not be sent'],
   'studio-request-failed': ['failed', 'Studio answered with an error'],
+  // A gateway's page (Cloudflare, the LAN edge) instead of Studio's answer:
+  // Studio is stopped or restarting behind it, or the way to it failed.
+  'studio-gateway-unavailable': ['unreachable', "Studio's gateway answered that Studio is not reachable"],
 };
 const ROLES = { main: 'main agent', scout: 'scout subagent', research: 'research subagent', verify: 'verify subagent', review: 'review subagent' };
 const REQUEST = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/;
@@ -133,7 +136,7 @@ export function redactedText(raw) { return redactSensitiveText(String(raw ?? '')
 // The sentence alone, for a status line that already says who is waiting.
 export function failureReason(code) { return (CODES[code] ?? CODES['managed-request-failed'])[1]; }
 // A failure Studio never saw: nothing was sent, so it is not a model request.
-export function failureIsLocal(code) { return code.startsWith('managed-') || code === 'studio-unreachable'; }
+export function failureIsLocal(code) { return code.startsWith('managed-') || code === 'studio-unreachable' || code === 'studio-gateway-unavailable'; }
 
 function known(code) { return typeof code === 'string' && Object.hasOwn(CODES, code) ? code : null; }
 
@@ -147,6 +150,7 @@ export function failureCode(raw) {
   if (known(studio)) return studio;
   const local = /(managed-broker:[A-Za-z_]{1,80}|managed-[a-z-]{1,80}|web-search-empty)/.exec(text)?.[1];
   if (known(local)) return local;
+  if (!studio && /\bAPI error \((?:50[234]|52\d|530)\)|^(?:50[234]|52\d|530)\b/.test(text)) return 'studio-gateway-unavailable';
   if (studio || /\bAPI error \(\d{3}\)|^\d{3} \{/.test(text)) return 'studio-request-failed';
   // The provider declined the request itself (its usage policy), not Studio:
   // the same request is declined again, so it is said in words.

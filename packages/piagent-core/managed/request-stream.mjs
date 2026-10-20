@@ -6,7 +6,7 @@
 // few times. Nothing that reached the model is sent twice.
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { describeFailure, failureCode, failureIsAdmissionRefusal, failureIsBriefRefusal, failureReason, unnamedFailureText } from '../runtime/managed-failure.mjs';
+import { describeFailure, failureCode, failureIsAdmissionRefusal, failureIsBriefRefusal, failureReason, failureText, unnamedFailureText } from '../runtime/managed-failure.mjs';
 import { CLIENT_AGENT } from './client-agent.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { purposeHeaders } from './call-purpose.mjs';
@@ -67,11 +67,21 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             // replaces the role's token and would void a sibling's before
             // Studio admits it. The share is let go once Studio has answered.
             share = shareGrant(owner, role);
-            const grant = await share.grant.catch((error) => { throw refused ? Error(refused) : error; });
+            // Agent Watch could not renew the grant because Studio (or Watch's
+            // way to it) is out of reach: wait for Studio, then renew again.
+            const link = owner.studioLink, grant = await share.grant.catch(async (error) => {
+              const code = failureCode(failureText(error));
+              if (!link?.waits(code) || signal?.aborted) throw refused ? Error(refused) : error;
+              letGo();
+              if (!(await link.waitUntilBack({ phase: 'broker', code, role, conversation: conversationSession(owner), runId: owner.grant?.run_id ?? null, signal }))) throw refused ? Error(refused) : error;
+              return null;
+            });
+            if (!grant) continue;
             verifyGrant(grant, owner.manifest, role);
             if (role === 'main') owner.grant = grant;
             // Tool calls that failed since the last request (tool-failures.mjs).
             void sendToolFailures(owner, grant.token);
+            void link?.flush(grant.token);
             const route = owner.routes.get(runtime);
             if (!route || grant.provider_model_id !== route.native || grant.provider !== route.provider || grant.model_id !== route.model_id || model.id !== 'agent-watch-auto') throw Error('managed-route-changed');
             const asked = Date.now();
@@ -83,7 +93,7 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             // Studio's id for this request, from its answer's headers: a
             // stream that ends here without an answer is ended there too.
             let studioRequest = null;
-            const onResponse = (response, at) => { studioRequest = studioRequestID(response?.headers); return options?.onResponse?.(response, at); };
+            const onResponse = (response, at) => { studioRequest = studioRequestID(response?.headers); link?.observe(response?.headers); return options?.onResponse?.(response, at); };
             const stream = original({ ...model, id: route.native }, context, { ...options, apiKey: grant.token, sessionId: conversation ?? grant.role_id, maxRetries: 0, onPayload, onResponse, fetch: (owner.compressedFetch ??= compressedFetch(owner, options?.fetch)),
               headers: { ...withoutCredentials(options?.headers), ...purpose, 'User-Agent': CLIENT_AGENT, 'X-Session-Id': grant.role_id, ...(conversation ? { 'X-Claude-Code-Session-Id': conversation } : {}) } });
             // Whether Studio admitted the request is known at its first event
@@ -94,8 +104,8 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
               if (opening && event.type === 'start') { opening.push(event); continue; }
               const code = event.type === 'error' ? failureCode(event.error?.errorMessage) : null;
               if (opening && code && !signal?.aborted && (failureIsAdmissionRefusal(code) || failureIsBriefRefusal(code) && brief < BRIEF_ASKS
-                || role === 'main' && code === ACCOUNT_GONE && rebinds < MAX_REBINDS || fast && fastRefusal(code))) { refusal = event.error; break; }
-              if (opening) { for (const held of opening) out.push(held); opening = null; wait = capacityWaitEnded(owner, wait, 'admitted'); letGo(); }
+                || role === 'main' && code === ACCOUNT_GONE && rebinds < MAX_REBINDS || fast && fastRefusal(code) || link?.always(code))) { refusal = event.error; break; }
+              if (opening) { for (const held of opening) out.push(held); opening = null; wait = capacityWaitEnded(owner, wait, 'admitted'); letGo(); link?.ok(); }
               out.push(event.type === 'error' ? { ...event, ...(signal?.aborted ? { reason: 'aborted' } : {}), error: told(event.error) } : event);
             }
             if (!refusal) {
@@ -115,6 +125,13 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             // generation lets Studio bind the conversation to another account.
             // Its prompt cache starts over there once.
             const refusedCode = failureCode(refusal.errorMessage);
+            // Studio, its gateway or its connector did not answer before the
+            // model did any work: wait for Studio to answer again, then ask again.
+            if (link?.always(refusedCode)) {
+              wait = capacityWaitEnded(owner, wait, 'ended');
+              if (await link.waitUntilBack({ phase: 'model', code: refusedCode, role, conversation: conversationSession(owner), runId: grant.run_id ?? null, signal })) continue;
+              out.push({ type: 'error', reason: 'error', error: told(refusal) }); return;
+            }
             if (role === 'main' && rebinds < MAX_REBINDS && (refusedCode === ACCOUNT_GONE
               || refusedCode === ACCOUNT_RESTING && wait && Date.now() - wait.since >= (owner.sessionRebindMs ?? SESSION_REBIND_MS))) {
               owner.conversationGeneration = (owner.conversationGeneration ?? 0) + 1; rebinds += 1;
@@ -250,9 +267,27 @@ export function companyTurnRetryable(message) {
 
 // True when the session retries company failures by code. A Pi whose session
 // no longer has the hook keeps retry off rather than retrying by words.
-export function enableCompanyTurnRetry(session, settings) {
+// An answer cut because Studio or the way to it stopped answering (an
+// update, a restart, the network) is asked again with no limit on how many
+// times: each time after Studio's heartbeat says it is back (studio-link.mjs).
+// Stop ends the wait. Other passing failures keep their two asks again.
+export function enableCompanyTurnRetry(session, settings, link = null) {
   if (typeof session?._isRetryableError !== 'function') return false;
-  session._isRetryableError = companyTurnRetryable;
+  const studio = message => !!link && message?.stopReason === 'error' && link.waits(failureCode(message.errorMessage));
+  session._isRetryableError = message => companyTurnRetryable(message) || studio(message);
   settings.applyOverrides({ retry: { enabled: true, ...TURN_RETRY } });
+  const prepare = session._prepareRetry;
+  if (link && typeof prepare === 'function') session._prepareRetry = async function (message) {
+    if (!studio(message)) return prepare.call(this, message);
+    // Studio answers here and was not away lately (Agent Watch or Studio's
+    // connector failed on a running Studio): Pi's own asks again, as before.
+    if (!(await link.needed(failureCode(message.errorMessage)).catch(() => false))) return companyTurnRetryable(message) ? prepare.call(this, message) : false;
+    this._retryAttempt = 0; // a wait for Studio is not one of the two asks again
+    if (!(await prepare.call(this, message))) return false;
+    const controller = new AbortController(); this._retryAbortController = controller;
+    try { return !!(await link.waitUntilBack({ phase: 'model', code: failureCode(message.errorMessage), signal: controller.signal })) && !this._agentRunAbortRequested; }
+    catch { this._finishCancelledRetry?.(); return false; }
+    finally { if (this._retryAbortController === controller) this._retryAbortController = undefined; }
+  };
   return true;
 }

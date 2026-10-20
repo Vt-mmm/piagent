@@ -13,7 +13,7 @@ import { managedThinkingLevels, nearestLevel } from './capabilities.mjs';
 import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from './native-catalog.mjs';
 import { fetchOriginTool } from './repository-operation.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
-import { enableCompanyTurnRetry, wrapRoleStreams } from './request-stream.mjs';
+import { enableCompanyTurnRetry, wrapRoleStreams } from './request-stream.mjs'; import { StudioLink } from './studio-link.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
 import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
 import { runHelper } from './helper-run.mjs';
@@ -139,7 +139,7 @@ export class ManagedSession {
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, terminalExtensions) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
-    const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main'));
+    const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main')); self.studioLink = new StudioLink({ origin: self.origin, agentDir, notify: event => self.notify(event), ui: () => self.session?.extensionRunner?.getUIContext?.() });
     const scope = scopeOf(self.origin, manifest);
     const prior = manager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-scope').at(-1)?.data;
     // Under another member or another Studio a conversation still opens and
@@ -167,7 +167,7 @@ export class ManagedSession {
     self.extensionsResult = result.extensionsResult;
     self.session = result.session;
     self.session.managedExecution = true;
-    self.turnRetry = enableCompanyTurnRetry(self.session, settings);
+    self.turnRetry = enableCompanyTurnRetry(self.session, settings, self.studioLink);
     // The member's access for this conversation: ask first, or Bypass (permission.mjs).
     self.permission = restorePermission(manager); self.session.managedSetPermission = permissionSetter(self, manager);
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
@@ -199,7 +199,7 @@ export class ManagedSession {
     };
     self.review = manager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-review').at(-1)?.data ?? null;
     const abort = self.session.abort.bind(self.session);
-    self.session.abort = async (...args) => { self.gateAbort?.abort(); if (self.activePrompt) self.stopRequested = true; return abort(...args); };
+    self.session.abort = async (...args) => { self.gateAbort?.abort(); self.studioLink?.cancel(); if (self.activePrompt) self.stopRequested = true; return abort(...args); };
     // One member message is one turn, harness rounds included (checks, review,
     // fixes after the answer, rounds that continue an unfinished checklist):
     // listeners hear "settled" once, when it ends.

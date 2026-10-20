@@ -18,6 +18,7 @@ test('managed WebUI shows a Studio refusal instead of an endless wait and accept
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-inference-error-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const requests=[];let gateway,browser;
  const server=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
+  if (req.url === "/v1/heartbeat") { res.writeHead(200, {'Content-Type':'application/json'}); res.end('{"status":"ready"}'); return; } // Studio itself answers
   for await(const _ of req);requests.push(req.url);
   res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'connector_unavailable',message:'connector_unavailable',request_id:randomUUID()}}));
  });
@@ -58,6 +59,7 @@ test('managed WebUI shows why a subagent failed on its step', {skip:process.plat
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-helper-error-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const roles={main:randomUUID(),research:randomUUID()};let gateway,browser,mainRequests=0;
  const server=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
+  if (req.url === "/v1/heartbeat") { res.writeHead(200, {'Content-Type':'application/json'}); res.end('{"status":"ready"}'); return; } // Studio itself answers
   for await(const _ of req);
   if(req.headers['x-session-id']===roles.research){res.writeHead(429,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'token_quota_exhausted',message:'token_quota_exhausted',request_id:randomUUID()}}));return;}
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=event=>res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);

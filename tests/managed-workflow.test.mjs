@@ -139,6 +139,8 @@ function project() {
 async function studio(script) {
   const requests = [];
   const server = http.createServer(async (req, res) => {
+    // Studio's heartbeat (studio-link.mjs) is not a model call.
+    if (req.url === '/v1/heartbeat') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"status":"ready"}'); return; }
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     // Only model calls follow the script; this Studio keeps no log of failed tool calls.
     if (req.url === '/studio/v1/managed/tool-failures') { res.writeHead(404).end(); return; }

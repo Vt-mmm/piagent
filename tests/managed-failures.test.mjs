@@ -51,6 +51,9 @@ test('a failure names who failed, why and Studio\'s request, never the harness m
 async function studio(answer) {
   const requests = [];
   const server = http.createServer(async (req, res) => {
+    // Studio's heartbeat (studio-link.mjs) is not a model request.
+    if (req.url === '/v1/heartbeat') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ status: 'ready' })); return; }
+    if (req.url === '/studio/v1/managed/disconnects') { for await (const _ of req); res.writeHead(204); res.end(); return; }
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const body = JSON.parse(Buffer.concat(chunks)); requests.push({ path: req.url.split('?')[0], body, session: req.headers['x-session-id'] });
     if (answer?.(req, res, body) === true) return;
