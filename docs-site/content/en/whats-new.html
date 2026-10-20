@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.35.0 · 2026-10-21</p>
+  <h2 id="v1-35-0">Long tasks survive a Studio update</h2>
+  <p class="section-lead">Leave a task running overnight and let Studio update or restart: Piagent no longer fails and stops, it waits for Studio to answer again and goes on by itself, for as long as it takes (Stop still stops it). Each wait is logged on the machine and reported to Studio (Logs → Mất kết nối) with its cause: a Studio update, a restart, or the machine's network. One dashboard turn can now run up to 24 hours. Needs Studio 0.36.0.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.34.3 · 2026-10-20</p>
   <h2 id="v1-34-3">Agent Watch notifies for company conversations</h2>
   <p class="section-lead">Company conversations wrote their state where Agent Watch does not look, so it never told you when one waited for you or was done. The state now goes to the folder Agent Watch reads.</p>

@@ -2,6 +2,22 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.35.0 - 2026-10-21
+
+Long company tasks go on across Studio updates.
+
+### Features
+
+- **Waits for Studio instead of failing.** When a company request cannot reach Studio for a reason that is Studio's or the way to it (Studio stopped, restarting or being updated; a Cloudflare or LAN-edge page instead of Studio's answer, now its own code `studio-gateway-unavailable`; Agent Watch losing Studio during an update), Piagent reads Studio's heartbeat (`GET /v1/heartbeat`, Studio 0.36.0) and asks again once Studio is back, with no limit on how long; Stop ends the wait. A request cut before the model answered is asked again as it was; an answer cut mid-stream is asked again by the turn's retry without its two-try limit; where the WebUI ends that retry (a tool already ran), the next round starts by itself and tells the agent why ("Studio was updated (0.35.3 → 0.36.0) … continue from where you were"). A key, quota or policy failure fails at once as before; Agent Watch or Studio's connector failing while Studio answers here (and was not away in the last 10 minutes) fails at once too, after the usual two asks.
+- **Every wait is logged and reported.** One JSON line per event in `<agentDir>/logs/studio-link.jsonl` (`kind` `studio_wait` / `studio_disconnect`, `cause`, `outcome`, versions, attempts), filterable with `jq`; reported to Studio (`POST /studio/v1/managed/disconnects`), which decides the cause from its own starts and lists it in Logs → "Mất kết nối". A Studio without the route (older than 0.36.0) is not asked again; a Studio without the heartbeat counts as up.
+- **24-hour turns in the WebUI.** The watchdog's ceiling for one member message is 24 hours (it was 6), so a checklist left running overnight is not cut; the 15-minute silence limit stays and each heartbeat read while waiting counts as activity.
+
+### Tests
+
+- `tests/managed-studio-link.test.mjs`: classification, waits, Stop, reports, the unlimited turn retry, a round that resumes, and Agent Watch or Studio's connector failing on a running Studio.
+- `tests/managed-studio-update-resume.test.mjs`: WebUI end to end, a request cut by a Studio update, Studio away for 5 s and back as a new version; the task finishes without a click, the report says `studio_update`, the local log has the wait.
+- Live check on the Mac mini: an 8-step task through Cloudflare while Studio was upgraded from 0.35.3 to 0.36.0; Agent Watch could not renew the grant for 14.7 s, Piagent waited and went on, all 8 steps finished, and Studio recorded the stretch as `studio_update`.
+
 ## v1.34.3 - 2026-10-20
 
 Agent Watch notifies for company conversations.
