@@ -2,6 +2,21 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.35.1 - 2026-10-21
+
+A passing failure of the model provider no longer stops a long task.
+
+### Fixes
+
+- **The provider's own error event in the middle of an answer is asked again.** Found on 2026-10-21: gpt-6-sol sent `api_error` after a tool step, Studio passed it on as it should, and Piagent did not recognise it, so nothing asked again and a long task stopped until the member wrote 8 minutes later. Pi's words for such an event (OpenAI `server_error` / `api_error`, Anthropic `api_error` / `overloaded_error`) are now the code `upstream_server_error`, asked again by the turn's retry (2 and 4 s later).
+- **A round cut by a passing provider failure goes on by itself.** Where the turn's retry does not run (the WebUI does not replay a round once a tool ran) or does not get through, the next round starts after a pause and tells the agent why: for `upstream_server_error`, `upstream_interrupted`, `upstream_incomplete`, `upstream_timeout`, `upstream_unavailable`, `connector_execution_failed` and `output_limit_exceeded`, at most 8 times per member message, 15 s doubling to 5 min (about 23 min in all); a round that ends well resets the count; Stop ends the pause. After the last one the turn fails with the reason, as before.
+- **Every ask again is in the member's local log.** `studio-link.jsonl` now also has `turn_retry` and `provider_retry` lines (and `outcome: "gave_up"`), so why a task stopped or went on can be read back.
+
+### Tests
+
+- `tests/managed-provider-retry.test.mjs`: the provider's words become `upstream_server_error` (Studio's own codes keep theirs), a round that goes on and resets the count, the bounded number of asks, Stop while waiting.
+- `tests/managed-provider-error-resume.test.mjs`: WebUI end to end, the provider's `api_error` event after a tool step; the task finishes without a click and the retry is in the local log.
+
 ## v1.35.0 - 2026-10-21
 
 Long company tasks go on across Studio updates.

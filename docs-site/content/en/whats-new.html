@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.35.1 · 2026-10-21</p>
+  <h2 id="v1-35-1">A passing model provider error no longer stops a long task</h2>
+  <p class="section-lead">When the model's server (GPT, Claude) reports an error in the middle of an answer, Piagent asks again a few seconds later; if the whole round is cut, the next one starts by itself after a pause (at most 8 times, about 23 minutes per message of yours), the agent is told why and goes on from where it was. Each ask again is written to the log on the machine.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.35.0 · 2026-10-21</p>
   <h2 id="v1-35-0">Long tasks survive a Studio update</h2>
   <p class="section-lead">Leave a task running overnight and let Studio update or restart: Piagent no longer fails and stops, it waits for Studio to answer again and goes on by itself, for as long as it takes (Stop still stops it). Each wait is logged on the machine and reported to Studio (Logs → Mất kết nối) with its cause: a Studio update, a restart, or the machine's network. One dashboard turn can now run up to 24 hours. Needs Studio 0.36.0.</p>

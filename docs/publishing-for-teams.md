@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.35.1`: lỗi của máy chủ model ngay giữa câu trả lời (OpenAI `server_error`/`api_error`, Anthropic `api_error`/`overloaded_error`) có mã `upstream_server_error` và được hỏi lại; vòng bị cắt vì lỗi tạm thời của nhà cung cấp tự chạy tiếp sau khi chờ (tối đa 8 lần, 15 giây tăng dần tới 5 phút, mỗi tin nhắn của member), báo agent lý do; mỗi lần hỏi lại ghi vào `studio-link.jsonl`.
 - `1.35.0`: task công ty không dừng khi Studio cập nhật hoặc khởi động lại: Piagent đọc heartbeat của Studio (`/v1/heartbeat`, Studio 0.36.0) và hỏi lại khi Studio trả lời, không giới hạn thời gian chờ (Stop dừng được); lỗi key, quota, chính sách vẫn dừng ngay; mỗi lần chờ ghi vào `<agentDir>/logs/studio-link.jsonl` và báo về Studio (Logs → “Mất kết nối”); trang của Cloudflare/LAN edge thay cho câu trả lời của Studio có mã riêng `studio-gateway-unavailable`; một lượt trên dashboard chạy được tới 24 giờ (trước là 6).
 - `1.34.3`: trạng thái cuộc trò chuyện công ty được ghi vào `~/.pi/agent/status/company`, nơi Agent Watch đọc (bản trước ghi vào thư mục riêng của phiên công ty nên Agent Watch không báo).
 - `1.34.2`: helper gửi kết quả cho Studio bằng token hiện tại của nó (bản 1.34.1 dùng token đầu tiên, đã bị thay khi gia hạn, nên Studio không ghi nhận).

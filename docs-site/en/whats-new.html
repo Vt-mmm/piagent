@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.35.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.35.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.35.1 · 2026-10-21</p>
+  <h2 id="v1-35-1">A passing model provider error no longer stops a long task</h2>
+  <p class="section-lead">When the model's server (GPT, Claude) reports an error in the middle of an answer, Piagent asks again a few seconds later; if the whole round is cut, the next one starts by itself after a pause (at most 8 times, about 23 minutes per message of yours), the agent is told why and goes on from where it was. Each ask again is written to the log on the machine.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.35.0 · 2026-10-21</p>
   <h2 id="v1-35-0">Long tasks survive a Studio update</h2>

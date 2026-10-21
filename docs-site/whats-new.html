@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.35.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.35.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,12 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.35.1 · 2026-10-21</p>
+  <h2 id="v1-35-1">Lỗi tạm thời của nhà cung cấp model không còn làm dừng task dài</h2>
+  <p class="section-lead">Khi máy chủ của model (GPT, Claude) báo lỗi ngay giữa câu trả lời, Piagent hỏi lại sau vài giây; nếu cả vòng bị cắt, vòng sau tự bắt đầu sau một lúc chờ (tối đa 8 lần, khoảng 23 phút cho mỗi tin nhắn của bạn), agent được báo lý do và làm tiếp từ chỗ dở. Mỗi lần hỏi lại được ghi vào log trên máy.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.35.0 · 2026-10-21</p>
   <h2 id="v1-35-0">Task dài chạy qua được lúc Studio cập nhật</h2>
