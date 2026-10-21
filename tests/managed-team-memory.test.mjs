@@ -111,6 +111,40 @@ test('a memory call whose token a model request renewed asks again once with a r
   assert.deepEqual(seen, ['voided']);
 });
 
+test('a protocol-4 Studio gets back what it served with the round that used it, and an older one does not', async () => {
+  const alive = setInterval(() => {}, 50);
+  try {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-serves-'));
+    execFileSync('git', ['-C', work, 'init', '-q']); execFileSync('git', ['-C', work, 'remote', 'add', 'origin', 'git@github.com:acme/shop.git']);
+    const scope = { origin: 'http://studio.test', key_id: 'key-a', user_id: 'member-1', studio_instance_id: 's', dataset_epoch: 'e', auth_generation: 1 };
+    const run = async protocol => {
+      const sent = [], briefServe = randomUUID(), searchServe = randomUUID();
+      const fetchImpl = async (url, init) => {
+        const op = url.split('/').at(-1), body = JSON.parse(init.body); sent.push([op, body]);
+        if (op === 'brief') return Response.json({ protocol_version: protocol, text: 'Team rules: x', facts: 1, rules: 1, pages: [], git_head: null, retain_sessions: true, serve_id: briefServe });
+        if (op === 'search') return Response.json({ text: 'notes', serve_id: searchServe });
+        if (op === 'retain') return Response.json({ status: 'pending', event_id: body.event_id, operation_id: randomUUID(), duplicate: false });
+        return Response.json({});
+      };
+      const memory = new TeamMemory({ origin: 'http://studio.test', cwd: work, stateDir: fs.mkdtempSync(path.join(os.tmpdir(), 'memory-serves-state-')), conversationId: 'conversation-serves', scope: () => scope, fetchImpl });
+      const grant = { token: 't', role_id: 'r' };
+      await memory.beforeRound(grant, 'how do I run the tests', false);
+      await memory.background;
+      await memory.search(grant, 'test command');
+      await memory.afterRound(grant, [{ role: 'user', content: 'use go test' }, { role: 'assistant', content: [{ type: 'text', text: 'ok' }] }], [], { scope });
+      const retains = sent.filter(([op]) => op === 'retain').map(([, b]) => b);
+      // The next round used nothing new: no serves go with it.
+      await memory.afterRound(grant, [{ role: 'user', content: 'thanks' }], [], { scope });
+      return { first: retains[0], next: sent.filter(([op]) => op === 'retain').map(([, b]) => b)[1], briefServe, searchServe };
+    };
+    const v4 = await run(4);
+    assert.deepEqual(v4.first.serves, [v4.briefServe, v4.searchServe]);
+    assert.equal(v4.next.serves, undefined);
+    const v3 = await run(3);
+    assert.equal(v3.first.serves, undefined);
+  } finally { clearInterval(alive); }
+});
+
 test('a v1 Studio gets the round in its old body, and closing a round stays within its budget', async () => {
   // AbortSignal.timeout timers do not hold the event loop; a running gateway does, so the test holds it too.
   const alive = setInterval(() => {}, 50);

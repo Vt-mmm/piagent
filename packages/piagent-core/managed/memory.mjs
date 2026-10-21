@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { MemoryOutbox, memoryScope, scopeID } from './memory-outbox.mjs';
-import { CheckLessons } from './memory-lessons.mjs';
+import { CheckLessons } from './memory-lessons.mjs'; import { SkillFeedback } from './skill-feedback.mjs'; import { RoundServes, FEEDBACK_PROTOCOL } from './memory-serves.mjs';
 import { CLIENT_AGENT } from './client-agent.mjs'; import { knownCapabilities, refreshCapabilities } from './studio-capabilities.mjs';
 import { redactedText } from '../runtime/managed-failure.mjs';
 import { git, repoKey, repositoryAt, findRepositories, topDirs, eventFor, commitChanges } from './memory-repos.mjs';
@@ -43,7 +43,7 @@ export function turnRecord(messages, changedFiles = [], lessons = []) {
   };
   const parts = [];
   // Preserve evidence and the final answer before budgeting member input.
-  const lessonText = lessons.slice(0, 3).map(l => `${l.line} Evidence: ${l.failed_call} → ${l.passed_call}; fingerprint ${l.fingerprint}; ${l.at}.`).join('\n');
+  const lessonText = lessons.slice(0, 3).map(l => `${l.line} Evidence: ${l.failed_call} ${l.kind === 'tool_error' ? 'and' : '→'} ${l.passed_call}; fingerprint ${l.fingerprint}; ${l.at}.`).join('\n');
   const memberBudget = MAX_TURN - 13000 - Buffer.byteLength(lessonText);
   const member = safeClip(asked.map(a => `Member: ${a}`).join('\n\n'), memberBudget);
   if (member) parts.push(member);
@@ -68,7 +68,7 @@ function bounded(promise, signal, late = () => {}) {
 
 export class TeamMemory {
   constructor({ origin, cwd, stateDir, conversationId, scope = () => null, lease = null, renew = null, fetchImpl = fetch, now = () => Date.now(), changed = () => [] }) {
-    this.renew = renew; this.scope = scope; this.lease = lease; this.protocol = 0; this.background = null; this.stats = {};
+    this.renew = renew; this.scope = scope; this.lease = lease; this.protocol = 0; this.background = null; this.stats = {}; this.serves = new RoundServes();
     Object.assign(this, { origin, cwd, stateDir, conversationId, fetchImpl, now, changed, repo: undefined, repos: undefined, folder: null, heads: {}, offUntil: 0, retain: true, briefed: false });
     this.syncScope();
     this.knownPath = stateDir ? path.join(stateDir, 'memory-known.json') : null;
@@ -215,7 +215,7 @@ export class TeamMemory {
     this.retain = answered.every(([, b]) => b.retain_sessions !== false);
     this.count('brief_successes'); if (this.lastBrief === 'ok') this.count('brief_nonempty');
     const heads = {};
-    for (const [r, b] of answered) heads[r.key] = b.git_head ?? null;
+    for (const [r, b] of answered) { heads[r.key] = b.git_head ?? null; this.serves.add(r.key, b.serve_id); }
     this.startBackground(grant, heads);
     const several = repos.length > 1, pages = new Set(), parts = [];
     let facts = 0;
@@ -309,11 +309,12 @@ export class TeamMemory {
         if (own.length) item.files = own.slice(0, 12).map(f => String(f).slice(0, 200));
         if (checks) item.checks = checks;
       }
+      if (this.protocol >= FEEDBACK_PROTOCOL && this.serves.of(r.key).length) item.serves = this.serves.of(r.key);
       if (!box.put(item)) { this.count('queue_rejected'); continue; }
       this.count('queued'); queued = true;
     }
-    // A rebind cannot send the old round using the new key.
-    if (!queued || scopeID(source) !== scopeID(this.scope())) return;
+    // A serve belongs to the round that used it. A rebind cannot send the old round using the new key.
+    this.serves.clear(); if (!queued || scopeID(source) !== scopeID(this.scope())) return;
     await this.#drain(grant, deadline);
   }
 
@@ -331,7 +332,7 @@ export class TeamMemory {
       try {
         if (claim.record.attempts) this.count('write_retries');
         // A round queued for protocol 3 meets a Studio that went back to 2: send the fields 2 knows.
-        const item = this.protocol >= PROTOCOL ? claim.record.item : (({ context, files, checks, ...v2 }) => v2)(claim.record.item);
+        const { serves, ...v3 } = claim.record.item, item = this.protocol >= FEEDBACK_PROTOCOL ? claim.record.item : this.protocol >= PROTOCOL ? v3 : (({ context, files, checks, ...v2 }) => v2)(v3);
         const ack = await this.#post(grant, 'retain', item, WRITE_MS, this.renew, signal);
         if (!ack || ack.status === 'retain_disabled') { this.retain = false; outcome = 'discard'; }
         else if (ack.event_id === claim.record.item.event_id && ack.operation_id && ['pending','processing','completed','failed','cancelled','unknown'].includes(ack.status)) {
@@ -369,7 +370,7 @@ export class TeamMemory {
     if (repository && !picked && this.repos.length > 1) return this.#none(repository);
     this.count(renew?.role && renew.role !== 'main' ? 'helper_search_calls' : 'search_calls');
     return this.#each(picked ? [picked] : this.#about(query), async r => {
-      try { return (await this.#post(grant, 'search', await this.#body(r, { query }), TOOL_MS, renew ?? this.renew))?.text ?? 'Team memory is off for this team.'; }
+      try { const answer = await this.#post(grant, 'search', await this.#body(r, { query }), TOOL_MS, renew ?? this.renew); this.serves.add(r.key, answer?.serve_id); return answer?.text ?? 'Team memory is off for this team.'; }
       catch { return 'Team memory did not answer; go on without it.'; }
     });
   }
@@ -447,7 +448,7 @@ export function attachMemory(self, manager, agentDir, verify) {
   return self.memory;
 }
 export function trackMemoryLessons(self) {
-  self.session.subscribe(event => { try { self.memoryTurn?.checks?.event(event); } catch { /* optional evidence */ } });
+  self.session.subscribe(event => { try { self.memoryTurn?.checks?.event(event); self.memoryTurn?.skills?.event(event); } catch { /* optional evidence */ } });
 }
 // Whether this conversation has team memory now: Studio answered memory for
 // this key recently and has not switched it off since (the Terminal's header).
@@ -464,7 +465,7 @@ export const helperMemoryTools = (managed, grant, renew) => managed.memory?.stat
 export async function openRound(self, manager, text) {
   if (!self.memory) return;
   self.memory.stats = {};
-  const turn = self.memoryTurn = { id: randomUUID(), at: new Date().toISOString(), scope: memoryScope(self.origin, self.manifest), request: text, users: [text], checks: new CheckLessons(self.checks?.commands ?? []) };
+  const turn = self.memoryTurn = { id: randomUUID(), at: new Date().toISOString(), scope: memoryScope(self.origin, self.manifest), request: text, users: [text], checks: new CheckLessons(self.checks?.commands ?? []), skills: SkillFeedback.forRound(self, text) };
   turn.entry = manager.appendCustomEntry('agent-watch-memory-turn', { id: turn.id, at: turn.at, scope: turn.scope });
   try {
     // Preserve the first brief in history; later refreshes are injected by the
@@ -479,6 +480,7 @@ export async function openRound(self, manager, text) {
   } catch { /* memory is optional */ }
 }
 export async function closeRound(self) {
+  try { const t = self.memoryTurn; t?.skills?.close({ checks: t.checks?.last, lessons: t.checks?.lessons ?? [] }); } catch { /* optional evidence */ }
   if (!self.grant || self.preflight || !self.memory || !self.memoryTurn) return;
   const turn = self.memoryTurn, closing = AbortSignal.timeout(CLOSE_MS), started = Date.now();
   let outcome = 'unknown';

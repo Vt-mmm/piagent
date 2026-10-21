@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CheckLessons } from '../packages/piagent-core/managed/memory-lessons.mjs';
+import { CheckLessons, errorShape } from '../packages/piagent-core/managed/memory-lessons.mjs';
 import { turnRecord } from '../packages/piagent-core/managed/memory.mjs';
 let seq=0;
 function run(c,command,output,isError=false,tool='bash') {const id=`call_${++seq}`;c.event({type:'tool_execution_start',toolName:tool,toolCallId:id,args:{command}});c.event({type:'tool_execution_end',toolName:tool,toolCallId:id,isError,result:{content:[{type:'text',text:output}]}});}
@@ -61,4 +61,27 @@ test('a check cut to its tail counts, judged by its output, as the same check as
  assert.deepEqual(new CheckLessons().summary,{passed:0,failed:0,final:'none'});
  // A flaky rerun with another tail length is no recovery.
  const e=new CheckLessons();run(e,'npm test 2>&1 | tail -40','1 failed');run(e,'npm test 2>&1 | tail -80','3 passed');assert.equal(e.lessons.length,0);
+});
+
+test('a command that fails the same way twice in a round is a tool-error lesson, once', () => {
+  const lessons = new CheckLessons([], () => Date.parse('2026-10-21T08:00:00Z'));
+  const run = (id, command, text, exitCode = 1) => {
+    lessons.event({ type: 'tool_execution_start', toolCallId: id, toolName: 'bash', args: { command } });
+    lessons.event({ type: 'tool_execution_end', toolCallId: id, isError: exitCode !== 0, result: { content: [{ type: 'text', text }], details: { exitCode } } });
+  };
+  run('a', 'gh pr view --fix-all', 'Usage: gh pr view\nerror: unknown option --fix-all at /tmp/run-123/x.js:4');
+  assert.equal(lessons.lessons.length, 0);
+  run('b', 'gh pr view --fix-all', 'Usage: gh pr view\nerror: unknown option --fix-all at /tmp/run-987/x.js:9');
+  run('c', 'gh pr view --fix-all', 'error: unknown option --fix-all at /tmp/run-555/x.js:1');
+  assert.equal(lessons.lessons.length, 1);
+  const [lesson] = lessons.lessons;
+  assert.equal(lesson.kind, 'tool_error');
+  assert.match(lesson.line, /^Observed repeated tool error: gh pr view --fix-all failed twice in one round with "error: unknown option --fix-all/);
+  assert.deepEqual([lesson.failed_call, lesson.passed_call], ['a', 'b']);
+  // A different error, a success, or a cancelled command is no lesson.
+  run('d', 'ls missing', 'ls: missing: No such file or directory');
+  run('e', 'ls missing', 'ok', 0);
+  run('f', 'sleep 9', 'Command timed out'); run('g', 'sleep 9', 'Command timed out');
+  assert.equal(lessons.lessons.length, 1);
+  assert.equal(errorShape('error at /tmp/abc/1.js:42 id deadbeefcafe "quoted"'), 'error at <tmp> id <id> "…"');
 });

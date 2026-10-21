@@ -105,13 +105,38 @@ export function appendRepositoryMemoryFact(cwd, input, options = {}) {
   return record;
 }
 
+// Files whose change says nothing durable about the repository: build
+// output, caches, logs, snapshots and Piagent's own state.
+const DISPOSABLE_PATH = /(?:^|\/)(?:tmp|temp|node_modules|dist|build|coverage|test-results|\.pi|\.cache|\.next|out)\/|\.(?:log|snap|tmp)$/i;
+
+// A completed task is written only when it adds something (after Cognee's
+// session distillation): "not_durable" when every changed file is disposable,
+// "already_known" when an unexpired record already cites the same files at
+// the same digests. Returns the reason to skip, or null.
+export function completedTaskSkipReason(cwd, citations, options = {}) {
+  const durable = citations.filter((citation) => !DISPOSABLE_PATH.test(normalizePath(citation.path)));
+  if (durable.length === 0) return "not_durable";
+  // Digests as they are stored: only a current working-tree digest is kept.
+  const key = (list) => list.map((citation) => `${normalizePath(citation.path)}@${isCurrentWorkingTreeDigest(citation.digest) ? citation.digest : ""}`).sort().join("\n");
+  const wanted = key(durable);
+  const known = readRepositoryMemoryFacts(cwd, { limit: 200, now: options.now })
+    .some((record) => record.kind === "retrieval-feedback" && key(record.citations.filter((citation) => !DISPOSABLE_PATH.test(citation.path))) === wanted);
+  return known ? "already_known" : null;
+}
+
 export function recordCompletedTaskMemory(cwd, task, options = {}) {
-  const citations = (Array.isArray(task?.changedFiles) ? task.changedFiles : []).slice(0, 8).map((file) => ({
+  const all = (Array.isArray(task?.changedFiles) ? task.changedFiles : []).map((file) => ({
     path: file,
     reason: "Changed file verified by the task completion gate.",
     digest: task?.finalFileDigests?.[file]
   }));
-  if (citations.length === 0) return undefined;
+  if (all.length === 0) return undefined;
+  const skip = completedTaskSkipReason(cwd, all, { now: options.now });
+  if (skip) {
+    options.onSkip?.(skip);
+    return undefined;
+  }
+  const citations = all.filter((citation) => !DISPOSABLE_PATH.test(normalizePath(citation.path))).slice(0, 8);
   const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
   return appendRepositoryMemoryFact(cwd, {
     kind: "retrieval-feedback",

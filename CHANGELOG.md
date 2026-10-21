@@ -2,6 +2,23 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+Team memory learns from what went wrong (needs Agent Studio with the memory feedback loop, protocol 4).
+
+### Features
+
+- **What memory handed a round goes back with it.** Briefs and `memory_search` answers name what they handed over (`serve_id`). The round that used them sends the ids back with its retain (`serves`), and only to a Studio that speaks protocol 4. Studio then rates those notes by the member's next words, and stops briefing notes members said were wrong.
+- **A command that fails the same way twice in a round is a lesson.** This goes beside check recoveries (`managed/memory-lessons.mjs`). The lesson keeps the first error line, sanitized (temporary paths, ids and numbers taken out of the fingerprint), with no guessed cause.
+- **Repository memory keeps only completed tasks that add something.** Changes only to build output, caches, logs or Piagent's own state are `not_durable`. The same files at the same digests a second time are `already_known` (`completedTaskSkipReason`).
+- **Skills that keep failing are proposed for review.** When at least 3 of a skill's last rounds ended with a failed check or a repeated tool error, Piagent writes `.pi/piagent-state/skill-proposals/<skill>.md` with the evidence, at most once a week. Piagent never edits a skill itself.
+
+### Tests
+
+- `tests/managed-team-memory.test.mjs`: protocol 4 sends the brief's and the search's serves with the round that used them, and protocol 3 sends none.
+- `tests/managed-memory-lessons.test.mjs`: repeated tool errors give one lesson; different errors, successes and timeouts give none.
+- `tests/repository-memory-distill.test.mjs`, `tests/managed-skill-feedback.test.mjs`.
+
 ## v1.35.1 - 2026-10-21
 
 A passing failure of the model provider no longer stops a long task.
