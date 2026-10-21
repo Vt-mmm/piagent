@@ -2,7 +2,7 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.36.0 - 2026-10-21
 
 Team memory learns from what went wrong (needs Agent Studio with the memory feedback loop, protocol 4).
 

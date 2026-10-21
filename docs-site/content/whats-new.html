@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.36.0 · 2026-10-21</p>
+  <h2 id="v1-36-0">Team memory học từ chỗ làm sai</h2>
+  <p class="section-lead">Những gì memory đưa cho một lượt (brief, kết quả <code>memory_search</code>) được gửi lại Studio cùng lượt đó, để Studio chấm theo câu trả lời tiếp theo của member và thôi đưa những ghi chú member nói là sai (cần Agent Studio 0.37.0). Một lệnh lỗi giống nhau hai lần trong một lượt thành bài học; memory của repo bỏ qua task không thêm gì mới; skill hay làm hỏng lượt được đề xuất xem lại trong <code>.pi/piagent-state/skill-proposals</code>, Piagent không tự sửa skill.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.35.1 · 2026-10-21</p>
   <h2 id="v1-35-1">Lỗi tạm thời của nhà cung cấp model không còn làm dừng task dài</h2>
   <p class="section-lead">Khi máy chủ của model (GPT, Claude) báo lỗi ngay giữa câu trả lời, Piagent hỏi lại sau vài giây; nếu cả vòng bị cắt, vòng sau tự bắt đầu sau một lúc chờ (tối đa 8 lần, khoảng 23 phút cho mỗi tin nhắn của bạn), agent được báo lý do và làm tiếp từ chỗ dở. Mỗi lần hỏi lại được ghi vào log trên máy.</p>

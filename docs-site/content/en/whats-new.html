@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.36.0 · 2026-10-21</p>
+  <h2 id="v1-36-0">Team memory learns from what went wrong</h2>
+  <p class="section-lead">What memory handed a round (briefs, <code>memory_search</code> answers) goes back to Studio with that round, so Studio rates it by the member's next words and stops handing over notes members said were wrong (needs Agent Studio 0.37.0). A command that fails the same way twice in a round becomes a lesson; repository memory skips tasks that add nothing new; skills that keep ending rounds badly are proposed for review in <code>.pi/piagent-state/skill-proposals</code>, and Piagent never edits a skill itself.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.35.1 · 2026-10-21</p>
   <h2 id="v1-35-1">A passing model provider error no longer stops a long task</h2>
   <p class="section-lead">When the model's server (GPT, Claude) reports an error in the middle of an answer, Piagent asks again a few seconds later; if the whole round is cut, the next one starts by itself after a pause (at most 8 times, about 23 minutes per message of yours), the agent is told why and goes on from where it was. Each ask again is written to the log on the machine.</p>
