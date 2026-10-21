@@ -151,6 +151,16 @@ export class StudioLink {
   }
   justBack() { return !!this.recoveredAt && this.now() - this.recoveredAt < (this.brokerGraceMs ?? BROKER_GRACE_MS); }
 
+  // A pause Stop can end (a round asked again after a provider's passing failure).
+  async hold(ms, signal) {
+    const controller = new AbortController(), stop = () => controller.abort(signal?.reason);
+    if (signal?.aborted) throw signal.reason ?? Error('aborted');
+    signal?.addEventListener('abort', stop, { once: true });
+    this.waiting.add(controller);
+    try { await this.pause(ms, controller.signal); }
+    finally { signal?.removeEventListener('abort', stop); this.waiting.delete(controller); if (!this.waiting.size) this.status(undefined); }
+  }
+
   // Stop ends every wait at once.
   cancel() { for (const controller of this.waiting) controller.abort(Error('managed-request-aborted')); }
 
@@ -209,6 +219,14 @@ export class StudioLink {
   status(text) {
     try { this.ui()?.setWorkingMessage?.(text); } catch { /* no Terminal */ }
   }
+}
+
+// What the main agent reads when its work goes on after the model provider
+// failed for a passing reason in the middle of the round.
+export function providerResumeMessage(code, attempt, max) {
+  return { customType: 'agent-watch-process', display: true,
+    content: `Harness: your last step was cut off because the model provider failed while answering [${code}]; that is a passing failure on its side (attempt ${attempt} of ${max} to go on). Nothing you asked for is lost: the files and the checklist are as you left them. Check where you were (the checklist, git status, the last command you ran) and continue the member's task from there; do not redo work that is already done.`,
+    details: { phase: 'resume', cause: 'provider', code, attempt, max } };
 }
 
 // What the main agent reads when its work goes on after Studio was back.

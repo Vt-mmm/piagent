@@ -257,7 +257,7 @@ function capacityStatus(owner) {
 // run) fails at once, as before. Pi decides by the words of an error, which
 // for a company failure would match "rate limited" or "timeout" in sentences
 // that must not be retried; here it decides by Studio's code only.
-export const TURN_RETRY_CODES = new Set(['upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable', 'output_limit_exceeded',
+export const TURN_RETRY_CODES = new Set(['upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable', 'upstream_server_error', 'output_limit_exceeded',
   'connector_unavailable', 'connector_execution_failed', 'inference_unavailable', 'studio-unreachable']);
 export const TURN_RETRY = { maxRetries: 2, baseDelayMs: 2_000 };
 
@@ -278,7 +278,13 @@ export function enableCompanyTurnRetry(session, settings, link = null) {
   settings.applyOverrides({ retry: { enabled: true, ...TURN_RETRY } });
   const prepare = session._prepareRetry;
   if (link && typeof prepare === 'function') session._prepareRetry = async function (message) {
-    if (!studio(message)) return prepare.call(this, message);
+    // Each ask again goes to the member's local log (studio-link.jsonl), so a
+    // task that stopped or went on can be read back later.
+    if (!studio(message)) {
+      const asked = await prepare.call(this, message);
+      if (asked) link.log({ kind: 'turn_retry', code: failureCode(message.errorMessage), attempt: this._retryAttempt });
+      return asked;
+    }
     // Studio answers here and was not away lately (Agent Watch or Studio's
     // connector failed on a running Studio): Pi's own asks again, as before.
     if (!(await link.needed(failureCode(message.errorMessage)).catch(() => false))) return companyTurnRetryable(message) ? prepare.call(this, message) : false;

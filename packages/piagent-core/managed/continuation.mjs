@@ -1,7 +1,7 @@
 import { checkpointsOf } from './checkpoints.mjs';
 import { unfinished, planText, currentPlan, workflowPolicy } from './workflow.mjs';
 import { failureCode } from '../runtime/managed-failure.mjs';
-import { resumeMessage } from './studio-link.mjs';
+import { providerResumeMessage, resumeMessage } from './studio-link.mjs';
 
 // A main agent often ends its turn between the steps of its own checklist
 // ("STEP06 done, STEP07 next"), though the member asked for all of them.
@@ -15,6 +15,14 @@ export const MAX_ROUNDS = 30;
 // How the member's message ended, shown under the last answer.
 export const TURN_END_ENTRY = 'agent-watch-turn-end';
 export const TURN_END_STATES = ['done', 'midway', 'failed', 'cancelled'];
+// A round cut by a passing failure of the model provider (its error event in
+// the middle of an answer, an answer cut or never sent) is asked again by the
+// turn's own retry; where that retry does not run (the WebUI does not replay a
+// round once a tool ran), the next round starts by itself after a pause: at
+// most PROVIDER_RESUME_DELAYS_MS.length times per member message, 15 s
+// doubling to 5 min (about 23 min in all); a round that ends well resets it.
+export const PROVIDER_RESUME_CODES = new Set(['upstream_server_error', 'upstream_interrupted', 'upstream_incomplete', 'upstream_timeout', 'upstream_unavailable', 'connector_execution_failed', 'output_limit_exceeded']);
+export const PROVIDER_RESUME_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 240_000, 300_000, 300_000, 300_000];
 
 const completed = plan => plan?.plan?.filter(p => p.status === 'completed').length ?? 0;
 const deferred = plan => plan?.plan?.filter(p => p.status === 'deferred').length ?? 0;
@@ -86,7 +94,7 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
     await self.session.sendCustomMessage({ customType: 'agent-watch-process', content, display: true, details: { phase: 'undo', undo } }, { triggerTurn: false });
     return;
   }
-  let continuation = fresh(self, manager, text), result, waiting = null, ended = null;
+  let continuation = fresh(self, manager, text), result, waiting = null, ended = null, providerResumes = 0;
   self.stopRequested = false; self.queued = [];
   try {
     for (let first = true; ; first = false) {
@@ -111,6 +119,19 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
         stopped ||= self.stopRequested;
         if (round.planUpdated) continuation.touched = true;
       }
+      const delays = self.providerResumeDelaysMs ?? PROVIDER_RESUME_DELAYS_MS;
+      if (!failure) providerResumes = 0;
+      else if (!resume && !stopped && !self.queued.length && PROVIDER_RESUME_CODES.has(failure.code) && providerResumes < delays.length) {
+        const delay = delays[providerResumes++], conversation = manager.getSessionId?.() ?? null;
+        self.studioLink?.log({ kind: 'provider_retry', code: failure.code, attempt: providerResumes, of: delays.length, delay_ms: delay, conversation });
+        self.notify({ type: 'managed_provider_retry', code: failure.code, attempt: providerResumes, of: delays.length, delayMs: delay });
+        self.studioLink?.status(`The model provider failed while answering (${failure.code}). Going on in ${Math.round(delay / 1000)} s (${providerResumes}/${delays.length}). Esc stops.`);
+        try { await (self.studioLink ? self.studioLink.hold(delay) : new Promise(r => setTimeout(r, delay))); resume = providerResumeMessage(failure.code, providerResumes, delays.length); }
+        catch { /* stopped while waiting */ }
+        stopped ||= self.stopRequested;
+        if (round.planUpdated) continuation.touched = true;
+      } else if (PROVIDER_RESUME_CODES.has(failure.code) && providerResumes >= delays.length)
+        self.studioLink?.log({ kind: 'provider_retry', code: failure.code, outcome: 'gave_up', attempts: providerResumes, conversation: manager.getSessionId?.() ?? null });
       const plan = currentPlan(manager), message = resume && !stopped ? resume : continuation.next({ plan, planUpdated: round.planUpdated, changed: round.changed, stopped, failed: !!failure });
       if (self.queued.length) {
         // The member wrote while the round closed: theirs is the next round,

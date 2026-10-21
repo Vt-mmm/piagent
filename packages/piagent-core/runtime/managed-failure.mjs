@@ -52,6 +52,10 @@ const CODES = {
   managed_service_unavailable: ['service', 'Studio could not start the run'],
   upstream_interrupted: ['service', 'the model response was interrupted'],
   upstream_incomplete: ['service', 'the model returned no response'],
+  // The provider's own error event in the middle of an answer (OpenAI
+  // server_error / api_error, Anthropic api_error / overloaded_error): a
+  // passing failure on its side, asked again.
+  upstream_server_error: ['service', 'the model provider failed while answering (a passing error on its side)'],
   // Studio ended the stream: the model wrote past the request's output limit
   // (a degenerate answer), or the request was ended for the member.
   output_limit_exceeded: ['service', 'the model kept writing past its output limit and was stopped'],
@@ -104,6 +108,7 @@ const CODES = {
 };
 const ROLES = { main: 'main agent', scout: 'scout subagent', research: 'research subagent', verify: 'verify subagent', review: 'review subagent' };
 const REQUEST = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/;
+const PROVIDER_SERVER_ERROR = /^(?:Error Code )?(?:server_error|api_error|internal_error|internal_server_error|overloaded_error|undefined):|An error occurred while processing your request|"type"\s*:\s*"(?:api_error|overloaded_error)"|\bOverloaded\b/i;
 const NETWORK = /fetch failed|econnrefused|econnreset|enotfound|ehostunreach|etimedout|socket hang up|network|connection error|terminated|timed? ?out|aborted due to timeout/i;
 
 export function failureKind(code) { return CODES[code]?.[0] ?? 'failed'; }
@@ -151,6 +156,9 @@ export function failureCode(raw) {
   const local = /(managed-broker:[A-Za-z_]{1,80}|managed-[a-z-]{1,80}|web-search-empty)/.exec(text)?.[1];
   if (known(local)) return local;
   if (!studio && /\bAPI error \((?:50[234]|52\d|530)\)|^(?:50[234]|52\d|530)\b/.test(text)) return 'studio-gateway-unavailable';
+  // How Pi's providers word the provider's error event inside a streamed
+  // answer (seen 2026-10-21: gpt-6-sol sent api_error mid-answer and the task stopped).
+  if (PROVIDER_SERVER_ERROR.test(text)) return 'upstream_server_error';
   if (studio || /\bAPI error \(\d{3}\)|^\d{3} \{/.test(text)) return 'studio-request-failed';
   // The provider declined the request itself (its usage policy), not Studio:
   // the same request is declined again, so it is said in words.

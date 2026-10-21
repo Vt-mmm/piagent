@@ -233,6 +233,7 @@ test('an empty answer stream is a named failure after two retries; an unnamed on
   });
   const authority = authorityOf(), agent = broker(authority);
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.providerResumeDelaysMs = []; // the end once a failure outlasts every ask; the rounds that go on are tested in managed-provider-retry
   managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
   try {
     assert.equal(managed.turnRetry, true);

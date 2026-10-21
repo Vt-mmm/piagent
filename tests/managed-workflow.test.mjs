@@ -520,6 +520,7 @@ test('a change of a turn that stopped before its process ran is settled by the n
     // A failure that outlasts the turn retry (request-stream.mjs: two more asks) stops the turn.
     main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { fail: true }, { fail: true }, { fail: true }, { tool: 'bash', input: { command: 'sh check.sh' } }, 'The check passes now.', 'Nothing else to do.'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.providerResumeDelaysMs = []; // a failure that outlasts every ask stops the turn here
   managed.services.settingsManager.applyOverrides({ retry: { baseDelayMs: 5 } });
   try {
     await managed.session.prompt('Make a.txt say fixed');
