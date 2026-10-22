@@ -2,6 +2,21 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.36.1 - 2026-10-22
+
+Agent Watch failing to reach a running Studio for a moment no longer stops a task.
+
+### Fixes
+
+- **A broker failure while Studio answers is asked again.** Found on 2026-10-22: after a long command, renewing the run's grant through Agent Watch failed once with `managed-broker:serverUnavailable` (Agent Watch's way to Studio answered a 5xx; Studio never saw the call). Studio's heartbeat said ready, so the failure was not waited out and a 25-minute task with 2 of 4 steps open stopped at once. Now a `managed-broker` failure on a Studio that answers is asked again, pausing longer each time (2 s doubling), until it has failed for 3 minutes without a request going through; then it fails as before.
+- **Closing the round's run goes through the same wait**, so a passing gateway error does not fail a turn whose work is done.
+- Each wait is in `studio-link.jsonl` and reported to Studio (Logs → "Mất kết nối", cause `broker_offline`). Codes that are not Agent Watch's (a refused key or report, `connector_unavailable` on a running Studio) still fail at once.
+
+### Tests
+
+- `tests/managed-failures.test.mjs`: a renew and a close Agent Watch could not send once are asked again and the turn ends well (both fail on 1.36.0).
+- `tests/managed-studio-link.test.mjs`: the retry window, its reset when a request goes through, and codes that still fail at once.
+
 ## v1.36.0 - 2026-10-21
 
 Team memory learns from what went wrong (needs Agent Studio with the memory feedback loop, protocol 4).

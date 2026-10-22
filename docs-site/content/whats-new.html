@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.36.1 · 2026-10-22</p>
+  <h2 id="v1-36-1">Agent Watch mất kết nối tới Studio trong chốc lát không còn làm dừng task</h2>
+  <p class="section-lead">Khi Agent Watch trên máy bạn không tới được Studio trong lúc Studio vẫn chạy (đường mạng hay gateway lỗi thoáng qua), Piagent hỏi lại, mỗi lần chờ lâu hơn, trong tối đa 3 phút, rồi làm tiếp; trước đây một lần lỗi như vậy dừng cả task. Bước đóng run cuối lượt cũng được hỏi lại. Mỗi lần chờ được ghi vào log trên máy và báo về Studio.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.36.0 · 2026-10-21</p>
   <h2 id="v1-36-0">Team memory học từ chỗ làm sai</h2>
   <p class="section-lead">Những gì memory đưa cho một lượt (brief, kết quả <code>memory_search</code>) được gửi lại Studio cùng lượt đó, để Studio chấm theo câu trả lời tiếp theo của member và thôi đưa những ghi chú member nói là sai (cần Agent Studio 0.37.0). Một lệnh lỗi giống nhau hai lần trong một lượt thành bài học; memory của repo bỏ qua task không thêm gì mới; skill hay làm hỏng lượt được đề xuất xem lại trong <code>.pi/piagent-state/skill-proposals</code>, Piagent không tự sửa skill.</p>

@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.36.1 · 2026-10-22</p>
+  <h2 id="v1-36-1">A moment when Agent Watch cannot reach Studio no longer stops a task</h2>
+  <p class="section-lead">When Agent Watch on your machine cannot reach Studio while Studio is running (a passing network or gateway error), Piagent asks again, waiting longer each time, for up to 3 minutes, and goes on; before, one such failure stopped the whole task. Closing the run at the end of a round is asked again too. Each wait is written to the log on the machine and reported to Studio.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.36.0 · 2026-10-21</p>
   <h2 id="v1-36-0">Team memory learns from what went wrong</h2>
   <p class="section-lead">What memory handed a round (briefs, <code>memory_search</code> answers) goes back to Studio with that round, so Studio rates it by the member's next words and stops handing over notes members said were wrong (needs Agent Studio 0.37.0). A command that fails the same way twice in a round becomes a lesson; repository memory skips tasks that add nothing new; skills that keep ending rounds badly are proposed for review in <code>.pi/piagent-state/skill-proposals</code>, and Piagent never edits a skill itself.</p>
