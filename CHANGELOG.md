@@ -2,6 +2,29 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.37.1 - 2026-10-22
+
+Closes, helper reports and team-memory lessons Studio can trust (from the 2026-10-22 upstream audit), and two outbound-address fixes from the 2026-10-22 security review.
+
+### Security
+
+- **`web_fetch` and the package proxy refuse every IPv6 form of a private address.** Both checked IPv4 carried in IPv6 only when it was written dotted, so `https://[::ffff:7f00:1]/` (127.0.0.1) or a NAT64 `64:ff9b::c0a8:101` (192.168.1.1) passed and was dialled; the URL parser even rewrites `[::ffff:127.0.0.1]` to the hex form. One classifier (`managed/ip-policy.mjs`) now judges mapped, compatible, translated, NAT64 and 6to4 addresses by their IPv4, treats Teredo and IPv6 outside `2000::/3` as private, and fails closed on anything it cannot parse. HTTPS certificate checks are unchanged.
+- **With a company upstream proxy (`HTTPS_PROXY`), the package proxy still refuses private destinations.** It handed the host name to the upstream, which resolved it itself, so no address was checked. The name is now looked up and checked here in every mode, and the upstream is asked for the checked address (`CONNECT <ip>:<port>`, or the IP with the original `Host` for plain HTTP); TLS still names the registry end to end. A name this machine cannot resolve is refused like any other refused host; `run_with_network` still reaches it after the member approves.
+
+### Fixes
+
+- **A run's close asked again is recorded closed only when it reached Studio.** After a close failed for a moment, Agent Watch dropped the run, so the close asked again "succeeded" without reaching Studio: Piagent recorded the run closed while Studio kept it active until its lease lapsed and lost the process report. Agent Watch 0.15.11 (Windows 0.1.16) sends it again and says so (`close-retry`); with an older Agent Watch the run now stays "active" here and reopening the conversation recovers or abandons it.
+- **A helper whose close fails for a moment keeps its answer.** A helper role's close goes through the same wait for Studio as the run's; a close that still fails no longer turns a finished helper into a failure, and the role's next helper closes it first. A helper's report to Studio is sent again after a passing failure (no answer, 5xx, 429), never after a refusal.
+- **A repeated tool-error lesson names the right command.** Lessons were keyed on the executable, so `curl service-a` and `curl service-b` failing the same way became one lesson saying the first "failed twice". The whole command (without temporary paths, ids and numbers) is the key now.
+- Skill feedback keeps one file per skill name (`a/b`, `a_b` and `A_B` shared one); notes served under an old key or epoch are forgotten when the scope changes.
+
+### Tests
+
+- `tests/managed-failures.test.mjs`: a close asked again of an Agent Watch with and without `close-retry`.
+- `tests/managed-helper-settlement.test.mjs`: a settlement sent again after a 5xx only; a helper role close asked again and never failing the helper.
+- `tests/managed-memory-lessons.test.mjs`, `tests/managed-skill-feedback.test.mjs`, `tests/managed-memory-outbox.test.mjs`: two commands of one executable, alike skill names, a scope change.
+- `tests/managed-ip-policy.test.mjs`, `tests/managed-coding-tools.test.mjs`, `tests/managed-package-proxy.test.mjs`: hex/dotted mapped, NAT64, 6to4 and Teredo addresses refused; the upstream proxy is asked for the checked address only.
+
 ## v1.37.0 - 2026-10-22
 
 A cut answer no longer stops a long task, and the company Terminal can be driven by a script.

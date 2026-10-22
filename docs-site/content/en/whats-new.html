@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.37.1 · 2026-10-22</p>
+  <h2 id="v1-37-1">Closes Studio can trust</h2>
+  <p class="section-lead">When closing a run failed for a moment, the close asked again could "succeed" without reaching Studio, and Piagent recorded the run closed. With Agent Watch 0.15.11 (Windows 0.1.16) the close asked again reaches Studio; with an older Agent Watch the run stays open here and is recovered when the conversation reopens. A helper whose close fails for a moment keeps its answer, and its report to Studio is sent again. Team memory no longer merges two different commands that failed the same way into one lesson. Security: <code>web_fetch</code> and the package proxy refuse private addresses written in any IPv6 form, and with a company upstream proxy the package proxy still checks where it connects.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.37.0 · 2026-10-22</p>
   <h2 id="v1-37-0">An answer cut mid-stream no longer stops a long task</h2>
   <p class="section-lead">When the way from Studio to the model is cut while an answer is streaming, Studio says "Request interrupted"; Piagent used to take it as "the request could not be sent" and stopped the whole task. Now it asks again and goes on by itself. New <code>piagent studio --rpc</code> lets a script drive a company conversation over Pi's RPC protocol (several messages, answering the agent's questions).</p>

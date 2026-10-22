@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.37.1 · 2026-10-22</p>
+  <h2 id="v1-37-1">Đóng run mà Studio tin được</h2>
+  <p class="section-lead">Khi đóng run lỗi trong chốc lát, lần hỏi đóng lại có thể "thành công" mà không tới Studio, và Piagent ghi run là đã đóng. Với Agent Watch 0.15.11 (Windows 0.1.16), lần hỏi lại tới được Studio; với Agent Watch cũ, run được để mở ở đây và được khôi phục khi mở lại cuộc trò chuyện. Helper đóng lỗi trong chốc lát vẫn giữ câu trả lời, báo cáo của nó được gửi lại cho Studio. Team memory không còn gộp hai lệnh khác nhau cùng lỗi thành một bài học. Bảo mật: <code>web_fetch</code> và package proxy chặn địa chỉ nội bộ viết dưới mọi dạng IPv6, và khi có upstream proxy của công ty, package proxy vẫn kiểm tra đích kết nối.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.37.0 · 2026-10-22</p>
   <h2 id="v1-37-0">Câu trả lời bị cắt giữa chừng không còn làm dừng task dài</h2>
   <p class="section-lead">Khi đường từ Studio tới model bị cắt lúc câu trả lời đang chạy, Studio báo "Request interrupted"; trước đây Piagent coi đó là "không gửi được yêu cầu" và dừng cả task. Giờ Piagent hỏi lại và tự làm tiếp. Thêm <code>piagent studio --rpc</code> để một script điều khiển cuộc trò chuyện công ty qua giao thức RPC của Pi (nhiều tin nhắn, trả lời câu hỏi của agent).</p>
