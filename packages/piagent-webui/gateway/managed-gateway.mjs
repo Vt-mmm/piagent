@@ -47,6 +47,7 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
       } catch(error) { if(runtime) await runtime.dispose(); else await broker.dispose(); throw error; }
     };
     const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:PI_HOST_VERSION,managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null,
+      workspaceWrite: (id, request) => { const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('workspace-runtime-unavailable'); return runtime.boundary.invoke('workspace', request); },
       workspaceRead: (id, request) => { const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('workspace-runtime-unavailable'); return runtime.boundary.invoke('workspace', request); }}});
     return gateway;
   } finally { if(probe) await probe.dispose(); else await probeBroker.dispose(); }

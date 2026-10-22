@@ -1,3 +1,4 @@
+import { WorkspaceWriteSessions, type ManagedWorkspaceWriter } from './workspace-write-sessions.ts';
 import { managedProjection } from './managed-projection.ts';
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -100,7 +101,7 @@ export async function startPiagentGateway(options: {
   agentDir?: string;
   staticRoot?: string;
   scopedBrokerRouter?: ScopedBrokerRouter;
-  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
+  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
   // Company sessions relayed into this dashboard (the dashboard entry passes
   // the Agent Watch binding; omitted: none).
   company?: CompanyConnector;
@@ -269,7 +270,13 @@ export async function startPiagentGateway(options: {
     updates = new UpdateCenter({ packageRoot: options.packageRoot, piVersion: options.expectedPiVersion, managed: Boolean(options.managed),
       busy: async () => runtimes!.currentOperations().length + (relay ? (await relay.operations()).length : 0) });
     updates.start();
+    const workspaceWrites = new WorkspaceWriteSessions({ root: state.root, key, gatewayInstanceRef, runtimes, managed: !!options.managed,
+      managedWrite: options.managed?.workspaceWrite, changed: sessionRef => events.publish("session.changed", { sessionRef }) });
     loopback = await startLoopbackServer({
+      workspaceWrite: {
+        state: sessionRef => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/workspace/write`) : workspaceWrites.state(sessionRef),
+        execute: (sessionRef, command) => company(sessionRef) ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/workspace/write`, command) : workspaceWrites.execute(sessionRef, command)
+      },
       staticRoot,
       mode: "gateway",
       readCapabilities: () => capabilities(gatewayInstanceRef, true, !!options.managed),

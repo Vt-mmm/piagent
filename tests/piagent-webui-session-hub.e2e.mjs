@@ -1,3 +1,17 @@
+import { WorkspaceWriteController } from '../packages/piagent-webui/server/workspace-write-controller.ts';
+import { writeWorkspaceFile } from '../packages/piagent-core/extensions/workspace-write.ts';
+let workspaceWritable = false;
+const workspaceControllers = new Map();
+function workspaceController(sessionRef) {
+  if (workspaceControllers.has(sessionRef)) return workspaceControllers.get(sessionRef);
+  const journal = [];
+  const controller = new WorkspaceWriteController({
+    facts: () => ({ identity: { ...inspectionSnapshot.identity, sessionRef }, writable: workspaceWritable, agentRunning: workspaceWritable }),
+    history: () => journal, append: receipt => journal.push(receipt),
+    write: payload => ({ state: 'saved', ...writeWorkspaceFile(mentionProject, payload, { policy: {}, profile: {}, readOnly: !workspaceWritable }) })
+  });
+  workspaceControllers.set(sessionRef, controller); return controller;
+}
 import { personalWorkspaceReader } from "../packages/piagent-webui/server/workspace-reader.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -272,6 +286,7 @@ test.beforeAll(async () => {
   // Every test opens fresh pages from one address; the suite outgrows the
   // 120 requests a minute a page may make before it signs in.
   server = await startLoopbackServer({ anonymousRequestsPerMinute: 1_000,
+    workspaceWrite: { state: ref => workspaceController(ref).state(), execute: (ref, command) => workspaceController(ref).execute(command) },
     staticRoot: path.join(root, "packages/piagent-webui/dist/client"), mode: "gateway",
     readCapabilities: () => capabilities, readSessionCatalog: () => catalog,
     readSessionLiveState: () => {
@@ -1968,4 +1983,66 @@ test("tool file links open at their line and editor tabs do not leak to another 
   await expect(page.getByRole("heading", { name: "Review source changes" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "src/tool-link.ts", exact: true })).toHaveCount(0);
   await expect(page.locator(".cm-content")).toHaveCount(0);
+});
+
+
+test("workspace editor saves with Cmd/Ctrl+S, preserves drafts and resolves digest conflicts explicitly", async ({ page }) => {
+  workspaceWritable = true;
+  fs.writeFileSync(path.join(mentionProject, 'src/editor.txt'), 'original text');
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+    await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+    await page.getByRole('button', { name: 'src', exact: true }).click();
+    await page.getByRole('button', { name: 'editor.txt', exact: true }).click();
+    const editor = page.locator('.cm-content').first();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+    await editor.fill('member edit');
+    await expect(page.getByRole('tab', { name: 'src/editor.txt ●', exact: true })).toBeVisible();
+    await editor.press('Control+s');
+    await expect.poll(() => fs.readFileSync(path.join(mentionProject, 'src/editor.txt'), 'utf8')).toBe('member edit');
+    await expect(page.getByRole('tab', { name: 'src/editor.txt', exact: true })).toBeVisible();
+    await editor.fill('unsaved draft');
+    await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+    await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+    await expect(editor).toContainText('unsaved draft');
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.getByRole('button', { name: /Đóng tệp|Close file/ }).click();
+    await expect(editor).toContainText('unsaved draft');
+    fs.writeFileSync(path.join(mentionProject, 'src/editor.txt'), 'agent changed');
+    await editor.press('Control+s');
+    const conflict = page.getByRole('dialog'); await expect(conflict).toBeVisible();
+    await conflict.getByRole('button', { name: /Xem khác biệt|Compare/ }).click();
+    await expect(conflict).toContainText('agent changed'); await expect(conflict).toContainText('unsaved draft');
+    page.once('dialog', dialog => dialog.dismiss());
+    await conflict.getByRole('button', { name: /Ghi đè|Overwrite/ }).click();
+    assert.equal(fs.readFileSync(path.join(mentionProject, 'src/editor.txt'), 'utf8'), 'agent changed');
+    page.once('dialog', dialog => dialog.accept());
+    await conflict.getByRole('button', { name: /Ghi đè|Overwrite/ }).click();
+    await expect(conflict).not.toBeVisible();
+    await expect.poll(() => fs.readFileSync(path.join(mentionProject, 'src/editor.txt'), 'utf8')).toBe('unsaved draft');
+    await expect(page.getByText(/Agent đang chạy và có thể sửa tệp này|The agent is running and may change this file/)).toBeVisible();
+    await editor.fill('discard this draft'); fs.writeFileSync(path.join(mentionProject, 'src/editor.txt'), 'latest from agent');
+    await editor.press('Meta+s'); await expect(conflict).toBeVisible();
+    await conflict.getByRole('button', { name: /Tải lại|Reload/ }).click();
+    await expect(conflict).not.toBeVisible(); await expect(editor).toContainText('latest from agent');
+    await page.getByRole('button', { name: /Tệp mới|New file/, exact: true }).click();
+    await page.getByRole('textbox', { name: /Đường dẫn trong project|Path in project/ }).fill('src/new-editor.txt');
+    await page.getByRole('dialog').getByRole('button', { name: /^(Tạo|Create)$/ }).click();
+    const retryKeys = [];
+    await page.route('**/workspace/write', async route => {
+      if (route.request().method() !== 'POST') return route.continue();
+      retryKeys.push(route.request().postDataJSON().idempotencyKey);
+      if (retryKeys.length === 1) { await route.fetch(); await route.abort(); } else await route.continue();
+    });
+    await editor.fill('new file'); await editor.press('Control+s');
+    await expect(page.getByText(/Chưa lưu được tệp. Bản sửa vẫn được giữ|Could not confirm the save/)).toBeVisible();
+    await page.getByRole('button', { name: /^(Lưu|Save)$/ }).click();
+    await expect(page.getByRole('tab', { name: 'src/new-editor.txt', exact: true })).toBeVisible();
+    assert.equal(retryKeys.length, 2); assert.equal(retryKeys[0], retryKeys[1]);
+    await expect.poll(() => fs.existsSync(path.join(mentionProject, 'src/new-editor.txt')) && fs.readFileSync(path.join(mentionProject, 'src/new-editor.txt'), 'utf8')).toBe('new file');
+    assert.deepEqual(errors, []);
+  } finally { workspaceWritable = false; }
 });

@@ -687,3 +687,21 @@ it("workspace session reads require authentication and relay company reads befor
   assert.equal(personal.status, 200); assert.deepEqual(JSON.parse(personal.body), { kind: "file", relative: "src/file.ts" });
   assert.deepEqual(local, ["session.personal"]);
 });
+
+it("workspace writes require the browser session, origin, CSRF and matching session before dispatch", async () => {
+  const calls=[];
+  const server=await start({workspaceWrite:{state:sessionRef=>({sessionRef}),execute:(sessionRef,command)=>{calls.push({sessionRef,command});return {saved:true};}}});
+  const route='/api/v1/sessions/session.personal/workspace/write';
+  assert.equal((await request(server.origin,route)).status,401);
+  const exchange=await request(server.origin,'/api/v1/bootstrap',{method:'POST',headers:{Origin:server.origin,'Content-Type':'application/json'},body:JSON.stringify({capability:bootstrapValue(server.launchUrl)})});
+  const headers={Origin:server.origin,Cookie:exchange.headers['set-cookie'][0].split(';',1)[0],'Content-Type':'application/json'};
+  assert.equal((await request(server.origin,route,{headers})).status,200);
+  const body=JSON.stringify({identity:{sessionRef:'session.personal'}});
+  assert.equal((await request(server.origin,route,{method:'POST',headers,body})).status,403);
+  headers['X-Piagent-CSRF']=JSON.parse(exchange.body).csrfToken;
+  assert.equal((await request(server.origin,route,{method:'POST',headers:{...headers,Origin:'https://other.invalid'},body})).status,403);
+  assert.equal((await request(server.origin,route,{method:'POST',headers,body:JSON.stringify({identity:{sessionRef:'session.company'}})})).status,400);
+  assert.equal(calls.length,0);
+  assert.equal((await request(server.origin,route,{method:'POST',headers,body})).status,200);
+  assert.equal(calls.length,1);assert.equal(calls[0].sessionRef,'session.personal');
+});

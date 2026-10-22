@@ -54,3 +54,40 @@ test('workspace worker refuses missing or modified build artifacts', t => {
   assert.throws(() => verifyWorkspaceWorker(pins), /managed-runtime-changed/);
   assert.throws(() => workspaceWorkerPins(cwd), /workspace-worker-invalid/);
 });
+
+test('company member save conflicts with agent edits and forces agent reread inside the real boundary', { skip: !sdk || process.platform !== 'darwin' }, async t => {
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-workspace-write-boundary-')));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, 'file.txt'), 'first\n');
+  const boundary = new ManagedToolBoundary({ cwd, sdkRoot: sdk, searchTools: false });
+  t.after(() => boundary.dispose());
+  assert.equal((await boundary.invoke('workspace', { kind: 'write-state' })).writable, true);
+  const original = await boundary.invoke('workspace', { kind: 'file', path: 'file.txt' });
+  await boundary.invoke('read', { path: 'file.txt' });
+  const saved = await boundary.invoke('workspace', { kind: 'write', payload: { path: 'file.txt', content: 'member\n', expectedDigest: original.digest } });
+  assert.equal(saved.state, 'saved');
+  await assert.rejects(boundary.invoke('edit', { path: 'file.txt', edits: [{ oldText: 'member', newText: 'clobbered' }] }), /stale-content/);
+  await assert.rejects(boundary.invoke('write', { path: 'file.txt', content: 'clobbered' }), /stale-content/);
+  assert.equal(fs.readFileSync(path.join(cwd, 'file.txt'), 'utf8'), 'member\n');
+  await boundary.invoke('read', { path: 'file.txt' });
+  await boundary.invoke('edit', { path: 'file.txt', edits: [{ oldText: 'member', newText: 'agent' }] });
+  const conflict = await boundary.invoke('workspace', { kind: 'write', payload: { path: 'file.txt', content: 'member again', expectedDigest: saved.digest } });
+  assert.equal(conflict.code, 'stale-content'); assert.equal(fs.readFileSync(path.join(cwd, 'file.txt'), 'utf8'), 'agent\n');
+  const results = await Promise.all([
+    boundary.invoke('workspace', { kind: 'write', payload: { path: 'file.txt', content: 'concurrent member', expectedDigest: conflict.currentDigest } }),
+    boundary.invoke('write', { path: 'file.txt', content: 'concurrent agent' }).catch(error => ({ error: error.message }))
+  ]);
+  assert.equal(results[0].state, 'saved'); assert.match(results[1].error, /stale-content/);
+  assert.equal(fs.readFileSync(path.join(cwd, 'file.txt'), 'utf8'), 'concurrent member');
+  assert.equal((await boundary.invoke('workspace', { kind: 'write', payload: { path: '.env', content: 'secret', expectedDigest: 'absent' } })).code, 'path-protected');
+});
+
+test('company boundary read-only authority overrides member write request', { skip: !sdk || process.platform !== 'darwin' }, async t => {
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-workspace-readonly-')));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const boundary = new ManagedToolBoundary({ cwd, sdkRoot: sdk, searchTools: false, readOnly: true });
+  t.after(() => boundary.dispose());
+  assert.equal((await boundary.invoke('workspace', { kind: 'write-state' })).writable, false);
+  assert.equal((await boundary.invoke('workspace', { kind: 'write', payload: { path: 'new.txt', content: 'forbidden', expectedDigest: 'absent' } })).code, 'read-only');
+  assert.equal(fs.existsSync(path.join(cwd, 'new.txt')), false);
+});

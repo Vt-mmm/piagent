@@ -1,3 +1,4 @@
+import { beginToolFreshness } from './tool-freshness.mjs';
 import { sandboxDiagnostic } from './sandbox-diagnostic.mjs';
 import { fallbackFind, fallbackGrep } from './search-fallback.mjs';
 import fs from 'node:fs';
@@ -37,8 +38,9 @@ input.on('line', async line => {
     active = true; controller = new AbortController(); network = message.network === true; isolated = message.isolated === true; docker = message.docker === true; engine = message.engine === true;
     if (message.name === 'workspace') {
       const { inspectManagedWorkspace } = await import('./dist/workspace/worker.mjs');
-      emit({ result: await inspectManagedWorkspace(cwd, fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url)), message.args) }); return;
+      emit({ result: await inspectManagedWorkspace(cwd, fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url)), message.args, message.workspaceReadOnly === true) }); return;
     }
+    const finishFreshness = beginToolFreshness(cwd, message.name, message.args, message.expectedFileDigest);
     const options = message.name === 'bash' ? { shellPath: '/bin/bash', exposeSessionEnvironment: false } : undefined;
     // The runtime copies ripgrep/fd here when the machine has or can fetch them.
     const provided = name => fs.existsSync(path.join(process.env.HOME ?? '', '.pi/agent/bin', name));
@@ -50,7 +52,7 @@ input.on('line', async line => {
     // failures. Pi 0.87 throws on denial and on a non-zero shell exit; Pi 1.x
     // returns an isError result with the same text instead: read as the throw.
     if (result?.isError === true) throw new Error((result.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('\n') || 'managed-worker-failed');
-    emit({ result });
+    emit({ result, freshness: finishFreshness() });
   } catch (error) { emit({ error: sandboxDiagnostic(error instanceof Error ? error.message : 'managed-worker-failed', { network, isolated, docker, engine }) }); }
   finally { if (active) { input.close(); process.stdin.destroy(); } }
 });

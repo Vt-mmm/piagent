@@ -1,3 +1,4 @@
+import { workspaceWriteAuthority } from "../packages/piagent-core/runtime/policy/workspace-write-authority.ts";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -432,7 +433,7 @@ describe("piagent guard integration", () => {
   });
 
   // A freeform turn keeps this protection after the task-contract retirement.
-  it("rejects a stale read-to-edit snapshot in a freeform turn before any mutation starts", async () => {
+  it("member save leaves the live freeform guard stale for edit and write until agent rereads", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     fs.writeFileSync(path.join(cwd, "src", "freshness.ts"), "export const value = 1;\n");
@@ -447,7 +448,11 @@ describe("piagent guard integration", () => {
       content: [{ type: "text", text: "export const value = 1;" }],
       isError: false
     }, ctx);
-    fs.writeFileSync(path.join(cwd, "src", "freshness.ts"), "// concurrent change\nexport const value = 1;\n");
+    assert.equal(workspaceWriteAuthority.writable(cwd, "edit-freshness"), true);
+    workspaceWriteAuthority.write(cwd, "edit-freshness", { path: "src/freshness.ts", content: "// concurrent change\nexport const value = 1;\n",
+      expectedDigest: crypto.createHash("sha256").update("export const value = 1;\n").digest("hex") });
+    const staleWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", { path: "src/freshness.ts", content: "clobbered" });
+    assert.equal(staleWrite.block, true); assert.match(staleWrite.reason, /previously observed source snapshot is stale/);
 
     const stale = await callToolCall(harness.handlers.get("tool_call"), ctx, "edit", {
       path: "src/freshness.ts",

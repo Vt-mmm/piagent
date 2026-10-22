@@ -29,7 +29,7 @@ test("the provider's error event inside an answer is a passing failure the turn 
 function turnWith(outcomes, { delays = [10, 20, 40], stopOnHold = false } = {}) {
   const entries = [], sent = [], holds = [], logs = [], notes = [];
   let rounds = 0;
-  const manager = { getEntries: () => [], appendCustomEntry: (type, data) => entries.push({ type, data }), getSessionId: () => 'conv-7' };
+  const manager = { getBranch: () => [], getEntries: () => [], appendCustomEntry: (type, data) => entries.push({ type, data }), getSessionId: () => 'conv-7' };
   const self = { manifest: {}, queued: [], providerResumeDelaysMs: delays, notify: e => notes.push(e),
     studioLink: { waits: code => STUDIO_WAIT_CODES.has(code), waitUntilBack: async () => null, log: e => logs.push(e), status: () => {},
       hold: async ms => { holds.push(ms); if (stopOnHold) { self.stopRequested = true; throw Error('managed-request-aborted'); } } },

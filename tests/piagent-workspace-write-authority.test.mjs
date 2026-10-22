@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import test from 'node:test';
+import { WorkspaceWriteAuthority } from '../packages/piagent-core/runtime/policy/workspace-write-authority.ts';
+import { EditFreshnessGuard } from '../packages/piagent-core/runtime/quality/edit-freshness-guard.ts';
+const sha=text=>createHash('sha256').update(text).digest('hex');
+test('member save uses current guard permission and leaves the agent read observation stale until reread',t=>{
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-authority-'));t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+ fs.writeFileSync(path.join(cwd,'file.ts'),'before');
+ const authority=new WorkspaceWriteAuthority(),ctx={cwd,sessionManager:{getSessionId:()=> 'session'}};
+ let readOnly=true;
+ const unbind=authority.bind(cwd,'session',{owner:'guard',policy:()=>({policy:{},profile:{permissionProfile:'read-only'},readOnly})});
+ const payload={path:'file.ts',content:'member',expectedDigest:sha('before')};
+ assert.equal(authority.writable(cwd,'session'),false);assert.throws(()=>authority.write(cwd,'session',payload),e=>e.code==='read-only');
+ const guard=new EditFreshnessGuard();guard.observe(ctx,'freeform',['file.ts'],'read');
+ readOnly=false;
+ assert.equal(authority.writable(cwd,'session'),true);authority.write(cwd,'session',payload);
+ assert.equal(guard.evaluate(ctx,'freeform',['file.ts']).decision,'stale');
+ guard.observe(ctx,'freeform',['file.ts'],'read');assert.equal(guard.evaluate(ctx,'freeform',['file.ts']).decision,'current');
+ readOnly=true;assert.equal(authority.writable(cwd,'session'),false);
+ unbind();assert.equal(authority.writable(cwd,'session'),false);
+ assert.throws(()=>authority.write(cwd,'session',{...payload,expectedDigest:sha('member')}),e=>e.code==='read-only');
+});

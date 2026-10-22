@@ -60,7 +60,7 @@ test('the first change of a run takes its checkpoint once; outside git there is 
   const root = repository(), boundary = new ManagedToolBoundary({ cwd: root, sdkRoot, protectedRoots: [], proxyPorts: [] });
   const plain = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-undo-plain-'))), outside = new ManagedToolBoundary({ cwd: plain, sdkRoot, protectedRoots: [], proxyPorts: [] });
   try {
-    const run = new RunProcess({ plan: 'off', verify: 'off', review: 'off', maxFixLoops: 0 }, { request: 'x', complex: false, checks: { commands: [] } }), session = { boundary, run, session: { sessionManager: { getEntries: () => [] } }, refreshReview: async () => {} };
+    const run = new RunProcess({ plan: 'off', verify: 'off', review: 'off', maxFixLoops: 0 }, { request: 'x', complex: false, checks: { commands: [] } }), session = { boundary, run, session: { sessionManager: { getBranch: () => [], getEntries: () => [] } }, refreshReview: async () => {} };
     let calls = 0;
     const [write] = processEditTools(session, [{ name: 'write', execute: async (_id, args) => { calls += 1; fs.writeFileSync(path.join(root, args.path), 'x\n'); return { content: [{ type: 'text', text: 'Written.' }] }; } }]);
     await write.execute('1', { path: 'a.txt' });
@@ -82,12 +82,12 @@ test('/undo sent as a message is answered with a note and no model request', asy
   const self = { checkpoints: { undo: async () => ({ result: 'done', restored: 1, removed: 0, files: ['a.txt'], text: 'Đã hoàn tác lượt trước: 1 file.' }) },
     notify: () => {}, session: { sendCustomMessage: async (message, options) => sent.push({ message, options }), messages: [] } };
   const runRound = async () => { rounds.push('round'); return {}; };
-  await memberTurn(self, { manager: {}, prompt: async () => {}, runRound }, '  /undo ', async () => {});
+  await memberTurn(self, { manager: { getBranch: () => [] }, prompt: async () => {}, runRound }, '  /undo ', async () => {});
   assert.deepEqual(rounds, [], 'no round, so no model request');
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].message.details, { phase: 'undo', undo: { result: 'done', restored: 1, removed: 0, files: ['a.txt'] } });
   assert.equal(sent[0].message.customType, 'agent-watch-process'); assert.equal(sent[0].options.triggerTurn, false);
   // Anything else is a turn as before.
-  await assert.rejects(memberTurn(self, { manager: { getEntries: () => [] }, prompt: async () => {}, runRound: async () => { rounds.push('round'); throw Error('ran'); } }, '/undo now', async () => {}), /ran/);
+  await assert.rejects(memberTurn(self, { manager: { getBranch: () => [], getEntries: () => [] }, prompt: async () => {}, runRound: async () => { rounds.push('round'); throw Error('ran'); } }, '/undo now', async () => {}), /ran/);
   assert.deepEqual(rounds, ['round']);
 });

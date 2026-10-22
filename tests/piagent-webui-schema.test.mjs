@@ -53,7 +53,8 @@ const primaryContracts = [
   "workspace-tree-v1",
   "workspace-file-v1",
   "workspace-paths-v1",
-  "workspace-search-v1"
+  "workspace-search-v1",
+  "workspace-write-v1"
 ];
 
 function fixture(name, state = "valid") {

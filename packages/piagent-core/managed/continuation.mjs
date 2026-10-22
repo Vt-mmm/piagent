@@ -1,4 +1,5 @@
 import { checkpointsOf } from './checkpoints.mjs';
+import { takeWorkspaceMemberEditNotice } from '../runtime/session/workspace-member-edits.mjs';
 import { unfinished, planText, currentPlan, workflowPolicy } from './workflow.mjs';
 import { failureCode } from '../runtime/managed-failure.mjs';
 import { providerResumeMessage, resumeMessage } from './studio-link.mjs';
@@ -87,6 +88,8 @@ const fresh = (self, manager, text) => {
 };
 
 export async function memberTurn(self, { manager, prompt, runRound }, text, deliver) {
+  const notice = takeWorkspaceMemberEditNotice(manager);
+  if (notice) await self.session.sendCustomMessage(notice, { triggerTurn: false });
   // /undo from the WebUI (the Terminal has its own command): the last turn's
   // files go back, said in a note, with no model request (checkpoints.mjs).
   if (/^\s*\/undo\s*$/.test(text)) {

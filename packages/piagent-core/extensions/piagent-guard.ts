@@ -93,6 +93,8 @@ import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-stat
 import { hasDurableContextEvidence } from "./context-evidence.js";
 import { piApprovalBroker, type ApprovalActionDraft, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
+import { createWorkspaceWriteAuthorityBindings } from "../runtime/policy/workspace-write-authority.ts";
+import { registerWorkspaceMemberEdits } from "../runtime/session/workspace-member-edits.mjs";
 import {
   TOOL_RESULT_CAPTURE_MAX_CHARS,
   TOOL_RESULT_COMPACT_CHAR_THRESHOLD,
@@ -3454,6 +3456,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // is already per session.
   const FREEFORM_EDIT_SCOPE = "freeform";
   const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext);
+  registerWorkspaceMemberEdits(pi);
+  const workspaceWriteBindings = createWorkspaceWriteAuthorityBindings(policy, loadProfileFromContext, (ctx, profile) => {
+    const permission = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
+    return permission.mode !== "read-only" && !permission.warning;
+  });
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
@@ -3699,6 +3706,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         ctx.ui.notify("Piagent Fast mode is enabled, but the active provider is not OpenAI Codex; no service tier was changed.", "warning");
       }
       sourceMutationGuardBindings.bind(ctx);
+      workspaceWriteBindings.bind(ctx);
       await activityInspector.refresh(ctx);
     }
   });
@@ -3717,6 +3725,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     beforeShutdown: async (ctx) => {
       serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
+      workspaceWriteBindings.unbind(ctx);
       editFreshnessGuard.clear(ctx);
       activityInspector.dispose(ctx);
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
@@ -3821,7 +3830,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
       const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
       if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
-      if (event.toolName === "edit" || targetInspection.exactLocalPatchExecutor) {
+      if (event.toolName === "edit" || event.toolName === "write" || targetInspection.exactLocalPatchExecutor) {
         const freshness = editFreshnessGuard.evaluate(ctx, FREEFORM_EDIT_SCOPE, targetInspection.targets);
         if (freshness.decision === "stale") {
           telemetry(ctx, { event: "edit_freshness_stale", toolCallId: event.toolCallId, enforce: freshness.enforce, paths: freshness.stalePaths.map(redactText) });

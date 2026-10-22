@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/workspace-write-v1.schema.json",
+  "title": "Piagent WebUI workspace write v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/state"
+    },
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    }
+  ],
+  "$defs": {
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "identity",
+        "revisions",
+        "writable",
+        "agentRunning"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-workspace-write-v1"
+        },
+        "messageType": {
+          "const": "state"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "revisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "writable": {
+          "type": "boolean"
+        },
+        "agentRunning": {
+          "type": "boolean"
+        }
+      },
+      "title": "Workspace write state"
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKey",
+        "requestedAt",
+        "expiresAt",
+        "action",
+        "actionDigest",
+        "identity",
+        "expectedRevisions",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-workspace-write-v1"
+        },
+        "messageType": {
+          "const": "command"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._~-]{32,128}$"
+        },
+        "requestedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "expiresAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "action": {
+          "const": "workspace.write"
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "expectedRevisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload"
+        }
+      },
+      "title": "Workspace write command"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKeyDigest",
+        "action",
+        "actionDigest",
+        "identity",
+        "phase",
+        "resultCode",
+        "requestedAt",
+        "settledAt",
+        "observedRevisionsBefore",
+        "observedRevisionsAfter",
+        "path",
+        "digest",
+        "currentDigest",
+        "deduplicated"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-workspace-write-v1"
+        },
+        "messageType": {
+          "const": "receipt"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKeyDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "action": {
+          "const": "workspace.write"
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "phase": {
+          "enum": [
+            "settled",
+            "rejected",
+            "uncertain"
+          ]
+        },
+        "resultCode": {
+          "enum": [
+            "saved",
+            "stale-content",
+            "stale-revision",
+            "identity-mismatch",
+            "read-only",
+            "path-protected",
+            "unsafe-path",
+            "invalid-write",
+            "expired",
+            "idempotency-payload-mismatch",
+            "effect-unknown",
+            "write-failed"
+          ]
+        },
+        "requestedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "settledAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "observedRevisionsBefore": {
+          "$ref": "#/$defs/revisions"
+        },
+        "observedRevisionsAfter": {
+          "$ref": "#/$defs/revisions"
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currentDigest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(absent|[a-f0-9]{64})$"
+        },
+        "deduplicated": {
+          "type": "boolean"
+        }
+      },
+      "title": "Workspace write receipt"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "content",
+        "expectedDigest"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 1048576
+        },
+        "expectedDigest": {
+          "type": "string",
+          "pattern": "^(absent|[a-f0-9]{64})$"
+        }
+      },
+      "title": "Workspace write payload"
+    },
+    "revisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workspaceRevision"
+      ],
+      "properties": {
+        "workspaceRevision": {
+          "$ref": "common-v1.schema.json#/$defs/revisionToken"
+        }
+      },
+      "title": "Workspace write revisions"
+    }
+  }
+}

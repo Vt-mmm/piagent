@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-workspace-write-v1",
+  "messageType": "state",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "revisions": {
+    "workspaceRevision": "workspace.0"
+  },
+  "writable": "yes",
+  "agentRunning": false
+}

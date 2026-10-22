@@ -30,3 +30,4 @@ export type * as WorkspaceTreeV1 from "./workspace-tree-v1.ts";
 export type * as WorkspaceFileV1 from "./workspace-file-v1.ts";
 export type * as WorkspacePathsV1 from "./workspace-paths-v1.ts";
 export type * as WorkspaceSearchV1 from "./workspace-search-v1.ts";
+export type * as WorkspaceWriteV1 from "./workspace-write-v1.ts";

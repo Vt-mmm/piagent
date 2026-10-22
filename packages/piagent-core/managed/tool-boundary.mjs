@@ -1,3 +1,4 @@
+import { ToolFreshness } from './tool-freshness.mjs';
 import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -194,6 +195,7 @@ function provisionSearchTools(home, userHome) {
 
 export class ManagedToolBoundary {
   #tail = Promise.resolve();
+  #freshness = new ToolFreshness();
   #children = new Set();
   #closed = false;
   // readOnly: the project cannot be written. commands: bash is offered all
@@ -210,7 +212,7 @@ export class ManagedToolBoundary {
     this.sdkPath = path.join(this.sdkRoot, 'dist/index.js');
     this.git = managedGit();
     if (JSON.parse(fs.readFileSync(path.join(this.sdkRoot, 'package.json'), 'utf8')).version !== PI_HOST_VERSION) throw new Error('managed-sdk-version-unqualified');
-    const workerModules = ['search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs', 'workspace-worker-pins.mjs'].map(name => path.join(this.runtimeRoot, name));
+    const workerModules = ['tool-freshness.mjs', 'search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs', 'workspace-worker-pins.mjs'].map(name => path.join(this.runtimeRoot, name));
     this.pins = new Map([this.node, this.git, workerPath, ...workerModules, this.sdkPath].map(file => [file, hash(file)]));
     const userHome = fs.realpathSync(home ?? os.homedir());
     if ([userHome, '/', this.sdkRoot, this.runtimeRoot].includes(this.cwd)
@@ -315,12 +317,8 @@ export class ManagedToolBoundary {
     const factories = { read: api.createReadToolDefinition, write: api.createWriteToolDefinition,
       edit: api.createEditToolDefinition, bash: api.createBashToolDefinition,
       grep: api.createGrepToolDefinition, find: api.createFindToolDefinition, ls: api.createLsToolDefinition };
-    return this.allowed.map(name => ({ ...factories[name](this.cwd), execute: (_id, args, signal, onUpdate, context) => {
-      // One queue spans read and all mutations so two concurrent edit requests
-      // observe a deterministic order. Helpers use separate read-only workers.
-      const run = this.#tail.then(() => this.invoke(name, args, signal, onUpdate, context?.model));
-      this.#tail = run.catch(() => {}); return run;
-    } }));
+    return this.allowed.map(name => ({ ...factories[name](this.cwd), execute: (_id, args, signal, onUpdate, context) =>
+      this.invoke(name, args, signal, onUpdate, context?.model) }));
   }
   // The proxy listens on loopback (macOS: Seatbelt opens its one port even
   // while a local proxy closes the rest of loopback) or on a Unix socket that
@@ -339,7 +337,12 @@ export class ManagedToolBoundary {
       this.proxyUrl = url; this.#applyProxy();
     } catch { await this.proxy.close().catch(() => {}); this.proxy = null; }
   }
-  async invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
+  invoke(name, args, signal, onUpdate, model, options = {}) {
+    // Direct member operations share the agent's read/mutation queue.
+    const run = this.#tail.then(() => this.#queuedInvoke(name, args, signal, onUpdate, model, options));
+    this.#tail = run.catch(() => {}); return run;
+  }
+  async #queuedInvoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
     await this.proxyReady;
     const before = this.proxy?.deniedCount ?? 0;
     try { return await this.#invoke(name, args, signal, onUpdate, model, { network, docker }); }
@@ -362,7 +365,7 @@ export class ManagedToolBoundary {
     if (name !== 'bash' && typeof args?.path === 'string' && /^@?~(\/|$)/.test(args.path)) args = { ...args, path: this.userHome + args.path.replace(/^@?~/, '') };
     if (!this.linux && !network && Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
     const isolated = !this.linux && !network && await this.proxyCheck.listening;
-    const message = JSON.stringify({ name, args, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
+    const message = JSON.stringify({ name, args, expectedFileDigest: this.#freshness.expected(this.cwd, name, args), workspaceReadOnly: this.setup.readOnly, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
       const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network, docker)]
@@ -373,7 +376,7 @@ export class ManagedToolBoundary {
       });
       this.#children.add(child);
       const decoder = new StringDecoder('utf8');
-      let pending = '', bytes = 0, result, failure, terminated = false, hardStop;
+      let pending = '', bytes = 0, result, freshness, failure, terminated = false, hardStop;
       const terminate = () => {
         if (terminated) return; terminated = true;
         child.stdin.write('{"cancel":true}\n');
@@ -408,7 +411,7 @@ export class ManagedToolBoundary {
             // A cancel or timeout asked for first stays the reason: the worker
             // then reports how its command ended ("Command aborted").
             else if (value.error) failure ??= new Error(String(value.error).slice(0, 1000));
-            else if (value.result) result = value.result;
+            else if (value.result) { result = value.result; freshness = value.freshness; }
             else throw new Error('managed-worker-invalid-response');
           } catch { failure = new Error('managed-worker-invalid-response'); terminate(); }
         }
@@ -422,7 +425,7 @@ export class ManagedToolBoundary {
         this.#children.delete(child); signal?.removeEventListener('abort', abort);
         if (failure) reject(failure);
         else if (code !== 0 || !result || pending) reject(new Error('managed-worker-failed'));
-        else resolve(result);
+        else { this.#freshness.observe(this.cwd, name, args, freshness); resolve(result); }
       });
       child.stdin.write(message);
       if (signal?.aborted) abort();

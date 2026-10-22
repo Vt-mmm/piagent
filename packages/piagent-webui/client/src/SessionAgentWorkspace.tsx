@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Stack from "@mui/material/Stack";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
@@ -18,6 +19,11 @@ export function SessionAgentWorkspace({ active, snapshot, sessionRef, terminalAc
   liveActivities?: readonly LiveActivity[];
   refresh(): Promise<PiagentWebUICanonicalSnapshotV1 | undefined> }) {
   const { locale } = useUiPreferences();
+  useEffect(() => {
+    const saved = (event: Event) => { if ((event as CustomEvent).detail?.sessionRef === sessionRef) void refresh(); };
+    window.addEventListener('piagent-workspace-saved', saved);
+    return () => window.removeEventListener('piagent-workspace-saved', saved);
+  }, [sessionRef, refresh]);
   if (active === "source") return <SourceWorkspace snapshot={snapshot} sessionRef={sessionRef} refreshSnapshot={refresh}
     findings={findings} onSendComments={onSendComments} />;
   if (active === "documents") return <DocumentWorkspace sessionRef={sessionRef} />;

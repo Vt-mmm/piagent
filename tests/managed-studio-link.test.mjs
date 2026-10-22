@@ -142,7 +142,7 @@ test("an answer cut because Studio stopped is asked again with no limit, after S
 test("a round cut by a Studio update goes on by itself once Studio is back, with the reason told to the agent", async () => {
   const entries = [], notified = [], sent = [];
   let rounds = 0;
-  const manager = { getEntries: () => [], appendCustomEntry: (type, data) => entries.push({ type, data }), getSessionId: () => 'conv-9' };
+  const manager = { getBranch: () => [], getEntries: () => [], appendCustomEntry: (type, data) => entries.push({ type, data }), getSessionId: () => 'conv-9' };
   const waits = [];
   const self = { manifest: {}, queued: [], notify: e => notified.push(e),
     studioLink: { waits: code => STUDIO_WAIT_CODES.has(code), waitUntilBack: async o => { waits.push(o); return { cause: 'studio_update', waited_ms: 7 * 60_000, version_before: '0.35.3', version_after: '0.36.0' }; } },
@@ -165,7 +165,7 @@ test("a round cut by a Studio update goes on by itself once Studio is back, with
 
 test('Stop while a round waits for Studio ends the turn as stopped', async () => {
   const entries = [];
-  const manager = { getEntries: () => [], appendCustomEntry: (type, data) => entries.push({ type, data }), getSessionId: () => 'conv-9' };
+  const manager = { getBranch: () => [], getEntries: () => [], appendCustomEntry: (type, data) => entries.push({ type, data }), getSessionId: () => 'conv-9' };
   const self = { manifest: {}, queued: [], notify: () => {},
     studioLink: { waits: code => STUDIO_WAIT_CODES.has(code), waitUntilBack: async () => { self.stopRequested = true; throw Error('managed-request-aborted'); } },
     session: { messages: [], sendCustomMessage: async () => assert.fail('no round after Stop') } };
