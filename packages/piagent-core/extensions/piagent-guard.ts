@@ -1,3 +1,4 @@
+import { sessionMutationObserver } from "../runtime/inspection/session-mutation-observer.ts";
 import { unresolvedFocusedVerification } from "./acceptance-focused-verification.js";
 import fs from "node:fs";
 import os from "node:os";
@@ -3455,12 +3456,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // task-contract retirement, so it uses one session-wide key; the guard itself
   // is already per session.
   const FREEFORM_EDIT_SCOPE = "freeform";
-  const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext);
-  registerWorkspaceMemberEdits(pi);
-  const workspaceWriteBindings = createWorkspaceWriteAuthorityBindings(policy, loadProfileFromContext, (ctx, profile) => {
+  const workspaceWritable = (ctx: ExtensionContext, profile: ProjectProfile) => {
     const permission = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
     return permission.mode !== "read-only" && !permission.warning;
-  });
+  };
+  const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext, workspaceWritable);
+  registerWorkspaceMemberEdits(pi);
+  const workspaceWriteBindings = createWorkspaceWriteAuthorityBindings(policy, loadProfileFromContext, workspaceWritable);
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
@@ -3726,6 +3728,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
       workspaceWriteBindings.unbind(ctx);
+      sessionMutationObserver.clear(ctx.cwd, ctx.sessionManager.getSessionId());
       editFreshnessGuard.clear(ctx);
       activityInspector.dispose(ctx);
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
@@ -3804,6 +3807,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
         disposition: result.disposition, reasonCode: result.reasonCode, calls: result.calls, tokens: result.tokens });
     },
     observeEditFreshness: (ctx, event, metadata) => {
+      sessionMutationObserver.finish(ctx.cwd, ctx.sessionManager.getSessionId(), event.toolCallId ?? "", event.toolName, metadata.successful,
+        { policy: policy as unknown as Record<string, unknown>, profile: loadProfileFromContext(ctx) as unknown as Record<string, unknown> });
       if (!metadata.successful) return;
       const protectedPaths = effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths;
       const source = event.toolName === "read" ? "read" : ["edit", "write", "apply_patch"].includes(event.toolName) ? "mutation" : undefined;
@@ -3840,6 +3845,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       return;
     },
     afterAuthorized: (event, ctx, metadata) => {
+      const input = isPlainRecord(event.input) ? event.input : {};
+      sessionMutationObserver.begin(ctx.cwd, ctx.sessionManager.getSessionId(), metadata.toolCallId, event.toolName, input,
+        authorizationMutationTargetInspection(ctx.cwd, event.toolName, input).targets,
+        { policy: policy as unknown as Record<string, unknown>, profile: loadProfileFromContext(ctx) as unknown as Record<string, unknown> });
       const helperPreflight = evaluateDirectSubagentDispatch({ toolName: event.toolName, toolInput: event.input, cwd: ctx.cwd, helpersMode: helpersMode(),
         taskPending: false, dispatchAuthority: false, durableSubagentState: undefined });
       if (helperPreflight.applicable && helperPreflight.dispatch && helperPreflight.allowed) {

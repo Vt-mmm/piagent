@@ -11,6 +11,71 @@
     }
   ],
   "$defs": {
+    "sourceRevertIdentityBinding": {
+      "if": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "const": "source.revert"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "null"
+                  },
+                  "taskRunId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "expectedRevisions": {
+                "type": "object",
+                "properties": {
+                  "taskRevision": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  },
+                  "taskRunId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  }
+                }
+              },
+              "expectedRevisions": {
+                "type": "object",
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
     "action": {
       "enum": [
         "chat.send",
@@ -579,6 +644,7 @@
         }
       },
       "allOf": [
+        { "$ref": "#/$defs/sourceRevertIdentityBinding" },
         {
           "$ref": "#/$defs/commandActionBindings"
         }
@@ -1029,7 +1095,7 @@
               "expectedRevisions": {
                 "properties": {
                   "taskRevision": {
-                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                    "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
                   },
                   "workspaceRevision": {
                     "$ref": "common-v1.schema.json#/$defs/revisionToken"
@@ -1160,7 +1226,6 @@
                   "review.mark",
                   "source.stage",
                   "source.unstage",
-                  "source.revert",
                   "source.open-in-vscode",
                   "commit-summary.generate"
                 ]
@@ -1662,6 +1727,7 @@
         }
       },
       "allOf": [
+        { "$ref": "#/$defs/sourceRevertIdentityBinding" },
         {
           "$ref": "#/$defs/receiptActionResultBinding"
         },
@@ -1700,7 +1766,6 @@
                   "review.mark",
                   "source.stage",
                   "source.unstage",
-                  "source.revert",
                   "source.open-in-vscode",
                   "commit-summary.generate"
                 ]

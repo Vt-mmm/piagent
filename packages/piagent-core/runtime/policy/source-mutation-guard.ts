@@ -1,3 +1,4 @@
+import type { SessionMutationObservation } from "../inspection/session-mutation-observer.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -19,11 +20,16 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const WORKSPACE = /^wt-content-v2:[a-f0-9]{64}$/;
 
 export type SourceMutationGuardFacts = {
-  taskId: string;
-  taskRunId: string;
-  taskRevision: string;
+  taskId: string | null;
+  taskRunId: string | null;
+  taskRevision: string | null;
   controlRevision: string;
-  taskState: "active" | "terminal" | "unknown";
+  taskState: "active" | "terminal" | "unknown" | "none";
+  sessionBound?: boolean;
+  writable?: boolean;
+  sessionObservation?(path: string): SessionMutationObservation | null;
+  sessionReverted?(authority: SourceRevertAuthority, beforeDigest: string, committedDigest: string): void;
+  sessionHunkRefs?(authority: SourceRevertAuthority): string[];
   idle: boolean;
   isProtectedPath(projectRelativePath: string): boolean;
 };
@@ -42,8 +48,8 @@ export type SourceMutationGuardRequest = {
 };
 export type SourceRevertGuardRequest = {
   cwd: string; rawSessionId: string;
-  identity: { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string; taskRunId: string };
-  action: "source.revert"; expectedTaskRevision: string; expectedControlRevision: string; expectedIndexPreimage: string;
+  identity: { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string | null; taskRunId: string | null };
+  action: "source.revert"; expectedTaskRevision: string | null; expectedControlRevision: string; expectedIndexPreimage: string;
   expectedWorkspacePreimage: string; previewRef: string; confirmedPreviewDigest: string; authority: SourceRevertAuthority;
 };
 
@@ -84,8 +90,20 @@ export class PiSourceMutationGuard {
   available(cwd: string, rawSessionId: string): boolean {
     try {
       const binding = this.#bindings.get(bindingKey(cwd, rawSessionId)), facts = binding?.facts();
-      return Boolean(facts && facts.taskState === "active" && facts.idle);
+      return Boolean(facts && (facts.taskState === "active" || facts.sessionBound === true && facts.taskState === "none" && facts.writable === true) && facts.idle);
     } catch { return false; }
+  }
+
+  sessionObservation(cwd: string, rawSessionId: string, file: string): SessionMutationObservation | null {
+    try { const facts = this.#bindings.get(bindingKey(cwd, rawSessionId))?.facts();
+      return facts?.sessionBound === true ? facts.sessionObservation?.(file) ?? null : null;
+    } catch { return null; }
+  }
+
+  sessionControlRevision(cwd: string, rawSessionId: string): string | null {
+    try { const facts = this.#bindings.get(bindingKey(cwd, rawSessionId))?.facts();
+      return facts?.sessionBound === true && facts.taskState === "none" ? facts.controlRevision : null;
+    } catch { return null; }
   }
 
   async execute(request: SourceMutationGuardRequest): Promise<SourceIndexTransactionResult> {
@@ -96,7 +114,7 @@ export class PiSourceMutationGuard {
     const recheck = (): boolean => {
       try {
         const facts = binding!.facts();
-        return Boolean(facts && facts.taskState === "active" && facts.idle
+        return Boolean(this.#bindings.get(bindingKey(request.cwd, request.rawSessionId)) === binding && facts && facts.taskState === "active" && facts.idle
           && facts.taskId === request.identity.taskId && facts.taskRunId === request.identity.taskRunId
           && facts.taskRevision === request.expectedTaskRevision && facts.controlRevision === request.expectedControlRevision
           && this.#pathsAllowed(binding!, facts, request.authority));
@@ -116,15 +134,26 @@ export class PiSourceMutationGuard {
     const recheck = (): boolean => {
       try {
         const facts = binding!.facts(), target = request.authority.target;
-        return Boolean(facts && facts.taskState === "active" && facts.idle && Date.now() <= Date.parse(target.expiresAt)
+        const sessionBound = request.identity.taskId === null && request.identity.taskRunId === null && request.expectedTaskRevision === null;
+        const active = sessionBound ? facts?.sessionBound === true && facts.taskState === "none" && facts.writable === true : facts?.taskState === "active";
+        const pathsAllowed = facts && this.#pathsAllowed(binding!, facts, { repoRoot: request.authority.repoRoot, repoPaths: [request.authority.repoPath] });
+        const authored = sessionBound && pathsAllowed ? facts?.sessionHunkRefs?.(request.authority) ?? [] : [];
+        const selected = target.hunkRefs.length ? target.hunkRefs : request.authority.patchAuthority.hunks.map(hunk => hunk.hunkRef);
+        return Boolean(this.#bindings.get(bindingKey(request.cwd, request.rawSessionId)) === binding && facts && active && pathsAllowed
+          && (!sessionBound || selected.length > 0 && selected.every(ref => authored.includes(ref))) && facts.idle && Date.now() <= Date.parse(target.expiresAt)
           && facts.taskId === request.identity.taskId && facts.taskRunId === request.identity.taskRunId
           && facts.taskRevision === request.expectedTaskRevision && facts.controlRevision === request.expectedControlRevision
           && this.#pathsAllowed(binding!, facts, { repoRoot: request.authority.repoRoot, repoPaths: [request.authority.repoPath] }));
       } catch { return false; }
     };
     if (!recheck()) return revertRejected(request, "mutation-guard-precondition-stale");
+    const relative = path.relative(binding.cwd, path.resolve(request.authority.repoRoot, request.authority.repoPath)).split(path.sep).join("/");
+    const before = binding.facts()?.sessionObservation?.(relative);
     return executeGuardedSourceWorktreeRevert({ authority: request.authority, expectedIndexPreimage: request.expectedIndexPreimage,
-      expectedWorkspacePreimage: request.expectedWorkspacePreimage, recheck });
+      expectedWorkspacePreimage: request.expectedWorkspacePreimage, recheck, onCommitted: digest => {
+        try { if (before && this.#bindings.get(bindingKey(request.cwd, request.rawSessionId)) === binding)
+          binding.facts()?.sessionReverted?.(request.authority, before.currentDigest, digest); } catch { /* Lost observation only disables further review. */ }
+      } });
   }
 
   #validRequest(request: SourceMutationGuardRequest): boolean {
@@ -150,9 +179,10 @@ export class PiSourceMutationGuard {
   #validRevertRequest(request: SourceRevertGuardRequest): boolean {
     try { validateSourceRevertTarget(request.authority.target); } catch { return false; }
     const target = request.authority.target;
+    const sessionBound = request.identity.taskId === null && request.identity.taskRunId === null && request.expectedTaskRevision === null;
     return request.action === "source.revert" && REF.test(request.identity.projectRef) && REF.test(request.identity.runtimeInstanceId)
-      && REF.test(request.identity.sessionRef) && REF.test(request.identity.taskId) && REF.test(request.identity.taskRunId)
-      && REVISION.test(request.expectedTaskRevision) && REVISION.test(request.expectedControlRevision)
+      && REF.test(request.identity.sessionRef) && (sessionBound || REF.test(request.identity.taskId!) && REF.test(request.identity.taskRunId!) && REVISION.test(request.expectedTaskRevision!))
+      && REVISION.test(request.expectedControlRevision)
       && DIGEST.test(request.expectedIndexPreimage) && WORKSPACE.test(request.expectedWorkspacePreimage)
       && REF.test(request.previewRef) && DIGEST.test(request.confirmedPreviewDigest)
       && request.previewRef === target.previewRef && request.confirmedPreviewDigest === target.confirmedPreviewDigest

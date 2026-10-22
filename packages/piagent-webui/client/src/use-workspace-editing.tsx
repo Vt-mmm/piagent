@@ -1,3 +1,4 @@
+import { useWorkspaceRefresh } from './use-workspace-refresh.ts';
 import { useEffect, useRef, useState } from 'react';
 import type { PiagentWebUIWorkspaceFileV1 as WorkspaceFile } from '../../contracts/generated/workspace-file-v1.ts';
 import type { WorkspaceWriteState } from '../../contracts/generated/workspace-write-v1.ts';
@@ -9,6 +10,7 @@ export function useWorkspaceEditing(session: string) {
   const { locale } = useUiPreferences(), state = useWorkspaceEditorTabs(session);
   const [authority, setAuthority] = useState<WorkspaceWriteState>(), [saving, setSaving] = useState(false), busy = useRef(false);
   const [message, setMessage] = useState<string>(), [conflict, setConflict] = useState<WorkspaceFile>();
+  useWorkspaceRefresh(session, busy, setConflict);
   useEffect(() => {
     const controller = new AbortController();
     const refresh = () => { void workspaceWriteState(session, controller.signal).then(setAuthority).catch(() => { if (!controller.signal.aborted) setAuthority(undefined); }); };

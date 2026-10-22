@@ -1,3 +1,5 @@
+import type { ExactGitPatchAuthority } from "./source-action-contract.ts";
+export type { ExactGitPatchAuthority } from "./source-action-contract.ts";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import { collectGitStatus, runReadOnlyGit, type GitStatusRecord, type GitStatusSnapshot } from "./git-status-adapter.ts";
@@ -363,7 +365,6 @@ async function patchForUnstagedRecord(snapshot: GitStatusSnapshot, record: GitSt
     `--unified=${contextLines}`, "--", ...paths], { timeoutMs, maxBytes });
 }
 
-export type ExactGitPatchAuthority = { header: Buffer; hunks: Array<{ hunkRef: string; bytes: Buffer }> };
 type ExactGitPatchOptions = {
   snapshot: GitStatusSnapshot; record: GitStatusRecord; view: "unstaged" | "staged"; fileRef: string;
   contextLines?: number; timeoutMs?: number; maxBytes?: number; maxHunks?: number;

@@ -14,14 +14,14 @@ async function digest(value: unknown): Promise<string> {
   return `sha256:${[...new Uint8Array(result)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export async function createSourceRevertCommand(snapshot: PiagentWebUICanonicalSnapshotV1,
+export async function createSourceRevertCommand(snapshot: { identity: PiagentWebUICanonicalSnapshotV1["identity"]; revision: Pick<PiagentWebUICanonicalSnapshotV1["revision"], "runtimeRevision" | "controlRevision" | "approvalRevision" | "sessionOptionRevision" | "queueRevision"> },
   preview: PiagentWebUIConfirmedExactSourceRevertPreviewV1): Promise<Command> {
   if (preview.state !== "ready" || !preview.target) throw new Error("source-revert-preview-unavailable");
   const requested = new Date(), target = preview.target;
   if (Date.parse(target.expiresAt) <= requested.getTime()) throw new Error("source-revert-preview-expired");
-  const identity = { ...structuredClone(snapshot.identity), agentOperationId: null, toolCallId: null };
-  const expectedRevisions = { runtimeRevision: snapshot.revision.runtimeRevision, taskRevision: target.taskRevision,
-    controlRevision: snapshot.revision.controlRevision, workspaceRevision: target.workspaceRevision, indexRevision: target.indexRevision,
+  const identity = { ...structuredClone(preview.commandBinding ? preview.identity : snapshot.identity), agentOperationId: null, toolCallId: null };
+  const expectedRevisions = { runtimeRevision: preview.commandBinding?.runtimeRevision ?? snapshot.revision.runtimeRevision, taskRevision: target.taskRevision,
+    controlRevision: preview.commandBinding?.controlRevision ?? snapshot.revision.controlRevision, workspaceRevision: target.workspaceRevision, indexRevision: target.indexRevision,
     approvalRevision: snapshot.revision.approvalRevision, sessionOptionRevision: snapshot.revision.sessionOptionRevision,
     queueRevision: snapshot.revision.queueRevision, workspacePreimage: target.workspacePreimage, indexPreimage: target.indexPreimage,
     patchPreimage: target.patchPreimage };
@@ -33,4 +33,12 @@ export async function createSourceRevertCommand(snapshot: PiagentWebUICanonicalS
     identity, expectedRevisions, payload };
   command.actionDigest = await digest({ action: command.action, identity, expectedRevisions, payload });
   return command as Command;
+}
+
+export function createSessionSourceRevertCommand(preview: PiagentWebUIConfirmedExactSourceRevertPreviewV1): Promise<Command> {
+  if (!preview.commandBinding || !preview.target) throw new Error("source-revert-binding-unavailable");
+  return createSourceRevertCommand({ identity: preview.identity, revision: {
+    ...preview.commandBinding,
+    approvalRevision: null, sessionOptionRevision: null, queueRevision: null
+  } }, preview);
 }

@@ -10,6 +10,14 @@
     "version": { "const": "piagent-webui-source-revert-v1" },
     "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
     "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "commandBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtimeRevision", "controlRevision"],
+      "properties": {
+        "runtimeRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "controlRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+      }
+    },
     "action": { "const": "source.revert" },
     "state": { "enum": ["ready", "unavailable"] },
     "target": { "anyOf": [{ "$ref": "#/$defs/revertTarget" }, { "type": "null" }] },
@@ -19,12 +27,23 @@
   },
   "allOf": [
     {
+      "if": { "properties": { "identity": { "type": "object", "properties": { "taskId": { "type": "null" } } } } },
+      "then": { "properties": {
+        "identity": { "type": "object", "properties": { "taskRunId": { "type": "null" } } },
+        "target": { "type": ["object", "null"], "properties": { "taskRevision": { "type": "null" } } }
+      } },
+      "else": { "properties": {
+        "identity": { "type": "object", "properties": { "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" } } },
+        "target": { "type": ["object", "null"], "properties": { "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" } } }
+      } }
+    },
+    {
       "properties": {
         "identity": {
           "type": "object",
           "properties": {
-            "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
-            "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "taskId": { "$ref": "common-v1.schema.json#/$defs/nullablePublicId" },
+            "taskRunId": { "$ref": "common-v1.schema.json#/$defs/nullablePublicId" },
             "agentOperationId": { "type": "null" },
             "toolCallId": { "type": "null" }
           }
@@ -96,7 +115,7 @@
         "path": { "$ref": "common-v1.schema.json#/$defs/safeDisplayPath" },
         "oldPath": { "type": "null" },
         "effect": { "const": "restore-worktree-from-index" },
-        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
         "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
         "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
         "viewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },

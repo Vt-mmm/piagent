@@ -1,3 +1,5 @@
+import { ManagedSourceRevertSessions, type ManagedSourceRuntime } from "./managed-source-revert-sessions.ts";
+import { SourceRevertSessions } from "./source-revert-sessions.ts";
 import { WorkspaceWriteSessions, type ManagedWorkspaceWriter } from './workspace-write-sessions.ts';
 import { managedProjection } from './managed-projection.ts';
 import { randomBytes } from "node:crypto";
@@ -101,7 +103,7 @@ export async function startPiagentGateway(options: {
   agentDir?: string;
   staticRoot?: string;
   scopedBrokerRouter?: ScopedBrokerRouter;
-  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
+  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; managedSource?: (id: string) => ManagedSourceRuntime; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
   // Company sessions relayed into this dashboard (the dashboard entry passes
   // the Agent Watch binding; omitted: none).
   company?: CompanyConnector;
@@ -272,7 +274,19 @@ export async function startPiagentGateway(options: {
     updates.start();
     const workspaceWrites = new WorkspaceWriteSessions({ root: state.root, key, gatewayInstanceRef, runtimes, managed: !!options.managed,
       managedWrite: options.managed?.workspaceWrite, changed: sessionRef => events.publish("session.changed", { sessionRef }) });
+    const sourceReverts = options.managed ? new ManagedSourceRevertSessions({ root: state.root, key, gatewayInstanceRef, runtimes,
+      managedSource: options.managed.managedSource, changed: sessionRef => events.publish("session.changed", { sessionRef }) }) : new SourceRevertSessions({ root: state.root, key, runtimes, managed: !!options.managed,
+      provider: sessionRef => inspections.provider(sessionRef), changed: sessionRef => events.publish("session.changed", { sessionRef }) });
     loopback = await startLoopbackServer({
+      sessionSourceRevert: {
+        sources: sessionRef => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-review`) : sourceReverts.sources(sessionRef),
+        diff: (sessionRef, fileRef) => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-review/${encodeURIComponent(fileRef)}`) : sourceReverts.diff(sessionRef, fileRef),
+        preview: (sessionRef, fileRef, hunkRef) => company(sessionRef)
+          ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-reverts/${encodeURIComponent(fileRef)}${hunkRef ? `?hunkRef=${encodeURIComponent(hunkRef)}` : ""}`)
+          : sourceReverts.preview(sessionRef, fileRef, hunkRef),
+        execute: (sessionRef, command) => company(sessionRef)
+          ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-reverts`, command) : sourceReverts.execute(sessionRef, command)
+      },
       workspaceWrite: {
         state: sessionRef => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/workspace/write`) : workspaceWrites.state(sessionRef),
         execute: (sessionRef, command) => company(sessionRef) ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/workspace/write`, command) : workspaceWrites.execute(sessionRef, command)

@@ -2046,3 +2046,201 @@ test("workspace editor saves with Cmd/Ctrl+S, preserves drafts and resolves dige
     assert.deepEqual(errors, []);
   } finally { workspaceWritable = false; }
 });
+
+test('editor shows exact agent hunks, keeps without writing and hides review when draft changes', async ({ page }) => {
+  const { createHash } = await import('node:crypto');
+  workspaceWritable = true;
+  const content = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+  const filePath = path.join(mentionProject, 'src/review.txt'); fs.writeFileSync(filePath, content);
+  const diff = JSON.parse(fs.readFileSync(new URL('../evals/fixtures/piagent-webui/diff-v1.valid.json', import.meta.url)));
+  diff.file.path = 'src/review.txt'; diff.file.currentDigest = `sha256:${createHash('sha256').update(content).digest('hex')}`;
+  diff.hunks = [1, 8].map(line => ({ hunkRef: `hunk.editor.${line}`, oldStart: line, oldLineCount: 1, newStart: line, newLineCount: 1,
+    header: `@@ -${line} +${line} @@`, lines: [
+      { kind: 'deleted', marker: '-', lineRef: `old.${line}`, oldLineNumber: line, newLineNumber: null, text: `old line ${line}`, redacted: false },
+      { kind: 'added', marker: '+', lineRef: `new.${line}`, oldLineNumber: null, newLineNumber: line, text: `line ${line}`, redacted: false }
+    ] }));
+  diff.agentHunkRefs = diff.hunks.map(hunk => hunk.hunkRef);
+  await page.route('**/source-review', route => route.fulfill({ json: { files: [{ ...diff.file, pathDisplay: 'exact-safe' }] } }));
+  await page.route('**/source-review/*', route => route.fulfill({ json: diff }));
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error' && /Content Security Policy/.test(message.text())) errors.push(message.text()); });
+  try {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+    await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+    await page.getByRole('button', { name: 'src', exact: true }).click();
+    await page.getByRole('button', { name: 'review.txt', exact: true }).click();
+    await expect(page.locator('.cm-agent-added')).toHaveCount(2);
+    await expect(page.locator('.cm-agent-deleted')).toHaveCount(2);
+    await expect(page.locator('.cm-agent-marker')).toHaveCount(2);
+    await expect(page.getByRole('tab', { name: 'src/review.txt (2)', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /^(Comment dòng đã xóa|Comment on removed line) 1$/ }).click();
+    const commentDialog = page.getByRole('dialog', { name: /Comment theo dòng|Line comment/ });
+    await commentDialog.getByRole('textbox', { name: /Comment cho dòng này|Comment on this line/ }).fill('Please explain this removal.');
+    await commentDialog.getByRole('button', { name: /Lưu comment|Save comment/ }).click();
+    const commentBar = page.getByRole('region', { name: /Comment chờ gửi|Comments to send/ });
+    await commentBar.getByRole('button', { name: /Đưa vào ô chat|Put in the composer/ }).click();
+    await expect(page.getByPlaceholder('Nhắn cho Piagent…')).toHaveValue(/src\/review.txt:1 \((dòng đã xóa|removed line)\)[\s\S]*old line 1[\s\S]*Please explain this removal\./);
+    const editor = page.locator('.cm-content').first(); await editor.focus(); await editor.press('Alt+ArrowDown');
+    await expect(page.locator('.cm-lineNumbers .cm-activeLineGutter')).toHaveText('8');
+    await page.getByRole('button', { name: /^(Giữ|Keep)$/ }).first().click();
+    await expect(page.getByRole('tab', { name: 'src/review.txt (1)', exact: true })).toBeVisible();
+    expect(fs.readFileSync(filePath, 'utf8')).toBe(content);
+    await editor.fill('member draft');
+    await expect(page.locator('.cm-agent-added')).toHaveCount(0);
+    await expect(page.locator('.cm-agent-deleted')).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'src/review.txt ●', exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally { workspaceWritable = false; }
+});
+
+test('agent events reload clean editor tabs and preserve dirty drafts in the conflict dialog', async ({ page }) => {
+  workspaceWritable = true;
+  const file = path.join(mentionProject, 'src/refresh.txt'); fs.writeFileSync(file, 'initial content');
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+    await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+    await page.getByRole('button', { name: 'src', exact: true }).click();
+    await page.getByRole('button', { name: 'refresh.txt', exact: true }).click();
+    const editor = page.locator('.cm-content').first();
+    await expect(editor).toHaveText('initial content');
+    fs.writeFileSync(file, 'agent changed clean file');
+    protocol.events.publish('session.changed', { sessionRef: 'session_release_prep' });
+    await expect(editor).toHaveText('agent changed clean file');
+    await expect(page.getByRole('tab', { name: 'src/refresh.txt', exact: true })).toBeVisible();
+    await editor.fill('member unsaved draft');
+    fs.writeFileSync(file, 'agent changed dirty file');
+    protocol.events.publish('session.changed', { sessionRef: 'session_release_prep' });
+    const dialog = page.getByRole('dialog', { name: /Tệp đã thay đổi trên đĩa|The file changed on disk/ });
+    await expect(dialog).toBeVisible();
+    await expect(editor).toHaveText('member unsaved draft');
+    await expect(page.getByRole('tab', { name: 'src/refresh.txt ●', exact: true, includeHidden: true })).toBeVisible();
+    expect(fs.readFileSync(file, 'utf8')).toBe('agent changed dirty file');
+    await dialog.getByRole('button', { name: /^(Tải lại|Reload)$/ }).click();
+    await expect(editor).toHaveText('agent changed dirty file');
+    expect(errors).toEqual([]);
+  } finally { workspaceWritable = false; }
+});
+
+test('inline revert previews one hunk and retries a lost response with the identical command', async ({ page }) => {
+  const { createHash } = await import('node:crypto'); workspaceWritable = true;
+  const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
+  const original = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+  const after = original.replace('line 1\n', 'old line 1\n');
+  const filePath = path.join(mentionProject, 'src/revert.txt'); fs.writeFileSync(filePath, original);
+  const diff = JSON.parse(fs.readFileSync(new URL('../evals/fixtures/piagent-webui/diff-v1.valid.json', import.meta.url)));
+  diff.file.path = 'src/revert.txt'; diff.file.currentDigest = hash(original);
+  diff.hunks = [1, 8].map(line => ({ hunkRef: `hunk.revert.${line}`, oldStart: line, oldLineCount: 1, newStart: line, newLineCount: 1,
+    header: `@@ -${line} +${line} @@`, lines: [
+      { kind: 'deleted', marker: '-', lineRef: `old.${line}`, oldLineNumber: line, newLineNumber: null, text: `old line ${line}`, redacted: false },
+      { kind: 'added', marker: '+', lineRef: `new.${line}`, oldLineNumber: null, newLineNumber: line, text: `line ${line}`, redacted: false }
+    ] }));
+  diff.agentHunkRefs = diff.hunks.map(hunk => hunk.hunkRef);
+  const preview = JSON.parse(fs.readFileSync(new URL('../evals/fixtures/piagent-webui/source-revert-v1.valid.json', import.meta.url)));
+  preview.target.path = diff.file.path; preview.target.fileRef = diff.file.fileRef; preview.target.fileRevision = diff.file.fileRevision;
+  preview.target.hunkRefs = [diff.hunks[0].hunkRef]; preview.target.expiresAt = new Date(Date.now() + 240000).toISOString();
+  preview.preview.hunks = [{ hunkRef: diff.hunks[0].hunkRef, header: diff.hunks[0].header,
+    lines: diff.hunks[0].lines.map(({ kind, marker, text }) => ({ kind, marker, text })) }];
+  preview.commandBinding = { runtimeRevision: 'runtime.inline', controlRevision: 'control.inline' };
+  await page.route('**/source-review', route => route.fulfill({ json: { files: [{ ...diff.file, pathDisplay: 'exact-safe' }] } }));
+  await page.route('**/source-review/*', route => route.fulfill({ json: diff }));
+  await page.route('**/source-reverts/*', route => route.fulfill({ json: preview }));
+  const commands = []; let effects = 0;
+  await page.route('**/source-reverts', async route => {
+    commands.push(route.request().postDataJSON());
+    if (commands.length === 1) {
+      effects++; fs.writeFileSync(filePath, after);
+      diff.file.currentDigest = hash(after); diff.hunks = diff.hunks.slice(1); diff.agentHunkRefs = diff.hunks.map(hunk => hunk.hunkRef);
+      await route.abort('failed');
+    } else await route.fulfill({ json: { phase: 'settled', resultCode: 'reverted', deduplicated: true } });
+  });
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.setViewportSize({ width: 1600, height: 1000 }); await page.goto(server.issueLaunchUrl());
+    await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+    await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+    await page.getByRole('button', { name: 'src', exact: true }).click();
+    await page.getByRole('button', { name: 'revert.txt', exact: true }).click();
+    await page.getByRole('button', { name: /^(Hoàn tác|Revert)$/ }).first().click();
+    const dialog = page.getByRole('dialog', { name: /Hoàn tác thay đổi của agent|Revert agent changes/ });
+    await expect(dialog).toContainText('old line 1'); expect(commands).toHaveLength(0);
+    await dialog.getByRole('button', { name: /Xác nhận hoàn tác|Confirm revert/ }).click();
+    await expect(dialog).toContainText(/Chưa nhận được kết quả|No result received/);
+    await dialog.getByRole('button', { name: /Kiểm tra lại|Check again/ }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator('.cm-content')).toContainText('old line 1');
+    await expect(page.locator('.cm-agent-added')).toHaveCount(1);
+    expect(commands).toHaveLength(2); expect(commands[1]).toEqual(commands[0]); expect(effects).toBe(1);
+    expect(fs.readFileSync(filePath, 'utf8')).toBe(after); expect(errors).toEqual([]);
+  } finally { workspaceWritable = false; }
+});
+
+test('editor line comments use LineReview and reach the selected agent conversation through its composer', async ({ page }) => {
+  fs.writeFileSync(path.join(mentionProject, 'src/comment.txt'), 'first line\nconst amount = 2;\nlast line\n');
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.setViewportSize({ width: 1600, height: 1000 }); await page.goto(server.issueLaunchUrl());
+  await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+  const composer = page.getByPlaceholder('Nhắn cho Piagent…'); await composer.fill('Please review this too.');
+  await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+  await page.getByRole('button', { name: 'src', exact: true }).click();
+  await page.getByRole('button', { name: 'comment.txt', exact: true }).click();
+  await page.locator('.cm-line').filter({ hasText: 'const amount = 2;' }).click();
+  await page.getByRole('button', { name: /Comment dòng hiện tại|Comment on current line/ }).click();
+  const dialog = page.getByRole('dialog', { name: /Comment theo dòng|Line comment/ });
+  await expect(dialog).toContainText('src/comment.txt:2');
+  await dialog.getByRole('textbox', { name: /Comment cho dòng này|Comment on this line/ }).fill('Check this amount against the test.');
+  await dialog.getByRole('button', { name: /Lưu comment|Save comment/ }).click();
+  await expect(dialog).not.toBeVisible();
+  const bar = page.getByRole('region', { name: /Comment chờ gửi|Comments to send/ });
+  await expect(bar).toContainText('src/comment.txt:2');
+  await bar.getByRole('button', { name: /Đưa vào ô chat|Put in the composer/ }).click();
+  await expect(composer).toHaveValue(/Please review this too\.[\s\S]*src\/comment.txt:2[\s\S]*const amount = 2;[\s\S]*Check this amount against the test\./);
+  const message = await composer.inputValue();
+  await composer.press('Enter');
+  await expect.poll(() => lastSendPayload?.message).toBe(message);
+  await expect(bar).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('review counts cover inactive tabs and Keep survives closing the narrow editor drawer', async ({ page }) => {
+  const { createHash } = await import('node:crypto');
+  const diffs = ['first', 'second'].map((name, index) => {
+    const content = `${name} agent line\n`, file = `src/${name}-review.txt`;
+    fs.writeFileSync(path.join(mentionProject, file), content);
+    const diff = JSON.parse(fs.readFileSync(new URL('../evals/fixtures/piagent-webui/diff-v1.valid.json', import.meta.url)));
+    diff.file.path = file; diff.file.fileRef = `file.drawer.${index}`;
+    diff.file.currentDigest = `sha256:${createHash('sha256').update(content).digest('hex')}`;
+    diff.hunks = [{ hunkRef: `hunk.drawer.${index}`, oldStart: 1, oldLineCount: 1, newStart: 1, newLineCount: 1,
+      header: '@@ -1 +1 @@', lines: [{ kind: 'added', marker: '+', lineRef: `line.drawer.${index}`, oldLineNumber: null,
+        newLineNumber: 1, text: content.trim(), redacted: false }] }];
+    diff.agentHunkRefs = diff.hunks.map(hunk => hunk.hunkRef); return diff;
+  });
+  await page.route('**/source-review', route => route.fulfill({ json: { files: diffs.map(diff => ({ ...diff.file, pathDisplay: 'exact-safe' })) } }));
+  await page.route('**/source-review/*', route => route.fulfill({ json: diffs.find(diff => route.request().url().endsWith(diff.file.fileRef)) }));
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.setViewportSize({ width: 900, height: 1000 }); await page.goto(server.issueLaunchUrl());
+  await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+  await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+  await page.getByRole('button', { name: 'src', exact: true }).click();
+  await page.getByRole('button', { name: 'first-review.txt', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'src/first-review.txt (1)', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'second-review.txt', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'src/second-review.txt (1)', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'src/first-review.txt (1)', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^(Giữ|Keep)$/ }).click();
+  await expect(page.getByRole('tab', { name: 'src/second-review.txt', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^(Đóng|Close)$/ }).click();
+  await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+  await expect(page.getByRole('tab', { name: 'src/first-review.txt (1)', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'src/second-review.txt', exact: true })).toBeVisible();
+  await expect(page.locator('.cm-agent-added')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'src/first-review.txt (1)', exact: true }).click();
+  await expect(page.locator('.cm-agent-added')).toHaveCount(1);
+  expect(fs.readFileSync(path.join(mentionProject, 'src/second-review.txt'), 'utf8')).toBe('second agent line\n');
+  expect(errors).toEqual([]);
+});

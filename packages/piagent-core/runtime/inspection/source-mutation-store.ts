@@ -1,3 +1,8 @@
+import type { SourceMutationEvidenceRecord, SourceMutationAppendOptions } from "./source-action-contract.ts";
+export type { SourceMutationEvidenceRecord, SourceMutationAppendOptions } from "./source-action-contract.ts";
+import { SOURCE_MUTATION_EVIDENCE_VERSION } from "./source-action-contract.ts";
+export { SOURCE_MUTATION_EVIDENCE_VERSION } from "./source-action-contract.ts";
+
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,41 +17,6 @@ const MAX_RECORDS = 4_000, MAX_RECORD_BYTES = 96 * 1024;
 const REF = /^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$/, DIGEST = /^sha256:[a-f0-9]{64}$/;
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/, REVISION_KEYS = ["runtimeRevision", "taskRevision", "controlRevision",
   "workspaceRevision", "indexRevision", "approvalRevision", "sessionOptionRevision", "queueRevision"];
-export const SOURCE_MUTATION_EVIDENCE_VERSION = "piagent-webui-source-mutation-evidence-v1";
-
-export type SourceMutationEvidenceRecord = {
-  schemaVersion: 1;
-  version: typeof SOURCE_MUTATION_EVIDENCE_VERSION;
-  recordId: string;
-  evidenceRef: string;
-  sequence: number;
-  phase: "requested" | "settled" | "rejected" | "uncertain";
-  resultCode: "mutation-requested" | "staged" | "unstaged" | "reverted" | "mutation-rejected" | "effect-unknown";
-  failureCode: string | null;
-  projectRef: string;
-  runtimeInstanceId: string;
-  sessionRef: string;
-  taskId: string;
-  taskRunId: string;
-  commandId: string;
-  idempotencyKeyDigest: string;
-  actionDigest: string;
-  action: SourceMutationAction | "source.revert";
-  target: SourceMutationTarget | SourceRevertTarget;
-  selectedHunkRefs: string[];
-  requestedAt: string;
-  recordedAt: string;
-  retentionUntil: string;
-  beforeIndexPreimage: string;
-  afterIndexPreimage: string | null;
-  beforeWorkspacePreimage: string;
-  afterWorkspacePreimage: string | null;
-  observedRevisionsBefore: Record<string, string | null>;
-  observedRevisionsAfter: Record<string, string | null> | null;
-  integrityDigest: string;
-};
-
-type AppendOptions = Omit<SourceMutationEvidenceRecord, "schemaVersion" | "version" | "recordId" | "evidenceRef" | "sequence" | "retentionUntil" | "integrityDigest"> & { projectRoot: string };
 
 function sha(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function evidenceDigest(value: unknown): string { return `sha256:${sha(canonicalReviewValue(value))}`; }
@@ -132,7 +102,7 @@ export function readSourceMutationEvidence(projectRoot: string, taskRunId: strin
   return { records: corruptions.length ? [] : records.sort((left, right) => left.sequence - right.sequence), corruptions };
 }
 
-export function appendSourceMutationEvidence(options: AppendOptions): SourceMutationEvidenceRecord {
+export function appendSourceMutationEvidence(options: SourceMutationAppendOptions): SourceMutationEvidenceRecord {
   const manifest = readTaskBaselineManifest(options.projectRoot, options.taskRunId);
   if (!manifest || manifest.taskId !== options.taskId || manifest.captureState !== "current"
     || taskBaselineRetentionState(manifest, new Date(options.recordedAt)) !== "active") throw new Error("mutation-baseline-unavailable");

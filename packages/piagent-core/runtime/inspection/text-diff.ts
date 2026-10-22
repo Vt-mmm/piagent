@@ -8,19 +8,20 @@ export type TextDiffResult = {
   reasonCode: string | null;
 };
 
-function lines(content: Buffer): string[] | null {
+function lines(content: Buffer, preserveLineEndings: boolean): string[] | null {
   if (content.includes(0)) return null;
   const text = content.toString("utf8");
   if (Buffer.from(text, "utf8").compare(content) !== 0) return null;
   if (!text) return [];
+  if (preserveLineEndings) return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
   const result = text.split("\n");
   if (text.endsWith("\n")) result.pop();
   return result.map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
 }
 
-export function diffTextBuffers(base: Buffer, current: Buffer, maxCells = 4_000_000): TextDiffResult {
-  const before = lines(base);
-  const after = lines(current);
+export function diffTextBuffers(base: Buffer, current: Buffer, maxCells = 4_000_000, preserveLineEndings = false): TextDiffResult {
+  const before = lines(base, preserveLineEndings);
+  const after = lines(current, preserveLineEndings);
   if (!before || !after) return { operations: [], additions: 0, deletions: 0, exact: false, reasonCode: "binary-content" };
   const cells = (before.length + 1) * (after.length + 1);
   if (!Number.isSafeInteger(cells) || cells > maxCells) {

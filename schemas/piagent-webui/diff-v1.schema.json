@@ -35,6 +35,10 @@
     "file": { "$ref": "source-change-v1.schema.json#/$defs/fileChange" },
     "availability": { "$ref": "#/$defs/availability" },
     "fallback": { "$ref": "#/$defs/fallback" },
+    "agentHunkRefs": {
+      "type": "array", "maxItems": 128, "uniqueItems": true,
+      "items": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+    },
     "hunks": {
       "type": "array",
       "maxItems": 128,

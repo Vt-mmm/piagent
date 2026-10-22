@@ -40,7 +40,7 @@ async function gitDirectory(repoRoot: string): Promise<string> {
   if (!path.isAbsolute(candidate) || !stat.isDirectory() || stat.isSymbolicLink()) throw new Error("git-directory-invalid");
   return resolved;
 }
-async function restoreWholeFile(authority: SourceRevertAuthority, recheck: () => Promise<boolean>): Promise<void> {
+async function restoreWholeFile(authority: SourceRevertAuthority, recheck: () => Promise<boolean>): Promise<string> {
   const bytes = await runReadOnlyGit(authority.repoRoot, ["cat-file", "blob", authority.indexObject], { maxBytes: 16 * 1024 * 1024 });
   const target = path.resolve(authority.repoRoot, authority.repoPath), parent = fs.realpathSync.native(path.dirname(target));
   if (parent !== path.dirname(target) || !target.startsWith(`${authority.repoRoot}${path.sep}`)) throw new Error("revert-target-unsafe");
@@ -52,8 +52,9 @@ async function restoreWholeFile(authority: SourceRevertAuthority, recheck: () =>
   try { if (!await recheck()) throw new Error("revert-preimage-stale"); fs.renameSync(temporary, target); }
   finally { fs.rmSync(temporary, { force: true }); }
   const actual = fs.readFileSync(target); if (!actual.equals(bytes)) throw new Error("revert-postcondition-failed");
+  return createHash("sha256").update(bytes).digest("hex");
 }
-type PreparedSelectedHunk = { stagingPath: string; target: string; initialMode: number };
+type PreparedSelectedHunk = { stagingPath: string; target: string; initialMode: number; contentDigest: string };
 function inside(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -101,7 +102,7 @@ async function prepareSelectedHunk(authority: SourceRevertAuthority, hunkRef: st
       fs.fchmodSync(stagingDescriptor, result.mode & 0o777);
       fs.fsyncSync(stagingDescriptor);
     } finally { fs.closeSync(stagingDescriptor); }
-    return { stagingPath, target, initialMode: current.mode & 0o777 };
+    return { stagingPath, target, initialMode: current.mode & 0o777, contentDigest: createHash("sha256").update(candidate).digest("hex") };
   } catch (error) {
     cleanupStagingFile(stagingPath);
     throw error;
@@ -109,8 +110,11 @@ async function prepareSelectedHunk(authority: SourceRevertAuthority, hunkRef: st
 }
 
 export async function executeGuardedSourceWorktreeRevert(options: { authority: SourceRevertAuthority; expectedIndexPreimage: string;
-  expectedWorkspacePreimage: string; recheck(): boolean; timeoutMs?: number }): Promise<SourceIndexTransactionResult> {
+  expectedWorkspacePreimage: string; recheck(): boolean; onCommitted?(contentDigest: string): void; timeoutMs?: number }): Promise<SourceIndexTransactionResult> {
   const before = { beforeIndexPreimage: options.expectedIndexPreimage, beforeWorkspacePreimage: options.expectedWorkspacePreimage };
+  const observeCommitted = (digest: string) => {
+    try { options.onCommitted?.(digest); } catch { /* Observation failure must not change the file transaction outcome. */ }
+  };
   let lockPath = "", ownsLock = false, committed = false;
   try {
     const gitDir = await gitDirectory(options.authority.repoRoot), lockName = createHash("sha256").update(options.authority.repoPath).digest("hex");
@@ -141,8 +145,9 @@ export async function executeGuardedSourceWorktreeRevert(options: { authority: S
           return result({ state: "rejected", reasonCode: "mutation-preimage-stale", ...before,
             afterIndexPreimage: null, afterWorkspacePreimage: null });
         fs.renameSync(prepared.stagingPath, prepared.target);
+        observeCommitted(prepared.contentDigest);
       } finally { cleanupStagingFile(prepared.stagingPath); }
-    } else await restoreWholeFile(options.authority, finalRecheck);
+    } else { const digest = await restoreWholeFile(options.authority, finalRecheck); observeCommitted(digest); }
     committed = true;
     const afterIndexPreimage = await collectIndexPreimage(options.authority.repoRoot);
     const afterWorkspacePreimage = collectSelectedWorkspacePreimage(options.authority.repoRoot, [options.authority.repoPath]);

@@ -1,3 +1,4 @@
+import { sessionMutationObserver } from "../packages/piagent-core/runtime/inspection/session-mutation-observer.ts";
 import { workspaceWriteAuthority } from "../packages/piagent-core/runtime/policy/workspace-write-authority.ts";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -430,6 +431,28 @@ describe("piagent guard integration", () => {
     assert.equal(harness.activeTools.has("piagent_context_engine"), false);
     assert.equal(harness.activeTools.size, 17, "usage, policy, retrieval and source schemas remain unloaded until needed");
     for (const name of retired) assert.equal(harness.activeTools.has(name), false, name);
+  });
+
+  it("freeform tool hooks retain exact session mutation evidence without a task", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root), file = "src/observed.ts";
+    const before = "export const value = 1;\n", after = "export const value = 2;\n";
+    fs.writeFileSync(path.join(cwd, file), before);
+    const ctx = createContext(cwd, { sessionId: "session-evidence", sessionName: "SESSION-EVIDENCE" });
+    const harness = createPiHarness({ activeTools: ["read", "edit", "write", "bash"] });
+    piagentGuard(harness.pi); await harness.handlers.get("session_start")({}, ctx);
+    const event = { toolCallId: "exact-session-write", toolName: "write", input: { path: file, content: after } };
+    const decision = await harness.handlers.get("tool_call")(event, ctx);
+    assert.notEqual(decision?.block, true, decision?.reason);
+    fs.writeFileSync(path.join(cwd, file), after);
+    await harness.handlers.get("tool_result")({ ...event, content: [{ type: "text", text: "Saved" }], isError: false }, ctx);
+    const observed = sessionMutationObserver.current(cwd, "session-evidence", file, { policy: {}, profile: {} });
+    assert.equal(observed?.baseline.content, before);
+    assert.equal(observed?.currentDigest, crypto.createHash("sha256").update(after).digest("hex"));
+    assert.equal(activeSessionTask(cwd, "session-evidence"), undefined);
+    fs.writeFileSync(path.join(cwd, file), "member changed this");
+    assert.equal(sessionMutationObserver.current(cwd, "session-evidence", file, { policy: {}, profile: {} }), null);
+    sessionMutationObserver.clear(cwd, "session-evidence");
   });
 
   // A freeform turn keeps this protection after the task-contract retirement.
@@ -2620,19 +2643,19 @@ non-secret metadata are safe alternatives.`;
     assert.deepEqual(approvalBroker.projection(cwd, ctx.sessionManager.getSessionId()).summary.pending, []);
   });
 
-  // WebUI stage/unstage/revert authority is bound to an active task. With task
-  // contracts retired no session has one, so the capability stays off rather
-  // than acting without the task and control revisions it checks.
-  it("keeps WebUI source mutation unavailable without an active task", async () => {
+  // Freeform revert binds to the live writable session; shutdown revokes it.
+  // Stage/unstage still require task authority in their own execution guard.
+  it("binds freeform WebUI revert availability to the session lifecycle", async () => {
     const { root, piagentGuard, sourceMutationGuard } = await loadGuardFixture();
     const cwd = createProject(root), ctx = createContext(cwd), harness = createPiHarness();
     piagentGuard(harness.pi);
     assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false);
     await harness.handlers.get("session_start")({}, ctx);
-    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false, "an active task is required");
+    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), true, "the idle writable session is bound");
     const write = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", { path: "src/free.ts", content: "export {};\n" });
     assert.notEqual(write.block, true, write.reason);
-    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false);
+    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), true);
+    assert.ok(sourceMutationGuard.sessionControlRevision(cwd, ctx.sessionManager.getSessionId()));
     await harness.handlers.get("session_shutdown")({ reason: "test" }, ctx);
     assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false);
   });

@@ -1,3 +1,5 @@
+import { controlActionDigest } from "../server/control-command-digest.ts";
+export { controlActionDigest } from "../server/control-command-digest.ts";
 import { firstUserEntryAfter } from "./dispatch-user-entry.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes } from "node:crypto";
@@ -104,9 +106,6 @@ function dispatchEntry(pending: PendingDispatch, ctx: ExtensionContext): any | n
 }
 export function chatContentDigest(payload: Pick<NewOperationChatCommand["payload"], "text" | "attachmentRefs">): string {
   return sha(canonical({ text: payload.text, attachmentRefs: payload.attachmentRefs }));
-}
-export function controlActionDigest(command: { action: unknown; identity: unknown; expectedRevisions: unknown; payload: unknown }): string {
-  return sha(canonical({ action: command.action, identity: command.identity, expectedRevisions: command.expectedRevisions, payload: command.payload }));
 }
 export const chatActionDigest = controlActionDigest;
 export class SameSessionPiBridge {

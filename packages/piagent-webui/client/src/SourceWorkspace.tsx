@@ -30,7 +30,7 @@ import { createSourceRevertCommand } from "./source-revert-command.ts";
 import { createSourceOpenCommand } from "./source-open-command.ts";
 import { tokenizeDiffLine } from "./diff-syntax.ts";
 import { CommentBar, FileFindings, LineAnchor, LineNotes, LineReviewContext, type LineReviewValue } from "./LineReview.tsx";
-import { commentKey, readComments, reviewMessage, upsertComment, writeComments, type LineComment, type LineSide, type ReviewFinding } from "./line-review.ts";
+import { LINE_COMMENTS_CHANGED, commentKey, readComments, reviewMessage, upsertComment, writeComments, type LineComment, type LineSide, type ReviewFinding } from "./line-review.ts";
 import { activeFileRef, currentSourceDocument, fileStats, localizedSourceTabs, provenanceLabel, relatedEvidence,
   sourceDiffMatchesSnapshot, sourceDocumentMatchesSnapshot, sourceSnapshotRevisionKey, sourceSummary,
   sourceDetailUnavailableNeedsRecovery,
@@ -73,7 +73,7 @@ function validReviewSettlement(command: Command, receipt: Receipt, expectedResul
     && typeof receipt.settledAt === "string" && typeof receipt.settlementEvidenceRef === "string";
 }
 
-type SourceDetailTarget = { view: string; fileRef: string; taskRevision: string; workspaceRevision: string; indexRevision: string | null;
+type SourceDetailTarget = { view: string; fileRef: string; taskRevision: string | null; workspaceRevision: string; indexRevision: string | null;
   viewRevision: string; fileRevision: string };
 type SourceDetailIdentity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string | null; taskRunId: string | null };
 type SourceDetailProjection = PiagentWebUIDigestBoundSelectedFileReviewStateV1 | PiagentWebUIGuardedSelectedFileSourceMutationPreviewV1
@@ -249,6 +249,10 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef, finding
   const [comments, setCommentList] = useState<LineComment[]>(() => sessionRef ? readComments(sessionRef) : []);
   const [editing, setEditing] = useState<{ key: string; path: string; side: LineSide; line: number; code: string } | null>(null);
   useEffect(() => { setCommentList(sessionRef ? readComments(sessionRef) : []); setEditing(null); }, [sessionRef]);
+  useEffect(() => {
+    const changed = (event: Event) => { if (sessionRef && (event as CustomEvent).detail === sessionRef) setCommentList(readComments(sessionRef)); };
+    window.addEventListener(LINE_COMMENTS_CHANGED, changed); return () => window.removeEventListener(LINE_COMMENTS_CHANGED, changed);
+  }, [sessionRef]);
   const setComments = useCallback((next: LineComment[]) => { setCommentList(next); if (sessionRef) writeComments(sessionRef, next); }, [sessionRef]);
   const hasTaskView = Boolean(snapshot.task && snapshot.sourceChanges.task?.state !== "unavailable" && snapshot.sourceChanges.task?.revision);
   const availableTabs = useMemo(() => localizedSourceTabs(locale), [locale]);
@@ -713,7 +717,7 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef, finding
       const command = await createSourceRevertCommand(snapshot, submittedPreview);
       if (actionAuthorityRef.current !== submittedAuthority || commandAuthorityRef.current !== submittedCommandAuthority) return;
       effectMayHaveStarted = true;
-      const receipt = await sendSourceRevertCommand(command);
+      const receipt = await sendSourceRevertCommand(command, undefined, sessionRef);
       if (receipt.phase === "uncertain") {
         await reconcileUncertainSource(submittedSourceScope, submittedSourceGeneration, submittedDetailScope,
           submittedDetailGeneration, submittedRevisionKey, localize(locale,

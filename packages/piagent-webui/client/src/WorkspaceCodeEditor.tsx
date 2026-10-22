@@ -1,3 +1,9 @@
+import Button from '@mui/material/Button';
+import type { Hunk } from '../../contracts/generated/diff-v1.ts';
+import { workspaceDiffDecorations } from './workspace-diff-decorations.ts';
+import { localize, useUiPreferences } from './ui-preferences.tsx';
+const noHunks: Hunk[] = [];
+const ignoreHunk = (_ref: string) => {};
 import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
@@ -6,19 +12,26 @@ import { EditorView, lineNumbers, highlightActiveLineGutter, keymap } from '@cod
 import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 
-export default function WorkspaceCodeEditor({ content, path, line = 1, readOnly = true, onChange, onSave }: {
+export default function WorkspaceCodeEditor({ content, path, line = 1, readOnly = true, onChange, onSave, hunks = noHunks, onKeep = ignoreHunk, onRevert, onComment }: {
+  onComment?(line: number, code: string, side?: 'new' | 'old'): void;
+  hunks?: Hunk[]; onKeep?(ref: string): void; onRevert?(ref: string): void;
   content: string; path: string; line?: number; readOnly?: boolean; onChange?(value: string): void; onSave?(): void;
 }) {
   const host = useRef<HTMLDivElement>(null), editor = useRef<EditorView | null>(null), theme = useTheme();
-  const callbacks = useRef({ onChange, onSave }); callbacks.current = { onChange, onSave };
+  const callbacks = useRef({ onChange, onSave, onComment }); callbacks.current = { onChange, onSave, onComment };
   const initial = useRef(content); initial.current = content;
-  const editable = useRef(new Compartment());
+  const editable = useRef(new Compartment()), review = useRef(new Compartment());
+  const { locale } = useUiPreferences();
   useEffect(() => {
     if (!host.current) return;
     const nonce = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')?.content;
     const language = new Compartment(); let disposed = false;
     const view = new EditorView({ parent: host.current, state: EditorState.create({ doc: initial.current, extensions: [
-      EditorView.cspNonce.of(nonce ?? ''), editable.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
+      review.current.of([]), EditorView.cspNonce.of(nonce ?? ''), editable.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
+      keymap.of([{ key: 'Mod-Shift-m', run: view => {
+        const selected = view.state.doc.lineAt(view.state.selection.main.head);
+        callbacks.current.onComment?.(selected.number, selected.text); return !!callbacks.current.onComment;
+      } }]),
       keymap.of(['Ctrl-s', 'Meta-s'].map(key => ({ key, run: () => { callbacks.current.onSave?.(); return true; } }))),
       EditorView.updateListener.of(update => { if (update.docChanged) callbacks.current.onChange?.(update.state.doc.toString()); }),
       lineNumbers(), highlightActiveLineGutter(), syntaxHighlighting(defaultHighlightStyle), language.of([]), EditorView.contentAttributes.of({ 'aria-label': path, tabindex: '0' }),
@@ -33,11 +46,21 @@ export default function WorkspaceCodeEditor({ content, path, line = 1, readOnly 
     const view = editor.current; if (view && view.state.doc.toString() !== content)
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } });
   }, [content, path, theme]);
+  useEffect(() => {
+    const view = editor.current;
+    if (view) view.dispatch({ effects: review.current.reconfigure(workspaceDiffDecorations(view, hunks, localize(locale, 'Giữ', 'Keep'), onKeep, localize(locale, 'Hoàn tác', 'Revert'), onRevert, localize(locale, 'Comment dòng đã xóa', 'Comment on removed line'), onComment)) });
+  }, [hunks, onKeep, onRevert, onComment, content, path, theme, locale]);
   useEffect(() => { editor.current?.dispatch({ effects: editable.current.reconfigure([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]) }); }, [readOnly, path, theme]);
   useEffect(() => {
     const view = editor.current; if (!view) return;
     const target = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, line))).from;
     view.dispatch({ selection: { anchor: target }, effects: EditorView.scrollIntoView(target, { y: 'center' }) });
   }, [line, path, theme]);
-  return <Box ref={host} sx={{ height: '100%', minHeight: 240, overflow: 'hidden' }} />;
+  return <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    {onComment && <Button size="small" onClick={() => {
+      const view = editor.current; if (!view) return;
+      const selected = view.state.doc.lineAt(view.state.selection.main.head); onComment(selected.number, selected.text);
+    }}>{localize(locale, 'Comment dòng hiện tại', 'Comment on current line')}</Button>}
+    <Box ref={host} sx={{ flex: 1, minHeight: 240, overflow: 'hidden' }} />
+  </Box>;
 }

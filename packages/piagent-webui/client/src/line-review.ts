@@ -6,6 +6,7 @@ export type LineSide = "new" | "old";
 export type LineComment = { path: string; line: number; side: LineSide; code: string; text: string; at: number };
 export type ReviewFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
 
+export const LINE_COMMENTS_CHANGED = "piagent-line-comments-changed";
 const MAX_COMMENTS = 50, MAX_TEXT = 2000, MAX_CODE = 400;
 const storageKey = (sessionRef: string) => `piagent-line-comments:${sessionRef}`;
 
@@ -30,6 +31,7 @@ export function writeComments(sessionRef: string, comments: LineComment[]): void
     if (comments.length) sessionStorage.setItem(storageKey(sessionRef), JSON.stringify(comments.slice(0, MAX_COMMENTS)));
     else sessionStorage.removeItem(storageKey(sessionRef));
   } catch { /* private window: comments last as long as the page */ }
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(LINE_COMMENTS_CHANGED, { detail: sessionRef }));
 }
 
 // Adds or replaces the comment on one line; an empty text removes it.

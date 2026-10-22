@@ -16,16 +16,16 @@ export type ReviewStateProjection = {
   health: { state: "ok" | "degraded" | "unavailable" | "error"; reasonCode: string | null; message: string | null };
 };
 
-type DeriveReviewTargetOptions = {
+type DeriveReviewTargetOptions<Revision extends string | null = string> = {
   diff: DiffDocument;
-  taskId: string;
-  taskRunId: string;
-  taskRevision: string;
+  taskId: string | null;
+  taskRunId: string | null;
+  taskRevision: Revision;
   workspaceRevision: string;
   indexRevision: string | null;
 };
 
-function targetCore(options: DeriveReviewTargetOptions): Omit<ReviewTarget, "diffRef" | "patchPreimage" | "contentDigest"> & { basisRef: string } {
+function targetCore<Revision extends string | null>(options: DeriveReviewTargetOptions<Revision>): Omit<ReviewTarget, "taskRevision" | "diffRef" | "patchPreimage" | "contentDigest"> & { taskRevision: Revision; basisRef: string } {
   const diff = options.diff as Record<string, any>, file = diff.file as Record<string, any>, observed = diff.observed as Record<string, any>;
   return {
     view: diff.view as ReviewView, fileRef: String(file.fileRef), taskRevision: options.taskRevision,
@@ -36,17 +36,28 @@ function targetCore(options: DeriveReviewTargetOptions): Omit<ReviewTarget, "dif
   };
 }
 
-export function deriveReviewTarget(options: DeriveReviewTargetOptions): ReviewTarget | null {
+export function deriveSourceDiffTarget<Revision extends string | null>(options: DeriveReviewTargetOptions<Revision> & {
+  sessionIdentity?: Pick<WebUiIdentity, "projectRef" | "runtimeInstanceId" | "sessionRef">;
+}): (Omit<ReviewTarget, "taskRevision"> & { taskRevision: Revision }) | null {
   const diff = options.diff as Record<string, any>;
-  if (!options.taskId || !options.taskRunId || !options.taskRevision || !options.workspaceRevision
+  const binding = options.sessionIdentity;
+  const session = binding ? { projectRef: binding.projectRef, runtimeInstanceId: binding.runtimeInstanceId, sessionRef: binding.sessionRef } : undefined;
+  const sessionBound = session && options.taskId === null && options.taskRunId === null && options.taskRevision === null
+    && ["projectRef", "runtimeInstanceId", "sessionRef"].every(key => typeof session[key] === "string" && session[key] === diff.identity?.[key])
+    && diff.identity?.taskId === null && diff.identity?.taskRunId === null;
+  if ((!sessionBound && (!options.taskId || !options.taskRunId || !options.taskRevision)) || !options.workspaceRevision
     || diff.availability?.state !== "current" || diff.fallback?.kind !== "none"
     || diff.truncation?.truncated !== false || diff.redaction?.applied !== false || diff.redaction?.truncated !== false
     || diff.file?.status === "C" || diff.file?.content?.kind !== "text" || diff.file?.content?.access !== "available") return null;
-  const core = targetCore(options), preimage = reviewDigest({ schemaVersion: 1, taskId: options.taskId, taskRunId: options.taskRunId, ...core });
+  const core = targetCore(options), preimage = reviewDigest({ schemaVersion: 1, taskId: options.taskId, taskRunId: options.taskRunId, ...(sessionBound ? { sessionIdentity: session } : {}), ...core });
   return { view: core.view, fileRef: core.fileRef, diffRef: `diff.${preimage.slice("sha256:".length)}`, taskRevision: core.taskRevision,
     workspaceRevision: core.workspaceRevision, indexRevision: core.indexRevision, viewRevision: core.viewRevision,
     fileRevision: core.fileRevision, baseDigest: core.baseDigest, currentDigest: core.currentDigest,
     patchPreimage: preimage, contentDigest: preimage };
+}
+
+export function deriveReviewTarget(options: DeriveReviewTargetOptions): ReviewTarget | null {
+  return deriveSourceDiffTarget(options);
 }
 
 function sameTarget(left: ReviewTarget, right: ReviewTarget): boolean {

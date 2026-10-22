@@ -1,3 +1,6 @@
+import type { WebUiIdentity } from "./source-action-contract.ts";
+export type { WebUiIdentity } from "./source-action-contract.ts";
+
 import { createHash } from "node:crypto";
 import path from "node:path";
 import {
@@ -15,15 +18,6 @@ import { sourceInspectionPlan } from "./source-inspection-plan.ts";
 const DEFAULT_PAGE_LIMIT = 300;
 const MAX_PAGE_LIMIT = 2_000;
 const MAX_TEXT_BYTES = 4 * 1024 * 1024;
-export type WebUiIdentity = {
-  projectRef: string;
-  runtimeInstanceId: string;
-  sessionRef: string;
-  taskId: string | null;
-  taskRunId: string | null;
-  agentOperationId: string | null;
-  toolCallId: string | null;
-};
 export type SourceProjectionOptions = {
   cwd: string;
   identity: WebUiIdentity;

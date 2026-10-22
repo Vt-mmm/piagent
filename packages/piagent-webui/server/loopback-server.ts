@@ -1,3 +1,4 @@
+import { routeSessionSourceRevert, type SessionSourceRevertRoutes } from "./session-source-revert-routes.ts";
 import http, { type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 
@@ -51,6 +52,7 @@ export async function startLoopbackServer(options: {
   readSessionCreationOptions?: () => unknown | Promise<unknown>;
   readSessionModel?: (sessionRef: string) => WebUiReadModelProvider | Promise<WebUiReadModelProvider>;
   workspaceWrite?: WorkspaceWriteRoutes;
+  sessionSourceRevert?: SessionSourceRevertRoutes;
   executeSessionAttachment?: (sessionRef: string, command: unknown) => unknown | Promise<unknown>;
   readSessionConnections?: (sessionRef: string) => unknown | Promise<unknown>;
   executeSessionConnection?: (command: unknown) => unknown | Promise<unknown>;
@@ -305,6 +307,7 @@ export async function startLoopbackServer(options: {
 
     // The main agent's questions to the member, a project's Git branches, and
     // Piagent's own updates.
+    if (await routeSessionSourceRevert({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options.sessionSourceRevert)) return;
     if (await routeWorkspaceWrite({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options.workspaceWrite)) return;
     if (await routeMemberRequest({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options)) return;
 

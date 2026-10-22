@@ -283,7 +283,6 @@ describe("Piagent WebUI control semantics", () => {
       "review.mark",
       "source.stage",
       "source.unstage",
-      "source.revert",
       "source.open-in-vscode",
       "commit-summary.generate"
     ]) {
@@ -292,6 +291,16 @@ describe("Piagent WebUI control semantics", () => {
       value.identity.taskId = null;
       value.identity.taskRunId = null;
       expectInvalid(value);
+    }
+
+    const freeform = receipt("source.revert", settledResultsByAction.get("source.revert"));
+    freeform.identity.taskId = null;
+    freeform.identity.taskRunId = null;
+    expectValid(freeform);
+    for (const field of ["taskId", "taskRunId"]) {
+      const mixed = structuredClone(freeform);
+      mixed.identity[field] = "task.mixed";
+      expectInvalid(mixed);
     }
 
     const dispatched = receipt("chat.send", "dispatch-observed");

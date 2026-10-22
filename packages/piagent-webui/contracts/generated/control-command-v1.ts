@@ -1,23 +1,24 @@
 /* Generated from schemas/piagent-webui/control-command-v1.schema.json. Do not edit. */
 
 export type PiagentWebUIControlCommandAndReceiptV1 = Command | Receipt;
-export type Command = CommandActionBindings & {
-  schemaVersion: 1;
-  version: "piagent-webui-control-v1";
-  messageType: "command";
-  commandId: string;
-  idempotencyKey: string;
-  requestedAt: string;
-  expiresAt: string;
-  capabilityScope: CapabilityScope;
-  action: Action;
-  actionDigest: string;
-  identity: Identity;
-  expectedRevisions: ExpectedRevisions;
-  payload: {
-    [k: string]: any;
+export type Command = SourceRevertIdentityBinding &
+  CommandActionBindings & {
+    schemaVersion: 1;
+    version: "piagent-webui-control-v1";
+    messageType: "command";
+    commandId: string;
+    idempotencyKey: string;
+    requestedAt: string;
+    expiresAt: string;
+    capabilityScope: CapabilityScope;
+    action: Action;
+    actionDigest: string;
+    identity: Identity;
+    expectedRevisions: ExpectedRevisions;
+    payload: {
+      [k: string]: any;
+    };
   };
-};
 export type CommandActionBindings = {
   [k: string]: any;
 };
@@ -51,7 +52,8 @@ export type Identity = {
   agentOperationId: string | null;
   toolCallId: string | null;
 };
-export type Receipt = ReceiptActionResultBinding &
+export type Receipt = SourceRevertIdentityBinding &
+  ReceiptActionResultBinding &
   ReceiptPhaseResultBinding & {
     [k: string]: any;
   } & {
@@ -290,6 +292,9 @@ export type ReceiptPhaseResultBinding =
       [k: string]: any;
     };
 
+export interface SourceRevertIdentityBinding {
+  [k: string]: any;
+}
 export interface ExpectedRevisions {
   runtimeRevision: string;
   taskRevision: string | null;

@@ -41,7 +41,7 @@ import { acceptAttribute, attachmentDetail, discardAttachment, dragCarriesFiles,
 import { CompanyReconnect, createFailureText } from "./CompanyReconnect.tsx";
 import { NewSessionPage } from "./NewSessionPage.tsx";
 import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
-import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
+import { appendToComposer, COMPOSER_APPENDED, NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { SessionComposerControls } from "./SessionComposerControls.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { conversationCommands, matchConversationCommand, type CommandNotice, type CommandResult, type ConversationCommandContext } from "./conversation-commands.ts";
@@ -88,14 +88,6 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
         : activity === "failed" ? [localize(locale, "Lượt cuối lỗi", "Last turn failed"), "error"] as const
           : [localize(locale, "Sẵn sàng", "Ready"), "default"] as const;
   return <Chip size="small" variant="outlined" color={color} label={text} />;
-}
-
-const COMPOSER_APPENDED = "piagent-composer-appended";
-// Adds text to a conversation's draft, after what is already typed.
-function appendToComposer(sessionRef: string, text: string) {
-  const current = readDraft(sessionRef);
-  writeDraft(sessionRef, current.trim() ? `${current.trimEnd()}\n\n${text}` : text);
-  window.dispatchEvent(new CustomEvent(COMPOSER_APPENDED, { detail: sessionRef }));
 }
 
 type KeptComposer = { attachments: Attachment[]; messageRequestId: string; sendUnconfirmed: boolean };

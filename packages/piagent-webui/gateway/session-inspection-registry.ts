@@ -1,3 +1,4 @@
+import { piSourceMutationGuard } from "../../piagent-core/runtime/policy/source-mutation-guard.ts";
 import { personalWorkspaceReader } from "../server/workspace-reader.ts";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -50,7 +51,7 @@ const EMPTY_REPLAY = {
   reasonCode: null
 };
 
-function inspectionRuntimeRef(gatewayInstanceRef: string, sessionRef: string): string {
+export function inspectionRuntimeRef(gatewayInstanceRef: string, sessionRef: string): string {
   return `runtime.${createHash("sha256").update(`${gatewayInstanceRef}\0${sessionRef}`).digest("hex")}`;
 }
 
@@ -262,7 +263,7 @@ export class SessionInspectionRegistry {
       reasonCode: projects.size ? null : "no-known-project" };
   }
 
-  async provider(sessionRef: string): Promise<WebUiReadModelProvider> {
+  async provider(sessionRef: string): Promise<CoreInspectionProvider> {
     const info = await this.#sessionInfo(sessionRef);
     const modifiedAt = info.modified.toISOString();
     const cached = this.#providers.get(sessionRef);
@@ -294,6 +295,11 @@ export class SessionInspectionRegistry {
       runtimeInstanceId: inspectionRuntimeRef(this.#gatewayInstanceRef, sessionRef),
       eventStore,
       task: () => safeRead(() => activeSessionTask(info.cwd, info.id), undefined),
+      ...(!this.#managed && context.model?.provider !== "agent_watch_managed" ? {
+        sourceMutationGuardAvailable: () => piSourceMutationGuard.available(info.cwd, info.id),
+        sourceSessionControlRevision: () => piSourceMutationGuard.sessionControlRevision(info.cwd, info.id),
+        sourceSessionObservation: (file: string) => piSourceMutationGuard.sessionObservation(info.cwd, info.id, file)
+      } : {}),
       activityEvents: () => safeRead(() => readContextTelemetry(info.cwd, { limit: 5_000 }), []),
       // A provider can outlive the turn that created it (notably while a new
       // session has not reached the host index yet). Read the branch at request

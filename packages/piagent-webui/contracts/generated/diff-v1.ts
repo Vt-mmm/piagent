@@ -17,6 +17,10 @@ export type PiagentWebUIBoundedFileDiffV1 = {
   /**
    * @maxItems 128
    */
+  agentHunkRefs?: string[];
+  /**
+   * @maxItems 128
+   */
   hunks: Hunk[];
   /**
    * @maxItems 129

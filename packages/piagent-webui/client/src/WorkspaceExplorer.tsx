@@ -1,3 +1,6 @@
+import { useWorkspaceComments } from './use-workspace-comments.tsx';
+import { useWorkspaceRevert } from './use-workspace-revert.tsx';
+import { useWorkspaceReview } from './use-workspace-review.ts';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -59,6 +62,9 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
   useEffect(() => { if (target) void open(target.path, target.line ?? 1); }, [target]);
   useEffect(() => { if (sidebarMode && sidebarMode !== "sessions") setSection(sidebarMode); }, [sidebarMode]);
   const tab = tabs.find(tab => tab.file.path === active), file = tab?.file;
+  const review = useWorkspaceReview(sessionRef, tabs, active);
+  const revert = useWorkspaceRevert(sessionRef, file?.path, file?.digest ?? null, !!tab && !tabDirty(tab), review.diff);
+  const lineReview = useWorkspaceComments(sessionRef, file?.path, tab?.draft ?? '', review.hunks);
   const conflictTab = tabs.find(tab => tab.file.path === editing.conflict?.path);
   const navigation = <Box component="nav" aria-label={localize(locale, "Tệp dự án", "Project files")} sx={{ width: navigationHost ? "100%" : 180, flexShrink: 0, overflow: "auto", borderRight: 1, borderColor: "divider" }}>
       {!navigationHost && <Tabs value={section} onChange={(_, value) => setSection(value)} aria-label={localize(locale, "Khám phá project", "Explore project")}>
@@ -76,23 +82,24 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
       {tree?.truncated && <Typography variant="caption">{localize(locale, "Danh sách đã được giới hạn.", "Listing limit reached.")}</Typography>}
       </>}
     </Box>;
-  return <><Stack direction="row" sx={{ height: "calc(100vh - 150px)", minHeight: 320 }}>
+  return <>{revert.dialog}{lineReview.dialog}<Stack direction="row" sx={{ height: "calc(100vh - 150px)", minHeight: 320 }}>
     {navigationHost ? createPortal(navigation, navigationHost) : navigation}
     <Box sx={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
       {error && <Alert severity="warning">{localize(locale, "Chưa đọc được tệp hoặc thư mục này.", "This file or folder could not be read.")}</Alert>}
+      {lineReview.bar}
       {editing.message && <Alert severity="warning">{editing.message}</Alert>}
       {editing.authority?.agentRunning && <Alert severity="info">{localize(locale, "Agent đang chạy và có thể sửa tệp này.", "The agent is running and may change this file.")}</Alert>}
       {!!tabs.length && <Tabs value={active ?? false} onChange={(_, value) => editing.select(value)} variant="scrollable" scrollButtons="auto" aria-label={localize(locale, "Các tệp đang mở", "Open files")}>
-        {tabs.map(tab => <Tab key={tab.file.path} value={tab.file.path} label={`${tab.file.path}${tabDirty(tab) ? " ●" : ""}`} />)}</Tabs>}
+        {tabs.map(tab => <Tab key={tab.file.path} value={tab.file.path} label={`${tab.file.path}${tabDirty(tab) ? " ●" : ""}${review.counts.get(tab.file.path) ? ` (${review.counts.get(tab.file.path)})` : ""}`} />)}</Tabs>}
       {loading && <CircularProgress size={20} />}
-      {file && <Stack direction="row">
+      {file && <Stack direction="row">{revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !tab || (!tabDirty(tab) && !tab.pending) || editing.saving} onClick={() => void editing.save(file.path)}>{localize(locale, "Lưu", "Save")}</Button>
         <Button size="small" onClick={() => editing.close(file.path)}>{localize(locale, "Đóng tệp", "Close file")}</Button>
         <Button size="small" onClick={() => { if (!tab || !tabDirty(tab) || window.confirm(localize(locale, "Bỏ thay đổi chưa lưu và tải lại?", "Discard unsaved changes and reload?"))) void editing.reload(file.path); }}>{localize(locale, "Tải lại", "Reload")}</Button>
       </Stack>}
       {file?.binary || file?.oversized ? <Alert severity="info">{localize(locale, "Tệp nhị phân hoặc quá lớn để hiển thị.", "This file is binary or too large to display.")}</Alert>
         : file?.content !== null && file?.content !== undefined ? <Box sx={{ flex: 1, minHeight: 0 }}><Suspense fallback={<CircularProgress size={20} />}>
-          <CodeEditor content={tab?.draft ?? file.content} path={file.path} line={tab?.line ?? 1} readOnly={!editing.authority?.writable || file.readOnly}
+          <CodeEditor onComment={lineReview.open} hunks={review.hunks} onKeep={review.keep} onRevert={editing.authority?.writable ? ref => void revert.request(ref) : undefined} content={tab?.draft ?? file.content} path={file.path} line={tab?.line ?? 1} readOnly={!editing.authority?.writable || file.readOnly}
             onChange={value => editing.change(file.path, value)} onSave={() => void editing.save(file.path)} /></Suspense></Box>
           : <Typography sx={{ p: 2 }}>{localize(locale, "Chọn một tệp để mở.", "Select a file to open.")}</Typography>}
     </Box>

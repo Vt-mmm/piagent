@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+export type MutationProofReader = (cwd: string, file: string) => { content: string; digest: string } | undefined;
+
 const MAX_PROOF_FILE_BYTES = 4 * 1024 * 1024;
 
 export type ModelMutationProof = {
@@ -106,7 +108,7 @@ function patchStrings(input: Record<string, unknown>): string[] {
   return Object.values(input).filter((value): value is string => typeof value === "string" && value.includes("*** "));
 }
 
-function patchProof(cwd: string, input: Record<string, unknown>, targets: string[], proof: ModelMutationProof): void {
+function patchProof(cwd: string, input: Record<string, unknown>, targets: string[], proof: ModelMutationProof, read: MutationProofReader): void {
   for (const patch of patchStrings(input)) {
     const lines = patch.replace(/\r\n/g, "\n").split("\n");
     for (let index = 0; index < lines.length; index += 1) {
@@ -127,7 +129,7 @@ function patchProof(cwd: string, input: Record<string, unknown>, targets: string
         continue;
       }
       proof.replacePaths.push(file);
-      const before = stableFile(cwd, file);
+      const before = read(cwd, file);
       if (!before) continue;
       proof.preContentDigests[file] = before.digest;
       const projected = applyPatchHunks(before.content, section);
@@ -140,7 +142,8 @@ export function expectedModelMutationProof(
   cwd: string,
   toolName: string,
   input: Record<string, unknown>,
-  targetPaths: string[]
+  targetPaths: string[],
+  read: MutationProofReader = stableFile
 ): ModelMutationProof {
   const targets = [...new Set(targetPaths)];
   const proof: ModelMutationProof = { expectedContentDigests: {}, preContentDigests: {}, fullContentPaths: [], replacePaths: [] };
@@ -153,13 +156,13 @@ export function expectedModelMutationProof(
     rememberFullContent(targets[0], [input.content]);
   } else if (toolName === "edit" && targets.length === 1) {
     proof.replacePaths.push(targets[0]);
-    const before = stableFile(cwd, targets[0]);
+    const before = read(cwd, targets[0]);
     const edits = inputEdits(input);
     if (before) proof.preContentDigests[targets[0]] = before.digest;
     const projected = before && edits ? applyUniqueReplacements(before.content, edits) : undefined;
     if (projected !== undefined) proof.expectedContentDigests[targets[0]] = [contentDigest(projected)];
   } else if (toolName === "apply_patch") {
-    patchProof(cwd, input, targets, proof);
+    patchProof(cwd, input, targets, proof, read);
   }
   proof.fullContentPaths = [...new Set(proof.fullContentPaths)].sort();
   proof.replacePaths = [...new Set(proof.replacePaths)].sort();

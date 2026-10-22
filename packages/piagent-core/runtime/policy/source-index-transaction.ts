@@ -1,3 +1,6 @@
+import type { SourceIndexTransactionResult } from "../inspection/source-action-contract.ts";
+export type { SourceIndexTransactionResult } from "../inspection/source-action-contract.ts";
+
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -14,16 +17,6 @@ import { localFilterDisableArgs } from "../inspection/git-filter-safety.ts";
 
 const MAX_INDEX_BYTES = 64 * 1024 * 1024;
 
-export type SourceIndexTransactionResult = {
-  state: "settled" | "rejected" | "uncertain";
-  reasonCode: string | null;
-  beforeIndexPreimage: string;
-  afterIndexPreimage: string | null;
-  beforeWorkspacePreimage: string;
-  afterWorkspacePreimage: string | null;
-  executor: "pi-guard";
-  directExecution: false;
-};
 
 function result(value: Omit<SourceIndexTransactionResult, "executor" | "directExecution">): SourceIndexTransactionResult {
   return { ...value, executor: "pi-guard", directExecution: false };

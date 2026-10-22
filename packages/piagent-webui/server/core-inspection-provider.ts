@@ -8,23 +8,7 @@ import { readTerminalDeliveryReceipt, terminalDeliverySessionEntries } from "./t
 
 const CORE_ROOT = "../../piagent-core";
 const SOURCE_AUTHORITY_ALIGNED = Symbol("piagent-source-authority-aligned");
-const STABLE_IDENTITY_FIELDS = ["projectRef", "runtimeInstanceId", "sessionRef", "taskId", "taskRunId"] as const;
-
-function stableIdentityMatches(left: Record<string, any> | null | undefined, right: Record<string, any> | null | undefined): boolean {
-  return Boolean(left && right && STABLE_IDENTITY_FIELDS.every((field) => left[field] === right[field]));
-}
-
-function sourceBinding(snapshot: Record<string, any>) {
-  return { sourceProjectionRevision: snapshot.sourceChanges.projectionRevision,
-    taskViewRevision: snapshot.sourceChanges.task.revision, workspaceRevision: snapshot.sourceChanges.workingTree.revision,
-    indexRevision: snapshot.sourceChanges.staged.revision };
-}
-
-function sourceDocumentMatches(document: Record<string, any> | null | undefined, snapshot: Record<string, any>): boolean {
-  const binding = sourceBinding(snapshot);
-  return Boolean(document && stableIdentityMatches(document.identity, snapshot.identity)
-    && Object.entries(binding).every(([field, value]) => document.snapshotBinding?.[field] === value));
-}
+import { STABLE_IDENTITY_FIELDS, stableIdentityMatches, sourceBinding, sourceDocumentMatches } from "./source-projection-binding.ts";
 
 type RuntimeEvent = { eventCursor: string; [key: string]: unknown };
 type EventReplay = {
@@ -42,8 +26,8 @@ type EventStore = {
 };
 
 async function loadCoreInspection() {
-  const [{ collectFileDiff }, { buildWebUiInspectionProjection }, { matchesProtectedPath }, reviewProjection, reviewStore, mutationProjection, revertProjection, openProjection, commitSummaryProjection, taskIndexProjection, taskTimelineProjection, recoveryHistoryProjection, handoffHistoryProjection, subagentTreeProjection, releaseMonitorProjection, documentWorkspaceProjection] = await Promise.all([
-    import(`${CORE_ROOT}/runtime/inspection/diff-projection.ts`),
+  const [{ collectSessionFileDiff: collectFileDiff }, { buildWebUiInspectionProjection }, { matchesProtectedPath }, reviewProjection, reviewStore, mutationProjection, revertProjection, openProjection, commitSummaryProjection, taskIndexProjection, taskTimelineProjection, recoveryHistoryProjection, handoffHistoryProjection, subagentTreeProjection, releaseMonitorProjection, documentWorkspaceProjection] = await Promise.all([
+    import(`${CORE_ROOT}/runtime/inspection/session-diff-projection.ts`),
     import(`${CORE_ROOT}/runtime/inspection/webui-snapshot.ts`),
     import(`${CORE_ROOT}/extensions/policy-core.js`),
     import(`${CORE_ROOT}/runtime/inspection/review-state-projection.ts`),
@@ -87,6 +71,8 @@ export type CoreInspectionInput = {
   approvalProjection?: () => { revision: string | null; summary: Record<string, unknown> };
   approvalDetail?: (approvalRef: string) => unknown | null;
   sourceMutationGuardAvailable?: () => boolean;
+  sourceSessionControlRevision?: () => string | null;
+  sourceSessionObservation?: (path: string) => unknown;
   sourceOpenAvailable?: () => boolean;
   lifecycleControl?: () => { state: "active" | "pause-requested" | "paused" | "terminal" | "unknown"; controlRevision: string | null;
     dispatchBlocked: boolean; currentPhase: string; pauseEpoch: number; actions: { stop: boolean; pause: boolean; resume: boolean } };
@@ -218,6 +204,9 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
         } };
       }
     }
+    if (value.snapshot.identity.taskId === null && value.snapshot.identity.taskRunId === null && this.#input.sourceSessionControlRevision) {
+      value.snapshot.revision.controlRevision = this.#input.sourceSessionControlRevision();
+    }
     projectApprovalState(value.snapshot, this.#input.approvalProjection?.());
     if (sourceIdentityAligned) {
       const binding = sourceBinding(value.snapshot);
@@ -312,7 +301,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     const { collectFileDiff, matchesProtectedPath } = await loadCoreInspection();
     const protectedPaths = this.#input.protectedPaths?.() ?? [];
     const value = await collectFileDiff({
-      cwd: this.#input.cwd, identity, sourceView: source, fileRef,
+      cwd: this.#input.cwd, identity, sourceView: source, fileRef, sessionObservation: this.#input.sourceSessionObservation,
       precondition: { expectedViewRevision: source.viewRevision, expectedFileRevision: file.fileRevision,
         expectedBaseDigest: file.baseDigest ?? null, expectedCurrentDigest: file.currentDigest ?? null },
       taskRevision: projection.snapshot.revision.taskRevision,
@@ -379,14 +368,19 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     const projection = await this.#projection(), snapshot = projection.snapshot;
     this.#requireSourceAuthority(projection, ["working-tree", ...(projection.sourceViews.task ? ["task" as const] : [])]);
     const identity = { ...snapshot.identity, agentOperationId: null, toolCallId: null };
-    if (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision || !snapshot.revision.workspaceRevision || !snapshot.revision.indexRevision)
+    const sessionBound = identity.taskId === null && identity.taskRunId === null && snapshot.revision.taskRevision === null
+      && !!this.#input.sourceSessionObservation;
+    if ((!sessionBound && (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision))
+      || !snapshot.revision.workspaceRevision || !snapshot.revision.indexRevision)
       throw new ReadModelNotFound();
     const source = projection.sourceViews.workingTree, taskView = projection.sourceViews.task ?? null;
-    if (!source?.files.some((file: any) => file.fileRef === fileRef)) throw new ReadModelNotFound();
+    const file = source?.files.find((file: any) => file.fileRef === fileRef);
+    if (!file) throw new ReadModelNotFound();
     const diff = await this.diff("working-tree", fileRef) as any;
     const { collectSourceRevertPreview, matchesProtectedPath } = await loadCoreInspection();
     const protectedPaths = this.#input.protectedPaths?.() ?? [];
     return collectSourceRevertPreview({ cwd: this.#input.cwd, identity, sourceView: source, taskView, diff,
+      sessionObservation: sessionBound && file.pathDisplay === "exact-safe" ? this.#input.sourceSessionObservation?.(file.path) : undefined,
       taskRevision: snapshot.revision.taskRevision, workspaceRevision: snapshot.revision.workspaceRevision,
       indexRevision: snapshot.revision.indexRevision, selectedHunkRefs: hunkRef ? [hunkRef] : [],
       confirmationKey: this.#sourceRevertConfirmationKey,

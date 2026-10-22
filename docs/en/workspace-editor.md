@@ -43,4 +43,30 @@ Source Changes and gives the next agent turn a short note naming the edited
 files. An agent that read an older version must read again before edit/write.
 Company reads and writes share the agent's queue inside the existing sandbox.
 Read-only access disables saving, and the server checks access again on each save.
-Interactive terminals, inline hunk review and checkpoint restore are later milestones.
+
+## Review agent changes
+
+Open files show proven agent hunks with added lines, removed-line blocks and gutter
+markers. Each open tab shows its remaining hunk count. **Alt+ArrowDown/Up** moves
+between hunks. **Keep** removes a hunk from review without changing the file; it
+survives closing the drawer in this page, and changed content needs review again.
+Reloading the page clears these Keep choices.
+
+**Revert** opens a preview and requires confirmation. It uses the existing guarded
+source revert and preserves the Git index. If the response is lost, **Check again**
+asks about the same command. Revert is unavailable for mixed member/agent hunks,
+stale content, protected paths and unsupported changes. Newly created untracked
+agent files can be reviewed and kept; deleting them through revert is not yet
+supported. A pre-existing member file is not treated as wholly agent-authored.
+
+Agent activity refreshes clean open files. Unsaved drafts stay intact and show the
+same conflict choices as saving. Hunk decorations disappear while editing a draft.
+**Comment on current line** or **Cmd/Ctrl+Shift+M** opens LineReview. Removed lines
+have their own comment button and retain the old line number and text. **Put in the
+composer** appends comments to your draft; send the message to ask the agent to act.
+
+Attribution requires an exact observed write/edit/patch in this session and a
+current, complete, unredacted diff. CRLF and missing final newlines are compared
+exactly. Unobserved shell edits and observations lost on runtime restart do not
+receive agent hunk markers. Company review and revert run inside its sandbox.
+Interactive terminals and checkpoint restore are later milestones.

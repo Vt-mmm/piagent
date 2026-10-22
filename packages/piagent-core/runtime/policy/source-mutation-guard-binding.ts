@@ -1,3 +1,8 @@
+import path from "node:path";
+import { reviewDigest } from "../inspection/review-state-contract.ts";
+import { sessionMutationObserver } from "../inspection/session-mutation-observer.ts";
+import { sessionAuthoredHunkRefs } from "../inspection/session-hunk-provenance.ts";
+import { inspectWorkspaceFile, workspacePathFlags } from "../../extensions/workspace-inspection.ts";
 import { randomBytes } from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -15,7 +20,8 @@ export type SourceMutationGuardBindings = {
 };
 
 export function createSourceMutationGuardBindings(policy: BasePolicy,
-  loadProfile: (ctx: ExtensionContext) => ProjectProfile): SourceMutationGuardBindings {
+  loadProfile: (ctx: ExtensionContext) => ProjectProfile,
+  writable?: (ctx: ExtensionContext, profile: ProjectProfile) => boolean): SourceMutationGuardBindings {
   const guardInstanceId = `guard.${randomBytes(32).toString("hex")}`, bindings = new Map<string, () => void>();
   const key = (ctx: ExtensionContext) => `${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`;
   return {
@@ -24,7 +30,26 @@ export function createSourceMutationGuardBindings(policy: BasePolicy,
       bindings.set(bindingKey, piSourceMutationGuard.bind({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), guardInstanceId,
         facts: () => {
           const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-          if (!task) return null;
+          if (!task) {
+            const profile = loadProfile(ctx), canWrite = writable?.(ctx, profile) === true;
+            const workspacePolicy = { policy: policy as unknown as Record<string, unknown>, profile: profile as unknown as Record<string, unknown>, readOnly: !canWrite };
+            const paths = effectiveProtectedPaths(policy, profile);
+            return { taskId: null, taskRunId: null, taskRevision: null, taskState: "none" as const, sessionBound: true, writable: canWrite,
+              controlRevision: reviewDigest({ guardInstanceId, sessionId: ctx.sessionManager.getSessionId(), canWrite, paths }), idle: ctx.isIdle(),
+              isProtectedPath: (file: string) => { const flags = workspacePathFlags(file, workspacePolicy); return flags.protected || flags.readOnly; },
+              sessionObservation: file => sessionMutationObserver.current(ctx.cwd, ctx.sessionManager.getSessionId(), file, workspacePolicy),
+              sessionReverted: (authority, before, committed) => {
+                const relative = path.relative(ctx.cwd, path.resolve(authority.repoRoot, authority.repoPath)).split(path.sep).join("/");
+                sessionMutationObserver.reverted(ctx.cwd, ctx.sessionManager.getSessionId(), relative, before, committed, workspacePolicy);
+              },
+              sessionHunkRefs: authority => {
+                const relative = path.relative(ctx.cwd, path.resolve(authority.repoRoot, authority.repoPath)).split(path.sep).join("/");
+                const observation = sessionMutationObserver.current(ctx.cwd, ctx.sessionManager.getSessionId(), relative, workspacePolicy);
+                if (!observation) return [];
+                const current = inspectWorkspaceFile(ctx.cwd, relative, workspacePolicy);
+                return current.content === null ? [] : sessionAuthoredHunkRefs(observation, current.content, authority.patchAuthority);
+              } };
+          }
           const control = inspectTaskControlState(ctx.cwd, task);
           const taskState = task.trace.outcome !== "pending" || control.state === "terminal" ? "terminal"
             : control.state === "active" ? "active" : "unknown";

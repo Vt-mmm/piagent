@@ -37,8 +37,17 @@ input.on('line', async line => {
     if (active || (message.name !== 'workspace' && !Object.hasOwn(factories, message.name))) throw new Error('managed-worker-request-invalid');
     active = true; controller = new AbortController(); network = message.network === true; isolated = message.isolated === true; docker = message.docker === true; engine = message.engine === true;
     if (message.name === 'workspace') {
-      const { inspectManagedWorkspace } = await import('./dist/workspace/worker.mjs');
-      emit({ result: await inspectManagedWorkspace(cwd, fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url)), message.args, message.workspaceReadOnly === true) }); return;
+      const { inspectManagedWorkspace, inspectManagedSource } = await import('./dist/workspace/worker.mjs');
+      const assets = fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url));
+      emit(message.args?.kind === 'source'
+        ? await inspectManagedSource(cwd, assets, message.args.request, message.sourceContext, message.workspaceReadOnly === true)
+        : { result: await inspectManagedWorkspace(cwd, assets, message.args, message.workspaceReadOnly === true) }); return;
+    }
+    let finishObservation = () => null;
+    if (message.mutationObservation && ['edit', 'write'].includes(message.name)) {
+      const { beginManagedMutationObservation } = await import('./dist/workspace/worker.mjs');
+      finishObservation = beginManagedMutationObservation(cwd, fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url)),
+        { ...message.mutationObservation, toolName: message.name, args: message.args }, message.workspaceReadOnly === true);
     }
     const finishFreshness = beginToolFreshness(cwd, message.name, message.args, message.expectedFileDigest);
     const options = message.name === 'bash' ? { shellPath: '/bin/bash', exposeSessionEnvironment: false } : undefined;
@@ -52,7 +61,7 @@ input.on('line', async line => {
     // failures. Pi 0.87 throws on denial and on a non-zero shell exit; Pi 1.x
     // returns an isError result with the same text instead: read as the throw.
     if (result?.isError === true) throw new Error((result.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('\n') || 'managed-worker-failed');
-    emit({ result, freshness: finishFreshness() });
+    emit({ result, freshness: finishFreshness(), mutationObservation: finishObservation() });
   } catch (error) { emit({ error: sandboxDiagnostic(error instanceof Error ? error.message : 'managed-worker-failed', { network, isolated, docker, engine }) }); }
   finally { if (active) { input.close(); process.stdin.destroy(); } }
 });

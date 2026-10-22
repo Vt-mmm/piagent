@@ -77,7 +77,6 @@ export function useSessionHub(): SessionHub {
       return catalogRef.current ?? value;
     } catch { setConnection("reconnecting"); return undefined; }
   }, [persistCursor]);
-
   const request = useCallback((command: unknown): Promise<Receipt> => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.reject(new GatewayCommandTransportError("gateway-not-connected", false));
@@ -457,6 +456,7 @@ export function useSessionHub(): SessionHub {
             [payload.sessionRef]: mergeTerminalOperationActivities(current[payload.sessionRef] ?? [], [terminal]) }));
         }
         if (["catalog.changed", "session.changed", "runtime.changed", "message.completed", "operation.settled"].includes(String(frame.kind))) refreshSoon();
+        if (["session.changed", "tool.completed", "operation.settled"].includes(String(frame.kind)) && typeof payload?.sessionRef === "string") window.dispatchEvent(new CustomEvent("piagent-workspace-changed", { detail: { sessionRef: payload.sessionRef } }));
       });
       socket.addEventListener("close", () => {
         window.clearTimeout(helloTimeout);

@@ -705,3 +705,53 @@ it("workspace writes require the browser session, origin, CSRF and matching sess
   assert.equal((await request(server.origin,route,{method:'POST',headers,body})).status,200);
   assert.equal(calls.length,1);assert.equal(calls[0].sessionRef,'session.personal');
 });
+
+it("session revert routes authenticate reads and enforce mutation authority before dispatch", async () => {
+  const calls = [];
+  const server = await start({ sessionSourceRevert: {
+    preview: (...args) => { calls.push(["preview", ...args]); return { preview: true }; },
+    execute: (...args) => { calls.push(["execute", ...args]); return { settled: true }; }
+  } });
+  const route = "/api/v1/sessions/catalog.session/source-reverts";
+  assert.equal((await request(server.origin, `${route}/file.one`)).status, 401);
+  assert.equal((await request(server.origin, route, { method: "POST", body: "{}" })).status, 401);
+  const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+    headers: { Origin: server.origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+  const headers = { Origin: server.origin, Cookie: exchange.headers["set-cookie"][0].split(";", 1)[0],
+    "Content-Type": "application/json" };
+  const command = { identity: { sessionRef: "inspection.session" } }, body = JSON.stringify(command);
+  assert.equal((await request(server.origin, route, { method: "POST", headers, body })).status, 403);
+  headers["X-Piagent-CSRF"] = JSON.parse(exchange.body).csrfToken;
+  assert.equal((await request(server.origin, route, { method: "POST", headers: { ...headers, Origin: "https://other.invalid" }, body })).status, 403);
+  assert.equal((await request(server.origin, route, { method: "POST", headers: { ...headers, "Content-Type": "text/plain" }, body })).status, 415);
+  assert.equal((await request(server.origin, route, { method: "POST", headers, body: "{" })).status, 400);
+  assert.equal((await request(server.origin, route, { method: "POST", headers, body: JSON.stringify("x".repeat(70_000)) })).status, 413);
+  for (const suffix of ["?unknown=x", "?hunkRef=a&hunkRef=b", "?hunkRef=", "?hunkRef=../x"]) {
+    assert.equal((await request(server.origin, `${route}/file.one${suffix}`, { headers })).status, 400);
+  }
+  assert.equal((await request(server.origin, `${route}?hunkRef=a`, { method: "POST", headers, body })).status, 400);
+  assert.equal((await request(server.origin, route, { headers })).status, 405);
+  assert.equal((await request(server.origin, `${route}/file.one`, { method: "POST", headers, body })).status, 405);
+  assert.deepEqual(calls, []);
+  assert.equal((await request(server.origin, `${route}/file.one?hunkRef=hunk.one`, { headers })).status, 200);
+  assert.equal((await request(server.origin, route, { method: "POST", headers, body })).status, 200);
+  // Catalog routing and inspection identity are distinct; the controller binds the latter.
+  assert.deepEqual(calls, [["preview", "catalog.session", "file.one", "hunk.one"], ["execute", "catalog.session", command]]);
+});
+
+it("session revert routes fail closed when the service is absent or fails", async () => {
+  for (const sessionSourceRevert of [undefined, { preview() { throw new Error("private path"); }, execute() { throw new Error("private path"); } }]) {
+    const server = await start({ sessionSourceRevert });
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const headers = { Origin: server.origin, Cookie: exchange.headers["set-cookie"][0].split(";", 1)[0],
+      "Content-Type": "application/json", "X-Piagent-CSRF": JSON.parse(exchange.body).csrfToken };
+    for (const [suffix, method] of [["/file.one", "GET"], ["", "POST"]]) {
+      const result = await request(server.origin, `/api/v1/sessions/catalog.session/source-reverts${suffix}`, { headers, method, body: method === "POST" ? "{}" : undefined });
+      assert.equal(result.status, 503);
+      assert.doesNotMatch(result.body.toString(), /private path/);
+    }
+  }
+});

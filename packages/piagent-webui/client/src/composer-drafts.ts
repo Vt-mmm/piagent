@@ -64,3 +64,10 @@ export function readComposerMemory<T>(key: string): T | undefined {
 export function writeComposerMemory<T>(key: string, value: T | null): void {
   if (value === null) memory.delete(key); else memory.set(key, value);
 }
+
+export const COMPOSER_APPENDED = "piagent-composer-appended";
+export function appendToComposer(sessionRef: string, text: string) {
+  const current = readDraft(sessionRef);
+  writeDraft(sessionRef, current.trim() ? `${current.trimEnd()}\n\n${text}` : text);
+  window.dispatchEvent(new CustomEvent(COMPOSER_APPENDED, { detail: sessionRef }));
+}

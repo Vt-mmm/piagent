@@ -1,21 +1,25 @@
 /* Generated from schemas/piagent-webui/source-revert-v1.schema.json. Do not edit. */
 
 export type PiagentWebUIConfirmedExactSourceRevertPreviewV1 = {
+  [k: string]: any;
+} & {
   identity?: {
-    taskId?: string;
-    taskRunId?: string;
+    taskId?: string | null;
+    taskRunId?: string | null;
     agentOperationId?: null;
     toolCallId?: null;
     [k: string]: any;
   };
   [k: string]: any;
 } & {
-  [k: string]: any;
-} & {
   schemaVersion: 1;
   version: "piagent-webui-source-revert-v1";
   generatedAt: string;
   identity: Identity;
+  commandBinding?: {
+    runtimeRevision: string;
+    controlRevision: string;
+  };
   action: "source.revert";
   state: "ready" | "unavailable";
   target: RevertTarget | null;
@@ -51,7 +55,7 @@ export interface RevertTarget {
   path: string;
   oldPath: null;
   effect: "restore-worktree-from-index";
-  taskRevision: string;
+  taskRevision: string | null;
   workspaceRevision: string;
   indexRevision: string;
   viewRevision: string;

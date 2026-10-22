@@ -1,3 +1,4 @@
+import { SessionMutationObservations } from "./session-mutation-observations.mjs";
 import { ToolFreshness } from './tool-freshness.mjs';
 import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs';
 import fs from 'node:fs';
@@ -13,10 +14,11 @@ import { languageEnvironment } from './language-environment.mjs';
 import { PI_HOST_VERSION, hostPackage } from './pi-host.mjs';
 export { PI_HOST_VERSION, hostPackage };
 import { containerEngine, dockerCli, engineEnvironment } from './container-engine.mjs';
-import { DEFAULT_DOMAINS, PackageProxy, mavenSettings, memberDomains, proxyEnvironment } from './package-proxy.mjs';
+import { proxyEnvironment } from './package-proxy.mjs';
+import { startBoundaryPackageProxy } from './boundary-package-proxy.mjs';
+import { SourceRevertRequests } from './source-revert-requests.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
 import { agentWatchDataDirectory } from './store.mjs';
-
 const TOOL_NAMES = Object.freeze(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
 const MAX_WIRE_BYTES = 12 * 1024 * 1024;
 const workerPath = fileURLToPath(new URL('./tool-worker.mjs', import.meta.url));
@@ -27,7 +29,6 @@ function literal(value) {
 }
 function inside(file, root) { return file === root || file.startsWith(root + path.sep); }
 const pattern = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 // Folders a member points the agent to for reference (an @ mention, "read
 // ~/Documents/old-shop"): their own files on this Mac, external drives and
 // the shared folder, read-only. Hidden entries of the home folder (shell
@@ -43,7 +44,6 @@ function referenceRules(home, roots) {
   return `(allow file-read* (subpath ${literal(home)}) (subpath "/Volumes") (subpath "/Users/Shared") (subpath "/private/tmp"))
 (deny file-read-data file-read-xattr (require-all (require-any (regex #"^${pattern(home)}/\\.") (subpath ${literal(path.join(home, 'Library'))}))${opened}))`;
 }
-
 export function managedSeatbelt({ cwd, sdkRoot, runtimeRoot, temporary, node, denied = [], readOnly = false, repository = [], gitDirs = [], toolchains = [], developer = [], browsers = [], network = false, references = null, skills = [], caches = [], loopback = true, license = null, docker = null, proxyPort = null }) {
   // Default-deny protects Keychain/SSH agent/Watch IPC and process inspection.
   // System libraries/toolchains are read-only. Writes stay in this project and
@@ -112,7 +112,6 @@ ${denied.map(root => `(deny file-read* file-write* (require-all (subpath ${liter
   (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))
 `;
 }
-
 // Toolchains from the pinned node/git and Homebrew, compilers and SDK; the
 // git identity this project gets on the user's machine (name and email only)
 // so commits work. Without network, package managers fail fast instead of
@@ -196,6 +195,11 @@ function provisionSearchTools(home, userHome) {
 export class ManagedToolBoundary {
   #tail = Promise.resolve();
   #freshness = new ToolFreshness();
+  #sourceRequests = new SourceRevertRequests();
+  get sourceControlRevision() { return this.#sourceRequests.revision; }
+  source(request, binding) { return this.invoke("workspace", this.#sourceRequests.request(request, binding)); }
+  #mutationObservations = new SessionMutationObservations();
+  mutationObservation(file) { return this.#mutationObservations.get(file); }
   #children = new Set();
   #closed = false;
   // readOnly: the project cannot be written. commands: bash is offered all
@@ -323,20 +327,7 @@ export class ManagedToolBoundary {
   // The proxy listens on loopback (macOS: Seatbelt opens its one port even
   // while a local proxy closes the rest of loopback) or on a Unix socket that
   // the worker forwards from inside the command's network namespace (Linux).
-  async startProxy() {
-    this.proxy = new PackageProxy({ domains: [...DEFAULT_DOMAINS, ...memberDomains(this.userHome)] });
-    try {
-      let url;
-      if (this.linux) {
-        this.proxySocket = path.join(os.tmpdir(), `piagent-proxy-${randomUUID().slice(0, 8)}.sock`);
-        await this.proxy.listen(this.proxySocket);
-        url = 'http://127.0.0.1:3128';
-      } else url = `http://127.0.0.1:${(await this.proxy.listen()).port}`;
-      const settings = path.join(this.home, '.m2/settings.xml');
-      fs.mkdirSync(path.dirname(settings), { recursive: true, mode: 0o700 }); fs.writeFileSync(settings, mavenSettings(url), { mode: 0o600 });
-      this.proxyUrl = url; this.#applyProxy();
-    } catch { await this.proxy.close().catch(() => {}); this.proxy = null; }
-  }
+  startProxy() { return startBoundaryPackageProxy(this, () => this.#applyProxy()); }
   invoke(name, args, signal, onUpdate, model, options = {}) {
     // Direct member operations share the agent's read/mutation queue.
     const run = this.#tail.then(() => this.#queuedInvoke(name, args, signal, onUpdate, model, options));
@@ -365,7 +356,11 @@ export class ManagedToolBoundary {
     if (name !== 'bash' && typeof args?.path === 'string' && /^@?~(\/|$)/.test(args.path)) args = { ...args, path: this.userHome + args.path.replace(/^@?~/, '') };
     if (!this.linux && !network && Date.now() - this.proxyCheck.at > 5000) this.proxyCheck = { at: Date.now(), listening: localProxyListening(this.proxyPorts) };
     const isolated = !this.linux && !network && await this.proxyCheck.listening;
-    const message = JSON.stringify({ name, args, expectedFileDigest: this.#freshness.expected(this.cwd, name, args), workspaceReadOnly: this.setup.readOnly, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
+    const observing = ['edit', 'write'].includes(name) && this.workspacePins;
+    if (observing) verifyWorkspaceWorker(this.workspacePins);
+    const mutationObservation = this.#mutationObservations.prepare(this.cwd, name, args, observing);
+    const sourceContext = this.#sourceRequests.consume(args, this.#mutationObservations);
+    const message = JSON.stringify({ name, args, sourceContext, mutationObservation, expectedFileDigest: this.#freshness.expected(this.cwd, name, args), workspaceReadOnly: this.setup.readOnly, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
       const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network, docker)]
@@ -376,7 +371,7 @@ export class ManagedToolBoundary {
       });
       this.#children.add(child);
       const decoder = new StringDecoder('utf8');
-      let pending = '', bytes = 0, result, freshness, failure, terminated = false, hardStop;
+      let pending = '', bytes = 0, result, freshness, observation, sourceObservation, failure, terminated = false, hardStop;
       const terminate = () => {
         if (terminated) return; terminated = true;
         child.stdin.write('{"cancel":true}\n');
@@ -411,7 +406,7 @@ export class ManagedToolBoundary {
             // A cancel or timeout asked for first stays the reason: the worker
             // then reports how its command ended ("Command aborted").
             else if (value.error) failure ??= new Error(String(value.error).slice(0, 1000));
-            else if (value.result) { result = value.result; freshness = value.freshness; }
+            else if (value.result) { result = value.result; freshness = value.freshness; observation = value.mutationObservation; sourceObservation = value.sourceObservation; }
             else throw new Error('managed-worker-invalid-response');
           } catch { failure = new Error('managed-worker-invalid-response'); terminate(); }
         }
@@ -425,7 +420,9 @@ export class ManagedToolBoundary {
         this.#children.delete(child); signal?.removeEventListener('abort', abort);
         if (failure) reject(failure);
         else if (code !== 0 || !result || pending) reject(new Error('managed-worker-failed'));
-        else { this.#freshness.observe(this.cwd, name, args, freshness); resolve(result); }
+        else { this.#freshness.observe(this.cwd, name, args, freshness);
+          this.#mutationObservations.acceptRevert(args, sourceContext, result, sourceObservation);
+          this.#mutationObservations.accept(this.cwd, name, args, mutationObservation, observation); resolve(result); }
       });
       child.stdin.write(message);
       if (signal?.aborted) abort();
@@ -470,6 +467,7 @@ export class ManagedToolBoundary {
     const stopping = [...this.#children].map(child => new Promise(resolve => { child.once('close', resolve); child.managedCancel(); }));
     await Promise.all(stopping); await this.#tail;
     await this.background?.dispose(); await this.stopStrays(); if (!this.linux) await stopMarked(`PIAGENT_PROCESS_SCOPE=${this.scope}:`);
+    this.#mutationObservations.clear();
     await this.proxyReady; await this.proxy?.close().catch(() => {});
     if (this.proxySocket) fs.rmSync(this.proxySocket, { force: true });
     fs.rmSync(this.temporary, { recursive: true, force: true });

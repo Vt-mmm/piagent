@@ -91,3 +91,31 @@ test('company boundary read-only authority overrides member write request', { sk
   assert.equal((await boundary.invoke('workspace', { kind: 'write', payload: { path: 'new.txt', content: 'forbidden', expectedDigest: 'absent' } })).code, 'read-only');
   assert.equal(fs.existsSync(path.join(cwd, 'new.txt')), false);
 });
+
+test('company exact mutation observations survive worker replacement and reset on member saves', { skip: !sdk || process.platform !== 'darwin' }, async t => {
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-company-observation-')));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, 'file.txt'), 'member baseline\n');
+  const boundary = new ManagedToolBoundary({ cwd, sdkRoot: sdk, searchTools: false });
+  t.after(() => boundary.dispose());
+  const first = await boundary.invoke('write', { path: 'file.txt', content: 'agent one\n' });
+  assert.equal(first.mutationObservation, undefined, 'private provenance is not added to the model tool result');
+  assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member baseline\n');
+  await boundary.invoke('edit', { path: 'file.txt', edits: [{ oldText: 'one', newText: 'two' }] });
+  assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member baseline\n');
+  const file = await boundary.invoke('workspace', { kind: 'file', path: 'file.txt' });
+  await boundary.invoke('workspace', { kind: 'write', payload: { path: 'file.txt', expectedDigest: file.digest, content: 'member again\n' } });
+  assert.equal(boundary.mutationObservation('file.txt'), null);
+  await boundary.invoke('read', { path: 'file.txt' });
+  await boundary.invoke('write', { path: 'file.txt', content: 'agent three\n' });
+  assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member again\n');
+  const copy = boundary.mutationObservation('file.txt'); copy.baseline.content = 'forged';
+  assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member again\n');
+  await boundary.invoke('bash', { command: 'true' });
+  assert.equal(boundary.mutationObservation('file.txt'), null);
+  await boundary.invoke('write', { path: 'new.txt', content: 'new agent file' });
+  assert.equal(boundary.mutationObservation('new.txt')?.baseline.digest, 'absent');
+  await boundary.invoke('edit', { path: 'new.txt', edits: [{ oldText: 'new', newText: 'updated' }] });
+  assert.equal(boundary.mutationObservation('new.txt')?.baseline.digest, 'absent');
+
+});

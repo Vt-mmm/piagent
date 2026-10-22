@@ -190,7 +190,7 @@ export function readSessionSourceMutation(sessionRef: string, action: "source.st
 
 export function readSessionSourceRevert(sessionRef: string, fileRef: string, hunkRef: string | null = null, signal?: AbortSignal): Promise<PiagentWebUIConfirmedExactSourceRevertPreviewV1> {
   const query = hunkRef ? `?hunkRef=${encodeURIComponent(hunkRef)}` : "";
-  return readJson(sessionInspectionPath(sessionRef, `/api/v1/source-reverts/${encodeURIComponent(fileRef)}${query}`), signal);
+  return readJson(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-reverts/${encodeURIComponent(fileRef)}${query}`, signal);
 }
 
 export function readSessionCommitSummary(sessionRef: string, signal?: AbortSignal): Promise<PiagentWebUIDeterministicStagedCommitSummaryV1> {
@@ -387,9 +387,9 @@ export async function sendSourceMutationCommand(command: Command, signal?: Abort
   return await response.json() as Receipt;
 }
 
-export async function sendSourceRevertCommand(command: Command, signal?: AbortSignal): Promise<Receipt> {
+export async function sendSourceRevertCommand(command: Command, signal?: AbortSignal, sessionRef?: string | null): Promise<Receipt> {
   const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
-  const response = await csrfFetch("/api/v1/source-mutations", { method: "POST", credentials: "same-origin", signal,
+  const response = await csrfFetch(sessionRef ? `/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-reverts` : "/api/v1/source-mutations", { method: "POST", credentials: "same-origin", signal,
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;

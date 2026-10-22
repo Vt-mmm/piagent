@@ -6,6 +6,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Added
 
+- Session Hub reviews exact observed agent hunks inline, with Keep, preview-confirmed Revert, hunk navigation/counts and current/removed-line comments to the composer. Clean tabs refresh after agent changes; dirty drafts retain conflict handling. Company source review and revert run in the existing sandbox. New untracked agent files support review; deletion through hunk revert remains unavailable.
+
 - Session Hub edits and atomically saves files with Cmd/Ctrl+S, dirty tabs, new files and digest conflicts (Reload/Compare/confirmed Overwrite). Live permission and protected-path checks apply in personal and company mode. Durable receipts prevent duplicate saves; member edits notify the next agent turn and invalidate stale agent edits.
 - Session Hub opens project files in read-only editor tabs, with Files/Search navigation, Cmd/Ctrl+P, line links from tool calls, source changes and @mentions, and a drawer on smaller screens. Protected files stay locked. Company file reads and searches run inside the session's existing sandbox through its Gateway.
 

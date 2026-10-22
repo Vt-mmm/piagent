@@ -1,3 +1,6 @@
+import type { SourceMutationAction, SourceMutationTarget, SourceMutationProjection, SourceMutationAuthority } from "./source-action-contract.ts";
+export type { SourceMutationAction, SourceMutationTarget, SourceMutationProjection, SourceMutationAuthority } from "./source-action-contract.ts";
+
 import { createHash } from "node:crypto";
 
 import { runReadOnlyGit } from "./git-status-adapter.ts";
@@ -7,47 +10,6 @@ import { collectSelectedSourceFileState, type SourceChangeDocument, type SourceP
 import type { DiffDocument } from "./diff-projection.ts";
 import { hashWorkspaceFile, inspectWorkspaceEntry } from "./workspace-file-reader.ts";
 
-export type SourceMutationAction = "source.stage" | "source.unstage";
-export type SourceMutationTarget = {
-  view: "working-tree" | "staged";
-  repoRef: string;
-  fileRef: string;
-  diffRef: string;
-  status: "A" | "M" | "D" | "R" | "U";
-  path: string;
-  oldPath: string | null;
-  effect: "copy-worktree-to-index" | "restore-index-from-head";
-  taskRevision: string;
-  workspaceRevision: string;
-  indexRevision: string;
-  viewRevision: string;
-  fileRevision: string;
-  workspacePreimage: string;
-  indexPreimage: string;
-  patchPreimage: string;
-  contentDigest: string;
-  hunkRefs: string[];
-};
-export type SourceMutationProjection = {
-  schemaVersion: 1;
-  version: "piagent-webui-source-mutation-v1";
-  generatedAt: string;
-  identity: WebUiIdentity;
-  action: SourceMutationAction;
-  state: "ready" | "unavailable";
-  target: SourceMutationTarget | null;
-  reasonCode: string | null;
-  health: { state: "ok" | "unavailable" | "error"; reasonCode: string | null; message: string | null };
-};
-export type SourceMutationAuthority = {
-  repoRoot: string;
-  repoPaths: string[];
-  headOid: string | null;
-  indexStatus: string;
-  worktreeStatus: string;
-  target: SourceMutationTarget;
-  patchAuthority: ExactGitPatchAuthority | null;
-};
 const REF = /^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$/, REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/,
   DIGEST = /^sha256:[a-f0-9]{64}$/, WORKSPACE = /^wt-content-v2:[a-f0-9]{64}$/,
   SAFE_PATH = /^(?!\/)(?![A-Za-z]:)(?!.*(?:^|\/)\.\.(?:\/|$))[^\u0000-\u001F\u007F\\]{1,1024}$/;

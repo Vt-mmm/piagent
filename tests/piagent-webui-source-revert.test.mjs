@@ -1,3 +1,9 @@
+import { CoreInspectionProvider } from "../packages/piagent-webui/server/core-inspection-provider.ts";
+import { createSourceMutationGuardBindings } from "../packages/piagent-core/runtime/policy/source-mutation-guard-binding.ts";
+import { piSourceMutationGuard } from "../packages/piagent-core/runtime/policy/source-mutation-guard.ts";
+import { SourceRevertStore } from "../packages/piagent-webui/gateway/source-revert-store.ts";
+import { SourceRevertController as SessionSourceRevertController } from "../packages/piagent-webui/server/source-revert-controller.ts";
+import { SessionMutationObserver, sessionMutationObserver } from "../packages/piagent-core/runtime/inspection/session-mutation-observer.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -250,4 +256,115 @@ test("source revert rejects revision and liveness transitions while resolving th
     assert.equal(receipt.error?.code, scenario.errorCode); assert.equal(mutations, 0);
     assert.equal(readSourceMutationEvidence(cwd, identity.taskRunId).records.length, 0);
   });
+});
+
+test("freeform session preview reuses exact revert while preserving a pre-existing member hunk", async t => {
+  const { cwd, lines } = repository(t), observer = sessionMutationObserver, policy = { policy: {}, profile: {} };
+  const sessionIdentity = { ...identity, taskId: null, taskRunId: null };
+  const member = [...lines]; member[20] = "member before agent";
+  const baseline = `${member.join("\n")}\n`; fs.writeFileSync(path.join(cwd, "a.txt"), baseline);
+  const changed = [...member]; changed[1] = "agent changed line 2";
+  const content = `${changed.join("\n")}\n`;
+  observer.begin(cwd, "raw-session", "write-one", "write", { path: "a.txt", content }, ["a.txt"], policy);
+  fs.writeFileSync(path.join(cwd, "a.txt"), content);
+  observer.finish(cwd, "raw-session", "write-one", "write", true, policy);
+  const sessionObservation = observer.current(cwd, "raw-session", "a.txt", policy); assert.ok(sessionObservation);
+  const views = await collectSourceChangeViews({ cwd, identity: sessionIdentity, taskRevision: null });
+  const file = views.workingTree.files.find(file => file.path === "a.txt");
+  const diff = await collectFileDiff({ cwd, identity: sessionIdentity, sourceView: views.workingTree, fileRef: file.fileRef,
+    precondition: { expectedViewRevision: views.workingTree.viewRevision, expectedFileRevision: file.fileRevision,
+      expectedBaseDigest: file.baseDigest, expectedCurrentDigest: file.currentDigest }, taskRevision: null });
+  assert.equal(diff.hunks.length, 2);
+  const options = { cwd, identity: sessionIdentity, taskRevision: null, sessionObservation, sourceView: views.workingTree,
+    taskView: null, diff, workspaceRevision: views.workingTree.viewRevision, indexRevision: views.staged.viewRevision,
+    confirmationKey: Buffer.alloc(32, 3), guardAvailable: true };
+  const whole = await collectSourceRevertPreview(options);
+  assert.equal(whole.projection.reasonCode, "revert-provenance-unavailable");
+  const selected = await collectSourceRevertPreview({ ...options, selectedHunkRefs: [diff.hunks[0].hunkRef] });
+  assert.equal(selected.projection.state, "ready", selected.projection.reasonCode);
+  assert.equal(selected.projection.target.taskRevision, null);
+  const validation = validateFixture(registry, "source-revert-v1", selected.projection);
+  assert.equal(validation.valid, true, JSON.stringify(validation.errors));
+  const other = await collectSourceRevertPreview({ ...options, selectedHunkRefs: [diff.hunks[1].hunkRef] });
+  assert.equal(other.projection.state, "unavailable");
+  const missing = await collectSourceRevertPreview({ ...options, sessionObservation: undefined });
+  assert.equal(missing.projection.state, "unavailable");
+  const indexBefore = execFileSync("git", ["-C", cwd, "show", ":a.txt"]);
+  const journalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "session-revert-journal-")), journalKey = Buffer.alloc(32, 17);
+  t.after(() => fs.rmSync(journalRoot, { recursive: true, force: true }));
+  const evidenceStore = new SourceRevertStore(journalRoot, journalKey).forSession(cwd, sessionIdentity.projectRef, sessionIdentity.sessionRef);
+  let canWrite = true, idle = true;
+  const ctx = { cwd, sessionManager: { getSessionId: () => "raw-session" }, isIdle: () => idle };
+  const bindings = createSourceMutationGuardBindings({}, () => ({}), () => canWrite);
+  bindings.bind(ctx);
+  const sessionRevisions = { ...revisions, taskRevision: null, controlRevision: piSourceMutationGuard.sessionControlRevision(cwd, "raw-session") };
+  const provider = new CoreInspectionProvider({ cwd, sessionId: "raw-session", runtimeInstanceId: "runtime.session-inspection",
+    eventStore: { retention: () => ({ eventRetentionCount: 0, eventRetentionSeconds: 0 }), currentCursor: () => null,
+      resyncRequired: () => false, replay: () => ({ state: "current", events: [], nextCursor: "start", latestCursor: "start", reasonCode: null }) },
+    sourceMutationGuardAvailable: () => piSourceMutationGuard.available(cwd, "raw-session"),
+    sourceSessionControlRevision: () => piSourceMutationGuard.sessionControlRevision(cwd, "raw-session"),
+    sourceSessionObservation: file => piSourceMutationGuard.sessionObservation(cwd, "raw-session", file) });
+  const inspected = await provider.snapshot();
+  assert.equal(inspected.revision.controlRevision, sessionRevisions.controlRevision);
+  const source = await provider.sourceChanges("working-tree"), sourceFile = source.files.find(file => file.path === "a.txt");
+  const inspectedDiff = await provider.diff("working-tree", sourceFile.fileRef);
+  const inspectedPreview = await provider.sourceRevert(sourceFile.fileRef, inspectedDiff.hunks[0].hunkRef);
+  assert.equal(inspectedPreview.state, "ready", inspectedPreview.reasonCode);
+  assert.equal(inspectedPreview.identity.taskId, null);
+  const guardedRequest = { cwd, rawSessionId: "raw-session", identity: sessionIdentity, action: "source.revert", expectedTaskRevision: null,
+    expectedControlRevision: sessionRevisions.controlRevision, expectedIndexPreimage: selected.authority.target.indexPreimage,
+    expectedWorkspacePreimage: selected.authority.target.workspacePreimage, previewRef: selected.authority.target.previewRef,
+    confirmedPreviewDigest: selected.authority.target.confirmedPreviewDigest, authority: selected.authority };
+  canWrite = false;
+  assert.equal((await piSourceMutationGuard.executeRevert(guardedRequest)).state, "rejected");
+  canWrite = true; idle = false;
+  assert.equal((await piSourceMutationGuard.executeRevert(guardedRequest)).state, "rejected");
+  idle = true;
+  let dispatched = 0;
+  const controllerOptions = { allowSessionReverts: true, projectRoot: cwd,
+    bridge: { snapshot: () => ({ state: "ready", identity: sessionIdentity, revisions: sessionRevisions, taskState: "none", liveness: "idle" }) },
+    resolve: async () => selected, revisions: async () => sessionRevisions,
+    evidence: evidenceStore,
+    mutate: async request => {
+      assert.equal(evidenceStore.read(cwd, null, sessionIdentity.sessionRef).records.at(-1).phase, "requested", "persist before dispatch"); dispatched++;
+      assert.equal(request.identity.taskId, null); assert.equal(request.expectedTaskRevision, null);
+      return piSourceMutationGuard.executeRevert({ cwd, rawSessionId: "raw-session", ...request });
+    } };
+  const controller = new SessionSourceRevertController(controllerOptions);
+  const command = await createSourceRevertCommand({ identity: sessionIdentity, revision: sessionRevisions }, selected.projection);
+  assert.equal(validateFixture(registry, "control-command-v1", command).valid, true);
+  const malformed = structuredClone(command); malformed.identity.taskRunId = "task.fake";
+  assert.equal(validateFixture(registry, "control-command-v1", malformed).valid, false);
+  const effect = await controller.execute(command);
+  assert.equal(effect.phase, "settled", JSON.stringify(effect.error));
+  assert.equal(effect.identity.taskId, null);
+  assert.equal(validateFixture(registry, "control-command-v1", effect).valid, true);
+  const recovered = new SessionSourceRevertController({ ...controllerOptions,
+    evidence: new SourceRevertStore(journalRoot, journalKey).forSession(cwd, sessionIdentity.projectRef, sessionIdentity.sessionRef),
+    mutate: async () => { throw Error("must not dispatch after restart"); } });
+  const replay = await recovered.execute(command);
+  assert.equal(replay.deduplicated, true); assert.equal(replay.phase, "settled"); assert.equal(dispatched, 1);
+  const journal = fs.readFileSync(path.join(journalRoot, "source-reverts", `${sessionIdentity.sessionRef}.json`), "utf8");
+  assert.equal(journal.includes("agent changed line 2"), false); assert.equal(journal.includes(command.idempotencyKey), false);
+  await t.test("persisted pending revert remains uncertain after settlement persistence fails", async () => {
+    const second = { ...command, commandId: "revert.interrupted", idempotencyKey: "interrupted-revert-key-01234567890123456789" };
+    let effects = 0;
+    const interrupted = new SessionSourceRevertController({ ...controllerOptions,
+      evidence: { ...evidenceStore, append: record => { if (record.phase !== "requested") throw Error("disk unavailable"); return evidenceStore.append(record); } },
+      mutate: async request => { effects++; return { state: "settled", reasonCode: null, executor: "pi-guard", directExecution: false,
+        beforeIndexPreimage: request.expectedIndexPreimage, afterIndexPreimage: request.expectedIndexPreimage,
+        beforeWorkspacePreimage: request.expectedWorkspacePreimage, afterWorkspacePreimage: request.expectedWorkspacePreimage }; } });
+    assert.equal((await interrupted.execute(second)).phase, "uncertain");
+    const retry = new SessionSourceRevertController({ ...controllerOptions,
+      evidence: new SourceRevertStore(journalRoot, journalKey).forSession(cwd, sessionIdentity.projectRef, sessionIdentity.sessionRef),
+      mutate: async () => { effects++; throw Error("must not retry uncertain effect"); } });
+    const receipt = await retry.execute(second);
+    assert.equal(receipt.phase, "uncertain"); assert.equal(receipt.deduplicated, true); assert.equal(effects, 1);
+  });
+  const wrongKey = new SourceRevertStore(journalRoot, Buffer.alloc(32, 19)).forSession(cwd, sessionIdentity.projectRef, sessionIdentity.sessionRef);
+  assert.equal(wrongKey.read(cwd, null, sessionIdentity.sessionRef).corruptions.length, 1);
+  assert.equal(evidenceStore.read(cwd, null, "another.session").corruptions.length, 1);
+  assert.equal(fs.readFileSync(path.join(cwd, "a.txt"), "utf8"), baseline);
+  assert.deepEqual(execFileSync("git", ["-C", cwd, "show", ":a.txt"]), indexBefore);
+  bindings.unbind(ctx); observer.clear(cwd, "raw-session");
 });
