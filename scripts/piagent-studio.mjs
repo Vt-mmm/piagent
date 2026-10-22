@@ -15,16 +15,17 @@ const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest
 process.removeAllListeners('warning');
 process.on('warning', warning => { if (warning.name !== 'ExperimentalWarning') process.stderr.write(`${warning.name}: ${warning.message}\n`); });
 const args = process.argv.slice(2), flags = new Map();
-if (args.includes('--help')) { console.log('piagent studio [--web [--no-open] | --serve | --check | --doctor | --prompt <text> [--json]] [--config <Agent Watch configuration>] [--project <folder>]\nDefaults: the configuration imported into ~/.pi/agent and the current project. Personal sessions remain under pi / piagent dashboard.\n--json with --prompt writes the event stream of `pi --mode json` (JSONL on stdout; failures on stderr, exit 1).'); process.exit(0); }
+if (args.includes('--help')) { console.log('piagent studio [--web [--no-open] | --serve | --check | --doctor | --prompt <text> [--json] | --rpc] [--config <Agent Watch configuration>] [--project <folder>]\nDefaults: the configuration imported into ~/.pi/agent and the current project. Personal sessions remain under pi / piagent dashboard.\n--json with --prompt writes the event stream of `pi --mode json` (JSONL on stdout; failures on stderr, exit 1).\n--rpc speaks the protocol of `pi --mode rpc` on stdin/stdout for one company conversation (several messages, questions as extension UI requests).'); process.exit(0); }
 for (let i = 0; i < args.length; i++) {
-  if (['--check', '--doctor', '--web', '--serve', '--no-open', '--json'].includes(args[i])) { flags.set(args[i], true); continue; }
+  if (['--check', '--doctor', '--web', '--serve', '--no-open', '--json', '--rpc'].includes(args[i])) { flags.set(args[i], true); continue; }
   if (!['--config', '--project', '--prompt'].includes(args[i]) || flags.has(args[i]) || !args[i + 1]) throw Error('managed-launch-arguments');
   flags.set(args[i], args[++i]);
 }
 if (flags.has('--json') && !flags.has('--prompt')) throw Error('managed-launch-arguments');
+if (flags.has('--rpc') && ['--check', '--doctor', '--web', '--serve', '--prompt', '--json'].some((f) => flags.has(f))) throw Error('managed-launch-arguments');
 const home = os.homedir();
 // Joining Agent Watch takes a few seconds; keys typed before the Terminal draws are lost, so say so.
-if (!['--check', '--prompt', '--serve', '--doctor', '--web'].some((f) => flags.has(f)) && process.stderr.isTTY) process.stderr.write('Piagent công ty: đang kết nối Agent Watch, chờ ô nhập hiện ra rồi gõ…\n');
+if (!['--check', '--prompt', '--serve', '--doctor', '--web', '--rpc'].some((f) => flags.has(f)) && process.stderr.isTTY) process.stderr.write('Piagent công ty: đang kết nối Agent Watch, chờ ô nhập hiện ra rồi gõ…\n');
 // Do this before importing the SDK: it must not discover personal keys, Node
 // preload hooks, proxy overrides or provider endpoints from an ambient shell.
 const clean = { PATH: '/usr/bin:/bin', HOME: home, LANG: 'en_US.UTF-8', TERM: process.env.TERM || 'xterm-256color', ...interopEnvironment() };
@@ -182,6 +183,15 @@ try {
       const { failureLines } = await import('./company-terminal.mjs');
       process.stderr.write(`${failureLines(last.errorMessage) ?? String(last.errorMessage??'Agent Watch: the request failed [managed-request-failed]')}\n`);process.exitCode = 1;
     }
+  } else if (flags.has('--rpc')) {
+    // One company conversation driven by a client (a script, a test that
+    // plays the member) over Pi's RPC protocol. Pi exits the process when the
+    // client closes stdin, so the conversation, its broker and its lease are
+    // released inside Pi's own dispose instead of the finally below.
+    process.env.PI_OFFLINE = '1'; process.env.PI_SKIP_VERSION_CHECK = '1';
+    const dispose = host.dispose.bind(host);
+    host.dispose = async () => { try { await dispose(); } finally { await current?.dispose(); current = null; hold?.release(); } };
+    await api.runRpcMode(host);
   } else {
     // The company terminal runs the pinned Pi release: no "Run pi update" notice
     // (updating Pi breaks the Agent Watch import), no package-update, catalog or

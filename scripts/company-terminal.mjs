@@ -388,7 +388,8 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       const session = managed()?.session;
       if (!session?.subscribe || heard === session) return;
       heard = session;
-      const showBranch = async () => { const branch = await branchOf(managed()?.cwd ?? ctx.cwd); ctx.ui?.setStatus?.('agent-watch-branch', branch ? `⎇ ${branch}` : undefined); };
+      // The conversation can close while git answers (a client ends right after a turn): its ctx is then stale.
+      const showBranch = async () => { try { const branch = await branchOf(managed()?.cwd ?? ctx.cwd); ctx.ui?.setStatus?.('agent-watch-branch', branch ? `⎇ ${branch}` : undefined); } catch { /* closed meanwhile */ } };
       ctx.ui?.setWorkingMessage?.(WORKING);
       void showBranch();
       session.subscribe((event) => {
