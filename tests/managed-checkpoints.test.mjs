@@ -91,3 +91,39 @@ test('/undo sent as a message is answered with a note and no model request', asy
   await assert.rejects(memberTurn(self, { manager: { getBranch: () => [], getEntries: () => [] }, prompt: async () => {}, runRound: async () => { rounds.push('round'); throw Error('ran'); } }, '/undo now', async () => {}), /ran/);
   assert.deepEqual(rounds, ['round']);
 });
+
+test('company confirmed restore uses exact user turns and sandbox worker policy, including policy changes after a turn', { skip: !supported, timeout: 180000 }, async () => {
+  const root = repository(), boundary = new ManagedToolBoundary({ cwd: root, sdkRoot, protectedRoots: [], proxyPorts: [] });
+  const entries = [], managed = { boundary, activePrompt: false, session: { sessionManager: { getBranch: () => entries } } };
+  const checkpoints = new TurnCheckpoints(managed), requests = [], invoke = boundary.invoke.bind(boundary);
+  boundary.invoke = (...args) => { requests.push([args[0], args[1]?.kind, args[1]?.operation]); return invoke(...args); };
+  try {
+    fs.writeFileSync(path.join(root, '.env'), 'SYNTHETIC_SECRET=hidden\n');
+    const turn = async (id, text) => {
+      entries.push({ id, type: 'message', message: { role: 'user' } });
+      const run = {}; await checkpoints.take(run);
+      assert.equal(run.checkpoint.turnRef, id);
+      fs.writeFileSync(path.join(root, 'a.txt'), text); await checkpoints.finish(run);
+      return run;
+    };
+    const first = await turn('member-one', 'one\n'); await turn('member-two', 'two\n');
+    assert.equal(git(root, 'ls-tree', '-r', '--name-only', first.checkpoint.before).includes('.env'), false);
+    const target = (await checkpoints.list()).points[0].id, preview = await checkpoints.preview(target);
+    assert.equal(preview.result, 'ready');
+    assert.equal((await checkpoints.restoreTo(target, preview)).completed.length, 2);
+    assert.equal(read(root, 'a.txt'), 'a0\n'); assert.equal(read(root, '.env'), 'SYNTHETIC_SECRET=hidden\n');
+    await turn('member-three', 'three\n');
+    fs.mkdirSync(path.join(root, '.pi'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.pi/piagent-profile.json'), JSON.stringify({ readOnlyPaths: ['a.txt'] }));
+    const selected = (await checkpoints.list()).points[0].id, denied = await checkpoints.preview(selected);
+    const result = await checkpoints.restoreTo(selected, denied);
+    assert.equal(result.result, 'uncertain'); assert.match(result.reason, /checkpoint-read-only/);
+    assert.equal(read(root, 'a.txt'), 'three\n');
+    assert.ok(requests.every(([tool, kind]) => tool === 'workspace' && kind === 'checkpoint'), 'all Git operations enter the pinned sandbox worker');
+    let allowed = true;
+    const queued = boundary.invoke('workspace', { kind: 'checkpoint', operation: 'available' }, undefined, undefined, undefined,
+      { guard: () => { if (!allowed) throw Error('fixture-lease-replaced'); } });
+    allowed = false;
+    await assert.rejects(queued, /fixture-lease-replaced/);
+  } finally { await boundary.dispose(); fs.rmSync(root, { recursive: true, force: true }); }
+});

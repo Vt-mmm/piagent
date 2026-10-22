@@ -5,6 +5,7 @@
   <p>Review thay đổi đã quan sát của agent ngay trong editor: Giữ, Hoàn tác có preview và xác nhận, số hunk và comment theo dòng đưa vào chat. Tệp chưa có bản sửa tự tải lại sau khi agent sửa; bản sửa chưa lưu được giữ. Tệp mới do agent tạo hỗ trợ review; chưa hỗ trợ xóa tệp qua hoàn tác hunk.</p>
   <p>Cuộc trò chuyện personal có tab terminal dưới editor, đổi kích thước, Ctrl+C và phát lại khi reload. Gửi @terminal hoặc @terminal:2 để đính output giới hạn dung lượng đã che secret. Thiếu PTY native được báo mà không tắt dashboard; shell company không bao giờ chuyển sang chạy trên host.</p>
   <p>Cuộc trò chuyện company có terminal trong sandbox Linux/WSL qua Gateway công ty: chặn mạng, che credential và dừng tiến trình con khi release cuộc trò chuyện. Relay nối lại khôi phục output mà không gửi lại lệnh. macOS báo không khả dụng, không mở shell trên host. Luồng đầy đủ đã kiểm chứng trên Linux arm64; Linux x64 native và WSL còn cần kiểm chứng riêng.</p>
+  <p>Checkpoint trong Timeline cho xem trước file trước khi khôi phục một hoặc nhiều lượt. Xung đột với sửa đổi của member sẽ dừng khôi phục; commit và vùng stage được giữ nguyên. Cuộc trò chuyện personal cũng có /undo. Khi mất phản hồi trình duyệt, yêu cầu cũ còn qua reload để bạn chủ động kiểm tra kết quả.</p>
 </section>
 
 <section class="section">

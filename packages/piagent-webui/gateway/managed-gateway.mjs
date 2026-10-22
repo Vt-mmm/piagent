@@ -1,6 +1,7 @@
 import { managedThinkingLevels, nearestLevel } from '../../piagent-core/managed/capabilities.mjs';
 import { ManagedBrokerClient } from '../../piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../../piagent-core/managed/session.mjs';
+import { checkpointsOf } from '../../piagent-core/managed/checkpoints.mjs';
 import { fastAllowed } from '../../piagent-core/managed/fast-mode.mjs';
 import { PI_HOST_VERSION } from '../../piagent-core/managed/pi-host.mjs';
 import fs from 'node:fs';
@@ -47,6 +48,15 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
       } catch(error) { if(runtime) await runtime.dispose(); else await broker.dispose(); throw error; }
     };
     const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:PI_HOST_VERSION,managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null,
+      managedCheckpoint: id => {
+        const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('checkpoint-runtime-unavailable');
+        const boundary = runtime.boundary, checkpoints = checkpointsOf(runtime);
+        const current = () => workspaceRuntimes.get(id) === runtime && runtime.boundary === boundary;
+        const check = () => { if (!current()) throw Error('checkpoint-runtime-replaced'); };
+        return { current, writable: async () => { check(); const state = await boundary.invoke('workspace', { kind: 'write-state' }); check(); return state.writable === true; },
+          port: { list: () => { check(); return checkpoints.list(); }, preview: target => { check(); return checkpoints.preview(target); },
+            restoreTo: (target, expected, guard) => checkpoints.restoreTo(target, expected, () => { check(); guard?.(); }) } };
+      },
       managedTerminal: id => {
         const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('terminal-runtime-unavailable');
         const boundary = runtime.boundary;

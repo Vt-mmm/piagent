@@ -1,4 +1,5 @@
 import { WorkspaceMentions } from "./workspace-navigation.tsx";
+import { TurnCheckpointButton } from "./CheckpointTimeline.tsx";
 import { lazy, Suspense, type ReactNode } from "react";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import ErrorOutlineRounded from "@mui/icons-material/ErrorOutlineRounded";
@@ -140,6 +141,7 @@ export function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineT
       {turn.end && <TurnEndNote end={turn.end} locale={locale} onContinue={turn.failure ? undefined : onContinue} />}
       {turn.requests > 0 && <TurnFooter turn={turn} locale={locale} />}
     </AgentBlock>}
+    <TurnCheckpointButton turnRef={turn.user.messageRef} />
   </Stack>;
 }
 

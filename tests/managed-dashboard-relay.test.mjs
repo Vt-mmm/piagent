@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {test} from 'node:test';
@@ -15,6 +15,7 @@ import {gatewayProfileState} from '../packages/piagent-webui/gateway/profile-sta
 import {loadPinnedPiHost} from '../packages/piagent-webui/gateway/pi-host.ts';
 import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
+import { qualifyCompanyCheckpoints } from './helpers/company-checkpoint-browser.mjs';
 import { qualifyCompanyTerminal } from './helpers/company-terminal-browser.mjs';
 
 // The personal dashboard shows a company session in its own list and page:
@@ -31,16 +32,29 @@ test('a company session is created, answered and listed inside the personal dash
  const temp=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-dashboard-relay-')));
  const project=path.join(temp,'shop-project'),companyAgent=path.join(temp,'company-agent'),personalAgent=path.join(temp,'personal-agent'),probe=path.join(companyAgent,'probe');
  for(const dir of [project,probe,personalAgent])fs.mkdirSync(dir,{recursive:true});
+ execFileSync('git',['init','-q',project]);
+ fs.writeFileSync(path.join(project,'checkpoint.txt'),'before\n');
  fs.writeFileSync(path.join(project,'.env'),'COMPANY_TERMINAL_FIXTURE_SECRET=hidden\n');
  const requests=[];let child,personal,browser;
  const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   res.writeHead(200,{'Content-Type':'text/event-stream'});const emit=e=>res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
   const response={id:'resp_fixture',object:'response',status:'in_progress',model:body.model,output:[]};emit({type:'response.created',response});
-  const item={id:'msg_fixture',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'COMPANY_OK',annotations:[]}]};
-  emit({type:'response.output_item.added',output_index:0,item:{...item,content:[],status:'in_progress'}});
-  emit({type:'response.content_part.added',item_id:item.id,output_index:0,content_index:0,part:{type:'output_text',text:'',annotations:[]}});
-  emit({type:'response.output_text.delta',item_id:item.id,output_index:0,content_index:0,delta:'COMPANY_OK'});
+  let item;
+  if(requests.length===2 || requests.length===4) {
+   const turn=requests.length===2?1:2;
+   const args=JSON.stringify({path:turn===1?'checkpoint.txt':'checkpoint-new.txt',content:`agent turn ${turn}\n`});
+   item={id:`fc_checkpoint_${turn}`,type:'function_call',call_id:`call_checkpoint_${turn}`,name:'write',arguments:args,status:'completed'};
+   emit({type:'response.output_item.added',output_index:0,item:{...item,arguments:'',status:'in_progress'}});
+   emit({type:'response.function_call_arguments.delta',item_id:item.id,output_index:0,delta:args});
+   emit({type:'response.function_call_arguments.done',item_id:item.id,output_index:0,arguments:args});
+  } else {
+   const text=requests.length===1?'COMPANY_OK':`COMPANY_CHECKPOINT_${requests.length===3?1:2}_OK`;
+   item={id:'msg_fixture',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text,annotations:[]}]};
+   emit({type:'response.output_item.added',output_index:0,item:{...item,content:[],status:'in_progress'}});
+   emit({type:'response.content_part.added',item_id:item.id,output_index:0,content_index:0,part:{type:'output_text',text:'',annotations:[]}});
+   emit({type:'response.output_text.delta',item_id:item.id,output_index:0,content_index:0,delta:text});
+  }
   emit({type:'response.output_item.done',output_index:0,item});
   emit({type:'response.completed',response:{...response,status:'completed',output:[item],usage:{input_tokens:12,output_tokens:3,total_tokens:15}}});res.end();
  });
@@ -91,6 +105,8 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   await expect(page.getByRole('navigation').getByText(/^Công ty/).first()).toBeVisible();
   await expect(page.getByRole('navigation').getByText('Personal question').first()).toBeVisible();
   assert.equal(requests.length,1,'one company turn reached Studio');
+  await qualifyCompanyCheckpoints(page,project,requests,grant.token);
+  assert.equal(requests.length,5,'two mutating company turns each use one tool request and one answer');
   await page.getByRole('button',{name:'Terminal',exact:true}).click();
   if(process.platform==='linux') await qualifyCompanyTerminal(page,project);
   else {

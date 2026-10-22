@@ -62,6 +62,7 @@ export type TranscriptProjectionInput = {
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function opaque(prefix: string, value: unknown): string { return `${prefix}.${hash(JSON.stringify(value))}`; }
+export const transcriptMessageRef = (sessionRef: string, entryId: string) => opaque("message", [sessionRef, entryId]);
 function timestamp(value: unknown): string | null {
   const parsed = typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" ? Date.parse(value) : Number.NaN;
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
@@ -266,7 +267,7 @@ function item(entry: any, identity: TranscriptIdentity, customReceipt = false): 
       textChars: Math.min(1_000_000_000, projected.full.length), digest: `sha256:${hash(projected.full)}`, truncated: projected.truncated,
       redacted: projected.redacted, imageCount: imageCount(entry.message), reasonCode: projected.redacted ? "sensitive-values-redacted" as const : null };
   })();
-  return { messageRef: opaque("message", [identity.sessionRef, entry.id]), parentMessageRef: null, role: itemRole, recordedAt,
+  return { messageRef: transcriptMessageRef(identity.sessionRef, entry.id), parentMessageRef: null, role: itemRole, recordedAt,
     agentOperationId: null, turnIndex: null, content, ...(userProjection.attachments.length ? { attachments: userProjection.attachments } : {}),
     toolCalls: projectedToolCalls };
 }

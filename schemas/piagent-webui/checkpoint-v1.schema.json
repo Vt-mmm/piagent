@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/checkpoint-v1.schema.json",
+  "title": "Piagent WebUI checkpoint v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/state"
+    },
+    {
+      "$ref": "#/$defs/preview"
+    },
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    }
+  ],
+  "$defs": {
+    "revisions": {
+      "title": "Checkpoint revisions",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpointRevision"
+      ],
+      "properties": {
+        "checkpointRevision": {
+          "$ref": "common-v1.schema.json#/$defs/hash"
+        }
+      }
+    },
+    "point": {
+      "title": "Checkpoint point",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "turnRef",
+        "at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+        },
+        "turnRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "state": {
+      "title": "Checkpoint state",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "identity",
+        "revisions",
+        "available",
+        "agentRunning",
+        "points"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-checkpoint-v1"
+        },
+        "messageType": {
+          "const": "state"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "revisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "agentRunning": {
+          "type": "boolean"
+        },
+        "points": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        }
+      }
+    },
+    "step": {
+      "title": "Checkpoint step",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "turnRef",
+        "restore",
+        "remove"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+        },
+        "turnRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "restore": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "remove": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "preview": {
+      "title": "Checkpoint preview",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "identity",
+        "revisions",
+        "targetId",
+        "result",
+        "previewDigest",
+        "tree",
+        "steps",
+        "files",
+        "conflicts",
+        "stoppedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-checkpoint-v1"
+        },
+        "messageType": {
+          "const": "preview"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "revisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "targetId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+        },
+        "result": {
+          "enum": [
+            "ready",
+            "conflict",
+            "busy",
+            "none",
+            "unavailable"
+          ]
+        },
+        "previewDigest": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tree": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "stoppedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "payload": {
+      "title": "Checkpoint payload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetId",
+        "previewDigest",
+        "expectedTree",
+        "confirmed"
+      ],
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+        },
+        "previewDigest": {
+          "$ref": "common-v1.schema.json#/$defs/hash"
+        },
+        "expectedTree": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "confirmed": {
+          "const": true
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKey",
+        "requestedAt",
+        "expiresAt",
+        "action",
+        "actionDigest",
+        "identity",
+        "expectedRevisions",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-checkpoint-v1"
+        },
+        "messageType": {
+          "const": "command"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._~-]{32,128}$"
+        },
+        "requestedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "expiresAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "action": {
+          "const": "checkpoint.restore"
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "expectedRevisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload"
+        }
+      },
+      "title": "Checkpoint command"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKeyDigest",
+        "action",
+        "actionDigest",
+        "identity",
+        "phase",
+        "resultCode",
+        "requestedAt",
+        "settledAt",
+        "observedRevisionsBefore",
+        "observedRevisionsAfter",
+        "deduplicated",
+        "targetId",
+        "completed",
+        "files",
+        "conflicts",
+        "stoppedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-checkpoint-v1"
+        },
+        "messageType": {
+          "const": "receipt"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKeyDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "action": {
+          "const": "checkpoint.restore"
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "phase": {
+          "enum": [
+            "settled",
+            "rejected",
+            "uncertain"
+          ]
+        },
+        "resultCode": {
+          "enum": [
+            "restored",
+            "conflict",
+            "stale-revision",
+            "identity-mismatch",
+            "read-only",
+            "busy",
+            "unavailable",
+            "expired",
+            "idempotency-payload-mismatch",
+            "effect-unknown"
+          ]
+        },
+        "requestedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "settledAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "observedRevisionsBefore": {
+          "$ref": "#/$defs/revisions"
+        },
+        "observedRevisionsAfter": {
+          "$ref": "#/$defs/revisions"
+        },
+        "deduplicated": {
+          "type": "boolean"
+        },
+        "targetId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+        },
+        "completed": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+          }
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "stoppedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "Checkpoint receipt"
+    }
+  }
+}

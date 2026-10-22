@@ -24,7 +24,7 @@ type SessionHookDependencies = {
     event: string
   ) => TaskContract | undefined;
   onTurnEnd?: (ctx: ExtensionContext) => void;
-  onAgentSettled?: (ctx: ExtensionContext) => void;
+  onAgentSettled?: (ctx: ExtensionContext) => void | Promise<void>;
   beforeShutdown?: (ctx: ExtensionContext) => void | Promise<void>;
 };
 
@@ -102,7 +102,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
       taskRunId: task?.taskRunId,
       taskOutcome: task?.trace.outcome
     });
-    dependencies.onAgentSettled?.(ctx);
+    await dependencies.onAgentSettled?.(ctx);
   });
 
   pi.on("session_compact", async (event, ctx) => {
@@ -115,19 +115,22 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
   });
 
   pi.on("session_shutdown", async (event, ctx) => {
-    await dependencies.beforeShutdown?.(ctx);
-    flushObservedTaskContext(
-      pi,
-      ctx,
-      state.qualifiedTaskContext(ctx),
-      maxManifestFiles,
-      "context_observed_before_shutdown"
-    );
-    telemetry(ctx, {
-      event: "session_shutdown",
-      reason: event.reason,
-      targetSessionFile: event.targetSessionFile ? path.basename(event.targetSessionFile) : undefined
-    });
-    state.clearSession(ctx);
+    try { await dependencies.beforeShutdown?.(ctx); }
+    finally {
+      try {
+        flushObservedTaskContext(
+          pi,
+          ctx,
+          state.qualifiedTaskContext(ctx),
+          maxManifestFiles,
+          "context_observed_before_shutdown"
+        );
+        telemetry(ctx, {
+          event: "session_shutdown",
+          reason: event.reason,
+          targetSessionFile: event.targetSessionFile ? path.basename(event.targetSessionFile) : undefined
+        });
+      } finally { state.clearSession(ctx); }
+    }
   });
 }

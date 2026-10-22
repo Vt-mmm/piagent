@@ -18,7 +18,7 @@ type ToolCallHookDependencies = {
   beforeAuthorize?: (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallDecision> | ToolCallDecision;
   authorize: (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallDecision> | ToolCallDecision;
   reviewBudgetDecision?: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallDecision;
-  beforeStart?: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallDecision;
+  beforeStart?: (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallDecision> | ToolCallDecision;
   afterDecision?: (
     event: ToolCallEvent,
     ctx: ExtensionContext,
@@ -74,7 +74,7 @@ export function registerToolCallHook(pi: ExtensionAPI, dependencies: ToolCallHoo
     const decision = authorizationDecision && typeof authorizationDecision === "object" && authorizationDecision.block
       ? authorizationDecision
       : dependencies.reviewBudgetDecision?.(resolvedEvent, ctx);
-    const startDecision = !(decision && typeof decision === "object" && decision.block) ? dependencies.beforeStart?.(resolvedEvent, ctx) : undefined;
+    const startDecision = !(decision && typeof decision === "object" && decision.block) ? await dependencies.beforeStart?.(resolvedEvent, ctx) : undefined;
     const finalDecision = startDecision && typeof startDecision === "object" && startDecision.block ? startDecision : decision;
     // Every refusal leaves through here, so this is where it is answered. A
     // remedy attached at the 29 sites that build one is a remedy the next site

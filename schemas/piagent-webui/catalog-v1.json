@@ -316,6 +316,15 @@
       "role": "transport",
       "supported": true,
       "current": true
+    },
+    {
+      "name": "checkpoint-v1",
+      "file": "checkpoint-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/checkpoint-v1.schema.json",
+      "documentVersion": 1,
+      "role": "command",
+      "supported": true,
+      "current": true
     }
   ]
 }

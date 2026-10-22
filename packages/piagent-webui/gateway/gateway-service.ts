@@ -6,6 +6,7 @@ import { terminalRouter } from "./terminal-router.ts";
 import { ManagedSourceRevertSessions, type ManagedSourceRuntime } from "./managed-source-revert-sessions.ts";
 import { SourceRevertSessions } from "./source-revert-sessions.ts";
 import { WorkspaceWriteSessions, type ManagedWorkspaceWriter } from './workspace-write-sessions.ts';
+import { CheckpointSessions, type ManagedCheckpointRuntime } from './checkpoint-sessions.ts';
 import { managedProjection } from './managed-projection.ts';
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -108,7 +109,7 @@ export async function startPiagentGateway(options: {
   agentDir?: string;
   staticRoot?: string;
   scopedBrokerRouter?: ScopedBrokerRouter;
-  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; managedTerminal?: (id: string) => ManagedTerminalRuntime; managedSource?: (id: string) => ManagedSourceRuntime; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
+  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; managedCheckpoint?: (id: string) => ManagedCheckpointRuntime; managedTerminal?: (id: string) => ManagedTerminalRuntime; managedSource?: (id: string) => ManagedSourceRuntime; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
   // Company sessions relayed into this dashboard (the dashboard entry passes
   // the Agent Watch binding; omitted: none).
   company?: CompanyConnector;
@@ -285,10 +286,18 @@ export async function startPiagentGateway(options: {
     updates.start();
     const workspaceWrites = new WorkspaceWriteSessions({ root: state.root, key, gatewayInstanceRef, runtimes, managed: !!options.managed,
       managedWrite: options.managed?.workspaceWrite, changed: sessionRef => events.publish("session.changed", { sessionRef }) });
+    const checkpoints = new CheckpointSessions({ root: state.root, key, gatewayInstanceRef, runtimes, managed: !!options.managed,
+      managedCheckpoint: options.managed?.managedCheckpoint,
+      changed: sessionRef => events.publish("session.changed", { sessionRef }) });
     const sourceReverts = options.managed ? new ManagedSourceRevertSessions({ root: state.root, key, gatewayInstanceRef, runtimes,
       managedSource: options.managed.managedSource, changed: sessionRef => events.publish("session.changed", { sessionRef }) }) : new SourceRevertSessions({ root: state.root, key, runtimes, managed: !!options.managed,
       provider: sessionRef => inspections.provider(sessionRef), changed: sessionRef => events.publish("session.changed", { sessionRef }) });
     loopback = await startLoopbackServer({
+      checkpoints: {
+        state: sessionRef => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/checkpoints`) : checkpoints.state(sessionRef),
+        preview: (sessionRef, target) => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/checkpoints/${encodeURIComponent(target)}`) : checkpoints.preview(sessionRef, target),
+        execute: (sessionRef, command) => company(sessionRef) ? relayPost(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/checkpoints`, command) : checkpoints.execute(sessionRef, command)
+      },
       sessionSourceRevert: {
         sources: sessionRef => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-review`) : sourceReverts.sources(sessionRef),
         diff: (sessionRef, fileRef) => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/source-review/${encodeURIComponent(fileRef)}`) : sourceReverts.diff(sessionRef, fileRef),

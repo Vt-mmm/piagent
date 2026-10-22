@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-checkpoint-v1",
+  "messageType": "state",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "revisions": {
+    "checkpointRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "available": true,
+  "agentRunning": false,
+  "points": [],
+  "extra": "unexpected"
+}

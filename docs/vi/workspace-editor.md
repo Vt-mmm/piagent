@@ -127,3 +127,36 @@ chỉ kiểm file runtime và điều kiện tiên quyết (`ptySpawnVerified: f
 khẳng định máy này đã mở được PTY trong sandbox. Luồng đầy đủ Gateway, relay và
 trình duyệt đã được kiểm chứng trên Linux arm64 trong Docker. Lần này chưa kiểm
 chứng riêng Linux x64 native và WSL.
+
+## Khôi phục một lượt agent
+
+Trong project Git, lượt đã kết thúc và có đổi file sẽ có nút **Khôi phục về trước
+lượt này** trong Timeline. Mở để xem trước các file bị ảnh hưởng và số lượt, rồi
+chọn **Xác nhận khôi phục**. Hệ thống hoàn tác từ lượt mới nhất về lượt đã chọn,
+xóa file do các lượt đó tạo và trả nội dung file đã sửa về trước đó. HEAD, commit
+tạo trong lượt và vùng stage của member được giữ nguyên.
+
+Nếu member đã sửa lại file bị ảnh hưởng sau lượt đó, khôi phục dừng ở lượt đó và
+nêu tên file xung đột. Các lượt mới hơn an toàn có thể đã được khôi phục; kết quả
+cho biết số lượt. Agent đang chạy, preview đã thay đổi hoặc quyền ghi bị thu hồi
+thì cần xem trước lại. Đường dẫn protected và read-only vẫn giữ giới hạn.
+Project không dùng Git thì không có checkpoint.
+
+Pi TUI personal cũng có `/undo` để hoàn tác lượt gần nhất mà không gọi model.
+Lịch sử personal giữ tối đa 64 checkpoint cho mỗi project và session trong file
+chỉ chủ sở hữu truy cập được ở `.pi/piagent-state/checkpoints`. Git ref riêng dưới
+`refs/piagent/checkpoints/` giữ tree trước/sau khỏi bị garbage collection xóa,
+không tạo commit hoặc sửa index. Nếu runtime personal dừng trước snapshot cuối
+lượt, phục hồi giữ nguyên các file đã sửa và chỉ bỏ metadata checkpoint chưa
+hoàn tất. Checkpoint của các lượt đã kết thúc vẫn kiểm tra xung đột với thay đổi
+của member. Thao tác checkpoint company chạy trong sandbox
+hiện có; lịch sử company tồn tại trong vòng đời runtime.
+
+Nếu trình duyệt mất phản hồi khôi phục, **Kiểm tra lại kết quả** gửi đúng khóa yêu
+cầu cũ. Yêu cầu đang chờ còn sau khi reload cùng tab; reload không tự gửi yêu cầu.
+Giữ tab đó đến khi biết kết quả. Nếu trình duyệt không lưu được yêu cầu đang chờ,
+hệ thống từ chối gửi lần khôi phục mới. Kết quả chưa xác nhận có thể đã đổi file:
+kiểm tra file trước khi tiếp tục. Kiểm tra cùng yêu cầu không tự chạy lại thao tác
+file có kết quả chưa rõ. Nếu chỉ một số file đã đổi hoặc lưu lịch sử thất bại,
+checkpoint còn giữ có thể báo xung đột; kiểm tra và xử lý file trước khi thử
+khôi phục với preview mới.

@@ -2314,3 +2314,90 @@ test('personal terminal panel runs echo under CSP and reconnects after reload', 
     expect(await page.evaluate(() => window.__terminalCsp)).toEqual([]); expect(errors).toEqual([]);
   } finally { row.sessionRef = previousRef; await browserTerminals.dispose(); browserTerminals = null; }
 });
+
+for (const scenario of ['lost-response', 'member-conflict', 'storage-unavailable']) {
+  test(`Timeline checkpoint previews and confirms real multi-turn restoration: ${scenario}`, async ({ page }) => {
+    const { PersonalCheckpointGit } = await import('../packages/piagent-core/runtime/checkpoints/personal-git.ts');
+    const { TurnCheckpointService } = await import('../packages/piagent-core/runtime/checkpoints/turn-checkpoints.mjs');
+    const { CheckpointController } = await import('../packages/piagent-webui/server/checkpoint-controller.ts');
+    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'checkpoint-browser-')));
+    const git = (...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+    const write = (file, value) => fs.writeFileSync(path.join(cwd, file), value);
+    const read = file => fs.readFileSync(path.join(cwd, file), 'utf8');
+    git('init', '-q'); write('a.txt', 'before'); write('b.txt', 'before');
+    const service = new TurnCheckpointService(new PersonalCheckpointGit(cwd, () => ({ policy: {}, profile: {}, readOnly: false })));
+    const turn = async (turnRef, change) => { const run = { turnRef }; await service.take(run); change(); await service.finish(run); };
+    await turn('message_history_user', () => write('a.txt', 'agent first'));
+    if (scenario === 'member-conflict') write('a.txt', 'member between turns');
+    await turn('message_checkpoint_second', () => { write('b.txt', 'agent second'); write('new.txt', 'agent created'); });
+    git('add', '.'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'member commit');
+    const head = git('rev-parse', 'HEAD'), index = fs.readFileSync(path.join(cwd, '.git/index'));
+    const identity = { projectRef: 'project', runtimeInstanceId: 'runtime', sessionRef: 'session_source_review',
+      taskId: null, taskRunId: null, agentOperationId: null, toolCallId: null };
+    const journal = [], commands = []; let effects = 0;
+    const controller = new CheckpointController({ facts: async () => { const listed = await service.list(); return {
+      identity, revisions: { checkpointRevision: listed.revision }, available: true, agentRunning: false, writable: true, points: listed.points }; },
+      history: () => journal, append: receipt => journal.push(receipt), restore: (target, expected) => { effects++; return service.restoreTo(target, expected); } });
+    const base = transcriptFixture.items[0], content = value => ({ ...base.content, text: value, textChars: value.length });
+    processTranscript = [
+      { ...base, messageRef: 'message_checkpoint_second', role: 'user', recordedAt: '2026-08-14T06:00:00.000Z', content: content('Second checkpoint turn'), toolCalls: [] },
+      { ...base, messageRef: 'message_checkpoint_answer', parentMessageRef: 'message_checkpoint_second', role: 'assistant', recordedAt: '2026-08-14T06:00:01.000Z', content: content('Second edit done'), toolCalls: [] },
+    ];
+    await page.route('**/sessions/session_source_review/checkpoints**', async route => {
+      const request = route.request();
+      if (request.method() === 'POST') {
+        const command = request.postDataJSON(); commands.push(command);
+        const receipt = await controller.execute(command);
+        if (scenario === 'lost-response' && commands.length === 1) return route.abort();
+        return route.fulfill({ json: receipt });
+      }
+      const target = new URL(request.url()).pathname.split('/checkpoints/')[1];
+      if (!target) return route.fulfill({ json: await controller.state() });
+      const value = await service.preview(target);
+      return route.fulfill({ json: { schemaVersion: 1, version: 'piagent-webui-checkpoint-v1', messageType: 'preview', identity,
+        revisions: { checkpointRevision: value.revision }, targetId: target, result: value.result, previewDigest: value.digest,
+        tree: value.tree, steps: value.steps, files: value.files, conflicts: value.conflicts, stoppedAt: value.stoppedAt } });
+    });
+    try {
+      if (scenario === 'storage-unavailable') await page.addInitScript(() => {
+        const original = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(key, value) {
+          if (key === 'piagent.checkpoint.pending.v1') throw new DOMException('Quota exceeded', 'QuotaExceededError');
+          return original.call(this, key, value);
+        };
+      });
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      await page.goto(server.issueLaunchUrl());
+      await page.getByRole('navigation').getByText('Review source changes', { exact: true }).click();
+      const buttons = page.getByRole('button', { name: /Khôi phục về trước lượt này|Restore before this turn/ });
+      await expect(buttons).toHaveCount(2); await buttons.first().click();
+      const dialog = page.getByRole('dialog', { name: /Khôi phục về trước lượt này|Restore before this turn/ });
+      await expect(dialog.getByText(/Commit và vùng stage|Commits and staged changes/)).toBeVisible();
+      await expect(dialog.getByText(/new\.txt/).first()).toBeVisible();
+      assert.equal(commands.length, 0); assert.equal(read('b.txt'), 'agent second');
+      if (scenario === 'member-conflict') await expect(dialog.getByRole('alert')).toContainText('a.txt');
+      await dialog.getByRole('button', { name: /Xác nhận khôi phục|Confirm restore/ }).click();
+      if (scenario === 'storage-unavailable') {
+        await expect(page.getByRole('alert').filter({ hasText: /Không đọc hoặc lưu|could not read or save/ })).toBeAttached();
+        await expect(dialog.getByRole('button', { name: /Xác nhận khôi phục|Confirm restore/ })).toBeDisabled();
+        assert.equal(commands.length, 0); assert.equal(effects, 0); assert.equal(read('b.txt'), 'agent second');
+        return;
+      }
+      if (scenario === 'lost-response') {
+        await expect(dialog.getByRole('alert')).toContainText(/Chưa xác nhận|unconfirmed/);
+        await page.reload();
+        await page.getByRole('navigation').getByText('Review source changes', { exact: true }).click();
+        await expect(page.getByRole('alert').filter({ hasText: /chưa có kết quả xác nhận|awaiting a confirmed result/ })).toBeVisible();
+        assert.equal(commands.length, 1, 'reload must not dispatch automatically');
+        await page.getByRole('button', { name: /^(Xem kết quả|Check result)$/ }).click();
+        await dialog.getByRole('button', { name: /Kiểm tra lại kết quả|Check result again/ }).click();
+        await expect(dialog.getByRole('alert')).toContainText(/Đã khôi phục 2 lượt|Restored 2 turns/);
+        assert.deepEqual(commands[0], commands[1]);
+      } else await expect(dialog.getByRole('alert').last()).toContainText(/Đã khôi phục 1 lượt|Restored 1 turns/);
+      assert.equal(effects, 1); assert.equal(read('b.txt'), 'before');
+      assert.equal(read('a.txt'), scenario === 'member-conflict' ? 'member between turns' : 'before');
+      assert.equal(fs.existsSync(path.join(cwd, 'new.txt')), false);
+      assert.equal(git('rev-parse', 'HEAD'), head); assert.deepEqual(fs.readFileSync(path.join(cwd, '.git/index')), index);
+    } finally { processTranscript = []; fs.rmSync(cwd, { recursive: true, force: true }); }
+  });
+}

@@ -335,10 +335,10 @@ export class ManagedToolBoundary {
     const run = this.#tail.then(() => this.#queuedInvoke(name, args, signal, onUpdate, model, options));
     this.#tail = run.catch(() => {}); return run;
   }
-  async #queuedInvoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
+  async #queuedInvoke(name, args, signal, onUpdate, model, { network = false, docker = false, guard = undefined } = {}) {
     await this.proxyReady;
     const before = this.proxy?.deniedCount ?? 0;
-    try { return await this.#invoke(name, args, signal, onUpdate, model, { network, docker }); }
+    try { guard?.(); return await this.#invoke(name, args, signal, onUpdate, model, { network, docker, guard }); }
     catch (error) {
       // A command that failed after the proxy refused a host: name the hosts.
       const refused = !network && !docker && this.proxy ? this.proxy.deniedSince(before) : [];
@@ -346,7 +346,7 @@ export class ManagedToolBoundary {
       throw new Error(`managed-domain-blocked: Lệnh thường chỉ tải được từ các registry package quen thuộc (npm, PyPI, Go, crates.io, Maven, Gradle, NuGet, RubyGems, Packagist, pub.dev…) và tải về public từ GitHub. Host bị chặn: ${refused.join(', ')}. Nếu lệnh thật sự cần host này, dùng run_with_network để người dùng duyệt đúng lệnh đó.\n${String(error?.message ?? error)}`);
     }
   }
-  async #invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
+  async #invoke(name, args, signal, onUpdate, model, { network = false, docker = false, guard = undefined } = {}) {
     if (docker && !this.engine) throw new Error('managed-tool-unavailable');
     network ||= docker;
     if (name === 'workspace') { if (network || docker) throw Error('managed-tool-unavailable'); verifyWorkspaceWorker(this.workspacePins); }
@@ -365,6 +365,7 @@ export class ManagedToolBoundary {
     const message = JSON.stringify({ name, args, sourceContext, mutationObservation, expectedFileDigest: this.#freshness.expected(this.cwd, name, args), workspaceReadOnly: this.setup.readOnly, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
+      guard?.();
       const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network, docker)]
         : ['/usr/bin/sandbox-exec', ['-p', docker ? this.dockerProfile : network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile]];
       const child = spawn(sandbox, [...sandboxArgs, this.node, workerPath, this.sdkPath, this.cwd], {

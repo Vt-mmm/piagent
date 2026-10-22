@@ -32,3 +32,4 @@ export type * as WorkspacePathsV1 from "./workspace-paths-v1.ts";
 export type * as WorkspaceSearchV1 from "./workspace-search-v1.ts";
 export type * as WorkspaceWriteV1 from "./workspace-write-v1.ts";
 export type * as TerminalV1 from "./terminal-v1.ts";
+export type * as CheckpointV1 from "./checkpoint-v1.ts";

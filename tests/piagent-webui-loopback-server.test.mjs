@@ -706,6 +706,28 @@ it("workspace writes require the browser session, origin, CSRF and matching sess
   assert.equal(calls.length,1);assert.equal(calls[0].sessionRef,'session.personal');
 });
 
+it("checkpoint routes require the browser session, origin, CSRF and matching session before dispatch", async () => {
+  const calls=[];
+  const server=await start({checkpoints:{state:sessionRef=>({sessionRef}),preview:(sessionRef,target)=>({sessionRef,target}),execute:(sessionRef,command)=>{calls.push({sessionRef,command});return {saved:true};}}});
+  const route='/api/v1/sessions/session.personal/checkpoints';
+  assert.equal((await request(server.origin,route)).status,401);
+  const exchange=await request(server.origin,'/api/v1/bootstrap',{method:'POST',headers:{Origin:server.origin,'Content-Type':'application/json'},body:JSON.stringify({capability:bootstrapValue(server.launchUrl)})});
+  const headers={Origin:server.origin,Cookie:exchange.headers['set-cookie'][0].split(';',1)[0],'Content-Type':'application/json'};
+  assert.equal((await request(server.origin,route,{headers})).status,200);
+  const preview=route+'/11111111-1111-1111-1111-111111111111';
+  assert.equal((await request(server.origin,preview,{headers})).status,200);
+  assert.equal((await request(server.origin,preview+'?extra=x',{headers})).status,400);
+  assert.equal((await request(server.origin,preview,{method:'POST',headers,body:'{}'})).status,405);
+  const body=JSON.stringify({identity:{sessionRef:'session.personal'}});
+  assert.equal((await request(server.origin,route,{method:'POST',headers,body})).status,403);
+  headers['X-Piagent-CSRF']=JSON.parse(exchange.body).csrfToken;
+  assert.equal((await request(server.origin,route,{method:'POST',headers:{...headers,Origin:'https://other.invalid'},body})).status,403);
+  assert.equal((await request(server.origin,route,{method:'POST',headers,body:JSON.stringify({identity:{sessionRef:'session.company'}})})).status,400);
+  assert.equal(calls.length,0);
+  assert.equal((await request(server.origin,route,{method:'POST',headers,body})).status,200);
+  assert.equal(calls.length,1);assert.equal(calls[0].sessionRef,'session.personal');
+});
+
 it("session revert routes authenticate reads and enforce mutation authority before dispatch", async () => {
   const calls = [];
   const server = await start({ sessionSourceRevert: {

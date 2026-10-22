@@ -6,6 +6,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Added
 
+- Timeline checkpoint restoration previews affected files, requires confirmation and reverses safe turns until a member-edit conflict. Personal `/undo` shares the checkpoint service with company mode; personal history is bounded and pins Git trees without changing HEAD or the index. Browser retries retain the same request across tab reloads.
+
 - Company Session Hub terminals run inside the Linux/WSL bubblewrap boundary through the company Gateway and authenticated relay, with no network, credential masking and sandbox process cleanup. Disconnects reconnect for replay without automatically resending commands. Doctor reports prerequisites; macOS Seatbelt terminals remain unavailable with no host fallback. The complete browser workflow is qualified on Linux arm64; native Linux x64 and WSL remain unverified.
 
 - Personal Session Hub terminals open up to four project shells with lazy xterm tabs, resizing, Ctrl+C and reconnect replay. Session teardown cleans terminal processes. Explicit `@terminal`/`@terminal:2` sends attach bounded redacted output. Optional native PTY failures leave the dashboard usable and appear in Doctor; company terminals never fall back to host execution.

@@ -139,6 +139,7 @@ import { registerAgentStartHook } from "../runtime/hooks/agent-start-hook.ts";
 import { registerSessionHooks } from "../runtime/hooks/session-hooks.ts";
 import { registerSessionStartHook } from "../runtime/hooks/session-start-hook.ts";
 import { registerToolCallHook } from "../runtime/hooks/tool-call-hook.ts";
+import { PersonalCheckpointRuntime } from "../runtime/checkpoints/personal-runtime.ts";
 import { registerToolResultHook } from "../runtime/hooks/tool-result-hook.ts";
 import { readRuntimeVersionMetadata, RuntimeSnapshotCapture } from "../runtime/model/runtime-snapshot.ts";
 import { recordRuntimeSnapshotTelemetry } from "../runtime/model/snapshot-telemetry.ts";
@@ -3463,6 +3464,22 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext, workspaceWritable);
   registerWorkspaceMemberEdits(pi);
   const workspaceWriteBindings = createWorkspaceWriteAuthorityBindings(policy, loadProfileFromContext, workspaceWritable);
+  const personalCheckpoints = new PersonalCheckpointRuntime(ctx => ({
+    policy: policy as unknown as Record<string, unknown>,
+    profile: loadProfileFromContext(ctx) as unknown as Record<string, unknown>,
+    readOnly: !workspaceWritable(ctx, loadProfileFromContext(ctx))
+  }));
+  registerRuntimeCommand(pi, "undo", {
+    description: "Hoàn tác thay đổi của lượt trước; giữ nguyên commit.",
+    handler: async (_args, ctx) => {
+      try {
+        const undo = await personalCheckpoints.undo(ctx);
+        emitRuntimeMessage(ctx, "agent-watch-process", undo.text, { phase: "undo", undo });
+      } catch (error) {
+        emitRuntimeMessage(ctx, "agent-watch-process", `Không hoàn tác: ${redactText(String(error))}`, { phase: "undo", undo: { result: "failed" } });
+      }
+    }
+  });
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
@@ -3709,6 +3726,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
       sourceMutationGuardBindings.bind(ctx);
       workspaceWriteBindings.bind(ctx);
+      personalCheckpoints.bind(ctx);
       await activityInspector.refresh(ctx);
     }
   });
@@ -3723,8 +3741,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     appendTrace,
     flushObservedTaskContext: noTask,
     onTurnEnd: activityInspector.refresh,
-    onAgentSettled: activityInspector.refresh,
+    onAgentSettled: async ctx => { await personalCheckpoints.finish(ctx); await activityInspector.refresh(ctx); },
     beforeShutdown: async (ctx) => {
+      try { await personalCheckpoints.close(ctx); }
+      finally {
       serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
       workspaceWriteBindings.unbind(ctx);
@@ -3732,6 +3752,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       editFreshnessGuard.clear(ctx);
       activityInspector.dispose(ctx);
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
+      }
     }
   });
   registerTaskUsageHooks(pi, { activeTask: noTask, telemetry });
@@ -3824,6 +3845,21 @@ export default function piagentGuard(pi: ExtensionAPI) {
     redactText,
     telemetry,
     activity: recordActivity,
+    beforeStart: async (event, ctx) => {
+      const input = isPlainRecord(event.input) ? event.input : {};
+      const target = authorizationMutationTargetInspection(ctx.cwd, event.toolName, input);
+      let mutating = ["write", "edit", "apply_patch"].includes(event.toolName) || target.exactLocalPatchExecutor;
+      if (SHELL_TOOL_NAMES.has(event.toolName)) {
+        const shell = extractShellCommandInput(input);
+        if (shell.command) {
+          const command = normalizeShellCommandForPolicy(shell.command);
+          mutating ||= isProjectMutatingShellCommand(command, evaluateExecPolicy(command, loadProfileFromContext(ctx), policy).segments, ctx.cwd);
+        }
+      }
+      if (!mutating) return;
+      try { await personalCheckpoints.beforeMutation(ctx); }
+      catch (error) { return { block: true, reason: `Checkpoint failed before tool start: ${redactText(String(error))}` }; }
+    },
     beforeAuthorize: (event, ctx) => {
       const toolInput = isPlainRecord(event.input) ? event.input : {};
       const helperPreflight = evaluateDirectSubagentDispatch({ toolName: event.toolName, toolInput, cwd: ctx.cwd, helpersMode: helpersMode(),

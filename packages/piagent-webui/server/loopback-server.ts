@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { errorResponse, applySecurityHeaders, jsonResponse, requestBody } from "./http-security.ts";
 import { routeMemberRequest, type UpdateRoutes } from "./member-routes.ts";
 import { routeWorkspaceWrite, type WorkspaceWriteRoutes } from "./workspace-write-routes.ts";
+import { routeCheckpoint, type CheckpointRoutes } from "./checkpoint-routes.ts";
 import { ReadModelNotFound, type WebUiReadModelProvider } from "./read-model-provider.ts";
 import { routeReadOnlyRequest } from "./read-only-router.ts";
 import { SessionAuthority } from "./session-auth.ts";
@@ -52,6 +53,7 @@ export async function startLoopbackServer(options: {
   readSessionCreationOptions?: () => unknown | Promise<unknown>;
   readSessionModel?: (sessionRef: string) => WebUiReadModelProvider | Promise<WebUiReadModelProvider>;
   workspaceWrite?: WorkspaceWriteRoutes;
+  checkpoints?: CheckpointRoutes;
   sessionSourceRevert?: SessionSourceRevertRoutes;
   executeSessionAttachment?: (sessionRef: string, command: unknown) => unknown | Promise<unknown>;
   readSessionConnections?: (sessionRef: string) => unknown | Promise<unknown>;
@@ -309,6 +311,7 @@ export async function startLoopbackServer(options: {
     // Piagent's own updates.
     if (await routeSessionSourceRevert({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options.sessionSourceRevert)) return;
     if (await routeWorkspaceWrite({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options.workspaceWrite)) return;
+    if (await routeCheckpoint({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options.checkpoints)) return;
     if (await routeMemberRequest({ request, response, url, origin, requestOrigin, auth, now, consumeControl }, options)) return;
 
     if (request.method === "POST" && url.pathname.startsWith("/api/v1/approvals/") && url.pathname.endsWith("/decision") && options.executeApproval) {

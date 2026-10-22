@@ -127,6 +127,8 @@ export function createPiHarness(options = {}) {
 }
 
 export function createContext(cwd, options = {}) {
+  // Tool authorization runs within a user turn in the real SDK.
+  const defaultBranch = [{ type: "message", id: "fixture-user-turn", message: { role: "user", content: "Fixture request" } }];
   const notices = [];
   const confirmations = [];
   const selections = Array.isArray(options.select) ? [...options.select] : [];
@@ -162,8 +164,8 @@ export function createContext(cwd, options = {}) {
       getSessionFile: () => path.join(cwd, ".pi", "session.jsonl"),
       getSessionId: () => options.sessionId ?? "session-test",
       getSessionName: () => options.sessionName ?? "session",
-      getEntries: () => options.entries ?? options.branch ?? [],
-      getBranch: () => options.branch ?? options.entries ?? []
+      getEntries: () => options.entries ?? options.branch ?? defaultBranch,
+      getBranch: () => options.branch ?? options.entries ?? defaultBranch
     },
     confirmations,
     selectCalls,

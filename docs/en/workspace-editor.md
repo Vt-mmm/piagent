@@ -134,3 +134,36 @@ result checks runtime files and prerequisites only (`ptySpawnVerified: false`);
 it is not proof that this machine can spawn a sandboxed PTY. The complete
 Gateway, relay and browser workflow was qualified on Linux arm64 in Docker.
 Native Linux x64 and WSL were not independently qualified in this run.
+
+## Restore an agent turn
+
+In a Git project, a completed turn that changed files has **Restore before this
+turn** in the Timeline. Open it to preview the affected files and number of turns,
+then choose **Confirm restore**. Restoration runs from the newest turn back to
+the selected turn. It removes files created by those turns and restores the
+previous contents of files they changed. HEAD, commits made during a turn and
+the member's staging area remain unchanged.
+
+If a member changed an affected file afterward, restoration stops at that turn
+and names the conflicting files. Newer safe turns may already have been restored;
+the result reports how many. A running agent, changed preview or revoked write
+permission requires a fresh preview. Protected and read-only paths retain their
+restrictions. A project without Git has no checkpoints.
+
+Personal Pi TUI also supports `/undo` for the latest turn without asking the
+model. Personal history retains up to 64 checkpoints per project and session in
+owner-only `.pi/piagent-state/checkpoints` files. Private Git refs under
+`refs/piagent/checkpoints/` keep the before/after trees reachable during garbage
+collection without creating commits or modifying the index. If a personal runtime stops before the final snapshot, recovery leaves its
+file edits intact and discards only the unfinished checkpoint metadata. Earlier
+completed checkpoints still apply their member-edit conflict checks. Company checkpoint
+operations run inside the existing sandbox; company history lasts for the runtime.
+
+If the browser loses a restore response, **Check result again** sends the same
+request key. The pending request survives reload in the same browser tab; reload
+never submits it automatically. Keep that tab until the result is known. If the
+browser cannot save the pending request, it refuses a new restore. An unconfirmed
+result may mean files already changed: inspect them before continuing. Checking
+the same request does not automatically repeat an uncertain file operation. If
+only some files changed or the history save failed, the retained checkpoint can
+report a conflict; inspect and resolve the files before a fresh restore attempt.

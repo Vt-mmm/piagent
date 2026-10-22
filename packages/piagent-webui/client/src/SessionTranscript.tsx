@@ -20,6 +20,7 @@ import { LIVE_FAILURES, LiveTurnView, preloadMarkdown, TimelineTurnView } from "
 import { durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
   persistedLiveConversationMatches, persistedLiveUserExists, successfulAssistantText } from "./transcript-view-model.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
+import { CheckpointTimeline } from "./CheckpointTimeline.tsx";
 
 // Tokens per second of the answer being streamed, estimated from its text.
 function useLiveRate(text: string): number | null {
@@ -131,7 +132,8 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
   };
   const liveAnswer = live ? successfulAssistantText(live.assistant || "") : null;
   const content = useConversationScroll(sessionRef, Boolean(transcript) || error);
-  return <Stack ref={content} spacing={3}>
+  return <CheckpointTimeline sessionRef={sessionRef} refresh={`${refreshIdentity.key}:${reload}`} running={!!live && !live.complete && !live.error} locale={locale}>
+    <Stack ref={content} spacing={3}>
     {transcript?.page.hasOlder && <Box sx={{ textAlign: "center" }}><Button size="small" variant="text" startIcon={loadingOlder
       ? <CircularProgress size={14} /> : <HistoryRounded />} disabled={loadingOlder} onClick={() => void loadOlder()}>
       {localize(locale, "Tải tin cũ hơn", "Load older messages")}</Button></Box>}
@@ -148,5 +150,5 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     {/* Last, right above the composer: opening a conversation that waits on
         the member lands on its question, however long the running turn. */}
     <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
-  </Stack>;
+  </Stack></CheckpointTimeline>;
 }
