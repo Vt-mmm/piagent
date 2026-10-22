@@ -1,3 +1,5 @@
+import type { WorkspaceRead } from "./workspace-read-routes.ts";
+
 export type SourceView = "task" | "working-tree" | "staged";
 export type StreamEvent = { cursor: string; value: unknown };
 export type StreamReplay = {
@@ -9,6 +11,7 @@ export type StreamReplay = {
 };
 
 export type WebUiReadModelProvider = {
+  workspace?: WorkspaceRead;
   snapshot(): unknown | Promise<unknown>;
   sourceChanges(view: SourceView): unknown | Promise<unknown>;
   diff(view: SourceView, fileRef: string): unknown | Promise<unknown>;

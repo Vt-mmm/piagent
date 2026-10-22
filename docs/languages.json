@@ -60,6 +60,15 @@
         "en": "8bf18c59e1a99a57747a1d68775f43379d24e7af",
         "vi": "b6681a5be29c2891568d0cdbc26890b3b8f9570f"
       }
+    },
+    {
+      "topic": "workspace-editor",
+      "en": "docs/en/workspace-editor.md",
+      "vi": "docs/vi/workspace-editor.md",
+      "consistentAt": {
+        "en": "ba1dd50236862abc6d4ea5e24de850d7eba0cabb",
+        "vi": "f55fce9da94c9d818b8c053c79841d8ede7a03fe"
+      }
     }
   ]
 }

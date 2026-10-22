@@ -100,7 +100,7 @@ export async function startPiagentGateway(options: {
   agentDir?: string;
   staticRoot?: string;
   scopedBrokerRouter?: ScopedBrokerRouter;
-  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null };
+  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
   // Company sessions relayed into this dashboard (the dashboard entry passes
   // the Agent Watch binding; omitted: none).
   company?: CompanyConnector;
@@ -254,7 +254,10 @@ export async function startPiagentGateway(options: {
       events, command: relay ? { execute: (command) => relay!.handles(command)
         ? relay!.command(command as Record<string, unknown>, async () => (await hubCatalog()).catalogRevision) : commands.execute(command) } : commands });
     const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot, agentDir: state.agentDir,
-      models: inspectionModels, projects, mcpAuth, listSessions: () => runtimes!.listSessions(),
+      models: inspectionModels, managed: !!options.managed,
+      workspaceRead: options.managed?.workspaceRead ? async (sessionRef, id, kind, path) => {
+        await runtimes!.acquire(sessionRef); return options.managed!.workspaceRead!(id, { kind, path });
+      } : undefined, projects, mcpAuth, listSessions: () => runtimes!.listSessions(),
       openLiveSession: (sessionRef) => runtimes!.liveSessionManager(sessionRef),
       operationLiveness: (sessionRef) => runtimes!.currentOperation(sessionRef) ? "running" : "idle" });
     // Staged bytes live beside the inspection projection they were checked

@@ -49,7 +49,11 @@ const primaryContracts = [
   "session-command-v1",
   "runtime-command-v1",
   "gateway-capabilities-v1",
-  "gateway-protocol-v1"
+  "gateway-protocol-v1",
+  "workspace-tree-v1",
+  "workspace-file-v1",
+  "workspace-paths-v1",
+  "workspace-search-v1"
 ];
 
 function fixture(name, state = "valid") {

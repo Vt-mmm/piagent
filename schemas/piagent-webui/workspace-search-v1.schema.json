@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/workspace-search-v1.schema.json",
+  "title": "Piagent WebUI workspace search v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "query",
+    "truncated",
+    "available",
+    "backend",
+    "matches"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "version": {
+      "const": "piagent-webui-workspace-search-v1"
+    },
+    "generatedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "identity": {
+      "$ref": "common-v1.schema.json#/$defs/identity"
+    },
+    "query": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "available": {
+      "type": "boolean"
+    },
+    "backend": {
+      "enum": [
+        "ripgrep",
+        "fts"
+      ]
+    },
+    "matches": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "line",
+          "column",
+          "preview"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "column": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "preview": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      }
+    }
+  }
+}

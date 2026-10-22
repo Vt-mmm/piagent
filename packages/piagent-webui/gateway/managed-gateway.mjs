@@ -30,6 +30,7 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
     const host=probe.api,models=probe.modelRuntime;
     const snapshot=models.getAvailableSnapshot.bind(models);
     models.getAvailableSnapshot=()=>snapshot().map(model=>managedModelOption(probe.manifest,models,model));
+    const workspaceRuntimes = new Map();
     const factory=async(info,_instance,manager,initial)=>{
       if(initial?.modelRef && initial.modelRef!==webUiModelRef('agent_watch_managed','agent-watch-auto')) throw Error('managed-personal-switch-requires-new-session');
       const broker=newBroker();
@@ -41,10 +42,12 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
         // changed it: the conversation takes the nearest level the Harness allows now.
         if(initial) runtime.session.setThinkingLevel(nearestLevel(initial.thinkingLevel,managedThinkingLevels(runtime.manifest,runtime.modelRuntime,runtime.session.model)));
         await runtime.session.bindExtensions({mode:'rpc',uiContext:rpcUiContext()});
-        return {session:runtime.session,dispose:()=>runtime.dispose()};
+        workspaceRuntimes.set(info.id, runtime);
+        return {session:runtime.session,dispose:async()=>{ workspaceRuntimes.delete(info.id); await runtime.dispose(); }};
       } catch(error) { if(runtime) await runtime.dispose(); else await broker.dispose(); throw error; }
     };
-    const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:PI_HOST_VERSION,managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null}});
+    const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:PI_HOST_VERSION,managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null,
+      workspaceRead: (id, request) => { const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('workspace-runtime-unavailable'); return runtime.boundary.invoke('workspace', request); }}});
     return gateway;
   } finally { if(probe) await probe.dispose(); else await probeBroker.dispose(); }
 }

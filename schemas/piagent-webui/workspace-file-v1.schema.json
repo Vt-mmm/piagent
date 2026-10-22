@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/workspace-file-v1.schema.json",
+  "title": "Piagent WebUI workspace file v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "path",
+    "language",
+    "protected",
+    "readOnly",
+    "binary",
+    "oversized",
+    "content",
+    "digest",
+    "revision"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "version": {
+      "const": "piagent-webui-workspace-file-v1"
+    },
+    "generatedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "identity": {
+      "$ref": "common-v1.schema.json#/$defs/identity"
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "language": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "protected": {
+      "type": "boolean"
+    },
+    "readOnly": {
+      "type": "boolean"
+    },
+    "binary": {
+      "type": "boolean"
+    },
+    "oversized": {
+      "type": "boolean"
+    },
+    "content": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1048576
+    },
+    "digest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$",
+      "maxLength": 64
+    },
+    "revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "maxLength": 71
+    }
+  }
+}

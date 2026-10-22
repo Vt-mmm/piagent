@@ -1,3 +1,4 @@
+import { WorkspaceMentions } from "./workspace-navigation.tsx";
 import { lazy, Suspense, type ReactNode } from "react";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import ErrorOutlineRounded from "@mui/icons-material/ErrorOutlineRounded";
@@ -89,7 +90,7 @@ export function UserBubble({ text, attachments, note, locale }: { text: string |
   note?: string | null; locale: UiLocale }) {
   return <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 3, px: 2, py: 1.4 }}>
     <AttachmentCards attachments={attachments} locale={locale} />
-    {text && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}>{text}</Typography>}
+    {text && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}><WorkspaceMentions>{text}</WorkspaceMentions></Typography>}
     {note && <Typography variant="caption" color="text.secondary">{note}</Typography>}
   </Box>;
 }

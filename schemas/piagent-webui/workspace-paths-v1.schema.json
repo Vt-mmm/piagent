@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/workspace-paths-v1.schema.json",
+  "title": "Piagent WebUI workspace paths v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "query",
+    "truncated",
+    "suggestions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "version": {
+      "const": "piagent-webui-workspace-paths-v1"
+    },
+    "generatedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "identity": {
+      "$ref": "common-v1.schema.json#/$defs/identity"
+    },
+    "query": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "suggestions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value",
+          "label",
+          "detail",
+          "kind"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "directory"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

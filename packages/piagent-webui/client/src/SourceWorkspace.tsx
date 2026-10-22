@@ -1,3 +1,4 @@
+import { WorkspaceFileButton } from "./workspace-navigation.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FolderOpenRounded from "@mui/icons-material/FolderOpenRounded";
 import Box from "@mui/material/Box";
@@ -198,6 +199,7 @@ function DiffViewer({ state, review, mutation, revert, reviewEnabled, reviewBusy
               {revertBusy ? localize(locale, "Đang dựng preview…", "Building preview…") : "Revert file"}
             </button>
           </div>}
+          <WorkspaceFileButton path={diff.file.path} />
           {openEnabled && <div className="source-open-action">
             <button type="button" disabled={openBusy} onClick={onOpen}>{openBusy ? localize(locale, "Đang mở…", "Opening…") : localize(locale, "Mở trong VS Code", "Open in VS Code")}</button>
           </div>}

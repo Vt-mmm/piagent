@@ -1,3 +1,4 @@
+import { routeWorkspaceRead } from "./workspace-read-routes.ts";
 import type { WebUiReadModelProvider, SourceView } from "./read-model-provider.ts";
 
 const OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
@@ -5,6 +6,8 @@ const OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 export type ReadRouteResult = { handled: false } | { handled: true; status: number; value: unknown };
 
 export async function routeReadOnlyRequest(url: URL, provider: WebUiReadModelProvider): Promise<ReadRouteResult> {
+  const workspace = await routeWorkspaceRead(url, provider.workspace?.bind(provider));
+  if (workspace.handled) return workspace;
   if (url.pathname === "/api/v1/snapshot" && !url.search) return { handled: true, status: 200, value: await provider.snapshot() };
   if (url.pathname === "/api/v1/activity" && !url.search) return { handled: true, status: 200, value: await provider.activity() };
   if (url.pathname === "/api/v1/tasks" && !url.search) return { handled: true, status: 200, value: await provider.taskIndex() };

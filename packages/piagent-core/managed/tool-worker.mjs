@@ -3,7 +3,7 @@ import { fallbackFind, fallbackGrep } from './search-fallback.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 // A dedicated, credential-free process already inside Seatbelt. The launch
 // profile and environment are supplied by the trusted runtime, never the LLM.
 const [sdkPath, cwd] = process.argv.slice(2);
@@ -33,8 +33,12 @@ input.on('line', async line => {
   try {
     const message = JSON.parse(line);
     if (message.cancel === true) { controller?.abort(); return; }
-    if (active || !Object.hasOwn(factories, message.name)) throw new Error('managed-worker-request-invalid');
+    if (active || (message.name !== 'workspace' && !Object.hasOwn(factories, message.name))) throw new Error('managed-worker-request-invalid');
     active = true; controller = new AbortController(); network = message.network === true; isolated = message.isolated === true; docker = message.docker === true; engine = message.engine === true;
+    if (message.name === 'workspace') {
+      const { inspectManagedWorkspace } = await import('./dist/workspace/worker.mjs');
+      emit({ result: await inspectManagedWorkspace(cwd, fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url)), message.args) }); return;
+    }
     const options = message.name === 'bash' ? { shellPath: '/bin/bash', exposeSessionEnvironment: false } : undefined;
     // The runtime copies ripgrep/fd here when the machine has or can fetch them.
     const provided = name => fs.existsSync(path.join(process.env.HOME ?? '', '.pi/agent/bin', name));

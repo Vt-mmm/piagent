@@ -1,3 +1,4 @@
+import { WorkspaceMentions } from "./workspace-navigation.tsx";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Link from "@mui/material/Link";
@@ -22,7 +23,7 @@ export function MarkdownMessage({ children }: { children: string }) {
       h2: ({ children: value }) => <Typography component="h3" variant="h6" sx={{ mt: 2.25, mb: .8, fontWeight: 750 }}>{value}</Typography>,
       h3: ({ children: value }) => <Typography component="h4" sx={{ mt: 2, mb: .65, fontWeight: 750 }}>{value}</Typography>,
       h4: ({ children: value }) => <Typography component="h5" variant="body1" sx={{ mt: 1.75, mb: .5, fontWeight: 750 }}>{value}</Typography>,
-      p: ({ children: value }) => <Typography component="p" sx={{ my: 1, lineHeight: 1.75 }}>{value}</Typography>,
+      p: ({ children: value }) => <Typography component="p" sx={{ my: 1, lineHeight: 1.75 }}><WorkspaceMentions>{value}</WorkspaceMentions></Typography>,
       ul: ({ children: value }) => <Box component="ul" sx={{ my: 1, pl: 3.25, "& > li": { mb: .45 } }}>{value}</Box>,
       ol: ({ children: value }) => <Box component="ol" sx={{ my: 1, pl: 3.25, "& > li": { mb: .45 } }}>{value}</Box>,
       li: ({ children: value }) => <Box component="li" sx={{ pl: .25 }}>{value}</Box>,

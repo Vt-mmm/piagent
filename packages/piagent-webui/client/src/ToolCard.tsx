@@ -1,3 +1,4 @@
+import { WorkspaceFileButton } from "./workspace-navigation.tsx";
 import { useState } from "react";
 import AccountTreeOutlined from "@mui/icons-material/AccountTreeOutlined";
 import BuildOutlined from "@mui/icons-material/BuildOutlined";
@@ -86,6 +87,8 @@ export function ToolCard({ tool, locale, live, waiting }: { tool: TimelineTool |
           : <CheckRounded sx={{ fontSize: 16, color: "success.main" }} aria-label={localize(locale, "Xong", "Done")} />}
       {expandable && <ExpandMoreRounded sx={{ fontSize: 18, color: "text.disabled", transition: "transform .15s", transform: open ? "rotate(180deg)" : "none" }} />}
     </ButtonBase>
+    {summary.target && ["read", "write", "edit"].includes(summary.kind) && <WorkspaceFileButton path={summary.target}
+      line={Number.parseInt(summary.detail ?? "1", 10) || 1} />}
     <Collapse in={open && expandable} unmountOnExit>
       <Box sx={{ borderTop: 1, borderColor: "divider", bgcolor: "action.hover", maxHeight: 360, overflow: "auto" }}>
         {summary.detail && summary.kind !== "read" && <Typography variant="body2" color="text.secondary" sx={{ px: 1.25, py: .75, whiteSpace: "pre-wrap",

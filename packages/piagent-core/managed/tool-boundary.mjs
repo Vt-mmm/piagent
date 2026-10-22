@@ -1,3 +1,4 @@
+import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -205,10 +206,11 @@ export class ManagedToolBoundary {
     this.cwd = fs.realpathSync(cwd); this.sdkRoot = fs.realpathSync(sdkRoot);
     this.node = fs.realpathSync(node);
     this.runtimeRoot = fs.realpathSync(path.dirname(workerPath));
+    this.workspacePins = workspaceWorkerPins(this.runtimeRoot);
     this.sdkPath = path.join(this.sdkRoot, 'dist/index.js');
     this.git = managedGit();
     if (JSON.parse(fs.readFileSync(path.join(this.sdkRoot, 'package.json'), 'utf8')).version !== PI_HOST_VERSION) throw new Error('managed-sdk-version-unqualified');
-    const workerModules = ['search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs'].map(name => path.join(this.runtimeRoot, name));
+    const workerModules = ['search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs', 'workspace-worker-pins.mjs'].map(name => path.join(this.runtimeRoot, name));
     this.pins = new Map([this.node, this.git, workerPath, ...workerModules, this.sdkPath].map(file => [file, hash(file)]));
     const userHome = fs.realpathSync(home ?? os.homedir());
     if ([userHome, '/', this.sdkRoot, this.runtimeRoot].includes(this.cwd)
@@ -351,7 +353,8 @@ export class ManagedToolBoundary {
   async #invoke(name, args, signal, onUpdate, model, { network = false, docker = false } = {}) {
     if (docker && !this.engine) throw new Error('managed-tool-unavailable');
     network ||= docker;
-    if (this.#closed || !this.allowed.includes(name) || network && (name !== 'bash' || !this.networkAllowed)) throw new Error('managed-tool-unavailable');
+    if (name === 'workspace') { if (network || docker) throw Error('managed-tool-unavailable'); verifyWorkspaceWorker(this.workspacePins); }
+    if (this.#closed || (name !== 'workspace' && !this.allowed.includes(name)) || network && (name !== 'bash' || !this.networkAllowed)) throw new Error('managed-tool-unavailable');
     if (signal?.aborted) throw new Error('managed-tool-cancelled');
     for (const [file, digest] of this.pins) if (hash(file) !== digest) throw new Error('managed-runtime-changed');
     // `~` (as in an @~/… mention) is the member's home folder: the sandbox's

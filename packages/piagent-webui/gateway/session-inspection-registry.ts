@@ -1,3 +1,4 @@
+import { personalWorkspaceReader } from "../server/workspace-reader.ts";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -118,13 +119,16 @@ export class SessionInspectionRegistry {
   readonly #packageRoot: string;
   readonly #agentDir?: string;
   readonly #models?: ModelRuntime;
+  readonly #managed: boolean;
+  readonly #workspaceRead?: (sessionRef: string, id: string, kind: string, path: string) => Promise<unknown>;
   readonly #projects?: ProjectSource;
   readonly #mcpAuth?: McpAuthBroker;
   readonly #operationLiveness: ((sessionRef: string) => "idle" | "running" | "unknown") | null;
   readonly #providers = new Map<string, { modifiedAt: string; provider: CoreInspectionProvider }>();
 
   constructor(options: { gatewayInstanceRef: string; host: PiHost; key: Buffer; packageRoot: string; agentDir?: string; models?: ModelRuntime; projects?: ProjectSource;
-    mcpAuth?: McpAuthBroker; listSessions?: () => Promise<PiSessionInfo[]>;
+    workspaceRead?: (sessionRef: string, id: string, kind: string, path: string) => Promise<unknown>;
+    managed?: boolean; mcpAuth?: McpAuthBroker; listSessions?: () => Promise<PiSessionInfo[]>;
     openLiveSession?: (sessionRef: string) => ReturnType<PiHost["SessionManager"]["open"]> | null;
     operationLiveness?: (sessionRef: string) => "idle" | "running" | "unknown" }) {
     this.#gatewayInstanceRef = options.gatewayInstanceRef;
@@ -135,6 +139,8 @@ export class SessionInspectionRegistry {
     this.#packageRoot = options.packageRoot;
     this.#agentDir = options.agentDir;
     this.#models = options.models;
+    this.#managed = options.managed === true;
+    this.#workspaceRead = options.workspaceRead;
     this.#projects = options.projects;
     this.#mcpAuth = options.mcpAuth;
     this.#operationLiveness = options.operationLiveness ?? null;
@@ -312,6 +318,17 @@ export class SessionInspectionRegistry {
       approvalProjection: () => piApprovalBroker.projection(info.cwd, info.id),
       approvalDetail: (approvalRef) => piApprovalBroker.detail(info.cwd, info.id, approvalRef)
     });
+    if (this.#managed && this.#workspaceRead) {
+      Object.assign(provider, { workspace: async (kind: string, relative: string) => {
+        const value = await this.#workspaceRead!(sessionRef, info.id, kind, relative);
+        return { schemaVersion: 1, version: `piagent-webui-workspace-${kind}-v1`, generatedAt: new Date().toISOString(),
+          identity: (await provider.snapshot() as { identity: unknown }).identity, ...(value as object) };
+      } });
+    }
+    if (!this.#managed && context.model?.provider !== "agent_watch_managed") {
+      Object.assign(provider, { workspace: personalWorkspaceReader({ cwd: info.cwd, packageRoot: this.#packageRoot,
+        identity: async () => (await provider.snapshot() as { identity: Record<string, unknown> }).identity }) });
+    }
     this.#providers.delete(sessionRef);
     this.#providers.set(sessionRef, { modifiedAt, provider });
     while (this.#providers.size > CACHE_LIMIT) this.#providers.delete(this.#providers.keys().next().value as string);

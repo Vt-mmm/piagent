@@ -659,3 +659,31 @@ describe("Piagent WebUI Git branches", () => {
     assert.deepEqual(switches.map(([, request]) => request.branch), ["feature", "busy", "dirty", "boom"]);
   });
 });
+
+it("workspace session reads require authentication and relay company reads before any local provider", async () => {
+  const relays = [], local = [];
+  const server = await start({
+    relaySessionRead: async (sessionRef, route) => {
+      relays.push({ sessionRef, route });
+      return sessionRef === "session.company" ? { status: 200, value: { boundary: "company" } } : null;
+    },
+    readSessionModel: async (sessionRef) => {
+      local.push(sessionRef);
+      return { workspace: (kind, relative) => ({ kind, relative }) };
+    }
+  });
+  const route = "/api/v1/sessions/session.company/inspection/workspace/file?path=src%2Ffile.ts";
+  assert.equal((await request(server.origin, route)).status, 401);
+  assert.deepEqual(relays, []); assert.deepEqual(local, []);
+  const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+    headers: { Origin: server.origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+  const headers = { Origin: server.origin, Cookie: exchange.headers["set-cookie"][0].split(";", 1)[0] };
+  const company = await request(server.origin, route, { headers });
+  assert.equal(company.status, 200); assert.deepEqual(JSON.parse(company.body), { boundary: "company" });
+  assert.deepEqual(local, []);
+  assert.deepEqual(relays, [{ sessionRef: "session.company", route: "/workspace/file?path=src%2Ffile.ts" }]);
+  const personal = await request(server.origin, route.replace("session.company", "session.personal"), { headers });
+  assert.equal(personal.status, 200); assert.deepEqual(JSON.parse(personal.body), { kind: "file", relative: "src/file.ts" });
+  assert.deepEqual(local, ["session.personal"]);
+});

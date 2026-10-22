@@ -262,6 +262,42 @@
       "role": "transport",
       "supported": true,
       "current": true
+    },
+    {
+      "name": "workspace-tree-v1",
+      "file": "workspace-tree-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/workspace-tree-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "workspace-file-v1",
+      "file": "workspace-file-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/workspace-file-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "workspace-paths-v1",
+      "file": "workspace-paths-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/workspace-paths-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "workspace-search-v1",
+      "file": "workspace-search-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/workspace-search-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
     }
   ]
 }

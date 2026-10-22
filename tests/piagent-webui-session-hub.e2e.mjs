@@ -1,3 +1,4 @@
+import { personalWorkspaceReader } from "../packages/piagent-webui/server/workspace-reader.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -20,6 +21,8 @@ import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 let server, protocol;
+let workspaceMention = "";
+test.afterEach(() => { workspaceMention = ""; });
 let persistedBrowserConversation = false;
 let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
 let sessionSendAttempts = 0, sessionSendEffects = 0;
@@ -217,6 +220,7 @@ test.beforeAll(async () => {
   // identity and revision checks the Gateway applies in production.
   attachments = new SessionAttachmentRegistry({ inspect: async () => inspectionSnapshot });
   const inspectionProvider = {
+    workspace: personalWorkspaceReader({ cwd: mentionProject, packageRoot: root, identity: () => inspectionSnapshot.identity }),
     snapshot: () => inspectionSnapshot,
     sourceChanges: (view) => ({ ...sourceFixture, view, bases: view === "task"
       ? { taskBaselineDigest: "sha256:" + "a".repeat(64), headOid: null, indexDigest: null, workingTreeDigest: null }
@@ -242,7 +246,7 @@ test.beforeAll(async () => {
     activity: () => inspectionSnapshot.activity,
     transcript: () => (transcriptReads += 1, transcriptUnavailable) ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
       { ...transcriptFixture.items[0], messageRef: "message_history_user", content: { ...transcriptFixture.items[0].content,
-        text: "Open the persisted release checklist", textChars: 36 } },
+        text: "Open the persisted release checklist" + workspaceMention, textChars: 36 + workspaceMention.length } },
       { ...transcriptFixture.items[0], messageRef: "message_history_assistant", parentMessageRef: "message_history_user", role: "assistant",
         recordedAt: "2026-08-13T14:00:00.000Z", content: { ...transcriptFixture.items[0].content,
           text: "## Implementation result\n\n**Status:** ready.\n\nThe durable transcript is available.\n\n- Session isolation\n- Formatted output\n\n| Gate | State |\n| --- | --- |\n| Chromium | Pass |\n\n![remote preview](https://example.invalid/track.png) [unsafe](javascript:alert(1))",
@@ -1877,4 +1881,91 @@ test("comments lines of two files on the diff, shows the review helper's finding
   } finally {
     delete row.managedReview; secondSourceFile = false;
   }
+});
+
+test("workspace explorer opens real files in nonce-styled read-only tabs and locks protected files", async ({ page }) => {
+  workspaceMention = " @src/search.md:3";
+  fs.writeFileSync(path.join(mentionProject, "src/example.ts"), "export const fromDiff = true;\n");
+  fs.writeFileSync(path.join(mentionProject, "src/search.md"), "first line\nsecond line\n  needle third line\n");
+  fs.writeFileSync(path.join(mentionProject, ".env"), "EXPLORER_TEST_SECRET=never-render\n");
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error" && /Content Security Policy/.test(message.text())) errors.push(message.text()); });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+  await page.getByRole("button", { name: /^(Tệp|Files)$/ }).click();
+  await expect(page.getByRole("button", { name: /\.env.*(được bảo vệ|protected)/ })).toBeDisabled();
+  await page.getByRole("button", { name: "src", exact: true }).click();
+  await page.getByRole("button", { name: "pricing.js", exact: true }).click();
+  await expect(page.locator(".cm-content")).toContainText("export const vat = 0.1;");
+  await expect(page.locator(".cm-content")).toHaveAttribute("contenteditable", "false");
+  await page.getByRole("button", { name: "cart.js", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "src/pricing.js", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "src/cart.js", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "src/pricing.js", exact: true }).click();
+  await expect(page.locator(".cm-content")).toContainText("export const vat = 0.1;");
+  await page.keyboard.press("Control+p");
+  const quick = page.getByRole("dialog");
+  await expect(quick).toBeVisible();
+  await quick.getByRole("textbox", { name: /Tên tệp|File name/ }).fill("cart");
+  await quick.getByRole("button", { name: "src/cart.js", exact: true }).click();
+  await expect(quick).not.toBeVisible();
+  await expect(page.locator(".cm-content")).toContainText("export {};");
+  await page.getByRole("tab", { name: /^(Tìm kiếm|Search)$/ }).click();
+  await page.getByRole("textbox", { name: /Tìm nội dung|Search contents/ }).fill("needle");
+  await page.getByRole("button", { name: /src\/search.md:3:3/ }).click();
+  await expect(page.locator(".cm-content")).toContainText("needle third line");
+  await expect(page.locator(".cm-activeLineGutter")).toHaveText("3");
+  await page.getByRole("button", { name: "@src/search.md:3", exact: true }).click();
+  await expect(page.locator(".cm-activeLineGutter")).toHaveText("3");
+  await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
+  await page.getByRole("tab", { name: /Source Changes/ }).click();
+  await page.getByRole("button", { name: /Mở trong editor|Open in editor/ }).last().click();
+  await expect(page.locator(".cm-content")).toContainText("export const fromDiff = true;");
+  assert.equal(await page.locator("body").innerText().then(text => text.includes("never-render")), false);
+  assert.deepEqual(errors, []);
+});
+
+for (const width of [390, 1000]) {
+  test(`workspace files and search remain usable in a drawer at ${width}px`, async ({ page }) => {
+    fs.writeFileSync(path.join(mentionProject, "src/narrow.md"), "first\nneedle narrow\n");
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+    await page.getByRole("button", { name: /^(Tệp|Files)$/ }).click();
+    await page.getByRole("button", { name: "src", exact: true }).click();
+    await page.getByRole("button", { name: "narrow.md", exact: true }).click();
+    await expect(page.locator(".cm-content")).toContainText("needle narrow");
+    await page.getByRole("tab", { name: /^(Tìm kiếm|Search)$/ }).click();
+    await page.getByRole("textbox", { name: /Tìm nội dung|Search contents/ }).fill("needle narrow");
+    await page.getByRole("button", { name: /src\/narrow.md:2:1/ }).click();
+    await expect(page.locator(".cm-activeLineGutter")).toHaveText("2");
+    await page.getByRole("button", { name: /^(Đóng|Close)$/ }).click();
+    await expect(page.locator(".cm-content")).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+  });
+}
+
+test("tool file links open at their line and editor tabs do not leak to another session", async ({ page }) => {
+  fs.writeFileSync(path.join(mentionProject, "src/tool-link.ts"), "// first\nexport const toolTarget = true;\n");
+  const base = transcriptFixture.items[0];
+  processTranscript = [{ ...base, messageRef: "message_workspace_tool", parentMessageRef: "message_history_user", role: "assistant",
+    recordedAt: "2026-08-14T09:00:00.000Z", content: { ...base.content, text: "Read the requested source.", textChars: 26 },
+    toolCalls: [{ toolCallRef: "tool_workspace_link", toolName: "read", state: "completed",
+      summary: { kind: "read", target: "src/tool-link.ts", detail: "2–2" } }] }];
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+  await page.getByRole("button", { name: /Mở trong editor|Open in editor/ }).click();
+  await expect(page.locator(".cm-content")).toContainText("export const toolTarget = true;");
+  await expect(page.locator(".cm-activeLineGutter")).toHaveText("2");
+  await page.getByRole("tab", { name: /^(Phiên|Sessions)$/ }).click();
+  await page.getByText("Review source changes", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Review source changes" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "src/tool-link.ts", exact: true })).toHaveCount(0);
+  await expect(page.locator(".cm-content")).toHaveCount(0);
 });

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-workspace-file-v1",
+  "generatedAt": "2026-10-22T00:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "path": "src/example.ts",
+  "language": "typescript",
+  "protected": false,
+  "readOnly": false,
+  "binary": false,
+  "oversized": false,
+  "content": "example",
+  "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "revision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

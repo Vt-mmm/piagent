@@ -1,3 +1,6 @@
+import { WorkspaceSidebarTabs, type WorkspaceSidebarMode } from "./WorkspaceSidebarTabs.tsx";
+import { WorkspaceNavigationProvider } from "./workspace-navigation.tsx";
+import { SessionEditorLayout } from "./SessionEditorLayout.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
@@ -23,6 +26,8 @@ import TextField from "@mui/material/TextField";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
@@ -426,6 +431,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const { locale, colorMode, setLocale, setColorMode } = useUiPreferences();
   const sessionLost = useSessionLost();
   const updates = useUpdates(), [paletteOpen, setPaletteOpen] = useState(false);
+  const [workspaceSidebarMode, setWorkspaceSidebarMode] = useState<WorkspaceSidebarMode>("sessions");
+  const workspaceWide = useMediaQuery(useTheme().breakpoints.up("lg"));
+  const [workspaceNavigationHost, setWorkspaceNavigationHost] = useState<HTMLDivElement | null>(null);
   const [query, setQuery] = useState(""), [selectedRef, setSelectedRef] = useState<string>();
   const [mobileOpen, setMobileOpen] = useState(false), [showArchived, setShowArchived] = useState(false);
   const [view, setView] = useState<HubView>("chat"), [settingsOpen, setSettingsOpen] = useState(false);
@@ -433,12 +441,14 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const [inspectorOpen, setInspectorOpen] = useState(false), [activeInspector, setActiveInspector] = useState<SessionWorkspaceId>("task");
   // The Workspace panel is part of the layout on wide screens and a drawer
   // on narrow ones; the choice is remembered in this browser.
-  const narrow = typeof window !== "undefined" && window.innerWidth < 1200;
+  const narrow = !workspaceWide;
   const [panelOpen, setPanelOpen] = useState(() => {
     try { const stored = window.localStorage.getItem(PANEL_KEY); if (stored) return stored === "open"; } catch { /* storage may be blocked */ }
     return window.innerWidth >= 1200;
   });
-  const togglePanel = () => setPanelOpen((value) => {
+  // Mobile drawers open only by an explicit click, never by a desktop resize.
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const togglePanel = () => narrow ? setMobilePanelOpen(value => !value) : setPanelOpen((value) => {
     try { window.localStorage.setItem(PANEL_KEY, value ? "closed" : "open"); } catch { /* best effort */ }
     return !value;
   });
@@ -656,8 +666,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     updateDot={Boolean(updates.status?.updateAvailable && updates.status.installable)}
     onSettings={() => { openSettings(updates.status?.updateAvailable && updates.status.installable ? "updates" : "general"); setMobileOpen(false); }} />;
   const workspacePanel = view === "chat" && selected ? <ChangesPanel session={selected} snapshot={currentInspection} live={selectedLive} locale={locale}
-    onOpenReview={() => openInspector("source")} onClose={() => setPanelOpen(false)} /> : null;
-  const panelShown = Boolean(workspacePanel) && panelOpen && !inspectorOpen;
+    onOpenReview={() => openInspector("source")} onClose={() => narrow ? setMobilePanelOpen(false) : setPanelOpen(false)} /> : null;
+  const panelShown = Boolean(workspacePanel) && (narrow ? mobilePanelOpen : panelOpen) && !inspectorOpen;
 
   if (sessionLost) return <SessionExpired locale={locale} />;
   if (!catalog && connection !== "failed") return <Stack sx={{ minHeight: "100vh", alignItems: "center", justifyContent: "center" }} spacing={2}>
@@ -669,7 +679,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     actions: { newChat: () => { setCreateError(null); setView("new"); }, togglePanel, openChanges: () => openInspector("source"), refresh: () => void refresh(),
       settings: openSettings, checkUpdates: () => { openSettings("updates"); void updates.check(); }, setColorMode, setLocale, openSession: choose } });
   const running = Object.values(live).filter((item) => item && !item.complete).length;
-  return <Box sx={{ minHeight: "100vh", bgcolor: "background.default", "--piagent-status-bar": { xs: "0px", md: `${STATUS_BAR_HEIGHT}px` } }}>
+  return <WorkspaceNavigationProvider sessionRef={view === "chat" ? selectedSessionRef : undefined} onOpen={() => setInspectorOpen(false)}><Box sx={{ minHeight: "100vh", bgcolor: "background.default", "--piagent-status-bar": { xs: "0px", md: `${STATUS_BAR_HEIGHT}px` } }}>
     <AppBar position="fixed" color="transparent" elevation={0} sx={{ left: { md: `${SIDEBAR_WIDTH}px` }, right: { lg: panelShown ? `${PANEL_WIDTH}px` : 0, xl: inspectorOpen ? INSPECTOR_WIDTH : panelShown ? `${PANEL_WIDTH}px` : 0 },
       width: { xs: "100%", md: "auto" }, borderBottom: 1, transition: "right .2s ease",
       borderColor: "divider", bgcolor: "rgba(var(--piagent-palette-background-defaultChannel) / .9)", backdropFilter: "blur(18px)" }}><Toolbar sx={{ minHeight: "60px !important", gap: 1 }}>
@@ -696,12 +706,15 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     <Box component="nav" sx={{ width: { md: SIDEBAR_WIDTH } }}><Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)}
       sx={{ display: { xs: "block", md: "none" }, "& .MuiDrawer-paper": { width: SIDEBAR_WIDTH } }}>{sidebar}</Drawer><Drawer variant="permanent"
       sx={{ display: { xs: "none", md: "block" }, "& .MuiDrawer-paper": { width: SIDEBAR_WIDTH, borderRight: 1, borderColor: "divider",
-        height: "calc(100% - var(--piagent-status-bar, 0px))" } }}>{sidebar}</Drawer></Box>
+        height: "calc(100% - var(--piagent-status-bar, 0px))" } }}>
+        {workspaceWide && selected && view === "chat" && <WorkspaceSidebarTabs value={workspaceSidebarMode} onChange={setWorkspaceSidebarMode} />}
+        {!workspaceWide || workspaceSidebarMode === "sessions" || !selected || view !== "chat" ? sidebar : <Box ref={setWorkspaceNavigationHost} sx={{ overflow: "auto", flex: 1 }} />}
+      </Drawer></Box>
     <Box component="main" sx={{ ml: { md: `${SIDEBAR_WIDTH}px` }, mr: { lg: panelShown ? `${PANEL_WIDTH}px` : 0, xl: inspectorOpen ? INSPECTOR_WIDTH : panelShown ? `${PANEL_WIDTH}px` : 0 },
       pt: "60px", transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={launchProject ?? selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
         onCreate={(value) => createNewSession(value)} />
-        : selected ? <Conversation key={selected.sessionRef} session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
+        : selected ? <SessionEditorLayout key={selected.sessionRef} sessionRef={selected.sessionRef} navigationHost={workspaceNavigationHost} sidebarMode={workspaceSidebarMode} onSection={setWorkspaceSidebarMode}><Conversation key={selected.sessionRef} session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
             commandActions={{ setModel: (modelRef) => setModel(selected, modelRef), setThinking: (level) => setThinking(selected, level), setFast: (on) => setFast(selected, on),
               setPermission: (value) => setPermission(selected, value), rename: (title) => rename(selected, title), fork: () => fork(selected, null), pin: (on) => pin(selected, on),
               archive: () => archive(selected), newChat: () => { setCreateError(null); setView("new"); }, openChanges: () => openInspector("source"), openSettings: () => openSettings("general") }}
@@ -714,12 +727,12 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
               title: localize(locale, "Chưa dừng được lượt này", "This turn could not be stopped"),
               message: error instanceof Error && error.message === "operation-unavailable"
                 ? localize(locale, "Lượt đã kết thúc hoặc đang chuyển bước. Nếu vẫn còn chạy, bấm Dừng lần nữa.", "The turn already ended or is between steps. If it is still running, press Stop again.")
-                : error instanceof Error ? error.message : "session-abort-failed" }))} restart={() => restart(selected)} onInspector={openInspector} />
+                : error instanceof Error ? error.message : "session-abort-failed" }))} restart={() => restart(selected)} onInspector={openInspector} /></SessionEditorLayout>
             : <EmptyHub locale={locale} canCreate={canCreate} onNew={() => setView("new")} />}
     </Box>
     {workspacePanel && panelShown && !narrow && <Box component="aside" sx={{ display: { xs: "none", lg: "block" }, position: "fixed", top: 0, right: 0, bottom: "var(--piagent-status-bar, 0px)",
       width: PANEL_WIDTH, borderLeft: 1, borderColor: "divider", zIndex: (theme) => theme.zIndex.appBar - 1 }}>{workspacePanel}</Box>}
-    {workspacePanel && <Drawer anchor="right" variant="temporary" open={panelOpen && !inspectorOpen && narrow} onClose={() => setPanelOpen(false)}
+    {workspacePanel && <Drawer anchor="right" variant="temporary" open={mobilePanelOpen && !inspectorOpen && narrow} onClose={() => setMobilePanelOpen(false)}
       sx={{ display: { xs: "block", lg: "none" }, "& .MuiDrawer-paper": { width: `min(${PANEL_WIDTH}px, 88vw)` } }}>{workspacePanel}</Drawer>}
     <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={currentInspection} state={currentInspectionState} sessionRef={selectedSessionRef}
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
@@ -761,7 +774,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
         <Stack direction="row" sx={{ justifyContent: "flex-end" }}><Button variant="contained" onClick={() => setNotice(null)}>
           {localize(locale, "Đóng", "Close")}</Button></Stack></Stack>
     </Dialog>
-  </Box>;
+  </Box></WorkspaceNavigationProvider>;
 }
 
 // Why rename, fork or archive did not happen, in words; the code stays at the

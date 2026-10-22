@@ -39,7 +39,9 @@ function fixture({entrypointSha256 = sha(studioScript), nodeSha256 = sha(node), 
   const file = path.join(agent, 'agent-watch-managed.json');
   fs.writeFileSync(file, JSON.stringify(config));
   // A binding written before the launcher was installed (an update since).
-  const then = new Date(Date.now() - bindingAge * 1000); fs.utimesSync(file, then, then);
+  // Anchor old bindings to the install, not to how recently tests were started.
+  const then = new Date((bindingAge > 0 ? Math.min(Date.now(), fs.statSync(studioScript).ctimeMs) : Date.now()) - bindingAge * 1000);
+  fs.utimesSync(file, then, then);
   return {home, agent, file, config, ran, broker};
 }
 function launch(home) {

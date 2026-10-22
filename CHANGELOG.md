@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Added
+
+- Session Hub opens project files in read-only editor tabs, with Files/Search navigation, Cmd/Ctrl+P, line links from tool calls, source changes and @mentions, and a drawer on smaller screens. Protected files stay locked. Company file reads and searches run inside the session's existing sandbox through its Gateway.
+
 ## v1.37.1 - 2026-10-22
 
 Closes, helper reports and team-memory lessons Studio can trust (from the 2026-10-22 upstream audit), and two outbound-address fixes from the 2026-10-22 security review.

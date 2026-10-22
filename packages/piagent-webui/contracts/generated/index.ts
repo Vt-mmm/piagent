@@ -26,3 +26,7 @@ export type * as SessionCommandV1 from "./session-command-v1.ts";
 export type * as RuntimeCommandV1 from "./runtime-command-v1.ts";
 export type * as GatewayCapabilitiesV1 from "./gateway-capabilities-v1.ts";
 export type * as GatewayProtocolV1 from "./gateway-protocol-v1.ts";
+export type * as WorkspaceTreeV1 from "./workspace-tree-v1.ts";
+export type * as WorkspaceFileV1 from "./workspace-file-v1.ts";
+export type * as WorkspacePathsV1 from "./workspace-paths-v1.ts";
+export type * as WorkspaceSearchV1 from "./workspace-search-v1.ts";

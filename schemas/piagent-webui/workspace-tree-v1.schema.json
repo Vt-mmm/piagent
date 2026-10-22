@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/workspace-tree-v1.schema.json",
+  "title": "Piagent WebUI workspace tree v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "path",
+    "entries",
+    "truncated",
+    "source"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "version": {
+      "const": "piagent-webui-workspace-tree-v1"
+    },
+    "generatedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "identity": {
+      "$ref": "common-v1.schema.json#/$defs/identity"
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "protected",
+          "readOnly",
+          "ignored"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "directory",
+              "symlink",
+              "other"
+            ]
+          },
+          "protected": {
+            "type": "boolean"
+          },
+          "readOnly": {
+            "type": "boolean"
+          },
+          "ignored": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "source": {
+      "enum": [
+        "git",
+        "directory"
+      ]
+    }
+  }
+}

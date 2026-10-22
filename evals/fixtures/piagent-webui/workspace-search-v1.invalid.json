@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-workspace-search-v1",
+  "generatedAt": "2026-10-22T00:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "query": "hello",
+  "truncated": false,
+  "available": true,
+  "backend": "ripgrep",
+  "matches": [
+    {
+      "path": "hello.ts",
+      "line": 0,
+      "column": 3,
+      "preview": "  hello"
+    }
+  ]
+}

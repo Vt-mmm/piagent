@@ -45,7 +45,8 @@ function sameFile(left: fs.Stats, right: fs.Stats): boolean {
 
 function openRegularFile(repoRoot: string, repoPath: string): { descriptor: number; stat: fs.Stats; candidate: SafeCandidate } {
   const candidate = safeCandidate(repoRoot, repoPath);
-  const descriptor = fs.openSync(candidate.absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  // A non-regular entry (notably a FIFO) must reach the fstat refusal without blocking.
+  const descriptor = fs.openSync(candidate.absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
   try {
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new WorkspaceReadError("not-file", "Workspace entry is not a regular file");
