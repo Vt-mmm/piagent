@@ -2,6 +2,26 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.37.0 - 2026-10-22
+
+A cut answer no longer stops a long task, and the company Terminal can be driven by a script.
+
+### Fixes
+
+- **An answer Studio's upstream cut mid-stream is asked again.** Found on 2026-10-21 in the long-task soak: Studio's error event for a cut answer ("Request interrupted", code `upstream_interrupted`) reached Piagent without its code, which the provider libraries drop, so it showed "the request could not be sent" and stopped a long task. Studio's own words now name it `upstream_interrupted`: it is asked again and the task goes on by itself. "The answer ran past its output limit" names `output_limit_exceeded`. "Request ended by Studio" is still not asked again.
+- The company Terminal no longer exits with an error when a conversation closes right after a turn while git still answers for the branch status.
+
+### Added
+
+- **`piagent studio --rpc`**: one company conversation over Pi's RPC protocol on stdin/stdout. Several messages in one conversation; `ask_user` arrives as an extension UI select the client answers.
+- **Long-task soak lane** (`evals/long-task-soak-v1`, repository only): a simulated member drives the real company agent through 45–150-minute multi-phase tasks in real repositories (Node, Python, Go in Docker, PostgreSQL, Playwright, a polyglot monorepo) on the Terminal or the WebUI Gateway. It answers only the business decisions it owns, changes a rule mid-task, presses Stop, restarts the Gateway and nudges when the agent stops early; hidden acceptance checks decide whether the work is done.
+
+### Tests
+
+- `tests/managed-studio-rpc.test.mjs`: two messages in one conversation, `ask_user` answered through the client, a clean exit.
+- `tests/managed-failures.test.mjs`, `tests/managed-provider-retry.test.mjs`: Studio's words for a cut answer and an over-long answer, asked again; "Request ended by Studio" is not.
+- `tests/long-task-soak.test.mjs`: the simulated member's reading of a turn end, its answers, nudges, phases and stalls.
+
 ## v1.36.1 - 2026-10-22
 
 Agent Watch failing to reach a running Studio for a moment no longer stops a task.

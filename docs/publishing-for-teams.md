@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.37.0`: câu trả lời Studio báo "Request interrupted" (upstream bị cắt giữa chừng) được hỏi lại như `upstream_interrupted` thay vì dừng task; thêm `piagent studio --rpc` cho script điều khiển một cuộc trò chuyện công ty; bộ soak task dài `evals/long-task-soak-v1` (chỉ trong repo).
 - `1.36.1`: lỗi `managed-broker` (Agent Watch không tới được Studio) trong lúc Studio vẫn trả lời heartbeat được hỏi lại, chờ tăng dần từ 2 giây, tối đa 3 phút kể từ request thành công gần nhất, rồi mới báo lỗi; bước đóng run cuối lượt cũng vậy; mỗi lần chờ ghi vào `studio-link.jsonl` và báo về Studio (`broker_offline`).
 - `1.36.0`: brief và kết quả `memory_search` gửi kèm `serve_id`; lượt dùng chúng gửi lại `serves` cùng retain (chỉ tới Studio nói protocol 4, Agent Studio 0.37.0) để Studio chấm ghi chú theo câu tiếp theo của member; lệnh lỗi giống nhau hai lần trong một lượt thành bài học; memory của repo bỏ task `not_durable`/`already_known`; skill hay làm hỏng lượt được đề xuất xem lại trong `.pi/piagent-state/skill-proposals`.
 - `1.35.1`: lỗi của máy chủ model ngay giữa câu trả lời (OpenAI `server_error`/`api_error`, Anthropic `api_error`/`overloaded_error`) có mã `upstream_server_error` và được hỏi lại; vòng bị cắt vì lỗi tạm thời của nhà cung cấp tự chạy tiếp sau khi chờ (tối đa 8 lần, 15 giây tăng dần tới 5 phút, mỗi tin nhắn của member), báo agent lý do; mỗi lần hỏi lại ghi vào `studio-link.jsonl`.

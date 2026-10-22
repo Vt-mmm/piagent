@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.37.0 · 2026-10-22</p>
+  <h2 id="v1-37-0">An answer cut mid-stream no longer stops a long task</h2>
+  <p class="section-lead">When the way from Studio to the model is cut while an answer is streaming, Studio says "Request interrupted"; Piagent used to take it as "the request could not be sent" and stopped the whole task. Now it asks again and goes on by itself. New <code>piagent studio --rpc</code> lets a script drive a company conversation over Pi's RPC protocol (several messages, answering the agent's questions).</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.36.1 · 2026-10-22</p>
   <h2 id="v1-36-1">A moment when Agent Watch cannot reach Studio no longer stops a task</h2>
   <p class="section-lead">When Agent Watch on your machine cannot reach Studio while Studio is running (a passing network or gateway error), Piagent asks again, waiting longer each time, for up to 3 minutes, and goes on; before, one such failure stopped the whole task. Closing the run at the end of a round is asked again too. Each wait is written to the log on the machine and reported to Studio.</p>
