@@ -46,14 +46,16 @@ export type Capability = {
   version: number | null;
   reasonCode: string | null;
 };
-export type Request = HealthRequest | ListRequest | GetRequest | CommandRequest;
+export type Request =
+  HealthRequest | ListRequest | GetRequest | CommandRequest | TerminalStateRequest | TerminalCommandRequest;
 export type HealthRequest = RequestBase & {
   method?: "gateway.health";
   params?: {};
   [k: string]: any;
 };
 export type RequestId = string;
-export type Method = "gateway.health" | "sessions.list" | "sessions.get" | "sessions.command";
+export type Method =
+  "gateway.health" | "sessions.list" | "sessions.get" | "sessions.command" | "terminals.state" | "terminals.command";
 export type ListRequest = RequestBase & {
   method?: "sessions.list";
   params?: {
@@ -170,7 +172,24 @@ export type CommandRequest = RequestBase & {
   };
   [k: string]: any;
 };
-export type SuccessResponse = HealthResponse | ListResponse | GetResponse | CommandResponse;
+export type TerminalStateRequest = RequestBase & {
+  method?: "terminals.state";
+  params?: {
+    sessionRef: string;
+    csrfToken: string;
+  };
+  [k: string]: any;
+};
+export type TerminalCommandRequest = RequestBase & {
+  method?: "terminals.command";
+  params?: {
+    command: TerminalCommand;
+    csrfToken: string;
+  };
+  [k: string]: any;
+};
+export type SuccessResponse =
+  HealthResponse | ListResponse | GetResponse | CommandResponse | TerminalStateResponse | TerminalCommandResponse;
 export type HealthResponse = ResponseBase & {
   method?: "gateway.health";
   ok?: true;
@@ -461,6 +480,20 @@ export type Receipt = {
     message: string;
   };
 };
+export type TerminalStateResponse = ResponseBase & {
+  method?: "terminals.state";
+  ok?: true;
+  result?: TerminalState;
+  error?: null;
+  [k: string]: any;
+};
+export type TerminalCommandResponse = ResponseBase & {
+  method?: "terminals.command";
+  ok?: true;
+  result?: TerminalReceipt;
+  error?: null;
+  [k: string]: any;
+};
 export type ErrorResponse = ResponseBase & {
   ok?: false;
   result?: null;
@@ -596,6 +629,48 @@ export interface BaseCommandProperties {
     [k: string]: any;
   };
 }
+export interface TerminalCommand {
+  schemaVersion: 1;
+  version: "piagent-terminal-v1";
+  messageType: "command";
+  commandId: string;
+  idempotencyKey: string;
+  requestedAt: string;
+  expiresAt: string;
+  action: "terminal.command";
+  actionDigest: string;
+  identity: TerminalIdentity;
+  expectedRevisions: TerminalRevisions;
+  payload: TerminalOpen | TerminalInput | TerminalResize | TerminalClose;
+}
+export interface TerminalIdentity {
+  gatewayInstanceRef: string;
+  sessionRef: string;
+  runtimeInstanceRef: string;
+}
+export interface TerminalRevisions {
+  terminalRevision: string;
+}
+export interface TerminalOpen {
+  kind: "open";
+  cols: number;
+  rows: number;
+}
+export interface TerminalInput {
+  kind: "input";
+  terminalRef: string;
+  data: string;
+}
+export interface TerminalResize {
+  kind: "resize";
+  terminalRef: string;
+  cols: number;
+  rows: number;
+}
+export interface TerminalClose {
+  kind: "close";
+  terminalRef: string;
+}
 export interface ResponseBase {
   schemaVersion: 1;
   version: "piagent-gateway-protocol-v1";
@@ -621,6 +696,48 @@ export interface SessionDetail {
   gatewayInstanceRef: string;
   catalogRevision: string;
   session: SessionRow;
+}
+export interface TerminalState {
+  schemaVersion: 1;
+  version: "piagent-terminal-v1";
+  messageType: "state";
+  identity: TerminalIdentity;
+  revisions: TerminalRevisions;
+  available: boolean;
+  reasonCode: string | null;
+  /**
+   * @maxItems 4
+   */
+  terminals:
+    | []
+    | [TerminalSummary]
+    | [TerminalSummary, TerminalSummary]
+    | [TerminalSummary, TerminalSummary, TerminalSummary]
+    | [TerminalSummary, TerminalSummary, TerminalSummary, TerminalSummary];
+}
+export interface TerminalSummary {
+  terminalRef: string;
+  number: number;
+  state: "running" | "exited";
+  cols: number;
+  rows: number;
+  sequence: number;
+  exitCode: number | null;
+}
+export interface TerminalReceipt {
+  schemaVersion: 1;
+  version: "piagent-terminal-v1";
+  messageType: "receipt";
+  commandId: string;
+  idempotencyKey: string;
+  action: "terminal.command";
+  actionDigest: string;
+  identity: TerminalIdentity;
+  observedRevisions: TerminalRevisions;
+  phase: "settled" | "rejected" | "uncertain";
+  terminalRef: string | null;
+  reasonCode: string | null;
+  deduplicated: boolean;
 }
 export interface ProtocolError {
   code: string;

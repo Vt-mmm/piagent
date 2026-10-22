@@ -66,3 +66,37 @@ hiện tại đầy đủ, chưa che nội dung. CRLF và thiếu newline cuối
 xác. Sửa qua shell chưa được quan sát hoặc quan sát mất khi runtime khởi động lại
 không nhận dấu hunk agent. Company review và hoàn tác trong sandbox của phiên.
 Terminal tương tác và khôi phục checkpoint thuộc các milestone sau.
+
+## Terminal personal
+
+Chọn **Terminal** cạnh Tệp, rồi **+** để mở shell của member trong project của
+cuộc trò chuyện. Mỗi cuộc trò chuyện có tối đa bốn tab. Panel nằm dưới editor trên
+màn rộng và mở drawer bên dưới trên màn hẹp. Kéo thanh phân cách để đổi chiều cao,
+hoặc focus vào thanh và dùng phím mũi tên. Terminal theo theme hiện tại;
+Ctrl+C ngắt lệnh đang chạy ở foreground.
+
+Lệnh tự gõ chạy với quyền host của member, không hỏi duyệt như lệnh agent.
+Terminal personal không phải sandbox. Đóng terminal, release hoặc restart phiên,
+hay tắt Gateway sẽ dừng process group và các tiến trình con đã quan sát. Shell tự
+thoát cũng dọn các tiến trình còn trong process group. Tiến trình chủ động tách
+sang session khác nằm ngoài vòng đời process group đó.
+
+Ẩn panel hoặc reload trang giữ shell khi runtime Gateway vẫn còn sống. Mở lại
+phát lại tối đa 64 KB output đã giữ của mỗi tab. Bản phát lại và phần đính cho agent
+che secret nhận diện được; terminal trực tiếp hiển thị output gốc cho member.
+Restart Gateway xóa terminal và buffer. Nếu mất biên nhận lệnh, input tạm dừng:
+**Kiểm tra lại lệnh** hỏi về đúng lệnh cũ. Kiểm tra terminal trước khi chọn
+**Đã kiểm tra, tiếp tục**. Lệnh chờ còn trong bộ nhớ trang khi đổi panel, không còn
+sau khi reload trang.
+
+Gõ `@terminal` (terminal 1) hoặc `@terminal:2` trong composer, rồi bấm Gửi để đính
+output hiện tại đã che secret. Mention lặp chỉ đính một lần, tối đa bốn tab với
+tổng 64 KB output. Terminal không tồn tại sẽ từ chối lần gửi. Output được trích
+như dữ liệu không đáng tin; chỉ gõ mention chưa gửi gì. Số tab tăng trong runtime
+và không dùng lại sau khi đóng.
+
+Module PTY native là tùy chọn và có thể không khả dụng. Panel báo lý do và
+`piagent-doctor --json` có `productReadiness.personalTerminal`; các phần dashboard
+khác vẫn dùng được. Doctor kiểm tra việc nạp module, không khẳng định đã thử mở
+shell. Chưa hỗ trợ Windows native; dùng WSL. Bản terminal personal này chưa bật
+terminal company và không bao giờ chuyển sang mở shell company trên host.

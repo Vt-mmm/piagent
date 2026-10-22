@@ -1,3 +1,4 @@
+import { terminalTransport } from "./terminal-transport.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
@@ -319,7 +320,7 @@ export function useSessionHub(): SessionHub {
       if (stopped || browserSessionLost()) return;
       setConnection(attempt === 0 ? "connecting" : "reconnecting");
       const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${scheme}//${window.location.host}/api/v1/gateway`, "piagent.gateway.v1"); socketRef.current = socket;
+      const socket = new WebSocket(`${scheme}//${window.location.host}/api/v1/gateway`, "piagent.gateway.v1"); socketRef.current = socket; terminalTransport.attach(socket);
       const helloTimeout = window.setTimeout(() => socket.close(1008, "hello-timeout"), 5_000);
       socket.addEventListener("open", () => socket.send(JSON.stringify({ schemaVersion: 1, version: "piagent-gateway-protocol-v1",
         messageType: "connect", clientRef, minimumProtocol: 1, maximumProtocol: 1, lastEventSequence: sequenceRef.current,
@@ -494,7 +495,6 @@ export function useSessionHub(): SessionHub {
       pendingRef.current.clear(); socketRef.current?.close(1000, "client-unmount");
       document.removeEventListener("visibilitychange", visible); };
   }, [persistCursor, refresh]);
-
   return { catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission, setFast,
     rename, pin, archive, unarchive, fork };
 }

@@ -93,8 +93,11 @@ export class SessionAuthority {
   }
 
   authorizeMutation(request: IncomingMessage, now = Date.now()): BrowserSession | null {
+    return this.authorizeMutationToken(request, request.headers["x-piagent-csrf"], now);
+  }
+
+  authorizeMutationToken(request: IncomingMessage, csrf: unknown, now = Date.now()): BrowserSession | null {
     const session = this.authenticate(request, now);
-    const csrf = request.headers["x-piagent-csrf"];
     return session && typeof csrf === "string" && equal(csrf, session.csrf) ? session : null;
   }
 

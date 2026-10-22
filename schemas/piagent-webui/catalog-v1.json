@@ -307,6 +307,15 @@
       "role": "command",
       "supported": true,
       "current": true
+    },
+    {
+      "name": "terminal-v1",
+      "file": "terminal-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/terminal-v1.schema.json",
+      "documentVersion": 1,
+      "role": "transport",
+      "supported": true,
+      "current": true
     }
   ]
 }

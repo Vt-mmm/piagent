@@ -32,22 +32,21 @@ export class SessionRuntimeSupervisor {
   readonly #runtimeFactory: RuntimeFactory; readonly #events: GatewayEventStore; readonly #settledOwners = new Set<string>();
   readonly #host: any | null; readonly #operationDeadlinePolicy: SessionOperationDeadlinePolicy;
   readonly #resolveProject: ((projectRef: string) => string | null) | null;
-  readonly #sessionDirectory?: string;
+  readonly #sessionDirectory?: string; readonly #closeSessionResources: (sessionRef: string) => Promise<void>;
   readonly #settleOperation: ReturnType<typeof createSessionOperationSettlement>;
   readonly #active = new Map<string, ActiveRuntime>(); readonly #opening = new Map<string, Promise<SessionLeaseSnapshot>>();
   readonly #created = new Map<string, PiSessionInfo>(); #closed = false; #closing: Promise<void> | null = null; #readProjection: ((sessionRef: string) => Promise<Projection>) | null = null;
   constructor(options: {
-    gatewayInstanceRef: string;
-    key: Buffer;
+    gatewayInstanceRef: string; key: Buffer;
     leases: SessionLeaseStore;
     listSessions(): Promise<PiSessionInfo[]>;
     runtimeFactory?: RuntimeFactory;
     host?: any;
-    agentDir?: string;
-    packageRoot?: string;
+    agentDir?: string; packageRoot?: string;
     modelRuntime?: any;
     scopedBrokerRouter?: ScopedBrokerRouter;
     sessionDirectory?: string;
+    closeSessionResources?(sessionRef: string): Promise<void>;
     events?: GatewayEventStore;
     operationWatchdog?: SessionOperationWatchdogOptions;
     resolveProject?(projectRef: string): string | null;
@@ -61,7 +60,7 @@ export class SessionRuntimeSupervisor {
     this.#host = options.host ?? null;
     this.#operationDeadlinePolicy = sessionOperationDeadlinePolicy(options.operationWatchdog);
     this.#resolveProject = options.resolveProject ?? null;
-    this.#sessionDirectory = options.sessionDirectory;
+    this.#sessionDirectory = options.sessionDirectory; this.#closeSessionResources = options.closeSessionResources ?? (async () => {});
     this.#settleOperation = createSessionOperationSettlement(options);
     if (options.runtimeFactory) this.#runtimeFactory = options.runtimeFactory;
     else {
@@ -169,7 +168,7 @@ export class SessionRuntimeSupervisor {
     if (active.operationRef || active.settling) throw new Error("session-runtime-busy");
     this.#active.delete(sessionRef);
     bestEffortUnsubscribe(active.unsubscribeApproval); bestEffortUnsubscribe(active.unbindApproval);
-    try { await active.runtime.dispose(); }
+    try { await this.#closeSessionResources(sessionRef); await active.runtime.dispose(); }
     catch (error) {
       try { this.#leases.requireRecovery(sessionRef, active.lease.ownerEpoch!, this.#gatewayInstanceRef,
         active.lease.runtimeInstanceRef!, "session-runtime-dispose-failed"); } catch { /* remains fail closed */ }
@@ -308,6 +307,7 @@ export class SessionRuntimeSupervisor {
     if (active.lastSessionRevision) this.#events.publish("runtime.changed", { sessionRef,
       sessionRevision: active.lastSessionRevision, liveState: "uncertain", operationRef: null,
       ...(messageRequestId ? { messageRequestId } : {}), reasonCode });
+    await this.#closeSessionResources(sessionRef);
     await boundedResult(Promise.resolve().then(() => active.runtime.dispose()), this.#operationDeadlinePolicy.terminationTimeoutMs);
   }
   #bindApproval(sessionRef: string, active: ActiveRuntime): void {

@@ -70,3 +70,38 @@ current, complete, unredacted diff. CRLF and missing final newlines are compared
 exactly. Unobserved shell edits and observations lost on runtime restart do not
 receive agent hunk markers. Company review and revert run inside its sandbox.
 Interactive terminals and checkpoint restore are later milestones.
+
+## Personal terminal
+
+Choose **Terminal** beside Files, then **+** to open the member's shell in the
+conversation's project. Each conversation supports four tabs. The panel sits
+below the editor on wide screens and opens a bottom drawer on smaller screens.
+Drag the separator to change its height, or focus it and use the arrow keys.
+The terminal follows the current theme; Ctrl+C interrupts the foreground command.
+
+Typed commands run with the member's host privileges, without an agent approval
+prompt. Personal terminal execution is not a sandbox. Closing a terminal,
+releasing or restarting its session, or shutting down the Gateway stops its
+process group and observed descendants. A shell exit also cleans remaining
+process-group children. Processes deliberately detached into another session
+are outside that process group's lifetime.
+
+Hiding the panel or reloading the page preserves the shell while its Gateway
+runtime remains alive. Reopening replays up to 64 KB of retained output per tab.
+Replay and agent attachments redact recognized secrets; the live terminal shows
+the member's own raw output. Restarting the Gateway clears terminals and buffers.
+If a command's receipt is lost, input pauses: **Check command again** asks about
+the same command. Check the terminal before choosing **Checked, continue**.
+Pending commands survive panel changes in page memory, not a page reload.
+
+Write `@terminal` (terminal 1) or `@terminal:2` in the composer, then press Send
+to attach the current redacted output. Repeated mentions attach a tab once, with
+at most four tabs and a combined 64 KB of output. Missing terminals refuse the
+send. Output is quoted as untrusted evidence; merely typing a mention sends
+nothing. Tab numbers increase within the runtime and are not reused after close.
+
+The optional native PTY module can be unavailable. The panel explains this and
+`piagent-doctor --json` reports `productReadiness.personalTerminal`; other dashboard
+features remain usable. Doctor checks module loading and does not claim a shell
+spawn test. Native Windows is unavailable; use WSL. Company terminal execution
+is not enabled by this personal implementation and never falls back to a host shell.

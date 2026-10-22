@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-terminal-v1",
+  "messageType": "state",
+  "identity": {
+    "gatewayInstanceRef": "gateway.fixture",
+    "sessionRef": "session.fixture",
+    "runtimeInstanceRef": "runtime.fixture",
+    "cwd": "/private/project"
+  },
+  "revisions": {
+    "terminalRevision": "terminal.rev1"
+  },
+  "available": true,
+  "reasonCode": null,
+  "terminals": []
+}

@@ -22,7 +22,7 @@ function fixture(t, composite) {
     firstMessage: "Synthetic close", allMessagesText: "Synthetic close" };
   const entered = deferred(), finish = deferred(), listeners = new Set(), observed = [];
   const events = new GatewayEventStore(); events.subscribe(event => observed.push(event));
-  let disposed = 0;
+  let disposed = 0; const resourcesClosed = [];
   const session = { isIdle: true, isStreaming: false,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     async prompt() { for (const listener of listeners) listener({ type: "agent_start" });
@@ -40,12 +40,13 @@ function fixture(t, composite) {
   const leases = new SessionLeaseStore(root, key), ref = sessionRefForPath(key, target.path);
   const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_close_test", key, leases, events,
     listSessions: async () => [target], operationWatchdog: { terminationTimeoutMs: 100, projectionTimeoutMs: 100 },
-    runtimeFactory: async () => ({ session, async dispose() { disposed++; } }) });
+    closeSessionResources: async sessionRef => { assert.equal(supervisor.liveSessionManager(sessionRef), null); resourcesClosed.push(sessionRef); },
+    runtimeFactory: async () => ({ session, async dispose() { assert.equal(resourcesClosed.at(-1), ref); disposed++; } }) });
   supervisor.setProjectionReader(async () => {
     if (!composite) { entered.resolve(); await finish.promise; }
     return { sessionRevision: "revision_closed", liveState: "idle" };
   });
-  return { supervisor, ref, leases, entered, finish, observed, disposed: () => disposed };
+  return { supervisor, ref, leases, entered, finish, observed, resourcesClosed, disposed: () => disposed };
 }
 
 test("close waits for ordinary settlement and releases the runtime once", { timeout: 2000 }, async t => {
@@ -57,19 +58,19 @@ test("close waits for ordinary settlement and releases the runtime once", { time
   const secondClosing = f.supervisor.close().then(() => { secondClosed = true; });
   await tick(); assert.equal(closed, false); assert.equal(secondClosed, false);
   f.finish.resolve(); await Promise.all([closing, secondClosing]);
-  assert.equal(f.supervisor.activeCount, 0); assert.equal(f.disposed(), 1);
+  assert.equal(f.supervisor.activeCount, 0); assert.equal(f.disposed(), 1); assert.deepEqual(f.resourcesClosed, [f.ref]);
   assert.equal(f.leases.inspect(f.ref).state, "released");
-  await f.supervisor.close(); assert.equal(f.disposed(), 1);
+  await f.supervisor.close(); assert.equal(f.disposed(), 1); assert.deepEqual(f.resourcesClosed, [f.ref]);
 });
 
 test("close quarantines stalled settlement and late completion cannot restore authority", { timeout: 2000 }, async t => {
   const f = fixture(t, true);
   await f.supervisor.send(f.ref, { delivery: "new-operation", message: "Finish", expectedOperationRef: null }, "revision_start");
   await f.entered.promise; await f.supervisor.close();
-  assert.equal(f.supervisor.activeCount, 0); assert.equal(f.disposed(), 1);
+  assert.equal(f.supervisor.activeCount, 0); assert.equal(f.disposed(), 1); assert.deepEqual(f.resourcesClosed, [f.ref]);
   assert.equal(f.leases.inspect(f.ref).state, "recovery-required");
   f.finish.resolve(); await tick(); await f.supervisor.close();
-  assert.equal(f.supervisor.activeCount, 0); assert.equal(f.disposed(), 1);
+  assert.equal(f.supervisor.activeCount, 0); assert.equal(f.disposed(), 1); assert.deepEqual(f.resourcesClosed, [f.ref]);
   assert.equal(f.leases.inspect(f.ref).state, "recovery-required");
   const terminals = f.observed.filter(event => event.kind === "operation.settled");
   assert.equal(terminals.length, 1);

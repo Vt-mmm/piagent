@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/terminal-v1.schema.json",
+  "title": "Piagent session terminal v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/state"
+    },
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    },
+    {
+      "$ref": "#/$defs/output"
+    },
+    {
+      "$ref": "#/$defs/exit"
+    }
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gatewayInstanceRef",
+        "sessionRef",
+        "runtimeInstanceRef"
+      ],
+      "properties": {
+        "gatewayInstanceRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "sessionRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "runtimeInstanceRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        }
+      },
+      "title": "Terminal identity"
+    },
+    "revisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminalRevision"
+      ],
+      "properties": {
+        "terminalRevision": {
+          "$ref": "common-v1.schema.json#/$defs/revisionToken"
+        }
+      },
+      "title": "Terminal revisions"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminalRef",
+        "number",
+        "state",
+        "cols",
+        "rows",
+        "sequence",
+        "exitCode"
+      ],
+      "properties": {
+        "terminalRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "enum": [
+            "running",
+            "exited"
+          ]
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 500
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "Terminal summary"
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "identity",
+        "revisions",
+        "available",
+        "reasonCode",
+        "terminals"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-terminal-v1"
+        },
+        "messageType": {
+          "const": "state"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "revisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "reasonCode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        },
+        "terminals": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/summary"
+          }
+        }
+      },
+      "title": "Terminal state"
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKey",
+        "requestedAt",
+        "expiresAt",
+        "action",
+        "actionDigest",
+        "identity",
+        "expectedRevisions",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-terminal-v1"
+        },
+        "messageType": {
+          "const": "command"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKey": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "action": {
+          "const": "terminal.command"
+        },
+        "actionDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "expectedRevisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "cols",
+                "rows"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "open"
+                },
+                "cols": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 500
+                },
+                "rows": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              },
+              "title": "Terminal open"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "terminalRef",
+                "data"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "input"
+                },
+                "terminalRef": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                },
+                "data": {
+                  "type": "string",
+                  "maxLength": 16384
+                }
+              },
+              "title": "Terminal input"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "terminalRef",
+                "cols",
+                "rows"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "resize"
+                },
+                "terminalRef": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                },
+                "cols": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 500
+                },
+                "rows": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              },
+              "title": "Terminal resize"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "terminalRef"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "close"
+                },
+                "terminalRef": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                }
+              },
+              "title": "Terminal close"
+            }
+          ]
+        }
+      },
+      "title": "Terminal command"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKey",
+        "action",
+        "actionDigest",
+        "identity",
+        "observedRevisions",
+        "phase",
+        "terminalRef",
+        "reasonCode",
+        "deduplicated"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-terminal-v1"
+        },
+        "messageType": {
+          "const": "receipt"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKey": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "action": {
+          "const": "terminal.command"
+        },
+        "actionDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "observedRevisions": {
+          "$ref": "#/$defs/revisions"
+        },
+        "phase": {
+          "enum": [
+            "settled",
+            "rejected",
+            "uncertain"
+          ]
+        },
+        "terminalRef": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasonCode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        },
+        "deduplicated": {
+          "type": "boolean"
+        }
+      },
+      "title": "Terminal receipt"
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "identity",
+        "terminalRef",
+        "sequence",
+        "data",
+        "replay",
+        "reset",
+        "complete",
+        "truncated"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-terminal-v1"
+        },
+        "messageType": {
+          "const": "output"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "terminalRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "replay": {
+          "type": "boolean"
+        },
+        "reset": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "title": "Terminal output"
+    },
+    "exit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "identity",
+        "terminalRef",
+        "sequence",
+        "exitCode",
+        "signal"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-terminal-v1"
+        },
+        "messageType": {
+          "const": "exit"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "terminalRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "signal": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "Terminal exit"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { PersonalTerminalProcesses } from '../packages/piagent-webui/gateway/personal-terminal-processes.ts';
+const until = async check => { const end = Date.now() + 8000; while (!check()) { if (Date.now() > end) throw Error('terminal-wait-timeout'); await new Promise(resolve => setTimeout(resolve, 25)); } };
+const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+
+test('personal PTY runs in project, resizes, interrupts and closes shell plus background child', async t => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'personal-terminal-'));
+  t.after(() => fs.rmSync(cwd, {recursive:true,force:true}));
+  let text = '';
+  const terminals = new PersonalTerminalProcesses(event => { if (event.kind === 'output') text += event.data; });
+  t.after(() => terminals.dispose());
+  assert.equal(terminals.unavailableReason, null);
+  const terminal = terminals.open({sessionRef:'session.one',mode:'personal',cwd},{cols:80,rows:24},'/bin/sh');
+  terminals.input('session.one',terminal.terminalRef,"pwd; printf 'READY_OK\\n'\n");
+  await until(() => text.includes('READY_OK\r\n'));
+  assert.ok(text.includes(fs.realpathSync(cwd)) || text.includes(cwd));
+  terminals.resize('session.one',terminal.terminalRef,{cols:101,rows:37});
+  terminals.input('session.one',terminal.terminalRef,'stty size\n');
+  await until(() => text.includes('37 101'));
+  terminals.input('session.one',terminal.terminalRef,'sleep 30\n');
+  await new Promise(resolve=>setTimeout(resolve,100));
+  terminals.input('session.one',terminal.terminalRef,'\x03');
+  terminals.input('session.one',terminal.terminalRef,"printf 'AFTER_INTERRUPT\\n'\n");
+  await until(() => text.includes('AFTER_INTERRUPT\r\n'));
+  terminals.input('session.one',terminal.terminalRef,'sleep 30 & echo $! > child.pid\n');
+  await until(()=>fs.existsSync(path.join(cwd,'child.pid')));
+  const pid=Number(fs.readFileSync(path.join(cwd,'child.pid'),'utf8'));
+  assert.ok(alive(pid));
+  assert.throws(()=>terminals.input('session.other',terminal.terminalRef,'echo bad\n'),/terminal-not-found/);
+  assert.throws(()=>terminals.input('session.one',terminal.terminalRef,'x'.repeat(16385)),/terminal-input-limit/);
+  await terminals.closeSession('session.one');
+  await until(()=>!alive(terminal.pid)&&!alive(pid));
+  assert.deepEqual(terminals.list('session.one'),[]);
+});
+
+test('personal PTY refuses company, bounds tabs and fails softly without native module', async t => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-limits-'));
+  t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+  const terminals=new PersonalTerminalProcesses(()=>{});t.after(()=>terminals.dispose());
+  const scope={sessionRef:'session.limits',mode:'personal',cwd},size={cols:80,rows:24};
+  assert.throws(()=>terminals.open({...scope,mode:'company'},size),/company-boundary-required/);
+  assert.throws(()=>terminals.open(scope,{cols:0,rows:24}),/terminal-invalid-size/);
+  for(let i=0;i<4;i++)terminals.open(scope,size,'/bin/sh');
+  assert.throws(()=>terminals.open(scope,size,'/bin/sh'),/terminal-limit/);
+  await terminals.dispose();
+  assert.throws(()=>terminals.open(scope,size),/terminal-session-closed/);
+  const unavailable=new PersonalTerminalProcesses(()=>{},()=>{ throw new Error('native module unavailable'); });
+  assert.equal(unavailable.unavailableReason,'terminal-native-module-unavailable');
+  assert.throws(()=>unavailable.open(scope,size),/terminal-native-module-unavailable/);
+});
+
+test('natural shell exit cleans remaining process-group children before closing an exited tab',async t=>{
+  const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'terminal-exit-'));
+  t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
+  let exited=false;
+  const terminals=new PersonalTerminalProcesses(event=>{if(event.kind==='exit')exited=true;});t.after(()=>terminals.dispose());
+  const terminal=terminals.open({sessionRef:'session.exit',mode:'personal',cwd},{cols:80,rows:24},'/bin/sh');
+  terminals.input('session.exit',terminal.terminalRef,"set +m; trap '' HUP; sleep 30 & echo $! > child.pid\n");
+  await until(()=>fs.existsSync(path.join(cwd,'child.pid')));
+  const pid=Number(fs.readFileSync(path.join(cwd,'child.pid'),'utf8'));assert.ok(alive(pid));
+  t.after(()=>{try{process.kill(pid,'SIGKILL');}catch{}});
+  terminals.input('session.exit',terminal.terminalRef,'exit\n');
+  await until(()=>exited);await until(()=>!alive(pid));
+  assert.equal(terminals.list('session.exit')[0].exited,true);
+  await terminals.closeSession('session.exit');assert.deepEqual(terminals.list('session.exit'),[]);
+});

@@ -6,6 +6,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Added
 
+- Personal Session Hub terminals open up to four project shells with lazy xterm tabs, resizing, Ctrl+C and reconnect replay. Session teardown cleans terminal processes. Explicit `@terminal`/`@terminal:2` sends attach bounded redacted output. Optional native PTY failures leave the dashboard usable and appear in Doctor; company terminals never fall back to host execution.
+
 - Session Hub reviews exact observed agent hunks inline, with Keep, preview-confirmed Revert, hunk navigation/counts and current/removed-line comments to the composer. Clean tabs refresh after agent changes; dirty drafts retain conflict handling. Company source review and revert run in the existing sandbox. New untracked agent files support review; deletion through hunk revert remains unavailable.
 
 - Session Hub edits and atomically saves files with Cmd/Ctrl+S, dirty tabs, new files and digest conflicts (Reload/Compare/confirmed Overwrite). Live permission and protected-path checks apply in personal and company mode. Durable receipts prevent duplicate saves; member edits notify the next agent turn and invalidate stale agent edits.

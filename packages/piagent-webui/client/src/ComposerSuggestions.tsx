@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useLayoutEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import AutoAwesomeOutlined from "@mui/icons-material/AutoAwesomeOutlined";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import FolderOutlined from "@mui/icons-material/FolderOutlined";
@@ -85,17 +85,20 @@ export function useComposerSuggestions({ projectRef, value, onChange, locale, bu
   const suggestions = open ? items! : [];
   useEffect(() => { if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" }); }, [open, active, listId]);
 
+  const pendingSelection = useRef<{ text: string; caret: number } | null>(null);
+  useLayoutEffect(() => {
+    const selection = pendingSelection.current, input = inputRef.current;
+    if (!selection || !input || selection.text !== value) return;
+    pendingSelection.current = null;
+    input.focus(); input.setSelectionRange(selection.caret, selection.caret); setCaret(selection.caret);
+  }, [value]);
   const pick = (item: Item) => {
     if (!live) return;
     const next = item.apply(value, live);
+    // Restore selection in the text commit, before another keystroke can arrive.
+    // A later animation frame can move the caret behind freshly typed text.
+    pendingSelection.current = next;
     onChange(next.text); setCaret(next.caret);
-    // React writing the new text moves the caret to its end (past a closing
-    // quote); a late selection event would then close the menu. The caret is
-    // put back, and recorded again, once the text is on screen.
-    requestAnimationFrame(() => {
-      const input = inputRef.current; if (!input) return;
-      input.focus(); input.setSelectionRange(next.caret, next.caret); setCaret(next.caret);
-    });
   };
   const onKeyDown = (event: KeyboardEvent): boolean => {
     if (!open || event.nativeEvent.isComposing || event.keyCode === 229) return false;

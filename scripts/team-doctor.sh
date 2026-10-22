@@ -512,8 +512,12 @@ const verifyGroups = projectProfile?.verifyCommands && typeof projectProfile.ver
   : [];
 const stateRoot = path.join(projectPath, ".pi", "piagent-state");
 const expectedPiHostVersion = rootPackage.peerDependencies?.["@earendil-works/pi-coding-agent"] ?? null;
+const { personalTerminalDiagnostic } = await import(pathToFileURL(path.join(platformRoot, "packages/piagent-webui/gateway/personal-terminal-diagnostic.mjs")).href);
+const terminalReadiness = personalTerminalDiagnostic();
+if (!terminalReadiness.available) warnings.push(`Personal terminal unavailable: ${terminalReadiness.reasonCode}; the dashboard remains available.`);
 const productReadiness = {
   schemaVersion: 1,
+  personalTerminal: terminalReadiness,
   versionAlignment: {
     piHostExpected: expectedPiHostVersion,
     piHostObserved: runtimeModel.piHostVersion,

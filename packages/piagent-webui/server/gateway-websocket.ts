@@ -1,3 +1,4 @@
+import { TerminalWebSocketStream, type TerminalStreamPort } from "./terminal-websocket-stream.ts";
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -13,9 +14,10 @@ type GatewayProtocolEvent = {
   sequence: number;
   [key: string]: unknown;
 };
-export type GatewayRequest = { requestId: string; method: "gateway.health" | "sessions.list" | "sessions.get" | "sessions.command"; params: Record<string, unknown> };
+export type GatewayRequest = { requestId: string; method: "gateway.health" | "sessions.list" | "sessions.get" | "sessions.command" | "terminals.state" | "terminals.command"; params: Record<string, unknown> };
 export type GatewayProtocolHandler = {
   capabilities(): unknown;
+  terminalEvents?: TerminalStreamPort;
   execute(request: GatewayRequest): Promise<unknown>;
   events: {
     readonly stateVersion: number;
@@ -44,12 +46,18 @@ function parseConnect(value: unknown): { lastEventSequence: number | null } | nu
 function parseRequest(value: unknown): GatewayRequest | null {
   if (!record(value) || !exactKeys(value, ["schemaVersion", "version", "messageType", "requestId", "method", "params"]) || value.schemaVersion !== 1
     || value.version !== "piagent-gateway-protocol-v1" || value.messageType !== "request" || typeof value.requestId !== "string"
-    || !REQUEST_ID.test(value.requestId) || !["gateway.health", "sessions.list", "sessions.get", "sessions.command"].includes(String(value.method))
+    || !REQUEST_ID.test(value.requestId) || !["gateway.health", "sessions.list", "sessions.get", "sessions.command", "terminals.state", "terminals.command"].includes(String(value.method))
     || !record(value.params)) return null;
   const params = value.params;
   if (value.method === "gateway.health" && !exactKeys(params, [])) return null;
   if (value.method === "sessions.get" && (!exactKeys(params, ["sessionRef"]) || typeof params.sessionRef !== "string" || !REF.test(params.sessionRef))) return null;
   if (value.method === "sessions.command" && (!exactKeys(params, ["command"]) || !record(params.command))) return null;
+  if (value.method === "terminals.state" || value.method === "terminals.command") {
+    if (typeof params.csrfToken !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(params.csrfToken)) return null;
+    if (value.method === "terminals.state" && (!exactKeys(params, ["sessionRef", "csrfToken"])
+      || typeof params.sessionRef !== "string" || !REF.test(params.sessionRef))) return null;
+    if (value.method === "terminals.command" && (!exactKeys(params, ["command", "csrfToken"]) || !record(params.command))) return null;
+  }
   if (value.method === "sessions.list") {
     if (!exactKeys(params, ["cursor", "limit", "filter", "query", "projectRef"]) || !nullableRef(params.cursor) || !nullableRef(params.projectRef)
       || !Number.isInteger(params.limit) || Number(params.limit) < 1 || Number(params.limit) > 200
@@ -100,12 +108,18 @@ export function attachGatewayWebSocket(options: {
     webSockets.handleUpgrade(request, socket, head, (client) => webSockets.emit("connection", client, request));
   };
   options.server.on("upgrade", upgrade);
-  webSockets.on("connection", (socket) => {
+  webSockets.on("connection", (socket, upgradeRequest: IncomingMessage) => {
+    const terminalStream = options.protocol.terminalEvents ? new TerminalWebSocketStream({ port: options.protocol.terminalEvents,
+      authorized: csrf => Boolean(options.authority.authorizeMutationToken(upgradeRequest, csrf)),
+      send: message => send(socket, message), close: reason => socket.close(1008, reason) }) : null;
+    let queued = 0;
     sockets.add(socket); let connected = false, unsubscribe: (() => void) | null = null, chain = Promise.resolve();
     const timeout = setTimeout(() => socket.close(1008, "connect-timeout"), 5_000);
     socket.on("message", (data, binary) => {
       if (binary) { socket.close(1003, "text-only"); return; }
+      if (++queued > 128) { socket.close(1013, "request-backpressure"); return; }
       chain = chain.then(async () => {
+        if (socket.readyState !== WebSocket.OPEN) return;
         let value: unknown;
         try { value = JSON.parse(data.toString()); } catch { socket.close(1007, "invalid-json"); return; }
         if (!connected) {
@@ -128,11 +142,21 @@ export function attachGatewayWebSocket(options: {
         }
         const request = parseRequest(value);
         if (!request) { socket.close(1008, "invalid-request"); return; }
-        try { send(socket, response(request, options.protocol.events.stateVersion, await options.protocol.execute(request))); }
-        catch (error) { send(socket, errorResponse(request, options.protocol.events.stateVersion, error)); }
-      }).catch(() => socket.close(1011, "gateway-failure"));
+        let replay: ReturnType<TerminalWebSocketStream["begin"]> | undefined;
+        try {
+          if (request.method.startsWith("terminals.") && !options.authority.authorizeMutationToken(upgradeRequest, request.params.csrfToken))
+            throw Object.assign(new Error("terminal-csrf-required"), { code: "terminal-csrf-required" });
+          if (request.method === "terminals.state") replay = terminalStream?.begin(String(request.params.sessionRef), String(request.params.csrfToken));
+          const result = await options.protocol.execute(request);
+          if (request.method.startsWith("terminals.") && !options.authority.authorizeMutationToken(upgradeRequest, request.params.csrfToken))
+            throw Object.assign(new Error("terminal-csrf-required"), { code: "terminal-csrf-required" });
+          const reply = () => send(socket, response(request, options.protocol.events.stateVersion, result));
+          if (replay) replay.finish(reply); else reply();
+        }
+        catch (error) { replay?.abort(); send(socket, errorResponse(request, options.protocol.events.stateVersion, error)); }
+      }).catch(() => socket.close(1011, "gateway-failure")).finally(() => { queued--; });
     });
-    socket.once("close", () => { clearTimeout(timeout); unsubscribe?.(); sockets.delete(socket); });
+    socket.once("close", () => { clearTimeout(timeout); unsubscribe?.(); terminalStream?.stop(); sockets.delete(socket); });
     socket.once("error", () => socket.terminate());
   });
   return { close: async () => {

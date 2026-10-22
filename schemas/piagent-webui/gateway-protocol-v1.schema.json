@@ -11,6 +11,122 @@
     { "$ref": "#/$defs/event" }
   ],
   "$defs": {
+    "terminalStateRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/requestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "terminals.state"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sessionRef",
+                "csrfToken"
+              ],
+              "properties": {
+                "sessionRef": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                },
+                "csrfToken": {
+                  "type": "string",
+                  "minLength": 16,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "terminalCommandRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/requestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "terminals.command"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "command",
+                "csrfToken"
+              ],
+              "properties": {
+                "command": {
+                  "$ref": "terminal-v1.schema.json#/$defs/command"
+                },
+                "csrfToken": {
+                  "type": "string",
+                  "minLength": 16,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "terminalStateResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/responseBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "terminals.state"
+            },
+            "ok": {
+              "const": true
+            },
+            "result": {
+              "$ref": "terminal-v1.schema.json#/$defs/state"
+            },
+            "error": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "terminalCommandResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/responseBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "terminals.command"
+            },
+            "ok": {
+              "const": true
+            },
+            "result": {
+              "$ref": "terminal-v1.schema.json#/$defs/receipt"
+            },
+            "error": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
     "requestId": {
       "type": "string",
       "minLength": 16,
@@ -23,7 +139,7 @@
       "maximum": 9007199254740991
     },
     "method": {
-      "enum": ["gateway.health", "sessions.list", "sessions.get", "sessions.command"]
+      "enum": ["gateway.health", "sessions.list", "sessions.get", "sessions.command", "terminals.state", "terminals.command"]
     },
     "connect": {
       "type": "object",
@@ -152,7 +268,9 @@
         { "$ref": "#/$defs/healthRequest" },
         { "$ref": "#/$defs/listRequest" },
         { "$ref": "#/$defs/getRequest" },
-        { "$ref": "#/$defs/commandRequest" }
+        { "$ref": "#/$defs/commandRequest" },
+        { "$ref": "#/$defs/terminalStateRequest" },
+        { "$ref": "#/$defs/terminalCommandRequest" }
       ]
     },
     "responseBase": {
@@ -232,7 +350,9 @@
         { "$ref": "#/$defs/healthResponse" },
         { "$ref": "#/$defs/listResponse" },
         { "$ref": "#/$defs/getResponse" },
-        { "$ref": "#/$defs/commandResponse" }
+        { "$ref": "#/$defs/commandResponse" },
+        { "$ref": "#/$defs/terminalStateResponse" },
+        { "$ref": "#/$defs/terminalCommandResponse" }
       ]
     },
     "protocolError": {

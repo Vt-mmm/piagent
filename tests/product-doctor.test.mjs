@@ -20,6 +20,9 @@ describe("product doctor readiness", () => {
       const report = JSON.parse(result.stdout);
       const readiness = report.productReadiness;
       assert.equal(readiness.schemaVersion, 1);
+      assert.equal(typeof readiness.personalTerminal.available, "boolean");
+      assert.equal(readiness.personalTerminal.probe, "module-load");
+      assert.equal(readiness.personalTerminal.shellSpawnVerified, false);
       assert.equal(readiness.versionAlignment.aligned, null);
       assert.equal(readiness.versionAlignment.piagentPackage, readiness.versionAlignment.piagentObserved);
       assert.equal(readiness.project.gitReady, true);

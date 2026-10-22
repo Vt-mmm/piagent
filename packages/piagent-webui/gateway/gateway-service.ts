@@ -1,3 +1,5 @@
+import { attachTerminalMentions } from "./terminal-mentions.ts";
+import { PersonalTerminalSessions } from "./personal-terminal-sessions.ts";
 import { ManagedSourceRevertSessions, type ManagedSourceRuntime } from "./managed-source-revert-sessions.ts";
 import { SourceRevertSessions } from "./source-revert-sessions.ts";
 import { WorkspaceWriteSessions, type ManagedWorkspaceWriter } from './workspace-write-sessions.ts';
@@ -121,6 +123,7 @@ export async function startPiagentGateway(options: {
   let loopback: Awaited<ReturnType<typeof startLoopbackServer>> | null = null;
   let control: Awaited<ReturnType<typeof startGatewayControlSocket>> | null = null;
   let runtimes: SessionRuntimeSupervisor | null = null;
+  let terminals: PersonalTerminalSessions | null = null;
   let mcpAuth: McpAuthBroker | null = null;
   let attachments: SessionAttachmentRegistry | null = null;
   let relay: CompanyRelay | null = null;
@@ -141,6 +144,7 @@ export async function startPiagentGateway(options: {
       // run once this process is gone.
       try { attachments?.close(); } catch { /* shutdown never fails on cleanup */ }
       await mcpAuth?.close().catch(() => undefined);
+      await terminals?.dispose().catch(() => undefined);
       await runtimes?.close().catch(() => undefined);
       await control?.close().catch(() => undefined);
       settleWait?.();
@@ -190,10 +194,12 @@ export async function startPiagentGateway(options: {
       gatewayInstanceRef, key, leases, listSessions: cachedSessionLister((dir) => host.SessionManager.listAll(dir), path.join(state.agentDir, 'sessions'), Boolean(options.managed)),
       host, agentDir: state.agentDir, packageRoot: options.packageRoot, modelRuntime: inspectionModels, events,
       runtimeFactory: options.managed?.runtimeFactory,
+      closeSessionResources: async sessionRef => { await terminals?.closeSession(sessionRef); },
       sessionDirectory: options.managed ? path.join(state.agentDir, 'sessions') : undefined,
       scopedBrokerRouter: options.scopedBrokerRouter,
       resolveProject: (projectRef) => projects.resolve(projectRef)
     });
+    if (!options.managed) terminals = new PersonalTerminalSessions({ key, gatewayInstanceRef, managed: false, runtimes });
     const sessionFacts = (manager: { buildSessionContext(): any; getBranch(): any[] }) => {
       const context = manager.buildSessionContext();
       return { model: context.model ? { provider: String(context.model.provider), modelId: String(context.model.modelId) } : null,
@@ -250,11 +256,11 @@ export async function startPiagentGateway(options: {
       // controller, because it reads sessions through the inspection registry.
       prepareAttachments: (sessionRef, refs, messageRequestId, text) => {
         if (!attachments) throw new Error("session-attachment-unavailable");
-        return attachments.reserveForPrompt(sessionRef, refs, messageRequestId, text);
+        return attachments.reserveForPrompt(sessionRef, refs, messageRequestId, attachTerminalMentions(sessionRef, text, terminals));
       } });
     const runtimeCommands = new RuntimeCommandController({ catalog: readCatalog, runtimes, events });
     const protocol = new GatewayProtocolService({ capabilities: () => capabilities(gatewayInstanceRef, true, !!options.managed), catalog: hubCatalog,
-      events, command: relay ? { execute: (command) => relay!.handles(command)
+      events, terminals: terminals ?? undefined, terminalEvents: terminals ?? undefined, command: relay ? { execute: (command) => relay!.handles(command)
         ? relay!.command(command as Record<string, unknown>, async () => (await hubCatalog()).catalogRevision) : commands.execute(command) } : commands });
     const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot, agentDir: state.agentDir,
       models: inspectionModels, managed: !!options.managed,

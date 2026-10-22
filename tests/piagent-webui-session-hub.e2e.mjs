@@ -1,3 +1,7 @@
+import { attachTerminalMentions } from "../packages/piagent-webui/gateway/terminal-mentions.ts";
+import { PersonalTerminalSessions } from "../packages/piagent-webui/gateway/personal-terminal-sessions.ts";
+import { sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
+let browserTerminals = null;
 import { WorkspaceWriteController } from '../packages/piagent-webui/server/workspace-write-controller.ts';
 import { writeWorkspaceFile } from '../packages/piagent-core/extensions/workspace-write.ts';
 let workspaceWritable = false;
@@ -158,9 +162,10 @@ test.beforeAll(async () => {
       }
       // Claim exactly as the runtime supervisor does, so what the assertions see
       // is what a real session would have been prompted with.
+      const preparedMessage = attachTerminalMentions(value.sessionRef, value.payload.message, browserTerminals);
       dispatchedContent = value.payload.attachmentRefs?.length
-        ? (await attachments.claim(value.sessionRef, value.payload.attachmentRefs, value.payload.messageRequestId, value.payload.message)).content
-        : null;
+        ? (await attachments.claim(value.sessionRef, value.payload.attachmentRefs, value.payload.messageRequestId, preparedMessage)).content
+        : browserTerminals ? [{ type: "text", text: preparedMessage }] : null;
     }
     const stale = value.expectedCatalogRevision !== catalog.catalogRevision || (value.action === "session.create"
       ? value.expectedSessionRevision !== null : !currentRow || value.expectedSessionRevision !== currentRow.sessionRevision);
@@ -229,7 +234,9 @@ test.beforeAll(async () => {
       catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: targetSessionRevision, deduplicated: false,
       evidenceRef: "evidence_browser_send_01", error: null };
   } };
-  protocol = new GatewayProtocolService({ capabilities: () => capabilities, catalog: async () => catalog, command });
+  protocol = new GatewayProtocolService({ capabilities: () => capabilities, catalog: async () => catalog, command,
+    terminals: { state: ref => browserTerminals.state(ref), execute: command => browserTerminals.execute(command) },
+    terminalEvents: { subscribe: (ref, listener) => browserTerminals.subscribe(ref, listener), replay: ref => browserTerminals.replay(ref) } });
   // The real registry, so staging exercises the same extraction and the same
   // identity and revision checks the Gateway applies in production.
   attachments = new SessionAttachmentRegistry({ inspect: async () => inspectionSnapshot });
@@ -2243,4 +2250,67 @@ test('review counts cover inactive tabs and Keep survives closing the narrow edi
   await expect(page.locator('.cm-agent-added')).toHaveCount(1);
   expect(fs.readFileSync(path.join(mentionProject, 'src/second-review.txt'), 'utf8')).toBe('second agent line\n');
   expect(errors).toEqual([]);
+});
+
+test('personal terminal panel runs echo under CSP and reconnects after reload', async ({ page }) => {
+  const key = Buffer.alloc(32, 4), info = { id: 'browser-terminal', path: path.join(mentionBase, 'terminal.jsonl'), cwd: mentionProject };
+  const ref = sessionRefForPath(key, info.path), row = catalog.sessions.find(item => item.sessionRef === 'session_release_prep'), previousRef = row.sessionRef;
+  const owner = { gatewayInstanceRef: catalog.gatewayInstanceRef, runtimeInstanceRef: 'runtime.browserterminal', ownerEpoch: 1, continuity: 'exact' };
+  const manager = { getSessionId: () => info.id, buildSessionContext: () => ({ model: { provider: 'personal' } }) };
+  browserTerminals = new PersonalTerminalSessions({ key, gatewayInstanceRef: catalog.gatewayInstanceRef, managed: false,
+    runtimes: { listSessions: async () => [info], acquire: async () => ({ ...owner }), liveSessionManager: () => manager,
+      ownership: () => ({ state: 'gateway-owned', owner }) } });
+  row.sessionRef = ref;
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => { window.__terminalCsp = []; document.addEventListener('securitypolicyviolation', event => window.__terminalCsp.push(event.violatedDirective)); });
+  try {
+    await page.setViewportSize({ width: 1600, height: 1000 }); await page.goto(server.issueLaunchUrl());
+    await page.getByRole('navigation').getByText(row.title, { exact: true }).click();
+    await page.getByRole('button', { name: 'Terminal', exact: true }).click();
+    await page.getByRole('button', { name: /Mở terminal|Open terminal/ }).click();
+    await expect(page.locator('.xterm-helper-textarea')).toHaveCount(1);
+    await page.locator('.xterm-helper-textarea').focus();
+    await page.keyboard.type("echo BROWSER_TERMINAL_READY"); await page.keyboard.press('Enter');
+    await expect.poll(() => browserTerminals.forAgent(ref).text).toContain('BROWSER_TERMINAL_READY\r\n');
+    await expect(page.locator('.xterm-rows')).toContainText('BROWSER_TERMINAL_READY');
+    expect(await page.evaluate(() => window.__terminalCsp)).toEqual([]);
+    const terminalRef = (await browserTerminals.state(ref)).terminals[0].terminalRef;
+    const oldRows = (await browserTerminals.state(ref)).terminals[0].rows;
+    await page.getByRole('separator', { name: /Chiều cao terminal|Terminal height/ }).focus();
+    await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp');
+    await expect.poll(async () => (await browserTerminals.state(ref)).terminals[0].rows).toBeGreaterThan(oldRows);
+    await page.locator('.xterm-helper-textarea').focus();
+    await page.keyboard.type('echo INTERRUPT_READY; sleep 30'); await page.keyboard.press('Enter');
+    await expect.poll(() => browserTerminals.forAgent(ref).text).toContain('INTERRUPT_READY\r\n');
+    await page.keyboard.press('Control+c');
+    await page.keyboard.type('echo AFTER_BROWSER_INTERRUPT'); await page.keyboard.press('Enter');
+    await expect.poll(() => browserTerminals.forAgent(ref).text).toContain('AFTER_BROWSER_INTERRUPT\r\n');
+
+    await page.reload();
+    await page.getByRole('navigation').getByText(row.title, { exact: true }).click();
+    await page.getByRole('button', { name: 'Terminal', exact: true }).click();
+    await expect(page.locator('.xterm-rows')).toContainText('BROWSER_TERMINAL_READY');
+    expect((await browserTerminals.state(ref)).terminals[0].terminalRef).toBe(terminalRef);
+    await page.getByRole('button', { name: /Mở terminal|Open terminal/ }).click();
+    await expect(page.getByRole('tab', { name: 'Terminal 2', exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Terminal 2', exact: true }).click();
+    const secret = 'sk-' + 'a'.repeat(48), beforeSend = sessionSendEffects;
+    await page.locator('.xterm-helper-textarea:visible').focus();
+    await page.keyboard.type(`echo OPENAI_API_KEY=${secret}; echo SECOND_TERMINAL_OUTPUT`); await page.keyboard.press('Enter');
+    await expect.poll(() => browserTerminals.forAgent(ref, 2).text).toContain('SECOND_TERMINAL_OUTPUT\r\n');
+    await page.getByPlaceholder('Nhắn cho Piagent…').fill('Review @terminal and @terminal:2');
+    expect(sessionSendEffects).toBe(beforeSend);
+    await page.getByRole('button', { name: 'Gửi', exact: true }).click();
+    await expect.poll(() => dispatchedContent?.[0]?.text).toContain('Terminal 2 output');
+    expect(dispatchedContent[0].text).toContain('BROWSER_TERMINAL_READY');
+    expect(dispatchedContent[0].text).toContain('SECOND_TERMINAL_OUTPUT');
+    expect(dispatchedContent[0].text).not.toContain(secret);
+    expect(dispatchedContent[0].text).toContain('REDACTED');
+
+    await page.getByRole('button', { name: /Đóng terminal|Close terminal/ }).click();
+    await expect(page.getByRole('tab', { name: 'Terminal 2', exact: true })).toHaveCount(0);
+    await page.setViewportSize({ width: 640, height: 800 });
+    await expect(page.getByRole('button', { name: /Ẩn terminal|Hide terminal/ })).toBeVisible();
+    expect(await page.evaluate(() => window.__terminalCsp)).toEqual([]); expect(errors).toEqual([]);
+  } finally { row.sessionRef = previousRef; await browserTerminals.dispose(); browserTerminals = null; }
 });
