@@ -47,6 +47,11 @@ export async function startManagedGateway({ config, configPath, cwd, agentDir, p
       } catch(error) { if(runtime) await runtime.dispose(); else await broker.dispose(); throw error; }
     };
     const gateway=await startPiagentGateway({packageRoot,agentDir,expectedPiVersion:PI_HOST_VERSION,managed:{host,models,runtimeFactory:factory,project:registerProject?cwd:null,
+      managedTerminal: id => {
+        const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('terminal-runtime-unavailable');
+        const boundary = runtime.boundary;
+        return { terminals: boundary.terminals, current: () => workspaceRuntimes.get(id) === runtime && runtime.boundary === boundary };
+      },
       managedSource: id => {
         const runtime = workspaceRuntimes.get(id); if (!runtime) throw Error('source-runtime-unavailable');
         const boundary = runtime.boundary;

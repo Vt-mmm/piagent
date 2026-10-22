@@ -5,6 +5,13 @@ import {TerminalTransport,terminalMessage} from '../packages/piagent-webui/clien
 import {terminalCommand} from '../packages/piagent-webui/client/src/terminal-command.ts';
 import {parseTerminalCommand} from '../packages/piagent-webui/server/terminal-command.ts';
 const state=JSON.parse(fs.readFileSync(new URL('../evals/fixtures/piagent-webui/terminal-v1.valid.json',import.meta.url)));
+test('terminal wire accepts unknown exit status and rejects unexpected private fields',()=>{
+ const exit={schemaVersion:1,version:'piagent-terminal-v1',messageType:'exit',identity:state.identity,
+  terminalRef:'terminal.one',sequence:1,exitCode:null,signal:null};
+ assert.equal(terminalMessage(exit),true);
+ assert.equal(terminalMessage({...exit,privateGrant:'must-not-forward'}),false);
+ assert.equal(terminalMessage({...state,identity:{...state.identity,privateGrant:'must-not-forward'}}),false);
+});
 class Socket extends EventTarget {
  readyState=1;sent=[];
  send(data){this.sent.push(JSON.parse(data));}

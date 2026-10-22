@@ -1,23 +1,11 @@
+import { isTerminalMessage } from '../../shared/terminal-message.ts';
 import type { TerminalCommand, TerminalReceipt, TerminalState, TerminalOutput, TerminalExit } from '../../contracts/generated/terminal-v1.ts';
 import { browserCsrfToken } from './bootstrap.ts';
 export type TerminalMessage = TerminalState | TerminalOutput | TerminalExit;
 type Pending = { method: string; resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };
 const object = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
 const ref = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/.test(value);
-export function terminalMessage(value: unknown): value is TerminalMessage {
-  if (!object(value) || value.schemaVersion !== 1 || value.version !== 'piagent-terminal-v1' || !object(value.identity)
-    || !['gatewayInstanceRef', 'runtimeInstanceRef', 'sessionRef'].every(key => ref(value.identity[key]))) return false;
-  if (value.messageType === 'state') return object(value.revisions) && typeof value.revisions.terminalRevision === 'string'
-    && typeof value.available === 'boolean' && (value.reasonCode === null || typeof value.reasonCode === 'string')
-    && Array.isArray(value.terminals) && value.terminals.length <= 4 && value.terminals.every((tab: unknown) => object(tab)
-      && ref(tab.terminalRef) && Number.isSafeInteger(tab.number) && tab.number > 0 && ['running', 'exited'].includes(tab.state)
-      && Number.isSafeInteger(tab.sequence) && tab.sequence >= 0 && Number.isInteger(tab.cols) && tab.cols >= 2 && tab.cols <= 500
-      && Number.isInteger(tab.rows) && tab.rows >= 1 && tab.rows <= 200 && (tab.exitCode === null || Number.isInteger(tab.exitCode)));
-  if (!ref(value.terminalRef) || !Number.isSafeInteger(value.sequence) || value.sequence < 0) return false;
-  if (value.messageType === 'output') return typeof value.data === 'string' && value.data.length <= 8192
-    && ['replay', 'reset', 'complete', 'truncated'].every(key => typeof value[key] === 'boolean');
-  return value.messageType === 'exit' && Number.isInteger(value.exitCode) && (value.signal === null || Number.isInteger(value.signal));
-}
+export function terminalMessage(value: unknown): value is TerminalMessage { return isTerminalMessage(value); }
 export class TerminalTransport {
   #socket: WebSocket | null = null;
   #ready = false;

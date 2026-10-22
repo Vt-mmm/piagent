@@ -1,3 +1,5 @@
+export { companyTerminalDiagnostic } from './terminal-runtime.mjs';
+
 // What a failed command tells the agent. Every environment failure names the
 // way on (owner, 2026-10-13): a tool that asks the member's approval
 // (run_with_network, run_with_docker, start_docker, fetch_origin, run_on_host)

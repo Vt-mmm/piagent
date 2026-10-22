@@ -477,7 +477,10 @@
           "maximum": 9007199254740991
         },
         "exitCode": {
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "signal": {
           "type": [

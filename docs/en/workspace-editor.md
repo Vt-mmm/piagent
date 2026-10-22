@@ -69,7 +69,7 @@ Attribution requires an exact observed write/edit/patch in this session and a
 current, complete, unredacted diff. CRLF and missing final newlines are compared
 exactly. Unobserved shell edits and observations lost on runtime restart do not
 receive agent hunk markers. Company review and revert run inside its sandbox.
-Interactive terminals and checkpoint restore are later milestones.
+Checkpoint restore is a later milestone.
 
 ## Personal terminal
 
@@ -103,5 +103,34 @@ nothing. Tab numbers increase within the runtime and are not reused after close.
 The optional native PTY module can be unavailable. The panel explains this and
 `piagent-doctor --json` reports `productReadiness.personalTerminal`; other dashboard
 features remain usable. Doctor checks module loading and does not claim a shell
-spawn test. Native Windows is unavailable; use WSL. Company terminal execution
-is not enabled by this personal implementation and never falls back to a host shell.
+spawn test. Native Windows is unavailable; use WSL.
+
+
+## Company terminal
+
+Company conversations use the same terminal panel through the company Gateway,
+including when opened from the personal dashboard. On Linux and WSL, the shell
+starts inside the conversation's bubblewrap tool boundary. It has no internet,
+package proxy or Docker access. Writes stay within the project and a private
+temporary directory; a read-only profile keeps the project read-only. Credential
+files are masked, and protected paths retain the boundary's restrictions.
+The shell is Bash without startup files; it does not load the member's shell config.
+
+Up to four terminals belong to each conversation. Closing a terminal, releasing
+its conversation or shutting down the company Gateway stops its sandbox and
+all descendants, including detached children. Hiding the panel and reloading the
+browser preserve the terminal while the company runtime lives. A lost relay
+connection disables input and reconnects for state and replay; it never resends
+commands automatically. Explicit terminal mentions are attached inside the
+company Gateway, and Studio grants stay there.
+
+On macOS, the existing Seatbelt sandbox refuses PTY allocation, including the
+fallback tested during qualification. The panel reports that company terminals
+are unavailable; it never opens a company shell on the host. Other company
+features remain usable. Native Windows is unavailable; use WSL.
+
+`piagent-doctor --json` reports `productReadiness.companyTerminal`. A supported
+result checks runtime files and prerequisites only (`ptySpawnVerified: false`);
+it is not proof that this machine can spawn a sandboxed PTY. The complete
+Gateway, relay and browser workflow was qualified on Linux arm64 in Docker.
+Native Linux x64 and WSL were not independently qualified in this run.

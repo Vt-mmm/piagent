@@ -23,6 +23,10 @@ describe("product doctor readiness", () => {
       assert.equal(typeof readiness.personalTerminal.available, "boolean");
       assert.equal(readiness.personalTerminal.probe, "module-load");
       assert.equal(readiness.personalTerminal.shellSpawnVerified, false);
+      assert.equal(typeof readiness.companyTerminal.supported, "boolean");
+      assert.equal(readiness.companyTerminal.scope, "company");
+      assert.equal(readiness.companyTerminal.probe, "runtime-files");
+      assert.equal(readiness.companyTerminal.ptySpawnVerified, false);
       assert.equal(readiness.versionAlignment.aligned, null);
       assert.equal(readiness.versionAlignment.piagentPackage, readiness.versionAlignment.piagentObserved);
       assert.equal(readiness.project.gitReady, true);

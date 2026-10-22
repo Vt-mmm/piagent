@@ -1,4 +1,5 @@
 import { SessionMutationObservations } from "./session-mutation-observations.mjs";
+import { BoundaryTerminals } from './terminal-boundary.mjs';
 import { ToolFreshness } from './tool-freshness.mjs';
 import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs';
 import fs from 'node:fs';
@@ -268,6 +269,7 @@ export class ManagedToolBoundary {
     if (searchTools) provisionSearchTools(this.home, userHome);
     else fs.writeFileSync(path.join(this.home, '.ripgreprc'), '', { mode: 0o600 });
     this.allowed = readOnly ? TOOL_NAMES.filter(name => !['write', 'edit'].includes(name) && (name !== 'bash' || commands)) : [...TOOL_NAMES];
+    this.terminals = new BoundaryTerminals(this);
   }
   // What the machine offers commands: toolchains, the JDK, the Docker engine.
   // Looked up again after the member installs or starts something
@@ -465,7 +467,7 @@ export class ManagedToolBoundary {
   async dispose() {
     this.#closed = true;
     const stopping = [...this.#children].map(child => new Promise(resolve => { child.once('close', resolve); child.managedCancel(); }));
-    await Promise.all(stopping); await this.#tail;
+    await Promise.all([this.terminals.dispose(), ...stopping]); await this.#tail;
     await this.background?.dispose(); await this.stopStrays(); if (!this.linux) await stopMarked(`PIAGENT_PROCESS_SCOPE=${this.scope}:`);
     this.#mutationObservations.clear();
     await this.proxyReady; await this.proxy?.close().catch(() => {});

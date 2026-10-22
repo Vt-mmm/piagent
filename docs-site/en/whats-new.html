@@ -110,6 +110,7 @@
   <p class="section-lead">Session Hub now saves edits with Cmd/Ctrl+S, marks unsaved tabs and creates files. When a file changes on disk, reload, compare or confirm an overwrite. Current write permissions and protected paths are enforced in personal and company mode; company writes stay inside the existing sandbox. The agent must reread a stale file after member edits.</p>
   <p>Review observed agent changes directly in the editor: Keep, preview-confirmed Revert, hunk counts and line comments to chat. Clean files reload after agent edits; unsaved drafts remain intact. Newly created agent files support review; deletion through hunk revert is not yet supported.</p>
   <p>Personal conversations now offer terminal tabs below the editor, with resize, Ctrl+C and replay after reload. Send @terminal or @terminal:2 to attach bounded redacted output. Missing native PTY support is reported without disabling the dashboard; company shells never fall back to host execution.</p>
+  <p>Company conversations now offer terminals inside the Linux/WSL sandbox through their Gateway, with network blocked, credentials masked and child processes stopped when the conversation is released. Relay reconnects restore output without resending commands. macOS reports unavailable without opening a host shell. The full workflow is verified on Linux arm64; native Linux x64 and WSL still need independent verification.</p>
 </section>
 
 <section class="section">

@@ -1,5 +1,8 @@
 import { attachTerminalMentions } from "./terminal-mentions.ts";
 import { PersonalTerminalSessions } from "./personal-terminal-sessions.ts";
+import { ManagedTerminalSessions } from "./managed-terminal-sessions.ts";
+import type { ManagedTerminalRuntime } from "./managed-terminal-binding.ts";
+import { terminalRouter } from "./terminal-router.ts";
 import { ManagedSourceRevertSessions, type ManagedSourceRuntime } from "./managed-source-revert-sessions.ts";
 import { SourceRevertSessions } from "./source-revert-sessions.ts";
 import { WorkspaceWriteSessions, type ManagedWorkspaceWriter } from './workspace-write-sessions.ts';
@@ -105,7 +108,7 @@ export async function startPiagentGateway(options: {
   agentDir?: string;
   staticRoot?: string;
   scopedBrokerRouter?: ScopedBrokerRouter;
-  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; managedSource?: (id: string) => ManagedSourceRuntime; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
+  managed?: { host: any; models: any; runtimeFactory: RuntimeFactory; project: string | null; managedTerminal?: (id: string) => ManagedTerminalRuntime; managedSource?: (id: string) => ManagedSourceRuntime; workspaceWrite?: ManagedWorkspaceWriter; workspaceRead?: (id: string, request: { kind: string; path: string }) => Promise<unknown> };
   // Company sessions relayed into this dashboard (the dashboard entry passes
   // the Agent Watch binding; omitted: none).
   company?: CompanyConnector;
@@ -123,7 +126,7 @@ export async function startPiagentGateway(options: {
   let loopback: Awaited<ReturnType<typeof startLoopbackServer>> | null = null;
   let control: Awaited<ReturnType<typeof startGatewayControlSocket>> | null = null;
   let runtimes: SessionRuntimeSupervisor | null = null;
-  let terminals: PersonalTerminalSessions | null = null;
+  let terminals: PersonalTerminalSessions | ManagedTerminalSessions | null = null;
   let mcpAuth: McpAuthBroker | null = null;
   let attachments: SessionAttachmentRegistry | null = null;
   let relay: CompanyRelay | null = null;
@@ -199,7 +202,8 @@ export async function startPiagentGateway(options: {
       scopedBrokerRouter: options.scopedBrokerRouter,
       resolveProject: (projectRef) => projects.resolve(projectRef)
     });
-    if (!options.managed) terminals = new PersonalTerminalSessions({ key, gatewayInstanceRef, managed: false, runtimes });
+    terminals = options.managed ? new ManagedTerminalSessions({ key, gatewayInstanceRef, managed: true, runtimes,
+      managedTerminal: options.managed.managedTerminal }) : new PersonalTerminalSessions({ key, gatewayInstanceRef, managed: false, runtimes });
     const sessionFacts = (manager: { buildSessionContext(): any; getBranch(): any[] }) => {
       const context = manager.buildSessionContext();
       return { model: context.model ? { provider: String(context.model.provider), modelId: String(context.model.modelId) } : null,
@@ -259,8 +263,9 @@ export async function startPiagentGateway(options: {
         return attachments.reserveForPrompt(sessionRef, refs, messageRequestId, attachTerminalMentions(sessionRef, text, terminals));
       } });
     const runtimeCommands = new RuntimeCommandController({ catalog: readCatalog, runtimes, events });
+    const routedTerminals = terminalRouter(terminals, relay);
     const protocol = new GatewayProtocolService({ capabilities: () => capabilities(gatewayInstanceRef, true, !!options.managed), catalog: hubCatalog,
-      events, terminals: terminals ?? undefined, terminalEvents: terminals ?? undefined, command: relay ? { execute: (command) => relay!.handles(command)
+      events, terminals: routedTerminals, terminalEvents: routedTerminals, command: relay ? { execute: (command) => relay!.handles(command)
         ? relay!.command(command as Record<string, unknown>, async () => (await hubCatalog()).catalogRevision) : commands.execute(command) } : commands });
     const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot, agentDir: state.agentDir,
       models: inspectionModels, managed: !!options.managed,

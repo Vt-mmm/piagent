@@ -53,13 +53,18 @@ export class BackgroundProcesses {
     entry.status = 'stopped'; entry.reason = reason; clearTimeout(entry.timer);
     // Its process group, what it started (found by parent, since ps cannot
     // read the environment of Apple's own binaries), then its marker.
-    const tree = descendants(entry.child.pid);
-    for (const pid of [-entry.child.pid, ...tree]) try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ }
-    await this.boundary.stopBackground(entry.key);
-    for (const pid of tree) try { process.kill(pid, 'SIGKILL'); } catch { /* stopped */ }
+    await stopProcessGroup(entry.child, () => this.boundary.stopBackground(entry.key));
     return entry;
   }
   async dispose() { await Promise.all(this.running().map(entry => this.stop(entry.id, 'the conversation closed'))); }
+}
+
+export async function stopProcessGroup(child, stopMarked = () => new Promise(resolve => setTimeout(resolve, 100))) {
+  if (!Number.isInteger(child.pid) || child.pid <= 1 || child.exitCode != null || child.signalCode != null) return;
+  const tree = descendants(child.pid);
+  for (const pid of [-child.pid, ...tree]) try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ }
+  await stopMarked();
+  for (const pid of [...tree, -child.pid]) try { process.kill(pid, 'SIGKILL'); } catch { /* stopped */ }
 }
 
 function descendants(root) {

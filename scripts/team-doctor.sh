@@ -515,9 +515,13 @@ const expectedPiHostVersion = rootPackage.peerDependencies?.["@earendil-works/pi
 const { personalTerminalDiagnostic } = await import(pathToFileURL(path.join(platformRoot, "packages/piagent-webui/gateway/personal-terminal-diagnostic.mjs")).href);
 const terminalReadiness = personalTerminalDiagnostic();
 if (!terminalReadiness.available) warnings.push(`Personal terminal unavailable: ${terminalReadiness.reasonCode}; the dashboard remains available.`);
+const { companyTerminalDiagnostic } = await import(pathToFileURL(path.join(platformRoot, "packages/piagent-core/managed/sandbox-diagnostic.mjs")).href);
+const companyTerminalReadiness = companyTerminalDiagnostic();
+if (!companyTerminalReadiness.supported) warnings.push(`Company terminal unavailable: ${companyTerminalReadiness.reasonCode}; no host shell fallback.`);
 const productReadiness = {
   schemaVersion: 1,
   personalTerminal: terminalReadiness,
+  companyTerminal: companyTerminalReadiness,
   versionAlignment: {
     piHostExpected: expectedPiHostVersion,
     piHostObserved: runtimeModel.piHostVersion,

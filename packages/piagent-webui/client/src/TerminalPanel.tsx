@@ -33,7 +33,11 @@ export default function TerminalPanel({ sessionRef }: { sessionRef: string }) {
       {active && <Button disabled={blocked || model.busy} onClick={() => void client.execute({ kind: 'close', terminalRef: active })}>{localize(locale, 'Đóng terminal', 'Close terminal')}</Button>}
     </Box>
     {!model.connected && <Alert severity="info">{localize(locale, 'Đang nối lại terminal…', 'Reconnecting terminal…')}</Alert>}
-    {state && !state.available && <Alert severity="info">{localize(locale, 'Terminal chưa khả dụng trên môi trường này.', 'Terminal is unavailable in this environment.')} {state.reasonCode}</Alert>}
+    {state && !state.available && <Alert severity="info">{state.reasonCode === 'managed-terminal-seatbelt-unavailable'
+      ? localize(locale, 'Sandbox hiện tại trên macOS không hỗ trợ terminal công ty.', 'The current macOS sandbox does not support company terminals.')
+      : state.reasonCode === 'company-terminal-disconnected'
+        ? localize(locale, 'Mất kết nối với terminal công ty. Đang kết nối lại…', 'Company terminal disconnected. Reconnecting…')
+        : <>{localize(locale, 'Terminal chưa khả dụng trên môi trường này.', 'Terminal is unavailable in this environment.')} {state.reasonCode}</>}</Alert>}
     {model.error && <Alert severity="warning">{localize(locale, 'Thao tác terminal chưa hoàn tất.', 'The terminal action did not complete.')} {model.error}
       {model.pending ? <>
         <Typography variant="body2">{localize(locale, 'Kiểm tra output trước khi tiếp tục. Lệnh có thể đã chạy.', 'Check the output before continuing. The command may have run.')}</Typography>

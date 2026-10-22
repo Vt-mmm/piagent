@@ -6,6 +6,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Added
 
+- Company Session Hub terminals run inside the Linux/WSL bubblewrap boundary through the company Gateway and authenticated relay, with no network, credential masking and sandbox process cleanup. Disconnects reconnect for replay without automatically resending commands. Doctor reports prerequisites; macOS Seatbelt terminals remain unavailable with no host fallback. The complete browser workflow is qualified on Linux arm64; native Linux x64 and WSL remain unverified.
+
 - Personal Session Hub terminals open up to four project shells with lazy xterm tabs, resizing, Ctrl+C and reconnect replay. Session teardown cleans terminal processes. Explicit `@terminal`/`@terminal:2` sends attach bounded redacted output. Optional native PTY failures leave the dashboard usable and appear in Doctor; company terminals never fall back to host execution.
 
 - Session Hub reviews exact observed agent hunks inline, with Keep, preview-confirmed Revert, hunk navigation/counts and current/removed-line comments to the composer. Clean tabs refresh after agent changes; dirty drafts retain conflict handling. Company source review and revert run in the existing sandbox. New untracked agent files support review; deletion through hunk revert remains unavailable.

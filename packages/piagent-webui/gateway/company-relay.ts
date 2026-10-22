@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { WebSocket } from "ws";
+import { CompanyTerminalRelay } from "./company-terminal-relay.ts";
 
 import type { Catalog, SessionRow } from "../contracts/generated/session-catalog-v1.ts";
 import { webUiModelRef } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
@@ -41,6 +42,7 @@ const timedOut = (error: unknown) => error instanceof Error && (error.name === "
 const failure = (error: unknown, fallback: string) => error instanceof Error && /^[a-z][a-z0-9:._-]{2,95}$/.test(error.message) ? error.message : fallback;
 
 export class CompanyRelay {
+  readonly terminals: CompanyTerminalRelay;
   readonly #connector: CompanyConnector;
   readonly #events: GatewayEventStore;
   readonly #hubProject: (cwd: string) => string;
@@ -70,6 +72,8 @@ export class CompanyRelay {
     this.#connector = options.connector; this.#events = options.events;
     this.#hubProject = options.hubProject; this.#folder = options.folder;
     this.#readTimeoutMs = options.readTimeoutMs ?? READ_TIMEOUT_MS; this.#answerTimeoutMs = options.answerTimeoutMs ?? ANSWER_TIMEOUT_MS;
+    this.terminals = new CompanyTerminalRelay({ owns: ref => this.owns(ref),
+      link: async () => { const link = await this.#ready(); return this.#bootstrap(link.socket); } });
   }
 
   status(): CompanyStatus {
@@ -123,6 +127,7 @@ export class CompanyRelay {
 
   close(): void {
     this.#closed = true;
+    this.terminals.close();
     if (this.#retry) clearTimeout(this.#retry);
     this.#ws?.terminate();
   }

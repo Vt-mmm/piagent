@@ -4,6 +4,7 @@
   <p class="section-lead">Session Hub lưu chỉnh sửa bằng Cmd/Ctrl+S, đánh dấu tab chưa lưu và tạo tệp mới. Khi tệp trên đĩa đã đổi, bạn có thể tải lại, so sánh hoặc xác nhận ghi đè. Quyền ghi hiện tại và đường dẫn được bảo vệ được kiểm tra ở cả personal và company; company ghi trong sandbox hiện có. Agent phải đọc lại tệp cũ sau khi member sửa.</p>
   <p>Review thay đổi đã quan sát của agent ngay trong editor: Giữ, Hoàn tác có preview và xác nhận, số hunk và comment theo dòng đưa vào chat. Tệp chưa có bản sửa tự tải lại sau khi agent sửa; bản sửa chưa lưu được giữ. Tệp mới do agent tạo hỗ trợ review; chưa hỗ trợ xóa tệp qua hoàn tác hunk.</p>
   <p>Cuộc trò chuyện personal có tab terminal dưới editor, đổi kích thước, Ctrl+C và phát lại khi reload. Gửi @terminal hoặc @terminal:2 để đính output giới hạn dung lượng đã che secret. Thiếu PTY native được báo mà không tắt dashboard; shell company không bao giờ chuyển sang chạy trên host.</p>
+  <p>Cuộc trò chuyện company có terminal trong sandbox Linux/WSL qua Gateway công ty: chặn mạng, che credential và dừng tiến trình con khi release cuộc trò chuyện. Relay nối lại khôi phục output mà không gửi lại lệnh. macOS báo không khả dụng, không mở shell trên host. Luồng đầy đủ đã kiểm chứng trên Linux arm64; Linux x64 native và WSL còn cần kiểm chứng riêng.</p>
 </section>
 
 <section class="section">

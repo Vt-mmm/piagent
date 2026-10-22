@@ -65,7 +65,7 @@ Việc xác định hunk cần write/edit/patch được quan sát chính xác t
 hiện tại đầy đủ, chưa che nội dung. CRLF và thiếu newline cuối được so sánh chính
 xác. Sửa qua shell chưa được quan sát hoặc quan sát mất khi runtime khởi động lại
 không nhận dấu hunk agent. Company review và hoàn tác trong sandbox của phiên.
-Terminal tương tác và khôi phục checkpoint thuộc các milestone sau.
+Khôi phục checkpoint thuộc milestone sau.
 
 ## Terminal personal
 
@@ -98,5 +98,32 @@ và không dùng lại sau khi đóng.
 Module PTY native là tùy chọn và có thể không khả dụng. Panel báo lý do và
 `piagent-doctor --json` có `productReadiness.personalTerminal`; các phần dashboard
 khác vẫn dùng được. Doctor kiểm tra việc nạp module, không khẳng định đã thử mở
-shell. Chưa hỗ trợ Windows native; dùng WSL. Bản terminal personal này chưa bật
-terminal company và không bao giờ chuyển sang mở shell company trên host.
+shell. Chưa hỗ trợ Windows native; dùng WSL.
+
+
+## Terminal company
+
+Cuộc trò chuyện company dùng cùng panel terminal qua Gateway công ty, kể cả khi
+mở từ dashboard personal. Trên Linux và WSL, shell khởi chạy trong tool boundary
+bubblewrap của cuộc trò chuyện. Shell không có internet, package proxy hoặc
+Docker. Chỉ ghi trong project và thư mục tạm riêng; profile read-only giữ project
+chỉ đọc. File credential bị che, đường dẫn được bảo vệ giữ giới hạn của boundary.
+Shell là Bash không nạp file khởi động hoặc cấu hình shell của member.
+
+Mỗi cuộc trò chuyện có tối đa bốn terminal. Đóng terminal, release cuộc trò chuyện
+hoặc tắt Gateway công ty sẽ dừng sandbox và mọi tiến trình con, kể cả tiến trình
+đã tách riêng. Ẩn panel và reload trình duyệt giữ terminal khi runtime company
+còn sống. Mất kết nối relay tạm tắt input và tự nối lại để đọc trạng thái, phát lại
+output; không tự gửi lại lệnh. Mention terminal được đính bên trong Gateway
+công ty; Studio grant cũng chỉ ở đó.
+
+Trên macOS, sandbox Seatbelt hiện tại từ chối cấp PTY, kể cả phương án dự phòng
+đã thử khi kiểm chứng. Panel báo terminal company không khả dụng; không bao giờ
+mở shell company trên host. Các tính năng company khác vẫn dùng được.
+Chưa hỗ trợ Windows native; dùng WSL.
+
+`piagent-doctor --json` có `productReadiness.companyTerminal`. Kết quả supported
+chỉ kiểm file runtime và điều kiện tiên quyết (`ptySpawnVerified: false`), không
+khẳng định máy này đã mở được PTY trong sandbox. Luồng đầy đủ Gateway, relay và
+trình duyệt đã được kiểm chứng trên Linux arm64 trong Docker. Lần này chưa kiểm
+chứng riêng Linux x64 native và WSL.

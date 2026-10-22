@@ -15,6 +15,7 @@ import {gatewayProfileState} from '../packages/piagent-webui/gateway/profile-sta
 import {loadPinnedPiHost} from '../packages/piagent-webui/gateway/pi-host.ts';
 import {ensureWebUiBuild} from './helpers/piagent-webui-build.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
+import { qualifyCompanyTerminal } from './helpers/company-terminal-browser.mjs';
 
 // The personal dashboard shows a company session in its own list and page:
 // the company Gateway runs in its own process (as `piagent studio --serve`
@@ -25,11 +26,12 @@ const sdkRoot = piSdkRoot();
 const assistant=(text)=>({role:'assistant',content:[{type:'text',text}],api:'fixture',provider:'fixture',model:'fixture',
  usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'stop',timestamp:Date.now()});
 
-test('a company session is created, answered and listed inside the personal dashboard',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:120000},async()=>{
+test('a company session is created, answered and listed inside the personal dashboard',{skip:!['darwin','linux'].includes(process.platform)||!fs.existsSync(sdkRoot),timeout:180000},async()=>{
  ensureWebUiBuild(root);
  const temp=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-dashboard-relay-')));
  const project=path.join(temp,'shop-project'),companyAgent=path.join(temp,'company-agent'),personalAgent=path.join(temp,'personal-agent'),probe=path.join(companyAgent,'probe');
  for(const dir of [project,probe,personalAgent])fs.mkdirSync(dir,{recursive:true});
+ fs.writeFileSync(path.join(project,'.env'),'COMPANY_TERMINAL_FIXTURE_SECRET=hidden\n');
  const requests=[];let child,personal,browser;
  const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
   const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
@@ -71,7 +73,9 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   manager.appendMessage({role:'user',content:[{type:'text',text:'Personal question'}],timestamp:Date.now()});manager.appendMessage(assistant('Personal answer'));
   const launch=await requestGatewayControl(gatewayProfileState(personalAgent).controlSocket,{action:'issue-launch-url'});assert.equal(launch.ok,true);
   const origin=new URL(launch.value.launchUrl).origin;
-  browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'vi-VN'});await page.goto(launch.value.launchUrl);
+  browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'vi-VN'}),browserFrames=[];
+  page.on('websocket',socket=>socket.on('framereceived',event=>browserFrames.push(String(event.payload))));
+  await page.goto(launch.value.launchUrl);
   await expect(page.getByText('Gateway live',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Cuộc trò chuyện mới'}).last().click();
   await expect(page.getByRole('main').getByRole('button',{name:/shop-project/})).toBeVisible();
@@ -87,6 +91,14 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   await expect(page.getByRole('navigation').getByText(/^Công ty/).first()).toBeVisible();
   await expect(page.getByRole('navigation').getByText('Personal question').first()).toBeVisible();
   assert.equal(requests.length,1,'one company turn reached Studio');
+  await page.getByRole('button',{name:'Terminal',exact:true}).click();
+  if(process.platform==='linux') await qualifyCompanyTerminal(page,project);
+  else {
+  await expect(page.getByText('Sandbox hiện tại trên macOS không hỗ trợ terminal công ty.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Mở terminal',exact:true})).toBeDisabled();
+  assert.ok(browserFrames.some(frame=>frame.includes('managed-terminal-seatbelt-unavailable')),'terminal state came through CompanyRelay');
+  }
+  assert.ok(browserFrames.every(frame=>!frame.includes(grant.token)),'Studio grant never reaches browser frames');
   const companySessions=fs.readdirSync(path.join(companyAgent,'sessions'),{recursive:true}).filter(f=>String(f).endsWith('.jsonl'));
   assert.equal(companySessions.length,1,'the company transcript lives with the company runtime');
   const personalSessions=fs.readdirSync(path.join(personalAgent,'sessions'),{recursive:true}).filter(f=>String(f).endsWith('.jsonl'));

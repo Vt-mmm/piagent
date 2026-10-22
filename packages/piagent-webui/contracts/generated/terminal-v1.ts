@@ -107,6 +107,6 @@ export interface TerminalExit {
   identity: TerminalIdentity;
   terminalRef: string;
   sequence: number;
-  exitCode: number;
+  exitCode: number | null;
   signal: number | null;
 }
