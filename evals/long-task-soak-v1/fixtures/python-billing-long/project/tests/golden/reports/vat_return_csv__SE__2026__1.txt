@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+SE,SEK,2026-01,5,1637.66,409.41,0.00,409.41
+SE,SEK,2026-02,4,1552.47,388.13,0.00,388.13
+SE,SEK,2026-03,0,0.00,0.00,0.00,0.00

@@ -1,0 +1,15 @@
+{
+  "id": "framework-playwright-e2e",
+  "title": "Vanilla JS kanban board: edit/delete/move (buttons, keyboard, drag), tag filter, localStorage, accessible names, Playwright e2e",
+  "category": ["framework", "e2e", "third-party", "autonomous"],
+  "language": "vi",
+  "fixture": "web-playwright",
+  "requires": ["network"],
+  "prompt": "Em làm giúp anh toàn bộ SPEC.md cho ứng dụng bảng việc (JavaScript thuần, không framework, không build): thêm/sửa/xoá thẻ, chuyển thẻ giữa các cột bằng nút, bàn phím và kéo thả, lọc theo nhãn, lưu localStorage, accessible name cho mọi nút và ô nhập. Viết playwright.config.js (webServer chạy npm start) và test e2e Playwright cho từng mục trong thư mục e2e/, chạy npx playwright test đến khi qua hết. Đặc tả đã đủ, giữ đúng các data-testid và tên trong SPEC, không cần hỏi lại, cứ làm đến xong.",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "budget": { "maxMinutes": 75, "maxNudges": 3, "stallMinutes": 15 },
+  "oracle": { "hidden": "hidden", "checks": [{ "name": "hidden Playwright acceptance + own e2e suite (chromium)", "run": "bash scripts/oracle.sh", "timeoutSec": 600 }] },
+  "reference": "reference"
+}

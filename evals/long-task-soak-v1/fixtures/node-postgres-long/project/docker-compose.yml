@@ -1,0 +1,17 @@
+# PostgreSQL cho phát triển và test tích hợp.
+#   PG_PORT=55432 docker compose up -d
+#   export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/phonghop
+# Hoặc dùng scripts/db-up.sh (tự chọn cổng trống và in ra DATABASE_URL).
+services:
+  db:
+    image: postgres:17.6-alpine3.22
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: phonghop
+    ports:
+      - "127.0.0.1:${PG_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "phonghop", "-h", "127.0.0.1"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

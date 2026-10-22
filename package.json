@@ -52,6 +52,7 @@
     "docs-site/",
     "!docs-site/assets/shots/",
     "evals/",
+    "!evals/long-task-soak-v1/fixtures/",
     "packs/",
     "packages/piagent-core/",
     "!packages/piagent-core/extensions/core-services.js",

@@ -1,0 +1,10 @@
+{
+  "contract_version": 1,
+  "order_id": "O-1002",
+  "customer_id": "C-200",
+  "customer_tier": "vip",
+  "currency": "VND",
+  "items": [
+    { "sku": "TEA-01", "qty": 10, "unit_price": 45000 }
+  ]
+}

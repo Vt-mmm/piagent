@@ -1,0 +1,15 @@
+currency,status,invoices,total,refunded,outstanding
+EUR,paid,16,271.93,0.00,0.00
+EUR,partially_refunded,3,34.31,7.24,0.00
+EUR,refunded,2,18.03,18.03,0.00
+EUR,past_due,1,11.46,0.00,11.46
+GBP,paid,7,76.74,0.00,0.00
+GBP,partially_refunded,1,24.71,12.11,0.00
+GBP,past_due,1,27.41,0.00,27.41
+JPY,paid,11,49511.00,0.00,0.00
+JPY,partially_refunded,1,3979.00,955.00,0.00
+SEK,paid,9,3936.22,0.00,0.00
+USD,paid,25,827.50,0.00,0.00
+USD,partially_refunded,1,30.00,7.50,0.00
+USD,refunded,3,534.00,534.00,0.00
+VND,paid,1,2810809.00,0.00,0.00

@@ -1,0 +1,17 @@
+VAT RETURN - United Kingdom (GB) - 2025 Q1
+==========================================
+VAT Return (MTD)
+Currency: GBP   Standard rate: 20%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-01         4             46.50              9.31              1.55              7.76
+2025-02         1             23.55              4.71              0.00              4.71
+2025-03         4            115.70             23.13              0.00             23.13
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL           9            185.75             37.15              1.55             35.60
+
+Discounted invoices: 1 (discount 3.90, not deducted from the taxable base)
+Refunded invoices: 1
+
+Rate check: OK

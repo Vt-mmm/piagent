@@ -1,0 +1,17 @@
+VAT RETURN - Netherlands (NL) - 2025 Q1
+=======================================
+Omzetbelastingaangifte
+Currency: EUR   Standard rate: 21%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-01         2             18.10              3.80              0.00              3.80
+2025-02         2             18.06              3.79              0.00              3.79
+2025-03         3             27.22              5.72              0.73              4.99
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL           7             63.38             13.31              0.73             12.58
+
+Discounted invoices: 0 (discount 0.00, not deducted from the taxable base)
+Refunded invoices: 1
+
+Rate check: OK

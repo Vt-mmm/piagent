@@ -1,0 +1,288 @@
+{
+  "id": "long-polyglot-platform",
+  "title": "One long session on a polyglot monorepo: rename + contract v2, Go ledger with shared conformance, contract v3 with property tests, a 25k-line log investigation, a 3k-line legacy router refactor, CI and release 3.0.0",
+  "category": [
+    "long-horizon",
+    "polyglot",
+    "autonomous",
+    "framework"
+  ],
+  "language": "vi",
+  "fixture": "polyglot-monorepo-long",
+  "requires": [
+    "python",
+    "docker"
+  ],
+  "prompt": "Em làm giúp anh hết TODO.md nhé: đổi domain \"customer\" sang \"account\" trong toàn bộ monorepo (contract JSON, pricing-py, web-js, scripts, docs, fixtures), bump order contract lên v2 kèm compat shim đọc payload v1, cập nhật CHANGELOG cho release 2.0.0. Spec trong TODO.md đã chốt rồi, không cần hỏi lại. Làm xong thì chạy unittest Python, npm test bên web-js, release.sh --dry-run và grep lại cho sạch chữ customer, tick hết checklist. Mấy spec trong docs/specs/ là việc của các bước sau, anh sẽ giao dần trong cuộc trò chuyện này, giờ chưa đụng tới.",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "userActions": [
+    {
+      "when": {
+        "minutes": 12
+      },
+      "do": "steer",
+      "text": "À anh bổ sung một rule từ phía Account API, áp dụng ngay và cho mọi service (pricing-py, web-js, và cả ledger-go khi làm tới): payload có account_id với khoảng trắng ở đầu hoặc cuối (vd \" A-1\", \"A-1 \", tab hay newline) phải bị reject với error code INVALID, ở mọi version payload (cả v1 đi qua compat shim). Không được tự trim. Khoảng trắng ở giữa (\"A 1\") vẫn hợp lệ. Các lỗi version/mixed fields vẫn ưu tiên như cũ. Nhớ ghi rule này vào CHANGELOG của release có nó."
+    },
+    {
+      "when": {
+        "minutes": 30
+      },
+      "do": "stop_then_continue",
+      "text": "Sorry anh lỡ bấm Stop. Em làm tiếp phần đang dở nhé, không cần làm lại từ đầu."
+    },
+    {
+      "when": {
+        "minutes": 50
+      },
+      "do": "restart",
+      "hard": true,
+      "text": "Gateway bên công ty vừa restart nên phiên bị ngắt giữa chừng. Em xem lại repo đang tới đâu (git status, chạy test) rồi làm tiếp cho xong việc đang làm nhé."
+    },
+    {
+      "when": {
+        "minutes": 78
+      },
+      "do": "stop_then_continue",
+      "text": "Anh bấm Stop chỉ để xem tiến độ thôi, ổn rồi. Em tiếp tục cho xong nhé, xong nhớ chạy lại test."
+    }
+  ],
+  "budget": {
+    "maxMinutes": 150,
+    "maxNudges": 4,
+    "stallMinutes": 15
+  },
+  "oracle": {
+    "hidden": "hidden",
+    "checks": [
+      {
+        "name": "pricing-py unittest (hidden acceptance + own tests)",
+        "run": "cd services/pricing-py && /usr/bin/python3 -m unittest discover -s tests -v",
+        "timeoutSec": 300,
+        "stopOnFail": false
+      },
+      {
+        "name": "web-js node --test (hidden acceptance + own tests)",
+        "run": "cd services/web-js && node --test 'test/*.test.js'",
+        "timeoutSec": 300,
+        "stopOnFail": false
+      },
+      {
+        "name": "release.sh and dev-env.sh use ACCOUNT_API_URL, release 2.0.0 / contract v2",
+        "run": "bash .soak/check_release.sh",
+        "timeoutSec": 120,
+        "stopOnFail": false
+      },
+      {
+        "name": "no leftover customer outside CHANGELOG/TODO/compat; bookkeeping done",
+        "run": "/usr/bin/python3 .soak/check_rename.py",
+        "timeoutSec": 120,
+        "stopOnFail": false
+      }
+    ]
+  },
+  "reference": "reference",
+  "referenceSetup": [
+    "rm -f services/pricing-py/pricing/customer.py services/pricing-py/fixtures/customers.json services/pricing-py/tests/test_customer.py services/web-js/src/customer.js services/web-js/test/customer.test.js docs/customer-tiers.md"
+  ],
+  "phases": [
+    {
+      "id": "p2",
+      "prompt": "Release 2.0.0 ổn rồi, cảm ơn em. Giờ làm tiếp docs/specs/2-ledger-go.md nhé: service mới services/ledger-go (Go, stdlib only) đọc file event order (JSON Lines) và tính balance theo account, có CLI; đồng thời dựng bộ shared contract conformance để cùng một bộ payload chạy ở Python, Node và Go, và sửa luôn bug SHOP-412 về currency. Máy không cài Go, chạy go test / go vet qua Docker như trong spec. Spec đã chốt, không cần hỏi lại; xong thì chạy đủ test cả ba service.",
+      "oracle": {
+        "hidden": "hidden-p2",
+        "checks": [
+          {
+            "name": "pricing-py unittest (hidden acceptance + own tests)",
+            "run": "cd services/pricing-py && /usr/bin/python3 -m unittest discover -s tests -v",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "web-js node --test (hidden acceptance + own tests)",
+            "run": "cd services/web-js && node --test 'test/*.test.js'",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "ledger-go go vet + go test (Docker, hidden acceptance + own tests)",
+            "run": "bash .soak/go.sh 'timeout 540 go vet ./... && timeout 540 go test -count=1 ./...'",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "ledger CLI books the hidden event file exactly",
+            "run": "bash .soak/p2/check_cli.sh",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          }
+        ]
+      },
+      "reference": "reference-p2"
+    },
+    {
+      "id": "p3",
+      "prompt": "Tiếp spec 3 (docs/specs/3-contract-v3.md): order contract v3 thêm settlement_currency và fx_rate_ppm. Cả ba service phải đọc được v1/v2/v3 theo luật compat trong spec, writer ghi version thấp nhất đủ chở order, settlement total phải chính xác tuyệt đối, ledger tính balance theo settlement currency. Viết thêm property-style tests với random payload có seed cố định ở cả Python, Node và Go. Làm hết rồi chạy lại đủ test ba service nhé.",
+      "oracle": {
+        "hidden": "hidden-p3",
+        "checks": [
+          {
+            "name": "pricing-py unittest (hidden acceptance + own tests)",
+            "run": "cd services/pricing-py && /usr/bin/python3 -m unittest discover -s tests -v",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "web-js node --test (hidden acceptance + own tests)",
+            "run": "cd services/web-js && node --test 'test/*.test.js'",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "ledger-go go vet + go test (Docker, hidden acceptance + own tests)",
+            "run": "bash .soak/go.sh 'timeout 540 go vet ./... && timeout 540 go test -count=1 ./...'",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "1500 seeded v1/v2/v3 payloads agree with the spec in Python, Node and Go",
+            "run": "bash .soak/p3/crosscheck.sh",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          }
+        ]
+      },
+      "reference": "reference-p3"
+    },
+    {
+      "id": "p4",
+      "prompt": "Giờ chuyển qua vụ sự cố hôm 14/10: làm spec 4 (docs/specs/4-log-report.md). Viết scripts/log_report.py đọc logs/prod-2025-10.log, ra top error signature, p95 latency theo endpoint và khung giờ incident đúng theo định nghĩa trong spec, số liệu sẽ được đối chiếu chính xác từng con số. Không sửa file log. Viết test cho tool và ghi postmortem vào docs/incidents/2025-10-14.md.",
+      "oracle": {
+        "hidden": "hidden-p4",
+        "checks": [
+          {
+            "name": "log_report.py exact numbers (prod log + unseen log) and postmortem",
+            "run": "/usr/bin/python3 .soak/p4/check_log_report.py",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "scripts/tests unittest",
+            "run": "/usr/bin/python3 -m unittest discover -s scripts/tests -v",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          }
+        ]
+      },
+      "reference": "reference-p4"
+    },
+    {
+      "id": "p5",
+      "prompt": "Tiếp spec 5: tách services/web-js/src/legacy/router-old.js (~3000 dòng) thành các module nhỏ trong src/router/, hành vi phải y hệt bản cũ kể cả mấy quirk ghi ở đầu file và message lỗi. Nhớ ghi golden từ router cũ TRƯỚC khi đụng vào code, rồi mới refactor và xoá file legacy. Xong chạy npm test.",
+      "oracle": {
+        "hidden": "hidden-p5",
+        "checks": [
+          {
+            "name": "web-js node --test (hidden acceptance + own tests)",
+            "run": "cd services/web-js && node --test 'test/*.test.js'",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "legacy router removed, split into small modern modules, own golden test",
+            "run": "node .soak/p5/check_structure.mjs",
+            "timeoutSec": 120,
+            "stopOnFail": false
+          }
+        ]
+      },
+      "reference": "reference-p5",
+      "referenceSetup": [
+        "rm -rf services/web-js/src/legacy"
+      ]
+    },
+    {
+      "id": "p6",
+      "prompt": "Bước cuối, spec 6 (docs/specs/6-ci-release-3.md): viết scripts/ci.sh chạy mọi thứ (Go qua Docker), cập nhật docs, CHANGELOG và bump release 3.0.0 cho cả ba service. Trước khi chốt em rà lại toàn bộ: mọi yêu cầu anh đã thêm giữa chừng trong cuộc trò chuyện này phải có đủ ở cả ba service (kể cả ledger-go), và chạy bash scripts/ci.sh tới khi in ci: all ok.",
+      "oracle": {
+        "hidden": "hidden-p6",
+        "checks": [
+          {
+            "name": "pricing-py unittest (hidden acceptance + own tests)",
+            "run": "cd services/pricing-py && /usr/bin/python3 -m unittest discover -s tests -v",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "scripts/tests unittest",
+            "run": "/usr/bin/python3 -m unittest discover -s scripts/tests -v",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "web-js node --test (hidden acceptance + own tests)",
+            "run": "cd services/web-js && node --test 'test/*.test.js'",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "ledger-go go vet + go test (Docker, hidden acceptance + own tests)",
+            "run": "bash .soak/go.sh 'timeout 540 go vet ./... && timeout 540 go test -count=1 ./...'",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "ledger CLI books the hidden event file exactly",
+            "run": "bash .soak/p2/check_cli.sh",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "1500 seeded v1/v2/v3 payloads agree with the spec in Python, Node and Go",
+            "run": "bash .soak/p3/crosscheck.sh",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "log_report.py exact numbers (prod log + unseen log) and postmortem",
+            "run": "/usr/bin/python3 .soak/p4/check_log_report.py",
+            "timeoutSec": 600,
+            "stopOnFail": false
+          },
+          {
+            "name": "legacy router removed, split into small modern modules, own golden test",
+            "run": "node .soak/p5/check_structure.mjs",
+            "timeoutSec": 120,
+            "stopOnFail": false
+          },
+          {
+            "name": "release 3.0.0 / contract v3 across three services, v3 samples and ledger-go version checked",
+            "run": "bash .soak/check_release.sh",
+            "timeoutSec": 300,
+            "stopOnFail": false
+          },
+          {
+            "name": "no leftover customer outside CHANGELOG/TODO/compat (whole repo, 3.0.0)",
+            "run": "/usr/bin/python3 .soak/check_rename.py",
+            "timeoutSec": 120,
+            "stopOnFail": false
+          },
+          {
+            "name": "CHANGELOG 3.0.0 (incl. the mid-task account_id rule), docs/ledger.md, docs/contract.md v3, README",
+            "run": "/usr/bin/python3 .soak/p6/check_docs.py",
+            "timeoutSec": 60,
+            "stopOnFail": false
+          },
+          {
+            "name": "scripts/ci.sh runs every step, passes, and fails on a failing Python or Go test",
+            "run": "bash .soak/p6/check_ci.sh",
+            "timeoutSec": 1800,
+            "stopOnFail": false
+          }
+        ]
+      },
+      "reference": "reference-p6"
+    }
+  ]
+}

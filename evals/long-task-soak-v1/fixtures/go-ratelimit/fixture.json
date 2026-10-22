@@ -1,0 +1,1 @@
+{ "description": "Go 1.26 HTTP rate-limiting middleware (stdlib only, fake clock); Go runs only in the golang:1.26.3-alpine3.23 Docker image.", "setup": [], "protect": [] }

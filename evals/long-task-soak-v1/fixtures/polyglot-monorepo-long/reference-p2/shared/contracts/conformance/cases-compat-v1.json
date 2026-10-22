@@ -1,0 +1,7 @@
+[
+  {"name": "v2 with legacy id", "payload": {"contract_version": 2, "order_id": "O-1", "account_id": "A-1", "account_tier": "gold", "currency": "VND", "items": [{"sku": "TEA-01", "qty": 3, "unit_price": 45000}, {"sku": "CUP-02", "qty": 1, "unit_price": 120001}], "customer_id": "C-1"}, "expect": {"error": "MIXED_FIELDS"}},
+  {"name": "v1 vip", "payload": {"contract_version": 1, "order_id": "O-2", "customer_id": "C-2", "customer_tier": "vip", "currency": "USD", "items": [{"sku": "TEA-01", "qty": 7, "unit_price": 1999}]}, "expect": {"ok": {"source_version": 1, "account_id": "C-2", "account_tier": "vip", "currency": "USD", "subtotal": 13993, "discount": 1399, "total": 12594}}},
+  {"name": "v1 without version", "payload": {"order_id": "O-2", "customer_id": "C-2", "customer_tier": "vip", "currency": "USD", "items": [{"sku": "TEA-01", "qty": 7, "unit_price": 1999}]}, "expect": {"ok": {"source_version": 1, "account_id": "C-2", "account_tier": "vip", "currency": "USD", "subtotal": 13993, "discount": 1399, "total": 12594}}},
+  {"name": "v1 with new id", "payload": {"contract_version": 1, "order_id": "O-2", "customer_id": "C-2", "customer_tier": "vip", "currency": "USD", "items": [{"sku": "TEA-01", "qty": 7, "unit_price": 1999}], "account_id": "A-2"}, "expect": {"error": "MIXED_FIELDS"}},
+  {"name": "v1 bad tier", "payload": {"contract_version": 1, "order_id": "O-2", "customer_id": "C-2", "customer_tier": "gold ", "currency": "USD", "items": [{"sku": "TEA-01", "qty": 7, "unit_price": 1999}]}, "expect": {"error": "INVALID"}}
+]

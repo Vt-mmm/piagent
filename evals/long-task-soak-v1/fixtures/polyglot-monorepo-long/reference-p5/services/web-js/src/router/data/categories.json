@@ -1,0 +1,8 @@
+[
+  {"id":"tea","name":"Trà","name_en":"Tea"},
+  {"id":"teaware","name":"Ấm chén","name_en":"Teaware"},
+  {"id":"snack","name":"Bánh mứt","name_en":"Snacks"},
+  {"id":"gift","name":"Quà tặng","name_en":"Gift sets"},
+  {"id":"merch","name":"Đồ lưu niệm","name_en":"Merchandise"},
+  {"id":"subscription","name":"Gói định kỳ","name_en":"Subscriptions"}
+]

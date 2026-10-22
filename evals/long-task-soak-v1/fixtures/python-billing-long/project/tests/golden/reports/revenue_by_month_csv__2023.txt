@@ -1,0 +1,1 @@
+currency,month,invoices,subtotal,discount,tax,total,refunded,net

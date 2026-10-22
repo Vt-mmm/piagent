@@ -1,0 +1,1 @@
+{ "description": "Vanilla JS kanban board (no framework, no build) served by a tiny Node static server; Playwright 1.62.1 e2e on chromium.", "setup": ["npm install --no-audit --no-fund"], "protect": [] }

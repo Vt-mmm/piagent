@@ -1,0 +1,16 @@
+currency,plan,invoices,discounted,subtotal,discount,leakage_pct
+EUR,basic,21,4,198.04,10.36,5.2
+EUR,team,1,1,93.34,4.71,5.0
+GBP,basic,6,2,45.72,5.65,12.4
+GBP,pro,3,1,68.66,2.75,4.0
+JPY,basic,5,1,7591.00,249.00,3.3
+JPY,pro,6,1,27179.00,995.00,3.7
+JPY,team,1,0,14989.00,0.00,0.0
+SEK,basic,5,1,516.62,51.45,10.0
+SEK,pro,2,0,618.13,0.00,0.0
+SEK,team,2,0,2055.38,0.00,0.0
+USD,basic,7,1,70.00,1.50,2.1
+USD,enterprise,1,1,499.00,5.00,1.0
+USD,pro,18,1,540.00,3.00,0.6
+USD,team,3,1,297.00,5.00,1.7
+VND,team,1,0,2555281.00,0.00,0.0

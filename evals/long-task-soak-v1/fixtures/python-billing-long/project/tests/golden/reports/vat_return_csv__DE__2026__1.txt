@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+DE,EUR,2026-01,2,18.85,3.59,0.20,3.39
+DE,EUR,2026-02,5,47.17,8.96,0.00,8.96
+DE,EUR,2026-03,0,0.00,0.00,0.00,0.00

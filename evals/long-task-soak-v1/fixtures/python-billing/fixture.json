@@ -1,0 +1,1 @@
+{ "description": "Small pure-Python subscription billing package (src layout, pytest in a uv venv).", "setup": ["uv venv -q .venv && uv pip install -q --python .venv/bin/python pytest==8.3.5"], "protect": [] }

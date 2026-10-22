@@ -1,0 +1,181 @@
+[
+ {
+  "id": "revenue-by-month_2025",
+  "argv": [
+   "revenue-by-month",
+   "--year",
+   "2025"
+  ]
+ },
+ {
+  "id": "revenue-by-week_2025_csv",
+  "argv": [
+   "revenue-by-week",
+   "--year",
+   "2025",
+   "--csv"
+  ]
+ },
+ {
+  "id": "revenue-by-plan_all",
+  "argv": [
+   "revenue-by-plan"
+  ]
+ },
+ {
+  "id": "vat_DE_2025_Q2",
+  "argv": [
+   "vat",
+   "--country",
+   "DE",
+   "--year",
+   "2025",
+   "--quarter",
+   "2"
+  ]
+ },
+ {
+  "id": "vat_JP_2025_Q4_csv",
+  "argv": [
+   "vat",
+   "--country",
+   "JP",
+   "--year",
+   "2025",
+   "--quarter",
+   "4",
+   "--csv"
+  ]
+ },
+ {
+  "id": "aging_2025-12-31",
+  "argv": [
+   "aging",
+   "--as-of",
+   "2025-12-31"
+  ]
+ },
+ {
+  "id": "statement_C00042",
+  "argv": [
+   "statement",
+   "--customer",
+   "C00042"
+  ]
+ },
+ {
+  "id": "top-customers_2025_5_csv",
+  "argv": [
+   "top-customers",
+   "--year",
+   "2025",
+   "--limit",
+   "5",
+   "--csv"
+  ]
+ },
+ {
+  "id": "coupon-usage_2025",
+  "argv": [
+   "coupon-usage",
+   "--year",
+   "2025"
+  ]
+ },
+ {
+  "id": "refunds_2025_csv",
+  "argv": [
+   "refunds",
+   "--year",
+   "2025",
+   "--csv"
+  ]
+ },
+ {
+  "id": "status-summary_all",
+  "argv": [
+   "status-summary"
+  ]
+ },
+ {
+  "id": "mrr_2025",
+  "argv": [
+   "mrr",
+   "--year",
+   "2025"
+  ]
+ },
+ {
+  "id": "churn_2025",
+  "argv": [
+   "churn",
+   "--year",
+   "2025"
+  ]
+ },
+ {
+  "id": "discount-leakage_2025_csv",
+  "argv": [
+   "discount-leakage",
+   "--year",
+   "2025",
+   "--csv"
+  ]
+ },
+ {
+  "id": "tax-summary_2025",
+  "argv": [
+   "tax-summary",
+   "--year",
+   "2025"
+  ]
+ },
+ {
+  "id": "invoice-register_2025_03_csv",
+  "argv": [
+   "invoice-register",
+   "--year",
+   "2025",
+   "--month",
+   "3",
+   "--csv"
+  ]
+ },
+ {
+  "id": "daily-sales_2025_02",
+  "argv": [
+   "daily-sales",
+   "--year",
+   "2025",
+   "--month",
+   "2"
+  ]
+ },
+ {
+  "id": "revenue-by-quarter_2025_csv",
+  "argv": [
+   "revenue-by-quarter",
+   "--year",
+   "2025",
+   "--csv"
+  ]
+ },
+ {
+  "id": "revenue-by-country_2025",
+  "argv": [
+   "revenue-by-country",
+   "--year",
+   "2025"
+  ]
+ },
+ {
+  "id": "close-pack_2025_06",
+  "argv": [
+   "close-pack",
+   "--year",
+   "2025",
+   "--month",
+   "6"
+  ]
+ }
+]

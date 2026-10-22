@@ -1,0 +1,20 @@
+{
+  "id": "mixed-requirement-change",
+  "title": "The member changes a rule mid-task, presses Stop, and reopens the conversation",
+  "category": ["mixed", "interruption", "long-horizon"],
+  "language": "vi",
+  "fixture": "node-inventory",
+  "requires": [],
+  "prompt": "Cài đặt đầy đủ SPEC.md của kho-hang (src/ và test/), chạy npm test đến khi qua hết.",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "userActions": [
+    { "when": { "toolCalls": 12 }, "do": "steer", "text": "À anh đổi một quy tắc: lowStock(threshold) phải tính cả SKU có available đúng bằng threshold (<=, không phải <). Cập nhật code, test và SPEC.md cho khớp nhé." },
+    { "when": { "toolCalls": 25 }, "do": "stop_then_continue", "text": "Anh lỡ bấm dừng, em làm tiếp phần còn lại nhé." },
+    { "when": { "toolCalls": 40 }, "do": "restart", "text": "Anh vừa mở lại cửa sổ. Làm tiếp cho xong nhé." }
+  ],
+  "budget": { "maxMinutes": 75, "maxNudges": 3, "stallMinutes": 12 },
+  "oracle": { "hidden": "hidden-change", "checks": [{ "name": "spec acceptance with the changed rule", "run": "node --test 'test/*.test.js'", "timeoutSec": 300 }] },
+  "reference": "reference-change"
+}

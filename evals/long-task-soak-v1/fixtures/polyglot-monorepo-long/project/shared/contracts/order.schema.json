@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.shopflow.test/order/v1",
+  "title": "Order",
+  "description": "Order gửi từ web-js sang pricing-py. Một order thuộc về đúng một customer.",
+  "x-contract-version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "order_id", "customer_id", "customer_tier", "currency", "items"],
+  "properties": {
+    "contract_version": { "const": 1 },
+    "order_id": { "type": "string", "minLength": 1 },
+    "customer_id": { "type": "string", "minLength": 1, "description": "Id của customer trong Customer API." },
+    "customer_tier": { "enum": ["standard", "gold", "vip"] },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sku", "qty", "unit_price"],
+        "properties": {
+          "sku": { "type": "string", "minLength": 1 },
+          "qty": { "type": "integer", "minimum": 1 },
+          "unit_price": { "type": "integer", "minimum": 0, "description": "Đơn giá theo đơn vị nhỏ nhất của currency." }
+        }
+      }
+    }
+  }
+}

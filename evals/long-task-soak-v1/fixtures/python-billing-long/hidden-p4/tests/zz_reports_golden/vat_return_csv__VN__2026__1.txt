@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+VN,VND,2026-01,0,0,0,0,0
+VN,VND,2026-02,1,2555281,255528,0,255528
+VN,VND,2026-03,0,0,0,0,0

@@ -1,0 +1,17 @@
+VAT RETURN - France (FR) - 2025 Q2
+==================================
+Declaration de TVA (CA3)
+Currency: EUR   Standard rate: 20%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-04         1             89.78             17.96              0.00             17.96
+2025-05         1              9.15              1.83              0.00              1.83
+2025-06         2            182.21             36.44              0.00             36.44
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL           4            281.14             56.23              0.00             56.23
+
+Discounted invoices: 0 (discount 0.00, not deducted from the taxable base)
+Refunded invoices: 0
+
+Rate check: OK

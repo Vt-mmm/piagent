@@ -1,0 +1,17 @@
+VAT RETURN - Japan (JP) - 2025 Q1
+=================================
+Consumption tax return
+Currency: JPY   Standard rate: 10%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-01         5            13,179             1,318                 0             1,318
+2025-02         5            13,198             1,319                32             1,287
+2025-03         8            23,523             2,351               202             2,149
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL          18            49,900             4,988               234             4,754
+
+Discounted invoices: 3 (discount 2,024, not deducted from the taxable base)
+Refunded invoices: 2
+
+Rate check: OK

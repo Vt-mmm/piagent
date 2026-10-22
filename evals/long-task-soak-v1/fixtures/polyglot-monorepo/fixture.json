@@ -1,0 +1,1 @@
+{ "description": "Polyglot monorepo (Python stdlib pricing service, Node ESM web service, shared JSON contract, bash release script, docs).", "setup": [], "protect": [] }

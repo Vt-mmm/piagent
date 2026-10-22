@@ -1,0 +1,1591 @@
+2025-10-21T02:00:02.516Z level=info svc=web-js req=1e8a6a63ec method=GET path=/orders/O-55001 status=200 latency_ms=19
+2025-10-21T02:00:03.240Z level=info svc=web-js req=901012f037 method=GET path=/orders/O-55002 status=200 latency_ms=41
+2025-10-21T02:00:03.892Z level=info svc=web-js req=cb3f98e277 method=GET path=/accounts/A-1348/quotes status=200 latency_ms=82
+2025-10-21T02:00:03.966Z level=info svc=web-js req=12faecbd38 method=POST path=/orders status=201 latency_ms=172
+2025-10-21T02:00:04.151Z level=info svc=web-js req=928ede0d7a method=POST path=/accounts/A-1387/quotes status=201 latency_ms=364
+2025-10-21T02:00:04.687Z level=info svc=web-js req=10aa05e11a method=POST path=/accounts/A-1254/quotes status=201 latency_ms=113
+2025-10-21T02:00:04.861Z level=info svc=web-js req=58ab2cd31e method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:00:05.767Z level=info svc=web-js req=6465dc9f50 method=POST path=/accounts/A-1086/quotes status=201 latency_ms=121
+2025-10-21T02:00:06.087Z level=info svc=web-js req=ae5bd86d40 method=POST path=/accounts/A-1142/quotes status=201 latency_ms=245
+2025-10-21T02:00:06.316Z level=info svc=web-js req=6b254b0c4e method=GET path=/accounts/A-1118/quotes status=200 latency_ms=15
+2025-10-21T02:00:08.308Z level=info svc=web-js req=740dd27a65 method=GET path=/orders/55011 status=200 latency_ms=52
+2025-10-21T02:00:14.408Z level=info svc=web-js req=300fef7928 method=POST path=/orders status=201 latency_ms=132
+2025-10-21T02:00:14.981Z level=info svc=web-js req=5df2ee4e45 method=GET path=/accounts/A-1083/quotes status=200 latency_ms=56
+2025-10-21T02:00:16.150Z level=info svc=web-js req=1d1f7296ab method=GET path=/accounts/A-1106/quotes status=200 latency_ms=22
+2025-10-21T02:00:24.540Z level=info svc=web-js req=1a24e4e25a method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:00:28.063Z level=info svc=web-js req=b02587be6b method=POST path=/orders status=201 latency_ms=81
+2025-10-21T02:00:28.489Z level=info svc=web-js req=2ae883a1d4 method=GET path=/accounts/A-1270/quotes status=200 latency_ms=61
+2025-10-21T02:00:29.101Z level=info svc=web-js req=31da45e18a method=GET path=/accounts/A-1277/quotes status=200 latency_ms=32
+2025-10-21T02:00:34.053Z level=info svc=web-js req=47ca44eb86 method=POST path=/orders status=201 latency_ms=88
+2025-10-21T02:00:35.962Z level=info svc=web-js req=145d58c705 method=GET path=/accounts/A-1309/quotes status=200 latency_ms=41
+2025-10-21T02:00:36.980Z level=info svc=web-js req=a7e8c14743 method=GET path=/accounts/A-1100/quotes status=499 latency_ms=-
+2025-10-21T02:00:37.946Z level=info svc=web-js req=ca6f15b6ad method=GET path=/orders/O-55022 status=200 latency_ms=28
+2025-10-21T02:00:39.110Z level=info svc=web-js req=0720859634 method=GET path=/accounts/A-1369/quotes status=200 latency_ms=38
+2025-10-21T02:00:39.124Z level=info svc=web-js req=052188287e method=GET path=/catalog/items status=200 latency_ms=106
+2025-10-21T02:00:42.106Z level=info svc=web-js req=6f23a5ef88 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:00:42.320Z level=info svc=web-js req=6b8b5ab3ee method=GET path=/accounts/A-1108/quotes status=200 latency_ms=25
+2025-10-21T02:00:43.683Z level=info svc=web-js req=e0eaefc4d2 method=GET path=/accounts/A-1378/quotes status=200 latency_ms=42
+2025-10-21T02:00:55.114Z level=info svc=web-js req=2c265974a7 method=GET path=/orders/O-55028 status=200 latency_ms=83
+2025-10-21T02:00:55.489Z level=info svc=web-js req=e21b29fc99 method=GET path=/orders/O-55029 status=200 latency_ms=24
+2025-10-21T02:01:01.870Z level=info svc=web-js req=c84d82feac method=GET path=/accounts/A-1062/quotes status=200 latency_ms=32
+2025-10-21T02:01:04.252Z level=info svc=web-js req=f3bf268ea0 method=POST path=/orders status=201 latency_ms=125
+2025-10-21T02:01:13.381Z level=info svc=web-js req=5b321c5296 method=GET path=/catalog/items status=200 latency_ms=12
+2025-10-21T02:01:13.595Z level=info svc=web-js req=834ba2e161 method=POST path=/orders status=201 latency_ms=151
+2025-10-21T02:01:16.619Z level=info svc=web-js req=c1453bf491 method=GET path=/accounts/A-1117/quotes status=200 latency_ms=19
+2025-10-21T02:01:17.420Z level=info svc=web-js req=53b34e8ece method=POST path=/accounts/A-1346/quotes status=201 latency_ms=75
+2025-10-21 09:01:17,421+0700 INFO    pricing.quote: quoted order=O-55035 total=705000
+2025-10-21T02:01:18.601Z level=info svc=web-js req=1138efbaeb method=GET path=/accounts/A-1037/quotes status=200 latency_ms=15
+2025-10-21T02:01:21.851Z level=info svc=web-js req=b586e3e726 method=GET path=/accounts/A-1005/quotes status=200 latency_ms=51
+2025-10-21T02:01:29.745Z level=info svc=web-js req=4a34b3ff60 method=GET path=/accounts/A-1082/quotes status=200 latency_ms=23
+2025-10-21T02:01:30.033Z level=info svc=web-js req=7983a4e629 method=GET path=/orders/O-55039 status=404 latency_ms=11
+2025-10-21T02:01:30.356Z level=info svc=web-js req=4e81b62bb5 method=POST path=/accounts/A-1337/quotes status=201 latency_ms=107
+2025-10-21T02:01:32.080Z level=info svc=web-js req=296e4505f5 method=GET path=/catalog/items?page=23 status=409 latency_ms=108
+2025-10-21T02:01:33.927Z level=info svc=web-js req=2f759eb559 method=GET path=/orders/55042 status=200 latency_ms=49
+2025-10-21T02:01:34.074Z level=info svc=web-js req=4fe1e437b7 method=POST path=/accounts/A-1134/quotes status=201 latency_ms=87
+2025-10-21 09:01:34,075+0700 INFO    pricing.quote: quoted order=O-55043 total=344000
+2025-10-21T02:01:34.101Z level=info svc=web-js req=16d129d067 method=POST path=/accounts/A-1243/quotes status=201 latency_ms=168
+2025-10-21T02:01:34.370Z level=info svc=web-js req=c8b74b589b method=GET path=/accounts/A-1322/quotes status=200 latency_ms=54
+2025-10-21T02:01:35.112Z level=info svc=web-js req=d5d329d65c method=POST path=/accounts/A-1166/quotes status=201 latency_ms=121
+2025-10-21T02:01:35.788Z level=info svc=web-js req=afd38f8c45 method=POST path=/orders status=201 latency_ms=171
+2025-10-21T02:01:37.548Z level=info svc=web-js req=d5606a0deb method=GET path=/catalog/items status=200 latency_ms=10
+2025-10-21T02:01:37.697Z level=info svc=web-js req=eebf8e51aa method=GET path=/accounts/A-1009/quotes status=400 latency_ms=66
+2025-10-21T02:01:40.677Z level=info svc=web-js req=ba3c1ae917 method=GET path=/orders/O-55050 status=200 latency_ms=58
+2025-10-21T02:01:41.106Z level=info svc=web-js req=0bc458272f method=GET path=/accounts/A-1332/quotes status=200 latency_ms=45
+2025-10-21 09:01:46,000+0700 ERROR   pricing.cache: quote cache write failed: redis timeout after 500ms (key=q:bd736b96a0)
+2025-10-21T02:01:46.488Z level=info svc=web-js req=03222930ae method=GET path=/orders/O-55052 status=200 latency_ms=25
+2025-10-21T02:01:46.923Z level=info svc=web-js req=77774510ca method=POST path=/accounts/A-1344/quotes status=201 latency_ms=69
+2025-10-21T02:01:51.002Z level=info svc=web-js req=fe730f37f1 method=POST path=/accounts/A-1043/quotes status=201 latency_ms=42
+2025-10-21 09:01:51,002+0700 INFO    pricing.quote: quoted order=O-55054 total=216000
+2025-10-21T02:01:54.181Z level=info svc=web-js req=47823d11ed method=GET path=/accounts/A-1046/quotes status=200 latency_ms=48
+2025-10-21T02:01:56.371Z level=info svc=web-js req=73ae7c8f09 method=POST path=/orders status=201 latency_ms=387
+2025-10-21T02:01:58.785Z level=info svc=web-js req=65d6cff718 method=POST path=/orders status=409 latency_ms=113
+2025-10-21T02:01:58.823Z level=info svc=web-js req=5c138efef9 method=GET path=/catalog/items status=200 latency_ms=15
+2025-10-21T02:01:59.911Z level=info svc=web-js req=44f895fc55 method=POST path=/orders status=201 latency_ms=61
+2025-10-21T02:01:59.996Z level=info svc=web-js req=e0e9d625c9 method=POST path=/accounts/A-1395/quotes status=201 latency_ms=415
+2025-10-21T02:02:05.044Z level=info svc=web-js req=cf4223b8aa method=POST path=/accounts/A-1280/quotes status=201 latency_ms=51
+2025-10-21T02:02:08.035Z level=info svc=web-js req=f79304106e method=POST path=/accounts/A-1211/quotes status=201 latency_ms=68
+2025-10-21T02:02:08.543Z level=info svc=web-js req=d94fe04802 method=POST path=/orders status=201 latency_ms=416
+2025-10-21T02:02:10.848Z level=info svc=web-js req=cde54c5de6 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:02:11.229Z level=info svc=web-js req=3f72ee6a2e method=GET path=/orders/O-55065 status=200 latency_ms=104
+2025-10-21T02:02:11.459Z level=info svc=web-js req=e5c3c9f7e3 method=GET path=/accounts/A-1077/quotes status=200 latency_ms=66
+2025-10-21T02:02:13.950Z level=info svc=web-js req=20f662222e method=GET path=/orders/O-55067 status=200 latency_ms=15
+2025-10-21T02:02:14.765Z level=info svc=web-js req=42635956be method=GET path=/orders/O-55068 status=200 latency_ms=15
+2025-10-21T02:02:16.016Z level=info svc=web-js req=793e0b25cd method=GET path=/orders/O-55069 status=200 latency_ms=207
+2025-10-21T02:02:17.162Z level=info svc=web-js req=ace2856ec6 method=GET path=/orders/55070 status=422 latency_ms=53
+2025-10-21T02:02:17.459Z level=info svc=web-js req=6bb7e49f36 method=GET path=/accounts/A-1116/quotes status=409 latency_ms=131
+2025-10-21T02:02:18.907Z level=info svc=web-js req=c44fcc9a5c method=POST path=/accounts/A-1003/quotes status=201 latency_ms=201
+2025-10-21 09:02:18,908+0700 INFO    pricing.quote: quoted order=O-55072 total=227000
+2025-10-21T02:02:19.983Z level=info svc=web-js req=aae90fb651 method=GET path=/accounts/A-1151/quotes status=200 latency_ms=58
+2025-10-21T02:02:20.188Z level=info svc=web-js req=642f217e72 method=GET path=/orders/O-55074 status=200 latency_ms=11
+2025-10-21T02:02:22.336Z level=info svc=web-js req=86ef95eee8 method=POST path=/orders status=201 latency_ms=1013
+2025-10-21T02:02:23.062Z level=info svc=web-js req=471407ab33 method=GET path=/accounts/A-1340/quotes status=200 latency_ms=97
+2025-10-21T02:02:26.465Z level=info svc=web-js req=6ecdcec408 method=POST path=/accounts/A-1063/quotes status=201 latency_ms=210
+2025-10-21T02:02:27.260Z level=info svc=web-js req=cf3f7dc86b method=GET path=/orders/O-55078 status=422 latency_ms=26
+2025-10-21T02:02:27.841Z level=info svc=web-js req=9be6077d79 method=POST path=/accounts/A-1192/quotes status=201 latency_ms=47
+2025-10-21T02:02:30.196Z level=info svc=web-js req=ea98772790 method=GET path=/orders/O-55080 status=200 latency_ms=51
+2025-10-21T02:02:30.399Z level=info svc=web-js req=b779a5fd62 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:02:31.687Z level=info svc=web-js req=7ed096bfd6 method=GET path=/healthz status=200 latency_ms=4
+2025-10-21T02:02:32.425Z level=info svc=web-js req=dc53eab031 method=POST path=/accounts/A-1004/quotes status=201 latency_ms=200
+2025-10-21T02:02:33.358Z level=info svc=web-js req=538b6bfeae method=GET path=/accounts/A-1101/quotes status=200 latency_ms=22
+2025-10-21T02:02:33.595Z level=info svc=web-js req=f8b5b39023 method=POST path=/accounts/A-1053/quotes status=201 latency_ms=76
+2025-10-21 09:02:33,595+0700 INFO    pricing.quote: quoted order=O-55085 total=427000
+2025-10-21T02:02:36.935Z level=info svc=web-js req=4b4b3e90b7 method=POST path=/accounts/A-1345/quotes status=201 latency_ms=132
+2025-10-21T02:02:37.401Z level=info svc=web-js req=10538ae1c1 method=GET path=/accounts/A-1224/quotes status=200 latency_ms=27
+2025-10-21T02:02:43.164Z level=info svc=web-js req=a719bd2640 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:02:43.809Z level=info svc=web-js req=3b4b2e7245 method=GET path=/accounts/A-1002/quotes status=200 latency_ms=91
+2025-10-21T02:02:44.023Z level=info svc=web-js req=c7c6664843 method=GET path=/accounts/A-1298/quotes status=200 latency_ms=18
+2025-10-21T02:02:44.887Z level=info svc=web-js req=ff3437ccaa method=GET path=/accounts/A-1326/quotes status=200 latency_ms=58
+2025-10-21T02:02:49.576Z level=info svc=web-js req=4f9efac292 method=GET path=/orders/55092 status=200 latency_ms=70
+2025-10-21T02:02:49.595Z level=info svc=web-js req=88a3a16d92 method=GET path=/accounts/A-1253/quotes status=200 latency_ms=17
+2025-10-21T02:02:50.952Z level=info svc=web-js req=91bece7145 method=GET path=/accounts/A-1356/quotes status=200 latency_ms=214
+2025-10-21T02:02:54.480Z level=info svc=web-js req=f13423880b method=POST path=/accounts/A-1009/quotes status=201 latency_ms=722
+2025-10-21T02:03:00.995Z level=info svc=web-js req=b6e77b0475 method=POST path=/accounts/A-1022/quotes status=201 latency_ms=119
+2025-10-21T02:03:03.469Z level=info svc=web-js req=660aadacf0 method=POST path=/orders status=201 latency_ms=205
+2025-10-21T02:03:04.502Z level=info svc=web-js req=d78ff5ba77 method=GET path=/accounts/A-1183/quotes status=200 latency_ms=27
+2025-10-21T02:03:05.974Z level=info svc=web-js req=4e6b89d463 method=GET path=/accounts/A-1165/quotes status=200 latency_ms=56
+2025-10-21T02:03:07.300Z level=info svc=web-js req=3c771c23e1 method=POST path=/accounts/A-1337/quotes status=422 latency_ms=124
+2025-10-21 09:03:07,301+0700 ERROR   pricing.order: ContractError(INVALID): currency must be a 3-letter code [order=O-55100]
+2025-10-21T02:03:08.722Z level=info svc=web-js req=a88299ed6e method=POST path=/orders status=201 latency_ms=74
+2025-10-21T02:03:09.562Z level=info svc=web-js req=60e5160931 method=GET path=/orders/55102 status=200 latency_ms=24
+2025-10-21T02:03:09.790Z level=info svc=web-js req=e2fb52882f method=POST path=/orders status=201 latency_ms=941
+2025-10-21T02:03:10.859Z level=info svc=web-js req=10389bc3dc method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:03:10.908Z level=info svc=web-js req=f680915aaf method=GET path=/orders/O-55105 status=200 latency_ms=90
+2025-10-21T02:03:11.521Z level=info svc=web-js req=efa2f65e36 method=GET path=/accounts/A-1134/quotes status=200 latency_ms=27
+2025-10-21T02:03:11.528Z level=info svc=web-js req=f75c1a7c01 method=POST path=/accounts/A-1192/quotes status=201 latency_ms=224
+2025-10-21T02:03:13.243Z level=info svc=web-js req=935e73252b method=GET path=/catalog/items status=200 latency_ms=56
+2025-10-21T02:03:19.011Z level=info svc=web-js req=4f40ef5ec2 method=POST path=/accounts/A-1041/quotes status=201 latency_ms=63
+2025-10-21T02:03:23.350Z level=info svc=web-js req=836aed8872 method=GET path=/orders/O-55110 status=200 latency_ms=59
+2025-10-21T02:03:24.886Z level=info svc=web-js req=1b4dc1d327 method=GET path=/accounts/A-1250/quotes status=409 latency_ms=62
+2025-10-21T02:03:25.752Z level=info svc=web-js req=03227ee409 method=GET path=/orders/O-55112 status=200 latency_ms=42
+2025-10-21T02:03:26.623Z level=info svc=web-js req=43cfc31601 method=GET path=/accounts/A-1076/quotes status=200 latency_ms=17
+2025-10-21T02:03:32.917Z level=info svc=web-js req=3f7e2b86d1 method=GET path=/accounts/A-1287/quotes status=200 latency_ms=55
+2025-10-21T02:03:33.853Z level=info svc=web-js req=9c0329602a method=GET path=/accounts/A-1031/quotes status=200 latency_ms=38
+2025-10-21T02:03:34.974Z level=info svc=web-js req=81a48792c5 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:03:37.013Z level=info svc=web-js req=7ac870fef2 method=POST path=/accounts/A-1313/quotes status=201 latency_ms=84
+2025-10-21 09:03:37,014+0700 INFO    pricing.quote: quoted order=O-55117 total=865000
+2025-10-21T02:03:38.444Z level=info svc=web-js req=09a4de7a8d method=POST path=/accounts/A-1238/quotes status=201 latency_ms=167
+2025-10-21T02:03:41.754Z level=info svc=web-js req=ad8dc508c6 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:03:42.994Z level=info svc=web-js req=0381e6d6c8 method=POST path=/orders status=201 latency_ms=109
+2025-10-21T02:03:49.475Z level=info svc=web-js req=a1da17f2fb method=GET path=/catalog/items?page=21 status=200 latency_ms=13
+2025-10-21T02:03:50.570Z level=info svc=web-js req=01b2971b77 method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:03:53.159Z level=info svc=web-js req=e990b13f30 method=POST path=/accounts/A-1371/quotes status=201 latency_ms=299
+2025-10-21 09:03:53,160+0700 INFO    pricing.quote: quoted order=O-55123 total=115000
+2025-10-21T02:03:54.003Z level=info svc=web-js req=0aa245d658 method=GET path=/accounts/A-1082/quotes status=200 latency_ms=21
+2025-10-21T02:03:54.010Z level=info svc=web-js req=10aa069dd3 method=POST path=/orders status=201 latency_ms=282
+2025-10-21T02:03:54.121Z level=info svc=web-js req=e9d903ff4d method=POST path=/orders status=201 latency_ms=71
+2025-10-21T02:04:01.403Z level=info svc=web-js req=9317448971 method=POST path=/accounts/A-1050/quotes status=201 latency_ms=186
+2025-10-21 09:04:01,404+0700 INFO    pricing.quote: quoted order=O-55127 total=2000
+2025-10-21T02:04:02.079Z level=warn svc=web-js req=b17dd1e6c7 method=GET path=/orders/O-55128 status=503 latency_ms=192
+2025-10-21T02:04:02.079Z level=error svc=web-js req=5897b1ac9d msg="upstream timeout after 5000ms calling pricing-py"
+2025-10-21T02:04:02.097Z level=info svc=web-js req=d048a28354 method=GET path=/healthz status=200 latency_ms=5
+2025-10-21T02:04:03.248Z level=info svc=web-js req=c98fae625e method=GET path=/orders/O-55130 status=200 latency_ms=108
+2025-10-21T02:04:13.756Z level=info svc=web-js req=5f0671ce23 method=POST path=/accounts/A-1048/quotes status=201 latency_ms=100
+2025-10-21T02:04:17.226Z level=info svc=web-js req=c0b071b0da method=POST path=/accounts/A-1194/quotes status=201 latency_ms=159
+2025-10-21 09:04:17,227+0700 INFO    pricing.quote: quoted order=O-55132 total=596000
+2025-10-21T02:04:17.526Z level=info svc=web-js req=c5b0665350 method=POST path=/accounts/A-1079/quotes status=201 latency_ms=111
+2025-10-21 09:04:17,526+0700 INFO    pricing.quote: quoted order=O-55133 total=343000
+2025-10-21T02:04:18.964Z level=info svc=web-js req=b927937e85 method=POST path=/accounts/A-1356/quotes status=201 latency_ms=65
+2025-10-21 09:04:18,965+0700 INFO    pricing.quote: quoted order=O-55134 total=335000
+2025-10-21T02:04:19.303Z level=info svc=web-js req=2a1a0ffed5 method=GET path=/orders/O-55135 status=200 latency_ms=24
+2025-10-21T02:04:19.760Z level=info svc=web-js req=a31bf9b683 method=GET path=/accounts/A-1196/quotes status=200 latency_ms=22
+2025-10-21T02:04:21.417Z level=info svc=web-js req=a1fb1b0902 method=GET path=/accounts/A-1198/quotes status=200 latency_ms=15
+2025-10-21T02:04:21.530Z level=info svc=web-js req=9692f03975 method=GET path=/accounts/A-1131/quotes status=200 latency_ms=38
+2025-10-21T02:04:22.583Z level=info svc=web-js req=ad3a85eed0 method=POST path=/accounts/A-1117/quotes status=201 latency_ms=166
+2025-10-21 09:04:22,583+0700 INFO    pricing.quote: quoted order=O-55139 total=443000
+2025-10-21T02:04:23.548Z level=info svc=web-js req=40280da853 method=POST path=/accounts/A-1321/quotes status=201 latency_ms=310
+2025-10-21 09:04:23,549+0700 WARNING pricing.quote: slow quote 839ms order=O-55140
+2025-10-21T02:04:24.697Z level=info svc=web-js req=7dd4f58692 method=POST path=/accounts/A-1345/quotes status=201 latency_ms=287
+2025-10-21 09:04:24,698+0700 INFO    pricing.quote: quoted order=O-55141 total=258000
+2025-10-21T02:04:27.710Z level=info svc=web-js req=8a74efd764 method=GET path=/orders/O-55142 status=200 latency_ms=116
+2025-10-21T02:04:28.438Z level=info svc=web-js req=fd35c86b78 method=POST path=/accounts/A-1008/quotes status=201 latency_ms=251
+2025-10-21T02:04:29.289Z level=info svc=web-js req=ea6b2838e0 method=GET path=/accounts/A-1314/quotes status=200 latency_ms=17
+2025-10-21T02:04:31.949Z level=info svc=web-js req=38f8b44bc2 method=GET path=/orders/O-55145 status=200 latency_ms=15
+2025-10-21T02:04:33.805Z level=info svc=web-js req=11c6cfbfe5 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:04:40.400Z level=info svc=web-js req=d1d4a8b1a7 method=GET path=/orders/O-55147 status=200 latency_ms=55
+2025-10-21T02:04:41.491Z level=info svc=web-js req=443aff076f method=POST path=/accounts/A-1150/quotes status=201 latency_ms=165
+2025-10-21T02:04:43.373Z level=info svc=web-js req=7c7ac3caf8 method=GET path=/orders/O-55149 status=200 latency_ms=55
+2025-10-21T02:04:48.033Z level=info svc=web-js req=e79088ec8a method=GET path=/orders/55150 status=200 latency_ms=16
+2025-10-21T02:04:50.040Z level=info svc=web-js req=a803d61cbf method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:04:50.825Z level=info svc=web-js req=249417bb43 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:04:50.992Z level=info svc=web-js req=b0e4217251 method=GET path=/accounts/A-1231/quotes status=200 latency_ms=22
+2025-10-21T02:04:51.622Z level=info svc=web-js req=87368dc5bf method=POST path=/orders status=201 latency_ms=180
+2025-10-21T02:04:52.952Z level=info svc=web-js req=7b0ef6df4f method=GET path=/catalog/items status=200 latency_ms=15
+2025-10-21T02:04:57.134Z level=info svc=web-js req=77521858f4 method=GET path=/accounts/A-1251/quotes status=200 latency_ms=23
+2025-10-21T02:05:01.379Z level=info svc=web-js req=406c21a8d6 method=GET path=/orders/O-55157 status=200 latency_ms=37
+2025-10-21T02:05:01.914Z level=info svc=web-js req=a7341aa3ee method=GET path=/catalog/items status=200 latency_ms=18
+2025-10-21T02:05:02.274Z level=info svc=web-js req=660a40c9e8 method=GET path=/accounts/A-1098/quotes status=200 latency_ms=31
+2025-10-21T02:05:03.078Z level=info svc=web-js req=a8c417857d method=GET path=/catalog/items/ status=200 latency_ms=10
+2025-10-21T02:05:05.059Z level=info svc=web-js req=15ae54a836 method=POST path=/accounts/A-1278/quotes status=201 latency_ms=155
+2025-10-21T02:05:06.306Z level=info svc=web-js req=5e036feab9 method=POST path=/orders status=201 latency_ms=378
+2025-10-21T02:05:06.339Z level=info svc=web-js req=906e40b885 method=GET path=/accounts/A-1158/quotes status=200 latency_ms=28
+2025-10-21T02:05:08.516Z level=info svc=web-js req=7267970ab1 method=GET path=/catalog/items status=200 latency_ms=51
+2025-10-21T02:05:09.696Z level=info svc=web-js req=151a1f80d1 method=GET path=/orders/O-55165 status=200 latency_ms=108
+2025-10-21T02:05:12.114Z level=warn svc=web-js req=de37deeaed method=GET path=/accounts/A-1077/quotes status=500 latency_ms=85
+2025-10-21T02:05:12.114Z level=error svc=web-js req=91b82763ba msg="upstream timeout after 5000ms calling pricing-py"
+2025-10-21T02:05:14.318Z level=info svc=web-js req=ba2511957e method=GET path=/accounts/A-1375/quotes status=200 latency_ms=130
+2025-10-21T02:05:22.176Z level=info svc=web-js req=08b79b14f3 method=GET path=/accounts/A-1285/quotes status=200 latency_ms=42
+2025-10-21T02:05:22.723Z level=info svc=web-js req=dcf52bc655 method=GET path=/accounts/A-1333/quotes status=200 latency_ms=58
+2025-10-21T02:05:24.184Z level=info svc=web-js req=1dcc1fd5c7 method=GET path=/orders/O-55170 status=200 latency_ms=40
+2025-10-21T02:05:27.889Z level=info svc=web-js req=91c13897b4 method=GET path=/orders/55171 status=200 latency_ms=33
+2025-10-21T02:05:32.492Z level=info svc=web-js req=03fa3a0776 method=GET path=/accounts/A-1318/quotes status=200 latency_ms=69
+2025-10-21T02:05:32.526Z level=info svc=web-js req=e5c57d72fe method=GET path=/orders/O-55173 status=200 latency_ms=142
+2025-10-21T02:05:34.267Z level=info svc=web-js req=c8e32ef1ea method=POST path=/accounts/A-1352/quotes status=201 latency_ms=76
+2025-10-21T02:05:40.914Z level=info svc=web-js req=1588d8c0a5 method=GET path=/catalog/items status=200 latency_ms=47
+2025-10-21T02:05:41.961Z level=info svc=web-js req=65ad7b4176 method=POST path=/accounts/A-1195/quotes status=201 latency_ms=206
+2025-10-21 09:05:41,962+0700 INFO    pricing.quote: quoted order=O-55176 total=261000
+2025-10-21T02:05:42.689Z level=info svc=web-js req=653b9d226a method=GET path=/orders/O-55177 status=200 latency_ms=32
+2025-10-21T02:05:42.751Z level=info svc=web-js req=5c4a30189b method=GET path=/catalog/items status=200 latency_ms=13
+2025-10-21T02:05:43.387Z level=info svc=web-js req=5f1b2a9134 method=POST path=/accounts/A-1399/quotes status=201 latency_ms=59
+2025-10-21T02:05:45.361Z level=info svc=web-js req=7c90c2ed6d method=GET path=/orders/O-55180 status=200 latency_ms=43
+2025-10-21T02:05:45.807Z level=info svc=web-js req=412182e980 method=GET path=/accounts/A-1398/quotes status=200 latency_ms=19
+2025-10-21T02:05:48.196Z level=info svc=web-js req=f27ca13fc4 method=POST path=/accounts/A-1092/quotes status=201 latency_ms=43
+2025-10-21T02:05:49.428Z level=info svc=web-js req=abebbf2dac method=GET path=/orders/O-55183 status=200 latency_ms=14
+2025-10-21T02:05:50.812Z level=info svc=web-js req=5af0f058c5 method=GET path=/accounts/A-1081/quotes status=200 latency_ms=27
+2025-10-21T02:05:54.264Z level=info svc=web-js req=7bfc44e14b method=GET path=/orders/55185 status=200 latency_ms=12
+2025-10-21T02:05:57.827Z level=info svc=web-js req=1aa70b407e method=GET path=/accounts/A-1386/quotes status=200 latency_ms=24
+2025-10-21T02:06:00.846Z level=info svc=web-js req=0ebc6e9d5f method=GET path=/accounts/A-1173/quotes status=200 latency_ms=26
+2025-10-21T02:06:01.458Z level=info svc=web-js req=d6922c6c73 method=POST path=/accounts/A-1074/quotes status=201 latency_ms=59
+2025-10-21T02:06:02.416Z level=info svc=web-js req=ecab14660f method=GET path=/accounts/A-1233/quotes status=200 latency_ms=20
+2025-10-21T02:06:05.220Z level=info svc=web-js req=ec3d19ce0e method=POST path=/accounts/A-1146/quotes status=201 latency_ms=208
+2025-10-21T02:06:06.508Z level=info svc=web-js req=2382c2c4ba method=GET path=/accounts/A-1371/quotes status=200 latency_ms=22
+2025-10-21T02:06:09.379Z level=info svc=web-js req=232e4177ed method=POST path=/orders status=201 latency_ms=124
+2025-10-21T02:06:10.533Z level=info svc=web-js req=c27ed7cc99 method=GET path=/orders/O-55193 status=200 latency_ms=18
+2025-10-21T02:06:13.093Z level=info svc=web-js req=bbb136d5fb method=GET path=/accounts/A-1313/quotes status=200 latency_ms=59
+2025-10-21T02:06:14.801Z level=info svc=web-js req=c3e903e9cd method=GET path=/catalog/items?page=19 status=200 latency_ms=54
+2025-10-21 09:06:21,000+0700 ERROR   pricing.cache: quote cache write failed: redis timeout after 250ms (key=q:a3305576f3)
+2025-10-21T02:06:25.038Z level=info svc=web-js req=01dbaaae92 method=GET path=/catalog/items status=200 latency_ms=114
+2025-10-21T02:06:25.842Z level=info svc=web-js req=61de3b3ddd method=GET path=/catalog/items/ status=200 latency_ms=15
+2025-10-21T02:06:30.014Z level=info svc=web-js req=3e054bcbcb method=GET path=/catalog/items status=200 latency_ms=25
+2025-10-21T02:06:31.400Z level=info svc=web-js req=b2ed22c330 method=GET path=/accounts/A-1093/quotes status=200 latency_ms=31
+2025-10-21T02:06:41.517Z level=info svc=web-js req=b7180a3de7 method=GET path=/accounts/A-1306/quotes status=200 latency_ms=43
+2025-10-21T02:06:42.169Z level=info svc=web-js req=8a230f757d method=GET path=/accounts/A-1238/quotes status=200 latency_ms=46
+2025-10-21T02:06:45.475Z level=info svc=web-js req=6bb1a16a1b method=GET path=/catalog/items status=422 latency_ms=20
+2025-10-21T02:06:48.132Z level=info svc=web-js req=b755c7f81d method=GET path=/orders/O-55203 status=200 latency_ms=110
+2025-10-21T02:06:50.270Z level=info svc=web-js req=530db5a939 method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:06:52.231Z level=info svc=web-js req=02a1f7f5d6 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:06:53.609Z level=info svc=web-js req=c665a52d10 method=GET path=/orders/O-55206 status=200 latency_ms=18
+2025-10-21T02:06:55.890Z level=info svc=web-js req=adeafd6a99 method=POST path=/accounts/A-1023/quotes status=409 latency_ms=298
+2025-10-21T02:06:56.522Z level=info svc=web-js req=1c499b18e5 method=GET path=/orders/O-55208 status=200 latency_ms=21
+2025-10-21T02:06:58.166Z level=info svc=web-js req=88971a80e9 method=GET path=/orders/O-55209 status=200 latency_ms=122
+2025-10-21T02:06:59.640Z level=info svc=web-js req=bd167d27de method=POST path=/accounts/A-1261/quotes status=201 latency_ms=81
+2025-10-21T02:06:59.872Z level=info svc=web-js req=787a54c2e3 method=GET path=/orders/O-55211 status=200 latency_ms=38
+2025-10-21T02:07:01.462Z level=info svc=web-js req=235a3a701c method=POST path=/orders status=201 latency_ms=565
+2025-10-21T02:07:03.819Z level=info svc=web-js req=4479a9398b method=GET path=/orders/55213 status=200 latency_ms=36
+2025-10-21T02:07:04.161Z level=warn svc=web-js req=7f1e110eb0 method=POST path=/orders status=504 latency_ms=679
+2025-10-21T02:07:04.482Z level=info svc=web-js req=5ab91a8326 method=GET path=/accounts/A-1143/quotes status=200 latency_ms=57
+2025-10-21T02:07:10.641Z level=warn svc=web-js req=4c71ac0278 method=POST path=/accounts/A-1284/quotes status=503 latency_ms=359
+2025-10-21T02:07:10.641Z level=error svc=web-js req=936f867ce3 msg="upstream timeout after 3000ms calling pricing-py"
+2025-10-21T02:07:10.891Z level=info svc=web-js req=53f57181a7 method=POST path=/accounts/A-1118/quotes status=201 latency_ms=343
+2025-10-21T02:07:14.504Z level=info svc=web-js req=ff9eb7ce5b method=GET path=/accounts/A-1024/quotes status=200 latency_ms=116
+2025-10-21T02:07:16.008Z level=info svc=web-js req=11ad2d9c5f method=GET path=/catalog/items/ status=200 latency_ms=19
+2025-10-21T02:07:18.114Z level=info svc=web-js req=7c6bd56c0d method=GET path=/accounts/A-1191/quotes status=200 latency_ms=62
+2025-10-21T02:07:19.113Z level=info svc=web-js req=13fa7a2cf0 method=POST path=/orders status=201 latency_ms=173
+2025-10-21T02:07:19.830Z level=info svc=web-js req=6bf8a7d8c3 method=POST path=/accounts/A-1056/quotes status=201 latency_ms=81
+2025-10-21T02:07:21.740Z level=info svc=web-js req=a2a19e1497 method=GET path=/accounts/A-1096/quotes status=200 latency_ms=17
+2025-10-21T02:07:21.842Z level=info svc=web-js req=d765c6e445 method=GET path=/orders/O-55224 status=409 latency_ms=23
+2025-10-21T02:07:23.353Z level=info svc=web-js req=83880fa3ce method=GET path=/accounts/A-1015/quotes status=200 latency_ms=45
+2025-10-21T02:07:23.666Z level=info svc=web-js req=2b137d42bc method=GET path=/orders/O-55226 status=200 latency_ms=16
+2025-10-21T02:07:23.764Z level=info svc=web-js req=b724d868cb method=POST path=/accounts/A-1239/quotes status=409 latency_ms=237
+2025-10-21T02:07:26.030Z level=info svc=web-js req=9f73289c32 method=GET path=/accounts/A-1016/quotes status=200 latency_ms=19
+2025-10-21T02:07:29.520Z level=info svc=web-js req=280b42312f method=GET path=/accounts/A-1202/quotes status=200 latency_ms=159
+2025-10-21T02:07:29.526Z level=info svc=web-js req=f3fac33aa5 method=GET path=/catalog/items status=200 latency_ms=23
+2025-10-21T02:07:32.977Z level=info svc=web-js req=decaf21612 method=GET path=/orders/O-55231 status=200 latency_ms=19
+2025-10-21T02:07:34.694Z level=info svc=web-js req=8855c38305 method=GET path=/accounts/A-1183/quotes status=200 latency_ms=15
+2025-10-21T02:07:36.985Z level=info svc=web-js req=7730f2300d method=POST path=/accounts/A-1333/quotes status=201 latency_ms=55
+2025-10-21 09:07:36,986+0700 INFO    pricing.quote: quoted order=O-55233 total=36000
+2025-10-21T02:07:37.356Z level=info svc=web-js req=c9d5c31443 method=GET path=/accounts/A-1012/quotes status=200 latency_ms=22
+2025-10-21T02:07:40.662Z level=info svc=web-js req=4c354359fe method=POST path=/accounts/A-1122/quotes status=201 latency_ms=92
+2025-10-21T02:07:44.138Z level=info svc=web-js req=3f88df8c67 method=POST path=/accounts/A-1067/quotes status=201 latency_ms=781
+2025-10-21T02:07:49.352Z level=info svc=web-js req=b7a85353b1 method=POST path=/orders status=201 latency_ms=178
+2025-10-21T02:07:51.816Z level=info svc=web-js req=1be42d981a method=POST path=/accounts/A-1199/quotes status=201 latency_ms=182
+2025-10-21T02:07:55.990Z level=info svc=web-js req=5b484902df method=POST path=/orders status=201 latency_ms=112
+2025-10-21T02:07:57.838Z level=info svc=web-js req=a9cca4e513 method=GET path=/catalog/items status=200 latency_ms=57
+2025-10-21T02:07:58.470Z level=info svc=web-js req=4a2e811113 method=GET path=/catalog/items status=200 latency_ms=15
+2025-10-21T02:07:58.946Z level=info svc=web-js req=6127fc0342 method=GET path=/catalog/items status=200 latency_ms=20
+2025-10-21T02:08:00.065Z level=info svc=web-js req=1786febef8 method=POST path=/orders status=201 latency_ms=270
+2025-10-21T02:08:02.491Z level=info svc=web-js req=b0bd159778 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:08:02.882Z level=info svc=web-js req=20c73b72f3 method=GET path=/orders/O-55245 status=200 latency_ms=50
+2025-10-21T02:08:03.177Z level=info svc=web-js req=8b3c6ab6b9 method=GET path=/accounts/A-1359/quotes status=200 latency_ms=51
+2025-10-21T02:08:07.461Z level=info svc=web-js req=a2338faa86 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:08:07.507Z level=info svc=web-js req=ef2212fb12 method=GET path=/accounts/A-1361/quotes status=422 latency_ms=44
+2025-10-21T02:08:14.102Z level=info svc=web-js req=6c8c5ac762 method=GET path=/orders/55249 status=200 latency_ms=16
+2025-10-21T02:08:16.405Z level=info svc=web-js req=4ab0ac658d method=GET path=/accounts/A-1341/quotes status=200 latency_ms=189
+2025-10-21T02:08:17.093Z level=info svc=web-js req=291ceccddd method=POST path=/accounts/A-1022/quotes status=201 latency_ms=79
+2025-10-21T02:08:19.215Z level=info svc=web-js req=fa54ebef65 method=GET path=/accounts/A-1036/quotes status=200 latency_ms=43
+2025-10-21T02:08:21.377Z level=info svc=web-js req=17eb681073 method=GET path=/accounts/A-1330/quotes status=200 latency_ms=40
+2025-10-21T02:08:23.197Z level=info svc=web-js req=65c6419adb method=GET path=/orders/O-55254 status=200 latency_ms=21
+2025-10-21T02:08:23.423Z level=info svc=web-js req=d4b806c5c2 method=GET path=/accounts/A-1095/quotes status=200 latency_ms=48
+2025-10-21T02:08:29.187Z level=info svc=web-js req=d65e88df9b method=GET path=/orders/O-55256 status=200 latency_ms=72
+2025-10-21T02:08:34.948Z level=info svc=web-js req=f10cf0a5c1 method=GET path=/accounts/A-1021/quotes status=200 latency_ms=88
+2025-10-21 09:08:37,000+0700 INFO    pricing.health: ok workers=5
+2025-10-21T02:08:38.606Z level=info svc=web-js req=2329e42f63 method=POST path=/accounts/A-1374/quotes status=201 latency_ms=82
+2025-10-21T02:08:39.266Z level=info svc=web-js req=4824a64615 method=GET path=/accounts/A-1225/quotes status=422 latency_ms=26
+2025-10-21T02:08:40.761Z level=info svc=web-js req=b9e76c808b method=GET path=/accounts/A-1363/quotes status=200 latency_ms=33
+2025-10-21T02:08:43.984Z level=info svc=web-js req=75844bb0be method=GET path=/accounts/A-1226/quotes status=200 latency_ms=65
+2025-10-21T02:08:44.971Z level=info svc=web-js req=b90f5cb6a8 method=GET path=/orders/55262 status=200 latency_ms=139
+2025-10-21T02:08:45.705Z level=info svc=web-js req=57dd81d987 method=GET path=/orders/O-55263 status=200 latency_ms=30
+2025-10-21T02:08:45.924Z level=info svc=web-js req=948e0c6f2d method=GET path=/orders/O-55264 status=200 latency_ms=58
+2025-10-21T02:08:46.708Z level=info svc=web-js req=bf8c51309f method=POST path=/accounts/A-1123/quotes status=201 latency_ms=100
+2025-10-21T02:08:51.251Z level=info svc=web-js req=1cb25c7f15 method=GET path=/accounts/A-1271/quotes status=200 latency_ms=70
+2025-10-21T02:08:52.108Z level=info svc=web-js req=d6b6f05dd4 method=GET path=/catalog/items/ status=200 latency_ms=9
+2025-10-21T02:08:52.151Z level=info svc=web-js req=90310fac10 method=GET path=/accounts/A-1369/quotes status=200 latency_ms=42
+2025-10-21T02:08:53.112Z level=info svc=web-js req=f498248bd5 method=GET path=/accounts/A-1191/quotes status=200 latency_ms=17
+2025-10-21T02:08:55.987Z level=info svc=web-js req=ea1d5db2bf method=GET path=/accounts/A-1362/quotes status=200 latency_ms=122
+2025-10-21T02:08:57.320Z level=info svc=web-js req=3d1f6abac1 method=POST path=/accounts/A-1187/quotes status=201 latency_ms=90
+2025-10-21T02:08:58.727Z level=info svc=web-js req=ec08bdd271 method=POST path=/orders status=201 latency_ms=122
+2025-10-21T02:09:00.926Z level=info svc=web-js req=d7647f1d43 method=POST path=/accounts/A-1016/quotes status=201 latency_ms=44
+2025-10-21 09:09:00,926+0700 INFO    pricing.quote: quoted order=O-55273 total=866000
+2025-10-21T02:09:01.406Z level=info svc=web-js req=21e4dc2b23 method=POST path=/accounts/A-1117/quotes status=201 latency_ms=153
+2025-10-21 09:09:01,406+0700 INFO    pricing.quote: quoted order=O-55274 total=174000
+2025-10-21T02:09:01.661Z level=info svc=web-js req=7b9443efe9 method=POST path=/orders status=201 latency_ms=190
+2025-10-21T02:09:04.949Z level=info svc=web-js req=45626a1495 method=GET path=/accounts/A-1235/quotes status=200 latency_ms=57
+2025-10-21T02:09:07.409Z level=info svc=web-js req=23f4fb5de4 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:09:07.621Z level=info svc=web-js req=5c195793c8 method=GET path=/accounts/A-1287/quotes status=200 latency_ms=19
+2025-10-21T02:09:09.679Z level=info svc=web-js req=5cbd51f9dd method=POST path=/orders status=201 latency_ms=499
+2025-10-21T02:09:10.082Z level=info svc=web-js req=fde237b324 method=GET path=/orders/55280 status=200 latency_ms=55
+2025-10-21T02:09:10.128Z level=info svc=web-js req=74abe09cbf method=POST path=/accounts/A-1124/quotes status=201 latency_ms=723
+2025-10-21T02:09:12.433Z level=info svc=web-js req=eb12d0ee52 method=GET path=/catalog/items?page=20 status=200 latency_ms=15
+2025-10-21T02:09:16.794Z level=info svc=web-js req=ecde4963fd method=GET path=/catalog/items status=200 latency_ms=117
+2025-10-21T02:09:17.342Z level=info svc=web-js req=05b4533d4e method=POST path=/accounts/A-1089/quotes status=201 latency_ms=75
+2025-10-21T02:09:18.033Z level=info svc=web-js req=12144d8e2c method=GET path=/orders/O-55285 status=200 latency_ms=18
+2025-10-21T02:09:19.463Z level=info svc=web-js req=523654771b method=GET path=/catalog/items?page=18 status=200 latency_ms=27
+2025-10-21T02:09:22.975Z level=info svc=web-js req=0bcbd7d4aa method=POST path=/orders status=201 latency_ms=203
+2025-10-21T02:09:25.556Z level=info svc=web-js req=51ecdfbd22 method=GET path=/orders/O-55288 status=200 latency_ms=42
+2025-10-21T02:09:29.802Z level=info svc=web-js req=54d5bd6fee method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:09:32.693Z level=info svc=web-js req=ae89e5ae62 method=GET path=/accounts/A-1107/quotes status=200 latency_ms=80
+2025-10-21T02:09:32.752Z level=info svc=web-js req=c37a416ffa method=GET path=/orders/55291 status=200 latency_ms=40
+2025-10-21T02:09:36.133Z level=info svc=web-js req=46f0e171f2 method=GET path=/orders/O-55292 status=200 latency_ms=143
+2025-10-21T02:09:37.194Z level=info svc=web-js req=c1669db894 method=GET path=/accounts/A-1243/quotes status=200 latency_ms=89
+2025-10-21T02:09:39.481Z level=info svc=web-js req=26bcd32198 method=GET path=/catalog/items?page=33 status=200 latency_ms=13
+2025-10-21T02:09:44.933Z level=info svc=web-js req=cce6a9e369 method=GET path=/catalog/items?page=16 status=200 latency_ms=22
+2025-10-21T02:09:46.114Z level=info svc=web-js req=59dd32fac2 method=GET path=/accounts/A-1013/quotes status=200 latency_ms=74
+2025-10-21T02:09:46.272Z level=info svc=web-js req=430550de69 method=GET path=/orders/55297 status=200 latency_ms=27
+2025-10-21T02:09:51.099Z level=info svc=web-js req=fb3773b4d8 method=GET path=/accounts/A-1181/quotes status=200 latency_ms=79
+2025-10-21T02:09:53.095Z level=info svc=web-js req=df7c4d18cd method=GET path=/accounts/A-1393/quotes status=200 latency_ms=77
+2025-10-21T02:09:53.733Z level=info svc=web-js req=e2d9f1dd1b method=GET path=/accounts/A-1349/quotes status=200 latency_ms=156
+2025-10-21T02:09:54.236Z level=info svc=web-js req=ce0640a87d method=GET path=/accounts/A-1396/quotes status=200 latency_ms=24
+2025-10-21T02:09:56.116Z level=info svc=web-js req=bc80ac55da method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:09:57.000Z level=error svc=web-js req=e01086ca94 msg="rate limited by account-api, retry in 15s"
+2025-10-21T02:09:58.636Z level=info svc=web-js req=55e1c78fc4 method=POST path=/orders status=201 latency_ms=68
+2025-10-21T02:09:58.747Z level=info svc=web-js req=6e93296b9a method=GET path=/accounts/A-1120/quotes status=200 latency_ms=59
+2025-10-21T02:10:00.172Z level=info svc=web-js req=8b742850f0 method=POST path=/accounts/A-1208/quotes status=201 latency_ms=404
+2025-10-21T02:10:01.020Z level=info svc=web-js req=8a5179d507 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:10:02.898Z level=info svc=web-js req=24cdc2d189 method=GET path=/healthz status=200 latency_ms=4
+2025-10-21T02:10:04.625Z level=info svc=web-js req=d33da293e2 method=GET path=/orders/O-55308 status=200 latency_ms=102
+2025-10-21T02:10:04.857Z level=info svc=web-js req=71a56ee7be method=GET path=/accounts/A-1317/quotes status=200 latency_ms=122
+2025-10-21T02:10:05.189Z level=info svc=web-js req=61fea7da0e method=POST path=/accounts/A-1295/quotes status=201 latency_ms=204
+2025-10-21T02:10:07.540Z level=info svc=web-js req=a0126e45a3 method=POST path=/accounts/A-1364/quotes status=201 latency_ms=487
+2025-10-21T02:10:09.927Z level=info svc=web-js req=ff38a22304 method=POST path=/orders status=201 latency_ms=155
+2025-10-21T02:10:11.893Z level=info svc=web-js req=2d75d623f1 method=GET path=/catalog/items?page=11 status=200 latency_ms=49
+2025-10-21T02:10:12.011Z level=info svc=web-js req=40b3df0515 method=GET path=/catalog/items?page=25 status=200 latency_ms=19
+2025-10-21T02:10:13.183Z level=info svc=web-js req=72ff38e639 method=POST path=/accounts/A-1339/quotes status=201 latency_ms=128
+2025-10-21T02:10:14.437Z level=info svc=web-js req=5e9f6c3ff2 method=POST path=/orders status=201 latency_ms=53
+2025-10-21T02:10:15.026Z level=info svc=web-js req=8bb7daadc6 method=POST path=/orders status=201 latency_ms=88
+2025-10-21T02:10:15.029Z level=info svc=web-js req=6c20d84c9e method=POST path=/accounts/A-1123/quotes status=201 latency_ms=109
+2025-10-21T02:10:17.760Z level=info svc=web-js req=41cf9251e1 method=GET path=/catalog/items/ status=200 latency_ms=39
+2025-10-21T02:10:18.052Z level=info svc=web-js req=aa10381d14 method=POST path=/accounts/A-1296/quotes status=201 latency_ms=155
+2025-10-21T02:10:18.318Z level=info svc=web-js req=9097c0349c method=POST path=/accounts/A-1201/quotes status=201 latency_ms=122
+2025-10-21T02:10:23.450Z level=info svc=web-js req=ab026f4e61 method=POST path=/accounts/A-1242/quotes status=201 latency_ms=48
+2025-10-21 09:10:23,451+0700 INFO    pricing.quote: quoted order=O-55322 total=555000
+2025-10-21T02:10:23.727Z level=info svc=web-js req=13d90f42d8 method=GET path=/accounts/A-1348/quotes status=200 latency_ms=33
+2025-10-21T02:10:33.303Z level=info svc=web-js req=55b608029d method=GET path=/accounts/A-1254/quotes status=200 latency_ms=77
+2025-10-21T02:10:33.603Z level=info svc=web-js req=25a06363c9 method=GET path=/accounts/A-1353/quotes status=200 latency_ms=98
+2025-10-21T02:10:35.563Z level=info svc=web-js req=dba9f8ef91 method=GET path=/accounts/A-1003/quotes status=200 latency_ms=49
+2025-10-21T02:10:36.268Z level=info svc=web-js req=418a231343 method=POST path=/accounts/A-1215/quotes status=201 latency_ms=83
+2025-10-21 09:10:36,268+0700 INFO    pricing.quote: quoted order=O-55327 total=213000
+2025-10-21T02:10:36.609Z level=info svc=web-js req=33577d445b method=GET path=/orders/55328 status=200 latency_ms=48
+2025-10-21T02:10:42.493Z level=info svc=web-js req=0952d46eef method=POST path=/orders status=201 latency_ms=113
+2025-10-21T02:10:45.995Z level=info svc=web-js req=71ba519468 method=POST path=/orders status=201 latency_ms=90
+2025-10-21T02:10:47.216Z level=info svc=web-js req=7f98a61c0d method=GET path=/accounts/A-1092/quotes status=200 latency_ms=60
+2025-10-21T02:10:49.083Z level=info svc=web-js req=28d69b05b4 method=GET path=/catalog/items?page=15 status=200 latency_ms=36
+2025-10-21T02:10:49.540Z level=info svc=web-js req=41d5645201 method=GET path=/catalog/items status=200 latency_ms=13
+2025-10-21T02:10:56.342Z level=info svc=web-js req=c24b2babb8 method=POST path=/accounts/A-1217/quotes status=201 latency_ms=47
+2025-10-21T02:10:57.255Z level=info svc=web-js req=faaa568415 method=GET path=/orders/O-55335 status=200 latency_ms=21
+2025-10-21T02:10:59.267Z level=info svc=web-js req=a7392e71f4 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:11:01.192Z level=info svc=web-js req=ec942b6eb2 method=GET path=/orders/O-55337 status=200 latency_ms=33
+2025-10-21T02:11:02.604Z level=info svc=web-js req=5955485980 method=GET path=/orders/55338 status=200 latency_ms=25
+2025-10-21T02:11:04.894Z level=info svc=web-js req=187479bfc0 method=GET path=/accounts/A-1380/quotes status=200 latency_ms=20
+2025-10-21T02:11:06.240Z level=warn svc=web-js req=a569bafa1d method=GET path=/accounts/A-1082/quotes status=504 latency_ms=1240
+2025-10-21T02:11:07.675Z level=warn svc=web-js req=d7014483ca method=GET path=/catalog/items status=500 latency_ms=2170
+2025-10-21T02:11:08.195Z level=warn svc=web-js req=8a89366a37 method=POST path=/accounts/A-1133/quotes status=503 latency_ms=2200
+2025-10-21 09:11:08,196+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55342]
+2025-10-21T02:11:13.455Z level=info svc=web-js req=dfba0133c1 method=POST path=/accounts/A-1187/quotes status=201 latency_ms=80
+2025-10-21 09:11:13,456+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55343]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:11:14.124Z level=info svc=web-js req=2bc002c14a method=GET path=/accounts/A-1027/quotes status=200 latency_ms=85
+2025-10-21T02:11:18.790Z level=warn svc=web-js req=a91596640e method=GET path=/accounts/A-1015/quotes status=504 latency_ms=1353
+2025-10-21T02:11:18.790Z level=error svc=web-js req=c69865304e msg="upstream pricing-py returned 504"
+2025-10-21T02:11:19.512Z level=warn svc=web-js req=370a8d9088 method=POST path=/orders status=502 latency_ms=1529
+2025-10-21T02:11:20.330Z level=info svc=web-js req=69ee6f80a3 method=POST path=/orders status=201 latency_ms=280
+2025-10-21T02:11:23.350Z level=warn svc=web-js req=3234283557 method=GET path=/accounts/A-1125/quotes status=502 latency_ms=1421
+2025-10-21T02:11:23.610Z level=info svc=web-js req=11e878feb5 method=POST path=/orders status=201 latency_ms=303
+2025-10-21T02:11:26.935Z level=warn svc=web-js req=b7a6a46492 method=GET path=/orders/55350 status=503 latency_ms=1190
+2025-10-21T02:11:32.530Z level=warn svc=web-js req=77beb5dfc8 method=POST path=/orders status=502 latency_ms=1287
+2025-10-21T02:11:32.877Z level=info svc=web-js req=8897f5d452 method=GET path=/orders/O-55352 status=200 latency_ms=46
+2025-10-21T02:11:33.322Z level=warn svc=web-js req=9632b10455 method=GET path=/orders/55353 status=502 latency_ms=1848
+2025-10-21T02:11:33.323Z level=error svc=web-js req=937e1c6389 msg="upstream pricing-py returned 502"
+2025-10-21T02:11:35.184Z level=info svc=web-js req=f267ff684e method=GET path=/catalog/items?page=26 status=200 latency_ms=47
+2025-10-21T02:11:35.321Z level=warn svc=web-js req=7d4ceb9d73 method=GET path=/orders/O-55355 status=502 latency_ms=911
+2025-10-21T02:11:39.185Z level=warn svc=web-js req=645a8d0312 method=GET path=/catalog/items status=502 latency_ms=1163
+2025-10-21T02:11:40.116Z level=info svc=web-js req=1e3de20ce3 method=GET path=/accounts/A-1045/quotes status=200 latency_ms=24
+2025-10-21T02:11:44.031Z level=warn svc=web-js req=392adbc858 method=GET path=/orders/55358 status=502 latency_ms=2302
+2025-10-21T02:11:44.123Z level=info svc=web-js req=86641462a5 method=GET path=/catalog/items?page=33 status=200 latency_ms=47
+2025-10-21T02:11:45.560Z level=warn svc=web-js req=8dfc0986a1 method=GET path=/catalog/items status=502 latency_ms=1262
+2025-10-21T02:11:50.356Z level=info svc=web-js req=4471b058b1 method=GET path=/orders/55361 status=200 latency_ms=89
+2025-10-21T02:11:52.442Z level=info svc=web-js req=7fa793e3b3 method=POST path=/accounts/A-1338/quotes status=201 latency_ms=179
+2025-10-21 09:11:52,443+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55362]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:11:55.599Z level=info svc=web-js req=087578f33b method=GET path=/catalog/items/ status=200 latency_ms=17
+2025-10-21T02:11:57.981Z level=warn svc=web-js req=ff0bf2b809 method=POST path=/accounts/A-1003/quotes status=504 latency_ms=3186
+2025-10-21 09:11:57,982+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55364]
+2025-10-21T02:11:59.686Z level=info svc=web-js req=adf3348405 method=POST path=/orders status=201 latency_ms=57
+2025-10-21T02:12:03.242Z level=info svc=web-js req=42ae7a7002 method=GET path=/accounts/A-1158/quotes status=200 latency_ms=43
+2025-10-21T02:12:03.590Z level=info svc=web-js req=28a319c60b method=POST path=/accounts/A-1241/quotes status=201 latency_ms=67
+2025-10-21 09:12:03,590+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55367]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:12:04.137Z level=warn svc=web-js req=5c6442a535 method=POST path=/orders status=500 latency_ms=2281
+2025-10-21T02:12:09.387Z level=warn svc=web-js req=9a5a89172a method=POST path=/orders status=504 latency_ms=2199
+2025-10-21T02:12:10.881Z level=info svc=web-js req=1cb637c7e9 method=GET path=/accounts/A-1035/quotes status=200 latency_ms=19
+2025-10-21T02:12:11.453Z level=info svc=web-js req=caf0bb0874 method=GET path=/accounts/A-1090/quotes status=200 latency_ms=60
+2025-10-21T02:12:13.474Z level=info svc=web-js req=85bc542ee8 method=POST path=/accounts/A-1200/quotes status=201 latency_ms=89
+2025-10-21T02:12:19.973Z level=info svc=web-js req=9236c4930a method=GET path=/orders/O-55373 status=200 latency_ms=11
+2025-10-21T02:12:20.669Z level=warn svc=web-js req=e51ffc2ecd method=POST path=/orders status=502 latency_ms=3194
+2025-10-21T02:12:20.669Z level=error svc=web-js req=d2f84a27b3 msg="upstream pricing-py returned 502"
+2025-10-21T02:12:20.936Z level=warn svc=web-js req=9b45e52d0c method=GET path=/catalog/items?page=25 status=500 latency_ms=2916
+2025-10-21T02:12:20.936Z level=error svc=web-js req=5c1805e69a msg="upstream pricing-py returned 500"
+2025-10-21T02:12:23.303Z level=warn svc=web-js req=7500e0bf46 method=GET path=/orders/O-55376 status=502 latency_ms=1747
+2025-10-21T02:12:23.303Z level=error svc=web-js req=80466a622c msg="upstream pricing-py returned 502"
+2025-10-21T02:12:24.166Z level=warn svc=web-js req=7b1c4cb9ae method=GET path=/accounts/A-1228/quotes status=504 latency_ms=2770
+2025-10-21T02:12:25.700Z level=info svc=web-js req=cff951bed0 method=POST path=/accounts/A-1169/quotes status=201 latency_ms=71
+2025-10-21 09:12:25,701+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55378]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:12:33.270Z level=info svc=web-js req=661cc4d89a method=GET path=/accounts/A-1258/quotes status=200 latency_ms=36
+2025-10-21T02:12:34.627Z level=info svc=web-js req=0efee5bf02 method=GET path=/healthz status=200 latency_ms=4
+2025-10-21T02:12:34.931Z level=info svc=web-js req=7aa44b558c method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:12:35.728Z level=warn svc=web-js req=671ca44b00 method=POST path=/accounts/A-1349/quotes status=504 latency_ms=1732
+2025-10-21 09:12:35,728+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55382]
+2025-10-21T02:12:39.411Z level=warn svc=web-js req=c18f6daede method=GET path=/accounts/A-1398/quotes status=502 latency_ms=1693
+2025-10-21T02:12:45.728Z level=info svc=web-js req=d50354db0c method=POST path=/orders status=201 latency_ms=258
+2025-10-21T02:12:46.541Z level=info svc=web-js req=4e5ac4fd09 method=POST path=/orders status=201 latency_ms=183
+2025-10-21T02:12:49.549Z level=info svc=web-js req=db1b50afce method=POST path=/orders status=201 latency_ms=419
+2025-10-21T02:12:52.148Z level=warn svc=web-js req=d2e5b59f85 method=POST path=/orders status=502 latency_ms=2816
+2025-10-21T02:12:53.261Z level=warn svc=web-js req=47b5d0a4af method=GET path=/orders/O-55388 status=500 latency_ms=1609
+2025-10-21T02:12:54.186Z level=info svc=web-js req=361c72f47d method=POST path=/accounts/A-1374/quotes status=201 latency_ms=61
+2025-10-21 09:12:54,186+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55389]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:12:55.423Z level=info svc=web-js req=5652c81f73 method=POST path=/orders status=201 latency_ms=60
+2025-10-21T02:12:58.880Z level=warn svc=web-js req=1ae16ec3f5 method=GET path=/catalog/items status=502 latency_ms=2375
+2025-10-21T02:12:59.976Z level=info svc=web-js req=afa2e9b4ae method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:13:00.328Z level=info svc=web-js req=660c7658c1 method=POST path=/orders status=201 latency_ms=68
+2025-10-21T02:13:04.210Z level=info svc=web-js req=7a04aa34a6 method=GET path=/catalog/items?page=36 status=200 latency_ms=33
+2025-10-21T02:13:07.945Z level=info svc=web-js req=c98282df14 method=GET path=/accounts/A-1363/quotes status=200 latency_ms=21
+2025-10-21T02:13:09.514Z level=info svc=web-js req=989ce0e58d method=POST path=/accounts/A-1001/quotes status=201 latency_ms=43
+2025-10-21 09:13:09,514+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55396]
+2025-10-21T02:13:11.339Z level=warn svc=web-js req=d42ff76051 method=GET path=/orders/O-55397 status=502 latency_ms=926
+2025-10-21T02:13:15.044Z level=warn svc=web-js req=858bce4153 method=GET path=/accounts/A-1362/quotes status=500 latency_ms=1178
+2025-10-21T02:13:15.044Z level=error svc=web-js req=3dbaeca3bb msg="upstream pricing-py returned 500"
+2025-10-21T02:13:15.349Z level=warn svc=web-js req=31c4cf6da0 method=GET path=/catalog/items?page=20 status=504 latency_ms=2214
+2025-10-21T02:13:15.349Z level=error svc=web-js req=ae1d197268 msg="upstream pricing-py returned 504"
+2025-10-21T02:13:16.012Z level=info svc=web-js req=ea35f8abc8 method=GET path=/orders/O-55400 status=200 latency_ms=28
+2025-10-21T02:13:16.091Z level=info svc=web-js req=e9d99824d4 method=POST path=/orders status=404 latency_ms=343
+2025-10-21T02:13:25.615Z level=warn svc=web-js req=5307422ab1 method=GET path=/catalog/items?page=17 status=502 latency_ms=2265
+2025-10-21T02:13:25.615Z level=error svc=web-js req=fb29b61a26 msg="upstream pricing-py returned 502"
+2025-10-21T02:13:26.327Z level=info svc=web-js req=c0d63a13f0 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:13:26.858Z level=info svc=web-js req=eb5b568c38 method=POST path=/orders status=201 latency_ms=55
+2025-10-21T02:13:31.512Z level=info svc=web-js req=d9d3502210 method=GET path=/accounts/A-1394/quotes status=200 latency_ms=114
+2025-10-21T02:13:31.585Z level=warn svc=web-js req=a60dabd684 method=GET path=/orders/O-55406 status=502 latency_ms=2989
+2025-10-21T02:13:31.585Z level=error svc=web-js req=68ead3bf81 msg="upstream pricing-py returned 502"
+2025-10-21T02:13:31.656Z level=warn svc=web-js req=42b6dc0dce method=GET path=/catalog/items status=502 latency_ms=865
+2025-10-21T02:13:31.656Z level=error svc=web-js req=2df29a2b33 msg="upstream pricing-py returned 502"
+2025-10-21T02:13:33.418Z level=info svc=web-js req=f541d33661 method=GET path=/orders/O-55408 status=200 latency_ms=52
+2025-10-21T02:13:37.988Z level=info svc=web-js req=9911c4bbc2 method=GET path=/orders/O-55409 status=200 latency_ms=44
+2025-10-21T02:13:40.203Z level=warn svc=web-js req=8e246952ec method=POST path=/accounts/A-1039/quotes status=502 latency_ms=1153
+2025-10-21T02:13:40.660Z level=info svc=web-js req=b0b25f9ad7 method=GET path=/orders/55411 status=200 latency_ms=31
+2025-10-21T02:13:42.540Z level=info svc=web-js req=d5529befff method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:13:43.589Z level=warn svc=web-js req=029ff8a94f method=POST path=/accounts/A-1115/quotes status=502 latency_ms=2005
+2025-10-21T02:13:43.589Z level=error svc=web-js req=2816e887d3 msg="upstream pricing-py returned 502"
+2025-10-21T02:13:43.748Z level=warn svc=web-js req=41620d0f66 method=GET path=/orders/O-55414 status=500 latency_ms=1051
+2025-10-21T02:13:45.157Z level=info svc=web-js req=b88acc654c method=GET path=/accounts/A-1033/quotes status=200 latency_ms=29
+2025-10-21T02:13:46.441Z level=info svc=web-js req=2acbc467bd method=POST path=/accounts/A-1377/quotes status=201 latency_ms=94
+2025-10-21 09:13:46,441+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55416]
+2025-10-21T02:13:46.958Z level=info svc=web-js req=de434eccd7 method=GET path=/accounts/A-1099/quotes status=200 latency_ms=79
+2025-10-21T02:13:47.898Z level=warn svc=web-js req=1c1da7f575 method=GET path=/accounts/A-1193/quotes status=503 latency_ms=2823
+2025-10-21T02:13:48.105Z level=info svc=web-js req=1130d79739 method=GET path=/accounts/A-1060/quotes status=200 latency_ms=130
+2025-10-21T02:13:50.011Z level=warn svc=web-js req=37be855385 method=POST path=/accounts/A-1122/quotes status=502 latency_ms=2919
+2025-10-21T02:13:52.885Z level=info svc=web-js req=1519fbe2fd method=GET path=/catalog/items/ status=200 latency_ms=9
+2025-10-21T02:13:53.685Z level=info svc=web-js req=a947d74c11 method=POST path=/accounts/A-1235/quotes status=201 latency_ms=56
+2025-10-21 09:13:53,686+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55422]
+2025-10-21T02:13:55.285Z level=info svc=web-js req=af7865d1f3 method=POST path=/accounts/A-1131/quotes status=201 latency_ms=41
+2025-10-21 09:13:55,286+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55423]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:13:57.840Z level=warn svc=web-js req=dbdb791bcd method=POST path=/accounts/A-1309/quotes status=502 latency_ms=1065
+2025-10-21 09:13:57,840+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55424]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:13:59.097Z level=warn svc=web-js req=31d6da1946 method=GET path=/orders/O-55425 status=503 latency_ms=1394
+2025-10-21T02:13:59.673Z level=warn svc=web-js req=7a10d9d703 method=GET path=/accounts/A-1033/quotes status=503 latency_ms=1820
+2025-10-21T02:14:00.010Z level=info svc=web-js req=23e90de4f6 method=GET path=/orders/O-55427 status=200 latency_ms=21
+2025-10-21T02:14:01.540Z level=warn svc=web-js req=d195e924d8 method=GET path=/accounts/A-1164/quotes status=502 latency_ms=1145
+2025-10-21T02:14:02.131Z level=info svc=web-js req=1ad1d14ed0 method=GET path=/catalog/items?page=18 status=200 latency_ms=93
+2025-10-21T02:14:10.389Z level=warn svc=web-js req=4cd94bf286 method=GET path=/catalog/items status=504 latency_ms=2402
+2025-10-21T02:14:10.876Z level=info svc=web-js req=f6859b11e1 method=POST path=/accounts/A-1059/quotes status=201 latency_ms=123
+2025-10-21 09:14:10,877+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55431]
+2025-10-21T02:14:11.912Z level=warn svc=web-js req=f45dc3bfca method=GET path=/accounts/A-1195/quotes status=502 latency_ms=2555
+2025-10-21T02:14:15.185Z level=warn svc=web-js req=7971e4c3a9 method=GET path=/accounts/A-1379/quotes status=502 latency_ms=905
+2025-10-21T02:14:16.000Z level=info svc=web-js req=3bf8a22ee9 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:14:17.303Z level=warn svc=web-js req=b5bc3a7fa3 method=GET path=/accounts/A-1106/quotes status=502 latency_ms=2356
+2025-10-21T02:14:18.185Z level=info svc=web-js req=67e272a5ed method=POST path=/orders status=201 latency_ms=216
+2025-10-21T02:14:20.796Z level=info svc=web-js req=506fed9708 method=GET path=/orders/O-55437 status=200 latency_ms=110
+2025-10-21T02:14:21.594Z level=warn svc=web-js req=8cd5e5f04e method=POST path=/accounts/A-1009/quotes status=500 latency_ms=2218
+2025-10-21 09:14:21,595+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55438]
+2025-10-21T02:14:23.029Z level=warn svc=web-js req=aad982e22a method=GET path=/accounts/A-1392/quotes status=500 latency_ms=2725
+2025-10-21T02:14:25.095Z level=info svc=web-js req=2cd64b960d method=GET path=/accounts/A-1007/quotes status=400 latency_ms=38
+2025-10-21T02:14:27.311Z level=info svc=web-js req=151d3e06ea method=GET path=/accounts/A-1088/quotes status=200 latency_ms=28
+2025-10-21T02:14:27.719Z level=info svc=web-js req=515953d3cf method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:14:30.478Z level=warn svc=web-js req=9f103b24ee method=POST path=/orders status=502 latency_ms=1646
+2025-10-21T02:14:30.640Z level=warn svc=web-js req=27c053585a method=GET path=/accounts/A-1373/quotes status=504 latency_ms=1055
+2025-10-21T02:14:31.881Z level=info svc=web-js req=cb30f8cb01 method=GET path=/accounts/A-1008/quotes status=200 latency_ms=86
+2025-10-21T02:14:38.157Z level=info svc=web-js req=95eeffc467 method=POST path=/orders status=201 latency_ms=331
+2025-10-21T02:14:40.711Z level=warn svc=web-js req=b93a91eb84 method=GET path=/catalog/items?page=28 status=500 latency_ms=952
+2025-10-21T02:14:40.771Z level=info svc=web-js req=e6a99aad0e method=GET path=/accounts/A-1367/quotes status=200 latency_ms=57
+2025-10-21T02:14:44.873Z level=info svc=web-js req=4fce191e0c method=GET path=/accounts/A-1115/quotes status=200 latency_ms=33
+2025-10-21T02:14:47.575Z level=warn svc=web-js req=3c8384914e method=GET path=/orders/O-55450 status=500 latency_ms=2174
+2025-10-21T02:14:50.720Z level=info svc=web-js req=c64f8e94a7 method=GET path=/catalog/items?page=33 status=200 latency_ms=39
+2025-10-21T02:14:51.675Z level=warn svc=web-js req=51731ab8ab method=GET path=/orders/O-55452 status=504 latency_ms=1742
+2025-10-21T02:14:52.636Z level=info svc=web-js req=c41addee36 method=POST path=/accounts/A-1361/quotes status=201 latency_ms=111
+2025-10-21 09:14:52,636+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55453]
+2025-10-21T02:14:54.474Z level=info svc=web-js req=a9c02ca748 method=GET path=/accounts/A-1285/quotes status=200 latency_ms=43
+2025-10-21T02:14:55.567Z level=info svc=web-js req=c4e8e9a8f1 method=POST path=/accounts/A-1043/quotes status=201 latency_ms=183
+2025-10-21 09:14:55,568+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55455]
+2025-10-21T02:14:56.167Z level=warn svc=web-js req=56b5393c85 method=POST path=/accounts/A-1272/quotes status=503 latency_ms=2646
+2025-10-21 09:14:56,167+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55456]
+2025-10-21T02:15:01.856Z level=info svc=web-js req=d9bea784ed method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:15:07.180Z level=warn svc=web-js req=c3c996c130 method=GET path=/accounts/A-1214/quotes status=502 latency_ms=857
+2025-10-21T02:15:07.180Z level=error svc=web-js req=f3099b179f msg="upstream pricing-py returned 502"
+2025-10-21T02:15:08.699Z level=info svc=web-js req=f344170bdc method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:15:09.967Z level=info svc=web-js req=a2c19c3e6c method=POST path=/accounts/A-1180/quotes status=422 latency_ms=80
+2025-10-21 09:15:09,967+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55460]
+2025-10-21T02:15:12.412Z level=info svc=web-js req=8140d2d66b method=POST path=/orders status=201 latency_ms=800
+2025-10-21T02:15:12.996Z level=warn svc=web-js req=d8e558cc34 method=POST path=/accounts/A-1157/quotes status=500 latency_ms=2346
+2025-10-21T02:15:13.546Z level=info svc=web-js req=56f237eb43 method=GET path=/catalog/items status=200 latency_ms=68
+2025-10-21T02:15:15.198Z level=warn svc=web-js req=1e19b3a699 method=POST path=/accounts/A-1383/quotes status=502 latency_ms=1130
+2025-10-21T02:15:15.198Z level=error svc=web-js req=06cbea949b msg="upstream pricing-py returned 502"
+2025-10-21 09:15:15,198+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55464]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:15:16.637Z level=info svc=web-js req=4f60cbf505 method=GET path=/accounts/A-1379/quotes status=200 latency_ms=103
+2025-10-21T02:15:17.123Z level=warn svc=web-js req=969991ff47 method=GET path=/catalog/items status=502 latency_ms=1274
+2025-10-21T02:15:19.374Z level=info svc=web-js req=ed5cffe8c5 method=GET path=/accounts/A-1228/quotes status=200 latency_ms=110
+2025-10-21T02:15:22.739Z level=info svc=web-js req=6d218895db method=GET path=/orders/O-55468 status=200 latency_ms=40
+2025-10-21T02:15:25.952Z level=warn svc=web-js req=5d3810e8b1 method=GET path=/accounts/A-1148/quotes status=502 latency_ms=1120
+2025-10-21T02:15:26.387Z level=warn svc=web-js req=54fddb3c02 method=POST path=/accounts/A-1194/quotes status=502 latency_ms=2085
+2025-10-21 09:15:26,387+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55470]
+2025-10-21T02:15:31.221Z level=info svc=web-js req=e9047e017e method=GET path=/accounts/A-1073/quotes status=200 latency_ms=36
+2025-10-21T02:15:31.488Z level=warn svc=web-js req=e6d9e5d1f0 method=GET path=/catalog/items/ status=500 latency_ms=2929
+2025-10-21T02:15:31.726Z level=warn svc=web-js req=226c81781a method=GET path=/accounts/A-1236/quotes status=503 latency_ms=975
+2025-10-21T02:15:32.953Z level=warn svc=web-js req=b7e73a6bff method=GET path=/accounts/A-1215/quotes status=500 latency_ms=2252
+2025-10-21T02:15:34.414Z level=info svc=web-js req=b895e409d2 method=GET path=/orders/O-55475 status=200 latency_ms=17
+2025-10-21T02:15:34.429Z level=info svc=web-js req=f17d07d09f method=POST path=/orders status=201 latency_ms=91
+2025-10-21T02:15:40.537Z level=warn svc=web-js req=8bff6373ea method=GET path=/catalog/items status=502 latency_ms=1707
+2025-10-21T02:15:46.662Z level=warn svc=web-js req=294f5eacdf method=GET path=/accounts/A-1101/quotes status=503 latency_ms=2147
+2025-10-21T02:15:48.052Z level=warn svc=web-js req=f9c4c97d68 method=GET path=/accounts/A-1301/quotes status=503 latency_ms=2647
+2025-10-21T02:15:49.257Z level=warn svc=web-js req=5a12c30d93 method=GET path=/accounts/A-1265/quotes status=502 latency_ms=1809
+2025-10-21T02:15:50.264Z level=info svc=web-js req=dd771d51f3 method=POST path=/accounts/A-1181/quotes status=201 latency_ms=89
+2025-10-21 09:15:50,264+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55481]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:15:50.919Z level=info svc=web-js req=284c5851e6 method=POST path=/orders status=201 latency_ms=212
+2025-10-21T02:15:52.841Z level=info svc=web-js req=97539d6180 method=GET path=/orders/O-55483 status=200 latency_ms=51
+2025-10-21T02:15:53.832Z level=warn svc=web-js req=e7e5c437f8 method=GET path=/accounts/A-1080/quotes status=500 latency_ms=1394
+2025-10-21T02:15:53.832Z level=error svc=web-js req=ce52be17ab msg="upstream pricing-py returned 500"
+2025-10-21T02:15:54.416Z level=warn svc=web-js req=edcaaf92f3 method=POST path=/accounts/A-1253/quotes status=504 latency_ms=3106
+2025-10-21 09:15:54,417+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55485]
+2025-10-21T02:15:54.586Z level=warn svc=web-js req=cf5ce45bf0 method=GET path=/orders/O-55486 status=503 latency_ms=1096
+2025-10-21T02:15:54.636Z level=info svc=web-js req=0f35af003d method=GET path=/accounts/A-1170/quotes status=200 latency_ms=45
+2025-10-21T02:15:58.211Z level=warn svc=web-js req=8d8d07657f method=GET path=/accounts/A-1159/quotes status=500 latency_ms=1406
+2025-10-21T02:15:58.211Z level=error svc=web-js req=26ecd32642 msg="upstream pricing-py returned 500"
+2025-10-21T02:16:01.462Z level=warn svc=web-js req=acfeb15417 method=POST path=/accounts/A-1222/quotes status=503 latency_ms=1003
+2025-10-21T02:16:01.462Z level=error svc=web-js req=e42e0ddb44 msg="upstream pricing-py returned 503"
+2025-10-21 09:16:01,463+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55489]
+2025-10-21T02:16:02.556Z level=info svc=web-js req=93e268609b method=POST path=/orders status=201 latency_ms=208
+2025-10-21T02:16:02.618Z level=warn svc=web-js req=c9ea32a76e method=POST path=/accounts/A-1011/quotes status=502 latency_ms=1086
+2025-10-21T02:16:02.618Z level=error svc=web-js req=b02ccfcc24 msg="upstream pricing-py returned 502"
+2025-10-21 09:16:02,618+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55491]
+2025-10-21T02:16:03.754Z level=info svc=web-js req=6191e3b600 method=GET path=/accounts/A-1359/quotes status=200 latency_ms=15
+2025-10-21T02:16:05.644Z level=info svc=web-js req=fe44d9c8f3 method=POST path=/accounts/A-1245/quotes status=201 latency_ms=357
+2025-10-21T02:16:07.188Z level=info svc=web-js req=438f525c79 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:16:07.538Z level=warn svc=web-js req=d4ee224ae1 method=POST path=/accounts/A-1293/quotes status=500 latency_ms=2935
+2025-10-21T02:16:07.538Z level=error svc=web-js req=15c2d442e4 msg="upstream pricing-py returned 500"
+2025-10-21 09:16:07,539+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55495]
+2025-10-21T02:16:08.336Z level=info svc=web-js req=1de0632057 method=GET path=/orders/O-55496 status=200 latency_ms=11
+2025-10-21T02:16:08.477Z level=warn svc=web-js req=7e0922b55b method=POST path=/accounts/A-1371/quotes status=502 latency_ms=1249
+2025-10-21 09:16:08,477+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55497]
+2025-10-21T02:16:10.767Z level=info svc=web-js req=a5cef9177e method=POST path=/orders status=201 latency_ms=511
+2025-10-21T02:16:10.873Z level=info svc=web-js req=cf2517e200 method=POST path=/accounts/A-1162/quotes status=201 latency_ms=399
+2025-10-21 09:16:10,874+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55499]
+2025-10-21T02:16:11.305Z level=info svc=web-js req=0881a24fe5 method=GET path=/orders/55500 status=200 latency_ms=26
+2025-10-21T02:16:12.044Z level=warn svc=web-js req=b7e04665ee method=GET path=/accounts/A-1041/quotes status=503 latency_ms=2836
+2025-10-21T02:16:12.141Z level=info svc=web-js req=eee80996dc method=GET path=/catalog/items?page=8 status=200 latency_ms=33
+2025-10-21T02:16:13.250Z level=info svc=web-js req=10c56b28ee method=GET path=/catalog/items status=200 latency_ms=14
+2025-10-21T02:16:13.289Z level=info svc=web-js req=3b622f9854 method=GET path=/orders/O-55504 status=200 latency_ms=29
+2025-10-21T02:16:20.246Z level=warn svc=web-js req=e367b77f75 method=POST path=/accounts/A-1271/quotes status=500 latency_ms=2451
+2025-10-21T02:16:20.246Z level=error svc=web-js req=7878641b30 msg="upstream pricing-py returned 500"
+2025-10-21 09:16:20,246+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55505]
+2025-10-21T02:16:21.999Z level=warn svc=web-js req=615e2024eb method=POST path=/accounts/A-1283/quotes status=502 latency_ms=1668
+2025-10-21 09:16:21,999+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55506]
+2025-10-21T02:16:24.019Z level=info svc=web-js req=07c53c691b method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:16:31.095Z level=info svc=web-js req=f37b0ffe96 method=POST path=/accounts/A-1145/quotes status=201 latency_ms=95
+2025-10-21 09:16:31,096+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55508]
+2025-10-21T02:16:40.063Z level=warn svc=web-js req=026ba5736c method=GET path=/orders/O-55509 status=502 latency_ms=1106
+2025-10-21T02:16:40.063Z level=error svc=web-js req=8183d19841 msg="upstream pricing-py returned 502"
+2025-10-21T02:16:40.886Z level=info svc=web-js req=94ad9f6414 method=GET path=/orders/55510 status=200 latency_ms=49
+2025-10-21T02:16:42.285Z level=warn svc=web-js req=6a83e27857 method=GET path=/accounts/A-1025/quotes status=504 latency_ms=855
+2025-10-21T02:16:45.129Z level=warn svc=web-js req=ee35e7f1be method=GET path=/orders/O-55512 status=502 latency_ms=1234
+2025-10-21T02:16:46.603Z level=info svc=web-js req=d41c49df9e method=POST path=/orders status=422 latency_ms=130
+2025-10-21T02:16:47.532Z level=warn svc=web-js req=6dfe5b5773 method=GET path=/accounts/A-1075/quotes status=500 latency_ms=1130
+2025-10-21T02:16:47.572Z level=info svc=web-js req=28299e541d method=GET path=/accounts/A-1371/quotes status=200 latency_ms=21
+2025-10-21T02:16:50.568Z level=info svc=web-js req=c08b288f5e method=GET path=/accounts/A-1063/quotes status=200 latency_ms=46
+2025-10-21T02:16:58.581Z level=warn svc=web-js req=17c60aa36c method=GET path=/accounts/A-1216/quotes status=502 latency_ms=1920
+2025-10-21T02:17:02.524Z level=info svc=web-js req=1f7f6d5dd6 method=POST path=/accounts/A-1166/quotes status=201 latency_ms=53
+2025-10-21T02:17:03.284Z level=warn svc=web-js req=2b6788aa45 method=POST path=/orders status=502 latency_ms=3009
+2025-10-21T02:17:03.285Z level=error svc=web-js req=a9424b2a03 msg="upstream pricing-py returned 502"
+2025-10-21T02:17:04.664Z level=warn svc=web-js req=6832c950c7 method=POST path=/accounts/A-1122/quotes status=503 latency_ms=1253
+2025-10-21T02:17:04.978Z level=warn svc=web-js req=2711b0efa8 method=POST path=/accounts/A-1136/quotes status=503 latency_ms=2652
+2025-10-21T02:17:04.978Z level=error svc=web-js req=fd31209a8e msg="upstream pricing-py returned 503"
+2025-10-21 09:17:04,979+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55521]
+2025-10-21T02:17:05.290Z level=info svc=web-js req=104abcbab7 method=POST path=/accounts/A-1348/quotes status=201 latency_ms=65
+2025-10-21T02:17:05.514Z level=warn svc=web-js req=cd1ce61d4a method=POST path=/accounts/A-1065/quotes status=500 latency_ms=1149
+2025-10-21T02:17:05.514Z level=error svc=web-js req=f2953f8018 msg="upstream pricing-py returned 500"
+2025-10-21T02:17:05.962Z level=info svc=web-js req=002dfd9337 method=POST path=/accounts/A-1356/quotes status=201 latency_ms=102
+2025-10-21 09:17:05,962+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55524]
+2025-10-21T02:17:10.381Z level=warn svc=web-js req=38abe76007 method=GET path=/accounts/A-1079/quotes status=503 latency_ms=1204
+2025-10-21T02:17:10.381Z level=error svc=web-js req=155a878770 msg="upstream pricing-py returned 503"
+2025-10-21T02:17:11.547Z level=info svc=web-js req=c8a4e3e8f0 method=GET path=/catalog/items status=200 latency_ms=46
+2025-10-21T02:17:12.140Z level=info svc=web-js req=968f210bbf method=GET path=/orders/O-55527 status=200 latency_ms=18
+2025-10-21T02:17:13.301Z level=warn svc=web-js req=880b29e655 method=GET path=/orders/O-55528 status=504 latency_ms=1594
+2025-10-21T02:17:13.302Z level=error svc=web-js req=b4a0dd8910 msg="upstream pricing-py returned 504"
+2025-10-21T02:17:16.028Z level=info svc=web-js req=4b4a57722d method=POST path=/accounts/A-1191/quotes status=201 latency_ms=74
+2025-10-21 09:17:16,028+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55529]
+2025-10-21T02:17:16.400Z level=info svc=web-js req=c11611087d method=POST path=/accounts/A-1374/quotes status=201 latency_ms=196
+2025-10-21 09:17:16,400+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55530]
+2025-10-21T02:17:17.434Z level=info svc=web-js req=5da29ed738 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:17:20.704Z level=warn svc=web-js req=abe3d53b9d method=GET path=/accounts/A-1031/quotes status=504 latency_ms=2987
+2025-10-21T02:17:22.255Z level=info svc=web-js req=325e8806d3 method=POST path=/orders status=201 latency_ms=71
+2025-10-21T02:17:22.737Z level=warn svc=web-js req=276bd59a95 method=POST path=/accounts/A-1364/quotes status=503 latency_ms=2070
+2025-10-21 09:17:22,738+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55534]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:17:28.426Z level=info svc=web-js req=26313aaf5d method=GET path=/accounts/A-1345/quotes status=200 latency_ms=33
+2025-10-21T02:17:29.990Z level=info svc=web-js req=05fc9f01c9 method=POST path=/accounts/A-1061/quotes status=201 latency_ms=78
+2025-10-21 09:17:29,991+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55536]
+2025-10-21T02:17:30.375Z level=info svc=web-js req=9405378581 method=POST path=/orders status=201 latency_ms=117
+2025-10-21T02:17:33.761Z level=info svc=web-js req=93c5b2ea8a method=GET path=/orders/O-55538 status=200 latency_ms=54
+2025-10-21T02:17:34.370Z level=info svc=web-js req=70367ab7d5 method=GET path=/accounts/A-1292/quotes status=200 latency_ms=61
+2025-10-21T02:17:40.536Z level=warn svc=web-js req=dba764aa72 method=POST path=/accounts/A-1185/quotes status=503 latency_ms=1855
+2025-10-21 09:17:40,536+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55540]
+2025-10-21T02:17:43.542Z level=info svc=web-js req=a90debc419 method=POST path=/accounts/A-1281/quotes status=201 latency_ms=77
+2025-10-21 09:17:43,542+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55541]
+2025-10-21T02:17:46.044Z level=info svc=web-js req=bfc0aff78e method=POST path=/orders status=201 latency_ms=131
+2025-10-21T02:17:50.632Z level=info svc=web-js req=00b172bb4b method=GET path=/healthz status=200 latency_ms=4
+2025-10-21T02:17:50.633Z level=warn svc=web-js req=fb5e51f48a method=GET path=/catalog/items/ status=502 latency_ms=2938
+2025-10-21T02:17:50.634Z level=error svc=web-js req=7e872373aa msg="upstream pricing-py returned 502"
+2025-10-21T02:17:51.940Z level=info svc=web-js req=8f9d64d788 method=GET path=/accounts/A-1148/quotes status=200 latency_ms=25
+2025-10-21T02:17:52.276Z level=info svc=web-js req=53a446a017 method=GET path=/accounts/A-1043/quotes status=200 latency_ms=71
+2025-10-21T02:17:56.017Z level=info svc=web-js req=ff2977b4ba method=GET path=/orders/O-55547 status=200 latency_ms=29
+2025-10-21T02:18:01.929Z level=info svc=web-js req=7bb76eada8 method=GET path=/accounts/A-1313/quotes status=200 latency_ms=63
+2025-10-21T02:18:02.830Z level=info svc=web-js req=d5924c02cf method=GET path=/accounts/A-1140/quotes status=200 latency_ms=66
+2025-10-21T02:18:03.908Z level=warn svc=web-js req=0fd278cc4a method=POST path=/accounts/A-1163/quotes status=503 latency_ms=1679
+2025-10-21T02:18:03.909Z level=error svc=web-js req=9f9ca2ac17 msg="upstream pricing-py returned 503"
+2025-10-21 09:18:03,909+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55550]
+2025-10-21T02:18:04.527Z level=info svc=web-js req=2d11f97021 method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:18:11.609Z level=info svc=web-js req=1670a5a5be method=GET path=/healthz status=200 latency_ms=4
+2025-10-21T02:18:11.710Z level=warn svc=web-js req=5621b6d52b method=GET path=/orders/O-55553 status=502 latency_ms=924
+2025-10-21T02:18:12.497Z level=warn svc=web-js req=bceb8c18d3 method=GET path=/accounts/A-1368/quotes status=502 latency_ms=2053
+2025-10-21T02:18:13.255Z level=info svc=web-js req=ed8d954332 method=GET path=/healthz status=200 latency_ms=7
+2025-10-21T02:18:14.744Z level=info svc=web-js req=e2dcaab169 method=GET path=/accounts/A-1146/quotes status=200 latency_ms=19
+2025-10-21T02:18:17.362Z level=info svc=web-js req=be454ff628 method=GET path=/orders/O-55557 status=200 latency_ms=68
+2025-10-21T02:18:21.524Z level=warn svc=web-js req=caf43ce1e4 method=POST path=/accounts/A-1068/quotes status=502 latency_ms=2701
+2025-10-21 09:18:21,524+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55558]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:18:25.162Z level=warn svc=web-js req=bb7f099eff method=POST path=/orders status=502 latency_ms=2472
+2025-10-21T02:18:25.276Z level=info svc=web-js req=a732a6d92e method=GET path=/accounts/A-1391/quotes status=200 latency_ms=127
+2025-10-21T02:18:26.943Z level=warn svc=web-js req=9497e06395 method=POST path=/accounts/A-1048/quotes status=502 latency_ms=2434
+2025-10-21T02:18:31.698Z level=info svc=web-js req=2bc6f875f6 method=GET path=/catalog/items status=200 latency_ms=28
+2025-10-21T02:18:33.354Z level=info svc=web-js req=6927f84b3b method=GET path=/catalog/items status=200 latency_ms=52
+2025-10-21T02:18:33.672Z level=warn svc=web-js req=792947ca88 method=GET path=/catalog/items status=502 latency_ms=1598
+2025-10-21T02:18:33.672Z level=error svc=web-js req=80a5528c98 msg="upstream pricing-py returned 502"
+2025-10-21T02:18:36.344Z level=warn svc=web-js req=6f89b4201c method=POST path=/accounts/A-1050/quotes status=500 latency_ms=1576
+2025-10-21 09:18:36,344+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55565]
+2025-10-21T02:18:36.626Z level=warn svc=web-js req=4eb0f72119 method=GET path=/accounts/A-1293/quotes status=500 latency_ms=1479
+2025-10-21T02:18:43.255Z level=info svc=web-js req=404172a188 method=POST path=/orders status=201 latency_ms=188
+2025-10-21T02:18:43.301Z level=info svc=web-js req=69b904010a method=GET path=/accounts/A-1093/quotes status=200 latency_ms=31
+2025-10-21T02:18:45.345Z level=warn svc=web-js req=39feec9ef6 method=GET path=/accounts/A-1004/quotes status=503 latency_ms=971
+2025-10-21T02:18:45.345Z level=error svc=web-js req=63c1c54e81 msg="upstream pricing-py returned 503"
+2025-10-21T02:18:45.789Z level=warn svc=web-js req=6fad4199fd method=POST path=/accounts/A-1273/quotes status=504 latency_ms=2689
+2025-10-21T02:18:46.563Z level=warn svc=web-js req=f3761b2abb method=GET path=/accounts/A-1208/quotes status=500 latency_ms=1775
+2025-10-21T02:18:46.563Z level=error svc=web-js req=828eb2ecf4 msg="upstream pricing-py returned 500"
+2025-10-21T02:18:49.224Z level=warn svc=web-js req=28a1cd8a0c method=GET path=/catalog/items status=502 latency_ms=2821
+2025-10-21T02:18:53.744Z level=info svc=web-js req=a800a8049a method=GET path=/accounts/A-1153/quotes status=200 latency_ms=60
+2025-10-21T02:18:54.442Z level=warn svc=web-js req=14ab9bfce5 method=POST path=/accounts/A-1368/quotes status=502 latency_ms=1147
+2025-10-21 09:18:54,443+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55574]
+2025-10-21T02:18:54.698Z level=info svc=web-js req=5eeaa6b38b method=POST path=/orders status=201 latency_ms=217
+2025-10-21T02:18:55.828Z level=warn svc=web-js req=7c4cd3f960 method=GET path=/orders/O-55576 status=504 latency_ms=2729
+2025-10-21T02:18:59.554Z level=info svc=web-js req=c184e2cbb0 method=POST path=/accounts/A-1116/quotes status=201 latency_ms=66
+2025-10-21T02:19:01.118Z level=info svc=web-js req=79cc67bd09 method=GET path=/accounts/A-1055/quotes status=200 latency_ms=46
+2025-10-21T02:19:02.272Z level=warn svc=web-js req=23120ae1c2 method=GET path=/accounts/A-1257/quotes status=502 latency_ms=2938
+2025-10-21T02:19:05.485Z level=warn svc=web-js req=984e28fc5a method=POST path=/accounts/A-1300/quotes status=500 latency_ms=2731
+2025-10-21T02:19:05.485Z level=error svc=web-js req=106d89e40f msg="upstream pricing-py returned 500"
+2025-10-21 09:19:05,485+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55580]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:19:08.240Z level=warn svc=web-js req=8c4c90098a method=GET path=/catalog/items?page=37 status=504 latency_ms=2154
+2025-10-21T02:19:09.977Z level=warn svc=web-js req=b84a905de2 method=GET path=/accounts/A-1264/quotes status=504 latency_ms=2889
+2025-10-21T02:19:09.977Z level=error svc=web-js req=e4e9ec1c47 msg="upstream pricing-py returned 504"
+2025-10-21T02:19:10.243Z level=info svc=web-js req=dbd077fead method=POST path=/accounts/A-1304/quotes status=201 latency_ms=307
+2025-10-21 09:19:10,244+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55583]
+2025-10-21T02:19:11.496Z level=info svc=web-js req=31edf7304f method=GET path=/orders/O-55584 status=200 latency_ms=21
+2025-10-21T02:19:15.975Z level=warn svc=web-js req=6baff4acd6 method=GET path=/accounts/A-1333/quotes status=503 latency_ms=3028
+2025-10-21T02:19:15.975Z level=error svc=web-js req=64f5cd091f msg="upstream pricing-py returned 503"
+2025-10-21T02:19:18.307Z level=info svc=web-js req=91a88ca738 method=POST path=/accounts/A-1217/quotes status=201 latency_ms=171
+2025-10-21 09:19:18,307+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55586]
+2025-10-21T02:19:18.533Z level=info svc=web-js req=13be231e23 method=GET path=/accounts/A-1262/quotes status=200 latency_ms=235
+2025-10-21T02:19:20.319Z level=warn svc=web-js req=8bd83acc31 method=GET path=/catalog/items?page=30 status=502 latency_ms=1577
+2025-10-21T02:19:20.319Z level=error svc=web-js req=e427da0c73 msg="upstream pricing-py returned 502"
+2025-10-21T02:19:24.252Z level=info svc=web-js req=d9faafe648 method=GET path=/orders/O-55589 status=200 latency_ms=81
+2025-10-21T02:19:27.932Z level=info svc=web-js req=eb65132206 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:19:28.546Z level=info svc=web-js req=3af2060d25 method=POST path=/accounts/A-1194/quotes status=201 latency_ms=109
+2025-10-21 09:19:28,547+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55591]
+2025-10-21T02:19:29.517Z level=warn svc=web-js req=0ef857a93c method=POST path=/accounts/A-1214/quotes status=502 latency_ms=1796
+2025-10-21T02:19:29.819Z level=info svc=web-js req=66d0175b69 method=GET path=/accounts/A-1302/quotes status=200 latency_ms=70
+2025-10-21T02:19:34.846Z level=warn svc=web-js req=6f99644a6c method=GET path=/orders/O-55594 status=504 latency_ms=2192
+2025-10-21T02:19:37.638Z level=info svc=web-js req=eebe5fcb0d method=GET path=/orders/O-55595 status=200 latency_ms=35
+2025-10-21T02:19:39.334Z level=warn svc=web-js req=91c277ecd3 method=GET path=/accounts/A-1140/quotes status=503 latency_ms=2795
+2025-10-21T02:19:39.334Z level=error svc=web-js req=2c9ea1c4a8 msg="upstream pricing-py returned 503"
+2025-10-21T02:19:40.486Z level=info svc=web-js req=55aade49fd method=POST path=/orders status=201 latency_ms=234
+2025-10-21T02:19:40.906Z level=info svc=web-js req=722cab3290 method=POST path=/accounts/A-1372/quotes status=201 latency_ms=229
+2025-10-21 09:19:40,906+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55598]
+Traceback (most recent call last):
+  File "/app/pricing/order.py", line 112, in parse_order
+    raise ContractError(code, message)
+pricing.order.ContractError: unsupported contract_version: 3
+2025-10-21T02:19:41.197Z level=warn svc=web-js req=699616e6fd method=POST path=/accounts/A-1210/quotes status=502 latency_ms=1055
+2025-10-21 09:19:41,198+0700 ERROR   pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: 3 [order=O-55599]
+2025-10-21T02:19:44.524Z level=info svc=web-js req=03fc997a26 method=GET path=/orders/O-55600 status=200 latency_ms=12
+2025-10-21T02:19:47.670Z level=warn svc=web-js req=5094958af7 method=GET path=/catalog/items status=500 latency_ms=2374
+2025-10-21T02:19:51.193Z level=info svc=web-js req=1aa899a128 method=GET path=/accounts/A-1317/quotes status=200 latency_ms=46
+2025-10-21T02:19:52.999Z level=info svc=web-js req=4dc22d354f method=POST path=/accounts/A-1258/quotes status=201 latency_ms=54
+2025-10-21T02:19:56.237Z level=warn svc=web-js req=4e54f1db3f method=GET path=/catalog/items?page=37 status=504 latency_ms=1038
+2025-10-21T02:20:00.934Z level=info svc=web-js req=f4244e6675 method=POST path=/accounts/A-1115/quotes status=201 latency_ms=191
+2025-10-21T02:20:02.072Z level=info svc=web-js req=ef49f516b6 method=POST path=/accounts/A-1197/quotes status=201 latency_ms=60
+2025-10-21T02:20:03.028Z level=info svc=web-js req=531072d131 method=GET path=/accounts/A-1062/quotes status=200 latency_ms=97
+2025-10-21T02:20:04.003Z level=info svc=web-js req=8175a5b3a8 method=GET path=/accounts/A-1068/quotes status=200 latency_ms=50
+2025-10-21T02:20:09.815Z level=info svc=web-js req=e9de09d767 method=POST path=/accounts/A-1061/quotes status=499 latency_ms=-
+2025-10-21T02:20:09.919Z level=info svc=web-js req=d5fa552653 method=GET path=/accounts/A-1392/quotes status=200 latency_ms=40
+2025-10-21T02:20:11.054Z level=info svc=web-js req=9a406bf953 method=GET path=/accounts/A-1361/quotes status=200 latency_ms=66
+2025-10-21T02:20:15.977Z level=info svc=web-js req=4ec7458f20 method=GET path=/accounts/A-1190/quotes status=200 latency_ms=27
+2025-10-21T02:20:16.397Z level=info svc=web-js req=1b7156dc2b method=POST path=/accounts/A-1050/quotes status=201 latency_ms=343
+2025-10-21T02:20:17.617Z level=info svc=web-js req=df0d7dc1d5 method=GET path=/accounts/A-1385/quotes status=200 latency_ms=122
+2025-10-21T02:20:19.429Z level=info svc=web-js req=74c8cd6f2f method=GET path=/orders/O-55615 status=200 latency_ms=25
+2025-10-21T02:20:20.397Z level=info svc=web-js req=536fce87e4 method=GET path=/orders/55616 status=200 latency_ms=13
+2025-10-21T02:20:21.500Z level=info svc=web-js req=911009d625 method=GET path=/accounts/A-1326/quotes status=200 latency_ms=31
+2025-10-21T02:20:32.078Z level=info svc=web-js req=306eb48efc method=POST path=/accounts/A-1253/quotes status=201 latency_ms=53
+2025-10-21T02:20:35.795Z level=info svc=web-js req=5349ab24e5 method=GET path=/catalog/items?page=6 status=200 latency_ms=72
+2025-10-21T02:20:37.062Z level=info svc=web-js req=80a3e8f856 method=POST path=/accounts/A-1396/quotes status=201 latency_ms=118
+2025-10-21T02:20:38.942Z level=info svc=web-js req=fe77ec25ba method=GET path=/accounts/A-1274/quotes status=200 latency_ms=36
+2025-10-21T02:20:41.828Z level=info svc=web-js req=5f6a28a689 method=GET path=/accounts/A-1349/quotes status=200 latency_ms=19
+2025-10-21T02:20:42.564Z level=info svc=web-js req=c2727d4967 method=GET path=/catalog/items/ status=200 latency_ms=10
+2025-10-21T02:20:42.580Z level=info svc=web-js req=6dfd8ef4d0 method=POST path=/accounts/A-1179/quotes status=201 latency_ms=160
+2025-10-21T02:20:43.498Z level=info svc=web-js req=4c58876a06 method=POST path=/orders status=201 latency_ms=185
+2025-10-21T02:20:44.710Z level=info svc=web-js req=b0350606bb method=GET path=/catalog/items?page=35 status=200 latency_ms=21
+2025-10-21T02:20:47.056Z level=info svc=web-js req=1f39711fd7 method=GET path=/accounts/A-1270/quotes status=200 latency_ms=31
+2025-10-21T02:20:47.308Z level=info svc=web-js req=2f4459b70c method=POST path=/accounts/A-1017/quotes status=201 latency_ms=101
+2025-10-21 09:20:47,308+0700 INFO    pricing.quote: quoted order=O-55628 total=781000
+2025-10-21T02:20:47.627Z level=info svc=web-js req=8fc335183e method=POST path=/accounts/A-1366/quotes status=201 latency_ms=210
+2025-10-21T02:20:48.775Z level=info svc=web-js req=02034cda3c method=GET path=/accounts/A-1120/quotes status=200 latency_ms=19
+2025-10-21T02:20:49.174Z level=info svc=web-js req=c28fa102a1 method=GET path=/catalog/items?page=15 status=200 latency_ms=29
+2025-10-21T02:20:49.235Z level=info svc=web-js req=8b96d5a5fe method=POST path=/accounts/A-1356/quotes status=400 latency_ms=97
+2025-10-21T02:20:51.350Z level=info svc=web-js req=fb7d44e2cd method=GET path=/orders/O-55633 status=200 latency_ms=19
+2025-10-21T02:20:53.035Z level=info svc=web-js req=a2230e15ce method=POST path=/orders status=201 latency_ms=293
+2025-10-21T02:20:53.708Z level=info svc=web-js req=fc329ef170 method=POST path=/orders status=201 latency_ms=89
+2025-10-21T02:20:58.811Z level=info svc=web-js req=1d491070b6 method=POST path=/accounts/A-1049/quotes status=201 latency_ms=336
+2025-10-21T02:21:00.881Z level=info svc=web-js req=406d5dd1f1 method=POST path=/accounts/A-1139/quotes status=201 latency_ms=94
+2025-10-21T02:21:00.909Z level=info svc=web-js req=2e8fcfd4ea method=POST path=/accounts/A-1264/quotes status=201 latency_ms=194
+2025-10-21T02:21:01.602Z level=info svc=web-js req=ae891d793d method=GET path=/catalog/items?page=16 status=200 latency_ms=62
+2025-10-21T02:21:13.318Z level=info svc=web-js req=3079e6d464 method=POST path=/accounts/A-1255/quotes status=201 latency_ms=47
+2025-10-21T02:21:14.915Z level=info svc=web-js req=269f7cc625 method=POST path=/accounts/A-1248/quotes status=201 latency_ms=130
+2025-10-21 09:21:14,915+0700 INFO    pricing.quote: quoted order=O-55641 total=223000
+2025-10-21T02:21:15.396Z level=info svc=web-js req=05580796e4 method=GET path=/orders/O-55642 status=200 latency_ms=105
+2025-10-21T02:21:17.107Z level=info svc=web-js req=9939658eb2 method=GET path=/catalog/items status=200 latency_ms=96
+2025-10-21T02:21:17.647Z level=info svc=web-js req=1a691c614c method=POST path=/accounts/A-1076/quotes status=201 latency_ms=223
+2025-10-21 09:21:17,647+0700 INFO    pricing.quote: quoted order=O-55644 total=641000
+2025-10-21T02:21:18.919Z level=info svc=web-js req=2d7d402935 method=POST path=/accounts/A-1236/quotes status=201 latency_ms=240
+2025-10-21T02:21:19.016Z level=info svc=web-js req=209b1e12fb method=POST path=/accounts/A-1372/quotes status=201 latency_ms=416
+2025-10-21T02:21:20.733Z level=info svc=web-js req=7622fda35d method=GET path=/orders/O-55647 status=200 latency_ms=12
+2025-10-21T02:21:21.543Z level=info svc=web-js req=697c99d01a method=POST path=/orders status=201 latency_ms=57
+2025-10-21T02:21:22.153Z level=info svc=web-js req=b267bb4d86 method=GET path=/catalog/items?page=7 status=200 latency_ms=25
+2025-10-21T02:21:22.965Z level=info svc=web-js req=476b819704 method=POST path=/orders status=201 latency_ms=167
+2025-10-21T02:21:23.059Z level=info svc=web-js req=fd2ee18bd1 method=GET path=/accounts/A-1235/quotes status=200 latency_ms=35
+2025-10-21T02:21:28.874Z level=info svc=web-js req=7aebbb3c8d method=GET path=/accounts/A-1047/quotes status=200 latency_ms=31
+2025-10-21T02:21:30.534Z level=info svc=web-js req=769867ccf9 method=GET path=/catalog/items?page=27 status=200 latency_ms=16
+2025-10-21T02:21:37.658Z level=info svc=web-js req=1b70de31bd method=GET path=/accounts/A-1176/quotes status=200 latency_ms=25
+2025-10-21T02:21:43.429Z level=info svc=web-js req=0ca5f5bb1b method=POST path=/orders status=201 latency_ms=294
+2025-10-21T02:21:44.180Z level=info svc=web-js req=6e11230006 method=GET path=/orders/O-55656 status=200 latency_ms=30
+2025-10-21T02:21:45.542Z level=info svc=web-js req=520455833b method=POST path=/accounts/A-1264/quotes status=201 latency_ms=106
+2025-10-21T02:21:46.680Z level=info svc=web-js req=77dec4056f method=GET path=/orders/O-55658 status=200 latency_ms=40
+2025-10-21T02:21:48.903Z level=info svc=web-js req=3b1de0f267 method=GET path=/catalog/items?page=17 status=200 latency_ms=51
+2025-10-21T02:21:48.959Z level=info svc=web-js req=f7252622a5 method=POST path=/orders status=201 latency_ms=197
+2025-10-21T02:21:50.324Z level=info svc=web-js req=9dc3c825c8 method=POST path=/orders status=201 latency_ms=147
+2025-10-21T02:21:51.329Z level=info svc=web-js req=703a9b82cd method=GET path=/orders/O-55662 status=200 latency_ms=21
+2025-10-21T02:21:52.308Z level=info svc=web-js req=f1f782827d method=GET path=/orders/O-55663 status=200 latency_ms=44
+2025-10-21T02:21:53.520Z level=info svc=web-js req=08d7cf4e78 method=GET path=/accounts/A-1310/quotes status=200 latency_ms=27
+2025-10-21T02:21:56.088Z level=info svc=web-js req=e941319ee3 method=POST path=/accounts/A-1105/quotes status=201 latency_ms=83
+2025-10-21T02:21:59.873Z level=info svc=web-js req=36e05c8154 method=GET path=/accounts/A-1134/quotes status=200 latency_ms=25
+2025-10-21T02:22:03.249Z level=info svc=web-js req=d21becac23 method=GET path=/orders/O-55667 status=200 latency_ms=59
+2025-10-21T02:22:08.625Z level=info svc=web-js req=0dc9dce7d6 method=POST path=/accounts/A-1306/quotes status=201 latency_ms=81
+2025-10-21T02:22:09.069Z level=info svc=web-js req=6edd8c700f method=GET path=/accounts/A-1022/quotes status=200 latency_ms=52
+2025-10-21T02:22:09.219Z level=info svc=web-js req=c4d90135c6 method=POST path=/accounts/A-1278/quotes status=201 latency_ms=90
+2025-10-21T02:22:11.831Z level=info svc=web-js req=4852ee8eb0 method=GET path=/catalog/items status=200 latency_ms=83
+2025-10-21T02:22:11.883Z level=info svc=web-js req=566f9e0f6c method=GET path=/orders/55672 status=200 latency_ms=12
+2025-10-21 09:22:13,000+0700 INFO    pricing.health: ok workers=5
+2025-10-21T02:22:13.882Z level=info svc=web-js req=1ce54720cf method=GET path=/accounts/A-1084/quotes status=200 latency_ms=160
+2025-10-21T02:22:13.883Z level=info svc=web-js req=2a77e3d599 method=GET path=/accounts/A-1188/quotes status=200 latency_ms=44
+2025-10-21T02:22:16.820Z level=info svc=web-js req=d9d1d24c3e method=GET path=/catalog/items status=200 latency_ms=8
+2025-10-21T02:22:18.223Z level=info svc=web-js req=a668972637 method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:22:22.382Z level=info svc=web-js req=8d22b16fd9 method=GET path=/orders/O-55677 status=200 latency_ms=31
+2025-10-21T02:22:22.565Z level=info svc=web-js req=18ebb98b26 method=GET path=/accounts/A-1189/quotes status=200 latency_ms=19
+2025-10-21T02:22:24.130Z level=info svc=web-js req=dd5270955f method=GET path=/orders/O-55679 status=200 latency_ms=15
+2025-10-21T02:22:24.502Z level=info svc=web-js req=250e2ea1ef method=GET path=/orders/O-55680 status=200 latency_ms=107
+2025-10-21T02:22:25.590Z level=info svc=web-js req=0bcfe41c99 method=GET path=/accounts/A-1063/quotes status=200 latency_ms=33
+2025-10-21T02:22:28.554Z level=info svc=web-js req=dcaf0916d7 method=POST path=/accounts/A-1262/quotes status=201 latency_ms=85
+2025-10-21T02:22:30.919Z level=info svc=web-js req=6ef6d6dcf0 method=POST path=/accounts/A-1070/quotes status=201 latency_ms=233
+2025-10-21T02:22:34.416Z level=info svc=web-js req=23ae131f79 method=GET path=/orders/O-55684 status=200 latency_ms=96
+2025-10-21T02:22:35.255Z level=info svc=web-js req=c13ca5d6c0 method=POST path=/accounts/A-1319/quotes status=201 latency_ms=181
+2025-10-21 09:22:35,256+0700 INFO    pricing.quote: quoted order=O-55685 total=545000
+2025-10-21T02:22:35.343Z level=info svc=web-js req=014721ca9a method=GET path=/catalog/items status=200 latency_ms=65
+2025-10-21T02:22:40.081Z level=info svc=web-js req=e16fa91e1b method=POST path=/orders status=201 latency_ms=183
+2025-10-21T02:22:43.218Z level=info svc=web-js req=f8e5b2a561 method=GET path=/orders/O-55688 status=200 latency_ms=68
+2025-10-21T02:22:43.260Z level=info svc=web-js req=07fe7fe97c method=POST path=/accounts/A-1281/quotes status=201 latency_ms=89
+2025-10-21 09:22:43,260+0700 INFO    pricing.quote: quoted order=O-55689 total=127000
+2025-10-21T02:22:45.735Z level=info svc=web-js req=89e8ad96b8 method=POST path=/accounts/A-1045/quotes status=201 latency_ms=86
+2025-10-21T02:22:45.765Z level=info svc=web-js req=136e4dc7bd method=POST path=/accounts/A-1308/quotes status=201 latency_ms=119
+2025-10-21T02:22:46.883Z level=info svc=web-js req=49460f19c8 method=GET path=/orders/55692 status=200 latency_ms=122
+2025-10-21T02:22:51.664Z level=info svc=web-js req=b092ed7215 method=GET path=/orders/55693 status=200 latency_ms=65
+2025-10-21T02:22:54.956Z level=info svc=web-js req=a22fa5279c method=GET path=/accounts/A-1232/quotes status=200 latency_ms=30
+2025-10-21T02:22:55.426Z level=info svc=web-js req=541c7aed08 method=GET path=/catalog/items status=200 latency_ms=12
+2025-10-21T02:22:55.454Z level=info svc=web-js req=54b7b32f32 method=POST path=/accounts/A-1178/quotes status=201 latency_ms=207
+2025-10-21 09:22:55,455+0700 INFO    pricing.quote: quoted order=O-55696 total=810000
+2025-10-21T02:22:59.414Z level=info svc=web-js req=8a76337bda method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:23:01.233Z level=info svc=web-js req=56eb8c3b6e method=GET path=/accounts/A-1025/quotes status=200 latency_ms=27
+2025-10-21T02:23:01.645Z level=info svc=web-js req=cb7308e1a2 method=GET path=/orders/O-55699 status=200 latency_ms=122
+2025-10-21T02:23:01.714Z level=info svc=web-js req=c7ab762105 method=GET path=/accounts/A-1366/quotes status=200 latency_ms=29
+2025-10-21T02:23:04.891Z level=info svc=web-js req=93db68afa0 method=POST path=/accounts/A-1286/quotes status=201 latency_ms=245
+2025-10-21T02:23:05.035Z level=info svc=web-js req=b6d3013779 method=POST path=/accounts/A-1209/quotes status=400 latency_ms=147
+2025-10-21T02:23:16.000Z level=error svc=web-js req=d161d68491 msg="rate limited by account-api, retry in 16s"
+2025-10-21 09:23:16,000+0700 INFO    pricing.health: ok workers=7
+2025-10-21T02:23:17.010Z level=info svc=web-js req=06c116c9de method=GET path=/accounts/A-1226/quotes status=200 latency_ms=103
+2025-10-21T02:23:17.084Z level=info svc=web-js req=13ee988e34 method=POST path=/accounts/A-1009/quotes status=201 latency_ms=76
+2025-10-21 09:23:17,084+0700 INFO    pricing.quote: quoted order=O-55704 total=236000
+2025-10-21T02:23:17.229Z level=info svc=web-js req=66cb93c645 method=GET path=/accounts/A-1224/quotes status=200 latency_ms=20
+2025-10-21T02:23:17.312Z level=info svc=web-js req=7eeb0b1ef1 method=GET path=/accounts/A-1194/quotes status=200 latency_ms=24
+2025-10-21T02:23:17.702Z level=info svc=web-js req=78fa065cc5 method=POST path=/orders status=201 latency_ms=359
+2025-10-21T02:23:19.817Z level=info svc=web-js req=8ee5bb1923 method=GET path=/accounts/A-1216/quotes status=200 latency_ms=134
+2025-10-21T02:23:22.231Z level=info svc=web-js req=806439a5c8 method=POST path=/accounts/A-1305/quotes status=201 latency_ms=200
+2025-10-21T02:23:23.239Z level=info svc=web-js req=a176593d6a method=GET path=/catalog/items status=200 latency_ms=18
+2025-10-21T02:23:24.199Z level=info svc=web-js req=3320589489 method=GET path=/catalog/items?page=3 status=200 latency_ms=26
+2025-10-21T02:23:25.667Z level=info svc=web-js req=e7c7a34c63 method=POST path=/accounts/A-1166/quotes status=201 latency_ms=93
+2025-10-21 09:23:25,668+0700 INFO    pricing.quote: quoted order=O-55712 total=329000
+2025-10-21T02:23:27.943Z level=info svc=web-js req=c706482265 method=POST path=/orders status=201 latency_ms=228
+2025-10-21T02:23:35.791Z level=info svc=web-js req=ebd6a74d4e method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:23:35.894Z level=info svc=web-js req=76a17296e1 method=GET path=/orders/O-55715 status=200 latency_ms=16
+2025-10-21T02:23:35.899Z level=info svc=web-js req=71e726ca40 method=GET path=/accounts/A-1272/quotes status=400 latency_ms=30
+2025-10-21T02:23:37.297Z level=info svc=web-js req=1ee241cf78 method=GET path=/accounts/A-1213/quotes status=200 latency_ms=85
+2025-10-21T02:23:37.624Z level=info svc=web-js req=9b532f7136 method=POST path=/accounts/A-1272/quotes status=201 latency_ms=127
+2025-10-21T02:23:38.632Z level=info svc=web-js req=2d1503d296 method=POST path=/orders status=201 latency_ms=747
+2025-10-21T02:23:38.759Z level=info svc=web-js req=ff80180852 method=GET path=/accounts/A-1166/quotes status=200 latency_ms=37
+2025-10-21T02:23:43.006Z level=info svc=web-js req=efb3e082a7 method=GET path=/accounts/A-1155/quotes status=200 latency_ms=80
+2025-10-21T02:23:46.722Z level=info svc=web-js req=1b18dbf1af method=POST path=/accounts/A-1173/quotes status=201 latency_ms=142
+2025-10-21 09:23:46,723+0700 INFO    pricing.quote: quoted order=O-55722 total=50000
+2025-10-21T02:23:47.642Z level=info svc=web-js req=9e3a38f5a0 method=GET path=/catalog/items status=200 latency_ms=13
+2025-10-21T02:23:50.829Z level=info svc=web-js req=4372da7111 method=POST path=/accounts/A-1137/quotes status=201 latency_ms=163
+2025-10-21T02:23:55.094Z level=info svc=web-js req=8dc90c422c method=GET path=/accounts/A-1116/quotes status=200 latency_ms=123
+2025-10-21T02:23:58.857Z level=info svc=web-js req=d8218bfb0f method=GET path=/accounts/A-1277/quotes status=200 latency_ms=21
+2025-10-21T02:24:00.190Z level=info svc=web-js req=60cf13e0a2 method=GET path=/orders/O-55727 status=200 latency_ms=18
+2025-10-21T02:24:01.285Z level=info svc=web-js req=712bfcf514 method=GET path=/orders/55728 status=200 latency_ms=81
+2025-10-21T02:24:05.385Z level=info svc=web-js req=6140ca4510 method=GET path=/accounts/A-1195/quotes status=200 latency_ms=24
+2025-10-21T02:24:08.199Z level=info svc=web-js req=c786517ade method=POST path=/accounts/A-1271/quotes status=201 latency_ms=57
+2025-10-21T02:24:09.110Z level=info svc=web-js req=a751bdd40c method=GET path=/orders/O-55731 status=200 latency_ms=18
+2025-10-21T02:24:09.860Z level=info svc=web-js req=ac06d1326e method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:24:13.779Z level=info svc=web-js req=57f6b06260 method=GET path=/orders/O-55733 status=200 latency_ms=14
+2025-10-21T02:24:15.654Z level=info svc=web-js req=e889e5e65c method=POST path=/orders status=201 latency_ms=177
+2025-10-21T02:24:17.665Z level=info svc=web-js req=6e3b325b5e method=GET path=/orders/55735 status=200 latency_ms=60
+2025-10-21T02:24:20.711Z level=info svc=web-js req=fff80a6b7d method=GET path=/accounts/A-1363/quotes status=200 latency_ms=84
+2025-10-21T02:24:21.748Z level=info svc=web-js req=a706a07c8f method=POST path=/orders status=201 latency_ms=162
+2025-10-21T02:24:21.928Z level=info svc=web-js req=59f86797a5 method=GET path=/orders/O-55738 status=200 latency_ms=34
+2025-10-21T02:24:24.150Z level=info svc=web-js req=264802d225 method=GET path=/accounts/A-1173/quotes status=200 latency_ms=21
+2025-10-21T02:24:27.816Z level=info svc=web-js req=5ee7d1db1d method=POST path=/accounts/A-1380/quotes status=201 latency_ms=151
+2025-10-21T02:24:30.434Z level=info svc=web-js req=b0559b9e35 method=GET path=/orders/O-55741 status=200 latency_ms=126
+2025-10-21T02:24:30.684Z level=info svc=web-js req=bee66a2cab method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:24:31.659Z level=info svc=web-js req=7c38ff86f1 method=POST path=/accounts/A-1250/quotes status=201 latency_ms=340
+2025-10-21T02:24:32.491Z level=info svc=web-js req=cb4175f890 method=GET path=/accounts/A-1107/quotes status=200 latency_ms=105
+2025-10-21T02:24:33.077Z level=info svc=web-js req=da41ffa7d2 method=POST path=/orders status=201 latency_ms=322
+2025-10-21T02:24:33.625Z level=info svc=web-js req=7a39789e9a method=POST path=/accounts/A-1025/quotes status=201 latency_ms=183
+2025-10-21 09:24:33,626+0700 INFO    pricing.quote: quoted order=O-55746 total=408000
+2025-10-21T02:24:33.905Z level=info svc=web-js req=da98383c7d method=GET path=/accounts/A-1371/quotes status=200 latency_ms=47
+2025-10-21T02:24:39.900Z level=info svc=web-js req=24026efc89 method=GET path=/catalog/items status=200 latency_ms=31
+2025-10-21T02:24:43.645Z level=info svc=web-js req=3a11a56f84 method=POST path=/orders status=201 latency_ms=339
+2025-10-21T02:24:44.085Z level=info svc=web-js req=e33771b050 method=POST path=/accounts/A-1131/quotes status=201 latency_ms=288
+2025-10-21 09:24:44,086+0700 INFO    pricing.quote: quoted order=O-55750 total=322000
+2025-10-21T02:24:44.466Z level=info svc=web-js req=9cc5b911a1 method=POST path=/accounts/A-1265/quotes status=201 latency_ms=64
+2025-10-21 09:24:44,467+0700 INFO    pricing.quote: quoted order=O-55751 total=86000
+2025-10-21T02:24:49.543Z level=info svc=web-js req=c5137c6952 method=POST path=/accounts/A-1082/quotes status=201 latency_ms=291
+2025-10-21T02:24:55.025Z level=info svc=web-js req=53d614a8ef method=POST path=/orders status=201 latency_ms=74
+2025-10-21T02:24:55.878Z level=info svc=web-js req=0cf7ec600f method=POST path=/accounts/A-1044/quotes status=201 latency_ms=53
+2025-10-21T02:24:56.188Z level=info svc=web-js req=21b13d9984 method=POST path=/orders status=201 latency_ms=554
+2025-10-21T02:24:59.825Z level=warn svc=web-js req=4392e45355 method=GET path=/accounts/A-1393/quotes status=502 latency_ms=149
+2025-10-21T02:25:00.395Z level=info svc=web-js req=6ca3783bf7 method=GET path=/accounts/A-1231/quotes status=200 latency_ms=35
+2025-10-21T02:25:02.179Z level=info svc=web-js req=9988a39f16 method=GET path=/orders/O-55758 status=200 latency_ms=11
+2025-10-21T02:25:02.468Z level=info svc=web-js req=3d7fe316bd method=GET path=/catalog/items?page=9 status=200 latency_ms=25
+2025-10-21T02:25:03.329Z level=info svc=web-js req=060655f03b method=GET path=/accounts/A-1154/quotes status=200 latency_ms=140
+2025-10-21T02:25:05.335Z level=info svc=web-js req=ae16d49cfa method=GET path=/orders/O-55761 status=200 latency_ms=21
+2025-10-21T02:25:06.770Z level=info svc=web-js req=7cec9d1b03 method=POST path=/orders status=201 latency_ms=100
+2025-10-21T02:25:07.169Z level=info svc=web-js req=5a525b13ed method=GET path=/catalog/items/ status=200 latency_ms=8
+2025-10-21T02:25:07.644Z level=info svc=web-js req=5f07d83e08 method=GET path=/accounts/A-1009/quotes status=200 latency_ms=44
+2025-10-21T02:25:11.976Z level=info svc=web-js req=0b2591f5f0 method=GET path=/orders/O-55765 status=200 latency_ms=12
+2025-10-21T02:25:12.173Z level=info svc=web-js req=f6a534bca7 method=GET path=/orders/O-55766 status=200 latency_ms=17
+2025-10-21T02:25:13.119Z level=info svc=web-js req=015bee6294 method=GET path=/accounts/A-1237/quotes status=200 latency_ms=38
+2025-10-21T02:25:14.938Z level=info svc=web-js req=e62635ff50 method=GET path=/catalog/items status=200 latency_ms=10
+2025-10-21T02:25:16.014Z level=info svc=web-js req=8a94ef796e method=GET path=/accounts/A-1336/quotes status=200 latency_ms=25
+2025-10-21T02:25:16.835Z level=info svc=web-js req=7e24a0d193 method=POST path=/accounts/A-1041/quotes status=201 latency_ms=324
+2025-10-21T02:25:19.376Z level=info svc=web-js req=5d7be6737f method=GET path=/accounts/A-1288/quotes status=200 latency_ms=39
+2025-10-21T02:25:23.950Z level=info svc=web-js req=7c184f7911 method=GET path=/accounts/A-1138/quotes status=200 latency_ms=17
+2025-10-21T02:25:25.414Z level=info svc=web-js req=6d9ef2b810 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:25:26.772Z level=info svc=web-js req=911d63a2f9 method=GET path=/orders/O-55774 status=200 latency_ms=13
+2025-10-21T02:25:28.275Z level=info svc=web-js req=82fee931ae method=GET path=/catalog/items/ status=200 latency_ms=28
+2025-10-21T02:25:31.972Z level=info svc=web-js req=bdfbf6c54d method=GET path=/orders/O-55776 status=200 latency_ms=20
+2025-10-21T02:25:34.028Z level=info svc=web-js req=8e5c9154a5 method=GET path=/accounts/A-1277/quotes status=409 latency_ms=98
+2025-10-21T02:25:34.710Z level=info svc=web-js req=882571706a method=GET path=/catalog/items/ status=200 latency_ms=25
+2025-10-21T02:25:36.674Z level=info svc=web-js req=4656f80ea3 method=GET path=/orders/55779 status=200 latency_ms=13
+2025-10-21T02:25:38.990Z level=info svc=web-js req=f45d23d059 method=GET path=/accounts/A-1050/quotes status=200 latency_ms=18
+2025-10-21T02:25:40.709Z level=info svc=web-js req=6cfc879f3a method=GET path=/catalog/items status=200 latency_ms=15
+2025-10-21T02:25:41.189Z level=warn svc=web-js req=7e130500bb method=POST path=/accounts/A-1186/quotes status=504 latency_ms=384
+2025-10-21T02:25:43.827Z level=info svc=web-js req=bd838b6c1b method=POST path=/accounts/A-1242/quotes status=201 latency_ms=41
+2025-10-21 09:25:43,827+0700 INFO    pricing.quote: quoted order=O-55783 total=887000
+2025-10-21T02:25:49.134Z level=info svc=web-js req=778c2ad855 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:25:49.692Z level=info svc=web-js req=c8be2717ae method=POST path=/orders status=201 latency_ms=183
+2025-10-21T02:25:51.741Z level=info svc=web-js req=fe5bd2b16a method=POST path=/accounts/A-1275/quotes status=201 latency_ms=47
+2025-10-21T02:25:53.442Z level=info svc=web-js req=24ffe78c6f method=GET path=/orders/O-55787 status=200 latency_ms=70
+2025-10-21T02:25:55.615Z level=info svc=web-js req=b4e262947c method=GET path=/orders/O-55788 status=200 latency_ms=30
+2025-10-21T02:26:02.650Z level=info svc=web-js req=b75aa1f94f method=GET path=/accounts/A-1342/quotes status=200 latency_ms=60
+2025-10-21T02:26:04.108Z level=info svc=web-js req=59258e1568 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21 09:26:07,000+0700 INFO    pricing.health: ok workers=3
+2025-10-21T02:26:08.896Z level=info svc=web-js req=247693a39d method=GET path=/accounts/A-1338/quotes status=200 latency_ms=26
+2025-10-21T02:26:12.179Z level=info svc=web-js req=8ba8178448 method=POST path=/orders status=201 latency_ms=319
+2025-10-21T02:26:12.776Z level=info svc=web-js req=dd1000af3d method=GET path=/accounts/A-1186/quotes status=200 latency_ms=136
+2025-10-21T02:26:12.976Z level=info svc=web-js req=f43cdf65d3 method=POST path=/accounts/A-1262/quotes status=201 latency_ms=42
+2025-10-21T02:26:14.414Z level=info svc=web-js req=509e9f2ac8 method=GET path=/accounts/A-1221/quotes status=200 latency_ms=21
+2025-10-21T02:26:18.838Z level=info svc=web-js req=e095057632 method=POST path=/accounts/A-1074/quotes status=201 latency_ms=121
+2025-10-21T02:26:20.140Z level=info svc=web-js req=ef7c98e42b method=GET path=/accounts/A-1038/quotes status=200 latency_ms=61
+2025-10-21T02:26:21.304Z level=info svc=web-js req=08236905af method=POST path=/orders status=201 latency_ms=167
+2025-10-21T02:26:21.933Z level=info svc=web-js req=517914b646 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:26:23.283Z level=info svc=web-js req=58e050ab69 method=POST path=/accounts/A-1285/quotes status=201 latency_ms=181
+2025-10-21T02:26:23.304Z level=info svc=web-js req=dbbc40cd4e method=GET path=/orders/O-55801 status=200 latency_ms=43
+2025-10-21T02:26:23.576Z level=info svc=web-js req=a88f807a62 method=GET path=/orders/O-55802 status=200 latency_ms=73
+2025-10-21T02:26:24.450Z level=info svc=web-js req=1579d66822 method=GET path=/accounts/A-1209/quotes status=200 latency_ms=45
+2025-10-21T02:26:27.002Z level=info svc=web-js req=9e7b49d69c method=POST path=/accounts/A-1038/quotes status=201 latency_ms=114
+2025-10-21T02:26:28.071Z level=info svc=web-js req=7e42f3f06b method=POST path=/accounts/A-1022/quotes status=201 latency_ms=309
+2025-10-21T02:26:29.054Z level=info svc=web-js req=6ecbabad53 method=POST path=/accounts/A-1007/quotes status=201 latency_ms=259
+2025-10-21T02:26:34.464Z level=info svc=web-js req=399706997b method=GET path=/accounts/A-1006/quotes status=200 latency_ms=56
+2025-10-21T02:26:34.946Z level=info svc=web-js req=1c81ef7089 method=POST path=/accounts/A-1390/quotes status=201 latency_ms=103
+2025-10-21T02:26:35.797Z level=info svc=web-js req=185f5bd7d9 method=GET path=/orders/O-55809 status=200 latency_ms=31
+2025-10-21T02:26:36.007Z level=info svc=web-js req=257addec5f method=GET path=/orders/55810 status=200 latency_ms=81
+2025-10-21T02:26:36.813Z level=info svc=web-js req=647f6da50b method=GET path=/accounts/A-1171/quotes status=200 latency_ms=189
+2025-10-21T02:26:45.406Z level=info svc=web-js req=f636c287db method=POST path=/accounts/A-1247/quotes status=201 latency_ms=116
+2025-10-21T02:26:47.227Z level=info svc=web-js req=45aa669f2c method=GET path=/accounts/A-1032/quotes status=200 latency_ms=34
+2025-10-21T02:26:48.000Z level=error svc=web-js req=312951d840 msg="rate limited by account-api, retry in 6s"
+2025-10-21T02:26:48.410Z level=info svc=web-js req=a91cdee1b5 method=POST path=/accounts/A-1340/quotes status=201 latency_ms=321
+2025-10-21T02:26:52.416Z level=info svc=web-js req=2f69710380 method=GET path=/orders/O-55815 status=200 latency_ms=88
+2025-10-21T02:26:53.789Z level=info svc=web-js req=e58f487e50 method=POST path=/orders status=201 latency_ms=139
+2025-10-21T02:26:55.512Z level=info svc=web-js req=2b26e12896 method=POST path=/orders status=201 latency_ms=316
+2025-10-21T02:26:57.279Z level=info svc=web-js req=ce099559bf method=POST path=/orders status=201 latency_ms=355
+2025-10-21T02:27:04.354Z level=info svc=web-js req=165caf2ecb method=GET path=/accounts/A-1100/quotes status=200 latency_ms=16
+2025-10-21T02:27:04.858Z level=info svc=web-js req=43958d7b72 method=GET path=/accounts/A-1180/quotes status=200 latency_ms=27
+2025-10-21T02:27:05.666Z level=info svc=web-js req=7a01a77612 method=POST path=/accounts/A-1385/quotes status=201 latency_ms=59
+2025-10-21T02:27:07.480Z level=info svc=web-js req=7c426b56f3 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:27:08.280Z level=info svc=web-js req=f8023ba5c7 method=GET path=/accounts/A-1316/quotes status=200 latency_ms=110
+2025-10-21T02:27:08.715Z level=info svc=web-js req=9f8e49e065 method=GET path=/orders/O-55824 status=200 latency_ms=124
+2025-10-21T02:27:10.543Z level=info svc=web-js req=cd12028925 method=GET path=/accounts/A-1254/quotes status=200 latency_ms=31
+2025-10-21T02:27:11.403Z level=info svc=web-js req=52f56da58b method=GET path=/accounts/A-1276/quotes status=200 latency_ms=43
+2025-10-21T02:27:11.486Z level=info svc=web-js req=d87ed922cf method=POST path=/orders status=201 latency_ms=206
+2025-10-21T02:27:14.560Z level=info svc=web-js req=4b7194771e method=POST path=/accounts/A-1141/quotes status=201 latency_ms=125
+2025-10-21 09:27:14,560+0700 INFO    pricing.quote: quoted order=O-55828 total=479000
+2025-10-21T02:27:15.764Z level=info svc=web-js req=20de3cc594 method=GET path=/accounts/A-1146/quotes status=200 latency_ms=93
+2025-10-21T02:27:21.060Z level=info svc=web-js req=b901380689 method=GET path=/catalog/items status=400 latency_ms=108
+2025-10-21T02:27:21.540Z level=info svc=web-js req=86d5a15134 method=GET path=/accounts/A-1127/quotes status=200 latency_ms=61
+2025-10-21T02:27:23.225Z level=info svc=web-js req=ce533d13d6 method=POST path=/orders status=201 latency_ms=192
+2025-10-21T02:27:23.994Z level=info svc=web-js req=22aacb257b method=GET path=/orders/O-55833 status=200 latency_ms=97
+2025-10-21T02:27:29.769Z level=info svc=web-js req=899dfb723d method=POST path=/orders status=201 latency_ms=306
+2025-10-21T02:27:31.617Z level=info svc=web-js req=6ba828eae1 method=GET path=/healthz status=200 latency_ms=14
+2025-10-21T02:27:33.077Z level=info svc=web-js req=edfd84e9e9 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:27:33.186Z level=info svc=web-js req=7a1b2267c8 method=POST path=/accounts/A-1054/quotes status=201 latency_ms=95
+2025-10-21T02:27:33.913Z level=info svc=web-js req=a22f370a31 method=POST path=/accounts/A-1067/quotes status=201 latency_ms=146
+2025-10-21T02:27:34.302Z level=info svc=web-js req=117ff6c116 method=GET path=/accounts/A-1184/quotes status=200 latency_ms=100
+2025-10-21T02:27:35.358Z level=info svc=web-js req=548231bd09 method=GET path=/accounts/A-1007/quotes status=200 latency_ms=97
+2025-10-21T02:27:37.915Z level=info svc=web-js req=3cd7f2edb8 method=GET path=/accounts/A-1357/quotes status=200 latency_ms=87
+2025-10-21T02:27:44.705Z level=info svc=web-js req=b3c10fbc4c method=GET path=/accounts/A-1205/quotes status=200 latency_ms=17
+2025-10-21T02:27:49.563Z level=info svc=web-js req=36f724809c method=GET path=/accounts/A-1330/quotes status=200 latency_ms=77
+2025-10-21T02:27:52.350Z level=info svc=web-js req=560f96e05e method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:27:56.607Z level=info svc=web-js req=843786451b method=POST path=/orders status=201 latency_ms=198
+2025-10-21T02:28:00.465Z level=info svc=web-js req=e085bb90cf method=POST path=/accounts/A-1358/quotes status=201 latency_ms=85
+2025-10-21T02:28:00.568Z level=info svc=web-js req=80eaa39ba8 method=POST path=/accounts/A-1307/quotes status=201 latency_ms=91
+2025-10-21 09:28:00,569+0700 INFO    pricing.quote: quoted order=O-55847 total=379000
+2025-10-21T02:28:02.918Z level=info svc=web-js req=a8a72d219c method=GET path=/accounts/A-1028/quotes status=200 latency_ms=33
+2025-10-21T02:28:04.127Z level=info svc=web-js req=4bc11c087c method=GET path=/accounts/A-1351/quotes status=200 latency_ms=29
+2025-10-21T02:28:08.024Z level=info svc=web-js req=dd48852a0b method=GET path=/accounts/A-1207/quotes status=200 latency_ms=167
+2025-10-21T02:28:14.435Z level=info svc=web-js req=f8c545072f method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:28:16.441Z level=info svc=web-js req=303654a9ec method=POST path=/orders status=201 latency_ms=98
+2025-10-21T02:28:17.385Z level=info svc=web-js req=4dce38c051 method=GET path=/accounts/A-1044/quotes status=200 latency_ms=174
+2025-10-21T02:28:19.213Z level=info svc=web-js req=812046db28 method=POST path=/orders status=201 latency_ms=404
+2025-10-21T02:28:19.765Z level=info svc=web-js req=b3d9cc197e method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:28:20.862Z level=info svc=web-js req=afed6de98a method=GET path=/accounts/A-1371/quotes status=200 latency_ms=55
+2025-10-21T02:28:21.044Z level=warn svc=web-js req=84e12eaf99 method=GET path=/accounts/A-1242/quotes status=504 latency_ms=252
+2025-10-21T02:28:21.044Z level=error svc=web-js req=fec4d257c6 msg="upstream timeout after 5000ms calling pricing-py"
+2025-10-21T02:28:23.766Z level=info svc=web-js req=4fdbb17fee method=POST path=/accounts/A-1016/quotes status=201 latency_ms=122
+2025-10-21 09:28:23,767+0700 INFO    pricing.quote: quoted order=O-55858 total=696000
+2025-10-21T02:28:27.536Z level=info svc=web-js req=ea2afeaafc method=POST path=/accounts/A-1263/quotes status=201 latency_ms=127
+2025-10-21T02:28:28.769Z level=info svc=web-js req=918d69d413 method=POST path=/accounts/A-1057/quotes status=201 latency_ms=64
+2025-10-21T02:28:30.686Z level=info svc=web-js req=99aaa97ab1 method=GET path=/accounts/A-1292/quotes status=200 latency_ms=24
+2025-10-21T02:28:30.872Z level=info svc=web-js req=a0f563a8bc method=POST path=/accounts/A-1393/quotes status=201 latency_ms=101
+2025-10-21T02:28:31.126Z level=info svc=web-js req=c1e4806f46 method=POST path=/orders status=201 latency_ms=65
+2025-10-21T02:28:32.960Z level=info svc=web-js req=8efa481b23 method=POST path=/accounts/A-1106/quotes status=201 latency_ms=63
+2025-10-21T02:28:34.185Z level=info svc=web-js req=934cba1f54 method=POST path=/orders status=201 latency_ms=56
+2025-10-21T02:28:34.606Z level=info svc=web-js req=5fb6c24851 method=GET path=/orders/O-55866 status=200 latency_ms=18
+2025-10-21T02:28:38.881Z level=info svc=web-js req=3d1caf608f method=POST path=/orders status=201 latency_ms=65
+2025-10-21T02:28:39.150Z level=info svc=web-js req=0e60ed1daf method=POST path=/accounts/A-1129/quotes status=201 latency_ms=151
+2025-10-21 09:28:39,151+0700 INFO    pricing.quote: quoted order=O-55868 total=431000
+2025-10-21T02:28:45.636Z level=info svc=web-js req=0e619934d5 method=GET path=/accounts/A-1054/quotes status=200 latency_ms=46
+2025-10-21T02:28:46.189Z level=info svc=web-js req=051e69f250 method=GET path=/accounts/A-1315/quotes status=200 latency_ms=52
+2025-10-21T02:28:47.237Z level=info svc=web-js req=f89d50e895 method=GET path=/healthz status=200 latency_ms=5
+2025-10-21T02:28:47.586Z level=info svc=web-js req=c7304f76f6 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:28:49.263Z level=info svc=web-js req=fb2dda0f33 method=POST path=/accounts/A-1163/quotes status=201 latency_ms=50
+2025-10-21T02:28:49.944Z level=info svc=web-js req=91131b2b0f method=POST path=/orders status=201 latency_ms=145
+2025-10-21T02:28:52.621Z level=info svc=web-js req=ddb61398e4 method=GET path=/accounts/A-1244/quotes status=200 latency_ms=108
+2025-10-21T02:28:59.133Z level=info svc=web-js req=6b43097986 method=GET path=/accounts/A-1288/quotes status=200 latency_ms=25
+2025-10-21T02:29:02.442Z level=info svc=web-js req=b78b8dba4d method=POST path=/accounts/A-1310/quotes status=201 latency_ms=147
+2025-10-21 09:29:02,442+0700 INFO    pricing.quote: quoted order=O-55877 total=778000
+2025-10-21T02:29:04.191Z level=info svc=web-js req=d8b11a140c method=POST path=/accounts/A-1005/quotes status=201 latency_ms=102
+2025-10-21 09:29:04,191+0700 INFO    pricing.quote: quoted order=O-55878 total=329000
+2025-10-21T02:29:06.093Z level=info svc=web-js req=741dbe8135 method=POST path=/accounts/A-1255/quotes status=201 latency_ms=309
+2025-10-21T02:29:08.793Z level=info svc=web-js req=6f0ae69a11 method=GET path=/orders/O-55880 status=200 latency_ms=59
+2025-10-21T02:29:09.068Z level=info svc=web-js req=fc04d3b496 method=POST path=/accounts/A-1090/quotes status=201 latency_ms=77
+2025-10-21T02:29:09.821Z level=info svc=web-js req=376bda9a43 method=GET path=/accounts/A-1345/quotes status=200 latency_ms=80
+2025-10-21T02:29:12.122Z level=info svc=web-js req=f4ed187f3e method=POST path=/accounts/A-1214/quotes status=201 latency_ms=142
+2025-10-21T02:29:13.254Z level=info svc=web-js req=a04d9a5f90 method=GET path=/healthz status=200 latency_ms=7
+2025-10-21T02:29:14.234Z level=info svc=web-js req=abefbe1f6e method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:29:22.451Z level=info svc=web-js req=40ab6a3b44 method=GET path=/accounts/A-1248/quotes status=400 latency_ms=58
+2025-10-21T02:29:22.793Z level=info svc=web-js req=105767302a method=GET path=/orders/O-55887 status=200 latency_ms=243
+2025-10-21T02:29:24.075Z level=info svc=web-js req=2638efa9e1 method=POST path=/orders status=201 latency_ms=528
+2025-10-21T02:29:25.517Z level=info svc=web-js req=9e5b9dc510 method=POST path=/orders status=201 latency_ms=54
+2025-10-21T02:29:27.740Z level=info svc=web-js req=63e267e40d method=POST path=/orders status=201 latency_ms=149
+2025-10-21T02:29:29.196Z level=info svc=web-js req=b810024b16 method=POST path=/orders status=201 latency_ms=83
+2025-10-21T02:29:30.810Z level=info svc=web-js req=a860b233c3 method=GET path=/orders/55892 status=200 latency_ms=16
+2025-10-21T02:29:32.577Z level=info svc=web-js req=dbe2f49372 method=GET path=/orders/O-55893 status=200 latency_ms=60
+2025-10-21T02:29:35.307Z level=info svc=web-js req=097cbdfa5a method=GET path=/accounts/A-1009/quotes status=200 latency_ms=29
+2025-10-21T02:29:35.479Z level=info svc=web-js req=f0c969b72f method=GET path=/orders/O-55895 status=200 latency_ms=39
+2025-10-21T02:29:36.832Z level=info svc=web-js req=b2f7623c9c method=POST path=/orders status=201 latency_ms=329
+2025-10-21T02:29:37.822Z level=info svc=web-js req=57dc3b0f13 method=POST path=/accounts/A-1268/quotes status=201 latency_ms=160
+2025-10-21T02:29:39.461Z level=info svc=web-js req=c0451bcf05 method=POST path=/accounts/A-1352/quotes status=201 latency_ms=95
+2025-10-21T02:29:41.844Z level=info svc=web-js req=92a2fcc103 method=GET path=/accounts/A-1117/quotes status=422 latency_ms=74
+2025-10-21T02:29:44.640Z level=info svc=web-js req=25a649d782 method=GET path=/accounts/A-1105/quotes status=200 latency_ms=42
+2025-10-21T02:29:46.643Z level=info svc=web-js req=15ab737345 method=POST path=/accounts/A-1138/quotes status=201 latency_ms=86
+2025-10-21T02:29:47.959Z level=info svc=web-js req=2ad32cf07d method=POST path=/accounts/A-1197/quotes status=201 latency_ms=267
+2025-10-21T02:29:50.646Z level=info svc=web-js req=489ec93471 method=POST path=/accounts/A-1117/quotes status=201 latency_ms=68
+2025-10-21 09:29:50,646+0700 INFO    pricing.quote: quoted order=O-55903 total=47000
+2025-10-21T02:29:51.141Z level=info svc=web-js req=9548adec04 method=POST path=/accounts/A-1080/quotes status=201 latency_ms=56
+2025-10-21T02:29:52.512Z level=info svc=web-js req=f7b528df95 method=GET path=/accounts/A-1057/quotes status=200 latency_ms=44
+2025-10-21T02:29:52.964Z level=info svc=web-js req=ea23df972d method=GET path=/accounts/A-1358/quotes status=200 latency_ms=21
+2025-10-21T02:29:56.337Z level=info svc=web-js req=52f9b48e56 method=GET path=/catalog/items status=200 latency_ms=41
+2025-10-21T02:29:57.277Z level=info svc=web-js req=64f7fb4d1b method=GET path=/accounts/A-1047/quotes status=200 latency_ms=58
+2025-10-21T02:30:00.470Z level=warn svc=web-js req=cbac507d25 method=GET path=/accounts/A-1019/quotes status=502 latency_ms=970
+2025-10-21T02:30:06.377Z level=info svc=web-js req=9179be5996 method=GET path=/accounts/A-1290/quotes status=200 latency_ms=44
+2025-10-21T02:30:09.494Z level=warn svc=web-js req=b1e6322c3f method=POST path=/orders status=503 latency_ms=1016
+2025-10-21T02:30:12.109Z level=info svc=web-js req=1084971da1 method=POST path=/accounts/A-1179/quotes status=201 latency_ms=308
+2025-10-21T02:30:14.815Z level=info svc=web-js req=27e0923b5d method=POST path=/accounts/A-1207/quotes status=201 latency_ms=207
+2025-10-21 09:30:14,816+0700 INFO    pricing.quote: quoted order=O-55913 total=512000
+2025-10-21T02:30:17.659Z level=info svc=web-js req=e8b835e45f method=POST path=/accounts/A-1186/quotes status=201 latency_ms=235
+2025-10-21 09:30:17,659+0700 INFO    pricing.quote: quoted order=O-55914 total=43000
+2025-10-21T02:30:20.807Z level=warn svc=web-js req=d65e9f8f98 method=POST path=/accounts/A-1305/quotes status=504 latency_ms=1764
+2025-10-21T02:30:22.979Z level=info svc=web-js req=c4d49b6ed0 method=GET path=/orders/O-55916 status=200 latency_ms=11
+2025-10-21T02:30:23.842Z level=info svc=web-js req=eb5dd35242 method=POST path=/accounts/A-1199/quotes status=201 latency_ms=195
+2025-10-21T02:30:24.160Z level=info svc=web-js req=cfdfc30ec2 method=GET path=/accounts/A-1040/quotes status=200 latency_ms=51
+2025-10-21T02:30:25.087Z level=info svc=web-js req=2fa80873b4 method=POST path=/accounts/A-1112/quotes status=201 latency_ms=55
+2025-10-21T02:30:26.021Z level=warn svc=web-js req=a4bfdebbff method=GET path=/accounts/A-1024/quotes status=502 latency_ms=1610
+2025-10-21T02:30:26.021Z level=error svc=web-js req=13d7c3e365 msg="upstream pricing-py returned 502"
+2025-10-21T02:30:26.875Z level=info svc=web-js req=9d6b69659e method=GET path=/orders/O-55921 status=200 latency_ms=62
+2025-10-21T02:30:28.324Z level=warn svc=web-js req=fe6983a75c method=POST path=/accounts/A-1121/quotes status=504 latency_ms=1600
+2025-10-21T02:30:31.488Z level=warn svc=web-js req=51448e2f19 method=GET path=/accounts/A-1109/quotes status=500 latency_ms=2069
+2025-10-21T02:30:35.358Z level=warn svc=web-js req=0b4a8fc7bd method=GET path=/accounts/A-1147/quotes status=504 latency_ms=1433
+2025-10-21T02:30:35.675Z level=warn svc=web-js req=67291211a5 method=GET path=/accounts/A-1024/quotes status=502 latency_ms=1236
+2025-10-21T02:30:35.675Z level=error svc=web-js req=de167532d8 msg="upstream pricing-py returned 502"
+2025-10-21T02:30:47.294Z level=info svc=web-js req=efa7ebd3c3 method=POST path=/accounts/A-1017/quotes status=201 latency_ms=207
+2025-10-21T02:30:48.305Z level=warn svc=web-js req=66deb794b5 method=POST path=/accounts/A-1207/quotes status=502 latency_ms=2705
+2025-10-21T02:30:48.305Z level=error svc=web-js req=caea590f0a msg="upstream pricing-py returned 502"
+2025-10-21T02:30:48.901Z level=info svc=web-js req=a47c85c063 method=POST path=/orders status=201 latency_ms=106
+2025-10-21T02:30:50.676Z level=info svc=web-js req=dfd8a74bdb method=GET path=/orders/55929 status=200 latency_ms=34
+2025-10-21T02:30:52.139Z level=info svc=web-js req=32871873d3 method=GET path=/accounts/A-1234/quotes status=200 latency_ms=73
+2025-10-21T02:30:53.833Z level=info svc=web-js req=7fb8b1423a method=GET path=/orders/O-55931 status=200 latency_ms=12
+2025-10-21T02:30:55.515Z level=info svc=web-js req=5cdece69cc method=GET path=/accounts/A-1128/quotes status=200 latency_ms=74
+2025-10-21T02:30:55.702Z level=info svc=web-js req=aff64e6f3a method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:30:56.215Z level=info svc=web-js req=16963df6ae method=POST path=/orders status=201 latency_ms=698
+2025-10-21T02:30:56.350Z level=info svc=web-js req=04da06ea1a method=POST path=/orders status=201 latency_ms=224
+2025-10-21T02:30:57.380Z level=info svc=web-js req=eab751bf47 method=GET path=/accounts/A-1081/quotes status=200 latency_ms=20
+2025-10-21 09:30:58,000+0700 ERROR   pricing.cache: quote cache write failed: redis timeout after 250ms (key=q:a2afb32c4e)
+2025-10-21T02:31:00.314Z level=info svc=web-js req=e51db3fb17 method=GET path=/accounts/A-1387/quotes status=200 latency_ms=159
+2025-10-21T02:31:00.820Z level=warn svc=web-js req=8334433710 method=GET path=/catalog/items status=500 latency_ms=1864
+2025-10-21T02:31:03.804Z level=warn svc=web-js req=5dbe68df7f method=POST path=/accounts/A-1180/quotes status=504 latency_ms=1302
+2025-10-21T02:31:04.818Z level=info svc=web-js req=0d986a39b4 method=GET path=/accounts/A-1257/quotes status=200 latency_ms=17
+2025-10-21T02:31:05.644Z level=info svc=web-js req=72ba6129cb method=GET path=/catalog/items?page=19 status=200 latency_ms=79
+2025-10-21T02:31:06.135Z level=info svc=web-js req=1bd71346d2 method=GET path=/accounts/A-1352/quotes status=200 latency_ms=23
+2025-10-21T02:31:07.738Z level=info svc=web-js req=8e9b6b55a6 method=POST path=/accounts/A-1108/quotes status=201 latency_ms=198
+2025-10-21T02:31:10.128Z level=info svc=web-js req=d2ec95569a method=GET path=/accounts/A-1340/quotes status=200 latency_ms=16
+2025-10-21T02:31:10.979Z level=warn svc=web-js req=efe6497843 method=GET path=/orders/O-55945 status=500 latency_ms=2067
+2025-10-21T02:31:11.188Z level=info svc=web-js req=4cf235b60b method=GET path=/orders/55946 status=200 latency_ms=23
+2025-10-21T02:31:11.704Z level=warn svc=web-js req=a4268a653c method=POST path=/orders status=503 latency_ms=1739
+2025-10-21T02:31:11.704Z level=error svc=web-js req=d203475ddc msg="upstream pricing-py returned 503"
+2025-10-21T02:31:17.012Z level=warn svc=web-js req=e690998db8 method=POST path=/accounts/A-1382/quotes status=504 latency_ms=1247
+2025-10-21T02:31:21.178Z level=info svc=web-js req=aaff8d20c0 method=POST path=/orders status=201 latency_ms=277
+2025-10-21T02:31:21.723Z level=info svc=web-js req=6cf037f40b method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:31:22.840Z level=warn svc=web-js req=798ca0c0cf method=GET path=/accounts/A-1190/quotes status=503 latency_ms=1398
+2025-10-21T02:31:24.520Z level=info svc=web-js req=84a08d047f method=GET path=/accounts/A-1223/quotes status=200 latency_ms=20
+2025-10-21T02:31:26.899Z level=info svc=web-js req=e163b30d35 method=GET path=/orders/O-55953 status=200 latency_ms=28
+2025-10-21T02:31:30.557Z level=warn svc=web-js req=4ab6953c81 method=GET path=/orders/O-55954 status=500 latency_ms=2693
+2025-10-21T02:31:31.106Z level=warn svc=web-js req=58515fcfe6 method=POST path=/accounts/A-1203/quotes status=500 latency_ms=1928
+2025-10-21T02:31:31.176Z level=warn svc=web-js req=64215d0594 method=POST path=/accounts/A-1164/quotes status=502 latency_ms=2938
+2025-10-21T02:31:31.176Z level=error svc=web-js req=c20e2e7048 msg="upstream pricing-py returned 502"
+2025-10-21T02:31:33.978Z level=info svc=web-js req=1e4db57b52 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:31:34.536Z level=info svc=web-js req=41ea6f9dbf method=GET path=/accounts/A-1213/quotes status=200 latency_ms=83
+2025-10-21T02:31:35.449Z level=info svc=web-js req=d7ebdb9a80 method=POST path=/accounts/A-1315/quotes status=201 latency_ms=187
+2025-10-21T02:31:36.255Z level=warn svc=web-js req=9abeea2572 method=POST path=/accounts/A-1296/quotes status=504 latency_ms=1555
+2025-10-21T02:31:36.255Z level=error svc=web-js req=26b0896b05 msg="upstream pricing-py returned 504"
+2025-10-21T02:31:41.805Z level=info svc=web-js req=e2bc6e65ab method=POST path=/orders status=201 latency_ms=287
+2025-10-21T02:31:49.327Z level=info svc=web-js req=6c377c4228 method=GET path=/orders/O-55962 status=200 latency_ms=41
+2025-10-21T02:31:50.677Z level=info svc=web-js req=cca43b761b method=GET path=/accounts/A-1087/quotes status=200 latency_ms=15
+2025-10-21T02:31:54.150Z level=info svc=web-js req=981ba3025a method=GET path=/orders/O-55964 status=200 latency_ms=110
+2025-10-21T02:31:55.151Z level=info svc=web-js req=7cfcf0d890 method=POST path=/accounts/A-1248/quotes status=201 latency_ms=252
+2025-10-21T02:31:56.812Z level=info svc=web-js req=9d61ae3987 method=GET path=/orders/O-55966 status=200 latency_ms=88
+2025-10-21T02:31:57.465Z level=info svc=web-js req=314d74129b method=POST path=/orders status=201 latency_ms=334
+2025-10-21T02:31:57.711Z level=info svc=web-js req=9302ee482b method=GET path=/accounts/A-1041/quotes status=200 latency_ms=15
+2025-10-21T02:31:58.780Z level=info svc=web-js req=8070011c16 method=GET path=/catalog/items status=200 latency_ms=12
+2025-10-21T02:32:02.409Z level=info svc=web-js req=e93d005d0f method=GET path=/accounts/A-1306/quotes status=200 latency_ms=34
+2025-10-21T02:32:03.192Z level=info svc=web-js req=bca3bee81e method=POST path=/accounts/A-1343/quotes status=201 latency_ms=324
+2025-10-21T02:32:04.031Z level=info svc=web-js req=cf57d169ff method=GET path=/accounts/A-1137/quotes status=200 latency_ms=37
+2025-10-21T02:32:04.396Z level=warn svc=web-js req=67bf869578 method=GET path=/orders/O-55973 status=502 latency_ms=929
+2025-10-21T02:32:06.375Z level=warn svc=web-js req=0d706a11b7 method=POST path=/orders status=504 latency_ms=3169
+2025-10-21T02:32:06.375Z level=error svc=web-js req=941ab5acd6 msg="upstream pricing-py returned 504"
+2025-10-21T02:32:08.012Z level=warn svc=web-js req=6cf91a686c method=GET path=/catalog/items status=500 latency_ms=868
+2025-10-21T02:32:08.012Z level=error svc=web-js req=00480a30ef msg="upstream pricing-py returned 500"
+2025-10-21T02:32:10.461Z level=warn svc=web-js req=5a8a8f9900 method=POST path=/accounts/A-1251/quotes status=500 latency_ms=1944
+2025-10-21T02:32:12.269Z level=warn svc=web-js req=64c0cd399f method=POST path=/orders status=502 latency_ms=2642
+2025-10-21T02:32:12.269Z level=error svc=web-js req=a5d3dad20f msg="upstream pricing-py returned 502"
+2025-10-21T02:32:13.041Z level=info svc=web-js req=ad58828876 method=GET path=/accounts/A-1366/quotes status=200 latency_ms=39
+2025-10-21T02:32:13.412Z level=info svc=web-js req=5d80e054ea method=POST path=/accounts/A-1176/quotes status=201 latency_ms=156
+2025-10-21T02:32:13.541Z level=info svc=web-js req=6091144a67 method=GET path=/orders/O-55980 status=200 latency_ms=21
+2025-10-21T02:32:15.549Z level=info svc=web-js req=a3a556c3f3 method=GET path=/orders/O-55981 status=200 latency_ms=19
+2025-10-21T02:32:15.716Z level=warn svc=web-js req=c6d700ae5a method=GET path=/accounts/A-1222/quotes status=504 latency_ms=1347
+2025-10-21T02:32:17.831Z level=info svc=web-js req=4c8029a30c method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:32:21.150Z level=warn svc=web-js req=9b6eb9ecda method=GET path=/catalog/items status=503 latency_ms=1874
+2025-10-21T02:32:21.410Z level=warn svc=web-js req=71a0feb154 method=GET path=/orders/O-55985 status=503 latency_ms=2733
+2025-10-21T02:32:24.454Z level=warn svc=web-js req=8492c48400 method=POST path=/orders status=503 latency_ms=1102
+2025-10-21T02:32:26.015Z level=warn svc=web-js req=d53695e227 method=GET path=/orders/O-55987 status=502 latency_ms=1776
+2025-10-21T02:32:27.479Z level=info svc=web-js req=a176ae7782 method=GET path=/accounts/A-1381/quotes status=200 latency_ms=23
+2025-10-21T02:32:31.473Z level=warn svc=web-js req=2f98ff6b6e method=POST path=/accounts/A-1054/quotes status=503 latency_ms=2861
+2025-10-21T02:32:31.473Z level=error svc=web-js req=a777b2aba5 msg="upstream pricing-py returned 503"
+2025-10-21T02:32:36.576Z level=warn svc=web-js req=d1aeec1544 method=GET path=/accounts/A-1090/quotes status=504 latency_ms=2770
+2025-10-21T02:32:37.176Z level=warn svc=web-js req=f98105fa76 method=GET path=/accounts/A-1360/quotes status=502 latency_ms=1368
+2025-10-21T02:32:37.550Z level=info svc=web-js req=b218192ce4 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:32:42.004Z level=info svc=web-js req=1f43e6bca1 method=GET path=/catalog/items?page=10 status=200 latency_ms=40
+2025-10-21T02:32:47.308Z level=info svc=web-js req=382260643c method=POST path=/accounts/A-1097/quotes status=201 latency_ms=66
+2025-10-21T02:32:50.051Z level=info svc=web-js req=4a3e5f0df4 method=POST path=/orders status=201 latency_ms=62
+2025-10-21T02:32:54.000Z level=info svc=web-js req=0b605bd73f method=POST path=/accounts/A-1387/quotes status=201 latency_ms=160
+2025-10-21T02:32:54.167Z level=info svc=web-js req=f86f226b2f method=GET path=/catalog/items?page=32 status=200 latency_ms=12
+2025-10-21T02:32:54.519Z level=info svc=web-js req=f8783a4766 method=GET path=/accounts/A-1215/quotes status=200 latency_ms=26
+2025-10-21T02:32:56.980Z level=info svc=web-js req=fc871301b7 method=GET path=/catalog/items?page=2 status=200 latency_ms=35
+2025-10-21T02:32:58.716Z level=warn svc=web-js req=f5e562538a method=GET path=/catalog/items?page=26 status=502 latency_ms=2738
+2025-10-21T02:32:58.716Z level=error svc=web-js req=446e81cb52 msg="upstream pricing-py returned 502"
+2025-10-21T02:32:59.282Z level=info svc=web-js req=1bfaf99364 method=GET path=/accounts/A-1258/quotes status=200 latency_ms=41
+2025-10-21T02:33:00.965Z level=info svc=web-js req=8757fbbab8 method=GET path=/orders/56002 status=200 latency_ms=35
+2025-10-21T02:33:01.383Z level=info svc=web-js req=7e898d7b22 method=POST path=/orders status=201 latency_ms=169
+2025-10-21T02:33:04.461Z level=info svc=web-js req=ad90c36176 method=GET path=/accounts/A-1233/quotes status=200 latency_ms=211
+2025-10-21T02:33:08.431Z level=info svc=web-js req=08c1bc6f3f method=GET path=/accounts/A-1396/quotes status=200 latency_ms=63
+2025-10-21T02:33:09.920Z level=info svc=web-js req=2d11f7000b method=GET path=/accounts/A-1306/quotes status=200 latency_ms=31
+2025-10-21T02:33:12.934Z level=info svc=web-js req=9b6d45d520 method=GET path=/orders/O-56007 status=200 latency_ms=23
+2025-10-21T02:33:13.364Z level=info svc=web-js req=7bab2dc9d0 method=POST path=/accounts/A-1393/quotes status=201 latency_ms=57
+2025-10-21T02:33:21.177Z level=info svc=web-js req=6f52ab7aaa method=POST path=/accounts/A-1354/quotes status=201 latency_ms=137
+2025-10-21 09:33:21,178+0700 INFO    pricing.quote: quoted order=O-56009 total=536000
+2025-10-21T02:33:21.842Z level=info svc=web-js req=04b32eb933 method=POST path=/accounts/A-1097/quotes status=201 latency_ms=63
+2025-10-21 09:33:21,842+0700 INFO    pricing.quote: quoted order=O-56010 total=728000
+2025-10-21T02:33:22.410Z level=info svc=web-js req=f64b9018eb method=POST path=/accounts/A-1204/quotes status=201 latency_ms=68
+2025-10-21T02:33:24.399Z level=info svc=web-js req=0d315712e2 method=GET path=/accounts/A-1210/quotes status=200 latency_ms=68
+2025-10-21T02:33:25.588Z level=info svc=web-js req=0d6ad2ed65 method=POST path=/accounts/A-1381/quotes status=201 latency_ms=95
+2025-10-21T02:33:26.171Z level=info svc=web-js req=5e750eba77 method=POST path=/orders status=201 latency_ms=460
+2025-10-21T02:33:28.282Z level=info svc=web-js req=27d5ebc9ea method=GET path=/accounts/A-1136/quotes status=200 latency_ms=20
+2025-10-21T02:33:29.994Z level=info svc=web-js req=6b6fb52926 method=GET path=/accounts/A-1286/quotes status=200 latency_ms=21
+2025-10-21 09:33:30,000+0700 ERROR   pricing.cache: quote cache write failed: redis timeout after 250ms (key=q:f67dd794d3)
+2025-10-21T02:33:30.793Z level=info svc=web-js req=adebae1296 method=POST path=/accounts/A-1086/quotes status=201 latency_ms=285
+2025-10-21T02:33:31.113Z level=info svc=web-js req=a2ccace0e5 method=POST path=/accounts/A-1125/quotes status=201 latency_ms=126
+2025-10-21 09:33:31,113+0700 INFO    pricing.quote: quoted order=O-56018 total=482000
+2025-10-21T02:33:32.221Z level=info svc=web-js req=456562c435 method=GET path=/catalog/items status=200 latency_ms=38
+2025-10-21T02:33:35.216Z level=info svc=web-js req=0a9497cea2 method=GET path=/orders/56020 status=200 latency_ms=26
+2025-10-21T02:33:37.201Z level=info svc=web-js req=977eec5f62 method=GET path=/orders/O-56021 status=200 latency_ms=160
+2025-10-21T02:33:37.362Z level=info svc=web-js req=64976225a5 method=GET path=/accounts/A-1165/quotes status=200 latency_ms=81
+2025-10-21T02:33:38.041Z level=info svc=web-js req=849571d014 method=GET path=/orders/O-56023 status=200 latency_ms=43
+2025-10-21T02:33:38.463Z level=info svc=web-js req=6e06768c47 method=POST path=/accounts/A-1353/quotes status=201 latency_ms=106
+2025-10-21 09:33:38,463+0700 INFO    pricing.quote: quoted order=O-56024 total=873000
+2025-10-21T02:33:38.705Z level=info svc=web-js req=6b0e76f0c7 method=GET path=/accounts/A-1167/quotes status=200 latency_ms=48
+2025-10-21T02:33:46.787Z level=info svc=web-js req=59c96d4ce7 method=GET path=/orders/O-56026 status=200 latency_ms=17
+2025-10-21T02:33:47.275Z level=info svc=web-js req=78416b9cfc method=GET path=/orders/O-56027 status=200 latency_ms=52
+2025-10-21T02:33:47.483Z level=info svc=web-js req=8cbbaeeb6d method=GET path=/accounts/A-1358/quotes status=200 latency_ms=15
+2025-10-21T02:33:48.119Z level=info svc=web-js req=796d23073b method=POST path=/orders status=201 latency_ms=326
+2025-10-21T02:33:48.349Z level=info svc=web-js req=86b8c32ea8 method=POST path=/accounts/A-1239/quotes status=201 latency_ms=322
+2025-10-21T02:33:48.767Z level=info svc=web-js req=ea57b70d7c method=GET path=/catalog/items status=200 latency_ms=83
+2025-10-21T02:33:49.645Z level=info svc=web-js req=12cd8c84c4 method=POST path=/accounts/A-1138/quotes status=201 latency_ms=78
+2025-10-21 09:33:49,646+0700 WARNING pricing.quote: slow quote 460ms order=O-56032
+2025-10-21T02:33:51.615Z level=info svc=web-js req=ad5e298f02 method=GET path=/orders/56033 status=200 latency_ms=125
+2025-10-21T02:33:55.773Z level=info svc=web-js req=92f440715b method=POST path=/orders status=201 latency_ms=249
+2025-10-21T02:33:58.196Z level=info svc=web-js req=78313bd06f method=GET path=/catalog/items status=200 latency_ms=31
+2025-10-21T02:34:00.262Z level=info svc=web-js req=6dae23da1d method=POST path=/accounts/A-1074/quotes status=201 latency_ms=139
+2025-10-21T02:34:05.544Z level=info svc=web-js req=5f10581e25 method=POST path=/accounts/A-1119/quotes status=201 latency_ms=48
+2025-10-21T02:34:05.645Z level=info svc=web-js req=a8d068fca6 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:34:06.431Z level=info svc=web-js req=6a8ba6821d method=POST path=/accounts/A-1179/quotes status=201 latency_ms=182
+2025-10-21T02:34:11.280Z level=info svc=web-js req=c68c7fda1c method=POST path=/accounts/A-1148/quotes status=201 latency_ms=107
+2025-10-21T02:34:12.810Z level=info svc=web-js req=69d9a657e8 method=GET path=/accounts/A-1017/quotes status=200 latency_ms=41
+2025-10-21T02:34:14.244Z level=info svc=web-js req=87014428b4 method=POST path=/accounts/A-1356/quotes status=201 latency_ms=480
+2025-10-21T02:34:14.876Z level=info svc=web-js req=37b928f4bd method=GET path=/accounts/A-1137/quotes status=200 latency_ms=88
+2025-10-21T02:34:15.197Z level=info svc=web-js req=c4bc5a662d method=GET path=/orders/O-56044 status=409 latency_ms=43
+2025-10-21T02:34:17.937Z level=info svc=web-js req=aa7ab63330 method=POST path=/accounts/A-1173/quotes status=201 latency_ms=74
+2025-10-21T02:34:21.361Z level=info svc=web-js req=f18dda44e8 method=POST path=/orders status=201 latency_ms=111
+2025-10-21T02:34:21.959Z level=info svc=web-js req=1a1682a896 method=GET path=/accounts/A-1212/quotes status=200 latency_ms=23
+2025-10-21T02:34:22.333Z level=info svc=web-js req=056969abd0 method=POST path=/orders status=201 latency_ms=98
+2025-10-21T02:34:22.542Z level=info svc=web-js req=42b2be59a2 method=GET path=/orders/O-56049 status=200 latency_ms=68
+2025-10-21T02:34:26.031Z level=info svc=web-js req=01c55ab48e method=GET path=/orders/O-56050 status=200 latency_ms=28
+2025-10-21T02:34:27.769Z level=info svc=web-js req=e4650f9a2c method=GET path=/catalog/items?page=25 status=200 latency_ms=63
+2025-10-21T02:34:30.269Z level=info svc=web-js req=c3b7fb181e method=GET path=/accounts/A-1084/quotes status=200 latency_ms=28
+2025-10-21T02:34:34.806Z level=info svc=web-js req=55dd943f30 method=GET path=/catalog/items?page=16 status=200 latency_ms=29
+2025-10-21T02:34:35.783Z level=warn svc=web-js req=e7b86f70b0 method=GET path=/accounts/A-1240/quotes status=500 latency_ms=288
+2025-10-21T02:34:35.783Z level=error svc=web-js req=db620283a7 msg="upstream timeout after 5000ms calling pricing-py"
+2025-10-21T02:34:36.472Z level=info svc=web-js req=7d8f1768dd method=POST path=/accounts/A-1164/quotes status=201 latency_ms=393
+2025-10-21T02:34:36.531Z level=info svc=web-js req=c64185fd4b method=GET path=/accounts/A-1142/quotes status=200 latency_ms=30
+2025-10-21T02:34:40.239Z level=info svc=web-js req=7e70facbe8 method=GET path=/accounts/A-1150/quotes status=200 latency_ms=92
+2025-10-21T02:34:40.755Z level=info svc=web-js req=df6d519232 method=GET path=/accounts/A-1123/quotes status=200 latency_ms=21
+2025-10-21T02:34:45.825Z level=info svc=web-js req=f83a6acd4a method=GET path=/accounts/A-1092/quotes status=200 latency_ms=24
+2025-10-21T02:34:46.947Z level=info svc=web-js req=872f52283a method=GET path=/orders/O-56060 status=200 latency_ms=29
+2025-10-21T02:34:50.799Z level=info svc=web-js req=51b10bfc16 method=GET path=/accounts/A-1019/quotes status=200 latency_ms=81
+2025-10-21T02:34:51.875Z level=info svc=web-js req=c7ef6c86e1 method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:34:52.781Z level=info svc=web-js req=cfbd97769f method=POST path=/orders status=201 latency_ms=274
+2025-10-21T02:34:53.245Z level=info svc=web-js req=489dc00cef method=POST path=/accounts/A-1217/quotes status=201 latency_ms=64
+2025-10-21T02:34:56.310Z level=info svc=web-js req=af4971585a method=GET path=/orders/56065 status=200 latency_ms=16
+2025-10-21T02:34:58.020Z level=warn svc=web-js req=47a15e5129 method=POST path=/accounts/A-1361/quotes status=502 latency_ms=267
+2025-10-21T02:34:58.842Z level=info svc=web-js req=50be4e119d method=POST path=/accounts/A-1012/quotes status=201 latency_ms=46
+2025-10-21T02:35:05.984Z level=info svc=web-js req=629b341eb3 method=POST path=/accounts/A-1196/quotes status=201 latency_ms=114
+2025-10-21T02:35:06.846Z level=info svc=web-js req=76270ed7b2 method=GET path=/orders/56069 status=200 latency_ms=55
+2025-10-21T02:35:07.590Z level=info svc=web-js req=c816416011 method=GET path=/orders/56070 status=200 latency_ms=15
+2025-10-21T02:35:08.153Z level=info svc=web-js req=68f9e50b29 method=POST path=/accounts/A-1314/quotes status=201 latency_ms=68
+2025-10-21T02:35:10.233Z level=info svc=web-js req=1d72579850 method=GET path=/orders/O-56072 status=200 latency_ms=120
+2025-10-21T02:35:12.663Z level=info svc=web-js req=9dab76fe93 method=POST path=/accounts/A-1290/quotes status=201 latency_ms=129
+2025-10-21T02:35:13.929Z level=info svc=web-js req=ca10c36a2e method=GET path=/accounts/A-1291/quotes status=200 latency_ms=49
+2025-10-21T02:35:14.410Z level=info svc=web-js req=52fd9bd4a6 method=GET path=/accounts/A-1204/quotes status=200 latency_ms=42
+2025-10-21T02:35:15.916Z level=info svc=web-js req=810dc5b49c method=GET path=/catalog/items?page=6 status=200 latency_ms=10
+2025-10-21T02:35:22.909Z level=info svc=web-js req=7616ef23ed method=GET path=/catalog/items status=200 latency_ms=46
+2025-10-21T02:35:23.791Z level=info svc=web-js req=0b8f838b7f method=POST path=/orders status=201 latency_ms=103
+2025-10-21T02:35:27.868Z level=info svc=web-js req=a42742c22d method=GET path=/orders/56079 status=200 latency_ms=36
+2025-10-21T02:35:28.029Z level=info svc=web-js req=59faf42ab6 method=GET path=/accounts/A-1327/quotes status=200 latency_ms=50
+2025-10-21T02:35:31.093Z level=info svc=web-js req=6ec99c9ce4 method=GET path=/catalog/items?page=8 status=200 latency_ms=25
+2025-10-21T02:35:31.426Z level=info svc=web-js req=4a23683bcd method=GET path=/accounts/A-1394/quotes status=200 latency_ms=38
+2025-10-21T02:35:31.590Z level=info svc=web-js req=5fdbeae811 method=GET path=/orders/56083 status=400 latency_ms=28
+2025-10-21T02:35:34.577Z level=info svc=web-js req=49dcc30847 method=POST path=/accounts/A-1021/quotes status=201 latency_ms=170
+2025-10-21T02:35:40.075Z level=info svc=web-js req=ddec3924e6 method=POST path=/orders status=499 latency_ms=-
+2025-10-21T02:35:41.910Z level=info svc=web-js req=f99234e02f method=GET path=/orders/O-56086 status=200 latency_ms=11
+2025-10-21T02:35:42.535Z level=info svc=web-js req=99201d6ca2 method=GET path=/catalog/items?page=33 status=200 latency_ms=21
+2025-10-21T02:35:43.606Z level=info svc=web-js req=e8160ceb3c method=POST path=/orders status=400 latency_ms=112
+2025-10-21T02:35:43.826Z level=info svc=web-js req=9a6d127ec7 method=GET path=/catalog/items status=200 latency_ms=39
+2025-10-21T02:35:51.244Z level=info svc=web-js req=0ac860e0ca method=GET path=/catalog/items status=200 latency_ms=30
+2025-10-21T02:35:53.815Z level=info svc=web-js req=9bb2b9142b method=GET path=/accounts/A-1288/quotes status=200 latency_ms=34
+2025-10-21T02:35:53.836Z level=info svc=web-js req=a3ebb6504b method=GET path=/accounts/A-1239/quotes status=200 latency_ms=36
+2025-10-21T02:35:56.156Z level=info svc=web-js req=39b8cba95a method=GET path=/accounts/A-1293/quotes status=200 latency_ms=40
+2025-10-21T02:35:57.971Z level=info svc=web-js req=d1a7a601ff method=POST path=/orders status=201 latency_ms=77
+2025-10-21T02:35:58.661Z level=info svc=web-js req=9fd9e68d37 method=GET path=/accounts/A-1222/quotes status=200 latency_ms=27
+2025-10-21T02:35:59.334Z level=info svc=web-js req=183ba2dedc method=GET path=/accounts/A-1218/quotes status=200 latency_ms=36
+2025-10-21T02:36:00.768Z level=info svc=web-js req=757686154f method=GET path=/orders/O-56097 status=200 latency_ms=57
+2025-10-21T02:36:04.985Z level=info svc=web-js req=6ac8f2467a method=GET path=/accounts/A-1190/quotes status=200 latency_ms=87
+2025-10-21T02:36:05.356Z level=info svc=web-js req=b32943a56b method=POST path=/accounts/A-1112/quotes status=201 latency_ms=260
+2025-10-21 09:36:05,357+0700 WARNING pricing.quote: slow quote 575ms order=O-56099
+2025-10-21T02:36:08.872Z level=info svc=web-js req=756e22097b method=GET path=/orders/O-56100 status=200 latency_ms=22
+2025-10-21T02:36:09.101Z level=info svc=web-js req=1537db5e82 method=GET path=/accounts/A-1268/quotes status=200 latency_ms=43
+2025-10-21T02:36:12.274Z level=info svc=web-js req=4f02716af4 method=POST path=/accounts/A-1193/quotes status=201 latency_ms=56
+2025-10-21 09:36:12,274+0700 INFO    pricing.quote: quoted order=O-56102 total=286000
+2025-10-21T02:36:12.356Z level=info svc=web-js req=1b554e41a5 method=GET path=/orders/O-56103 status=200 latency_ms=50
+2025-10-21T02:36:13.891Z level=info svc=web-js req=a785a0cabf method=GET path=/orders/O-56104 status=200 latency_ms=49
+2025-10-21T02:36:18.352Z level=info svc=web-js req=27c4023586 method=POST path=/orders status=201 latency_ms=148
+2025-10-21T02:36:19.633Z level=info svc=web-js req=32244cd21c method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:36:24.643Z level=info svc=web-js req=1c8799eddf method=POST path=/orders status=499 latency_ms=-
+2025-10-21T02:36:24.847Z level=info svc=web-js req=07e4db0266 method=POST path=/accounts/A-1389/quotes status=201 latency_ms=167
+2025-10-21T02:36:32.636Z level=info svc=web-js req=350a81c133 method=GET path=/orders/O-56109 status=422 latency_ms=46
+2025-10-21T02:36:32.768Z level=info svc=web-js req=db40371c50 method=GET path=/accounts/A-1190/quotes status=200 latency_ms=21
+2025-10-21T02:36:33.542Z level=info svc=web-js req=601da12531 method=POST path=/accounts/A-1098/quotes status=201 latency_ms=107
+2025-10-21T02:36:34.412Z level=info svc=web-js req=be912c1443 method=POST path=/orders status=201 latency_ms=383
+2025-10-21T02:36:34.578Z level=info svc=web-js req=d9319b0fd6 method=POST path=/orders status=201 latency_ms=200
+2025-10-21T02:36:36.248Z level=info svc=web-js req=24eb8813d4 method=POST path=/accounts/A-1257/quotes status=201 latency_ms=460
+2025-10-21T02:36:37.328Z level=info svc=web-js req=f2426bfa74 method=GET path=/catalog/items status=200 latency_ms=54
+2025-10-21T02:36:38.614Z level=info svc=web-js req=c3570442b4 method=POST path=/accounts/A-1031/quotes status=201 latency_ms=261
+2025-10-21 09:36:38,615+0700 INFO    pricing.quote: quoted order=O-56116 total=596000
+2025-10-21T02:36:38.679Z level=info svc=web-js req=f03c0c7555 method=GET path=/catalog/items?page=17 status=200 latency_ms=76
+2025-10-21T02:36:39.238Z level=info svc=web-js req=a9e9ec423a method=GET path=/accounts/A-1380/quotes status=200 latency_ms=47
+2025-10-21T02:36:43.107Z level=info svc=web-js req=448f12fa68 method=GET path=/accounts/A-1332/quotes status=200 latency_ms=104
+2025-10-21T02:36:46.243Z level=info svc=web-js req=88d4239064 method=GET path=/accounts/A-1180/quotes status=200 latency_ms=74
+2025-10-21T02:36:46.349Z level=info svc=web-js req=86ea51944e method=GET path=/orders/O-56121 status=200 latency_ms=20
+2025-10-21T02:36:50.969Z level=info svc=web-js req=6ec38f8153 method=POST path=/orders status=201 latency_ms=111
+2025-10-21T02:36:52.855Z level=info svc=web-js req=b2f2d2d306 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:36:58.259Z level=info svc=web-js req=31ec27f3d2 method=POST path=/accounts/A-1305/quotes status=201 latency_ms=44
+2025-10-21 09:36:58,259+0700 INFO    pricing.quote: quoted order=O-56124 total=873000
+2025-10-21T02:36:59.072Z level=info svc=web-js req=cb7b19afa9 method=GET path=/accounts/A-1231/quotes status=200 latency_ms=221
+2025-10-21T02:36:59.521Z level=info svc=web-js req=1ab91ab1fe method=GET path=/catalog/items status=200 latency_ms=15
+2025-10-21T02:37:00.274Z level=info svc=web-js req=c7fc85acd6 method=GET path=/accounts/A-1054/quotes status=200 latency_ms=20
+2025-10-21T02:37:00.330Z level=info svc=web-js req=4a918085ac method=GET path=/orders/56128 status=200 latency_ms=24
+2025-10-21T02:37:06.177Z level=info svc=web-js req=77328d70e8 method=POST path=/accounts/A-1157/quotes status=201 latency_ms=309
+2025-10-21 09:37:06,177+0700 INFO    pricing.quote: quoted order=O-56129 total=210000
+2025-10-21T02:37:14.250Z level=info svc=web-js req=090605a354 method=GET path=/orders/O-56130 status=200 latency_ms=68
+2025-10-21T02:37:14.878Z level=info svc=web-js req=b6fd2de39c method=POST path=/accounts/A-1176/quotes status=201 latency_ms=68
+2025-10-21T02:37:15.691Z level=info svc=web-js req=2e6b4175ab method=GET path=/orders/O-56132 status=200 latency_ms=34
+2025-10-21T02:37:17.473Z level=info svc=web-js req=ff81c5d371 method=GET path=/accounts/A-1275/quotes status=200 latency_ms=119
+2025-10-21T02:37:20.232Z level=info svc=web-js req=755a6bf753 method=GET path=/catalog/items status=200 latency_ms=32
+2025-10-21T02:37:22.349Z level=info svc=web-js req=85f3c1aab2 method=GET path=/accounts/A-1124/quotes status=200 latency_ms=69
+2025-10-21T02:37:23.637Z level=info svc=web-js req=d27b339f62 method=GET path=/orders/O-56136 status=200 latency_ms=29
+2025-10-21T02:37:26.864Z level=info svc=web-js req=bba012a474 method=GET path=/catalog/items?page=4 status=200 latency_ms=17
+2025-10-21T02:37:29.491Z level=warn svc=web-js req=03805f966f method=GET path=/accounts/A-1399/quotes status=502 latency_ms=143
+2025-10-21T02:37:29.664Z level=info svc=web-js req=6629bb35bc method=GET path=/orders/56139 status=200 latency_ms=31
+2025-10-21T02:37:33.325Z level=info svc=web-js req=185476947d method=POST path=/orders status=201 latency_ms=478
+2025-10-21T02:37:38.000Z level=info svc=web-js req=e95ceb36d0 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:37:38.948Z level=info svc=web-js req=b742421bdb method=GET path=/accounts/A-1104/quotes status=200 latency_ms=29
+2025-10-21T02:37:39.163Z level=info svc=web-js req=f21f67bacd method=POST path=/accounts/A-1092/quotes status=201 latency_ms=101
+2025-10-21T02:37:40.325Z level=info svc=web-js req=602a9887f0 method=GET path=/orders/O-56144 status=200 latency_ms=15
+2025-10-21T02:37:41.325Z level=info svc=web-js req=074dbbfb39 method=GET path=/orders/56145 status=200 latency_ms=15
+2025-10-21T02:37:44.537Z level=warn svc=web-js req=b6650f25ca method=GET path=/orders/O-56146 status=503 latency_ms=357
+2025-10-21T02:37:45.228Z level=info svc=web-js req=590950b282 method=GET path=/orders/56147 status=200 latency_ms=14
+2025-10-21T02:37:45.250Z level=info svc=web-js req=2433daf035 method=POST path=/accounts/A-1165/quotes status=201 latency_ms=303
+2025-10-21 09:37:45,251+0700 INFO    pricing.quote: quoted order=O-56148 total=310000
+2025-10-21T02:37:45.900Z level=info svc=web-js req=710ddba5c7 method=POST path=/accounts/A-1282/quotes status=201 latency_ms=113
+2025-10-21T02:37:48.124Z level=info svc=web-js req=ae0f3e978c method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:37:48.858Z level=info svc=web-js req=9229a876d5 method=GET path=/catalog/items status=200 latency_ms=36
+2025-10-21T02:37:49.878Z level=info svc=web-js req=45ceb909aa method=GET path=/accounts/A-1263/quotes status=200 latency_ms=95
+2025-10-21T02:37:53.347Z level=info svc=web-js req=00ddc63da7 method=GET path=/accounts/A-1242/quotes status=200 latency_ms=21
+2025-10-21T02:37:53.866Z level=info svc=web-js req=251ddfc15c method=GET path=/catalog/items status=200 latency_ms=8
+2025-10-21T02:37:54.199Z level=info svc=web-js req=88e3485932 method=GET path=/orders/O-56155 status=200 latency_ms=28
+2025-10-21T02:37:57.571Z level=info svc=web-js req=f5340a0b2e method=GET path=/healthz status=200 latency_ms=5
+2025-10-21T02:38:00.325Z level=info svc=web-js req=9dfe6f237c method=POST path=/accounts/A-1027/quotes status=201 latency_ms=64
+2025-10-21 09:38:00,325+0700 INFO    pricing.quote: quoted order=O-56157 total=493000
+2025-10-21T02:38:03.298Z level=info svc=web-js req=b128f7d4ff method=GET path=/orders/O-56158 status=200 latency_ms=41
+2025-10-21T02:38:03.432Z level=info svc=web-js req=70d827b2a8 method=POST path=/orders status=201 latency_ms=84
+2025-10-21T02:38:06.070Z level=info svc=web-js req=dc6b817296 method=GET path=/accounts/A-1121/quotes status=200 latency_ms=86
+2025-10-21T02:38:11.360Z level=info svc=web-js req=23e21b9d76 method=GET path=/orders/O-56161 status=200 latency_ms=12
+2025-10-21T02:38:13.379Z level=info svc=web-js req=d45a348b94 method=GET path=/accounts/A-1207/quotes status=200 latency_ms=23
+2025-10-21T02:38:14.251Z level=info svc=web-js req=bbdf39678f method=GET path=/catalog/items/ status=200 latency_ms=14
+2025-10-21T02:38:14.663Z level=info svc=web-js req=7cb11ca971 method=POST path=/accounts/A-1114/quotes status=201 latency_ms=229
+2025-10-21T02:38:16.093Z level=info svc=web-js req=3441953829 method=GET path=/catalog/items status=200 latency_ms=28
+2025-10-21T02:38:17.268Z level=info svc=web-js req=14380c9085 method=POST path=/orders status=201 latency_ms=287
+2025-10-21T02:38:17.872Z level=info svc=web-js req=6661b24a52 method=POST path=/accounts/A-1037/quotes status=201 latency_ms=77
+2025-10-21T02:38:20.549Z level=info svc=web-js req=3025250dd8 method=GET path=/accounts/A-1343/quotes status=200 latency_ms=42
+2025-10-21T02:38:20.723Z level=info svc=web-js req=d7605ca08d method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:38:21.606Z level=info svc=web-js req=99fff38d6d method=GET path=/accounts/A-1294/quotes status=200 latency_ms=215
+2025-10-21T02:38:23.357Z level=info svc=web-js req=4ba761fdaf method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:38:26.985Z level=info svc=web-js req=accb7fb2a9 method=GET path=/orders/O-56172 status=200 latency_ms=57
+2025-10-21T02:38:28.100Z level=info svc=web-js req=2ced66c90c method=GET path=/catalog/items status=200 latency_ms=20
+2025-10-21T02:38:28.675Z level=info svc=web-js req=1ef54ad00c method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:38:28.908Z level=info svc=web-js req=325a4143f6 method=GET path=/accounts/A-1156/quotes status=200 latency_ms=31
+2025-10-21T02:38:31.867Z level=info svc=web-js req=d9e572c0b6 method=GET path=/accounts/A-1005/quotes status=200 latency_ms=79
+2025-10-21T02:38:32.132Z level=info svc=web-js req=8eee82839d method=GET path=/orders/O-56177 status=200 latency_ms=12
+2025-10-21T02:38:32.181Z level=info svc=web-js req=fd8c582bc9 method=POST path=/accounts/A-1078/quotes status=201 latency_ms=242
+2025-10-21T02:38:36.447Z level=info svc=web-js req=79a89bc676 method=GET path=/accounts/A-1101/quotes status=200 latency_ms=190
+2025-10-21T02:38:39.763Z level=info svc=web-js req=5a4c443c1f method=POST path=/accounts/A-1076/quotes status=201 latency_ms=61
+2025-10-21T02:38:41.232Z level=info svc=web-js req=54af4a0058 method=GET path=/orders/56181 status=200 latency_ms=47
+2025-10-21T02:38:45.234Z level=info svc=web-js req=1b32775367 method=GET path=/accounts/A-1049/quotes status=200 latency_ms=25
+2025-10-21T02:38:49.744Z level=info svc=web-js req=9619ae88bd method=GET path=/accounts/A-1259/quotes status=200 latency_ms=61
+2025-10-21T02:38:50.863Z level=info svc=web-js req=fbdbe89135 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:38:53.505Z level=info svc=web-js req=1e19dc2782 method=POST path=/accounts/A-1090/quotes status=201 latency_ms=273
+2025-10-21 09:38:53,505+0700 INFO    pricing.quote: quoted order=O-56185 total=247000
+2025-10-21T02:38:59.666Z level=info svc=web-js req=62dbae86c0 method=POST path=/accounts/A-1212/quotes status=201 latency_ms=65
+2025-10-21 09:38:59,666+0700 INFO    pricing.quote: quoted order=O-56186 total=397000
+2025-10-21T02:39:00.127Z level=info svc=web-js req=a779526f5e method=GET path=/orders/O-56187 status=200 latency_ms=32
+2025-10-21T02:39:02.761Z level=info svc=web-js req=b545d00102 method=GET path=/accounts/A-1165/quotes status=200 latency_ms=109
+2025-10-21T02:39:09.137Z level=info svc=web-js req=9e396c937e method=POST path=/orders status=201 latency_ms=412
+2025-10-21T02:39:12.484Z level=info svc=web-js req=ccde283edd method=POST path=/orders status=201 latency_ms=317
+2025-10-21T02:39:12.689Z level=info svc=web-js req=c881bfcdf4 method=GET path=/catalog/items?page=38 status=200 latency_ms=14
+2025-10-21T02:39:14.903Z level=info svc=web-js req=4facb23c9c method=GET path=/accounts/A-1237/quotes status=200 latency_ms=98
+2025-10-21T02:39:16.281Z level=info svc=web-js req=95f17ee979 method=POST path=/orders status=201 latency_ms=229
+2025-10-21T02:39:19.341Z level=info svc=web-js req=5068e90891 method=GET path=/orders/O-56194 status=200 latency_ms=41
+2025-10-21T02:39:19.725Z level=info svc=web-js req=1d98cb701e method=POST path=/accounts/A-1326/quotes status=201 latency_ms=382
+2025-10-21T02:39:25.010Z level=info svc=web-js req=c4200cfe44 method=POST path=/accounts/A-1183/quotes status=201 latency_ms=1077
+2025-10-21T02:39:25.612Z level=info svc=web-js req=c2f62749e5 method=GET path=/accounts/A-1078/quotes status=200 latency_ms=32
+2025-10-21T02:39:27.116Z level=info svc=web-js req=61ff490e28 method=GET path=/accounts/A-1267/quotes status=200 latency_ms=88
+2025-10-21T02:39:27.138Z level=info svc=web-js req=50c6f35b66 method=POST path=/accounts/A-1174/quotes status=201 latency_ms=80
+2025-10-21 09:39:27,138+0700 INFO    pricing.quote: quoted order=O-56199 total=610000
+2025-10-21T02:39:27.342Z level=info svc=web-js req=992f0ecf1d method=GET path=/accounts/A-1238/quotes status=200 latency_ms=71
+2025-10-21T02:39:27.579Z level=info svc=web-js req=e3837ac2c5 method=GET path=/accounts/A-1280/quotes status=200 latency_ms=38
+2025-10-21T02:39:28.041Z level=info svc=web-js req=c1e7517cba method=POST path=/accounts/A-1087/quotes status=201 latency_ms=77
+2025-10-21T02:39:28.879Z level=info svc=web-js req=f0334b72c8 method=POST path=/accounts/A-1095/quotes status=201 latency_ms=54
+2025-10-21T02:39:29.594Z level=info svc=web-js req=f77960d567 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:39:30.569Z level=info svc=web-js req=8e5447c24a method=POST path=/accounts/A-1376/quotes status=201 latency_ms=227
+2025-10-21T02:39:32.311Z level=info svc=web-js req=0ec122fd9b method=GET path=/orders/O-56206 status=499 latency_ms=-
+2025-10-21T02:39:33.057Z level=info svc=web-js req=1c44058632 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:39:33.342Z level=info svc=web-js req=341ea89f6f method=POST path=/accounts/A-1165/quotes status=201 latency_ms=148
+2025-10-21T02:39:35.910Z level=info svc=web-js req=26a6463e05 method=POST path=/accounts/A-1027/quotes status=201 latency_ms=76
+2025-10-21T02:39:37.275Z level=info svc=web-js req=8efdf50a78 method=GET path=/orders/56210 status=200 latency_ms=20
+2025-10-21T02:39:38.737Z level=info svc=web-js req=fe4b2fa644 method=GET path=/orders/O-56211 status=200 latency_ms=120
+2025-10-21T02:39:39.433Z level=info svc=web-js req=217e5a577a method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:39:40.660Z level=info svc=web-js req=07f028ad4f method=POST path=/accounts/A-1344/quotes status=201 latency_ms=48
+2025-10-21 09:39:40,660+0700 INFO    pricing.quote: quoted order=O-56213 total=495000
+2025-10-21T02:39:45.409Z level=info svc=web-js req=1799a172f5 method=GET path=/healthz status=200 latency_ms=4
+2025-10-21T02:39:47.523Z level=info svc=web-js req=ba7f61b69c method=POST path=/accounts/A-1192/quotes status=201 latency_ms=229
+2025-10-21 09:39:47,523+0700 INFO    pricing.quote: quoted order=O-56215 total=79000
+2025-10-21T02:39:49.825Z level=info svc=web-js req=260589503f method=POST path=/accounts/A-1268/quotes status=201 latency_ms=110
+2025-10-21T02:39:56.735Z level=info svc=web-js req=e911e7b942 method=GET path=/accounts/A-1065/quotes status=200 latency_ms=127
+2025-10-21T02:39:58.793Z level=info svc=web-js req=5372f9d14c method=GET path=/orders/O-56218 status=200 latency_ms=28
+2025-10-21T02:39:59.792Z level=info svc=web-js req=a4fee4161a method=GET path=/accounts/A-1355/quotes status=200 latency_ms=37
+2025-10-21T02:40:00.786Z level=info svc=web-js req=c3ba082122 method=GET path=/orders/O-56220 status=200 latency_ms=23
+2025-10-21T02:40:01.036Z level=info svc=web-js req=95cbcfc377 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:40:03.633Z level=info svc=web-js req=3e52f9bcc9 method=POST path=/accounts/A-1281/quotes status=201 latency_ms=430
+2025-10-21 09:40:03,634+0700 INFO    pricing.quote: quoted order=O-56222 total=451000
+2025-10-21T02:40:04.932Z level=info svc=web-js req=bc7c84acb6 method=GET path=/accounts/A-1152/quotes status=200 latency_ms=111
+2025-10-21T02:40:06.126Z level=info svc=web-js req=30d40d848a method=GET path=/accounts/A-1273/quotes status=200 latency_ms=129
+2025-10-21T02:40:07.507Z level=info svc=web-js req=b1b4ef8a67 method=POST path=/orders status=201 latency_ms=206
+2025-10-21T02:40:09.294Z level=info svc=web-js req=720d1409cd method=GET path=/orders/O-56226 status=200 latency_ms=104
+2025-10-21T02:40:12.498Z level=info svc=web-js req=b6a3183aa7 method=GET path=/catalog/items status=200 latency_ms=60
+2025-10-21T02:40:14.068Z level=info svc=web-js req=a7384f1b42 method=POST path=/accounts/A-1005/quotes status=201 latency_ms=158
+2025-10-21 09:40:14,069+0700 INFO    pricing.quote: quoted order=O-56228 total=530000
+2025-10-21T02:40:14.672Z level=info svc=web-js req=c01eddcc63 method=GET path=/accounts/A-1131/quotes status=200 latency_ms=42
+2025-10-21T02:40:17.916Z level=info svc=web-js req=39d8588c36 method=GET path=/orders/O-56230 status=200 latency_ms=91
+2025-10-21T02:40:24.033Z level=info svc=web-js req=48e3d00244 method=POST path=/orders status=201 latency_ms=265
+2025-10-21T02:40:25.549Z level=info svc=web-js req=39dc77922d method=GET path=/catalog/items?page=28 status=200 latency_ms=23
+2025-10-21T02:40:30.850Z level=info svc=web-js req=b4eeefcd69 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:40:34.310Z level=info svc=web-js req=01b6b4a8ed method=POST path=/accounts/A-1134/quotes status=201 latency_ms=177
+2025-10-21T02:40:35.370Z level=info svc=web-js req=2918295f40 method=POST path=/accounts/A-1340/quotes status=201 latency_ms=203
+2025-10-21 09:40:35,371+0700 INFO    pricing.quote: quoted order=O-56235 total=136000
+2025-10-21T02:40:42.747Z level=info svc=web-js req=1d166df61b method=POST path=/orders status=201 latency_ms=128
+2025-10-21T02:40:46.822Z level=info svc=web-js req=766c617d3f method=POST path=/accounts/A-1089/quotes status=201 latency_ms=288
+2025-10-21T02:40:47.018Z level=info svc=web-js req=a6efd4efd0 method=GET path=/catalog/items?page=25 status=200 latency_ms=15
+2025-10-21T02:40:47.787Z level=info svc=web-js req=7403d26974 method=GET path=/healthz status=200 latency_ms=7
+2025-10-21T02:40:47.944Z level=info svc=web-js req=25ac02125b method=GET path=/accounts/A-1039/quotes status=200 latency_ms=63
+2025-10-21T02:40:50.287Z level=info svc=web-js req=883ba08f8d method=POST path=/orders status=201 latency_ms=116
+2025-10-21T02:40:50.706Z level=info svc=web-js req=12780fe970 method=GET path=/accounts/A-1185/quotes status=200 latency_ms=73
+2025-10-21 09:40:54,000+0700 ERROR   pricing.cache: quote cache write failed: redis timeout after 500ms (key=q:a036f85b9e)
+2025-10-21T02:40:55.744Z level=info svc=web-js req=136a5ccc96 method=POST path=/accounts/A-1227/quotes status=201 latency_ms=233
+2025-10-21T02:40:57.012Z level=info svc=web-js req=c454723608 method=GET path=/accounts/A-1286/quotes status=200 latency_ms=82
+2025-10-21T02:40:57.368Z level=info svc=web-js req=92efef9081 method=GET path=/catalog/items status=200 latency_ms=32
+2025-10-21T02:41:00.197Z level=info svc=web-js req=34279279d9 method=GET path=/accounts/A-1336/quotes status=200 latency_ms=63
+2025-10-21T02:41:02.511Z level=info svc=web-js req=d98ab5f2ef method=GET path=/accounts/A-1322/quotes status=200 latency_ms=37
+2025-10-21T02:41:03.907Z level=info svc=web-js req=b3de493425 method=POST path=/accounts/A-1073/quotes status=201 latency_ms=428
+2025-10-21T02:41:04.135Z level=info svc=web-js req=d926fe8152 method=POST path=/orders status=201 latency_ms=173
+2025-10-21T02:41:08.017Z level=info svc=web-js req=e1143f1153 method=POST path=/accounts/A-1085/quotes status=201 latency_ms=124
+2025-10-21T02:41:10.271Z level=info svc=web-js req=6c283535cf method=GET path=/orders/O-56251 status=200 latency_ms=23
+2025-10-21T02:41:10.828Z level=info svc=web-js req=7f3a0f3d58 method=GET path=/accounts/A-1253/quotes status=200 latency_ms=63
+2025-10-21T02:41:13.020Z level=info svc=web-js req=7de0f3f2a5 method=GET path=/orders/O-56253 status=200 latency_ms=217
+2025-10-21T02:41:14.946Z level=info svc=web-js req=1a2afa90e3 method=GET path=/healthz status=200 latency_ms=2
+2025-10-21T02:41:17.732Z level=info svc=web-js req=b15a17cfa8 method=POST path=/orders status=201 latency_ms=67
+2025-10-21T02:41:17.948Z level=info svc=web-js req=be8316f3e0 method=GET path=/accounts/A-1077/quotes status=200 latency_ms=23
+2025-10-21T02:41:21.373Z level=info svc=web-js req=ddcffff1f9 method=POST path=/orders status=201 latency_ms=180
+2025-10-21T02:41:22.525Z level=info svc=web-js req=3ab82f4583 method=GET path=/accounts/A-1119/quotes status=200 latency_ms=37
+2025-10-21T02:41:22.606Z level=info svc=web-js req=e1058cae79 method=GET path=/accounts/A-1250/quotes status=200 latency_ms=83
+2025-10-21T02:41:28.639Z level=info svc=web-js req=c177a8f75b method=GET path=/catalog/items status=200 latency_ms=11
+2025-10-21T02:41:29.052Z level=info svc=web-js req=04a542bc29 method=POST path=/accounts/A-1138/quotes status=201 latency_ms=42
+2025-10-21 09:41:29,052+0700 INFO    pricing.quote: quoted order=O-56261 total=729000
+2025-10-21T02:41:32.557Z level=info svc=web-js req=b5bdade807 method=GET path=/accounts/A-1174/quotes status=200 latency_ms=113
+2025-10-21T02:41:33.250Z level=info svc=web-js req=6c9533631b method=GET path=/orders/O-56263 status=200 latency_ms=33
+2025-10-21T02:41:33.457Z level=info svc=web-js req=b7d1955735 method=GET path=/accounts/A-1024/quotes status=200 latency_ms=18
+2025-10-21T02:41:33.501Z level=info svc=web-js req=667cb12f81 method=POST path=/accounts/A-1080/quotes status=201 latency_ms=150
+2025-10-21T02:41:37.075Z level=info svc=web-js req=f3296dcbe1 method=POST path=/orders status=201 latency_ms=169
+2025-10-21T02:41:39.028Z level=info svc=web-js req=41ef144a64 method=GET path=/orders/56267 status=200 latency_ms=32
+2025-10-21T02:41:46.296Z level=info svc=web-js req=1b3ed70e62 method=GET path=/orders/56268 status=200 latency_ms=116
+2025-10-21T02:41:47.293Z level=info svc=web-js req=c99d377444 method=GET path=/catalog/items status=200 latency_ms=8
+2025-10-21T02:41:51.239Z level=info svc=web-js req=babca5458b method=POST path=/accounts/A-1227/quotes status=201 latency_ms=61
+2025-10-21T02:41:56.374Z level=info svc=web-js req=3b10d01d20 method=GET path=/accounts/A-1305/quotes status=200 latency_ms=43
+2025-10-21T02:41:59.082Z level=info svc=web-js req=295dfea058 method=GET path=/orders/O-56272 status=200 latency_ms=28
+2025-10-21T02:41:59.622Z level=info svc=web-js req=dca88211d7 method=GET path=/accounts/A-1386/quotes status=200 latency_ms=24
+2025-10-21T02:42:00.162Z level=info svc=web-js req=c3ffbd0e7c method=GET path=/accounts/A-1390/quotes status=200 latency_ms=218
+2025-10-21T02:42:00.870Z level=info svc=web-js req=8b4c180461 method=GET path=/accounts/A-1342/quotes status=200 latency_ms=40
+2025-10-21T02:42:01.118Z level=info svc=web-js req=b210117f04 method=POST path=/accounts/A-1377/quotes status=201 latency_ms=72
+2025-10-21T02:42:01.353Z level=info svc=web-js req=97d870c285 method=GET path=/accounts/A-1007/quotes status=200 latency_ms=17
+2025-10-21T02:42:02.733Z level=info svc=web-js req=92e3c47fe5 method=GET path=/accounts/A-1031/quotes status=200 latency_ms=25
+2025-10-21T02:42:03.171Z level=info svc=web-js req=76d538b5a3 method=GET path=/accounts/A-1371/quotes status=200 latency_ms=54
+2025-10-21T02:42:03.500Z level=info svc=web-js req=0fd2192e77 method=GET path=/catalog/items status=200 latency_ms=59
+2025-10-21T02:42:03.932Z level=info svc=web-js req=12f29dc23a method=GET path=/catalog/items?page=25 status=200 latency_ms=22
+2025-10-21T02:42:05.286Z level=info svc=web-js req=0bd5d7d427 method=GET path=/orders/O-56282 status=200 latency_ms=89
+2025-10-21T02:42:07.014Z level=info svc=web-js req=77b169ca5a method=GET path=/accounts/A-1114/quotes status=200 latency_ms=61
+2025-10-21T02:42:09.634Z level=info svc=web-js req=f9e3ecd134 method=GET path=/catalog/items?page=27 status=200 latency_ms=18
+2025-10-21T02:42:10.084Z level=info svc=web-js req=e05a7aafd0 method=POST path=/accounts/A-1367/quotes status=201 latency_ms=268
+2025-10-21T02:42:11.708Z level=info svc=web-js req=427c651007 method=POST path=/accounts/A-1396/quotes status=201 latency_ms=102
+2025-10-21T02:42:12.888Z level=info svc=web-js req=ab056504e7 method=POST path=/accounts/A-1070/quotes status=201 latency_ms=142
+2025-10-21T02:42:21.616Z level=info svc=web-js req=6dfe4ad1d2 method=GET path=/accounts/A-1240/quotes status=200 latency_ms=61
+2025-10-21T02:42:24.359Z level=info svc=web-js req=5f36ac3954 method=GET path=/orders/O-56289 status=200 latency_ms=21
+2025-10-21T02:42:27.319Z level=info svc=web-js req=288d6f720e method=GET path=/accounts/A-1047/quotes status=200 latency_ms=96
+2025-10-21T02:42:33.480Z level=info svc=web-js req=40e7e22a57 method=POST path=/accounts/A-1121/quotes status=201 latency_ms=373
+2025-10-21T02:42:39.094Z level=info svc=web-js req=d68b1b6dd9 method=GET path=/catalog/items status=200 latency_ms=13
+2025-10-21T02:42:40.051Z level=info svc=web-js req=0b1a46b307 method=GET path=/catalog/items?page=26 status=200 latency_ms=13
+2025-10-21T02:42:40.766Z level=info svc=web-js req=1e24494a0b method=GET path=/accounts/A-1260/quotes status=200 latency_ms=24
+2025-10-21T02:42:42.022Z level=info svc=web-js req=042ee73041 method=GET path=/accounts/A-1276/quotes status=200 latency_ms=22
+2025-10-21T02:42:42.434Z level=info svc=web-js req=e67d12dd6a method=GET path=/accounts/A-1164/quotes status=200 latency_ms=64
+2025-10-21T02:42:43.882Z level=info svc=web-js req=0cb3776201 method=GET path=/orders/O-56297 status=200 latency_ms=51
+2025-10-21T02:42:44.427Z level=info svc=web-js req=b86136085e method=POST path=/orders status=201 latency_ms=296
+2025-10-21T02:42:47.656Z level=info svc=web-js req=950688c8ff method=GET path=/accounts/A-1355/quotes status=200 latency_ms=188
+2025-10-21T02:42:49.046Z level=info svc=web-js req=a20ccbc72a method=POST path=/orders status=201 latency_ms=158
+2025-10-21T02:42:54.723Z level=info svc=web-js req=a05099f555 method=GET path=/accounts/A-1029/quotes status=200 latency_ms=78
+2025-10-21T02:42:55.474Z level=info svc=web-js req=f091d25433 method=POST path=/accounts/A-1296/quotes status=201 latency_ms=65
+2025-10-21 09:42:55,475+0700 INFO    pricing.quote: quoted order=O-56302 total=439000
+2025-10-21T02:43:03.194Z level=info svc=web-js req=ab3b89e86d method=POST path=/orders status=201 latency_ms=198
+2025-10-21T02:43:05.113Z level=info svc=web-js req=0ad1969d55 method=POST path=/accounts/A-1120/quotes status=201 latency_ms=99
+2025-10-21T02:43:06.035Z level=info svc=web-js req=6cf1ff876a method=GET path=/orders/56305 status=200 latency_ms=16
+2025-10-21T02:43:10.863Z level=info svc=web-js req=0cef435ee0 method=GET path=/catalog/items/ status=200 latency_ms=80
+2025-10-21T02:43:13.077Z level=info svc=web-js req=a8d9d428e1 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:43:14.705Z level=info svc=web-js req=93a59a4848 method=POST path=/orders status=201 latency_ms=159
+2025-10-21T02:43:19.834Z level=info svc=web-js req=580f00cbb6 method=GET path=/catalog/items status=409 latency_ms=39
+2025-10-21T02:43:22.054Z level=info svc=web-js req=be79cd98d0 method=POST path=/accounts/A-1352/quotes status=201 latency_ms=184
+2025-10-21 09:43:22,055+0700 INFO    pricing.quote: quoted order=O-56310 total=309000
+2025-10-21T02:43:24.518Z level=info svc=web-js req=3c40946707 method=GET path=/accounts/A-1220/quotes status=422 latency_ms=55
+2025-10-21T02:43:26.527Z level=info svc=web-js req=de17bbffe7 method=GET path=/accounts/A-1168/quotes status=200 latency_ms=47
+2025-10-21T02:43:28.905Z level=info svc=web-js req=7ccc7b9625 method=GET path=/accounts/A-1165/quotes status=200 latency_ms=68
+2025-10-21T02:43:29.464Z level=info svc=web-js req=479d69a124 method=GET path=/orders/O-56314 status=200 latency_ms=29
+2025-10-21T02:43:29.606Z level=info svc=web-js req=c97ac6f6a4 method=POST path=/orders status=201 latency_ms=222
+2025-10-21T02:43:30.917Z level=info svc=web-js req=32b5b6366c method=POST path=/accounts/A-1267/quotes status=201 latency_ms=162
+2025-10-21T02:43:32.452Z level=info svc=web-js req=d965a1d684 method=GET path=/accounts/A-1234/quotes status=200 latency_ms=95
+2025-10-21T02:43:35.204Z level=info svc=web-js req=a51a2d9f12 method=GET path=/accounts/A-1116/quotes status=200 latency_ms=75
+2025-10-21T02:43:35.854Z level=info svc=web-js req=46265b8829 method=GET path=/catalog/items status=200 latency_ms=19
+2025-10-21T02:43:38.189Z level=info svc=web-js req=6930fdb1e8 method=GET path=/accounts/A-1097/quotes status=200 latency_ms=32
+2025-10-21T02:43:38.348Z level=info svc=web-js req=0fe6869c40 method=GET path=/accounts/A-1360/quotes status=200 latency_ms=41
+2025-10-21T02:43:43.855Z level=info svc=web-js req=7a9a961d93 method=POST path=/accounts/A-1108/quotes status=201 latency_ms=275
+2025-10-21 09:43:43,856+0700 INFO    pricing.quote: quoted order=O-56322 total=549000
+2025-10-21T02:43:44.347Z level=info svc=web-js req=94398dffec method=GET path=/accounts/A-1103/quotes status=200 latency_ms=57
+2025-10-21T02:43:45.718Z level=info svc=web-js req=4fcb4e7b74 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:43:48.243Z level=info svc=web-js req=f8fe0ba256 method=POST path=/accounts/A-1364/quotes status=201 latency_ms=57
+2025-10-21T02:43:48.291Z level=info svc=web-js req=eefbaaafda method=GET path=/accounts/A-1339/quotes status=200 latency_ms=218
+2025-10-21T02:43:50.376Z level=info svc=web-js req=cbae3b4c78 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:43:58.311Z level=info svc=web-js req=b29ea3b285 method=GET path=/accounts/A-1122/quotes status=200 latency_ms=86
+2025-10-21T02:43:59.355Z level=info svc=web-js req=a8a0f89553 method=POST path=/orders status=201 latency_ms=145
+2025-10-21T02:43:59.463Z level=info svc=web-js req=1915e8f5a6 method=GET path=/accounts/A-1304/quotes status=200 latency_ms=50
+2025-10-21T02:44:00.364Z level=info svc=web-js req=4944baea6c method=GET path=/accounts/A-1079/quotes status=200 latency_ms=19
+2025-10-21T02:44:01.827Z level=info svc=web-js req=7006c2bc85 method=GET path=/catalog/items status=200 latency_ms=35
+2025-10-21T02:44:02.235Z level=info svc=web-js req=2a390572f4 method=GET path=/catalog/items?page=31 status=200 latency_ms=30
+2025-10-21T02:44:02.779Z level=info svc=web-js req=3e0d1a5435 method=GET path=/accounts/A-1390/quotes status=200 latency_ms=30
+2025-10-21T02:44:08.420Z level=info svc=web-js req=f08a85d1c2 method=GET path=/accounts/A-1218/quotes status=200 latency_ms=47
+2025-10-21T02:44:09.815Z level=info svc=web-js req=1c02c4365b method=GET path=/accounts/A-1312/quotes status=200 latency_ms=132
+2025-10-21T02:44:12.699Z level=info svc=web-js req=4e491aa1ec method=GET path=/accounts/A-1188/quotes status=422 latency_ms=28
+2025-10-21T02:44:18.077Z level=info svc=web-js req=505eb085e0 method=GET path=/healthz status=200 latency_ms=3
+2025-10-21T02:44:18.185Z level=info svc=web-js req=1b6ebfba45 method=GET path=/accounts/A-1259/quotes status=200 latency_ms=39
+2025-10-21T02:44:19.160Z level=info svc=web-js req=251368b997 method=GET path=/accounts/A-1116/quotes status=200 latency_ms=48
+2025-10-21T02:44:20.624Z level=info svc=web-js req=e9b160b274 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:44:20.802Z level=info svc=web-js req=e464e30992 method=GET path=/orders/56342 status=200 latency_ms=65
+2025-10-21T02:44:22.787Z level=info svc=web-js req=c9178e275f method=POST path=/orders status=201 latency_ms=237
+2025-10-21T02:44:24.361Z level=info svc=web-js req=fed69a3895 method=POST path=/accounts/A-1106/quotes status=201 latency_ms=147
+2025-10-21T02:44:24.829Z level=info svc=web-js req=ef1707049d method=POST path=/accounts/A-1095/quotes status=201 latency_ms=381
+2025-10-21 09:44:24,830+0700 INFO    pricing.quote: quoted order=O-56345 total=476000
+2025-10-21T02:44:25.858Z level=info svc=web-js req=77b87e42a1 method=GET path=/healthz status=200 latency_ms=1
+2025-10-21T02:44:28.735Z level=info svc=web-js req=78c7080be4 method=GET path=/accounts/A-1206/quotes status=200 latency_ms=50
+2025-10-21T02:44:30.206Z level=info svc=web-js req=61b349873e method=GET path=/accounts/A-1201/quotes status=200 latency_ms=79
+2025-10-21T02:44:31.897Z level=warn svc=web-js req=8e67a9082d method=POST path=/orders status=503 latency_ms=317
+2025-10-21T02:44:32.556Z level=info svc=web-js req=2f96c27d1a method=GET path=/accounts/A-1201/quotes status=200 latency_ms=82
+2025-10-21T02:44:34.152Z level=info svc=web-js req=e01014f32c method=GET path=/accounts/A-1023/quotes status=200 latency_ms=17
+2025-10-21T02:44:42.239Z level=info svc=web-js req=3aaae9de05 method=GET path=/accounts/A-1199/quotes status=200 latency_ms=105
+2025-10-21T02:44:42.510Z level=info svc=web-js req=54be25e1f7 method=GET path=/accounts/A-1036/quotes status=200 latency_ms=31
+2025-10-21T02:44:49.296Z level=info svc=web-js req=6b42fb0c20 method=GET path=/accounts/A-1147/quotes status=200 latency_ms=50
+2025-10-21T02:44:51.457Z level=info svc=web-js req=fe178b468a method=POST path=/accounts/A-1134/quotes status=201 latency_ms=306
+2025-10-21 09:44:51,457+0700 INFO    pricing.quote: quoted order=O-56355 total=534000
+2025-10-21T02:44:57.684Z level=info svc=web-js req=3008546807 method=GET path=/accounts/A-1277/quotes status=200 latency_ms=27
+2025-10-21T02:44:57.813Z level=info svc=web-js req=4fac5d4002 method=GET path=/orders/O-56357 status=200 latency_ms=85
+2025-10-21T02:44:58.667Z level=info svc=web-js req=d82c6d1d22 method=GET path=/orders/O-56358 status=200 latency_ms=24

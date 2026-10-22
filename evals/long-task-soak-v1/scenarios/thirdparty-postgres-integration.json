@@ -1,0 +1,30 @@
+{
+  "id": "thirdparty-postgres-integration",
+  "title": "Meeting-room booking service on real PostgreSQL: migrations, concurrency-safe overlap checks, soft cancel, keyset pagination",
+  "category": ["third-party", "business", "integration", "node"],
+  "language": "vi",
+  "fixture": "node-postgres",
+  "requires": ["docker", "network"],
+  "prompt": "Em làm giúp anh toàn bộ SPEC.md cho dịch vụ đặt lịch phòng họp nhé: thêm migration mới, hoàn thiện repository (phòng họp và đặt lịch), chống trùng lịch an toàn khi nhiều người đặt cùng lúc, huỷ đặt lịch, danh sách có phân trang, và viết test tích hợp chạy với PostgreSQL thật (dùng scripts/db-up.sh hoặc docker-compose.yml). Chỗ nào SPEC ghi \"cần chủ sản phẩm chốt\" thì hỏi anh trước khi làm phần đó, còn lại em cứ tự làm đến khi npm run migrate && npm test qua hết. Xong thì dừng container Postgres em đã bật.",
+  "questionsExpected": false,
+  "decisions": [
+    {
+      "id": "cancel-soft-delete",
+      "mustAsk": true,
+      "topic": ["hu[ỷy]", "h[ủu]y", "cancel", "x[oó][aáà]", "delete", "soft", "xoá mềm|xóa mềm|xoá hẳn|xóa hẳn"],
+      "option": "soft|mềm|cancelled_at|giữ lại|đánh dấu|mark",
+      "reply": "Huỷ là xoá mềm: giữ lại bản ghi và đặt cancelled_at = thời điểm huỷ (cột cancelled_at trong bảng bookings). Đặt lịch đã huỷ không tính khi kiểm tra trùng và không hiện trong listBookings mặc định, nhưng listBookings({ includeCancelled: true }) vẫn phải trả về chúng (kèm cancelledAt), getBooking vẫn trả về được, và huỷ lần nữa thì báo ALREADY_CANCELLED."
+    },
+    {
+      "id": "back-to-back",
+      "mustAsk": true,
+      "topic": ["li[eề]n k[eề]", "liền nhau|nối tiếp|sát nhau", "back.?to.?back", "adjacent", "end.*start", "kết thúc.*bắt đầu", "ch[aạ]m", "\\[\\s*\\)|half.?open|nửa mở"],
+      "option": "không (bị |được )?(tính là |coi là )?(trùng|xung đột)|cho phép|allow|not (a )?conflict|no conflict|don.?t conflict|half.?open|\\[\\)",
+      "reply": "Hai lịch liền kề (giờ kết thúc lịch này bằng giờ bắt đầu lịch kia, ví dụ 09:00–10:00 và 10:00–11:00) KHÔNG tính là trùng, phải cho phép đặt. Chỉ khi hai khoảng thật sự giao nhau mới là BOOKING_CONFLICT."
+    }
+  ],
+  "approvals": "allow",
+  "budget": { "maxMinutes": 75, "maxNudges": 3, "stallMinutes": 15 },
+  "oracle": { "hidden": "hidden", "checks": [{ "name": "spec acceptance on a throwaway PostgreSQL", "run": "bash scripts/oracle.sh", "timeoutSec": 600 }] },
+  "reference": "reference"
+}

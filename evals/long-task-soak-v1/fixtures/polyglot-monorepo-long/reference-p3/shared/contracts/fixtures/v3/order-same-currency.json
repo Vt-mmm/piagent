@@ -1,0 +1,12 @@
+{
+  "contract_version": 3,
+  "order_id": "O-3002",
+  "account_id": "C-100",
+  "account_tier": "standard",
+  "currency": "VND",
+  "settlement_currency": "VND",
+  "fx_rate_ppm": 1000000,
+  "items": [
+    { "sku": "TEA-01", "qty": 2, "unit_price": 45000 }
+  ]
+}

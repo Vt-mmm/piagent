@@ -1,0 +1,20 @@
+{
+  "name": "dat-phong-hop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "bash scripts/db-up.sh",
+    "db:down": "bash scripts/db-down.sh",
+    "migrate": "node scripts/migrate.js",
+    "test": "node --test --test-concurrency=1 test/",
+    "seed:report": "node scripts/seed-bookings.js",
+    "import:legacy": "node scripts/import-legacy.js"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "long-horizon-polyglot-rename",
+  "title": "Rename a domain concept across a Python/Node/shell/docs monorepo with a contract bump and a compat reader",
+  "category": ["long-horizon", "polyglot", "autonomous"],
+  "language": "vi",
+  "fixture": "polyglot-monorepo",
+  "requires": ["python"],
+  "prompt": "Em làm giúp anh hết TODO.md nhé: đổi domain \"customer\" sang \"account\" trong toàn bộ monorepo (contract JSON, pricing-py, web-js, scripts, docs, fixtures), bump order contract lên v2 kèm compat shim đọc payload v1, cập nhật CHANGELOG cho release 2.0.0. Spec trong TODO.md đã chốt rồi, không cần hỏi lại. Làm xong thì chạy unittest Python, npm test bên web-js, release.sh --dry-run và grep lại cho sạch chữ customer, tick hết checklist.",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "userActions": [
+    { "when": { "toolCalls": 30 }, "do": "restart", "text": "Anh vừa tắt máy mở lại, em xem lại TODO.md đang tới mục nào rồi làm tiếp cho xong nhé." },
+    { "when": { "toolCalls": 55 }, "do": "stop_then_continue", "text": "Sorry anh bấm nhầm Stop. Em cứ làm tiếp mấy mục còn lại trong TODO.md nha, nhớ chạy lại test cả hai service." }
+  ],
+  "budget": { "maxMinutes": 90, "maxNudges": 3, "stallMinutes": 15 },
+  "oracle": {
+    "hidden": "hidden",
+    "checks": [
+      { "name": "pricing-py unittest (hidden acceptance + own tests)", "run": "cd services/pricing-py && /usr/bin/python3 -m unittest discover -s tests -v", "timeoutSec": 300, "stopOnFail": false },
+      { "name": "web-js node --test (hidden acceptance + own tests)", "run": "cd services/web-js && node --test 'test/*.test.js'", "timeoutSec": 300, "stopOnFail": false },
+      { "name": "release.sh and dev-env.sh use ACCOUNT_API_URL, release 2.0.0 / contract v2", "run": "bash .soak/check_release.sh", "timeoutSec": 120, "stopOnFail": false },
+      { "name": "no leftover customer outside CHANGELOG/TODO/compat; bookkeeping done", "run": "/usr/bin/python3 .soak/check_rename.py", "timeoutSec": 120, "stopOnFail": false }
+    ]
+  },
+  "reference": "reference",
+  "referenceSetup": [
+    "rm -f services/pricing-py/pricing/customer.py services/pricing-py/fixtures/customers.json services/pricing-py/tests/test_customer.py services/web-js/src/customer.js services/web-js/test/customer.test.js docs/customer-tiers.md"
+  ]
+}

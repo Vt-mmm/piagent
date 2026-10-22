@@ -1,0 +1,3 @@
+STATEMENT FOR C99999
+====================
+No invoices for this customer.

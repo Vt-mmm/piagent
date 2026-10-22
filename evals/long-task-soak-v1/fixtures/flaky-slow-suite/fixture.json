@@ -1,0 +1,1 @@
+{ "description": "Node ESM batch relay whose suite takes ~2.7 min of real timers and has one flaky test caused by a double random draw in src/retry.js.", "setup": [], "protect": [] }

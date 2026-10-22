@@ -1,0 +1,43 @@
+{
+  "total_lines": 1591,
+  "unparsed_lines": 52,
+  "requests": 1358,
+  "top_errors": [
+    {
+      "signature": "pricing-py: pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: <n> [order=O-<n>]",
+      "count": 49
+    },
+    {
+      "signature": "web-js: upstream pricing-py returned <n>",
+      "count": 46
+    },
+    {
+      "signature": "pricing-py: pricing.cache: quote cache write failed: redis timeout after <n>ms (key=q:<hex>)",
+      "count": 5
+    },
+    {
+      "signature": "web-js: upstream timeout after <n>ms calling pricing-py",
+      "count": 5
+    },
+    {
+      "signature": "web-js: rate limited by account-api, retry in <n>s",
+      "count": 3
+    }
+  ],
+  "p95_latency_ms": {
+    "GET /accounts/{id}/quotes": 1775,
+    "GET /catalog/items": 2375,
+    "GET /healthz": 5,
+    "GET /orders/{id}": 1742,
+    "POST /accounts/{id}/quotes": 2200,
+    "POST /orders": 2199
+  },
+  "incident": {
+    "start": "2025-10-21T02:11:00Z",
+    "end": "2025-10-21T02:20:00Z",
+    "minutes": 9,
+    "requests": 268,
+    "errors_5xx": 118,
+    "top_error": "pricing-py: pricing.order: ContractError(UNSUPPORTED_VERSION): unsupported contract_version: <n> [order=O-<n>]"
+  }
+}

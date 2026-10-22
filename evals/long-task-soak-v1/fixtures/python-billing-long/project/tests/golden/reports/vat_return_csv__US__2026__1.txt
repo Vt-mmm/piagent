@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+US,USD,2026-01,13,937.00,0.00,0.00,0.00
+US,USD,2026-02,16,469.00,0.00,0.00,0.00
+US,USD,2026-03,0,0.00,0.00,0.00,0.00

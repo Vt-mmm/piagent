@@ -1,0 +1,7 @@
+{
+  "customers": [
+    { "customer_id": "C-100", "name": "Trà Quán Hẻm 5", "tier": "standard" },
+    { "customer_id": "C-200", "name": "Công ty TNHH Lá Xanh", "tier": "vip" },
+    { "customer_id": "C-300", "name": "Leaf & Co", "tier": "gold" }
+  ]
+}

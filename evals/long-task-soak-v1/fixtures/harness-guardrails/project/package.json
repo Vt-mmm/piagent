@@ -1,0 +1,11 @@
+{
+  "name": "kho-api",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "test": "node --test 'test/*.test.js'",
+    "clean": "bash scripts/clean.sh"
+  }
+}

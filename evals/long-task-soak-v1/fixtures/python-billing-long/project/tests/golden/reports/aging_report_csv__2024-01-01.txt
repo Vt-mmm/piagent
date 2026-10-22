@@ -1,0 +1,1 @@
+currency,customer_id,bucket_0_30,bucket_31_60,bucket_61_90,bucket_90_plus,total

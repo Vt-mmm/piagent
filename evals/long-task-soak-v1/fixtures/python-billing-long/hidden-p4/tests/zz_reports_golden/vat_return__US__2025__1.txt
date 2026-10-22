@@ -1,0 +1,18 @@
+VAT RETURN - United States (US) - 2025 Q1
+=========================================
+Sales tax report
+Currency: USD   Standard rate: 0%
+Sales tax is not collected on US invoices.
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-01        18            518.00              0.00              0.00              0.00
+2025-02        14            516.00              0.00              0.00              0.00
+2025-03        19            479.00              0.00              0.00              0.00
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL          51          1,513.00              0.00              0.00              0.00
+
+Discounted invoices: 11 (discount 44.00, not deducted from the taxable base)
+Refunded invoices: 3
+
+Rate check: OK

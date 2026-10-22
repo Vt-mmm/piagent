@@ -1,0 +1,5 @@
+{
+  "description": "Node 22 ESM meeting-room booking platform on PostgreSQL 17 (pg driver, node:test integration tests against a real database), grown over a long session: recurring bookings, a node:http JSON API with roles, weekly utilisation reporting, a legacy CSV migration, operations scripts. generate/ rebuilds the legacy CSV, the old import script and the p5 ground truth deterministically.",
+  "setup": ["npm install --no-audit --no-fund"],
+  "protect": ["migrations/001_rooms.sql", "data/legacy-bookings.csv", "legacy/import-old.js"]
+}

@@ -1,0 +1,737 @@
+{
+ "total": 20003,
+ "imported": 19953,
+ "cancelledInFile": 2549,
+ "conflicts": 3,
+ "skipped": 50,
+ "skippedByReason": {
+  "INVALID_TIME": 25,
+  "LEGACY_OVERLAP": 13,
+  "UNKNOWN_ROOM": 12
+ },
+ "problems": [
+  {
+   "line": 314,
+   "legacyId": "DP-019989",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 684,
+   "legacyId": "DP-019984",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 694,
+   "legacyId": "DP-019971",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 1474,
+   "legacyId": "DP-019996",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 2333,
+   "legacyId": "DP-019961",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 2838,
+   "legacyId": "DP-019969",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 3244,
+   "legacyId": "DP-019958",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 3377,
+   "legacyId": "DP-020001",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 3594,
+   "legacyId": "DP-020002",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 3612,
+   "legacyId": "DP-019995",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 3796,
+   "legacyId": "DP-019955",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 4488,
+   "legacyId": "DP-019968",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 5664,
+   "legacyId": "DP-019976",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 5816,
+   "legacyId": "DP-019985",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 5835,
+   "legacyId": "DP-019970",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 6248,
+   "legacyId": "DP-019962",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 6270,
+   "legacyId": "DP-019994",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 6792,
+   "legacyId": "DP-019975",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 7239,
+   "legacyId": "DP-019983",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 7257,
+   "legacyId": "DP-019960",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 8074,
+   "legacyId": "DP-019981",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 10237,
+   "legacyId": "DP-019963",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 10439,
+   "legacyId": "DP-019964",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 10489,
+   "legacyId": "DP-019990",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 11435,
+   "legacyId": "DP-019954",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 11646,
+   "legacyId": "DP-019966",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 11719,
+   "legacyId": "DP-019998",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 11759,
+   "legacyId": "DP-019987",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 11879,
+   "legacyId": "DP-019980",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 12252,
+   "legacyId": "DP-019965",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 12552,
+   "legacyId": "DP-020003",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 12652,
+   "legacyId": "DP-019991",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 12702,
+   "legacyId": "DP-019972",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 13372,
+   "legacyId": "DP-019967",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 13527,
+   "legacyId": "DP-019988",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 13754,
+   "legacyId": "DP-019956",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 14308,
+   "legacyId": "DP-019974",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 14716,
+   "legacyId": "DP-019978",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 14739,
+   "legacyId": "DP-019999",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 15091,
+   "legacyId": "DP-019982",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 16094,
+   "legacyId": "DP-019997",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 16404,
+   "legacyId": "DP-019959",
+   "reason": "UNKNOWN_ROOM"
+  },
+  {
+   "line": 16428,
+   "legacyId": "DP-019992",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 16548,
+   "legacyId": "DP-019973",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 17522,
+   "legacyId": "DP-020000",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 17936,
+   "legacyId": "DP-019993",
+   "reason": "LEGACY_OVERLAP"
+  },
+  {
+   "line": 17968,
+   "legacyId": "DP-019979",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 17998,
+   "legacyId": "DP-019977",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 18911,
+   "legacyId": "DP-019986",
+   "reason": "INVALID_TIME"
+  },
+  {
+   "line": 19816,
+   "legacyId": "DP-019957",
+   "reason": "UNKNOWN_ROOM"
+  }
+ ],
+ "rooms": {
+  "Phòng Sen": {
+   "capacity": 8,
+   "bookings": 1691
+  },
+  "Phòng Mai": {
+   "capacity": 6,
+   "bookings": 1616
+  },
+  "Phòng Đào": {
+   "capacity": 6,
+   "bookings": 1726
+  },
+  "Phòng Cúc": {
+   "capacity": 10,
+   "bookings": 1610
+  },
+  "Phòng Lan": {
+   "capacity": 12,
+   "bookings": 1735
+  },
+  "Phòng Trúc": {
+   "capacity": 4,
+   "bookings": 1745
+  },
+  "Phòng Đào Tạo": {
+   "capacity": 40,
+   "bookings": 1549
+  },
+  "Phòng Giám Đốc": {
+   "capacity": 8,
+   "bookings": 1598
+  },
+  "Hội trường A": {
+   "capacity": 300,
+   "bookings": 1689
+  },
+  "Hội trường B": {
+   "capacity": 150,
+   "bookings": 1702
+  },
+  "Phòng Họp Nhỏ 1": {
+   "capacity": 3,
+   "bookings": 1593
+  },
+  "Phòng Họp Nhỏ 2": {
+   "capacity": 3,
+   "bookings": 1699
+  }
+ },
+ "existing": [
+  {
+   "room": "Phòng Đào Tạo",
+   "startsAt": "2027-06-04T07:15:00.000Z",
+   "endsAt": "2027-06-04T07:45:00.000Z",
+   "note": "overlaps DP-003458"
+  },
+  {
+   "room": "Phòng Giám Đốc",
+   "startsAt": "2027-06-04T09:15:00.000Z",
+   "endsAt": "2027-06-04T09:45:00.000Z",
+   "note": "overlaps DP-003461"
+  },
+  {
+   "room": "Hội trường A",
+   "startsAt": "2027-06-04T04:15:00.000Z",
+   "endsAt": "2027-06-04T04:45:00.000Z",
+   "note": "overlaps DP-003464"
+  },
+  {
+   "room": "Hội trường A",
+   "startsAt": "2027-08-12T02:00:00.000Z",
+   "endsAt": "2027-08-12T03:00:00.000Z",
+   "note": "same time as cancelled DP-005014"
+  },
+  {
+   "room": "Hội trường A",
+   "startsAt": "2027-12-30T07:30:00.000Z",
+   "endsAt": "2027-12-30T08:00:00.000Z",
+   "note": "back-to-back after DP-008062"
+  }
+ ],
+ "conflictIds": [
+  "DP-003458",
+  "DP-003461",
+  "DP-003464"
+ ],
+ "notConflicts": [
+  "DP-005014",
+  "DP-008062"
+ ],
+ "samples": {
+  "email organizer": {
+   "legacyId": "DP-000001",
+   "room": "Phòng Sen",
+   "startsAt": "2027-01-04T01:30:00.000Z",
+   "endsAt": "2027-01-04T03:00:00.000Z",
+   "title": "Họp nhà cung cấp",
+   "organizer": "an.nguyen",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room code with a dot": {
+   "legacyId": "DP-000002",
+   "room": "Phòng Sen",
+   "startsAt": "2027-01-04T03:30:00.000Z",
+   "endsAt": "2027-01-04T05:30:00.000Z",
+   "title": "Họp phòng kế toán",
+   "organizer": "son.truong",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "upper-case organizer": {
+   "legacyId": "DP-000003",
+   "room": "Phòng Sen",
+   "startsAt": "2027-01-04T06:00:00.000Z",
+   "endsAt": "2027-01-04T08:00:00.000Z",
+   "title": "Daily standup",
+   "organizer": "phuc.ly",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "date style short": {
+   "legacyId": "DP-000004",
+   "room": "Phòng Sen",
+   "startsAt": "2027-01-04T09:00:00.000Z",
+   "endsAt": "2027-01-04T10:00:00.000Z",
+   "title": "Retro sprint",
+   "organizer": "binh.tran",
+   "cancelled": true,
+   "cancelledAt": "2027-01-04T09:00:00.000Z"
+  },
+  "cancelled without ngay_huy": {
+   "legacyId": "DP-000004",
+   "room": "Phòng Sen",
+   "startsAt": "2027-01-04T09:00:00.000Z",
+   "endsAt": "2027-01-04T10:00:00.000Z",
+   "title": "Retro sprint",
+   "organizer": "binh.tran",
+   "cancelled": true,
+   "cancelledAt": "2027-01-04T09:00:00.000Z"
+  },
+  "active status DA_DUYET": {
+   "legacyId": "DP-000007",
+   "room": "Phòng Mai",
+   "startsAt": "2027-01-04T05:00:00.000Z",
+   "endsAt": "2027-01-04T06:00:00.000Z",
+   "title": "Onboarding nhân viên mới",
+   "organizer": "uyen.dinh",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "date style iso": {
+   "legacyId": "DP-000010",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-04T02:30:00.000Z",
+   "endsAt": "2027-01-04T04:00:00.000Z",
+   "title": "Review sprint",
+   "organizer": "hoa.dang",
+   "cancelled": true,
+   "cancelledAt": "2026-12-31T09:30:00.000Z"
+  },
+  "time style sec": {
+   "legacyId": "DP-000010",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-04T02:30:00.000Z",
+   "endsAt": "2027-01-04T04:00:00.000Z",
+   "title": "Review sprint",
+   "organizer": "hoa.dang",
+   "cancelled": true,
+   "cancelledAt": "2026-12-31T09:30:00.000Z"
+  },
+  "cancel status CANCEL": {
+   "legacyId": "DP-000010",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-04T02:30:00.000Z",
+   "endsAt": "2027-01-04T04:00:00.000Z",
+   "title": "Review sprint",
+   "organizer": "hoa.dang",
+   "cancelled": true,
+   "cancelledAt": "2026-12-31T09:30:00.000Z"
+  },
+  "cancelled with ngay_huy": {
+   "legacyId": "DP-000010",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-04T02:30:00.000Z",
+   "endsAt": "2027-01-04T04:00:00.000Z",
+   "title": "Review sprint",
+   "organizer": "hoa.dang",
+   "cancelled": true,
+   "cancelledAt": "2026-12-31T09:30:00.000Z"
+  },
+  "time style h": {
+   "legacyId": "DP-000011",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-04T04:30:00.000Z",
+   "endsAt": "2027-01-04T05:00:00.000Z",
+   "title": "Họp HĐQT",
+   "organizer": "an.nguyen",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "html entity title": {
+   "legacyId": "DP-000012",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-04T05:00:00.000Z",
+   "endsAt": "2027-01-04T05:30:00.000Z",
+   "title": "Sales & Marketing",
+   "organizer": "quang.mai",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "time style short": {
+   "legacyId": "DP-000018",
+   "room": "Phòng Đào Tạo",
+   "startsAt": "2027-01-04T01:30:00.000Z",
+   "endsAt": "2027-01-04T03:30:00.000Z",
+   "title": "Họp dự án ERP",
+   "organizer": "hoa.dang",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "active status XAC_NHAN": {
+   "legacyId": "DP-000019",
+   "room": "Phòng Đào Tạo",
+   "startsAt": "2027-01-04T03:30:00.000Z",
+   "endsAt": "2027-01-04T04:30:00.000Z",
+   "title": "Đào tạo nội bộ",
+   "organizer": "thao.vu",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "empty organizer": {
+   "legacyId": "DP-000021",
+   "room": "Phòng Giám Đốc",
+   "startsAt": "2027-01-04T02:00:00.000Z",
+   "endsAt": "2027-01-04T03:00:00.000Z",
+   "title": "Demo sản phẩm",
+   "organizer": "khong-ro",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "cancel status DA_HUY": {
+   "legacyId": "DP-000024",
+   "room": "Hội trường A",
+   "startsAt": "2027-01-04T07:30:00.000Z",
+   "endsAt": "2027-01-04T08:30:00.000Z",
+   "title": "Review sprint",
+   "organizer": "khanh.bui",
+   "cancelled": true,
+   "cancelledAt": "2026-12-31T10:00:00.000Z"
+  },
+  "room alias hoi truong b": {
+   "legacyId": "DP-000025",
+   "room": "Hội trường B",
+   "startsAt": "2027-01-04T01:00:00.000Z",
+   "endsAt": "2027-01-04T03:00:00.000Z",
+   "title": "Training an toàn PCCC",
+   "organizer": "son.truong",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "active status (empty)": {
+   "legacyId": "DP-000026",
+   "room": "Hội trường B",
+   "startsAt": "2027-01-04T04:30:00.000Z",
+   "endsAt": "2027-01-04T06:00:00.000Z",
+   "title": "Họp giao ban tuần",
+   "organizer": "son.truong",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias PHN1": {
+   "legacyId": "DP-000029",
+   "room": "Phòng Họp Nhỏ 1",
+   "startsAt": "2027-01-04T06:00:00.000Z",
+   "endsAt": "2027-01-04T07:30:00.000Z",
+   "title": "Kế hoạch quý",
+   "organizer": "binh.tran",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room code lower case with spaces": {
+   "legacyId": "DP-000040",
+   "room": "Phòng Cúc",
+   "startsAt": "2027-01-05T05:00:00.000Z",
+   "endsAt": "2027-01-05T06:00:00.000Z",
+   "title": "Họp dự án ERP",
+   "organizer": "minh.ho",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias HT.A": {
+   "legacyId": "DP-000053",
+   "room": "Hội trường A",
+   "startsAt": "2027-01-05T07:00:00.000Z",
+   "endsAt": "2027-01-05T08:00:00.000Z",
+   "title": "Họp phòng kế toán",
+   "organizer": "binh.tran",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias Giam doc": {
+   "legacyId": "DP-000082",
+   "room": "Phòng Giám Đốc",
+   "startsAt": "2027-01-06T07:00:00.000Z",
+   "endsAt": "2027-01-06T08:30:00.000Z",
+   "title": "Họp giao ban tuần",
+   "organizer": "minh.ho",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "title with semicolon": {
+   "legacyId": "DP-000148",
+   "room": "Phòng Lan",
+   "startsAt": "2027-01-08T08:30:00.000Z",
+   "endsAt": "2027-01-08T10:00:00.000Z",
+   "title": "Đào tạo Excel; nâng cao",
+   "organizer": "thao.vu",
+   "cancelled": true,
+   "cancelledAt": "2027-01-05T10:00:00.000Z"
+  },
+  "room alias Phong Sen": {
+   "legacyId": "DP-000163",
+   "room": "Phòng Sen",
+   "startsAt": "2027-01-11T03:00:00.000Z",
+   "endsAt": "2027-01-11T05:00:00.000Z",
+   "title": "Retro sprint",
+   "organizer": "son.truong",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "end 24:00": {
+   "legacyId": "DP-000292",
+   "room": "Hội trường B",
+   "startsAt": "2027-01-15T12:00:00.000Z",
+   "endsAt": "2027-01-15T17:00:00.000Z",
+   "title": "Phỏng vấn ứng viên",
+   "organizer": "linh.do",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias phn2": {
+   "legacyId": "DP-000294",
+   "room": "Phòng Họp Nhỏ 2",
+   "startsAt": "2027-01-15T03:30:00.000Z",
+   "endsAt": "2027-01-15T04:00:00.000Z",
+   "title": "1:1 với quản lý",
+   "organizer": "thao.vu",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "title with quotes": {
+   "legacyId": "DP-000342",
+   "room": "Phòng Trúc",
+   "startsAt": "2027-01-19T08:00:00.000Z",
+   "endsAt": "2027-01-19T09:30:00.000Z",
+   "title": "Dự án \"Mặt Trời\"",
+   "organizer": "minh.ho",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias pn-1": {
+   "legacyId": "DP-000463",
+   "room": "Phòng Họp Nhỏ 1",
+   "startsAt": "2027-01-22T07:30:00.000Z",
+   "endsAt": "2027-01-22T08:00:00.000Z",
+   "title": "Họp khách hàng",
+   "organizer": "khanh.bui",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "empty title": {
+   "legacyId": "DP-000499",
+   "room": "Phòng Họp Nhỏ 2",
+   "startsAt": "2027-01-25T07:30:00.000Z",
+   "endsAt": "2027-01-25T08:30:00.000Z",
+   "title": "(không tiêu đề)",
+   "organizer": "chi.le",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias HT-B": {
+   "legacyId": "DP-000604",
+   "room": "Hội trường B",
+   "startsAt": "2027-01-28T01:30:00.000Z",
+   "endsAt": "2027-01-28T02:00:00.000Z",
+   "title": "Họp dự án ERP",
+   "organizer": "phuc.ly",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias Hoi truong A": {
+   "legacyId": "DP-000638",
+   "room": "Hội trường A",
+   "startsAt": "2027-01-29T02:30:00.000Z",
+   "endsAt": "2027-01-29T04:00:00.000Z",
+   "title": "Họp nhà cung cấp",
+   "organizer": "quang.mai",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "room alias HT-A": {
+   "legacyId": "DP-000723",
+   "room": "Hội trường A",
+   "startsAt": "2027-02-03T06:00:00.000Z",
+   "endsAt": "2027-02-03T07:00:00.000Z",
+   "title": "Phỏng vấn ứng viên",
+   "organizer": "dung.pham",
+   "cancelled": true,
+   "cancelledAt": "2027-02-03T06:00:00.000Z"
+  },
+  "cancelled row overlapping an active row": {
+   "legacyId": "DP-019914",
+   "room": "Phòng Họp Nhỏ 2",
+   "startsAt": "2028-01-21T04:00:00.000Z",
+   "endsAt": "2028-01-21T04:30:00.000Z",
+   "title": "Retro sprint",
+   "organizer": "khong-ro",
+   "cancelled": true,
+   "cancelledAt": "2028-01-16T03:00:00.000Z"
+  },
+  "fixture row DP-003458": {
+   "legacyId": "DP-003458",
+   "room": "Phòng Đào Tạo",
+   "startsAt": "2027-06-04T07:00:00.000Z",
+   "endsAt": "2027-06-04T08:00:00.000Z",
+   "title": "Họp nhà cung cấp",
+   "organizer": "quang.mai",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "fixture row DP-003461": {
+   "legacyId": "DP-003461",
+   "room": "Phòng Giám Đốc",
+   "startsAt": "2027-06-04T09:00:00.000Z",
+   "endsAt": "2027-06-04T10:30:00.000Z",
+   "title": "Review sprint",
+   "organizer": "thao.vu",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "fixture row DP-003464": {
+   "legacyId": "DP-003464",
+   "room": "Hội trường A",
+   "startsAt": "2027-06-04T04:00:00.000Z",
+   "endsAt": "2027-06-04T05:00:00.000Z",
+   "title": "Họp tổng kết tháng",
+   "organizer": "quang.mai",
+   "cancelled": false,
+   "cancelledAt": null
+  },
+  "fixture row DP-005014": {
+   "legacyId": "DP-005014",
+   "room": "Hội trường A",
+   "startsAt": "2027-08-12T02:00:00.000Z",
+   "endsAt": "2027-08-12T03:00:00.000Z",
+   "title": "Demo sản phẩm",
+   "organizer": "uyen.dinh",
+   "cancelled": true,
+   "cancelledAt": "2027-08-08T06:00:00.000Z"
+  },
+  "fixture row DP-008062": {
+   "legacyId": "DP-008062",
+   "room": "Hội trường A",
+   "startsAt": "2027-12-30T06:30:00.000Z",
+   "endsAt": "2027-12-30T07:30:00.000Z",
+   "title": "Họp tổng kết tháng",
+   "organizer": "an.nguyen",
+   "cancelled": false,
+   "cancelledAt": null
+  }
+ }
+}

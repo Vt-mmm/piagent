@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+JP,JPY,2026-01,10,43756,4375,108,4267
+JP,JPY,2026-02,2,6003,600,0,600
+JP,JPY,2026-03,0,0,0,0,0

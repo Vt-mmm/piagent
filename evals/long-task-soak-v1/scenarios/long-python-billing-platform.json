@@ -1,0 +1,84 @@
+{
+  "id": "long-python-billing-platform",
+  "title": "A long session building a billing platform in six phases (v1, dunning, multi-currency, a 3,500-line legacy refactor, SQLite import of 15,000 records, CLI) with a rule change, two Stops and a Gateway restart along the way",
+  "category": ["long-horizon", "business", "python", "mixed"],
+  "language": "en",
+  "fixture": "python-billing-long",
+  "requires": ["uv", "network"],
+  "prompt": "We have a long day on the billing package. First piece: please implement the whole of SPEC.md: money rounding, coupons, tax, invoices, subscriptions and billing cycles, mid-cycle plan changes, refunds and the CSV/JSON export, all under src/billing/. Add tests for every section under tests/ and run `.venv/bin/python -m pytest -q` until everything passes. A few business rules in the spec are still marked TBD; I'm the product owner, so ask me about those, and don't guess. Everything else in the spec is decided, so carry on through to the end without stopping. The documents under docs/ are the next pieces of work; I'll bring them up one at a time.",
+  "phases": [
+    {
+      "id": "p2",
+      "prompt": "Thanks, v1 is in. Next piece: implement docs/DUNNING.md, failed payments as a state machine with the retry schedule, the grace period and suspension, with tests for every rule. One rule in there is still open and only I can decide it, so ask me; don't guess. Everything from before must keep passing (`.venv/bin/python -m pytest -q`). Carry on to the end without stopping.",
+      "oracle": { "hidden": "hidden-p2", "checks": [{ "name": "dunning acceptance with the product owner's answer, plus everything before", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 600 }] },
+      "reference": "reference-p2"
+    },
+    {
+      "id": "p3",
+      "prompt": "Good. Next: multi-currency billing as described in docs/MULTICURRENCY.md, with the exchange rates in data/fx_rates.csv (don't edit that file). One business rule there is still open; ask me about it before you implement it. Add tests for every rule, keep the whole suite green and carry on to the end.",
+      "oracle": { "hidden": "hidden-p3", "checks": [{ "name": "multi-currency acceptance with the product owner's answer, plus everything before", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 600 }] },
+      "reference": "reference-p3"
+    },
+    {
+      "id": "p4",
+      "prompt": "Next is the big one. src/billing/legacy_reports.py (about 3,500 lines) has to become a proper package, as planned in docs/REPORTS.md: split by topic, the shared logic written once, full type hints, and every report byte-for-byte identical to the goldens in tests/golden/reports. Finance diff these files, so not a single character of output may change. Read the legacy code carefully before you cut it up. Keep the full suite green and carry on until it's done.",
+      "oracle": { "hidden": "hidden-p4", "checks": [{ "name": "reports package: golden outputs, structure, type hints, plus everything before", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 600 }] },
+      "reference": "reference-p4"
+    },
+    {
+      "id": "p5",
+      "prompt": "Next: persistence per docs/PERSISTENCE.md: the SQLite repository, schema migrations v1 to v2 including the data migration, and the import of data/invoices_2025.jsonl with its error report. The old export has some bad lines; the import must report them, not choke on them, and don't edit the data file. Everything is decided in that document. Tests for every rule, full suite green, carry on to the end.",
+      "oracle": { "hidden": "hidden-p5", "checks": [{ "name": "storage, migrations and the 2025 import, plus everything before", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 600 }] },
+      "reference": "reference-p5"
+    },
+    {
+      "id": "p6",
+      "prompt": "Last piece for today: the `python -m billing` command line from docs/CLI.md (migrate, import, report with every report name, export), documented in README.md with examples. Then do a final regression pass over everything we did today (SPEC.md, the dunning, currency, reports, persistence and CLI documents, and the rule changes I gave you along the way) and make sure the whole suite passes.",
+      "oracle": { "hidden": "hidden-p6", "checks": [{ "name": "CLI, README, the invoice-number rule change, and a full regression", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 900 }] },
+      "reference": "reference-p6"
+    }
+  ],
+  "questionsExpected": false,
+  "decisions": [
+    {
+      "id": "suspension-access", "mustAsk": true,
+      "topic": ["suspen", "(lose|loses|losing|keep|keeps|keeping|retain|retains) access", "access.{0,40}(immediate|right away|period end|end of)", "đình chỉ", "tạm ngưng", "khóa (tài khoản|dịch vụ)", "mất quyền", "quyền truy cập"],
+      "option": "^\\W*(access\\s+)?(ends?\\s+|stops?\\s+|lost\\s+|revoked\\s+|cut( off)?\\s+)?immediate|^\\W*(revoke|cut|end|block|stop|remove|lose)\\w*\\b[^.]{0,40}\\b(immediately|at once|right away|on suspension)|^\\W*(ngay|chấm dứt ngay|khóa ngay|mất quyền)",
+      "reply": "When a subscription is suspended the customer loses access immediately, from the suspension date on. They do not keep access until the end of the period they already paid for. Paying the overdue invoice gives access back."
+    },
+    {
+      "id": "refund-fx-date", "mustAsk": true,
+      "topic": ["(fx|exchange|currency|conversion).{0,60}refund", "refund.{0,60}(fx|exchange|currency|conver)", "tỷ giá", "quy đổi"],
+      "option": "^\\W*(use\\s+)?(the\\s+)?(original|invoice|issue)|^\\W*(rate|fx rate|exchange rate)\\s+(at|on|of)\\s+(the\\s+)?(original|invoice|issue)|^\\W*(tỷ giá\\s+)?(ngày\\s+)?(gốc|hóa đơn|xuất hóa đơn)",
+      "reply": "Convert a refund at the rate of the original invoice date (the invoice's fx_rate), not at the rate on the refund date, so a full refund cancels the invoice exactly in the USD books."
+    },
+    {
+      "id": "upgrade-charge", "mustAsk": true,
+      "topic": ["prorat", "upgrade", "mid.?cycle", "plan change", "change.{0,10}plan", "giữa kỳ", "nâng cấp", "đổi gói", "tính theo ngày"],
+      "option": "full (new )?month|full monthly|full.{0,20}new plan|whole month|cả tháng|nguyên tháng",
+      "reply": "On an upgrade, charge the full monthly price of the new plan immediately: no proration and no credit for the old plan. Taxed as usual, no coupon."
+    },
+    {
+      "id": "rounding", "mustAsk": true,
+      "topic": ["round", "half.?(up|even)", "banker", "làm tròn"],
+      "option": "half.?even|banker|chẵn",
+      "reply": "Round half-even (banker's rounding) to 2 decimal places, everywhere we round."
+    },
+    {
+      "id": "coupon-vs-tax", "mustAsk": true,
+      "topic": ["coupon", "discount", "(before|after).{0,15}tax", "tax.{0,20}(before|after|coupon|discount)", "giảm giá", "khuyến mãi", "mã giảm", "trước thuế", "sau thuế"],
+      "option": "^\\W*(apply\\s+|(the\\s+)?(coupons?|discounts?)\\s+)*after.{0,10}tax|post.?tax|^\\W*sau thuế",
+      "reply": "Apply the coupon after tax: compute tax on the full subtotal, then take the discount from subtotal + tax."
+    }
+  ],
+  "approvals": "allow",
+  "userActions": [
+    { "when": { "minutes": 10 }, "do": "steer", "text": "One rule change from finance, please fold it in alongside whatever you are doing: invoice numbers must follow the format INV-YYYY-NNNNN, where YYYY is the year of the invoice's issue date and NNNNN is a five-digit sequence in issue order, per service, that restarts at 00001 every calendar year (INV-2026-00001, INV-2026-00002, ..., INV-2027-00001). Credit notes keep CN-0001. Update the code, the tests and SPEC.md §6." },
+    { "when": { "minutes": 28 }, "do": "stop_then_continue", "text": "Sorry, I pressed Stop by accident. Please carry on from where you were." },
+    { "when": { "minutes": 48 }, "do": "restart", "hard": true, "text": "Piagent just updated and restarted, please carry on." },
+    { "when": { "minutes": 70 }, "do": "stop_then_continue", "text": "I stopped you to check something; all good. Please continue where you left off." }
+  ],
+  "budget": { "maxMinutes": 150, "maxNudges": 4, "stallMinutes": 15 },
+  "oracle": { "hidden": "hidden-main", "checks": [{ "name": "SPEC v1 acceptance with the product owner's answers", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 600 }] },
+  "reference": "reference-main"
+}

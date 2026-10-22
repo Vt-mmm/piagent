@@ -1,0 +1,17 @@
+VAT RETURN - Italy (IT) - 2025 Q1
+=================================
+Liquidazione periodica IVA
+Currency: EUR   Standard rate: 22%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-01         0              0.00              0.00              0.00              0.00
+2025-02         1              9.06              1.99              0.98              1.01
+2025-03         1              9.13              2.01              0.00              2.01
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL           2             18.19              4.00              0.98              3.02
+
+Discounted invoices: 1 (discount 1.10, not deducted from the taxable base)
+Refunded invoices: 1
+
+Rate check: OK

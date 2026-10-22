@@ -1,0 +1,8 @@
+{"event_id":"EV-1","type":"order.placed","order":{"contract_version":2,"order_id":"O-1","account_id":"A-1","account_tier":"standard","currency":"USD","items":[{"sku":"A","qty":3,"unit_price":1999}]}}
+{"event_id":"EV-2","type":"order.placed","order":{"contract_version":2,"order_id":"O-2","account_id":"A-2","account_tier":"gold","currency":"VND","items":[{"sku":"TEA-01","qty":3,"unit_price":45000}]}}
+{"event_id":"EV-3","type":"order.refunded","order":{"contract_version":2,"order_id":"O-3","account_id":"A-1","account_tier":"standard","currency":"USD","items":[{"sku":"A","qty":1,"unit_price":2400}]}}
+{"event_id":"EV-2","type":"order.placed","order":{"contract_version":2,"order_id":"O-2","account_id":"A-2","account_tier":"gold","currency":"VND","items":[{"sku":"TEA-01","qty":3,"unit_price":45000}]}}
+{"event_id":"EV-4",
+{"event_id":"EV-9","type":"order.cancelled","order":{}}
+
+{"event_id":"EV-10","type":"order.placed","order":{"contract_version":2,"order_id":"O-5","account_id":"","account_tier":"gold","currency":"VND","items":[{"sku":"A","qty":1,"unit_price":1}]}}

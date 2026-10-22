@@ -1,0 +1,182 @@
+{
+ "accepted": 229,
+ "balances": [
+  {
+   "account_id": "K-1",
+   "currency": "EUR",
+   "balance": -793202
+  },
+  {
+   "account_id": "K-1",
+   "currency": "USD",
+   "balance": 6356226
+  },
+  {
+   "account_id": "K-1",
+   "currency": "VND",
+   "balance": 5357293
+  },
+  {
+   "account_id": "K-2",
+   "currency": "EUR",
+   "balance": 5959911
+  },
+  {
+   "account_id": "K-2",
+   "currency": "USD",
+   "balance": 5930943
+  },
+  {
+   "account_id": "K-2",
+   "currency": "VND",
+   "balance": 7634130
+  },
+  {
+   "account_id": "K-3",
+   "currency": "EUR",
+   "balance": 5937634
+  },
+  {
+   "account_id": "K-3",
+   "currency": "USD",
+   "balance": 5020392
+  },
+  {
+   "account_id": "K-3",
+   "currency": "VND",
+   "balance": 7073010
+  },
+  {
+   "account_id": "K-4",
+   "currency": "EUR",
+   "balance": 5847596
+  },
+  {
+   "account_id": "K-4",
+   "currency": "USD",
+   "balance": 8137411
+  },
+  {
+   "account_id": "K-4",
+   "currency": "VND",
+   "balance": 6421083
+  },
+  {
+   "account_id": "K-5",
+   "currency": "EUR",
+   "balance": 4870623
+  },
+  {
+   "account_id": "K-5",
+   "currency": "USD",
+   "balance": 4490913
+  },
+  {
+   "account_id": "K-5",
+   "currency": "VND",
+   "balance": 2594649
+  },
+  {
+   "account_id": "K-6",
+   "currency": "EUR",
+   "balance": 2356308
+  },
+  {
+   "account_id": "K-6",
+   "currency": "USD",
+   "balance": 8171633
+  },
+  {
+   "account_id": "K-6",
+   "currency": "VND",
+   "balance": 2268643
+  },
+  {
+   "account_id": "K-7",
+   "currency": "EUR",
+   "balance": 6810248
+  },
+  {
+   "account_id": "K-7",
+   "currency": "USD",
+   "balance": 7384391
+  },
+  {
+   "account_id": "K-7",
+   "currency": "VND",
+   "balance": 4302113
+  },
+  {
+   "account_id": "K-8",
+   "currency": "EUR",
+   "balance": 7237171
+  },
+  {
+   "account_id": "K-8",
+   "currency": "USD",
+   "balance": 23052
+  },
+  {
+   "account_id": "K-8",
+   "currency": "VND",
+   "balance": 6968999
+  }
+ ],
+ "rejected": [
+  {
+   "line": 18,
+   "event_id": "EV-0018",
+   "code": "UNSUPPORTED_VERSION"
+  },
+  {
+   "line": 30,
+   "event_id": "EV-0030",
+   "code": "UNSUPPORTED_VERSION"
+  },
+  {
+   "line": 48,
+   "event_id": "EV-0031",
+   "code": "DUPLICATE"
+  },
+  {
+   "line": 74,
+   "event_id": "EV-0073",
+   "code": "UNKNOWN_TYPE"
+  },
+  {
+   "line": 85,
+   "event_id": "EV-0083",
+   "code": "INVALID"
+  },
+  {
+   "line": 101,
+   "event_id": "EV-0099",
+   "code": "UNKNOWN_TYPE"
+  },
+  {
+   "line": 120,
+   "event_id": "EV-0117",
+   "code": "UNKNOWN_TYPE"
+  },
+  {
+   "line": 149,
+   "event_id": "",
+   "code": "BAD_JSON"
+  },
+  {
+   "line": 161,
+   "event_id": "",
+   "code": "BAD_JSON"
+  },
+  {
+   "line": 204,
+   "event_id": "EV-0134",
+   "code": "DUPLICATE"
+  },
+  {
+   "line": 210,
+   "event_id": "EV-0049",
+   "code": "DUPLICATE"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+  "contract_version": 1,
+  "order_id": "O-1003",
+  "customer_id": "C-300",
+  "customer_tier": "gold",
+  "currency": "USD",
+  "items": [
+    { "sku": "POT-07", "qty": 1, "unit_price": 3999 },
+    { "sku": "TEA-01", "qty": 3, "unit_price": 199 }
+  ]
+}

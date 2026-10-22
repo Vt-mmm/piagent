@@ -1,0 +1,17 @@
+VAT RETURN - Spain (ES) - 2025 Q1
+=================================
+Modelo 303 (IVA)
+Currency: EUR   Standard rate: 21%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-01         3             45.05              9.46              0.00              9.46
+2025-02         3             45.28              9.50              0.00              9.50
+2025-03         2             35.78              7.52              0.00              7.52
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL           8            126.11             26.48              0.00             26.48
+
+Discounted invoices: 2 (discount 9.03, not deducted from the taxable base)
+Refunded invoices: 0
+
+Rate check: OK

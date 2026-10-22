@@ -1,0 +1,210 @@
+{
+  "id": "long-postgres-booking-platform",
+  "title": "Long session (60–120 min): meeting-room booking platform on real PostgreSQL grown over six phases — SPEC, recurring bookings, node:http API with roles, window-function reporting on 50k rows with an index, a 20k-row legacy CSV migration, operations scripts and final regression — with a mid-task rule change, Stops and a Gateway restart",
+  "category": [
+    "long-horizon",
+    "third-party",
+    "business",
+    "integration"
+  ],
+  "language": "vi",
+  "fixture": "node-postgres-long",
+  "requires": [
+    "docker",
+    "network"
+  ],
+  "prompt": "Hôm nay anh em mình làm cả buổi trên repo dat-phong-hop này. Bắt đầu với toàn bộ SPEC.md cho dịch vụ đặt lịch phòng họp nhé: thêm migration mới, hoàn thiện repository (phòng họp và đặt lịch), chống trùng lịch an toàn khi nhiều người đặt cùng lúc, huỷ đặt lịch, danh sách có phân trang, và viết test tích hợp chạy với PostgreSQL thật (dùng scripts/db-up.sh hoặc docker-compose.yml). Chỗ nào SPEC ghi \"cần chủ sản phẩm chốt\" thì hỏi anh trước khi làm phần đó, còn lại em cứ tự làm đến khi npm run migrate && npm test qua hết. Xong thì dừng container Postgres em đã bật. Các phần sau anh sẽ giao tiếp trong docs/backlog/, em chưa cần làm trước.",
+  "questionsExpected": false,
+  "decisions": [
+    {
+      "id": "legacy-conflict-import-cancelled",
+      "mustAsk": true,
+      "topic": [
+        "legacy",
+        "h[eệ] th[oố]ng c[uũ]",
+        "d[uữ] li[eệ]u c[uũ]",
+        "d[oò]ng c[uũ]",
+        "l[iị]ch c[uũ]",
+        "b[aả]n ghi c[uũ]",
+        "import",
+        "nh[aậ]p (d[uữ] li[eệ]u|l[iị]ch|v[aà]o)",
+        "\\bCSV\\b",
+        "migrat(e|ion) (data|of the old)"
+      ],
+      "option": "legacy-conflict",
+      "reply": "Dòng cũ đang hiệu lực mà trùng giờ với đặt lịch đã có trong hệ thống mới thì KHÔNG bỏ qua: vẫn nhập vào nhưng ở trạng thái đã huỷ, cancelled_at là thời điểm chạy import, và thêm cột cancelled_reason (text) với giá trị 'legacy-conflict' để sau này tra lại. Đặt lịch đang có trong hệ thống mới giữ nguyên. Những dòng này tính vào imported và conflicts, không nằm trong problems."
+    },
+    {
+      "id": "series-conflict-reject-all",
+      "mustAsk": true,
+      "topic": [
+        "chu[oỗ]i",
+        "series",
+        "recurr",
+        "[dđ][iị]nh k[yỳ]",
+        "l[aặ]p l[aạ]i",
+        "l[aầ]n l[aặ]p",
+        "bu[oổ]i (tr[uù]ng|b[iị] tr[uù]ng|l[aặ]p)",
+        "occurrence"
+      ],
+      "option": "từ chối (cả|toàn bộ)|reject (the )?(whole|entire|all)|whole series|entire series|all.or.nothing|không tạo buổi nào",
+      "reply": "Từ chối cả chuỗi, không tạo buổi nào: ném BOOKING_CONFLICT, và error.conflicts liệt kê đầy đủ mọi buổi bị trùng ({ startsAt, endsAt }, theo thứ tự thời gian) để người đặt biết mà chọn giờ khác. Không bỏ qua riêng buổi trùng."
+    },
+    {
+      "id": "cancel-soft-delete",
+      "mustAsk": true,
+      "topic": [
+        "hu[ỷy]",
+        "h[ủu]y",
+        "cancel",
+        "x[oó][aáà]",
+        "delete",
+        "soft",
+        "xoá mềm|xóa mềm|xoá hẳn|xóa hẳn"
+      ],
+      "option": "soft|mềm|cancelled_at|giữ lại|đánh dấu|mark",
+      "reply": "Huỷ là xoá mềm: giữ lại bản ghi và đặt cancelled_at = thời điểm huỷ (cột cancelled_at trong bảng bookings). Đặt lịch đã huỷ không tính khi kiểm tra trùng và không hiện trong listBookings mặc định, nhưng listBookings({ includeCancelled: true }) vẫn phải trả về chúng (kèm cancelledAt), getBooking vẫn trả về được, và huỷ lần nữa thì báo ALREADY_CANCELLED."
+    },
+    {
+      "id": "back-to-back",
+      "mustAsk": true,
+      "topic": [
+        "li[eề]n k[eề]",
+        "liền nhau|nối tiếp|sát nhau",
+        "back.?to.?back",
+        "adjacent",
+        "end.*start",
+        "kết thúc.*bắt đầu",
+        "ch[aạ]m",
+        "\\[\\s*\\)|half.?open|nửa mở"
+      ],
+      "option": "không (bị |được )?(tính là |coi là )?(trùng|xung đột)|cho phép|allow|not (a )?conflict|no conflict|don.?t conflict|half.?open|\\[\\)",
+      "reply": "Hai lịch liền kề (giờ kết thúc lịch này bằng giờ bắt đầu lịch kia, ví dụ 09:00–10:00 và 10:00–11:00) KHÔNG tính là trùng, phải cho phép đặt. Chỉ khi hai khoảng thật sự giao nhau mới là BOOKING_CONFLICT."
+    }
+  ],
+  "approvals": "allow",
+  "userActions": [
+    {
+      "when": {
+        "minutes": 15
+      },
+      "do": "steer",
+      "text": "Anh bổ sung một yêu cầu, áp dụng từ giờ cho mọi danh sách đặt lịch (listBookings, và sau này cả API): sắp theo giờ bắt đầu, cùng giờ bắt đầu thì theo tên phòng A→Z (không phân biệt hoa thường), rồi mới tới id. Phân trang con trỏ phải đúng theo thứ tự mới, không lặp, không sót. Yêu cầu này giữ nguyên cho các phần sau."
+    },
+    {
+      "when": {
+        "minutes": 32
+      },
+      "do": "stop_then_continue",
+      "text": "Anh lỡ tay bấm Stop, xin lỗi em. Em làm tiếp phần đang dở nhé, không cần làm lại từ đầu."
+    },
+    {
+      "when": {
+        "minutes": 52
+      },
+      "do": "restart",
+      "hard": true,
+      "text": "Anh vừa phải khởi động lại gateway của công ty nên cuộc trò chuyện bị ngắt giữa chừng. Em kiểm tra lại trạng thái repo (git status, chạy test) rồi làm tiếp phần đang dở cho xong nhé."
+    },
+    {
+      "when": {
+        "minutes": 80
+      },
+      "do": "stop_then_continue",
+      "text": "Anh dừng em một chút để xem tiến độ, ổn rồi. Em tiếp tục phần đang làm cho đến khi xong hết nhé."
+    }
+  ],
+  "budget": {
+    "maxMinutes": 160,
+    "maxNudges": 4,
+    "stallMinutes": 15
+  },
+  "oracle": {
+    "hidden": "hidden",
+    "checks": [
+      {
+        "name": "main: SPEC acceptance on a throwaway PostgreSQL",
+        "run": "bash scripts/oracle.sh",
+        "timeoutSec": 600
+      }
+    ]
+  },
+  "reference": "reference",
+  "phases": [
+    {
+      "id": "p2",
+      "prompt": "Phần SPEC ổn rồi, cảm ơn em. Tiếp theo em làm docs/backlog/02-lich-dinh-ky.md (đặt lịch định kỳ hằng ngày/hằng tuần) nhé, cùng cách làm như trước: chỗ nào ghi \"cần chủ sản phẩm chốt\" thì hỏi anh, còn lại tự làm đến khi npm run migrate && npm test qua hết (test cũ vẫn phải qua). Xong thì dừng container Postgres.",
+      "oracle": {
+        "hidden": "hidden-p2",
+        "checks": [
+          {
+            "name": "p2: recurring bookings + all earlier acceptance",
+            "run": "bash scripts/oracle.sh",
+            "timeoutSec": 600
+          }
+        ]
+      },
+      "reference": "reference-p2"
+    },
+    {
+      "id": "p3",
+      "prompt": "Ok anh xem rồi. Giờ tới docs/backlog/03-http-api.md: API HTTP JSON bằng node:http (không dùng framework), token đơn giản với vai trò admin/member, member chỉ huỷ được lịch của chính mình. Test tích hợp khởi động server trên cổng 0. Làm đến khi toàn bộ test qua, xong dừng container.",
+      "oracle": {
+        "hidden": "hidden-p3",
+        "checks": [
+          {
+            "name": "p3: node:http API with roles + all earlier acceptance",
+            "run": "bash scripts/oracle.sh",
+            "timeoutSec": 600
+          }
+        ]
+      },
+      "reference": "reference-p3"
+    },
+    {
+      "id": "p4",
+      "prompt": "Tiếp theo là docs/backlog/04-bao-cao.md: báo cáo công suất phòng theo tuần tính bằng SQL (hàm cửa sổ), index bookings_report_idx, script seed 50.000 đặt lịch và route /reports/utilisation cho admin. Em tự kiểm tra bằng EXPLAIN là báo cáo dùng đúng index và chạy dưới 2 giây trên dữ liệu seed nhé. Xong dừng container.",
+      "oracle": {
+        "hidden": "hidden-p4",
+        "checks": [
+          {
+            "name": "p4: utilisation report, index use and speed on 50k rows + all earlier acceptance",
+            "run": "bash scripts/oracle.sh",
+            "timeoutSec": 900
+          }
+        ]
+      },
+      "reference": "reference-p4"
+    },
+    {
+      "id": "p5",
+      "prompt": "Phần lớn nhất đây: docs/backlog/05-chuyen-du-lieu-cu.md, chuyển dữ liệu từ hệ thống cũ (data/legacy-bookings.csv, khoảng 20.000 dòng). Em đọc kỹ legacy/import-old.js để hiểu đúng cách hệ thống cũ đọc dữ liệu, nhưng không sửa file đó và không sửa file CSV. Viết importer mới có dry-run và báo cáo, chạy thử dry-run trên file thật rồi gửi anh số liệu. Chỗ cần chủ sản phẩm chốt thì hỏi anh. Xong dừng container.",
+      "oracle": {
+        "hidden": "hidden-p5",
+        "checks": [
+          {
+            "name": "p5: legacy CSV importer (dry-run, report, re-run) + all earlier acceptance",
+            "run": "bash scripts/oracle.sh",
+            "timeoutSec": 1200
+          }
+        ]
+      },
+      "reference": "reference-p5"
+    },
+    {
+      "id": "p6",
+      "prompt": "Cuối cùng là docs/backlog/06-ban-giao.md: db:reset, db:seed, mục \"Vận hành\" trong README bằng tiếng Việt, rồi kiểm tra hồi quy toàn bộ trên một database mới: mọi yêu cầu từ đầu buổi tới giờ, kể cả những điều anh dặn thêm giữa chừng. Xong nhớ dừng mọi container em đã bật.",
+      "oracle": {
+        "hidden": "hidden-p6",
+        "checks": [
+          {
+            "name": "p6: operations scripts, README, the mid-task ordering rule + full regression",
+            "run": "bash scripts/oracle.sh",
+            "timeoutSec": 1200
+          }
+        ]
+      },
+      "reference": "reference-p6"
+    }
+  ]
+}

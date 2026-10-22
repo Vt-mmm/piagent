@@ -1,0 +1,1 @@
+{ "description": "Node 22 ESM meeting-room booking service on PostgreSQL 17 (pg driver, node:test integration tests against a real database).", "setup": ["npm install --no-audit --no-fund"], "protect": ["migrations/001_rooms.sql"] }

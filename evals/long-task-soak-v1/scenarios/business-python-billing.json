@@ -1,0 +1,34 @@
+{
+  "id": "business-python-billing",
+  "title": "Build a Python billing package whose three open business rules only the product owner can settle",
+  "category": ["business", "framework", "python"],
+  "language": "en",
+  "fixture": "python-billing",
+  "requires": ["uv", "network"],
+  "prompt": "Please implement the whole of SPEC.md in this billing package: money rounding, coupons, tax, invoices, subscriptions and billing cycles, mid-cycle plan changes, refunds and the CSV/JSON export, all under src/billing/. Add tests for every section under tests/ and run `.venv/bin/python -m pytest -q` until everything passes. A few business rules in the spec are still marked TBD; I'm the product owner, so ask me about those, and don't guess. Everything else in the spec is decided, so carry on through to the end without stopping.",
+  "questionsExpected": false,
+  "decisions": [
+    {
+      "id": "upgrade-charge", "mustAsk": true,
+      "topic": ["prorat", "upgrade", "mid.?cycle", "plan change", "change.{0,10}plan", "giữa kỳ", "nâng cấp", "đổi gói", "tính theo ngày"],
+      "option": "full (new )?month|full monthly|full.{0,20}new plan|whole month|cả tháng|nguyên tháng",
+      "reply": "On an upgrade, charge the full monthly price of the new plan immediately: no proration and no credit for the old plan. Taxed as usual, no coupon."
+    },
+    {
+      "id": "rounding", "mustAsk": true,
+      "topic": ["round", "half.?(up|even)", "banker", "làm tròn"],
+      "option": "half.?even|banker|chẵn",
+      "reply": "Round half-even (banker's rounding) to 2 decimal places, everywhere we round."
+    },
+    {
+      "id": "coupon-vs-tax", "mustAsk": true,
+      "topic": ["coupon", "discount", "(before|after).{0,15}tax", "tax.{0,20}(before|after|coupon|discount)", "giảm giá", "khuyến mãi", "mã giảm", "trước thuế", "sau thuế"],
+      "option": "^\\W*(apply\\s+|(the\\s+)?(coupons?|discounts?)\\s+)*after.{0,10}tax|post.?tax|^\\W*sau thuế",
+      "reply": "Apply the coupon after tax: compute tax on the full subtotal, then take the discount from subtotal + tax."
+    }
+  ],
+  "approvals": "allow",
+  "budget": { "maxMinutes": 60, "maxNudges": 3, "stallMinutes": 12 },
+  "oracle": { "hidden": "hidden", "checks": [{ "name": "spec acceptance with the product owner's answers", "run": ".venv/bin/python -m pytest -q", "timeoutSec": 300 }] },
+  "reference": "reference"
+}

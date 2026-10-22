@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bảng việc</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Bảng việc</h1>
+    <form id="new-card" novalidate>
+      <label>Tiêu đề thẻ <input data-testid="new-card-title" autocomplete="off"></label>
+      <label>Nhãn <input data-testid="new-card-tags" placeholder="vd: gấp, khách" autocomplete="off"></label>
+      <button data-testid="add-card" type="submit">Thêm thẻ</button>
+      <p data-testid="form-error" role="alert" class="error" hidden></p>
+    </form>
+    <label class="filter">Lọc theo nhãn <select data-testid="tag-filter"></select></label>
+  </header>
+  <main id="board"></main>
+  <p data-testid="announcer" aria-live="polite" class="sr-only"></p>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

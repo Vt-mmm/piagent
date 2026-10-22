@@ -1,0 +1,22 @@
+{
+  "id": "stability-flaky-slow-suite",
+  "title": "Fix a flaky test at its root in a suite that takes ~2.7 minutes, and prove it with a deterministic regression test",
+  "category": ["stability", "long-running-commands", "autonomous"],
+  "language": "en",
+  "fixture": "flaky-slow-suite",
+  "requires": [],
+  "prompt": "Our CI keeps flaking on \"withRetry gives up before crossing the deadline (real timers)\" in ingest-relay; details are in ISSUE.md and the contract is docs/retry.md. Please find the root cause in src/ and fix it properly (no retries, skips or loosened assertions), add the `random` option, write a deterministic regression test that would fail on the old code, and run the whole suite green at least twice. Heads up: npm test takes about 3 minutes on purpose, let it finish. No need to check back with me, just get it done.",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "budget": { "maxMinutes": 60, "maxNudges": 3, "stallMinutes": 10 },
+  "oracle": {
+    "hidden": "hidden",
+    "checks": [
+      { "name": "no skip/todo/only or retry wrappers, soak suite and real-timer test kept, regression test injects random", "run": "node .soak/check_static.mjs", "timeoutSec": 60, "stopOnFail": false },
+      { "name": "deterministic retry contract: injected random, one draw per retry, never past the deadline (seeded sweep)", "run": "node --test .soak/retry-regression.hidden.test.mjs", "timeoutSec": 120 },
+      { "name": "full suite once (about 2.7 minutes of real timers)", "run": "node --test 'test/*.test.js'", "timeoutSec": 600 }
+    ]
+  },
+  "reference": "reference"
+}

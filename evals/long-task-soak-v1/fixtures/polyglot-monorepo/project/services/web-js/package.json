@@ -1,0 +1,8 @@
+{
+  "name": "@shopflow/web-js",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Web BFF: parses orders and asks the Customer API for quotes.",
+  "scripts": { "test": "node --test 'test/*.test.js'" }
+}

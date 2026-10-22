@@ -1,0 +1,1 @@
+{ "description": "Node ESM inventory library grown over six phases (warehouses, node:http API, audit log, legacy report-engine split, 20k-row CSV import, CLI); node:test, no dependencies. Regenerate the legacy module, golden outputs and CSV with generators/gen-legacy.mjs and generators/gen-csv.mjs.", "setup": [], "protect": [] }

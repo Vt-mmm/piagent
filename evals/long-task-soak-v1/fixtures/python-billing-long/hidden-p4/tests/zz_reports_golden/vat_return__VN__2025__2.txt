@@ -1,0 +1,17 @@
+VAT RETURN - Vietnam (VN) - 2025 Q2
+===================================
+To khai thue GTGT
+Currency: VND   Standard rate: 10%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-04         1         2,581,563           258,156                 0           258,156
+2025-05         2         5,222,676           522,268                 0           522,268
+2025-06         2         2,835,936           283,594                 0           283,594
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL           5        10,640,175         1,064,018                 0         1,064,018
+
+Discounted invoices: 0 (discount 0, not deducted from the taxable base)
+Refunded invoices: 0
+
+Rate check: OK

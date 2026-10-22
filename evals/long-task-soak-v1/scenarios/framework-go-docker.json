@@ -1,0 +1,40 @@
+{
+  "id": "framework-go-docker",
+  "title": "Fix and finish a Go rate-limiting middleware when Go only runs inside Docker",
+  "category": [
+    "framework",
+    "third-party",
+    "go",
+    "autonomous"
+  ],
+  "language": "ja",
+  "fixture": "go-ratelimit",
+  "requires": [
+    "docker"
+  ],
+  "prompt": "このリポジトリの SPEC.md を最後まで実装してください。トークンバケットの既知の不具合を直し、スライディングウィンドウ、クライアント単位の Keyed、HTTP ミドルウェアと ClientIP を実装して、各節のテストも書いてください。このマシンには Go が入っていないので、README にある Docker のコマンドで go test と go vet を実行し、すべて通るまで進めてください。仕様は確定しているので、途中で確認せずに完了まで任せます。",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "budget": {
+    "maxMinutes": 60,
+    "maxNudges": 3,
+    "stallMinutes": 12
+  },
+  "oracle": {
+    "hidden": "hidden",
+    "checks": [
+      {
+        "name": "spec acceptance (go test in Docker)",
+        "run": "docker run --rm -v \"$PWD\":/src -w /src golang:1.26.3-alpine3.23 timeout 540 go test -count=1 ./...",
+        "timeoutSec": 600
+      },
+      {
+        "name": "go vet (Docker)",
+        "run": "docker run --rm -v \"$PWD\":/src -w /src golang:1.26.3-alpine3.23 timeout 540 go vet ./...",
+        "timeoutSec": 600
+      }
+    ]
+  },
+  "reference": "reference"
+}

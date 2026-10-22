@@ -1,0 +1,1588 @@
+[
+ {
+  "id": "revenue_by_month__2024",
+  "function": "revenue_by_month",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month_csv__2024",
+  "function": "revenue_by_month_csv",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter__2024",
+  "function": "revenue_by_quarter",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter_csv__2024",
+  "function": "revenue_by_quarter_csv",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month__2025",
+  "function": "revenue_by_month",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month_csv__2025",
+  "function": "revenue_by_month_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter__2025",
+  "function": "revenue_by_quarter",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter_csv__2025",
+  "function": "revenue_by_quarter_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month__2026",
+  "function": "revenue_by_month",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month_csv__2026",
+  "function": "revenue_by_month_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter__2026",
+  "function": "revenue_by_quarter",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter_csv__2026",
+  "function": "revenue_by_quarter_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month__2023",
+  "function": "revenue_by_month",
+  "args": [
+   2023
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_month_csv__2023",
+  "function": "revenue_by_month_csv",
+  "args": [
+   2023
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter__2023",
+  "function": "revenue_by_quarter",
+  "args": [
+   2023
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_quarter_csv__2023",
+  "function": "revenue_by_quarter_csv",
+  "args": [
+   2023
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_week__2025",
+  "function": "revenue_by_week",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_week_csv__2025",
+  "function": "revenue_by_week_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_week__2026",
+  "function": "revenue_by_week",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_week_csv__2026",
+  "function": "revenue_by_week_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_country__all",
+  "function": "revenue_by_country",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_country_csv__all",
+  "function": "revenue_by_country_csv",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_plan__all",
+  "function": "revenue_by_plan",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_plan_csv__all",
+  "function": "revenue_by_plan_csv",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "status_summary__all",
+  "function": "status_summary",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "status_summary_csv__all",
+  "function": "status_summary_csv",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "coupon_usage__all",
+  "function": "coupon_usage",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "coupon_usage_csv__all",
+  "function": "coupon_usage_csv",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "discount_leakage__all",
+  "function": "discount_leakage",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "discount_leakage_csv__all",
+  "function": "discount_leakage_csv",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_country__2025",
+  "function": "revenue_by_country",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_country_csv__2025",
+  "function": "revenue_by_country_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_plan__2025",
+  "function": "revenue_by_plan",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_plan_csv__2025",
+  "function": "revenue_by_plan_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "status_summary__2025",
+  "function": "status_summary",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "status_summary_csv__2025",
+  "function": "status_summary_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "coupon_usage__2025",
+  "function": "coupon_usage",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "coupon_usage_csv__2025",
+  "function": "coupon_usage_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "discount_leakage__2025",
+  "function": "discount_leakage",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "discount_leakage_csv__2025",
+  "function": "discount_leakage_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_country__2026",
+  "function": "revenue_by_country",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_country_csv__2026",
+  "function": "revenue_by_country_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_plan__2026",
+  "function": "revenue_by_plan",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "revenue_by_plan_csv__2026",
+  "function": "revenue_by_plan_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "status_summary__2026",
+  "function": "status_summary",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "status_summary_csv__2026",
+  "function": "status_summary_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "coupon_usage__2026",
+  "function": "coupon_usage",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "coupon_usage_csv__2026",
+  "function": "coupon_usage_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "discount_leakage__2026",
+  "function": "discount_leakage",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "discount_leakage_csv__2026",
+  "function": "discount_leakage_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__DE__2025__1",
+  "function": "vat_return",
+  "args": [
+   "DE",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__DE__2025__2",
+  "function": "vat_return",
+  "args": [
+   "DE",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__DE__2025__3",
+  "function": "vat_return",
+  "args": [
+   "DE",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__DE__2025__4",
+  "function": "vat_return",
+  "args": [
+   "DE",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__DE__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "DE",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__DE__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "DE",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__FR__2025__1",
+  "function": "vat_return",
+  "args": [
+   "FR",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__FR__2025__2",
+  "function": "vat_return",
+  "args": [
+   "FR",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__FR__2025__3",
+  "function": "vat_return",
+  "args": [
+   "FR",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__FR__2025__4",
+  "function": "vat_return",
+  "args": [
+   "FR",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__FR__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "FR",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__FR__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "FR",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__NL__2025__1",
+  "function": "vat_return",
+  "args": [
+   "NL",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__NL__2025__2",
+  "function": "vat_return",
+  "args": [
+   "NL",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__NL__2025__3",
+  "function": "vat_return",
+  "args": [
+   "NL",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__NL__2025__4",
+  "function": "vat_return",
+  "args": [
+   "NL",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__NL__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "NL",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__NL__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "NL",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__ES__2025__1",
+  "function": "vat_return",
+  "args": [
+   "ES",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__ES__2025__2",
+  "function": "vat_return",
+  "args": [
+   "ES",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__ES__2025__3",
+  "function": "vat_return",
+  "args": [
+   "ES",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__ES__2025__4",
+  "function": "vat_return",
+  "args": [
+   "ES",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__ES__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "ES",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__ES__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "ES",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__IT__2025__1",
+  "function": "vat_return",
+  "args": [
+   "IT",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__IT__2025__2",
+  "function": "vat_return",
+  "args": [
+   "IT",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__IT__2025__3",
+  "function": "vat_return",
+  "args": [
+   "IT",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__IT__2025__4",
+  "function": "vat_return",
+  "args": [
+   "IT",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__IT__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "IT",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__IT__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "IT",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__GB__2025__1",
+  "function": "vat_return",
+  "args": [
+   "GB",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__GB__2025__2",
+  "function": "vat_return",
+  "args": [
+   "GB",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__GB__2025__3",
+  "function": "vat_return",
+  "args": [
+   "GB",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__GB__2025__4",
+  "function": "vat_return",
+  "args": [
+   "GB",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__GB__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "GB",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__GB__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "GB",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__SE__2025__1",
+  "function": "vat_return",
+  "args": [
+   "SE",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__SE__2025__2",
+  "function": "vat_return",
+  "args": [
+   "SE",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__SE__2025__3",
+  "function": "vat_return",
+  "args": [
+   "SE",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__SE__2025__4",
+  "function": "vat_return",
+  "args": [
+   "SE",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__SE__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "SE",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__SE__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "SE",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__JP__2025__1",
+  "function": "vat_return",
+  "args": [
+   "JP",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__JP__2025__2",
+  "function": "vat_return",
+  "args": [
+   "JP",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__JP__2025__3",
+  "function": "vat_return",
+  "args": [
+   "JP",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__JP__2025__4",
+  "function": "vat_return",
+  "args": [
+   "JP",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__JP__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "JP",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__JP__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "JP",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__VN__2025__1",
+  "function": "vat_return",
+  "args": [
+   "VN",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__VN__2025__2",
+  "function": "vat_return",
+  "args": [
+   "VN",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__VN__2025__3",
+  "function": "vat_return",
+  "args": [
+   "VN",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__VN__2025__4",
+  "function": "vat_return",
+  "args": [
+   "VN",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__VN__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "VN",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__VN__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "VN",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__US__2025__1",
+  "function": "vat_return",
+  "args": [
+   "US",
+   2025,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__US__2025__2",
+  "function": "vat_return",
+  "args": [
+   "US",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__US__2025__3",
+  "function": "vat_return",
+  "args": [
+   "US",
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return__US__2025__4",
+  "function": "vat_return",
+  "args": [
+   "US",
+   2025,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__US__2025__2",
+  "function": "vat_return_csv",
+  "args": [
+   "US",
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_csv__US__2026__1",
+  "function": "vat_return_csv",
+  "args": [
+   "US",
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_de__2024__4",
+  "function": "vat_return_de",
+  "args": [
+   2024,
+   4
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_jp_csv__2025__3",
+  "function": "vat_return_jp_csv",
+  "args": [
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "vat_return_us__2026__1",
+  "function": "vat_return_us",
+  "args": [
+   2026,
+   1
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report__2025-06-30",
+  "function": "aging_report",
+  "args": [
+   {
+    "date": "2025-06-30"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report_csv__2025-06-30",
+  "function": "aging_report_csv",
+  "args": [
+   {
+    "date": "2025-06-30"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report__2025-12-31",
+  "function": "aging_report",
+  "args": [
+   {
+    "date": "2025-12-31"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report_csv__2025-12-31",
+  "function": "aging_report_csv",
+  "args": [
+   {
+    "date": "2025-12-31"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report__2026-02-28",
+  "function": "aging_report",
+  "args": [
+   {
+    "date": "2026-02-28"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report_csv__2026-02-28",
+  "function": "aging_report_csv",
+  "args": [
+   {
+    "date": "2026-02-28"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report__2024-01-01",
+  "function": "aging_report",
+  "args": [
+   {
+    "date": "2024-01-01"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "aging_report_csv__2024-01-01",
+  "function": "aging_report_csv",
+  "args": [
+   {
+    "date": "2024-01-01"
+   }
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement__C00001",
+  "function": "customer_statement",
+  "args": [
+   "C00001"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement_csv__C00001",
+  "function": "customer_statement_csv",
+  "args": [
+   "C00001"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement__C00017",
+  "function": "customer_statement",
+  "args": [
+   "C00017"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement_csv__C00017",
+  "function": "customer_statement_csv",
+  "args": [
+   "C00017"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement__C00042",
+  "function": "customer_statement",
+  "args": [
+   "C00042"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement_csv__C00042",
+  "function": "customer_statement_csv",
+  "args": [
+   "C00042"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement__C00090",
+  "function": "customer_statement",
+  "args": [
+   "C00090"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement_csv__C00090",
+  "function": "customer_statement_csv",
+  "args": [
+   "C00090"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement__C99999",
+  "function": "customer_statement",
+  "args": [
+   "C99999"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "customer_statement_csv__C99999",
+  "function": "customer_statement_csv",
+  "args": [
+   "C99999"
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "top_customers__all",
+  "function": "top_customers",
+  "args": [
+   null
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "top_customers__2025__limit-5",
+  "function": "top_customers",
+  "args": [
+   2025
+  ],
+  "kwargs": {
+   "limit": 5
+  }
+ },
+ {
+  "id": "top_customers_csv__2025",
+  "function": "top_customers_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "top_customers_csv__all__limit-3",
+  "function": "top_customers_csv",
+  "args": [
+   null
+  ],
+  "kwargs": {
+   "limit": 3
+  }
+ },
+ {
+  "id": "refund_report__2025",
+  "function": "refund_report",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "refund_report_csv__2025",
+  "function": "refund_report_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "mrr_report__2025",
+  "function": "mrr_report",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "mrr_report_csv__2025",
+  "function": "mrr_report_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "churn_report__2025",
+  "function": "churn_report",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "churn_report_csv__2025",
+  "function": "churn_report_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "tax_summary__2025",
+  "function": "tax_summary",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "tax_summary_csv__2025",
+  "function": "tax_summary_csv",
+  "args": [
+   2025
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "refund_report__2026",
+  "function": "refund_report",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "refund_report_csv__2026",
+  "function": "refund_report_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "mrr_report__2026",
+  "function": "mrr_report",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "mrr_report_csv__2026",
+  "function": "mrr_report_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "churn_report__2026",
+  "function": "churn_report",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "churn_report_csv__2026",
+  "function": "churn_report_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "tax_summary__2026",
+  "function": "tax_summary",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "tax_summary_csv__2026",
+  "function": "tax_summary_csv",
+  "args": [
+   2026
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "refund_report__2024",
+  "function": "refund_report",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "refund_report_csv__2024",
+  "function": "refund_report_csv",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "mrr_report__2024",
+  "function": "mrr_report",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "mrr_report_csv__2024",
+  "function": "mrr_report_csv",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "churn_report__2024",
+  "function": "churn_report",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "churn_report_csv__2024",
+  "function": "churn_report_csv",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "tax_summary__2024",
+  "function": "tax_summary",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "tax_summary_csv__2024",
+  "function": "tax_summary_csv",
+  "args": [
+   2024
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales__2025__2",
+  "function": "daily_sales",
+  "args": [
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales_csv__2025__2",
+  "function": "daily_sales_csv",
+  "args": [
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register__2025__2",
+  "function": "invoice_register",
+  "args": [
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register_csv__2025__2",
+  "function": "invoice_register_csv",
+  "args": [
+   2025,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales__2025__12",
+  "function": "daily_sales",
+  "args": [
+   2025,
+   12
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales_csv__2025__12",
+  "function": "daily_sales_csv",
+  "args": [
+   2025,
+   12
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register__2025__12",
+  "function": "invoice_register",
+  "args": [
+   2025,
+   12
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register_csv__2025__12",
+  "function": "invoice_register_csv",
+  "args": [
+   2025,
+   12
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales__2024__2",
+  "function": "daily_sales",
+  "args": [
+   2024,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales_csv__2024__2",
+  "function": "daily_sales_csv",
+  "args": [
+   2024,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register__2024__2",
+  "function": "invoice_register",
+  "args": [
+   2024,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register_csv__2024__2",
+  "function": "invoice_register_csv",
+  "args": [
+   2024,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales__2026__2",
+  "function": "daily_sales",
+  "args": [
+   2026,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "daily_sales_csv__2026__2",
+  "function": "daily_sales_csv",
+  "args": [
+   2026,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register__2026__2",
+  "function": "invoice_register",
+  "args": [
+   2026,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "invoice_register_csv__2026__2",
+  "function": "invoice_register_csv",
+  "args": [
+   2026,
+   2
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "monthly_close_pack__2025__3",
+  "function": "monthly_close_pack",
+  "args": [
+   2025,
+   3
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "monthly_close_pack__2025__5",
+  "function": "monthly_close_pack",
+  "args": [
+   2025,
+   5
+  ],
+  "kwargs": {}
+ },
+ {
+  "id": "monthly_close_pack__2026__1",
+  "function": "monthly_close_pack",
+  "args": [
+   2026,
+   1
+  ],
+  "kwargs": {}
+ }
+]

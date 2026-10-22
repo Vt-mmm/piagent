@@ -1,0 +1,1 @@
+currency,date,number,status,charged,refunded,balance

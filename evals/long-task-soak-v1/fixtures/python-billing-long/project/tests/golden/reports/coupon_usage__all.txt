@@ -1,0 +1,21 @@
+COUPON USAGE (ALL YEARS)
+========================
+Coupon        Currency    Uses        Discount         Average
+------------  --------  ------  --------------  --------------
+FIXED5        EUR           12           55.79            4.65
+FIXED5        GBP            3           11.62            3.87
+FIXED5        JPY            3        2,224.00          741.33
+FIXED5        SEK            1           51.45           51.45
+FIXED5        USD           14           70.00            5.00
+FIXED5        VND            3      389,455.00      129,818.33
+LOYAL15       EUR            3           19.55            6.52
+LOYAL15       JPY            1          249.00          249.00
+LOYAL15       SEK            2          116.72           58.36
+LOYAL15       USD            9           38.85            4.32
+SPRING20      EUR            5           24.06            4.81
+SPRING20      GBP            2            7.38            3.69
+SPRING20      JPY            3        2,287.00          762.33
+SPRING20      USD           11           87.40            7.95
+WELCOME10     EUR            3           15.81            5.27
+WELCOME10     GBP            3           12.89            4.30
+WELCOME10     USD            7           15.00            2.14

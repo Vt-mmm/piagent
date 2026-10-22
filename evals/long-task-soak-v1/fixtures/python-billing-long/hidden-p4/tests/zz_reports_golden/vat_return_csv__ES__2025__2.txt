@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+ES,EUR,2025-04,3,470.74,98.85,0.00,98.85
+ES,EUR,2025-05,3,45.70,9.59,0.46,9.13
+ES,EUR,2025-06,1,9.26,1.94,0.00,1.94

@@ -1,0 +1,28 @@
+COUPON USAGE 2025
+=================
+Coupon        Currency    Uses        Discount         Average
+------------  --------  ------  --------------  --------------
+FIXED5        EUR          219        1,013.36            4.63
+FIXED5        GBP           74          285.26            3.85
+FIXED5        JPY           52       38,828.00          746.69
+FIXED5        SEK           42        2,155.20           51.31
+FIXED5        USD          182          910.00            5.00
+FIXED5        VND           25    3,264,035.00      130,561.40
+LOYAL15       EUR          186        1,390.31            7.47
+LOYAL15       GBP           63          486.06            7.72
+LOYAL15       JPY           61       57,929.00          949.66
+LOYAL15       SEK           36        4,273.87          118.72
+LOYAL15       USD          153        1,035.15            6.77
+LOYAL15       VND           34    3,438,381.00      101,128.85
+SPRING20      EUR          196        2,110.94           10.77
+SPRING20      GBP           67          495.97            7.40
+SPRING20      JPY           54      102,888.00        1,905.33
+SPRING20      SEK           41        3,828.78           93.38
+SPRING20      USD          186        1,469.60            7.90
+SPRING20      VND           40    8,882,735.00      222,068.38
+WELCOME10     EUR          192          906.06            4.72
+WELCOME10     GBP           67          235.78            3.52
+WELCOME10     JPY           59       72,350.00        1,226.27
+WELCOME10     SEK           34        3,007.35           88.45
+WELCOME10     USD          175          574.50            3.28
+WELCOME10     VND           41    2,625,598.00       64,038.98

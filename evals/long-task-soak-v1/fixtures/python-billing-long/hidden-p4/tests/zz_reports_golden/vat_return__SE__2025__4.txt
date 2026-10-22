@@ -1,0 +1,17 @@
+VAT RETURN - Sweden (SE) - 2025 Q4
+==================================
+Momsdeklaration
+Currency: SEK   Standard rate: 25%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-10         3            301.13             75.28              0.00             75.28
+2025-11         5          2,512.96            628.24             25.26            602.98
+2025-12         5          2,511.77            627.94              4.32            623.62
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL          13          5,325.86          1,331.46             29.58          1,301.88
+
+Discounted invoices: 1 (discount 57.05, not deducted from the taxable base)
+Refunded invoices: 2
+
+Rate check: OK

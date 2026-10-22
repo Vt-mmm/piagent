@@ -1,0 +1,17 @@
+VAT RETURN - Germany (DE) - 2025 Q2
+===================================
+Umsatzsteuer-Voranmeldung
+Currency: EUR   Standard rate: 19%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2025-04         6            152.84             29.05              0.00             29.05
+2025-05         8            316.90             60.21              1.75             58.46
+2025-06         6            155.16             29.47              0.24             29.23
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL          20            624.90            118.73              1.99            116.74
+
+Discounted invoices: 2 (discount 20.75, not deducted from the taxable base)
+Refunded invoices: 2
+
+Rate check: OK

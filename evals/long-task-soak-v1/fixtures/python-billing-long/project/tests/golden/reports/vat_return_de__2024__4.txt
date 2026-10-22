@@ -1,0 +1,17 @@
+VAT RETURN - Germany (DE) - 2024 Q4
+===================================
+Umsatzsteuer-Voranmeldung
+Currency: EUR   Standard rate: 19%
+
+Month    Invoices      Taxable base     Tax collected      Tax refunded       Net tax due
+-------  --------  ----------------  ----------------  ----------------  ----------------
+2024-10         0              0.00              0.00              0.00              0.00
+2024-11         5            209.52             39.81              6.56             33.25
+2024-12         8            192.13             36.52              0.75             35.77
+-------  --------  ----------------  ----------------  ----------------  ----------------
+TOTAL          13            401.65             76.33              7.31             69.02
+
+Discounted invoices: 2 (discount 8.72, not deducted from the taxable base)
+Refunded invoices: 2
+
+Rate check: OK

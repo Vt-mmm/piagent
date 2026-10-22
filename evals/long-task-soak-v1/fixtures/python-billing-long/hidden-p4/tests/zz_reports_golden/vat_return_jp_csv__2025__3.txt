@@ -1,0 +1,4 @@
+country,currency,month,invoices,taxable_base,tax_collected,tax_refunded,net_tax_due
+JP,JPY,2025-07,3,23704,2371,0,2371
+JP,JPY,2025-08,6,12017,1203,0,1203
+JP,JPY,2025-09,3,17922,1792,0,1792

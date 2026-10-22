@@ -1,0 +1,1 @@
+issued_on,number,customer_id,country,currency,coupon_code,subtotal,discount,tax,total,refunded,status

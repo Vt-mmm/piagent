@@ -1,0 +1,13 @@
+{
+  "contract_version": 3,
+  "order_id": "O-3001",
+  "account_id": "C-300",
+  "account_tier": "gold",
+  "currency": "USD",
+  "settlement_currency": "VND",
+  "fx_rate_ppm": 250000000,
+  "items": [
+    { "sku": "POT-07", "qty": 1, "unit_price": 3999 },
+    { "sku": "TEA-01", "qty": 3, "unit_price": 199 }
+  ]
+}
