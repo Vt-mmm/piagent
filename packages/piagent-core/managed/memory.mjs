@@ -78,7 +78,7 @@ export class TeamMemory {
     const scope = this.scope(), id = scopeID(scope);
     if (id !== this.scopeHash) {
       this.scopeHash = id; this.outbox = new MemoryOutbox(this.stateDir, scope, this.now);
-      this.protocol = 0; this.briefed = false; this.offUntil = 0; this.retain = true;
+      this.protocol = 0; this.briefed = false; this.offUntil = 0; this.retain = true; this.serves = new RoundServes(); // served under the old scope
     }
     return scope;
   }

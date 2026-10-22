@@ -5,9 +5,17 @@
 // Piagent never edits a skill itself and makes no model call for this.
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 const MIN_FAILURES = 3, MIN_SHARE = 0.5, KEEP = 10, REPROPOSE_MS = 7 * 86400_000;
-const safeName = name => String(name).replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 80);
+// One file name per skill name: a name with other characters (or capitals,
+// on a case-insensitive disk) gets a digest of itself, so \`a/b\` and \`a_b\`
+// keep their own counts.
+const safeName = name => {
+  name = String(name);
+  if (/^[a-z0-9_.-]{1,80}$/.test(name) && !/^\.+$/.test(name)) return name;
+  return `${name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 60)}~${createHash('sha256').update(name).digest('hex').slice(0, 12)}`;
+};
 
 export class SkillFeedback {
   // A managed round's tracker, when the conversation has skills.

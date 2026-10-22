@@ -91,3 +91,13 @@ test('the scope carries Studio-style lower-case key and user IDs from an upper-c
   assert.equal(scope.key_id, '36006e46-7893-4b75-a75b-d182dd600ac0');
   assert.equal(scope.user_id, '0f8103a3-0000-4000-8000-000000000001');
 });
+// 2026-10-22 audit: notes served under the old key went with the next retain
+// under the new one.
+test('a scope change forgets the notes served under the old scope', t => {
+ const root=temp(t);let current=scope('a');
+ const memory=new TeamMemory({origin:'https://studio.invalid',cwd:root,stateDir:root,conversationId:'conversation-1',scope:()=>current,fetchImpl:async()=>{throw Error('offline')}});
+ const old=randomUUID();memory.serves.add('github.com/acme/repo',old);
+ memory.syncScope();assert.deepEqual(memory.serves.of('github.com/acme/repo'),[old],'same scope keeps them');
+ current=scope('b');memory.syncScope();
+ assert.deepEqual(memory.serves.of('github.com/acme/repo'),[]);
+});

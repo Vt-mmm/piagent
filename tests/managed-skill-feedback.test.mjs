@@ -39,3 +39,21 @@ test('a skill that keeps failing is proposed for review, once a week', (t) => {
   now += 8 * 86400_000;
   assert.equal(round('command', failed).length, 1);
 });
+
+// 2026-10-22 audit: `a/b` and `a_b` shared one state file, so one skill's
+// failures counted for the other.
+test('two skill names that read alike keep their own counts', (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-skill-feedback-'));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const skills = ['a/b', 'a_b', 'A_B'].map(name => ({ name, filePath: path.join(cwd, `${name.replace('/', '-')}.md`) }));
+  const failed = { checks: 'failed', lessons: [] };
+  for (const name of ['a/b', 'a_b', 'A_B', 'a/b', 'a_b', 'A_B']) {
+    const f = new SkillFeedback({ cwd, skills });
+    f.request(`<skill name="${name}" location="x">`);
+    assert.deepEqual(f.close(failed), [], `${name}: two failures are no proposal yet`);
+  }
+  const dir = path.join(cwd, '.pi', 'piagent-state', 'skill-proposals');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  assert.equal(files.length, 3, files.join(','));
+  assert.ok(files.includes('a_b.json'), 'a plain name keeps its file');
+});

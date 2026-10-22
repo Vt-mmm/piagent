@@ -15,6 +15,7 @@ import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-r
 import { trackToolFailures } from './tool-failures.mjs';
 import { helperMemoryTools, renewer } from './memory.mjs';
 import { answeredSettlement, failedSettlement, settleHelper, OUTCOME_WORDS } from './helper-settlement.mjs';
+import { viaLink } from './studio-link.mjs';
 
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
 // A helper failure that another model of its role may not have: the model's
@@ -53,7 +54,16 @@ export async function runHelper(managed, role, task, signal, harness, { verifyGr
     }
   }
 }
+// A helper's role closes through the same wait as the run's close: a passing
+// failure of Agent Watch's way to Studio is asked again. A close that still
+// fails leaves the helper's answer standing: the role closes with the run,
+// and the next helper of the role closes it first.
+export async function closeRole(managed, role) {
+  try { await viaLink(managed.studioLink, () => managed.broker.request('close', { role })); managed.unclosed?.delete(role); }
+  catch { (managed.unclosed ??= new Set()).add(role); }
+}
 async function helperAttempt(managed, role, task, signal, harness, snapshot, parts, { verifyGrant, patiently, title }) {
+  if (managed.unclosed?.has(role)) await closeRole(managed, role);
   // A long local tool step may outlive the main lease. Refresh authority
   // before asking for a child; the broker serializes concurrent renewals,
   // and main's own searches running beside it share managed renew.
@@ -143,6 +153,6 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
   finally {
     for (const session of sessions) session.dispose(); await boundary?.dispose();
     await settleHelper(managed, renew.lease, report); // with the role's current token, before it closes
-    await managed.broker.request('close', { role });
+    await closeRole(managed, role);
   }
 }

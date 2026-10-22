@@ -269,3 +269,19 @@ export async function viaLink(link, ask, { conversation = null, runId = null } =
     }
   }
 }
+
+// Closing a round's run, asked again through the link. Only a refused report
+// closes again without it; an unconfirmed close throws (the turn fails). An
+// Agent Watch without close-retry forgets a run whose close failed, so asking
+// again "succeeds" without reaching Studio: false then, and the run stays
+// "active" for the runtime (reopening recovers or abandons it).
+export async function closeRun(link, broker, features, process, where) {
+  let unsent = false;
+  const close = args => viaLink(link, () => broker.request('close', args).catch(error => {
+    if (!features.includes('close-retry') && String(error?.message) !== 'managed-broker:invalidResponse') unsent = true;
+    throw error;
+  }), where);
+  try { await close(process ? { process } : {}); }
+  catch (error) { if (!process || String(error?.message) !== 'managed-broker:invalidResponse') throw error; await close(); }
+  return !unsent;
+}

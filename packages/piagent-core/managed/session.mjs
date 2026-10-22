@@ -13,7 +13,7 @@ import { managedThinkingLevels, nearestLevel } from './capabilities.mjs';
 import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from './native-catalog.mjs';
 import { fetchOriginTool } from './repository-operation.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
-import { enableCompanyTurnRetry, wrapRoleStreams, conversationSession } from './request-stream.mjs'; import { StudioLink, viaLink } from './studio-link.mjs';
+import { enableCompanyTurnRetry, wrapRoleStreams, conversationSession } from './request-stream.mjs'; import { StudioLink, closeRun } from './studio-link.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
 import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
 import { runHelper } from './helper-run.mjs';
@@ -296,15 +296,14 @@ export class ManagedSession {
             // the newest version the broker advertises.
             const features = self.manifest.broker_features ?? [];
             const process = self.run && features.includes('process') ? self.run.report(currentPlan(manager), features.includes('process-v3') ? 3 : features.includes('process-v2') ? 2 : 1) : null;
-            try { await viaLink(self.studioLink, () => self.broker.request('close', process ? { process } : {}), { conversation: conversationSession(self), runId: self.grant.run_id }); } // only a refused report closes again without it; an unconfirmed close fails the turn
-            catch (error) { if (!process || String(error?.message) !== 'managed-broker:invalidResponse') throw error; await viaLink(self.studioLink, () => self.broker.request('close'), { conversation: conversationSession(self), runId: self.grant.run_id }); }
-            manager.appendCustomEntry('agent-watch-run', { run_id: self.grant.run_id, state: 'closed' });
+            // A close Studio may not have had stays "active" here (closeRun).
+            if (await closeRun(self.studioLink, self.broker, features, process, { conversation: conversationSession(self), runId: self.grant.run_id })) manager.appendCustomEntry('agent-watch-run', { run_id: self.grant.run_id, state: 'closed' });
           }
         // A run that could not be closed (the network or Agent Watch went away)
         // ends the turn as failed; the run stays "active" here, so reopening
         // the conversation recovers or abandons it.
         } catch (error) { round.closeFailed = failureCode(failureText(error)) || 'close_failed'; }
-        finally { self.grant = null; self.run = null; self.preflight = null; }
+        finally { self.grant = null; self.run = null; self.preflight = null; self.unclosed = null; }
       }
     };
     self.session.prompt = async (text, options) => {

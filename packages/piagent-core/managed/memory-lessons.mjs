@@ -43,6 +43,9 @@ function passed(output) {
 // What an error says, without what varies between runs: numbers, ids,
 // temporary paths and quoted values.
 export const errorShape = text => clean(text,180).replace(/\/(?:tmp|var\/folders|private)\/\S*/g,'<tmp>').replace(/\b[0-9a-f]{8,}\b/gi,'<id>').replace(/\d+/g,'N').replace(/(["'`])[^"'`]{1,80}\1/g,'$1…$1');
+// A command without what varies between runs (temporary paths, ids,
+// numbers): \`curl service-a\` and \`curl service-b\` stay two commands.
+const commandShape = text => clean(text,160).replace(/\/(?:tmp|var\/folders|private)\/\S*/g,'<tmp>').replace(/\b[0-9a-f]{8,}\b/gi,'<id>').replace(/\d+/g,'N');
 const ERROR_LINE = /error|fail|exception|not found|no such|denied|refused|cannot|unknown (?:option|flag|command)|invalid|EADDRINUSE|ENOENT|EACCES/i;
 const MAX_LESSONS = 3;
 
@@ -55,7 +58,7 @@ export class CheckLessons {
   if(/managed[-_](?:tool[-_]cancelled|operation[-_]denied|helper[-_]cancelled)|Command aborted|Command timed out/i.test(output))return;
   const line=output.split('\n').find(l=>ERROR_LINE.test(l));
   if(!line)return;
-  const command=clean(call.command,160).split(' ')[0];
+  const command=commandShape(call.command);
   if(!command)return;
   const shape=errorShape(line), key=hash(command+'\0'+shape), seen=this.errors.get(key);
   if(!seen){if(this.errors.size>=40)this.errors.delete(this.errors.keys().next().value);this.errors.set(key,{id:event.toolCallId,command:clean(call.command,160),error:clean(line,180),done:false});return;}

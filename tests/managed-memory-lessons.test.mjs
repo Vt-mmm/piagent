@@ -85,3 +85,19 @@ test('a command that fails the same way twice in a round is a tool-error lesson,
   assert.equal(lessons.lessons.length, 1);
   assert.equal(errorShape('error at /tmp/abc/1.js:42 id deadbeefcafe "quoted"'), 'error at <tmp> id <id> "…"');
 });
+
+// 2026-10-22 audit: two targets of one executable failing with the same line
+// were one lesson saying the first command failed twice.
+test('two commands of one executable failing the same way are no repeated-error lesson', () => {
+  const lessons = new CheckLessons();
+  const run = (id, command) => {
+    lessons.event({ type: 'tool_execution_start', toolCallId: id, toolName: 'bash', args: { command } });
+    lessons.event({ type: 'tool_execution_end', toolCallId: id, isError: true, result: { content: [{ type: 'text', text: 'curl: (7) Failed to connect: Connection refused' }], details: { exitCode: 7 } } });
+  };
+  run('a', 'curl http://service-a:8080/health'); run('b', 'curl http://service-b:8080/health');
+  assert.equal(lessons.lessons.length, 0);
+  // The same command with another port or temporary path is still the same command.
+  run('c', 'curl http://service-a:9090/health');
+  assert.equal(lessons.lessons.length, 1);
+  assert.match(lessons.lessons[0].line, /curl http:\/\/service-a:8080\/health failed twice/);
+});

@@ -78,8 +78,11 @@ export function failedSettlement(role, error, signal, spec = {}) {
     evidence: [], files: [], ...(Object.keys(spec ?? {}).length ? { spec } : {}) };
 }
 
-// Sends the report with the attempt's own token; never fails the helper.
-export async function settleHelper(managed, grant, report, fetchImpl = (...args) => globalThis.fetch(...args)) {
+// Sends the report with the attempt's own token; never fails the helper. A
+// passing failure (no answer, 5xx, 429) is sent again after these pauses:
+// Studio keeps one report per role, so a repeat is safe.
+const SETTLE_PAUSES_MS = [500, 2_000];
+export async function settleHelper(managed, grant, report, fetchImpl = (...args) => globalThis.fetch(...args), pauses = SETTLE_PAUSES_MS) {
   if (!report || !hasCapability(managed, 'managed.settle.v1')) return false;
   let held = null;
   try {
@@ -87,10 +90,18 @@ export async function settleHelper(managed, grant, report, fetchImpl = (...args)
     // current one (the attempt's first token may be stale by now).
     if (typeof grant === 'function') { held = await grant(); grant = held.grant; }
     if (!grant?.token) return false;
-    const response = await fetchImpl(`${managed.origin}/v1/managed/settle`, { method: 'POST', signal: AbortSignal.timeout(3_000),
-      headers: { Authorization: `Bearer ${grant.token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT }, body: JSON.stringify(report) });
-    void response.body?.cancel?.().catch(() => {});
-    return response.ok;
+    for (let attempt = 0; ; attempt += 1) {
+      let status = 0;
+      try {
+        const response = await fetchImpl(`${managed.origin}/v1/managed/settle`, { method: 'POST', signal: AbortSignal.timeout(3_000),
+          headers: { Authorization: `Bearer ${grant.token}`, 'Content-Type': 'application/json', 'User-Agent': CLIENT_AGENT }, body: JSON.stringify(report) });
+        void response.body?.cancel?.().catch(() => {});
+        if (response.ok) return true;
+        status = response.status;
+      } catch { /* no answer */ }
+      if ((status && status < 500 && status !== 429) || attempt >= pauses.length) return false;
+      await new Promise(resolve => setTimeout(resolve, pauses[attempt]));
+    }
   } catch { return false; } finally { held?.release(); }
 }
 

@@ -105,7 +105,7 @@ const MODELS = { sonnet: { id: 'claude-sonnet-5-5', provider_model_id: 'claude-s
 // the models of the key when this broker enrolled.
 // Like Studio, a run carries the member's level (start) unless the Harness fixes
 // it: `mainEffort` for the main agent, `helperEffort` for both helpers.
-function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet', knows = [main], revision = 'r1', fail = {}, helper = 'opus', helpers = ['research'], mainEffort, helperEffort } = {}) {
+function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet', knows = [main], revision = 'r1', fail = {}, helper = 'opus', helpers = ['research'], mainEffort, helperEffort, features } = {}) {
   const calls = [], efforts = [], roles = { main: randomUUID(), research: randomUUID(), review: randomUUID() }, run = randomUUID(); let fence = 0, runEffort = 'medium';
   const grant = role => { const model = MODELS[role === 'main' ? main : helper]; return { ...authority, run_id: run, role_id: roles[role], role, fence: ++fence, provider: model.owned_by,
     model_id: model.id, provider_model_id: model.provider_model_id, effort: role === 'main' ? runEffort : helperEffort ?? runEffort, token: `as_run_${roles[role]}_${'x'.repeat(43)}` }; };
@@ -114,7 +114,7 @@ function broker(authority, { key = 'key-a', member = 'member-1', main = 'sonnet'
     if (fail[action]) throw Error(fail[action]);
     if (action === 'start') { efforts.push(args.effort); runEffort = mainEffort ?? args.effort; }
     if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: key, user: { id: member }, revision,
-      models: [...new Set([...knows, helper])].map(name => MODELS[name]), harness: { configuration: { main: { model_ids: [MODELS[knows[0]].id] }, ...Object.fromEntries(helpers.map(role => [role, { model_ids: [MODELS[helper].id] }])) } } };
+      models: [...new Set([...knows, helper])].map(name => MODELS[name]), harness: { configuration: { main: { model_ids: [MODELS[knows[0]].id] }, ...Object.fromEntries(helpers.map(role => [role, { model_ids: [MODELS[helper].id] }])) } }, ...(features ? { broker_features: features } : {}) };
     if (['start', 'renew', 'child'].includes(action)) return grant(args.role ?? 'main');
     if (action === 'close') return true;
     throw Error('unexpected-broker-action');
@@ -400,7 +400,7 @@ test('a run that cannot start becomes a turn with the reason, and nothing is sen
 // turn stopped; a broker failure while Studio answers is asked again.
 test('a close Agent Watch could not send once is asked again and the turn ends well', { skip: !supported, timeout: 120000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
-  const server = await studio(), authority = authorityOf(), agent = broker(authority);
+  const server = await studio(), authority = authorityOf(), agent = broker(authority, { features: ['close-retry'] });
   const request = agent.request.bind(agent);
   let closes = 0;
   agent.request = async (action, args) => {
@@ -414,6 +414,28 @@ test('a close Agent Watch could not send once is asked again and the turn ends w
     assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
     assert.deepEqual(agent.calls.filter(call => call === 'close'), ['close', 'close'], 'asked again once');
     assert.equal(managed.session.sessionManager.getEntries().filter(entry => entry.customType === 'agent-watch-run').at(-1)?.data?.state, 'closed');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// 2026-10-22 audit: an Agent Watch without close-retry forgets a run whose
+// close failed, so the close asked again "succeeds" without reaching Studio.
+// The run is not recorded closed: reopening recovers or abandons it.
+test('a close asked again of an Agent Watch without close-retry leaves the run active', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
+  const server = await studio(), authority = authorityOf(), agent = broker(authority);
+  const request = agent.request.bind(agent);
+  let closes = 0;
+  agent.request = async (action, args) => {
+    if (action === 'close' && ++closes === 1) { agent.calls.push(action); throw Error('managed-broker:serverUnavailable'); }
+    return request(action, args);
+  };
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.studioLink.minPauseMs = 10;
+  try {
+    await managed.session.prompt('hello');
+    assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
+    assert.deepEqual(agent.calls.filter(call => call === 'close'), ['close', 'close']);
+    assert.equal(managed.session.sessionManager.getEntries().filter(entry => entry.customType === 'agent-watch-run').at(-1)?.data?.state, 'active');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
