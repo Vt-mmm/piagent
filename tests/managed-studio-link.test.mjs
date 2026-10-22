@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { StudioLink, STUDIO_WAIT_CODES, classifyWait, resumeMessage, LINK_LOG } from '../packages/piagent-core/managed/studio-link.mjs';
+import { StudioLink, STUDIO_WAIT_CODES, classifyWait, resumeMessage, LINK_LOG, viaLink } from '../packages/piagent-core/managed/studio-link.mjs';
 import { enableCompanyTurnRetry } from '../packages/piagent-core/managed/request-stream.mjs';
 import { memberTurn } from '../packages/piagent-core/managed/continuation.mjs';
 import { failureCode, describeFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
@@ -180,16 +180,34 @@ test('the message that resumes the work says why it stopped and not to redo work
   assert.match(m.content, /do not redo work that is already done/);
 });
 
-test('Agent Watch losing Studio while Studio answers here fails at once, unless Studio was just away', async () => {
+test('Agent Watch losing Studio while Studio answers here is asked again for a few minutes, then fails', async () => {
   const ready = () => json(200, { status: 'ready', boot_id: AFTER, version: '0.36.0' });
-  const { link } = linkWith([ready]);
-  assert.equal(await link.waitUntilBack({ code: 'managed-broker:offline' }), null, 'Studio is fine: Agent Watch on this machine');
+  const { link, statuses } = linkWith([ready]);
+  // 2026-10-22: one gateway 5xx renewing the grant stopped a 25-minute task.
+  const first = await link.waitUntilBack({ code: 'managed-broker:serverUnavailable' });
+  assert.equal(first.outcome, 'resumed');
+  assert.equal(first.cause, 'broker_offline');
+  assert.match(statuses.find(Boolean), /Agent Watch could not reach Studio \(managed-broker:serverUnavailable\)/);
+  assert.equal(await link.needed('managed-broker:serverUnavailable'), true);
+  // Pausing longer each time; past BROKER_RETRY_MS without a request going through it fails as before.
+  let asks = 1;
+  while (await link.waitUntilBack({ code: 'managed-broker:serverUnavailable' })) asks += 1;
+  assert.ok(asks >= 5 && asks <= 8, `asked ${asks} times`);
+  assert.equal(await link.needed('managed-broker:offline'), false);
+  // A request that goes through starts the window over.
+  link.ok();
+  assert.equal((await link.waitUntilBack({ code: 'managed-broker:offline' })).outcome, 'resumed');
   // Studio was away and is back: Agent Watch gets a few minutes to reach it again.
   const away = linkWith([() => new Response('x', { status: 502 }), ready]);
   assert.equal((await away.link.waitUntilBack({ code: 'studio-unreachable' })).outcome, 'resumed');
   assert.equal((await away.link.waitUntilBack({ code: 'managed-broker:offline' })).outcome, 'resumed');
-  away.advance(11 * 60_000);
-  assert.equal(await away.link.waitUntilBack({ code: 'managed-broker:offline' }), null);
+});
+
+test("Codes that are not Agent Watch's still fail at once on a running Studio", async () => {
+  const ready = () => json(200, { status: 'ready', boot_id: AFTER, version: '0.36.0' });
+  const { link } = linkWith([ready]);
+  assert.equal(await link.waitUntilBack({ code: 'operation_unavailable' }), null);
+  assert.equal(await link.waitUntilBack({ code: 'managed-broker:invalidKey' }), null);
 });
 
 test("Studio's connector not answering on a running Studio fails at once; right after Studio was away it is waited out", async () => {
@@ -206,4 +224,15 @@ test('a Studio that started during the wait restarted, even when its earlier ver
   const after = { boot: AFTER, version: '0.36.0', startedAt: '2026-10-20T16:19:41Z' };
   assert.equal(classifyWait({ boot: null, version: null }, after, new Set(['down', 'ready']), ['managed-broker:serverUnavailable'], since), 'studio_restart');
   assert.equal(classifyWait({ boot: null, version: null }, { ...after, startedAt: '2026-10-19T08:00:00Z' }, new Set(['ready']), ['managed-broker:offline'], since), 'broker_offline');
+});
+
+test("Closing the round's run is asked again when Agent Watch's way to Studio fails for a moment", async () => {
+  const ready = () => json(200, { status: 'ready', boot_id: AFTER, version: '0.36.0' });
+  const { link } = linkWith([ready]);
+  let asks = 0;
+  const closed = await viaLink(link, async () => { if (++asks < 3) throw Error('managed-broker:serverUnavailable'); return 'closed'; }, { runId: AFTER });
+  assert.equal(closed, 'closed');
+  assert.equal(asks, 3);
+  await assert.rejects(viaLink(link, async () => { throw Error('managed-broker:invalidResponse'); }), /invalidResponse/, 'a refusal is not asked again');
+  await assert.rejects(viaLink(null, async () => { throw Error('managed-broker:serverUnavailable'); }), /serverUnavailable/, 'no link: fails as before');
 });

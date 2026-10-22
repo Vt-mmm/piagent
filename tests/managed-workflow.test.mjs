@@ -326,6 +326,7 @@ test('a run that cannot be closed ends the turn as failed instead of throwing', 
   const steps = [{ step: 'Read', status: 'completed' }, { step: 'Explain', status: 'pending' }];
   const server = await studio({ roleOf: () => 'main', review: [], main: [{ tool: 'update_plan', input: { plan: steps } }, 'Read it; next I explain.', 'Hello.'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.studioLink.brokerRetryMs = 0; // past the retry window: fails as before
   try {
     await managed.session.prompt('Plan the architecture migration of a.txt');
     const [end] = turnEnds(managed);

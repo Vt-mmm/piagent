@@ -379,6 +379,7 @@ test('a run that cannot start becomes a turn with the reason, and nothing is sen
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
   const server = await studio(), authority = authorityOf(), agent = broker(authority, { fail: { start: 'managed-broker:offline' } });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.studioLink.brokerRetryMs = 0; // past the retry window: fails as before
   try {
     await managed.session.prompt('hello');
     assert.deepEqual(roles(managed).filter(role => role !== 'system'), ['user', 'assistant']);
@@ -387,6 +388,46 @@ test('a run that cannot start becomes a turn with the reason, and nothing is sen
     assert.equal(server.requests.length, 0);
     assert.deepEqual(agent.calls, ['config', 'start'], 'no run was opened, so none is closed');
     assert.equal(managed.session.sessionManager.getEntries().some(entry => entry.customType === 'agent-watch-run'), false);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// 2026-10-22: Agent Watch's way to Studio failed once (a gateway 5xx) and the
+// turn stopped; a broker failure while Studio answers is asked again.
+test('a close Agent Watch could not send once is asked again and the turn ends well', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
+  const server = await studio(), authority = authorityOf(), agent = broker(authority);
+  const request = agent.request.bind(agent);
+  let closes = 0;
+  agent.request = async (action, args) => {
+    if (action === 'close' && ++closes === 1) { agent.calls.push(action); throw Error('managed-broker:serverUnavailable'); }
+    return request(action, args);
+  };
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.studioLink.minPauseMs = 10;
+  try {
+    await managed.session.prompt('hello');
+    assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
+    assert.deepEqual(agent.calls.filter(call => call === 'close'), ['close', 'close'], 'asked again once');
+    assert.equal(managed.session.sessionManager.getEntries().filter(entry => entry.customType === 'agent-watch-run').at(-1)?.data?.state, 'closed');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a renew Agent Watch could not send once is asked again and the model answers', { skip: !supported, timeout: 120000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-failures-'));
+  const server = await studio(), authority = authorityOf(), agent = broker(authority);
+  const request = agent.request.bind(agent);
+  let renews = 0;
+  agent.request = async (action, args) => {
+    if (action === 'renew' && ++renews === 1) { agent.calls.push(action); throw Error('managed-broker:serverUnavailable'); }
+    return request(action, args);
+  };
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.studioLink.minPauseMs = 10;
+  try {
+    await managed.session.prompt('hello');
+    assert.equal(last(managed).stopReason, 'stop', JSON.stringify(last(managed)));
+    assert.equal(renews, 2, 'asked again once');
+    assert.equal(server.requests.length, 1, 'the model is asked once');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -758,6 +799,7 @@ test('Stop during a command sends no renew; a close Studio cannot confirm is not
     return action === 'config' ? { ...out, broker_features: ['process'] } : out;
   };
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  managed.studioLink.brokerRetryMs = 0; // past the retry window: fails as before
   let stopAt = null;
   managed.session.subscribe(event => {
     if (event.type === 'tool_execution_start' && stopAt === null) { stopAt = agent.calls.length; setTimeout(() => void managed.session.abort(), 300); }

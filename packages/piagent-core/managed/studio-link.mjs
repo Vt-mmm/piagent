@@ -15,6 +15,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CLIENT_AGENT } from './client-agent.mjs';
+import { failureCode, failureText } from '../runtime/managed-failure.mjs';
 
 // Codes whose cause is Studio or the way to it: Studio, its gateway or its
 // connector did not answer (stopped, restarting, an update), or Agent Watch
@@ -34,6 +35,13 @@ const LOG_BYTES = 2 * 1024 * 1024, QUEUE = 50, BATCH = 20, SEND_TRIES = 5;
 const MIN_PAUSE_MS = 2_000, MAX_PAUSE_MS = 30_000, MAX_STREAK_PAUSE_MS = 5 * 60_000, BEAT_TIMEOUT_MS = 5_000;
 // After Studio was away, Agent Watch gets this long to reach it again.
 export const BROKER_GRACE_MS = 10 * 60_000;
+// Agent Watch could not reach Studio while Studio answers here: its way to
+// Studio failed for a moment (a gateway's 5xx, a dropped connection, a slow
+// answer). Found on 2026-10-22: one such failure renewing the grant stopped a
+// 25-minute task at once. It is asked again, pausing longer each time, until
+// it has failed for this long without a request going through; then it fails
+// as before (Agent Watch itself is broken, not the way to Studio).
+export const BROKER_RETRY_MS = 3 * 60_000;
 
 const header = (headers, name) => {
   if (!headers) return null;
@@ -74,7 +82,7 @@ export class StudioLink {
     if (seen.boot) this.last = { boot: seen.boot, version: seen.version ?? this.last.version };
   }
   // A request went through: the next wait starts with a short pause again.
-  ok() { this.streak = 0; }
+  ok() { this.streak = 0; this.brokerSince = null; }
   waits(code) { return STUDIO_WAIT_CODES.has(code); }
   // Studio or the way to it, whatever Studio's heartbeat says now.
   always(code) { return this.waits(code) && !conditional(code); }
@@ -107,7 +115,7 @@ export class StudioLink {
     if (signal?.aborted) throw signal.reason ?? Error('aborted');
     if (!this.waits(code)) return null;
     const first = conditional(code) ? await this.beat(signal) : null;
-    if (first?.state === 'ready' && !this.justBack()) return null;
+    if (first?.state === 'ready' && !this.justBack() && !this.brokerRetry(code)) return null;
     const controller = new AbortController(), stop = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', stop, { once: true });
     this.waiting.add(controller);
@@ -115,7 +123,8 @@ export class StudioLink {
     const seen = new Set(first ? [first.state] : []);
     this.log({ kind: 'studio_wait', state: 'start', id: event.id, phase, role, code, version: event.before.version, conversation });
     this.notify({ type: 'managed_studio_wait', id: event.id, role, phase, code, state: 'start', waitedMs: 0 });
-    this.status(`Studio is not answering (${code}). Waiting; the work goes on by itself when Studio is back. Esc stops.`);
+    this.status(first?.state === 'ready' ? `Agent Watch could not reach Studio (${code}). Asking again; the work goes on by itself. Esc stops.`
+      : `Studio is not answering (${code}). Waiting; the work goes on by itself when Studio is back. Esc stops.`);
     // Failing again right after a wait (Studio answers, the request does
     // not): each such wait starts with a longer pause, up to five minutes.
     let pause = Math.min(MAX_STREAK_PAUSE_MS, this.minPauseMs * 2 ** Math.min(this.streak, 8));
@@ -147,7 +156,15 @@ export class StudioLink {
   async needed(code, signal) {
     if (signal?.aborted) throw signal.reason ?? Error('aborted');
     if (!this.waits(code)) return false;
-    return !(conditional(code) && (await this.beat(signal)).state === 'ready' && !this.justBack());
+    return !(conditional(code) && (await this.beat(signal)).state === 'ready' && !this.justBack() && !this.brokerRetry(code, false));
+  }
+  // An Agent Watch failure on a Studio that answers: asked again within
+  // BROKER_RETRY_MS of the first one since a request last went through.
+  brokerRetry(code, start = true) {
+    if (!BROKER.test(code)) return false;
+    const since = this.brokerSince ?? this.now();
+    if (start) this.brokerSince = since;
+    return this.now() - since < (this.brokerRetryMs ?? BROKER_RETRY_MS);
   }
   justBack() { return !!this.recoveredAt && this.now() - this.recoveredAt < (this.brokerGraceMs ?? BROKER_GRACE_MS); }
 
@@ -238,4 +255,17 @@ export function resumeMessage(wait, code) {
   return { customType: 'agent-watch-process', display: true,
     content: `Harness: your last step was cut off because ${why} [${code}]; Studio answers again after about ${minutes} min. Nothing you asked for is lost: the files and the checklist are as you left them. Check where you were (the checklist, git status, the last command you ran) and continue the member's task from there; do not redo work that is already done.`,
     details: { phase: 'resume', cause: wait.cause, waitedMs: wait.waited_ms, code } };
+}
+
+// A broker call (closing the round's run) when Agent Watch's way to Studio
+// fails for a moment: asked again while the link waits, so a passing gateway
+// error does not fail a turn whose work is done.
+export async function viaLink(link, ask, { conversation = null, runId = null } = {}) {
+  for (;;) {
+    try { return await ask(); }
+    catch (error) {
+      const code = failureCode(failureText(error));
+      if (!(await link?.waitUntilBack({ phase: 'broker', code, conversation, runId }).catch(() => null))) throw error;
+    }
+  }
 }
