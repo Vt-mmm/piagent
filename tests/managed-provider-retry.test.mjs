@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { memberTurn, PROVIDER_RESUME_CODES, PROVIDER_RESUME_DELAYS_MS } from '../packages/piagent-core/managed/continuation.mjs';
 import { STUDIO_WAIT_CODES } from '../packages/piagent-core/managed/studio-link.mjs';
 import { failureCode, describeFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
-import { TURN_RETRY_CODES } from '../packages/piagent-core/managed/request-stream.mjs';
+import { TURN_RETRY_CODES, companyTurnRetryable } from '../packages/piagent-core/managed/request-stream.mjs';
 
 // Found 2026-10-21: gpt-6-sol sent its own error event (api_error) in the
 // middle of an answer after a tool ran; the round failed, nothing asked it
@@ -19,6 +19,8 @@ test("the provider's error event inside an answer is a passing failure the turn 
   assert.equal(failureCode('{"code":"token_quota_exhausted"}'), 'token_quota_exhausted');
   assert.ok(TURN_RETRY_CODES.has('upstream_server_error'));
   assert.ok(PROVIDER_RESUME_CODES.has('upstream_server_error'));
+  assert.ok(PROVIDER_RESUME_CODES.has(failureCode('Request interrupted')), 'a cut answer goes on by itself');
+  assert.ok(companyTurnRetryable({ stopReason: 'error', errorMessage: 'Request interrupted' }), 'and is asked again first');
   assert.match(describeFailure('main', 'Error Code server_error: x'), /model provider failed while answering.*\[upstream_server_error\]$/);
 });
 

@@ -166,6 +166,11 @@ export function failureCode(raw) {
   // The provider library's words for an answer stream that ended empty: Studio
   // admitted the request and nothing came back. It is not asked again.
   if (/stream ended without a (terminal event|stop reason)|response has no body/i.test(text)) return 'upstream_incomplete';
+  // Studio's own words when its upstream cut an answer already streaming: its
+  // error event carries the code, which the provider libraries drop (seen
+  // 2026-10-21: "Request interrupted" stopped a long task with no ask again).
+  if (/^Request interrupted\b/i.test(text)) return 'upstream_interrupted';
+  if (/^The answer ran past its output limit\b/i.test(text)) return 'output_limit_exceeded';
   if (NETWORK.test(text)) return 'studio-unreachable';
   return 'managed-request-failed';
 }

@@ -38,6 +38,11 @@ test('a failure names who failed, why and Studio\'s request, never the harness m
   assert.equal(parseFailure('agent_watch_managed stream ended without a terminal event').code, 'upstream_incomplete');
   assert.equal(parseFailure('agent_watch_managed response has no body').code, 'upstream_incomplete');
   assert.equal(parseFailure('Anthropic stream ended without a stop reason').code, 'upstream_incomplete');
+  // Studio's words for an answer its upstream cut mid-stream: the error event's
+  // code is lost in the provider library, so the words name it (asked again).
+  assert.equal(parseFailure('Request interrupted').code, 'upstream_interrupted');
+  assert.equal(parseFailure('The answer ran past its output limit').code, 'output_limit_exceeded');
+  assert.equal(parseFailure('Request ended by Studio').code, 'managed-request-failed', 'Studio ending a request itself is not asked again by its words');
   // The provider declined the request under its usage policy: said in words, kind "refused".
   const refusal = parseFailure("This request triggered restrictions on violative cyber content and was blocked under the provider's Usage Policy.");
   assert.deepEqual([refusal.code, refusal.kind], ['upstream_policy_refusal', 'refused']);
