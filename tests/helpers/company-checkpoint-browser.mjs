@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { expect } from '@playwright/test';
+import { memberEditorAndTests, reviewAgentHunk } from './ide-member-browser.mjs';
 
 export async function qualifyCompanyCheckpoints(page, project, requests, grant) {
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -12,18 +13,18 @@ export async function qualifyCompanyCheckpoints(page, project, requests, grant) 
       try { responses.push(await response.json()); } catch { /* Failed transport is asserted by the UI below. */ }
     }
   });
+  await memberEditorAndTests(page, project, { terminal: process.platform === 'linux' });
   for (const turn of [1, 2]) {
     await page.getByPlaceholder('Nhắn cho Piagent…').fill(`checkpoint turn ${turn}`);
     await page.getByRole('button', { name: 'Gửi', exact: true }).click();
     await expect(page.getByText(`COMPANY_CHECKPOINT_${turn}_OK`, { exact: true }).first()).toBeVisible({ timeout: 30000 });
     await expect.poll(() => fs.readFileSync(path.join(project, turn === 1 ? 'checkpoint.txt' : 'checkpoint-new.txt'), 'utf8')).toBe(`agent turn ${turn}\n`);
+    if (turn === 1) await reviewAgentHunk(page, project);
   }
   const git = (...args) => execFileSync('git', ['-C', project, ...args], { encoding: 'utf8' });
   git('add', 'checkpoint.txt', 'checkpoint-new.txt');
   git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'member commit after agent turns');
   const head = git('rev-parse', 'HEAD'), index = fs.readFileSync(path.join(project, '.git/index'));
-  await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
-  await page.getByRole('button', { name: 'checkpoint.txt', exact: true }).click();
   const editor = page.locator('.cm-content').first();
   await expect(editor).toContainText('agent turn 1');
   await editor.fill('member unsaved draft');
@@ -48,6 +49,7 @@ export async function qualifyCompanyCheckpoints(page, project, requests, grant) 
   await expect(dialog.getByRole('alert')).toContainText('Đã khôi phục 2 lượt.');
   assert.equal(fs.readFileSync(path.join(project, 'checkpoint.txt'), 'utf8'), 'before\n');
   assert.equal(fs.existsSync(path.join(project, 'checkpoint-new.txt')), false);
+  assert.equal(fs.readFileSync(path.join(project, 'member.txt'), 'utf8'), 'member saved\n');
   assert.equal(git('rev-parse', 'HEAD'), head); assert.deepEqual(fs.readFileSync(path.join(project, '.git/index')), index);
   assert.equal(fs.readFileSync(path.join(project, '.env'), 'utf8'), 'COMPANY_TERMINAL_FIXTURE_SECRET=hidden\n');
   assert.equal(requests.length, calls, 'restoration must not call the model');

@@ -1,11 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { invokeReviewSnapshot } from './review-snapshot-request.mjs';
 
-const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
-const WORKER = fileURLToPath(new URL('./review-snapshot-worker.mjs', import.meta.url));
 const MAX_SNAPSHOT = 16 * 1024 * 1024;
 
 // The worker runs inside the tool boundary; what it prints is one short line.
@@ -20,8 +18,8 @@ async function worker(boundary, mode, scope = null, base = null) {
     fs.writeFileSync(path.join(boundary.temporary, scopeName), JSON.stringify([...scope]), { mode: 0o600, flag: 'wx' });
   }
   let result;
-  const from = typeof base === 'string' && BASE.test(base) ? ' ' + base : '';
-  try { result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} ${mode}${scopeName ? ' ' + scopeName : ''}${from}`, timeout: 60 }); }
+  const extra = [...(scopeName ? [scopeName] : []), ...(typeof base === 'string' && BASE.test(base) ? [base] : [])];
+  try { result = await invokeReviewSnapshot(boundary, mode, extra); }
   finally { if (scopeName) fs.rmSync(path.join(boundary.temporary, scopeName), { force: true }); }
   const text = textContent(result).trim();
   if (result.details?.truncation?.truncated || text.includes('\n')) throw Error(/review-(patch|file|untracked)-limit/.exec(text)?.[0] ?? 'managed-review-patch-unreadable');
@@ -37,7 +35,7 @@ export async function readPatchDigest(boundary, scope = null, base = null) { ret
 // The commit HEAD names now, or null (no repository, no commit yet).
 export async function readHead(boundary) {
   try {
-    const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} head`, timeout: 60 });
+    const result = await invokeReviewSnapshot(boundary, 'head');
     const text = textContent(result).trim();
     return BASE.test(text) ? text : null;
   } catch { return null; }
@@ -48,7 +46,7 @@ export async function readHead(boundary) {
 export async function resolveReviewBase(boundary, ref) {
   if (typeof ref !== 'string' || !/^[A-Za-z0-9._\/~^@{}-]{1,200}$/.test(ref) || ref.startsWith('-')) return null;
   try {
-    const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} since ${quote(ref)}`, timeout: 60 });
+    const result = await invokeReviewSnapshot(boundary, 'since', [ref]);
     const text = textContent(result).trim();
     return BASE.test(text) ? text : null;
   } catch { return null; }
@@ -57,7 +55,7 @@ export async function resolveReviewBase(boundary, ref) {
 // came since: { base, ref }, or null.
 export async function readBranchBase(boundary) {
   try {
-    const result = await boundary.invoke('bash', { command: `${quote(process.execPath)} ${quote(WORKER)} branch-base`, timeout: 60 });
+    const result = await invokeReviewSnapshot(boundary, 'branch-base');
     const [base, ref] = textContent(result).trim().split(' ');
     return BASE.test(base ?? '') && ref ? { base, ref } : null;
   } catch { return null; }

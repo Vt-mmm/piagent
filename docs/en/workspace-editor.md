@@ -69,7 +69,6 @@ Attribution requires an exact observed write/edit/patch in this session and a
 current, complete, unredacted diff. CRLF and missing final newlines are compared
 exactly. Unobserved shell edits and observations lost on runtime restart do not
 receive agent hunk markers. Company review and revert run inside its sandbox.
-Checkpoint restore is a later milestone.
 
 ## Personal terminal
 
@@ -167,3 +166,27 @@ result may mean files already changed: inspect them before continuing. Checking
 the same request does not automatically repeat an uncertain file operation. If
 only some files changed or the history save failed, the retained checkpoint can
 report a conflict; inspect and resolve the files before a fresh restore attempt.
+
+
+## Try the complete workflow
+
+Use a disposable Git project with an initial commit and a passing test command.
+For personal mode, open it in `piagent dashboard`. For company mode, select its
+company conversation; the terminal steps require a Linux/WSL company Gateway
+with a working sandboxed PTY. On macOS, check the unavailable notice instead;
+that does not qualify the terminal steps.
+
+1. Open a tracked file in Files, make a small change and save with Cmd/Ctrl+S.
+2. Open Terminal, run the project's test command and inspect its exit status.
+3. Keep a different tracked file open. Ask the agent to read and edit that file
+   using edit/write. After the turn, inspect the added and removed inline lines.
+4. Choose Keep and check that the file content stays unchanged. Ask for a second
+   turn creating a small new file. Avoid shell edits for this attribution check.
+5. On the first agent turn, choose Restore before this turn. Check that the
+   preview lists both turns and both files, then confirm.
+6. Verify that the original file is restored, the new file is removed, and your
+   saved change from step 1 remains. HEAD and the staging area stay unchanged.
+
+The `ide-editor-terminal` soak scenario separately exercises guarded editor saves
+and terminal tests through the WebUI protocol. Its oracle self-check and transport
+tests do not by themselves prove a completed run against a live model.

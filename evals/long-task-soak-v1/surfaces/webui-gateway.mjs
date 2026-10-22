@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { piagentEnv } from '../lib/workspace.mjs';
+import { editWorkspace, runTerminal } from './workspace-actions.mjs';
 
 // The company WebUI (Agent Watch Auto) used the way the browser app uses it:
 // the launch link's capability for a cookie and CSRF token, the Gateway
@@ -12,7 +13,13 @@ const PROTOCOL = { schemaVersion: 1, version: 'piagent-gateway-protocol-v1' };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 export class WebUiSurface {
-  constructor({ piagent = 'piagent' } = {}) { this.piagent = piagent; this.pending = new Map(); this.answered = new Set(); }
+  constructor({ piagent = 'piagent' } = {}) { this.piagent = piagent; this.pending = new Map(); this.answered = new Set(); this.terminalListeners = new Set(); }
+  onTerminal(listener) { this.terminalListeners.add(listener); return () => this.terminalListeners.delete(listener); }
+  memberAction(action) {
+    if (action.do === 'editor_save') return editWorkspace(this, action);
+    if (action.do === 'terminal_test') return runTerminal(this, action);
+    throw Error('unsupported-workspace-action');
+  }
 
   // `--web` prints the launch link; when no company Gateway runs yet it starts
   // one and keeps serving it, so read the link without waiting for an exit
@@ -64,6 +71,10 @@ export class WebUiSurface {
       ws.on('open', () => ws.send(JSON.stringify({ ...PROTOCOL, messageType: 'connect', clientRef: 'soak_member', minimumProtocol: 1, maximumProtocol: 1, lastEventSequence: null, catalogRevision: null })));
       ws.on('message', data => {
         let frame; try { frame = JSON.parse(String(data)); } catch { return; }
+        if (frame.version === 'piagent-terminal-v1') {
+          for (const listener of this.terminalListeners) listener(frame);
+          return;
+        }
         if (frame.messageType === 'hello') { clearTimeout(timer); resolve(ws); return; }
         if (frame.messageType === 'response') {
           const p = this.pending.get(frame.requestId); if (!p) return; this.pending.delete(frame.requestId);
@@ -77,11 +88,15 @@ export class WebUiSurface {
   }
 
   #request(command) {
+    return this.gatewayRequest('sessions.command', { command });
+  }
+
+  gatewayRequest(method, params) {
     const requestId = opaque('request');
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(requestId); reject(Error('gateway command timeout')); }, 60_000);
       this.pending.set(requestId, { resolve: v => { clearTimeout(timer); resolve(v); }, reject: e => { clearTimeout(timer); reject(e); } });
-      this.ws.send(JSON.stringify({ ...PROTOCOL, messageType: 'request', requestId, method: 'sessions.command', params: { command } }));
+      this.ws.send(JSON.stringify({ ...PROTOCOL, messageType: 'request', requestId, method, params }));
     });
   }
 

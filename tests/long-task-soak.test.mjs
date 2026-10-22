@@ -94,6 +94,26 @@ class ScriptedSurface {
 
 const solve = project => fs.cpSync(path.join(fixtureDir('node-inventory'), 'reference'), project, { recursive: true });
 
+test('workspace actions are ordered after settlement and cannot be skipped behind a passing oracle', { timeout: 60000 }, async () => {
+  for (const supported of [true, false]) {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'soak-workspace-loop-'));
+    try {
+      const scenario = { id: 'workspace', language: 'en', fixture: 'node-inventory', prompt: 'Build SPEC.md', decisions: [],
+        userActions: [{ when: { turns: 1 }, do: 'editor_save' }, { when: { turns: 1 }, do: 'terminal_test' }],
+        oracle: { hidden: 'hidden', checks: [{ name: 'spec', run: "node --test 'test/*.test.js'" }] } };
+      const prepared = await prepareProject({ scenario, runDir });
+      const surface = new ScriptedSurface([{ text: 'Done, all tests pass.', work: solve }]), actions = [];
+      if (supported) surface.memberAction = async action => { actions.push(action.do); return {}; };
+      const result = await playScenario({ scenario, surface, prepared, runDir });
+      assert.equal(result.oracle.pass, true);
+      assert.equal(result.pass, supported);
+      assert.equal(result.stats.workspaceActions, supported ? 2 : 0);
+      assert.deepEqual(actions, supported ? ['editor_save', 'terminal_test'] : []);
+      if (!supported) assert.ok(result.defects.some(item => item.defect === 'workspace_actions_incomplete'));
+    } finally { fs.rmSync(runDir, { recursive: true, force: true }); }
+  }
+});
+
 test('the member nudges a task that stops part way and the run counts as recovered', { timeout: 60000 }, async () => {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'soak-loop-'));
   try {

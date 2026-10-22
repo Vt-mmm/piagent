@@ -1,3 +1,4 @@
+import { consumeReviewSnapshot } from './review-snapshot-request.mjs';
 import { SessionMutationObservations } from "./session-mutation-observations.mjs";
 import { BoundaryTerminals } from './terminal-boundary.mjs';
 import { ToolFreshness } from './tool-freshness.mjs';
@@ -217,7 +218,7 @@ export class ManagedToolBoundary {
     this.sdkPath = path.join(this.sdkRoot, 'dist/index.js');
     this.git = managedGit();
     if (JSON.parse(fs.readFileSync(path.join(this.sdkRoot, 'package.json'), 'utf8')).version !== PI_HOST_VERSION) throw new Error('managed-sdk-version-unqualified');
-    const workerModules = ['tool-freshness.mjs', 'search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs', 'workspace-worker-pins.mjs'].map(name => path.join(this.runtimeRoot, name));
+    const workerModules = ['review-snapshot-worker.mjs', 'tool-freshness.mjs', 'search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs', 'workspace-worker-pins.mjs'].map(name => path.join(this.runtimeRoot, name));
     this.pins = new Map([this.node, this.git, workerPath, ...workerModules, this.sdkPath].map(file => [file, hash(file)]));
     const userHome = fs.realpathSync(home ?? os.homedir());
     if ([userHome, '/', this.sdkRoot, this.runtimeRoot].includes(this.cwd)
@@ -360,7 +361,8 @@ export class ManagedToolBoundary {
     const isolated = !this.linux && !network && await this.proxyCheck.listening;
     const observing = ['edit', 'write'].includes(name) && this.workspacePins;
     if (observing) verifyWorkspaceWorker(this.workspacePins);
-    const mutationObservation = this.#mutationObservations.prepare(this.cwd, name, args, observing);
+    const snapshotRead = name === 'bash' && consumeReviewSnapshot(args);
+    const mutationObservation = snapshotRead ? undefined : this.#mutationObservations.prepare(this.cwd, name, args, observing);
     const sourceContext = this.#sourceRequests.consume(args, this.#mutationObservations);
     const message = JSON.stringify({ name, args, sourceContext, mutationObservation, expectedFileDigest: this.#freshness.expected(this.cwd, name, args), workspaceReadOnly: this.setup.readOnly, ...(network ? { network: true } : {}), ...(isolated ? { isolated: true } : {}), ...(docker ? { docker: true } : this.engine ? { engine: true } : {}), model: model ? { input: model.input, inputLimits: model.inputLimits } : undefined }) + '\n';
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');

@@ -1,3 +1,5 @@
+import { readHead, readChangedFiles, readPatchDigest, readPatchSnapshot } from '../packages/piagent-core/managed/patch-snapshot.mjs';
+import { invokeReviewSnapshot } from '../packages/piagent-core/managed/review-snapshot-request.mjs';
 import { buildContextIndexV2 } from '../packages/piagent-core/extensions/context-engine.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -96,6 +98,9 @@ test('company exact mutation observations survive worker replacement and reset o
   const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-company-observation-')));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   fs.writeFileSync(path.join(cwd, 'file.txt'), 'member baseline\n');
+  execFileSync('git', ['init', '-q', cwd]);
+  execFileSync('git', ['-C', cwd, 'add', 'file.txt']);
+  execFileSync('git', ['-C', cwd, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'baseline']);
   const boundary = new ManagedToolBoundary({ cwd, sdkRoot: sdk, searchTools: false });
   t.after(() => boundary.dispose());
   const first = await boundary.invoke('write', { path: 'file.txt', content: 'agent one\n' });
@@ -103,6 +108,12 @@ test('company exact mutation observations survive worker replacement and reset o
   assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member baseline\n');
   await boundary.invoke('edit', { path: 'file.txt', edits: [{ oldText: 'one', newText: 'two' }] });
   assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member baseline\n');
+  const observed = boundary.mutationObservation('file.txt');
+  assert.match(await readHead(boundary), /^[a-f0-9]{40}$/);
+  assert.ok((await readChangedFiles(boundary)).has('file.txt'));
+  assert.match(await readPatchDigest(boundary), /^[a-f0-9]{64}$/);
+  assert.match((await readPatchSnapshot(boundary)).patch, /agent two/);
+  assert.deepEqual(boundary.mutationObservation('file.txt'), observed, 'runtime snapshot reads retain exact provenance');
   const file = await boundary.invoke('workspace', { kind: 'file', path: 'file.txt' });
   await boundary.invoke('workspace', { kind: 'write', payload: { path: 'file.txt', expectedDigest: file.digest, content: 'member again\n' } });
   assert.equal(boundary.mutationObservation('file.txt'), null);
@@ -111,6 +122,12 @@ test('company exact mutation observations survive worker replacement and reset o
   assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member again\n');
   const copy = boundary.mutationObservation('file.txt'); copy.baseline.content = 'forged';
   assert.equal(boundary.mutationObservation('file.txt')?.baseline.content, 'member again\n');
+  let snapshotArgs;
+  await invokeReviewSnapshot({ invoke(_name, args) { snapshotArgs = args; } }, 'head');
+  assert.ok(Object.isFrozen(snapshotArgs));
+  await boundary.invoke('bash', structuredClone(snapshotArgs));
+  assert.equal(boundary.mutationObservation('file.txt'), null, 'copied model arguments cannot preserve provenance');
+  await boundary.invoke('write', { path: 'file.txt', content: 'agent four\n' });
   await boundary.invoke('bash', { command: 'true' });
   assert.equal(boundary.mutationObservation('file.txt'), null);
   await boundary.invoke('write', { path: 'new.txt', content: 'new agent file' });

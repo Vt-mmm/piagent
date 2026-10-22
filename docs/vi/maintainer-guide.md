@@ -2,6 +2,14 @@
 
 [English](../en/maintainer-guide.md)
 
+## Chạy toàn bộ test
+
+`npm test` chạy tối đa hai file test đồng thời, giống `npm run verify`.
+Nhiều file integration dùng SDK, worker sandbox và trình duyệt thật; giới hạn số
+file cạnh tranh tránh làm cạn thời gian chờ hiện có. Giới hạn này không đổi danh
+sách test hoặc assertion. Đặt tùy chọn Node runner trước đường dẫn file; nối
+`--test-concurrency=2` sau `npm test --` không cấu hình được script này.
+
 ## Rule đặt code
 
 Trước khi thêm code, cần trả lời một câu hỏi về ownership:

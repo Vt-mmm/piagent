@@ -28,12 +28,23 @@ the deterministic lifecycle evidence lives in `evals/long-horizon-v1` and the
 node evals/long-task-soak-v1/runner.mjs --list
 node evals/long-task-soak-v1/runner.mjs --self-check            # oracles: fail on the fixture, pass on the reference
 node evals/long-task-soak-v1/runner.mjs --surface webui --scenario autonomous-node-inventory
+node evals/long-task-soak-v1/runner.mjs --surface webui --scenario ide-editor-terminal
 node evals/long-task-soak-v1/runner.mjs --surface both --category business,third-party --repeat 2
 ```
 
 Runs go to `~/piagent-soak/runs/<time>/<scenario>-<surface>-<n>/` (`project/`,
 `events.jsonl`, `result.json`); reports to `~/piagent-soak/reports/` as JSON
 and Markdown. `--work-root` moves both.
+
+`ide-editor-terminal` requires a working company terminal (qualified on Linux;
+macOS Seatbelt reports unavailable). After the first agent turn, the member reads
+README through the workspace API, saves an appended note with its exact digest,
+and verifies the saved bytes through the same API. It then opens a real terminal
+over the authenticated Gateway WebSocket, runs `npm test`, observes its numeric
+exit status and closes the terminal. Missing, rejected, uncertain or unfinished
+member actions fail the scenario even if the agent's hidden oracle passes.
+These are editor/terminal protocol operations, not browser rendering coverage;
+the browser workflows are qualified separately. No host shell fallback is used.
 
 ## Verdicts
 
@@ -76,6 +87,12 @@ the scenario's decisions need, each counted as a push); per run:
   "reference": "reference", "referenceSetup": ["…"], "setup": ["…"], "protect": [".env"]
 }
 ```
+
+WebUI scenarios can also use ordered actions after a settled turn:
+`{ "when": { "turns": 1 }, "do": "editor_save", "path": "README.md", "append": "\nMember note.\n" }`
+and `{ "when": { "turns": 1 }, "do": "terminal_test", "command": "npm test", "timeoutSec": 120, "expectedExitCode": 0 }`.
+They run in listed order before oracle judging. The RPC terminal surface does
+not implement these member workspace operations and fails them explicitly.
 
 A fixture is `fixtures/<name>/` with `project/` (what the member's repository
 holds), `fixture.json` (`setup` commands such as dependency installs,

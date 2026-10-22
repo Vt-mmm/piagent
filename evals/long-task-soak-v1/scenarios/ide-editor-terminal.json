@@ -1,0 +1,19 @@
+{
+  "id": "ide-editor-terminal",
+  "title": "Member saves a document through the editor API and runs the project tests in the company terminal",
+  "category": ["ide", "autonomous", "long-horizon"],
+  "language": "vi",
+  "fixture": "node-inventory",
+  "requires": ["git"],
+  "prompt": "Làm toàn bộ SPEC.md cho thư viện kho-hang: cài đặt đủ 9 mục trong src/, viết test từng mục trong test/, chạy npm test đến khi qua hết. Đặc tả đã đủ, không cần hỏi lại, cứ làm đến xong. Sau lượt này anh sẽ mở README.md trong editor, lưu ghi chú của anh và tự chạy npm test trong terminal của WebUI.",
+  "questionsExpected": false,
+  "decisions": [],
+  "approvals": "allow",
+  "userActions": [
+    { "when": { "turns": 1 }, "do": "editor_save", "path": "README.md", "append": "\nMember reviewed this project in the Session Hub editor.\n" },
+    { "when": { "turns": 1 }, "do": "terminal_test", "command": "npm test", "timeoutSec": 120, "expectedExitCode": 0 }
+  ],
+  "budget": { "maxMinutes": 60, "maxNudges": 3, "stallMinutes": 12 },
+  "oracle": { "hidden": "hidden", "checks": [{ "name": "spec acceptance", "run": "node --test 'test/*.test.js'", "timeoutSec": 300 }] },
+  "reference": "reference"
+}

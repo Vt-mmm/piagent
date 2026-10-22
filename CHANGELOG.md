@@ -4,6 +4,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+- Company inline review preserves exact agent observations across trusted internal snapshot reads; ordinary shell commands still invalidate attribution.
+
 ### Added
 
 - Timeline checkpoint restoration previews affected files, requires confirmation and reverses safe turns until a member-edit conflict. Personal `/undo` shares the checkpoint service with company mode; personal history is bounded and pins Git trees without changing HEAD or the index. Browser retries retain the same request across tab reloads.

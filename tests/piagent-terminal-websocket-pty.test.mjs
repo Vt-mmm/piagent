@@ -12,6 +12,7 @@ import {GatewayProtocolService} from '../packages/piagent-webui/gateway/gateway-
 import {SessionAuthority} from '../packages/piagent-webui/server/session-auth.ts';
 import {attachGatewayWebSocket} from '../packages/piagent-webui/server/gateway-websocket.ts';
 import {controlActionDigest} from '../packages/piagent-webui/server/control-command-digest.ts';
+import {runTerminal} from '../evals/long-task-soak-v1/surfaces/workspace-actions.mjs';
 
 test('authenticated Gateway PTY survives socket reload and replays before subsequent live output', {timeout:15000},async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'terminal-socket-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -38,7 +39,7 @@ test('authenticated Gateway PTY survives socket reload and replays before subseq
   const execute=async payload=>{const current=await state(),command={schemaVersion:1,version:'piagent-terminal-v1',messageType:'command',commandId:`command.${++id}`,idempotencyKey:`key.${id}`,
    requestedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60000).toISOString(),action:'terminal.command',identity:current.identity,expectedRevisions:current.revisions,payload};
    return request('terminals.command',{command:{...command,actionDigest:controlActionDigest(command)}});};
-  return {socket,take,state,execute};
+  return {socket,take,state,execute,request};
  }
  const first=await connect(),opened=await first.execute({kind:'open',cols:80,rows:24});assert.equal(opened.phase,'settled');
  await first.execute({kind:'input',terminalRef:opened.terminalRef,data:"printf 'SOCKET_READY\\n'\n"});
@@ -51,4 +52,11 @@ test('authenticated Gateway PTY survives socket reload and replays before subseq
  await second.take(m=>m.messageType==='output'&&!m.replay&&m.data.includes('33 99'));
  assert.equal((await second.execute({kind:'close',terminalRef:opened.terminalRef})).phase,'settled');
  assert.equal((await second.state()).terminals.length,0);
+ const surface={sessionRef:ref,csrf:session.csrf,gatewayRequest:second.request,onTerminal(listener){
+  const receive=data=>{const message=JSON.parse(String(data));if(message.version==='piagent-terminal-v1')listener(message);};
+  second.socket.on('message',receive);return()=>second.socket.off('message',receive);
+ }};
+ assert.deepEqual(await runTerminal(surface,{command:'test -d .',timeoutSec:5}),{exitCode:0});
+ await assert.rejects(runTerminal(surface,{command:'exit 7',timeoutSec:5}),/terminal-command-exit:7/);
+ assert.equal((await second.state()).terminals.length,0,'soak action closes its terminal on success and failure');
 });

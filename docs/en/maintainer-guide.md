@@ -2,6 +2,14 @@
 
 [Tiếng Việt](../vi/maintainer-guide.md)
 
+## Full test runs
+
+`npm test` runs at most two test files concurrently, matching `npm run verify`.
+Several integration files own real SDKs, sandbox workers and browsers; limiting
+competing files avoids exhausting their existing deadlines. The limit does not
+change test selection or assertions. Place Node runner options before file paths;
+appending `--test-concurrency=2` after `npm test --` does not configure this script.
+
 ## Placement rule
 
 Before adding code, answer one ownership question:

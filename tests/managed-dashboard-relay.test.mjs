@@ -34,6 +34,10 @@ test('a company session is created, answered and listed inside the personal dash
  for(const dir of [project,probe,personalAgent])fs.mkdirSync(dir,{recursive:true});
  execFileSync('git',['init','-q',project]);
  fs.writeFileSync(path.join(project,'checkpoint.txt'),'before\n');
+ fs.writeFileSync(path.join(project,'member.txt'),'before\n');
+ fs.writeFileSync(path.join(project,'member.test.mjs'),"import {test} from 'node:test'; import assert from 'node:assert/strict'; import fs from 'node:fs'; test('member saved project file',()=>assert.equal(fs.readFileSync('member.txt','utf8'),'member saved\\n'));\n");
+ execFileSync('git',['-C',project,'add','checkpoint.txt','member.txt','member.test.mjs']);
+ execFileSync('git',['-C',project,'-c','user.name=Fixture','-c','user.email=fixture@example.com','commit','-qm','baseline']);
  fs.writeFileSync(path.join(project,'.env'),'COMPANY_TERMINAL_FIXTURE_SECRET=hidden\n');
  const requests=[];let child,personal,browser;
  const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34

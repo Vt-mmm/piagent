@@ -65,7 +65,6 @@ Việc xác định hunk cần write/edit/patch được quan sát chính xác t
 hiện tại đầy đủ, chưa che nội dung. CRLF và thiếu newline cuối được so sánh chính
 xác. Sửa qua shell chưa được quan sát hoặc quan sát mất khi runtime khởi động lại
 không nhận dấu hunk agent. Company review và hoàn tác trong sandbox của phiên.
-Khôi phục checkpoint thuộc milestone sau.
 
 ## Terminal personal
 
@@ -160,3 +159,27 @@ kiểm tra file trước khi tiếp tục. Kiểm tra cùng yêu cầu không t�
 file có kết quả chưa rõ. Nếu chỉ một số file đã đổi hoặc lưu lịch sử thất bại,
 checkpoint còn giữ có thể báo xung đột; kiểm tra và xử lý file trước khi thử
 khôi phục với preview mới.
+
+
+## Thử trọn luồng làm việc
+
+Dùng project Git thử nghiệm đã có commit đầu tiên và lệnh test đang chạy thành công.
+Với personal, mở project trong `piagent dashboard`. Với company, chọn cuộc hội thoại
+company của project; các bước terminal cần Gateway company Linux/WSL mở được PTY
+trong sandbox. Trên macOS, kiểm tra thông báo không khả dụng; việc này không chứng
+minh các bước terminal chạy được.
+
+1. Mở file tracked trong Tệp, sửa nhỏ và lưu bằng Cmd/Ctrl+S.
+2. Mở Terminal, chạy lệnh test của project và kiểm tra mã thoát.
+3. Giữ một file tracked khác đang mở. Nhờ agent đọc và sửa file bằng edit/write.
+   Sau lượt đó, kiểm tra dòng thêm và dòng xóa ngay trong editor.
+4. Chọn Giữ và kiểm tra nội dung file không đổi. Nhờ agent ở lượt thứ hai tạo một
+   file nhỏ mới. Tránh sửa qua shell khi kiểm tra việc xác định hunk agent.
+5. Ở lượt agent đầu tiên, chọn Khôi phục về trước lượt này. Kiểm tra preview liệt
+   kê cả hai lượt và hai file, rồi xác nhận.
+6. Kiểm tra file ban đầu đã được trả lại, file mới đã bị xóa và bản sửa đã lưu ở
+   bước 1 vẫn còn. HEAD và vùng stage giữ nguyên.
+
+Kịch bản soak `ide-editor-terminal` kiểm tra riêng việc lưu editor có guard và chạy
+test trong terminal qua giao thức WebUI. Self-check của oracle và test transport
+không tự chứng minh đã hoàn thành một lượt chạy với model thật.

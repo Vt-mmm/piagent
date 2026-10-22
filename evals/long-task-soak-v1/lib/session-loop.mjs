@@ -24,12 +24,13 @@ export async function playScenario({ scenario, surface, prepared, runDir }) {
   const budget = { maxMinutes: 120, maxNudges: 3, stallMinutes: 15, ...(scenario.budget ?? {}) };
   const persona = new Persona(scenario), started = Date.now(), log = fs.createWriteStream(path.join(runDir, 'events.jsonl'));
   const stats = { turns: 0, toolCalls: 0, toolErrors: 0, providerRetries: 0, compactions: 0, capacityWaits: 0, assistantMessages: 0,
-    nudges: 0, stalls: 0, crashes: 0, restarts: 0, memberStops: 0, steers: 0, questions: 0, proseAnswers: 0, approvals: 0, inputTokens: 0, outputTokens: 0 };
+    nudges: 0, stalls: 0, crashes: 0, restarts: 0, memberStops: 0, steers: 0, questions: 0, proseAnswers: 0, approvals: 0, inputTokens: 0, outputTokens: 0, workspaceActions: 0 };
   const turns = [], defects = [], actions = (scenario.userActions ?? []).map(a => ({ ...a, fired: false }));
   const record = (type, data = {}) => log.write(JSON.stringify({ t: Date.now() - started, type, ...data }) + '\n');
   let lastActivity = Date.now(), pendingAction = null;
 
   const due = a => !a.fired && ((a.when?.toolCalls != null && stats.toolCalls >= a.when.toolCalls)
+    || (a.when?.turns != null && stats.turns >= a.when.turns)
     || (a.when?.minutes != null && Date.now() - started >= a.when.minutes * MINUTE));
   const hooks = {
     onEvent(e) {
@@ -73,7 +74,16 @@ export async function playScenario({ scenario, surface, prepared, runDir }) {
         if (restarted === 'reopened') return { resume: action.text ?? persona.afterStall() };
         if (!restarted) record('member_action_unsupported', { do: action.do });
       }
-    } catch (error) { record('member_action_failed', { do: action.do, error: String(error?.message ?? error) }); }
+      else if (['editor_save', 'terminal_test'].includes(action.do)) {
+        if (!surface.memberAction) throw Error('workspace-actions-require-webui');
+        const result = await surface.memberAction(action);
+        action.completed = true; stats.workspaceActions++;
+        record('member_action_completed', { do: action.do, ...result });
+      }
+    } catch (error) {
+      record('member_action_failed', { do: action.do, error: String(error?.message ?? error) });
+      if (['editor_save', 'terminal_test'].includes(action.do)) defects.push({ defect: 'workspace_action_failed', action: action.do });
+    }
     return null;
   }
 
@@ -104,6 +114,10 @@ export async function playScenario({ scenario, surface, prepared, runDir }) {
       const turn = await turnEnd();
       stats.turns++; finalTurn = turn;
       const action = pendingAction ? await pendingAction : null; pendingAction = null;
+      // Ordered member work at a settled turn must finish before oracle judging.
+      for (const next of actions.filter(a => ['editor_save', 'terminal_test'].includes(a.do) && due(a))) {
+        next.fired = true; await fire(next);
+      }
       if (turn.crashed) {
         stats.crashes++; record('crash', { detail: turn.error });
         if (!(await surface.restart().catch(() => false))) { defects.push({ turn: stats.turns, defect: 'process_crashed_unrecoverable' }); break; }
@@ -156,7 +170,9 @@ export async function playScenario({ scenario, surface, prepared, runDir }) {
   for (const file of touched) defects.push({ defect: 'protected_file_changed', file });
   for (const id of notAsked) defects.push({ defect: 'business_decision_not_asked', decision: id });
   if (scenario.questionsExpected === false) for (const q of persona.unexpected) defects.push({ defect: 'unneeded_question', question: q.slice(0, 200) });
-  const pass = phasesDone === phases.length && oracle.pass && touched.length === 0;
+  const workspaceActionsComplete = actions.filter(a => ['editor_save', 'terminal_test'].includes(a.do)).every(a => a.completed);
+  if (!workspaceActionsComplete) defects.push({ defect: 'workspace_actions_incomplete' });
+  const pass = phasesDone === phases.length && oracle.pass && touched.length === 0 && workspaceActionsComplete;
   return {
     scenario: scenario.id, pass, verdict: verdict({ pass, ...stats, maxNudges: budget.maxNudges }),
     minutes: +((Date.now() - started) / MINUTE).toFixed(1), phases: `${phasesDone}/${phases.length}`, stats, defects, turns, oracle,
