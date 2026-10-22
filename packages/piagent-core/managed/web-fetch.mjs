@@ -2,6 +2,9 @@ import dns from 'node:dns/promises';
 import https from 'node:https';
 import net from 'node:net';
 import zlib from 'node:zlib';
+import { privateAddress } from './ip-policy.mjs';
+
+export { privateAddress };
 
 // Reads one public https page for the company session, from the runtime
 // process (tools in the sandbox have no network). GET only, no cookies or
@@ -10,20 +13,6 @@ import zlib from 'node:zlib';
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 const TEXT = /^(text\/|application\/(json|xml|xhtml\+xml|javascript|x-yaml|yaml|ld\+json|rss\+xml|atom\+xml))/i;
-
-function v4Private(address) {
-  const [a, b] = address.split('.').map(Number);
-  return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
-}
-export function privateAddress(address) {
-  if (net.isIPv4(address)) return v4Private(address);
-  if (!net.isIPv6(address)) return true;
-  const value = address.toLowerCase();
-  const mapped = value.match(/^(?:0*:)*:ffff:(\d+\.\d+\.\d+\.\d+)$/) ?? value.match(/^64:ff9b::(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return v4Private(mapped[1]);
-  return value === '::' || value === '::1' || /^f[cd]/.test(value) || /^fe[89ab]/.test(value) || /^ff/.test(value) || value.startsWith('2001:db8');
-}
 
 async function publicTarget(url, resolve) {
   if (url.protocol !== 'https:' || url.username || url.password) throw new Error('web-fetch-url-not-allowed');

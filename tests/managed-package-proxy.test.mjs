@@ -48,7 +48,7 @@ test('host rules: exact names and *.subdomains, never IP literals; member additi
 });
 
 test('private and local addresses are recognised', () => {
-  for (const address of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.129', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1'])
+  for (const address of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.129', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '64:ff9b::c0a8:101'])
     assert.ok(privateAddress(address), address);
   for (const address of ['104.16.0.35', '8.8.8.8', '2606:4700::6810:84e5', '172.32.0.1'])
     assert.equal(privateAddress(address), false, address);
@@ -88,6 +88,38 @@ test('plain HTTP is forwarded to allowed hosts with the Host header kept', async
   const refused = await get(`http://other.example:${originPort}/`);
   assert.equal(refused.status, 403);
   assert.match(refused.body, /other\.example is not an allowed package registry/);
+});
+
+test('a name that resolves to a hex IPv4-mapped private address is refused', async () => {
+  const proxy = new PackageProxy({ domains: ['registry.npmjs.org'], ports: [443], resolve: async () => [{ address: '::ffff:7f00:1' }] });
+  closers.push(() => proxy.close());
+  const { port } = await proxy.listen();
+  assert.match(await connect(port, 'registry.npmjs.org:443'), /^HTTP\/1\.1 403/);
+});
+
+// With a company upstream proxy the name is still looked up and checked here,
+// and the upstream is asked for the checked address, so it cannot resolve the
+// name to somewhere else; the client's TLS still names the host end to end.
+test('through an upstream proxy, names are checked here and the upstream gets the checked address', async () => {
+  const seen = [], tunnels = [];
+  const upstream = http.createServer((request, response) => { seen.push(`${request.method} ${request.url} host=${request.headers.host}`); response.writeHead(200).end('via upstream'); });
+  upstream.on('connect', (request, socket) => { seen.push(`CONNECT ${request.url}`); tunnels.push(socket); socket.write('HTTP/1.1 200 Connection Established\r\n\r\n'); socket.on('data', chunk => socket.write(`ECHO:${chunk}`)); });
+  const upstreamPort = await listen(upstream);
+  closers.push(() => { for (const socket of tunnels) socket.destroy(); upstream.closeAllConnections(); });
+  const answers = { 'registry.npmjs.org': [{ address: '104.16.0.35' }], 'repo1.maven.org': [{ address: '2606:4700::6810:84e5' }], 'rebind.example': [{ address: '104.16.0.35' }, { address: '::ffff:a00:5' }] };
+  const proxy = new PackageProxy({ domains: [...Object.keys(answers), 'gone.example'], ports: [443, 80], env: { HTTPS_PROXY: `http://127.0.0.1:${upstreamPort}` },
+    resolve: async name => { if (!answers[name]) throw new Error('ENOTFOUND'); return answers[name]; } });
+  closers.push(() => proxy.close());
+  const { port } = await proxy.listen();
+  assert.match(await connect(port, 'registry.npmjs.org:443'), /^HTTP\/1\.1 200[\s\S]*ECHO:ping/);
+  assert.match(await connect(port, 'repo1.maven.org:443'), /^HTTP\/1\.1 200[\s\S]*ECHO:ping/);
+  assert.match(await connect(port, 'rebind.example:443'), /^HTTP\/1\.1 403/, 'a name with any private address');
+  assert.match(await connect(port, 'gone.example:443'), /^HTTP\/1\.1 403/, 'a name that does not resolve here');
+  const body = await new Promise((resolve, reject) => http.get({ host: '127.0.0.1', port, agent: false, path: 'http://registry.npmjs.org/left-pad', headers: { host: 'registry.npmjs.org' } }, response => {
+    let text = ''; response.on('data', chunk => { text += chunk; }); response.on('end', () => resolve(text));
+  }).on('error', reject));
+  assert.equal(body, 'via upstream');
+  assert.deepEqual(seen, ['CONNECT 104.16.0.35:443', 'CONNECT [2606:4700::6810:84e5]:443', 'GET http://104.16.0.35/left-pad host=registry.npmjs.org']);
 });
 
 test('commands get the proxy in the variables package managers and the JVM read', () => {

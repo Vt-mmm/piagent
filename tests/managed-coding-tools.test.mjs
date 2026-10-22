@@ -165,6 +165,16 @@ test('web pages are read only from public https addresses, redirects included', 
   assert.equal(htmlToText('<p>a&#39;b &lt;c&gt;</p>').text, "a'b <c>");
 });
 
+test('web pages refuse IPv6 forms of a private IPv4 address, as literals or lookups', async () => {
+  const requestForTest = () => { throw new Error('web-fetch-connected'); };
+  const resolve = async () => assert.fail('a literal is never looked up');
+  for (const url of ['https://[::ffff:7f00:1]/', 'https://[::ffff:127.0.0.1]/', 'https://[64:ff9b::c0a8:101]/', 'https://[64:ff9b::7f00:1]/', 'https://[2002:c0a8:101::1]/', 'https://[2001:0:4136:e378::1]/'])
+    await assert.rejects(fetchPublicPage(url, {resolve, requestForTest}), /web-fetch-private-address/, url);
+  for (const address of ['::ffff:c0a8:101', '64:ff9b:1::808:808'])
+    await assert.rejects(fetchPublicPage('https://docs.example/', {resolve: async () => [{address, family: 6}], requestForTest}), /web-fetch-private-address/, address);
+  await assert.rejects(fetchPublicPage('https://docs.example/', {resolve: async () => [{address: '64:ff9b::808:808', family: 6}], requestForTest}), /web-fetch-connected/, 'NAT64 of a public address');
+});
+
 test('web search uses the provider search tool through Studio with the grant model and effort', async () => {
   const seen = [];
   const replies = {

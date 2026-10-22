@@ -3,6 +3,9 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { lookup } from 'node:dns/promises';
+import { privateAddress } from './ip-policy.mjs';
+
+export { privateAddress };
 
 // The package registries a company command reaches without asking: plain
 // bash has no network, except through this proxy, which the trusted runtime
@@ -10,6 +13,10 @@ import { lookup } from 'node:dns/promises';
 // HTTP to the hosts below and the member's own additions, on ports 443 and
 // 80 only, never to an IP literal or a name that resolves to this machine or
 // a private network (DNS rebinding), and connects to the address it checked.
+// With a company upstream proxy (HTTPS_PROXY) the name is still looked up and
+// checked here, and the upstream is asked for that checked address, never the
+// name, so it cannot resolve it elsewhere; a name this machine cannot look up
+// is refused (run_with_network still reaches it after the member approves).
 // Everything else is refused with 403 and remembered, so the command's
 // failure names the host and run_with_network (the member approves it).
 // Registries (and GitHub) take no upload without a token, and tokens stay
@@ -50,17 +57,8 @@ export function domainAllowed(host, domains) {
   return domains.some(rule => rule.startsWith('*.') ? name.endsWith(rule.slice(1)) && name.length > rule.length - 1 : name === rule);
 }
 
-// Addresses that are this machine, a private network or not routable.
-export function privateAddress(address) {
-  if (net.isIPv4(address)) {
-    const [a, b] = address.split('.').map(Number);
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32)
-      || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
-  }
-  const v6 = address.toLowerCase();
-  if (v6.startsWith('::ffff:')) return privateAddress(v6.slice(7));
-  return v6 === '::' || v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || v6.startsWith('ff');
-}
+// host:port of a checked address, as a CONNECT target or URL host.
+const authority = ({ host, port }) => `${net.isIPv6(host) ? `[${host}]` : host}:${port}`;
 
 function upstreamProxy(env) {
   for (const name of ['HTTPS_PROXY', 'https_proxy']) {
@@ -101,7 +99,6 @@ export class PackageProxy {
   // The checked public address of an allowed host, or null.
   async #target(host, port) {
     if (!this.ports.has(port) || !domainAllowed(host, this.domains)) { this.#deny(host); return null; }
-    if (this.upstream) return { host, port };
     try {
       const addresses = await this.resolve(host);
       if (!addresses.length || addresses.some(entry => this.isPrivate(entry.address))) { this.#deny(host); return null; }
@@ -117,7 +114,7 @@ export class PackageProxy {
     upstream.setTimeout(10 * 60_000, () => upstream.destroy());
     upstream.once('connect', () => {
       if (this.upstream) {
-        upstream.write(`CONNECT ${match[1]}:${match[2]} HTTP/1.1\r\nHost: ${match[1]}:${match[2]}\r\n\r\n`);
+        upstream.write(`CONNECT ${authority(target)} HTTP/1.1\r\nHost: ${authority(target)}\r\n\r\n`);
         let reply = Buffer.alloc(0);
         const onData = chunk => {
           reply = Buffer.concat([reply, chunk]);
@@ -144,8 +141,9 @@ export class PackageProxy {
     const target = await this.#target(url.hostname, Number(url.port) || 80);
     if (!target) { response.writeHead(403, { 'X-Piagent-Proxy': 'domain-not-allowed', 'Content-Type': 'text/plain; charset=utf-8' }).end(`piagent: ${url.hostname} is not an allowed package registry\n`); return; }
     const headers = { ...request.headers, host: url.host }; delete headers['proxy-connection']; delete headers['proxy-authorization'];
+    const pinned = new URL(url); pinned.host = authority(target);
     const outgoing = http.request(this.upstream
-      ? { host: this.upstream.host, port: this.upstream.port, path: url.href, method: request.method, headers }
+      ? { host: this.upstream.host, port: this.upstream.port, path: pinned.href, method: request.method, headers }
       : { host: target.host, port: target.port, path: url.pathname + url.search, method: request.method, headers, servername: url.hostname }, incoming => {
       response.writeHead(incoming.statusCode ?? 502, incoming.headers); incoming.pipe(response);
     });
