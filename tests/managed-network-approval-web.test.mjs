@@ -65,7 +65,7 @@ test('run_with_network asks the user in the company WebUI and runs the approved 
 
 // Bypass: a command that needs the internet runs without asking; one that
 // sends data out (git push) is still asked, with the reason.
-test('Bypass runs network commands without asking but still asks before git push',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
+test('Full access runs network commands without asking but still asks before git push',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-bypass-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const registry=http.createServer((_req,res)=>res.end('REGISTRY_REACHED'));await new Promise(r=>registry.listen(0,'127.0.0.1',r));
  const download=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/left-pad`,push='git push origin main';
@@ -102,18 +102,18 @@ test('Bypass runs network commands without asking but still asks before git push
   await page.getByRole('button',{name:/Cuộc trò chuyện mới|New chat/}).last().click();
   await page.getByRole('button',{name:/Thêm tùy chọn|More options/}).click();
   await page.getByRole('button',{name:/^Hỏi trước$|^Ask first$/}).click();
-  await page.getByRole('menuitem',{name:/Bypass/}).click();
-  await page.getByRole('button',{name:/^Dùng Bypass$|^Use Bypass$/}).click();
+  await page.getByRole('menuitem',{name:/Toàn quyền|Full access/}).click();
+  await page.getByRole('button',{name:/^Dùng toàn quyền$|^Use full access$/}).click();
   await page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).fill('Install left-pad and push');await page.getByRole('button',{name:/^Gửi$|^Send$/}).click();
   // The download ran without asking; the push waits for the member.
-  try{await expect(page.getByText(/Bypass still asks/).first()).toBeVisible({timeout:20000});}
+  try{await expect(page.getByText(/Full access still asks/).first()).toBeVisible({timeout:20000});}
   catch(error){console.log('bypass diagnostics',JSON.stringify({requests:requests.length,body:(await page.locator('body').innerText()).slice(0,2000)}));throw error;}
   assert.equal(requests.length,2,'the download ran without an approval');
   assert.match(JSON.stringify(requests[1].input),/REGISTRY_REACHED/);
   await page.getByRole('button',{name:/^Từ chối|^Deny/}).last().click();
   await expect(page.getByText('BYPASS_DONE',{exact:true})).toBeVisible({timeout:20000});
   // The choice is kept with the conversation.
-  await expect(page.getByRole('button',{name:/Đổi quyền truy cập|Change access level/})).toHaveText(/Bypass/);
+  await expect(page.getByRole('button',{name:/Đổi quyền truy cập|Change access level/})).toHaveText(/Toàn quyền/);
  }finally{await browser?.close();await gateway?.close();await new Promise(r=>studio.close(r));await new Promise(r=>registry.close(r));fs.rmSync(root,{recursive:true,force:true});}
 });
 
@@ -121,7 +121,7 @@ test('Bypass runs network commands without asking but still asks before git push
 // 2026-10-09: it looked on, then a reload showed "Hỏi trước"). The change is
 // kept, the waiting command still needs its answer, the next one runs without
 // asking, and a reload still shows Bypass.
-test('Bypass turned on while a command waits applies to the next commands and survives a reload',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
+test('Full access turned on while a command waits applies to the next commands and survives a reload',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-bypass-midturn-'))),project=path.join(root,'project');fs.mkdirSync(project);
  const registry=http.createServer((_req,res)=>res.end('REGISTRY_REACHED'));await new Promise(r=>registry.listen(0,'127.0.0.1',r));
  const first=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/first`,second=`curl -sS -m 5 http://127.0.0.1:${registry.address().port}/second`;
@@ -162,10 +162,10 @@ test('Bypass turned on while a command waits applies to the next commands and su
   await expect(access).toHaveText(/Hỏi trước|Ask first/);
   // While the first command waits for its answer, the member turns on Bypass.
   await access.click();
-  await page.getByRole('button',{name:'Bypass',exact:true}).click();
-  await page.getByRole('button',{name:/^Bật Bypass$|^Turn on Bypass$/}).click();
+  await page.getByRole('button',{name:'Toàn quyền',exact:true}).click();
+  await page.getByRole('button',{name:/^Bật toàn quyền$|^Enable full access$/}).click();
   await expect(page.getByRole('status').filter({hasText:/Lệnh đang chờ vẫn cần bạn bấm Cho phép/})).toBeVisible();
-  await expect(access).toHaveText(/Bypass/);
+  await expect(access).toHaveText(/Toàn quyền/);
   assert.equal(requests.length,1,'the waiting command did not run by itself');
   await page.getByRole('button',{name:/^Cho phép|^Allow/}).last().click();
   // The second command runs under Bypass: no second card.
@@ -174,6 +174,6 @@ test('Bypass turned on while a command waits applies to the next commands and su
   assert.equal((JSON.stringify(requests[2].input).match(/REGISTRY_REACHED/g)??[]).length,2,'both downloads reached the registry');
   await expect(page.getByText(/Second download/)).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('button',{name:/Đổi quyền truy cập|Change access level/})).toHaveText(/Bypass/,{timeout:15000});
+  await expect(page.getByRole('button',{name:/Đổi quyền truy cập|Change access level/})).toHaveText(/Toàn quyền/,{timeout:15000});
  }finally{await browser?.close();await gateway?.close();await new Promise(r=>studio.close(r));await new Promise(r=>registry.close(r));fs.rmSync(root,{recursive:true,force:true});}
 });

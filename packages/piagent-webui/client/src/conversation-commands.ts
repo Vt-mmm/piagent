@@ -13,6 +13,7 @@ export type ConversationCommandContext = {
   locale: UiLocale; company: boolean; running: boolean; pinned: boolean;
   // Company conversations carry fast mode only where the Harness allows it.
   fast: "on" | "off" | null; thinkingLevels: readonly string[];
+  /** A company conversation whose Harness allows Bypass. */ bypass?: boolean;
   loadModels(): Promise<Array<{ modelRef: string; label: string }>>;
   actions: { setModel(modelRef: string): Promise<unknown>; setThinking(level: string): Promise<unknown>; setFast(on: boolean): Promise<unknown>;
     setPermission(value: Permission): Promise<unknown>; rename(title: string): Promise<unknown>; fork(): Promise<unknown>; pin(on: boolean): Promise<unknown>;
@@ -69,12 +70,16 @@ export function conversationCommands(context: ConversationCommandContext): Conve
       return on === null ? usage("Cách dùng: /fast on|off", "Usage: /fast on|off")
         : attempt(locale, () => actions.setFast(on), on ? ok("Đã bật Fast.", "Fast is on.") : ok("Đã tắt Fast.", "Fast is off."), "Chưa đổi được Fast", "Could not change Fast");
     });
-    add("bypass", "<on|off>", "Bypass: chỉ hỏi việc bắt buộc, hoặc hỏi trước", "Bypass: ask only what must be asked, or ask first", async (value) => {
+    add("bypass", "<on|full|off>", "Bypass (không hỏi gì), Toàn quyền (chỉ hỏi việc bắt buộc) hoặc Hỏi trước", "Bypass (asks nothing), Full access (asks only what must be asked) or Ask first", async (value) => {
       if (value === "off") return attempt(locale, () => actions.setPermission("workspace-write"), ok("Đã chuyển sang Hỏi trước.", "Switched to Ask first."), "Chưa đổi được quyền", "Access not changed");
-      if (value !== "on") return usage("Cách dùng: /bypass on|off", "Usage: /bypass on|off");
-      return { confirm: { title: t("Bật Bypass?", "Turn on Bypass?"), confirmLabel: t("Bật Bypass", "Turn on Bypass"),
+      if (value === "full") return { confirm: { title: t("Bật Toàn quyền?", "Turn on Full access?"), confirmLabel: t("Bật Toàn quyền", "Turn on Full access"),
         description: t("Lệnh cần internet hoặc Docker chạy không hỏi; push, deploy và lệnh trên máy vẫn hỏi.", "Commands that need the internet or Docker run without asking; pushes, deploys and commands on this machine still ask."),
-        run: () => attempt(locale, () => actions.setPermission("trusted-full-access"), ok("Đã bật Bypass.", "Bypass is on."), "Chưa đổi được quyền", "Access not changed") } };
+        run: () => attempt(locale, () => actions.setPermission("trusted-full-access"), ok("Đã bật Toàn quyền.", "Full access is on."), "Chưa đổi được quyền", "Access not changed") } };
+      if (value !== "on") return usage("Cách dùng: /bypass on|full|off", "Usage: /bypass on|full|off");
+      if (!context.bypass) return usage("Harness của team đã tắt Bypass (admin Studio). Dùng /bypass full cho Toàn quyền.", "The team's Harness has Bypass off (Studio administrator). Use /bypass full for Full access.");
+      return { confirm: { title: t("Bật Bypass?", "Turn on Bypass?"), confirmLabel: t("Bật Bypass", "Turn on Bypass"),
+        description: t("Không hỏi gì nữa: internet, Docker, lệnh trên máy, push, deploy, migration đều chạy luôn. Lệnh thường vẫn trong sandbox; /undo vẫn dùng được.", "Nothing is asked any more: internet, Docker, commands on this machine, pushes, deploys and migrations all run. Plain commands stay in the sandbox; /undo still works."),
+        run: () => attempt(locale, () => actions.setPermission("bypass"), ok("Đã bật Bypass.", "Bypass is on."), "Chưa đổi được quyền", "Access not changed") } };
     });
   } else {
     add("model", "<tên model>", "Đổi model", "Change the model", async (wanted) => {

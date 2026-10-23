@@ -200,7 +200,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         <McpConnectionActions compact sessionRef={session.sessionRef} connection={connection} onChanged={(value) => onConnectionsChanged?.(value)} /></ListItem>)}
         {connections && connections.connections.length === 0 && <ListItem><ListItemText primary={localize(locale, "Chưa có MCP", "No MCP configured")} /></ListItem>}
         {!connections && <ListItem><ListItemText primary={localize(locale, "Đang đọc…", "Loading…")} /></ListItem>}</List>}
-      {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(managed ? ["workspace-write", "trusted-full-access"] as const : ["read-only", "workspace-write", "trusted-full-access", "bypass"] as const).map((value) =>
+      {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(managed ? ["workspace-write", "trusted-full-access", ...(session.managedBypass ? ["bypass"] as const : [])] as const : ["read-only", "workspace-write", "trusted-full-access", "bypass"] as const).map((value) =>
         <Button key={value} variant={permissionValue === value ? "contained" : "outlined"} color={value === "bypass" ? "error" : value === "trusted-full-access" ? "warning" : "primary"}
           disabled={!canSetPermission || optionBusy || !managed && session.liveState === "running"} onClick={() => changePermission(value)} sx={{ justifyContent: "flex-start" }}>
           {managed ? companyAccessLabel(value, locale) : label(value, locale)}</Button>)}{optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}</Stack>}
@@ -210,10 +210,10 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         <Button fullWidth variant="outlined" startIcon={<DifferenceRounded />} sx={{ mt: 1 }} onClick={() => { close(); onOpenChanges(); }}>
           {localize(locale, "Mở Source Changes", "Open Source Changes")}</Button></Box>}
     </Popover>
-    <ActionConfirmationDialog open={pendingPermission !== null} title={managed || pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={managed ? companyBypassDetail(locale) : pendingPermission === "bypass" ? personalBypassDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
+      description={pendingPermission === "bypass" ? (managed ? companyBypassDetail(locale) : personalBypassDetail(locale)) : managed ? companyFullAccessDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed || pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
       onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode) void applyPermission(mode); }} />
     <Snackbar open={permissionNotice !== null} autoHideDuration={permissionNotice?.tone === "success" ? 4000 : 12000} onClose={() => setPermissionNotice(null)}
       anchorOrigin={{ vertical: "top", horizontal: "center" }}><Alert severity={permissionNotice?.tone ?? "info"} variant="filled" onClose={() => setPermissionNotice(null)}
@@ -224,14 +224,19 @@ export function SessionComposerControls({ session, snapshot, connections, locale
 // A company conversation's access: ask before each command that needs the
 // internet, or Bypass (asks only for what must be confirmed).
 export function companyAccessLabel(value: string | null | undefined, locale: UiLocale) {
-  return value === "trusted-full-access" ? "Bypass" : localize(locale, "Hỏi trước", "Ask first");
+  return value === "bypass" ? "Bypass" : value === "trusted-full-access" ? localize(locale, "Toàn quyền", "Full access") : localize(locale, "Hỏi trước", "Ask first");
 }
 // A personal conversation's Bypass: every Piagent gate off.
 export function personalBypassDetail(locale: UiLocale) {
-  return localize(locale, "Không hỏi, không chặn gì trong cuộc trò chuyện personal này: xoá, push, gửi ra ngoài, file được bảo vệ đều chạy luôn, như chế độ bypass của Codex. Output vẫn được che secret và /undo vẫn hoàn tác được từng lượt. Không áp dụng cho company.",
-    "Nothing is asked or blocked in this personal conversation: deletes, pushes, external sends and protected files all run, as with Codex's bypass mode. Output is still redacted and /undo can still revert each turn. Does not apply to company conversations.");
+  return localize(locale, "Không hỏi, không chặn gì trong cuộc trò chuyện personal này: xoá, push, gửi ra ngoài, file được bảo vệ đều chạy luôn, như chế độ bypass của Codex. Output vẫn được che secret và /undo vẫn hoàn tác được từng lượt. Cuộc trò chuyện company theo công tắc Bypass trong Harness của Studio.",
+    "Nothing is asked or blocked in this personal conversation: deletes, pushes, external sends and protected files all run, as with Codex's bypass mode. Output is still redacted and /undo can still revert each turn. Company conversations follow the Bypass switch of the Studio Harness.");
 }
+// A company conversation's Bypass, where the team's Harness allows it.
 export function companyBypassDetail(locale: UiLocale) {
+  return localize(locale, "Không hỏi gì nữa trong cuộc trò chuyện này: lệnh cần internet, Docker, chạy trên máy, push, deploy, migration đều chạy luôn, như bypass của Codex. Lệnh thường vẫn chạy trong sandbox, output vẫn che secret và /undo vẫn hoàn tác được. Admin Studio có thể tắt Bypass trong Harness.",
+    "Nothing is asked in this conversation any more: commands that need the internet, Docker or this machine, pushes, deploys and migrations all run, as with Codex's bypass. Plain commands still run in the sandbox, output is still redacted and /undo still works. A Studio administrator can turn Bypass off in the Harness.");
+}
+export function companyFullAccessDetail(locale: UiLocale) {
   return localize(locale,
     "Lệnh cần internet (cài package, tải file, git pull, test có server hay browser) chạy luôn, không hỏi. Vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài (git push, publish, deploy, upload, ssh), chạy migration database, xóa mà không rõ đích hoặc dùng sudo.",
     "Commands that need the internet (package installs, downloads, git pull, tests with a server or browser) run without asking. You are still asked before anything that pushes or sends data out (git push, publish, deploy, uploads, ssh), database migrations, deletes whose target is unknown, and sudo.");

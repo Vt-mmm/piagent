@@ -19,8 +19,8 @@ export async function executePermissionCommand(session: any,
   // runtime keeps the choice in the conversation and reads it at each command,
   // so it may change while a turn runs (the supervisor lets it).
   if (session.managedExecution) {
-    // Bypass is personal only: a company conversation keeps the team's rules.
-    if (typeof session.managedSetPermission !== "function" || permissionMode === "read-only" || permissionMode === "bypass") throw new Error("managed-permission-unavailable");
+    // Bypass where the team's Harness allows it; the runtime refuses otherwise.
+    if (typeof session.managedSetPermission !== "function" || permissionMode === "read-only") throw new Error("managed-permission-unavailable");
     session.managedSetPermission(permissionMode);
     return;
   }

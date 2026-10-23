@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { networkConfirmation } from './permission.mjs';
+import { asksNothing, broadAccess, networkConfirmation } from './permission.mjs';
 import { engineAlive, engineLauncher } from './container-engine.mjs';
 import { MEMBER_ONLY, memberOnlyReason, runHostCommand } from './host-command.mjs';
 import { processTools } from './background-process.mjs';
@@ -34,9 +34,9 @@ const KINDS = {
     description: 'Run one shell command on the member\'s machine, outside the sandbox, as the member, after they approve that exact command. Use it when the sandbox blocks what the task needs and no other tool covers it: install a runtime or tool the project needs (brew install openjdk@21, brew install node@22, sdk install java…), git pull or git push with the member\'s sign-in, a private registry, a file outside the project. It has the member\'s files, Keychain and sign-ins, so ask only for what the task needs and say why in reason. No input can be typed: commands that need the member\'s password (sudo, a .pkg installer) or an interactive sign-in are refused; ask the member with ask_user for those.',
     allow: 'Run this exact command once on this machine, outside the sandbox, as you: it can read and change your files and use your sign-ins.',
     title: 'Chạy lệnh trên máy (ngoài sandbox)', allowText: 'chạy đúng lệnh này một lần trên máy bạn, ngoài sandbox, bằng quyền của bạn: lệnh đọc/sửa được file và dùng được tài khoản đã đăng nhập trên máy.',
-    // Bypass does not cover it: the member approves each command (with what
-    // Bypass would still have asked about, when there is something).
-    confirm: async (self, command) => await networkConfirmation(self, command) ?? 'ask',
+    // Full access does not cover it: the member approves each command (with
+    // what Full access would still have asked about). Bypass asks nothing.
+    confirm: async (self, command) => asksNothing(self) ? null : await networkConfirmation(self, command) ?? 'ask',
   },
 };
 
@@ -66,7 +66,7 @@ function commandTool(self, kind) {
       if (memberOnly) throw Error(MEMBER_ONLY(memberOnly));
       const confirm = await spec.confirm(self, args.command);
       if (confirm !== null) await approve(self, id, signal, ctx, { toolName: spec.name, rawAction: { command: args.command }, commandPreview: String(args.command),
-        provider: spec.provider, requestedScope: spec.scope, reason: (confirm === 'ask' ? String(args.reason) : `Bypass still asks: ${confirm}. ${args.reason}`).slice(0, 300), riskClass: spec.riskClass,
+        provider: spec.provider, requestedScope: spec.scope, reason: (confirm === 'ask' ? String(args.reason) : `Full access still asks: ${confirm}. ${args.reason}`).slice(0, 300), riskClass: spec.riskClass,
         allowConsequence: spec.allow, denyConsequence: 'The command does not run; the agent is told you declined.' },
       { title: spec.title, body: `${args.command}\n\nLý do: ${args.reason}${confirm === 'ask' ? '' : `\nBypass vẫn hỏi: ${confirm}`}\n\nĐồng ý: ${spec.allowText}\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.` });
       let ok = false;
@@ -97,7 +97,7 @@ function startDockerTool(self, { wait = 180_000, every = 2000, launcher: found =
       if (!launcher) throw Error(self.boundary.dockerCli ? MEMBER_ONLY("starting this machine's Docker service needs the member's password")
         : 'managed-docker-not-installed: Máy chưa cài Docker. Hỏi member bằng ask_user: cài Docker Desktop hoặc OrbStack (trình cài cần mật khẩu nên member tự cài; máy có Homebrew thì có thể xin run_on_host "brew install colima docker"), hay chạy check theo cách khác.');
       const preview = `${launcher.command} ${launcher.args.join(' ')}`;
-      if (self.permission !== 'trusted-full-access') await approve(self, id, signal, ctx, { toolName: 'start_docker', rawAction: { launcher: launcher.label }, commandPreview: preview,
+      if (!broadAccess(self)) await approve(self, id, signal, ctx, { toolName: 'start_docker', rawAction: { launcher: launcher.label }, commandPreview: preview,
         provider: 'docker', requestedScope: 'start-docker-once', reason: String(args.reason).slice(0, 300), riskClass: 'medium',
         allowConsequence: `Start ${launcher.label} on this machine; it keeps running after the conversation.`, denyConsequence: 'Docker is not started; the agent is told you declined.' },
       { title: `Mở ${launcher.label}`, body: `${preview}\n\nLý do: ${args.reason}\n\nĐồng ý: mở ${launcher.label} trên máy; nó vẫn chạy sau cuộc trò chuyện.\nTừ chối: không mở Docker, agent được báo bạn đã từ chối.` });

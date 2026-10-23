@@ -3,13 +3,14 @@ import { ManagedBrokerClient } from '../../piagent-core/managed/broker-client.mj
 import { ManagedSession } from '../../piagent-core/managed/session.mjs';
 import { checkpointsOf } from '../../piagent-core/managed/checkpoints.mjs';
 import { fastAllowed } from '../../piagent-core/managed/fast-mode.mjs';
+import { bypassAllowed } from '../../piagent-core/managed/permission.mjs';
 import { PI_HOST_VERSION } from '../../piagent-core/managed/pi-host.mjs';
 import fs from 'node:fs';
 
 // A company model as the new chat page sees it: the thinking levels its
 // Harness allows, and whether the Harness allows Fast mode (the page shows
 // the Fast switch only then).
-export const managedModelOption=(manifest,models,model)=>({...model,managedThinkingLevels:managedThinkingLevels(manifest,models,model),managedFast:fastAllowed(manifest)});
+export const managedModelOption=(manifest,models,model)=>({...model,managedThinkingLevels:managedThinkingLevels(manifest,models,model),managedFast:fastAllowed(manifest),managedBypass:bypassAllowed(manifest)});
 
 // Only called by the pinned launcher with Watch's non-secret import manifest.
 // Each web session owns its own broker; no personal auth/model/resource loader.

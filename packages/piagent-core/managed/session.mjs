@@ -26,7 +26,7 @@ import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, wo
 import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
-import { restorePermission, permissionSetter } from './permission.mjs';
+import { restorePermission, recordBypass, permissionSetter } from './permission.mjs';
 import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
@@ -169,7 +169,7 @@ export class ManagedSession {
     self.session.managedExecution = true;
     self.turnRetry = enableCompanyTurnRetry(self.session, settings, self.studioLink);
     // The member's access for this conversation: ask first, or Bypass (permission.mjs).
-    self.permission = restorePermission(manager); self.session.managedSetPermission = permissionSetter(self, manager);
+    self.permission = restorePermission(manager); recordBypass(self, manager); self.session.managedSetPermission = permissionSetter(self, manager);
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
     self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null where the Harness does not allow it
     self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };

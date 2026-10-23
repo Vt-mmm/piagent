@@ -107,19 +107,28 @@ test('Harness notes and failures read as on the dashboard', () => {
   assert.equal(launchReasonText('managed-unknown', 'vi'), null);
 });
 
-test('/bypass switches the conversation between ask first and Bypass, and the footer says so', { skip: !fs.existsSync(sdkRoot) }, async (t) => {
+test('/bypass switches the conversation between ask first, Full access and Bypass, and the footer says so', { skip: !fs.existsSync(sdkRoot) }, async (t) => {
   checksOn(t);
-  const managed = { permission: 'workspace-write', session: { managedSetPermission(mode) { managed.permission = mode; } } };
+  const managed = { permission: 'workspace-write', manifest: { harness: { configuration: { bypass_mode: true } } }, session: { managedSetPermission(mode) { managed.permission = mode; } } };
   const { pi, emit, commands, renderers } = fakePi();
   await companyTerminalExtension({ managed: () => managed, packageRoot: path.resolve('.'), sdkRoot })(pi);
   assert.ok(renderers.has('agent-watch-process') && renderers.has('agent-watch-review-status') && renderers.has('agent-watch-helper-receipt'));
-  const ui = fakeUi(['Bypass: chỉ hỏi việc bắt buộc']);
+  const ui = fakeUi(['Toàn quyền: chỉ hỏi việc bắt buộc']);
   await emit('session_start', {}, ui.ctx);
   assert.equal(ui.status.get('agent-watch-permission'), undefined);
   await commands.get('bypass').handler('', ui.ctx);
   assert.equal(managed.permission, 'trusted-full-access');
+  assert.equal(ui.status.get('agent-watch-permission'), 'Toàn quyền');
+  assert.match(ui.notices.at(-1).message, /^Toàn quyền:/);
+  await commands.get('bypass').handler('on', ui.ctx);
+  assert.equal(managed.permission, 'bypass');
   assert.equal(ui.status.get('agent-watch-permission'), 'Bypass');
   assert.match(ui.notices.at(-1).message, /^Bypass:/);
+  managed.manifest.harness.configuration.bypass_mode = false;
+  await commands.get('bypass').handler('on', ui.ctx);
+  assert.match(ui.notices.at(-1).message, /tắt Bypass/);
+  await commands.get('bypass').handler('status', ui.ctx);
+  assert.equal(ui.status.get('agent-watch-permission'), 'Toàn quyền', 'a Bypass the administrator switched off applies as Full access');
   await commands.get('bypass').handler('off', ui.ctx);
   assert.equal(managed.permission, 'workspace-write');
   assert.equal(ui.status.get('agent-watch-permission'), undefined);
@@ -152,7 +161,7 @@ test('the header names the team, the roles and effort (never a model), permissio
   assert.equal(headerText(before), 'Piagent công ty · team Test Quý · Main agent (Rất cao) · Subagent review bật · Hỏi trước · Fast tắt · memory tắt · 1.28.3');
   // After a run: the model and effort Studio granted; Bypass and Fast as switched.
   Object.assign(managed, { permission: 'trusted-full-access' }); managed.session.managedFastState = () => 'on';
-  assert.match(headerText(harnessSummary(managed, { last: { effort: 'high' } })), /Main agent \(Cao\) · Subagent review bật · Bypass · Fast bật/);
+  assert.match(headerText(harnessSummary(managed, { last: { effort: 'high' } })), /Main agent \(Cao\) · Subagent review bật · Toàn quyền · Fast bật/);
   // No Fast switch where the Harness does not allow it; no review when the workflow has none.
   const plain = { manifest: { harness: { configuration: { workflow: { review: 'off' }, main: { model_ids: ['m'] }, review: { model_ids: ['r'] } } } }, session: { managedFastState: () => null, state: { thinkingLevel: 'high' } } };
   assert.equal(headerText(harnessSummary(plain)), 'Piagent công ty · Main agent (Cao) · Hỏi trước · memory tắt');

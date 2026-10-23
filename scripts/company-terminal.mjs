@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
+import { bypassAllowed, effectivePermission } from '../packages/piagent-core/managed/permission.mjs';
 import { memoryOn } from '../packages/piagent-core/managed/memory.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
@@ -57,17 +58,19 @@ export function memoryResultLines(text, expanded = false) {
 const branchOf = (cwd) => new Promise((resolve) => execFile('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000 },
   (error, out) => resolve(error ? null : String(out).trim() || null)));
 export const HELP_TEXT = [
-  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass on|off|status quyền lệnh cần internet · /fast on|off|status (khi Harness cho phép) · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
+  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass on|full|off|status quyền của cuộc trò chuyện · /fast on|off|status (khi Harness cho phép) · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
   'Pi: /session thông tin cuộc trò chuyện · /resume mở cuộc trò chuyện công ty khác · /new cuộc mới · /compact nén ngữ cảnh · /tree, /fork nhánh · /name đặt tên · /copy, /export · /hotkeys toàn bộ phím tắt · /quit thoát.',
   'Phím: ! <lệnh> chạy shell · Esc dừng lượt đang chạy · Ctrl+C xoá ô nhập, hai lần để thoát · Ctrl+O xem thêm.',
   'Mở lại sau: piagent studio --project <thư mục>, rồi /resume. Đừng mở cuộc trò chuyện công ty bằng pi cá nhân.',
 ].join('\n');
 const PERMISSION_STATUS = 'agent-watch-permission';
-const ASK = 'Hỏi trước (mặc định)', BYPASS = 'Bypass: chỉ hỏi việc bắt buộc';
+const ASK = 'Hỏi trước (mặc định)', FULL = 'Toàn quyền: chỉ hỏi việc bắt buộc', BYPASS = 'Bypass: không hỏi gì';
 const PERMISSION_TEXT = {
   'workspace-write': 'Hỏi trước: mọi lệnh cần internet đều hỏi bạn.',
-  'trusted-full-access': 'Bypass: lệnh cần internet chạy luôn; vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài, chạy migration, xoá không rõ đích hoặc dùng sudo.',
+  'trusted-full-access': 'Toàn quyền: lệnh cần internet chạy luôn; vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài, chạy migration, xoá không rõ đích hoặc dùng sudo.',
+  bypass: 'Bypass: không hỏi gì nữa (internet, Docker, lệnh trên máy, push, deploy, migration đều chạy luôn); lệnh thường vẫn trong sandbox, /undo vẫn dùng được.',
 };
+const PERMISSION_NAME = { 'workspace-write': 'Hỏi trước', 'trusted-full-access': 'Toàn quyền', bypass: 'Bypass' };
 
 const EFFORT = { off: 'Tắt', minimal: 'Tối thiểu', low: 'Thấp', medium: 'Trung bình', high: 'Cao', xhigh: 'Rất cao', max: 'Tối đa' };
 export const effortText = (level) => EFFORT[level] ?? level ?? '';
@@ -83,7 +86,7 @@ export function harnessSummary(managed, { last = null, version = null } = {}) {
   return {
     team: manifest?.user?.team_name || null,
     effort: last?.effort || config.main?.effort || managed?.session?.state?.thinkingLevel || null,
-    review, permission: managed?.permission === 'trusted-full-access' ? 'Bypass' : 'Hỏi trước',
+    review, permission: PERMISSION_NAME[effectivePermission(managed ?? {})] ?? 'Hỏi trước',
     fast: fast === null ? null : fast === 'on', memory: managed ? memoryOn(managed) : false, version,
   };
 }
@@ -285,23 +288,25 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       afterUpdate: () => bindingChanged() ? 'Bản mới đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình (cần Agent Watch đang chạy); piagent studio chờ việc này khi mở lại.' : null });
 
     // Ask first or Bypass, kept with the conversation like the dashboard's switch.
-    const showPermission = (ctx) => ctx.ui?.setStatus?.(PERMISSION_STATUS, managed()?.permission === 'trusted-full-access' ? 'Bypass' : undefined);
+    const showPermission = (ctx) => { const mode = managed() ? effectivePermission(managed()) : null; ctx.ui?.setStatus?.(PERMISSION_STATUS, mode && mode !== 'workspace-write' ? PERMISSION_NAME[mode] : undefined); };
     pi.on('session_start', async (_event, ctx) => showPermission(ctx));
     pi.registerCommand('bypass', {
-      description: 'Bật/tắt Bypass cho cuộc trò chuyện công ty này (on, off, hoặc để trống để chọn)',
-      getArgumentCompletions: argumentCompletions(['on', 'off', 'status']),
+      description: 'Quyền của cuộc trò chuyện công ty này: on (Bypass, khi Harness cho phép), full (Toàn quyền), off (Hỏi trước), hoặc để trống để chọn',
+      getArgumentCompletions: argumentCompletions(['on', 'full', 'off', 'status']),
       handler: async (args, ctx) => {
         const session = managed();
         if (typeof session?.session?.managedSetPermission !== 'function') { ctx.ui.notify('Cuộc trò chuyện này chưa sẵn sàng.', 'error'); return; }
         const arg = args.trim().toLowerCase();
-        let mode = arg === 'on' ? 'trusted-full-access' : arg === 'off' ? 'workspace-write' : null;
+        const allowed = bypassAllowed(session.manifest);
+        let mode = arg === 'on' ? (allowed ? 'bypass' : null) : arg === 'full' ? 'trusted-full-access' : arg === 'off' ? 'workspace-write' : null;
+        if (arg === 'on' && !allowed) { ctx.ui.notify('Harness của team đã tắt Bypass (admin Studio). Dùng /bypass full cho Toàn quyền.', 'warning'); return; }
         if (!mode && arg !== 'status') {
-          const choice = await ctx.ui.select(`Quyền của cuộc trò chuyện này (đang: ${session.permission === 'trusted-full-access' ? 'Bypass' : 'Hỏi trước'})`, [ASK, BYPASS]);
-          mode = choice === BYPASS ? 'trusted-full-access' : choice === ASK ? 'workspace-write' : null;
+          const choice = await ctx.ui.select(`Quyền của cuộc trò chuyện này (đang: ${PERMISSION_NAME[effectivePermission(session)]})`, allowed ? [ASK, FULL, BYPASS] : [ASK, FULL]);
+          mode = choice === BYPASS ? 'bypass' : choice === FULL ? 'trusted-full-access' : choice === ASK ? 'workspace-write' : null;
         }
         if (mode && mode !== session.permission) session.session.managedSetPermission(mode);
         showPermission(ctx);
-        ctx.ui.notify(PERMISSION_TEXT[session.permission] ?? PERMISSION_TEXT['workspace-write'], 'info');
+        ctx.ui.notify(PERMISSION_TEXT[effectivePermission(session)] ?? PERMISSION_TEXT['workspace-write'], 'info');
       } });
 
     // /undo: the files the last turn changed go back to how they were before

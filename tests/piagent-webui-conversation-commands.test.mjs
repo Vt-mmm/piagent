@@ -56,12 +56,17 @@ test("full access and Bypass ask first; the rest of access and Fast apply at onc
   assert.deepEqual(await full.confirm.run(), { tone: "success", text: "Access is now full." });
   await run(personal.value, "/permission read-only");
   assert.deepEqual(personal.calls, [["setPermission", "trusted-full-access"], ["setPermission", "read-only"]]);
-  const company = context({ company: true, fast: "off" });
+  const company = context({ company: true, fast: "off", bypass: true });
   const bypass = await run(company.value, "/bypass on");
   assert.match(bypass.confirm.title, /Turn on Bypass/); await bypass.confirm.run();
+  const companyFull = await run(company.value, "/bypass full");
+  assert.match(companyFull.confirm.title, /Turn on Full access/); await companyFull.confirm.run();
   await run(company.value, "/bypass off"); await run(company.value, "/fast"); await run(company.value, "/fast off");
   assert.equal((await run(company.value, "/bypass")).tone, "warning");
-  assert.deepEqual(company.calls, [["setPermission", "trusted-full-access"], ["setPermission", "workspace-write"], ["setFast", true], ["setFast", false]]);
+  assert.deepEqual(company.calls, [["setPermission", "bypass"], ["setPermission", "trusted-full-access"], ["setPermission", "workspace-write"], ["setFast", true], ["setFast", false]]);
+  // A Harness with Bypass switched off by the administrator.
+  const closed = context({ company: true, fast: null, bypass: false });
+  assert.equal((await run(closed.value, "/bypass on")).tone, "warning"); assert.equal(closed.calls.length, 0);
   assert.deepEqual(await run(company.value, "/undo"), { send: true });
 });
 

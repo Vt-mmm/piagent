@@ -293,7 +293,8 @@ export type SessionRow = {
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
       ];
-  managedPermission?: "workspace-write" | "trusted-full-access";
+  managedPermission?: "workspace-write" | "trusted-full-access" | "bypass";
+  managedBypass?: true;
   managedFast?: "off" | "on";
   managedPlan?: {
     /**

@@ -1,3 +1,4 @@
+import { broadAccess } from './permission.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -112,7 +113,7 @@ export function fetchOriginTool(self) {
     parameters:{type:'object',properties:{path:{type:'string',maxLength:500,description:'Repository folder inside the conversation folder, such as "api"; omit when the conversation folder is the repository.'}},additionalProperties:false},
     execute:async(id,args,signal,_update,ctx)=>{
       const plan=await repositoryFetchPlan(self.boundary,args?.path);
-      if(self.permission==='trusted-full-access'&&!signal?.aborted)return executeRepositoryFetch(self.boundary,plan,signal);
+      if(broadAccess(self)&&!signal?.aborted)return executeRepositoryFetch(self.boundary,plan,signal);
       const {piApprovalBroker}=await import('../runtime/inspection/approval-broker.ts');
       const decision=await piApprovalBroker.request({cwd:self.cwd,rawSessionId:self.session.sessionManager.getSessionId(),toolCallId:id,
         action:{kind:'external-provider-action',preconditionClass:'runtime-only',toolName:'fetch_origin',rawAction:plan,

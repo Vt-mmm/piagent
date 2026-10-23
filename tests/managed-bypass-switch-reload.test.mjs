@@ -17,7 +17,7 @@ import { piSdkRoot } from './helpers/pi-sdk.mjs';
 // And opening another Bypass conversation showed "Hỏi trước": the button was
 // reset for the switch and only followed a change of the choice.
 const sdkRoot = piSdkRoot();
-test('every Bypass conversation shows Bypass, after switching and after a reload',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
+test('every Full access conversation shows Full access, after switching and after a reload',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:90000},async()=>{
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'managed-bypass-switch-'))),project=path.join(root,'project');fs.mkdirSync(project);
  let gateway,browser,count=0;
  const studio=http.createServer(async(req,res)=>{ if (req.url === "/v1/capabilities") { res.writeHead(404); res.end(); return; } // a Studio older than 0.34
@@ -46,14 +46,14 @@ test('every Bypass conversation shows Bypass, after switching and after a reload
    await page.getByRole('button',{name:/Cuộc trò chuyện mới|New chat/}).last().click();
    await page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).fill(name);await page.getByRole('button',{name:/^Gửi$|^Send$/}).click();
    await expect(page.getByText(reply,{exact:true})).toBeVisible({timeout:20000});
-   await access.click();await page.getByRole('button',{name:'Bypass',exact:true}).click();
-   await page.getByRole('button',{name:/^Bật Bypass$|^Turn on Bypass$/}).click();
-   await expect(access).toHaveText(/Bypass/);
+   await access.click();await page.getByRole('button',{name:'Toàn quyền',exact:true}).click();
+   await page.getByRole('button',{name:/^Bật toàn quyền$|^Enable full access$/}).click();
+   await expect(access).toHaveText(/Toàn quyền/);
   }
   await page.getByText('First chat').first().click();
   await expect(page.getByText('REPLY_1',{exact:true})).toBeVisible();
-  await expect(access).toHaveText(/Bypass/,{timeout:5000});
+  await expect(access).toHaveText(/Toàn quyền/,{timeout:5000});
   await page.reload();
-  await expect(page.getByRole('button',{name:/Đổi quyền truy cập|Change access level/})).toHaveText(/Bypass/,{timeout:15000});
+  await expect(page.getByRole('button',{name:/Đổi quyền truy cập|Change access level/})).toHaveText(/Toàn quyền/,{timeout:15000});
  }finally{await browser?.close();await gateway?.close();await new Promise(r=>studio.close(r));fs.rmSync(root,{recursive:true,force:true});}
 });

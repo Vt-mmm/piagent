@@ -204,7 +204,7 @@ function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?:
     { mode: "read-only" as const, detail: localize(locale, "Chỉ xem session, task và source; không thay đổi project.", "Inspect the session, task, and source without changing the project.") },
     { mode: "workspace-write" as const, detail: localize(locale, "Đọc, sửa file và chạy command trong project; thao tác nhạy cảm vẫn cần xác nhận.", "Read and edit project files and run commands; sensitive actions still require confirmation.") },
     { mode: "trusted-full-access" as const, detail: localize(locale, "Quyền rộng hơn trong runtime; xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "Broader runtime access; deleting or sending data externally still requires separate confirmation.") },
-    ...(session?.managed ? [] : [{ mode: "bypass" as const, detail: personalBypassDetail(locale) }])
+    ...(!session?.managed || session.managedBypass ? [{ mode: "bypass" as const, detail: personalBypassDetail(locale) }] : [])
   ];
   return <><Title>{localize(locale, "Quyền truy cập", "Access")}</Title><Typography variant="h2" sx={{ mb: .5 }}>
     {localize(locale, "Hồ sơ quyền", "Permission profile")}</Typography><Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>

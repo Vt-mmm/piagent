@@ -500,7 +500,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-auto --read-only -p "<task>"` | Auto-run scout/read-only; guard chặn shell/write/unknown tool. |
 | `piagent-auto --full-access -p "<task>"` | Trusted automation style; không tắt protected paths/redaction/human gates. |
 | `pi` rồi `/permission full-access <task>` | Một lệnh trong Pi để bật full-access cho session và giao task. Alias `/full-access <task>` vẫn chạy. |
-| `piagent-auto --bypass`, `/permission bypass` | Bypass như Codex: không hỏi, không chặn gì (xoá, push, migration, gửi ra ngoài, file được bảo vệ đều chạy). Chỉ cho session personal; output vẫn che secret, `/undo` vẫn hoàn tác từng lượt. Company giữ luật của team. |
+| `piagent-auto --bypass`, `/permission bypass` | Bypass như Codex: không hỏi, không chặn gì (xoá, push, migration, gửi ra ngoài, file được bảo vệ đều chạy). Output vẫn che secret, `/undo` vẫn hoàn tác từng lượt. Company: `/bypass on` (Bypass), `/bypass full` (Toàn quyền), `/bypass off` (Hỏi trước); admin Studio tắt được Bypass trong Harness, khi đó cuộc trò chuyện chạy như Toàn quyền. |
 | `pi --list-models` | Xem model Pi thấy được theo credentials hiện tại. |
 | `piagent-install --with-mcp --with-subagents` | Cài global package + MCP + subagent baseline từ package bin. |
 | `piagent-setup <project> --profile auto` | Setup đầy đủ cho một project khi muốn preseed bằng bin. |

@@ -246,7 +246,8 @@ export class SessionInspectionRegistry {
       const inputs = Array.isArray(value.input) ? value.input.filter((item): item is string => typeof item === "string") : null;
       return [{ modelRef: webUiModelRef(provider, modelId), provider, modelId, displayName: safeName(value.name ?? modelId),
         reasoning: value.reasoning, imageInput: inputs ? inputs.includes("image") : null, thinkingLevels,
-        ...(provider === "agent_watch_managed" && value.managedFast === true ? { managedFast: true } : {}) }];
+        ...(provider === "agent_watch_managed" && value.managedFast === true ? { managedFast: true } : {}),
+        ...(provider === "agent_watch_managed" && value.managedBypass === true ? { managedBypass: true } : {}) }];
     });
     // Only offer a default present in the authenticated host catalog. Retain
     // the previous Sol baseline for accounts that have not received GPT-6 yet.

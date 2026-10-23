@@ -104,7 +104,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   const setDraft = (value: string) => { setDraftText(value); writeDraft(sessionRef, value); };
   // The Terminal's / commands, run here through the buttons' session commands (conversation-commands.ts).
   const company = session.modelLabel === "agent-watch-auto", running = Boolean(live && !live.complete);
-  const commands = conversationCommands({ locale, company, running, pinned: session.pinned, fast: session.managedFast === "on" || session.managedFast === "off" ? session.managedFast : null,
+  const commands = conversationCommands({ locale, company, running, pinned: session.pinned, bypass: session.managedBypass === true, fast: session.managedFast === "on" || session.managedFast === "off" ? session.managedFast : null,
     thinkingLevels: session.managedThinkingLevels ?? (company ? [] : ["off", "minimal", "low", "medium", "high", "xhigh", "max"]),
     loadModels: () => readSessionCreationOptions().then((options) => options.models.map((model) => ({ modelRef: model.modelRef, label: model.displayName }))),
     actions: { ...commandActions, stop: abort } });
