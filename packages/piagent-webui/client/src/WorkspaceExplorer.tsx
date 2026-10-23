@@ -23,8 +23,8 @@ import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import { closableLabel } from "./tab-close.tsx";
-import type { PiagentWebUIWorkspaceTreeV1 } from "../../contracts/generated/workspace-tree-v1.ts";
-import { readWorkspaceFile, readWorkspaceTree } from "./workspace-api.ts";
+import { readWorkspaceFile } from "./workspace-api.ts";
+import { WorkspaceFileTree } from "./WorkspaceFileTree.tsx";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 const CodeEditor = lazy(() => import("./WorkspaceCodeEditor.tsx"));
 
@@ -33,7 +33,7 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
   const [section, setSection] = useState("files"), [newFile, setNewFile] = useState(false), [newPath, setNewPath] = useState(""), [compare, setCompare] = useState(false);
   const [renaming, setRenaming] = useState<string>(), [renamePath, setRenamePath] = useState("");
   const editing = useWorkspaceEditing(sessionRef), { tabs, active } = editing;
-  const [folder, setFolder] = useState(""), [tree, setTree] = useState<PiagentWebUIWorkspaceTreeV1>();
+  const [folder, setFolder] = useState("");
   const [error, setError] = useState(false), [loading, setLoading] = useState(false);
   const pending = useRef<AbortController | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -42,12 +42,6 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
     window.addEventListener('piagent-workspace-saved', saved);
     return () => window.removeEventListener('piagent-workspace-saved', saved);
   }, [sessionRef]);
-  useEffect(() => {
-    const controller = new AbortController(); setTree(undefined); setError(false);
-    void readWorkspaceTree(sessionRef, folder, controller.signal).then(value => { if (!controller.signal.aborted) setTree(value); })
-      .catch(() => { if (!controller.signal.aborted) setError(true); });
-    return () => controller.abort();
-  }, [sessionRef, folder, refresh]);
   useEffect(() => () => pending.current?.abort(), []);
   const open = async (path: string, line = 1) => {
     pending.current?.abort(); setLoading(false);
@@ -76,14 +70,7 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
       </Tabs>}
       {section === "search" ? <WorkspaceSearch sessionRef={sessionRef} onOpen={(path, line) => void open(path, line)} /> : <>
       <Button disabled={!editing.authority?.writable} onClick={() => { setNewPath(folder ? `${folder}/` : ""); setNewFile(true); }}>{localize(locale, "Tệp mới", "New file")}</Button>
-      {folder && <Button onClick={() => setFolder(folder.split("/").slice(0, -1).join("/"))}>{localize(locale, "Thư mục cha", "Parent folder")}</Button>}
-      <Typography variant="caption" sx={{ p: 1, overflowWrap: "anywhere" }}>{folder || "/"}</Typography>
-      {!tree && !error && <CircularProgress size={18} />}
-      {tree?.entries.map(entry => <Button key={entry.path} fullWidth disabled={entry.protected || entry.kind === "symlink" || entry.kind === "other"}
-        aria-label={entry.protected ? `${entry.name} (${localize(locale, "được bảo vệ", "protected")})` : entry.name}
-        onClick={() => entry.kind === "directory" ? setFolder(entry.path) : void open(entry.path)} sx={{ justifyContent: "flex-start", textTransform: "none", overflowWrap: "anywhere" }}>
-        {entry.kind === "directory" ? "▸ " : ""}{entry.name}{entry.protected ? " 🔒" : ""}</Button>)}
-      {tree?.truncated && <Typography variant="caption">{localize(locale, "Danh sách đã được giới hạn.", "Listing limit reached.")}</Typography>}
+      <WorkspaceFileTree sessionRef={sessionRef} refresh={refresh} active={active} onOpen={path => { setFolder(path.split("/").slice(0, -1).join("/")); void open(path); }} onFolder={setFolder} />
       </>}
     </Box>;
   return <>{revert.dialog}{lineReview.dialog}<Stack direction="row" sx={{ height: fill ? "100%" : "calc(100vh - 150px)", minHeight: fill ? 160 : 320 }}>

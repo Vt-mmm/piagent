@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Changed
+
+- **The files panel is a folder tree, as in VS Code.** Folders open in place under their parent (▸/▾) instead of replacing the list, each read when first opened and refreshed while open; the open file is highlighted and a file opened from search, a link or Cmd/Ctrl+P shows in its folder. **New file** starts in the last folder chosen.
+
 ## v1.38.1 - 2026-10-23
 
 v1.38.0 was tagged but never published: its release checks failed on two tests. This is the same release.
