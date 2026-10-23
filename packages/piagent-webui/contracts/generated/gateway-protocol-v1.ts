@@ -295,6 +295,110 @@ export type SessionRow = {
       ];
   managedPermission?: "workspace-write" | "trusted-full-access" | "bypass";
   managedBypass?: true;
+  managedProjectWarning?: {
+    team?: string;
+    /**
+     * @minItems 1
+     * @maxItems 6
+     */
+    warnings:
+      | [
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          }
+        ]
+      | [
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          }
+        ]
+      | [
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          }
+        ]
+      | [
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          }
+        ]
+      | [
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          }
+        ]
+      | [
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          },
+          {
+            repo: string;
+            kind: "other_team" | "unlisted";
+          }
+        ];
+  };
   managedFast?: "off" | "on";
   managedPlan?: {
     /**

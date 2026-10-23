@@ -16,6 +16,7 @@ import { memoryOn } from '../packages/piagent-core/managed/memory.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
+import { projectWarningText } from '../packages/piagent-webui/shared/project-warning-copy.ts';
 
 const LOCALE = 'vi';
 
@@ -399,6 +400,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       void showBranch();
       session.subscribe((event) => {
         if (event?.type === 'managed_helpers') ctx.ui?.setStatus?.('agent-watch-helpers', event.active ? `Subagent ${event.active}/${event.maximum}` : undefined);
+        if (event?.type === 'managed_project_warning') ctx.ui?.notify?.(projectWarningText(event.warnings, event.team, LOCALE), 'warning');
         const end = event?.type === 'managed_turn_end' ? turnEndOf(event.end) : null;
         if (!end) return;
         const copy = turnEndCopy(end, LOCALE), stats = turnStats(session.messages);

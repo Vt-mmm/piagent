@@ -11,6 +11,7 @@ import { CLIENT_AGENT } from './client-agent.mjs';
 import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { purposeHeaders } from './call-purpose.mjs';
 import { sendToolFailures } from './tool-failures.mjs';
+import { reportWorkspace } from './workspace-report.mjs';
 import { declineFast, fastPayload, fastRefusal } from './fast-mode.mjs';
 import { compressedFetch } from './compressed-fetch.mjs';
 
@@ -81,6 +82,8 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             if (role === 'main') owner.grant = grant;
             // Tool calls that failed since the last request (tool-failures.mjs).
             void sendToolFailures(owner, grant.token);
+            // Which repositories this conversation works in, once (workspace-report.mjs).
+            if (role === 'main') void reportWorkspace(owner, grant.token);
             void link?.flush(grant.token);
             const route = owner.routes.get(runtime);
             if (!route || grant.provider_model_id !== route.native || grant.provider !== route.provider || grant.model_id !== route.model_id || model.id !== 'agent-watch-auto') throw Error('managed-route-changed');

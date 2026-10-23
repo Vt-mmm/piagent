@@ -4,6 +4,10 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Added
+
+- **Studio is told when a team key works in a repository outside its team.** At the first model request of a company conversation, Piagent sends Studio the conversation's repositories (`POST /studio/v1/managed/workspace` with the run's token, the same `host/path` keys team memory already sends; a folder without one sends why), only to a Studio that serves it (`managed.workspace.v1`, Agent Studio 0.39.0). Studio's administrators see the warnings in Logs → "Sai project". When Studio says a repository belongs to another team or is outside the team's repository list, the member reads one line above the composer and in `piagent studio`; nothing is blocked, and memory works as before.
+
 ### Fixes
 
 - **The dashboard keeps its language and colour theme across restarts.** The browser stored them per address, and the dashboard's port changes each time it starts, so every restart went back to the defaults. The Gateway now keeps them (`piagent-gateway/ui-preferences.json`, owner-only) behind the browser session and its CSRF token, and applies them once the page is signed in.

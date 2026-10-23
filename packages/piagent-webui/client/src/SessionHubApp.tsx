@@ -1,6 +1,7 @@
 import { WorkspaceSidebarTabs, type WorkspaceSidebarMode } from "./WorkspaceSidebarTabs.tsx";
 import { WorkspaceNavigationProvider } from "./workspace-navigation.tsx";
 import { SessionEditorLayout } from "./SessionEditorLayout.tsx";
+import { ProjectWarning } from "./ProjectWarning.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
@@ -277,6 +278,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     </Box>
     <Box sx={{ position: "sticky", bottom: "var(--piagent-status-bar, 0px)", px: { xs: 1.5, sm: 2.5 }, pb: 2.5,
       background: "linear-gradient(transparent, var(--piagent-palette-background-default) 25%)" }}>
+      <ProjectWarning session={session} locale={locale} />
       {session.state === "terminal-owned" && <Alert severity="info" role="status" sx={{ maxWidth: 820, mx: "auto", mb: 1 }}>
         {localize(locale, "Cuộc trò chuyện này đang chạy trong Terminal hoặc một tiến trình Piagent khác. Trang này tự cập nhật để bạn theo dõi; gửi tin nhắn khi nó chạy xong.",
           "This conversation is running in Terminal or another Piagent process. This page follows it; send a message when it has finished.")}</Alert>}
