@@ -2,7 +2,16 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## v1.38.0 - 2026-10-23
+## v1.38.1 - 2026-10-23
+
+v1.38.0 was tagged but never published: its release checks failed on two tests. This is the same release.
+
+### Tests
+
+- `tests/managed-terminal-boundary.test.mjs`: the Linux fixture says it is a Linux boundary, as the real one does (the macOS Seatbelt path was taken on Linux and failed).
+- `tests/managed-network-approval-web.test.mjs`: the approval card gets 30 s to appear on slow runners.
+
+## v1.38.0 - 2026-10-23 (not published)
 
 Piagent becomes an editor: files, terminals, inline review and checkpoints in the dashboard, and Bypass that asks nothing (company conversations too, where the Harness allows it).
 

@@ -53,7 +53,7 @@ test('run_with_network asks the user in the company WebUI and runs the approved 
   browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'vi-VN'});await page.goto(launch.value.launchUrl);
   await page.getByRole('button',{name:/Cuộc trò chuyện mới|New chat/}).last().click();
   await page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).fill('Install left-pad');await page.getByRole('button',{name:/^Gửi$|^Send$/}).click();
-  try{await expect(page.getByText(/Download the package metadata/).first()).toBeVisible({timeout:15000});}
+  try{await expect(page.getByText(/Download the package metadata/).first()).toBeVisible({timeout:30000});}
   catch(error){console.log('approval diagnostics',JSON.stringify({requests:requests.length,body:(await page.locator('body').innerText()).slice(0,2000)}));throw error;}
   await expect(page.getByText(new RegExp(command.replace(/[.*+?^${}()|[\]\\/]/g,'\\$&'))).first()).toBeVisible();
   assert.equal(requests.length,1,'nothing runs before approval');

@@ -23,7 +23,7 @@ function fixture(t, readOnly = false) {
   fs.writeFileSync(path.join(cwd, '.env'), 'CREDENTIAL_SHOULD_NOT_BE_READ');
   fs.writeFileSync(path.join(cwd, 'private.txt'), 'PROTECTED_SHOULD_NOT_BE_READ');
   const node = fs.realpathSync(process.execPath);
-  const boundary = { cwd, temporary, scope: randomUUID(), node, allowed: ['bash'],
+  const boundary = { linux: true, cwd, temporary, scope: randomUUID(), node, allowed: ['bash'],
     pins: new Map([[node, createHash('sha256').update(fs.readFileSync(node)).digest('hex')]]),
     environment: { offline: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: temporary, TMPDIR: temporary } },
     linuxBase: { cwd, sdkRoot: '/usr/local/lib/node_modules', runtimeRoot, temporary, node, readOnly,
