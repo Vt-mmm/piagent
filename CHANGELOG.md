@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.39.0 - 2026-10-23
+
+Studio learns when a team key works in a repository outside its team, and the dashboard keeps its language and theme across restarts.
 
 ### Added
 

@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.39.0`: cuộc trò chuyện công ty gửi Studio danh sách repository (`POST /studio/v1/managed/workspace`, chỉ khi Studio có `managed.workspace.v1`, Agent Studio 0.39.0); repo thuộc team khác hoặc ngoài danh sách repo của team hiện một dòng cho member (`agent-watch-project`, `managedProjectWarning`), không chặn; dashboard lưu ngôn ngữ và theme ở Gateway (`piagent-gateway/ui-preferences.json`) nên giữ sau khi khởi động lại.
 - `1.38.2`: khung Tệp là cây thư mục như VS Code; theme màu (Piagent, Dracula, One Dark, Monokai, Nord, Tokyo Night, Catppuccin Mocha, Gruvbox, Solarized, GitHub) cho giao diện, editor và terminal, lưu trên trình duyệt (`piagent-webui-theme`); editor và terminal ghim dưới header khi hội thoại cuộn, có thanh chia độ rộng.
 - `1.38.1`: nội dung như 1.38.0; 1.38.0 có tag nhưng không được publish vì hai test của bước kiểm tra phát hành (fixture Linux của terminal công ty, thời gian chờ thẻ duyệt).
 - `1.38.0`: (tag, không publish) dashboard thành editor (file, tìm kiếm, lưu có kiểm tra xung đột, đổi tên/xóa, terminal cá nhân và công ty, review hunk Giữ/Hoàn tác, Timeline khôi phục lượt dùng chung checkpoint với `/undo`); quyền `bypass` cho cuộc trò chuyện cá nhân; cuộc trò chuyện công ty có `bypass` khi `harness.configuration.bypass_mode` là `true` (Agent Studio 0.38.0, Agent Watch 0.15.14 / Windows 0.1.17), "Toàn quyền" là `trusted-full-access`; `/bypass on|full|off`.
