@@ -8,6 +8,7 @@ import { afterEach, describe, it } from "node:test";
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
 import { SessionAuthority } from "../packages/piagent-webui/server/session-auth.ts";
 import { loadStaticBundle } from "../packages/piagent-webui/server/static-bundle.ts";
+import { UiPreferencesStore } from "../packages/piagent-webui/gateway/ui-preferences-store.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -218,6 +219,32 @@ describe("Piagent WebUI loopback server", () => {
     const cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
     const status = await request(server.origin, "/api/v1/managed", { headers: { Cookie: cookie, Origin: server.origin } });
     assert.deepEqual([status.status, JSON.parse(status.body)], [200, null]);
+  });
+
+  it("keeps the dashboard language and theme in the Gateway across restarts, behind browser authority", async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-ui-preferences-")); temporaryRoots.add(directory);
+    const store = new UiPreferencesStore(directory);
+    const server = await start({ uiPreferences: { read: () => store.read(), write: (value) => store.write(value) } });
+    assert.equal((await request(server.origin, "/api/v1/preferences")).status, 401);
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    const read = async () => JSON.parse((await request(server.origin, "/api/v1/preferences", { headers: { Cookie: cookie, Origin: server.origin } })).body);
+    const save = (body, extra = {}) => request(server.origin, "/api/v1/preferences", { method: "POST", headers: { ...headers, ...extra }, body: JSON.stringify(body) });
+    assert.deepEqual(await read(), {});
+    assert.equal((await save({ themeId: "dracula" }, { "X-Piagent-CSRF": "wrong" })).status, 403);
+    assert.equal((await save({ themeId: "dracula" }, { Origin: "http://127.0.0.1:1" })).status, 403);
+    assert.equal((await save({ locale: "fr" })).status, 400);
+    assert.equal((await save({ themeId: "../x" })).status, 400);
+    assert.equal((await save({ themeId: "dracula", extra: 1 })).status, 400);
+    assert.equal((await save({ locale: "en", themeId: "dracula" })).status, 200);
+    assert.equal((await save({ themeId: "nord" })).status, 200);
+    assert.deepEqual(await read(), { locale: "en", themeId: "nord" });
+    assert.equal(fs.statSync(store.file).mode & 0o777, 0o600);
+    assert.deepEqual(new UiPreferencesStore(directory).read(), { locale: "en", themeId: "nord" }, "a restarted Gateway reads the same choice");
+    fs.writeFileSync(store.file, "not json");
+    assert.deepEqual(store.read(), {}, "a damaged file is ignored");
   });
 
   it("connects the company runtime and relays company session reads only behind browser authority", async () => {

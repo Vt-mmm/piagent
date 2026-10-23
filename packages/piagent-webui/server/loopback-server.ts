@@ -3,7 +3,7 @@ import http, { type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 
 import { errorResponse, applySecurityHeaders, jsonResponse, requestBody } from "./http-security.ts";
-import { routeMemberRequest, type UpdateRoutes } from "./member-routes.ts";
+import { routeMemberRequest, type UiPreferenceRoutes, type UpdateRoutes } from "./member-routes.ts";
 import { routeWorkspaceWrite, type WorkspaceWriteRoutes } from "./workspace-write-routes.ts";
 import { routeCheckpoint, type CheckpointRoutes } from "./checkpoint-routes.ts";
 import { ReadModelNotFound, type WebUiReadModelProvider } from "./read-model-provider.ts";
@@ -81,6 +81,7 @@ export async function startLoopbackServer(options: {
   listBranches?: (projectRef: string, repository: string | null) => unknown | Promise<unknown>;
   switchBranch?: (projectRef: string, request: unknown) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
+  uiPreferences?: UiPreferenceRoutes;
   bootstrapTtlMs?: number;
   sessionTtlMs?: number;
   // Requests a minute from one address before it has a browser session (the

@@ -10,8 +10,9 @@ import { SessionHubApp } from "./SessionHubApp.tsx";
 import { UpdateProvider } from "./update-state.tsx";
 import { createPiagentTheme } from "./theme.ts";
 import { DEFAULT_THEME, THEME_PRESETS, themePreset } from "./theme-presets.ts";
+import { useServerPreferences } from "./use-server-preferences.ts";
 import { preferredLocale } from "./locale-preference.ts";
-import { UiPreferencesProvider, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
+import { UiPreferencesProvider, useUiPreferences, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
 import { useInspection } from "./use-inspection.ts";
 import { useSessionHub } from "./use-session-hub.ts";
 import "./styles.css";
@@ -31,7 +32,8 @@ function InspectionApp() {
 }
 
 function GatewayApp() {
-  const state = useSessionHub();
+  const state = useSessionHub(), { locale, themeId, setLocale, setThemeId } = useUiPreferences();
+  useServerPreferences(Boolean(state.catalog), { locale, themeId }, { setLocale, setThemeId });
   return <UpdateProvider><SessionHubApp {...state} /></UpdateProvider>;
 }
 

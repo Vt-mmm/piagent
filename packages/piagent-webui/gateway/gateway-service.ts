@@ -54,6 +54,7 @@ import { ProviderAuthBroker } from "./provider-auth-broker.ts";
 import { McpAuthBroker } from "./mcp-auth-broker.ts";
 import { AgentStatusFiles } from "./agent-status-files.ts";
 import type { ScopedBrokerRouter, RuntimeFactory } from "./session-runtime-factory.ts";
+import { UiPreferencesStore } from "./ui-preferences-store.ts";
 
 function unavailable(reasonCode: string) {
   return { status: "unavailable" as const, version: null, reasonCode };
@@ -292,7 +293,9 @@ export async function startPiagentGateway(options: {
     const sourceReverts = options.managed ? new ManagedSourceRevertSessions({ root: state.root, key, gatewayInstanceRef, runtimes,
       managedSource: options.managed.managedSource, changed: sessionRef => events.publish("session.changed", { sessionRef }) }) : new SourceRevertSessions({ root: state.root, key, runtimes, managed: !!options.managed,
       provider: sessionRef => inspections.provider(sessionRef), changed: sessionRef => events.publish("session.changed", { sessionRef }) });
+    const uiPreferences = new UiPreferencesStore(state.root);
     loopback = await startLoopbackServer({
+      uiPreferences: { read: () => uiPreferences.read(), write: value => uiPreferences.write(value) },
       checkpoints: {
         state: sessionRef => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/checkpoints`) : checkpoints.state(sessionRef),
         preview: (sessionRef, target) => company(sessionRef) ? relay!.json("GET", `/api/v1/sessions/${encodeURIComponent(sessionRef)}/checkpoints/${encodeURIComponent(target)}`) : checkpoints.preview(sessionRef, target),

@@ -23,6 +23,9 @@ export type UpdateRoutes = {
   apply(request: unknown): unknown | Promise<unknown>;
 };
 
+// The dashboard's language and theme, kept across restarts (the Gateway only).
+export type UiPreferenceRoutes = { read(): unknown | Promise<unknown>; write(value: unknown): unknown | Promise<unknown> };
+
 type Context = {
   request: IncomingMessage; response: ServerResponse; url: URL; origin: string; requestOrigin: string | undefined;
   auth: SessionAuthority; now: number; consumeControl(sessionId: string, now: number): boolean;
@@ -40,6 +43,7 @@ type Options = {
   listBranches?: (projectRef: string, repository: string | null) => unknown | Promise<unknown>;
   switchBranch?: (projectRef: string, request: unknown) => unknown | Promise<unknown>;
   updates?: UpdateRoutes;
+  uiPreferences?: UiPreferenceRoutes;
 };
 
 // The checks every change shares; a refusal is answered here and false returned.
@@ -134,6 +138,22 @@ export async function routeMemberRequest(context: Context, options: Options): Pr
       jsonResponse(response, BRANCH_STATUS[code] ?? 500, { error: { code: BRANCH_STATUS[code] || code === "branch-switch-failed" || code === "branch-switch-timeout" ? code : "branch-switch-failed",
         ...(typeof detail === "string" ? { detail } : {}) } });
     }
+    return true;
+  }
+
+  if (options.uiPreferences && url.pathname === "/api/v1/preferences") {
+    const store = options.uiPreferences;
+    if (request.method === "GET") {
+      if (!auth.authenticate(request)) { errorResponse(response, 401, "authentication-required"); return true; }
+      try { jsonResponse(response, 200, await store.read()); } catch { errorResponse(response, 503, "preferences-unavailable"); }
+      return true;
+    }
+    if (request.method !== "POST") { errorResponse(response, 405, "method-not-allowed"); return true; }
+    if (!authorizeChange(context)) return true;
+    const body = await jsonBody(context, "preferences-invalid");
+    if (!body.ok) return true;
+    try { jsonResponse(response, 200, await store.write(body.value)); }
+    catch (error) { const invalid = error instanceof Error && error.message === "preferences-invalid"; errorResponse(response, invalid ? 400 : 503, invalid ? "preferences-invalid" : "preferences-unavailable"); }
     return true;
   }
 

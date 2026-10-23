@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Fixes
+
+- **The dashboard keeps its language and colour theme across restarts.** The browser stored them per address, and the dashboard's port changes each time it starts, so every restart went back to the defaults. The Gateway now keeps them (`piagent-gateway/ui-preferences.json`, owner-only) behind the browser session and its CSRF token, and applies them once the page is signed in.
+
 ## v1.38.2 - 2026-10-23
 
 A folder tree as in VS Code, colour themes, and an editor and terminal that stay in view.
