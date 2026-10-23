@@ -232,7 +232,7 @@ export class SessionInspectionRegistry {
       if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1_048_576) return [];
       const value = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
       return [{ id: entry, displayName: safeName(value.displayName ?? entry),
-        permissionMode: ["read-only", "workspace-write", "trusted-full-access"].includes(String(value.permissionProfile))
+        permissionMode: ["read-only", "workspace-write", "trusted-full-access", "bypass"].includes(String(value.permissionProfile))
           ? String(value.permissionProfile) : null }];
     }).slice(0, 100), []);
     const models = availableModels.flatMap((value) => {

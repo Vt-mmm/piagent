@@ -121,7 +121,7 @@ export function useComposerSuggestions({ projectRef, value, onChange, locale, bu
   const anchor = inputRef.current;
   const menu = <Popper open={open} anchorEl={anchor} placement="top-start" disablePortal sx={{ zIndex: 1350, width: Math.min(640, anchor?.clientWidth ?? 640) }}
     modifiers={[{ name: "offset", options: { offset: [0, 10] } }]}>
-    <Paper elevation={8} sx={{ borderRadius: 2, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 340 }}>
+    <Paper elevation={8} sx={{ borderRadius: 1, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 340 }}>
       <Typography variant="caption" color="text.secondary" sx={{ px: 1.5, pt: 1, pb: .5 }}>
         {mode === "command"
           ? localize(locale, "Lệnh và skill của project và trên máy này · Tab để chọn", "Commands and skills of the project and on this computer · Tab to pick")
@@ -131,7 +131,7 @@ export function useComposerSuggestions({ projectRef, value, onChange, locale, bu
         sx={{ listStyle: "none", m: 0, p: .5, pt: 0, overflowY: "auto" }}>
         {suggestions.map((item, index) => <Box component="li" key={item.key} id={`${listId}-${index}`} role="option" aria-selected={index === active}
           onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActive(index)} onClick={() => pick(item)}
-          sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, px: 1, py: .55, borderRadius: 1.5, cursor: "pointer",
+          sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, px: 1, py: .55, borderRadius: 1, cursor: "pointer",
             bgcolor: index === active ? "action.selected" : "transparent" }}>
           {icon(item.icon)}
           <Typography noWrap sx={{ flexShrink: 0, maxWidth: "55%", fontSize: 14, fontWeight: 600 }}>{item.label}</Typography>

@@ -68,7 +68,7 @@ export function ToolCard({ tool, locale, live, waiting }: { tool: TimelineTool |
   const expandable = Boolean(change?.preview || result?.text || failure?.copy || summary.detail && summary.kind !== "read");
   const Icon = waiting ? HourglassEmptyRounded : ICONS[summary.kind], verb = VERBS[summary.kind][locale === "vi" ? 0 : 1];
   const title = summary.kind === "other" ? tool.toolName : verb;
-  return <Box sx={{ border: 1, borderColor: failed ? "error.main" : "divider", borderRadius: 2, bgcolor: "background.paper", overflow: "hidden" }}>
+  return <Box sx={{ border: 1, borderColor: failed ? "error.main" : "divider", borderRadius: 1, bgcolor: "background.paper", overflow: "hidden" }}>
     <ButtonBase component="div" disabled={!expandable} onClick={() => setOpen((value) => !value)} aria-expanded={expandable ? open : undefined}
       sx={{ width: "100%", display: "flex", alignItems: "center", gap: 1, px: 1.25, py: .85, textAlign: "left", justifyContent: "flex-start" }}>
       <Icon sx={{ fontSize: 17, color: failed ? "error.main" : "text.secondary", flexShrink: 0 }} />

@@ -18,9 +18,9 @@ export function ActionConfirmationDialog({ open, title, description, confirmLabe
   onCancel(): void;
 }) {
   return <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs" aria-describedby="piagent-confirm-dialog-description"
-    slotProps={{ paper: { sx: { borderRadius: 3, p: .5 } } }}>
+    slotProps={{ paper: { sx: { borderRadius: 1, p: .5 } } }}>
     <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.25, pb: 1 }}>
-      <Box sx={{ width: 36, height: 36, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "warning.main", color: "warning.contrastText" }}>
+      <Box sx={{ width: 36, height: 36, borderRadius: 1, display: "grid", placeItems: "center", bgcolor: "warning.main", color: "warning.contrastText" }}>
         <WarningAmberRounded fontSize="small" />
       </Box>
       <Typography component="span" sx={{ fontSize: "1.08rem", fontWeight: 700 }}>{title}</Typography>

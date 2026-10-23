@@ -89,7 +89,7 @@ export function UpdateSettings() {
     <Typography color="text.secondary" sx={{ mb: 3 }}>{localize(locale,
       "Piagent và Pi được cập nhật cùng nhau: Pi luôn lên đúng bản mà Piagent mới đã kiểm chứng.",
       "Piagent and Pi update together: Pi always moves to the version the new Piagent is qualified on.")}</Typography>
-    <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>
+    <Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>
       <VersionRow name="Piagent" detail={localize(locale, `Đang dùng ${status?.piagent.installed ?? "—"}`, `Using ${status?.piagent.installed ?? "—"}`)}
         chip={status?.piagent.updateAvailable ? localize(locale, `Có bản ${status.piagent.latest}`, `${status.piagent.latest} available`)
           : status?.piagent.latest ? localize(locale, "Mới nhất", "Up to date") : localize(locale, "Chưa rõ", "Unknown")}

@@ -5,7 +5,7 @@
 import type { UiLocale } from "./locale-preference.ts";
 const localize = (locale: UiLocale, vi: string, en: string) => locale === "vi" ? vi : en;
 
-export type Permission = "read-only" | "workspace-write" | "trusted-full-access";
+export type Permission = "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
 export type CommandNotice = { tone: "success" | "info" | "warning" | "error"; text: string };
 export type CommandResult = CommandNotice | { send: true }
   | { confirm: { title: string; description: string; confirmLabel: string; run(): Promise<CommandNotice> } };
@@ -84,10 +84,13 @@ export function conversationCommands(context: ConversationCommandContext): Conve
       if (matches.length !== 1) return usage(`Cách dùng: /model <tên>. Có: ${models.map((m) => m.label).slice(0, 12).join(", ") || "—"}`, `Usage: /model <name>. Available: ${models.map((m) => m.label).slice(0, 12).join(", ") || "—"}`);
       return attempt(locale, () => actions.setModel(matches[0].modelRef), ok(`Đã đổi model sang ${matches[0].label}.`, `The model is now ${matches[0].label}.`), "Chưa đổi được model", "Could not change the model");
     });
-    add("permission", "<read-only|ask|full>", "Đổi quyền của cuộc trò chuyện", "Change the conversation's access", async (value) => {
-      const mode: Permission | null = value === "read-only" ? "read-only" : value === "ask" ? "workspace-write" : value === "full" ? "trusted-full-access" : null;
-      if (!mode) return usage("Cách dùng: /permission read-only|ask|full", "Usage: /permission read-only|ask|full");
+    add("permission", "<read-only|ask|full|bypass>", "Đổi quyền của cuộc trò chuyện", "Change the conversation's access", async (value) => {
+      const mode: Permission | null = value === "read-only" ? "read-only" : value === "ask" ? "workspace-write" : value === "full" ? "trusted-full-access" : value === "bypass" ? "bypass" : null;
+      if (!mode) return usage("Cách dùng: /permission read-only|ask|full|bypass", "Usage: /permission read-only|ask|full|bypass");
       const apply = () => attempt(locale, () => actions.setPermission(mode), ok(`Đã đổi quyền sang ${value}.`, `Access is now ${value}.`), "Chưa đổi được quyền", "Access not changed");
+      if (mode === "bypass") return { confirm: { title: t("Bật Bypass?", "Turn on Bypass?"), confirmLabel: t("Bật Bypass", "Turn on Bypass"),
+        description: t("Không hỏi, không chặn gì trong cuộc trò chuyện này (xoá, push, file được bảo vệ đều chạy luôn). Output vẫn che secret, /undo vẫn hoàn tác được.",
+          "Nothing is asked or blocked in this conversation (deletes, pushes and protected files all run). Output is still redacted and /undo still works."), run: apply } };
       return mode !== "trusted-full-access" ? apply() : { confirm: { title: t("Bật toàn quyền?", "Enable full access?"), confirmLabel: t("Bật toàn quyền", "Enable full access"),
         description: t("Session được đọc, sửa file và chạy command trong phạm vi runtime; xoá hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "The session may read and edit files and run commands within the runtime; destructive actions and external transfers still ask."), run: apply } };
     });

@@ -57,7 +57,7 @@ function validPayload(action: SessionAction, payload: Record<string, unknown>): 
   if (action === "session.set-thinking") return exactKeys(payload, ["thinkingLevel"])
     && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(payload.thinkingLevel));
   if (action === "session.set-permission") return exactKeys(payload, ["permissionMode"])
-    && ["read-only", "workspace-write", "trusted-full-access"].includes(String(payload.permissionMode));
+    && ["read-only", "workspace-write", "trusted-full-access", "bypass"].includes(String(payload.permissionMode));
   if (action === "session.set-fast") return exactKeys(payload, ["fast"]) && typeof payload.fast === "boolean";
   if (action === "session.rename") return exactKeys(payload, ["title"]) && typeof payload.title === "string"
     && payload.title.length >= 1 && payload.title.length <= 500 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(payload.title);
@@ -71,7 +71,7 @@ function validPayload(action: SessionAction, payload: Record<string, unknown>): 
     && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(payload.thinkingLevel))
     && typeof payload.message === "string" && payload.message.length >= 1 && payload.message.length <= 32_768 && !payload.message.includes("\0")
     && REF.test(String(payload.messageRequestId)) && (payload.deferInitialMessage === undefined || typeof payload.deferInitialMessage === "boolean")
-    && (payload.permissionMode === undefined || ["read-only", "workspace-write", "trusted-full-access"].includes(String(payload.permissionMode)))
+    && (payload.permissionMode === undefined || ["read-only", "workspace-write", "trusted-full-access", "bypass"].includes(String(payload.permissionMode)))
     && (payload.fast === undefined || typeof payload.fast === "boolean")
     && (payload.workflow === undefined || isWebUiWorkflowId(payload.workflow));
 }
@@ -180,7 +180,7 @@ export class SessionCommandController {
         }
         if (command.payload.permissionMode !== undefined) {
           await this.#runtimes.setPermission(targetSessionRef, String(command.payload.permissionMode) as
-            "read-only" | "workspace-write" | "trusted-full-access");
+            "read-only" | "workspace-write" | "trusted-full-access" | "bypass");
         }
         // Fast mode chosen on the new chat page is on before the first message
         // runs; a Harness that does not allow it refuses the create.
@@ -232,7 +232,7 @@ export class SessionCommandController {
         resultCode = await this.#runtimes.setThinking(command.sessionRef!, String(command.payload.thinkingLevel));
       } else if (command.action === "session.set-permission") {
         resultCode = await this.#runtimes.setPermission(command.sessionRef!, String(command.payload.permissionMode) as
-          "read-only" | "workspace-write" | "trusted-full-access");
+          "read-only" | "workspace-write" | "trusted-full-access" | "bypass");
       } else if (command.action === "session.set-fast") {
         resultCode = await this.#runtimes.setFast(command.sessionRef!, command.payload.fast === true);
       } else if (command.action === "session.rename") {

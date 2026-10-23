@@ -74,7 +74,7 @@ hình chỉ đọc, không command nào mở lượt model.
 | Command | Mục đích |
 |---|---|
 | `/profile` | Xem hoặc đổi project profile; `/profile setup` chọn tech cho từng vai trò |
-| `/permission` | Đổi permission mode trong session |
+| `/permission` | Đổi permission mode trong session; `/permission bypass` (hoặc `piagent-auto --bypass`) tắt mọi cổng kiểm soát của Piagent như bypass của Codex, chỉ cho session personal, vẫn che secret trong output và giữ `/undo` |
 | `/context` | Xem Context Engine, index, retrieval và telemetry |
 | `/usage` | Xem session, model, thinking và context usage |
 | `/piagent-inspector` | Mở menu read-only để xem task diff, command fail/block, safety warning và context budget; panel bốn dòng tự hiện sát footer native, `toggle` để ẩn trong session |

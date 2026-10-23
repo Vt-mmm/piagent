@@ -26,8 +26,8 @@ import { localize, useUiPreferences } from "./ui-preferences.tsx";
 type Pending = { action: Action; argument: string | null; title: string; description: string };
 
 function ControlGroup({ icon, title, detail, children }: { icon: React.ReactNode; title: string; detail: string; children: React.ReactNode }) {
-  return <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start", mb: 1.5 }}>
-    <Box sx={{ width: 38, height: 38, borderRadius: 2, bgcolor: "action.selected", display: "grid", placeItems: "center", flex: "0 0 auto" }}>{icon}</Box>
+  return <Paper variant="outlined" sx={{ p: 2, borderRadius: 1 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start", mb: 1.5 }}>
+    <Box sx={{ width: 38, height: 38, borderRadius: 1, bgcolor: "action.selected", display: "grid", placeItems: "center", flex: "0 0 auto" }}>{icon}</Box>
     <Box><Typography sx={{ fontWeight: 820 }}>{title}</Typography><Typography variant="body2" color="text.secondary">{detail}</Typography></Box>
   </Stack>{children}</Paper>;
 }
@@ -72,7 +72,7 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
     <Typography color="text.secondary" sx={{ mb: 2.5 }}>{localize(locale,
       "Cùng logic với Terminal: Web UI gửi đúng slash command vào Pi runtime. Các nút xem trạng thái không gọi model; thao tác ghi luôn hỏi xác nhận.",
       "The same logic as Terminal: Web UI sends the exact slash command to the Pi runtime. Status controls do not call the model; writes always require confirmation.")}</Typography>
-    {!session && <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, mb: 2 }}><Typography color="text.secondary">{localize(locale,
+    {!session && <Paper variant="outlined" sx={{ p: 2, borderRadius: 1, mb: 2 }}><Typography color="text.secondary">{localize(locale,
       "Hãy chọn một cuộc trò chuyện để điều khiển project tương ứng.", "Select a chat to control its project.")}</Typography></Paper>}
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 1.25 }}>
       <ControlGroup icon={<QueryStatsRounded color="primary" />} title={localize(locale, "Runtime & token", "Runtime & tokens")}
@@ -155,7 +155,7 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
       </ControlGroup>
     </Box>
 
-    {(busy || receipt || error) && <Paper aria-live="polite" variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 2.5 }}>
+    {(busy || receipt || error) && <Paper aria-live="polite" variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 1 }}>
       {busy ? <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><CircularProgress size={18} /><Typography>{localize(locale, "Đang chạy trong Pi runtime…", "Running in the Pi runtime…")}</Typography></Stack>
         : <><Stack direction="row" sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}><CheckCircleOutlineRounded color={receipt?.state === "settled" ? "success" : "warning"} />
           <Typography sx={{ fontWeight: 800 }}>{receipt ? receipt.action : localize(locale, "Không hoàn tất", "Not completed")}</Typography>
@@ -167,7 +167,7 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
             `Fast: ${serviceTier.mode} · provider: ${serviceTier.provider ?? "unknown"} · ${serviceTier.reasonCode}`)}</Typography>}
           {error && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{error}</Typography>}
           {receipt?.outputs.map((output, index) => <Box component="pre" key={`${output.customType}-${index}`} sx={{ m: 0, mt: 1, p: 1.25,
-            borderRadius: 1.5, bgcolor: "action.hover", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12.5, maxHeight: 260, overflow: "auto" }}>{output.content}</Box>)}</>}
+            borderRadius: 1, bgcolor: "action.hover", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12.5, maxHeight: 260, overflow: "auto" }}>{output.content}</Box>)}</>}
     </Paper>}
     <ActionConfirmationDialog open={pending !== null} title={pending?.title ?? ""} description={pending?.description ?? ""}
       cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={localize(locale, "Xác nhận và chạy", "Confirm and run")}

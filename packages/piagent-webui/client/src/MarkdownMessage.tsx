@@ -32,7 +32,7 @@ export function MarkdownMessage({ children }: { children: string }) {
         borderLeft: 3, borderLeftColor: "primary.main", bgcolor: "action.hover", color: "text.secondary" }}>{value}</Paper>,
       code: ({ children: value }) => <Box component="code" sx={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: ".88em", bgcolor: "action.hover", borderRadius: .8, px: .55, py: .15 }}>{value}</Box>,
-      pre: ({ children: value }) => <Box component="pre" sx={{ my: 1.4, p: 1.5, overflowX: "auto", borderRadius: 2,
+      pre: ({ children: value }) => <Box component="pre" sx={{ my: 1.4, p: 1.5, overflowX: "auto", borderRadius: 1,
         bgcolor: "action.hover", border: 1, borderColor: "divider", whiteSpace: "pre", "& code": { bgcolor: "transparent", p: 0 } }}>{value}</Box>,
       a: ({ href, children: value }) => href ? <Link href={href} target={href.startsWith("#") ? undefined : "_blank"}
         rel={href.startsWith("#") ? undefined : "noopener noreferrer"} underline="hover">{value}</Link> : <>{value}</>,

@@ -17,7 +17,8 @@ export function createPiagentTheme(mode: PaletteMode) {
     text: { primary: dark ? "#f4f4ef" : "#1c2018", secondary: dark ? "#a4a6ad" : "#62685c", disabled: dark ? "#898c95" : "#6b7165" },
     divider: dark ? "#24262d" : "#dfe2d8"
   },
-  shape: { borderRadius: 10 },
+  // Square, editor-like edges: 2px everywhere, so sx radii (n × 2px) stay small.
+  shape: { borderRadius: 2 },
   typography: {
     fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     fontWeightRegular: 400,
@@ -52,19 +53,19 @@ export function createPiagentTheme(mode: PaletteMode) {
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
-        root: { minHeight: 34, borderRadius: 8 },
+        root: { minHeight: 32, borderRadius: 2 },
         outlined: { borderColor: dark ? "#32343c" : "#cfd4c8" }
       }
     },
     MuiChip: {
-      styleOverrides: { root: { height: 26, borderRadius: 7, fontWeight: 500 } }
+      styleOverrides: { root: { height: 24, borderRadius: 2, fontWeight: 500 } }
     },
     MuiListItemButton: {
       styleOverrides: {
         root: {
           minHeight: 42,
-          margin: "2px 10px",
-          borderRadius: 8,
+          margin: "1px 6px",
+          borderRadius: 2,
           color: dark ? "#a4a6ad" : "#62685c",
           "&.Mui-selected": {
             color: dark ? "#f4f4ef" : "#1c2018",

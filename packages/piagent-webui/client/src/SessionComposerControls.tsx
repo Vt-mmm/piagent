@@ -53,7 +53,7 @@ export const fastOnSx = { borderColor: "warning.main", color: "warning.main", fo
 function ComposerControl({ title, label: controlLabel, icon, active, badge, tone, onClick }: { title: string; label?: string;
   icon: React.ReactNode; active: boolean; badge?: number; tone?: "warning"; onClick(event: React.MouseEvent<HTMLElement>): void }) {
   const shared = { border: 1, borderColor: active ? "primary.main" : "divider", bgcolor: active ? "action.selected" : "transparent",
-    color: active ? "primary.main" : "text.secondary", borderRadius: 2, "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+    color: active ? "primary.main" : "text.secondary", borderRadius: 1, "&:hover": { bgcolor: "action.hover", color: "text.primary" },
     ...(active && tone === "warning" ? fastOnSx : {}) };
   const button = controlLabel ? <Button size="small" aria-label={title} onClick={onClick} startIcon={icon} sx={{ ...shared, minHeight: 34,
     minWidth: {xs:34,md:64}, maxWidth: 260, px: {xs:.75,md:1.15}, "& .MuiButton-startIcon": { mr: {xs:0,md:.65}, ml:0 }, "& .MuiButton-startIcon svg": { fontSize: 17 } }}>
@@ -67,11 +67,11 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   onConnectionsChanged, placement = "composer" }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; connections?: SessionConnections; locale: UiLocale; onOpenChanges(): void;
   canSetModel?: boolean; canSetThinking?: boolean; canSetPermission?: boolean; onSetModel?(modelRef: string): Promise<unknown>;
-  onSetThinking?(thinking: string): Promise<unknown>; onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>; onSetFast?(fast: boolean): Promise<unknown>;
+  onSetThinking?(thinking: string): Promise<unknown>; onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown>; onSetFast?(fast: boolean): Promise<unknown>;
   onConnectionsChanged?(value?: SessionConnections): void; placement?: "header" | "composer" }) {
   const [panel, setPanel] = useState<Panel>(null), [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [options, setOptions] = useState<SessionCreationOptions>(), [optionBusy, setOptionBusy] = useState(false), [optionError, setOptionError] = useState<string | null>(null);
-  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
+  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | null>(null);
   // What became of an access change, shown outside the panel (Bypass closes it for its confirmation).
   const [permissionNotice, setPermissionNotice] = useState<{ tone: "success" | "info" | "error"; text: string } | null>(null);
   useEffect(() => {
@@ -124,7 +124,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         : localize(locale, "Chưa đổi được Fast. Thử lại.", "Fast not changed. Try again.") });
     } finally { setOptionBusy(false); }
   };
-  const applyPermission = async (value: "read-only" | "workspace-write" | "trusted-full-access") => {
+  const applyPermission = async (value: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
     if (!onSetPermission) return;
     setOptionBusy(true); setOptionError(null);
     const name = managed ? companyAccessLabel(value, locale) : label(value, locale);
@@ -143,8 +143,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
     }
     finally { setOptionBusy(false); }
   };
-  const changePermission = (value: "read-only" | "workspace-write" | "trusted-full-access") => {
-    if (value === "trusted-full-access") { close(); setPendingPermission(value); return; }
+  const changePermission = (value: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
+    if (value === "trusted-full-access" || value === "bypass") { close(); setPendingPermission(value); return; }
     void applyPermission(value);
   };
   const panelTitle = panel === "model" ? "Model & thinking" : panel === "context" ? "Context"
@@ -178,7 +178,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
     </Box>
     <Popover open={panel !== null} anchorEl={anchor} onClose={close} anchorOrigin={{ vertical: placement === "header" ? "bottom" : "top", horizontal: "left" }}
       transformOrigin={{ vertical: placement === "header" ? "top" : "bottom", horizontal: "left" }}
-      slotProps={{ paper: { sx: { width: 330, maxWidth: "calc(100vw - 24px)", borderRadius: 2.5, p: 1.5,
+      slotProps={{ paper: { sx: { width: 330, maxWidth: "calc(100vw - 24px)", borderRadius: 1, p: 1.5,
         mt: placement === "header" ? 1 : 0 } } }}>
       <Typography sx={{ px: .5, pb: 1, fontWeight: 600 }}>{panelTitle}</Typography><Divider />
       {panel === "model" && <Stack sx={{ px: .5, pt: 1 }} spacing={1.25}>
@@ -200,8 +200,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         <McpConnectionActions compact sessionRef={session.sessionRef} connection={connection} onChanged={(value) => onConnectionsChanged?.(value)} /></ListItem>)}
         {connections && connections.connections.length === 0 && <ListItem><ListItemText primary={localize(locale, "Chưa có MCP", "No MCP configured")} /></ListItem>}
         {!connections && <ListItem><ListItemText primary={localize(locale, "Đang đọc…", "Loading…")} /></ListItem>}</List>}
-      {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(managed ? ["workspace-write", "trusted-full-access"] as const : ["read-only", "workspace-write", "trusted-full-access"] as const).map((value) =>
-        <Button key={value} variant={permissionValue === value ? "contained" : "outlined"} color={value === "trusted-full-access" ? "warning" : "primary"}
+      {panel === "permission" && <Stack sx={{ px: .5, pt: 1 }} spacing={.75}>{(managed ? ["workspace-write", "trusted-full-access"] as const : ["read-only", "workspace-write", "trusted-full-access", "bypass"] as const).map((value) =>
+        <Button key={value} variant={permissionValue === value ? "contained" : "outlined"} color={value === "bypass" ? "error" : value === "trusted-full-access" ? "warning" : "primary"}
           disabled={!canSetPermission || optionBusy || !managed && session.liveState === "running"} onClick={() => changePermission(value)} sx={{ justifyContent: "flex-start" }}>
           {managed ? companyAccessLabel(value, locale) : label(value, locale)}</Button>)}{optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}</Stack>}
       {panel === "changes" && <Box sx={{ px: .5, pt: .75 }}><Stat name={localize(locale, "Task changes", "Task changes")} value={String(source?.task?.counts.files ?? 0)} />
@@ -210,11 +210,11 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         <Button fullWidth variant="outlined" startIcon={<DifferenceRounded />} sx={{ mt: 1 }} onClick={() => { close(); onOpenChanges(); }}>
           {localize(locale, "Mở Source Changes", "Open Source Changes")}</Button></Box>}
     </Popover>
-    <ActionConfirmationDialog open={pendingPermission !== null} title={managed ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={managed ? companyBypassDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={managed || pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
+      description={managed ? companyBypassDetail(locale) : pendingPermission === "bypass" ? personalBypassDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
-      onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); void applyPermission("trusted-full-access"); }} />
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed || pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
+      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode) void applyPermission(mode); }} />
     <Snackbar open={permissionNotice !== null} autoHideDuration={permissionNotice?.tone === "success" ? 4000 : 12000} onClose={() => setPermissionNotice(null)}
       anchorOrigin={{ vertical: "top", horizontal: "center" }}><Alert severity={permissionNotice?.tone ?? "info"} variant="filled" onClose={() => setPermissionNotice(null)}
       role={permissionNotice?.tone === "error" ? "alert" : "status"}>{permissionNotice?.text}</Alert></Snackbar>
@@ -225,6 +225,11 @@ export function SessionComposerControls({ session, snapshot, connections, locale
 // internet, or Bypass (asks only for what must be confirmed).
 export function companyAccessLabel(value: string | null | undefined, locale: UiLocale) {
   return value === "trusted-full-access" ? "Bypass" : localize(locale, "Hỏi trước", "Ask first");
+}
+// A personal conversation's Bypass: every Piagent gate off.
+export function personalBypassDetail(locale: UiLocale) {
+  return localize(locale, "Không hỏi, không chặn gì trong cuộc trò chuyện personal này: xoá, push, gửi ra ngoài, file được bảo vệ đều chạy luôn, như chế độ bypass của Codex. Output vẫn được che secret và /undo vẫn hoàn tác được từng lượt. Không áp dụng cho company.",
+    "Nothing is asked or blocked in this personal conversation: deletes, pushes, external sends and protected files all run, as with Codex's bypass mode. Output is still redacted and /undo can still revert each turn. Does not apply to company conversations.");
 }
 export function companyBypassDetail(locale: UiLocale) {
   return localize(locale,

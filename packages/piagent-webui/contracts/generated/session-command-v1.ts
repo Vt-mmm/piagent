@@ -36,7 +36,7 @@ export type CreateCommand = BaseCommandProperties & {
 };
 export type IdempotencyKey = string;
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type PermissionMode = "read-only" | "workspace-write" | "trusted-full-access";
+export type PermissionMode = "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
 export type Workflow =
   "task" | "scout" | "be-to-fe" | "discuss" | "plan" | "review" | "commit" | "pr" | "onboard" | "platform-improve";
 export type SendCommand = BaseCommandProperties & {

@@ -362,7 +362,7 @@ export class SessionRuntimeSupervisor {
     if (effective !== thinkingLevel) throw new Error("session-thinking-mismatch");
     this.#touchCreated(sessionRef); return "thinking-changed";
   }
-  async setPermission(sessionRef: string, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<"permission-changed"> {
+  async setPermission(sessionRef: string, permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<"permission-changed"> {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");

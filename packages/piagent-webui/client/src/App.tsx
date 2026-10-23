@@ -159,7 +159,7 @@ export function App({ snapshot, connection = "connecting", events = [], refreshS
   const drawer = <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
     <Toolbar sx={{ minHeight: "72px !important", px: "18px !important", gap: 1.25 }}><Box className="brand-mark" aria-hidden="true">π</Box><Box sx={{ minWidth: 0 }}>
       <Typography sx={{ fontWeight: 760, lineHeight: 1.15 }}>Piagent</Typography><Typography variant="caption" color="text.disabled">WebUI · local</Typography></Box></Toolbar>
-    <Box sx={{ mx: 1.5, mb: 1.25, p: 1.35, border: 1, borderColor: "divider", borderRadius: 2, bgcolor: "action.hover" }}>
+    <Box sx={{ mx: 1.5, mb: 1.25, p: 1.35, border: 1, borderColor: "divider", borderRadius: 1, bgcolor: "action.hover" }}>
       <Typography variant="caption" color="text.disabled" sx={{ display: "block", textTransform: "uppercase", letterSpacing: ".09em" }}>{localize(locale, "Pi session hiện tại", "Current Pi session")}</Typography>
       <Typography variant="body2" noWrap title={snapshot.session.displayName ?? undefined} sx={{ mt: .45, fontWeight: 700 }}>{snapshot.session.displayName ?? "Pi session"}</Typography>
       <Typography variant="caption" color="text.secondary" title={snapshot.identity.sessionRef}>{compactRef(snapshot.identity.sessionRef)}</Typography>
@@ -173,7 +173,7 @@ export function App({ snapshot, connection = "connecting", events = [], refreshS
         <ToggleButton value="vi" aria-label="Tiếng Việt" sx={{ flex: 1 }}>VI</ToggleButton><ToggleButton value="en" aria-label="English" sx={{ flex: 1 }}>EN</ToggleButton>
       </ToggleButtonGroup>
       <Tooltip title={colorMode === "dark" ? localize(locale, "Chuyển sang giao diện sáng", "Use light mode") : localize(locale, "Chuyển sang giao diện tối", "Use dark mode")}>
-        <IconButton aria-label={colorMode === "dark" ? localize(locale, "Dùng giao diện sáng", "Use light mode") : localize(locale, "Dùng giao diện tối", "Use dark mode")} onClick={() => setColorMode(colorMode === "dark" ? "light" : "dark")} sx={{ border: 1, borderColor: "divider", borderRadius: 1.5 }}>
+        <IconButton aria-label={colorMode === "dark" ? localize(locale, "Dùng giao diện sáng", "Use light mode") : localize(locale, "Dùng giao diện tối", "Use dark mode")} onClick={() => setColorMode(colorMode === "dark" ? "light" : "dark")} sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}>
           {colorMode === "dark" ? <LightModeRounded fontSize="small" /> : <DarkModeRounded fontSize="small" />}</IconButton></Tooltip>
     </Stack></Box>
   </Box>;

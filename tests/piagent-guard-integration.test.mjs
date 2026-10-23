@@ -245,7 +245,8 @@ describe("piagent guard integration", () => {
     for (const kept of ["piagent_tools", "piagent_context_engine", "piagent_document_read", "piagent_source_checkout", "piagent_memory_note"]) {
       assert.equal(harness.tools.has(kept), true, kept);
     }
-    assert.equal(harness.commands.size, 27);
+    assert.equal(harness.commands.size, 28);
+    assert.equal(harness.commands.has("bypass"), true);
     assert.equal(harness.commands.has("undo"), true);
     for (const command of ["profile", "context-index", "piagent-mcp", "usage", "logs", "context", "permission", "fast", "memory", "piagent-inspector",
       "piagent-logs", "setname", "piagent-usage", "piagent-session", "piagent-context", "piagent-permission", "memory-policy"]) {
@@ -2132,6 +2133,40 @@ non-secret metadata are safe alternatives.`;
     assert.notEqual(broadStagePrompt.block, true);
     const migrationPrompt = await callToolCall(toolCall, ctx, "bash", { command: "npx prisma migrate deploy" });
     assert.equal(migrationPrompt.block, true);
+  });
+
+  it("bypass asks and blocks nothing in a personal session, keeps output redaction, and never reaches a company session", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.permissionProfile = "bypass";
+    profile.runtimePolicy.toolRegistry = "enforce";
+    profile.mcpCapabilities = [];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    assert.equal(ctx.ui.notices.some((notice) => /bypass is active/i.test(notice.message)), true);
+    const toolCall = harness.handlers.get("tool_call");
+    for (const [tool, input] of [
+      ["custom_reader", { path: ".env" }], ["bash", { command: "cat .env" }], ["bash", { command: "git push" }],
+      ["bash", { command: "npx prisma migrate deploy" }], ["bash", { command: "rm -rf build" }], ["write", { path: ".env", content: "X=1\n" }]
+    ]) {
+      const decision = await callToolCall(toolCall, ctx, tool, input);
+      assert.notEqual(decision?.block, true, `${tool} ${JSON.stringify(input)} runs without a prompt or block`);
+    }
+    assert.equal(ctx.confirmations.length, 0, "nothing was asked");
+    const secret = "sk-" + "a".repeat(48);
+    const shown = await callToolResult(harness.handlers.get("tool_result"), ctx, "bash", { command: "cat .env" }, [{ type: "text", text: `OPENAI_API_KEY=${secret}` }]);
+    assert.match(JSON.stringify(shown), /REDACTED/, "tool output is still redacted");
+    assert.equal(JSON.stringify(shown).includes(secret), false);
+
+    const company = createContext(cwd);
+    company.model = { provider: "agent_watch_managed", id: "agent-watch-auto" };
+    const companyPush = await callToolCall(toolCall, company, "bash", { command: "cat .env" });
+    assert.equal(companyPush.block, true, "a company session keeps every gate");
   });
 
   it("fails closed when an unavailable execution backend is requested", async () => {

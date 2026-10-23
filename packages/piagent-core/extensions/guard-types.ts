@@ -322,7 +322,9 @@ export type ResolvedOrchestrationPolicy = {
   rules: string[];
 };
 
-export type PermissionProfileMode = "read-only" | "workspace-write" | "trusted-full-access";
+// "bypass": personal sessions only; no Piagent gate asks or blocks (as Codex's
+// --dangerously-bypass-approvals-and-sandbox). Output redaction and turn checkpoints still run.
+export type PermissionProfileMode = "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
 
 export type PermissionProfilesConfig = {
   defaultMode?: PermissionProfileMode;

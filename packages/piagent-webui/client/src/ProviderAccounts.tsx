@@ -55,7 +55,7 @@ export function ProviderAccounts({ catalog, refresh }: { catalog?: ProviderAuthC
   const latestEvents = job?.events.slice(-4) ?? [];
   return <>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
-      {(catalog?.providers ?? []).map((provider) => <Paper variant="outlined" key={provider.providerRef} sx={{ p: 1.75, borderRadius: 2.5 }}>
+      {(catalog?.providers ?? []).map((provider) => <Paper variant="outlined" key={provider.providerRef} sx={{ p: 1.75, borderRadius: 1 }}>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}><ServiceIcon name={provider.name} size={38} />
           <Typography sx={{ flex: 1, fontWeight: 800 }}>{provider.name}</Typography>{provider.state === "connected" &&
             <Chip size="small" color="success" variant="outlined" icon={<CheckCircleRounded />} label={localize(locale, "Đã kết nối", "Connected")} />}

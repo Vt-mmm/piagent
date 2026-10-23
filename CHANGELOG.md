@@ -4,6 +4,11 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Added
+
+- **Bypass, as in Codex.** A new `bypass` permission mode (`/permission bypass`, `piagent-auto --bypass`, `PIAGENT_PERMISSION_PROFILE=bypass`, or **Bypass** in the dashboard's access menu) turns every Piagent gate off in a personal session: nothing is asked or blocked, deletes, pushes, migrations, external sends and protected or read-only paths included. Tool output is still redacted and each turn still gets its `/undo` checkpoint. Company sessions keep their team's rules, and a policy can forbid it by leaving `bypass` out of `permissionProfiles.allowedModes`. **Full access** (`trusted-full-access`) is unchanged, and a company conversation's **Bypass** keeps its own meaning.
+- **Editor-like workspace.** Square 2px edges across the dashboard; file and terminal tabs close with their own ×; the files and terminal panels hide with a × of their own; the editor sits above the terminal and both share the window height.
+
 ### Fixes
 
 - **A checkpoint that cannot be taken no longer stops the agent's edit.** Personal snapshots failed on a submodule, a file over 16 MB, a tree over 64 MB or a file changing mid-snapshot, and every write was then refused. Snapshots now hash the whole tree in one Git call (about 0.5 s instead of 35 s on a 4,000-file repository), include tracked files of any size, skip untracked files over 100 MB and leave submodules out. A turn whose snapshot fails has no checkpoint and ends the history before it; only another live owner of the session's history makes an edit wait. Company checkpoints get the same snapshot.

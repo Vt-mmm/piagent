@@ -303,7 +303,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
               : localize(locale, "Phát hiện runtime mới. Piagent sẽ giữ câu trả lời hiện tại rồi tự khởi động lại session.", "A new runtime was detected. Piagent will preserve the current response and restart the session automatically.")}
       </Alert>}
       <Box sx={{ position: "relative", maxWidth: 860, mx: "auto", border: 1, borderColor: dragging ? "primary.main" : "divider",
-        borderStyle: dragging ? "dashed" : "solid", borderRadius: 3, bgcolor: "background.paper", p: 1.15,
+        borderStyle: dragging ? "dashed" : "solid", borderRadius: 1, bgcolor: "background.paper", p: 1.15,
         boxShadow: "0 14px 44px rgba(0,0,0,.14)" }}
       onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
       onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
@@ -314,7 +314,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
         if (canAttach) void takeFiles(event.dataTransfer.files);
       }}>
         {dragging && <Box role="status" sx={{ position: "absolute", inset: 0, zIndex: 3, display: "grid", alignContent: "center", justifyItems: "center",
-          gap: .5, borderRadius: 3, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
+          gap: .5, borderRadius: 1, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
           <Typography sx={{ fontWeight: 750 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
             : attachments.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn này`, `This message already holds ${MAX_ATTACHMENTS} files`)
               : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
@@ -348,7 +348,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
           confirmLabel={pendingCommand?.confirmLabel ?? ""} cancelLabel={localize(locale, "Huỷ", "Cancel")} onCancel={() => setPendingCommand(null)}
           onConfirm={() => { const command = pendingCommand; setPendingCommand(null); if (command) void command.run().then(setCommandNotice); }} />
         <Collapse in={advancedOpen} id="piagent-message-options">
-          <Box sx={{ mt: .65, p: .85, borderRadius: 2, bgcolor: "action.hover" }}>
+          <Box sx={{ mt: .65, p: .85, borderRadius: 1, bgcolor: "action.hover" }}>
             <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale}
               onOpenChanges={() => onInspector("source")} onConnectionsChanged={refreshConnections} />
             <Stack direction="row" sx={{ minWidth: 0, alignItems: "center", gap: .75, flexWrap: "wrap" }}>
@@ -415,7 +415,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   abort(session: SessionRow): Promise<unknown>;
     restart(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;
-    setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
+    setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown>;
     setFast(session: SessionRow, fast: boolean): Promise<unknown>;
     rename(session: SessionRow, title: string): Promise<Receipt>; pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
     archive(session: SessionRow): Promise<Receipt>; unarchive(session: SessionRow): Promise<Receipt>;

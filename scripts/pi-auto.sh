@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  piagent-auto [--read-only|--workspace-write|--full-access] [--no-approve] [--] [pi args...]
+  piagent-auto [--read-only|--workspace-write|--full-access|--bypass] [--no-approve] [--] [pi args...]
 
 Purpose:
   Launch Pi with project-local trust approved for this run.
@@ -45,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --full-access|--trusted-full-access)
       PERMISSION_PROFILE="trusted-full-access"
+      shift
+      ;;
+    --bypass|--yolo|--dangerously-bypass)
+      PERMISSION_PROFILE="bypass"
       shift
       ;;
     --no-approve|-na)

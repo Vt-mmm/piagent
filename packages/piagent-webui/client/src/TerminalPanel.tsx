@@ -8,8 +8,11 @@ import Tab from '@mui/material/Tab';
 import Typography from '@mui/material/Typography';
 import { localize, useUiPreferences } from './ui-preferences.tsx';
 import { terminalSessionClient } from './terminal-session-client.ts';
+import IconButton from '@mui/material/IconButton';
+import CloseIcon from '@mui/icons-material/Close';
+import { closableLabel } from './tab-close.tsx';
 const View = lazy(() => import('./TerminalView.tsx'));
-export default function TerminalPanel({ sessionRef }: { sessionRef: string }) {
+export default function TerminalPanel({ sessionRef, onHide }: { sessionRef: string; onHide?(): void }) {
   const { locale } = useUiPreferences(), client = useMemo(() => terminalSessionClient(sessionRef), [sessionRef]);
   const model = useSyncExternalStore(client.subscribe, client.snapshot), state = model.state;
   const [selected, setSelected] = useState<string | null>(null), [height, setHeight] = useState(280);
@@ -26,11 +29,13 @@ export default function TerminalPanel({ sessionRef }: { sessionRef: string }) {
       sx={{ height: 8, cursor: 'row-resize', touchAction: 'none', bgcolor: 'action.hover' }} />
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <Tabs value={active ?? false} onChange={(_, value) => setSelected(value)} variant="scrollable" sx={{ flex: 1, minWidth: 0 }}>
-        {state?.terminals.map(tab => <Tab key={tab.terminalRef} value={tab.terminalRef} label={`Terminal ${tab.number}${tab.state === 'exited' ? localize(locale, ' · đã thoát', ' · exited') : ''}`} />)}
+        {state?.terminals.map(tab => <Tab key={tab.terminalRef} value={tab.terminalRef} aria-label={`Terminal ${tab.number}${tab.state === 'exited' ? localize(locale, ' · đã thoát', ' · exited') : ''}`} label={closableLabel(`Terminal ${tab.number}${tab.state === 'exited' ? localize(locale, ' · đã thoát', ' · exited') : ''}`,
+          localize(locale, `Đóng Terminal ${tab.number}`, `Close Terminal ${tab.number}`), () => { if (!model.busy) void client.execute({ kind: 'close', terminalRef: tab.terminalRef }); })} />)}
       </Tabs>
       <Button disabled={blocked || model.busy || (state?.terminals.length ?? 0) >= 4} aria-label={localize(locale, 'Mở terminal', 'Open terminal')}
         onClick={() => void client.execute({ kind: 'open', cols: 80, rows: 24 })}>+</Button>
       {active && <Button disabled={blocked || model.busy} onClick={() => void client.execute({ kind: 'close', terminalRef: active })}>{localize(locale, 'Đóng terminal', 'Close terminal')}</Button>}
+      {onHide && <IconButton size="small" aria-label={localize(locale, 'Ẩn khung terminal', 'Hide terminal panel')} title={localize(locale, 'Ẩn khung terminal (terminal vẫn chạy)', 'Hide terminal panel (terminals keep running)')} onClick={onHide}><CloseIcon fontSize="small" /></IconButton>}
     </Box>
     {!model.connected && <Alert severity="info">{localize(locale, 'Đang nối lại terminal…', 'Reconnecting terminal…')}</Alert>}
     {state && !state.available && <Alert severity="info">{state.reasonCode === 'managed-terminal-seatbelt-unavailable'

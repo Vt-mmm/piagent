@@ -1,4 +1,4 @@
-import { companyAccessLabel, companyBypassDetail, fastHint, fastLabel, fastOnSx } from "./SessionComposerControls.tsx";
+import { companyAccessLabel, companyBypassDetail, personalBypassDetail, fastHint, fastLabel, fastOnSx } from "./SessionComposerControls.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sendsOnEnter } from "./enter-key.ts";
 import AddRounded from "@mui/icons-material/AddRounded";
@@ -74,7 +74,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [permissionMode, setPermissionMode] = useState<PermissionMode | null>(null), [message, setMessageText] = useState(() => readDraft(NEW_CHAT_DRAFT));
   // Kept when the member opens a conversation and comes back (composer-drafts.ts).
   const setMessage = (value: string) => { setMessageText(value); writeDraft(NEW_CHAT_DRAFT, value); };
-  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
+  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | null>(null);
   const [files, setFiles] = useState<readonly File[]>(() => readComposerMemory<readonly File[]>(NEW_CHAT_DRAFT) ?? []), [fileError, setFileError] = useState<string | null>(null);
   useEffect(() => { writeComposerMemory(NEW_CHAT_DRAFT, files.length ? files : null); }, [files]);
   const [dragging, setDragging] = useState(false);
@@ -177,7 +177,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
         {localize(locale, "Hôm nay làm gì?", "What should we work on?")}
       </Typography>
       <Box sx={{ position: "relative", width: "100%", maxWidth: 820, border: 1, borderColor: dragging ? "primary.main" : "divider",
-        borderStyle: dragging ? "dashed" : "solid", borderRadius: 3.5, bgcolor: "background.paper",
+        borderStyle: dragging ? "dashed" : "solid", borderRadius: 1, bgcolor: "background.paper",
         p: 1.25, boxShadow: "0 18px 55px rgba(0,0,0,.13)" }}
       onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
       onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
@@ -188,7 +188,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
         if (canAttach) selectFiles(event.dataTransfer.files);
       }}>
         {dragging && <Box role="status" sx={{ position: "absolute", inset: 0, zIndex: 3, display: "grid", alignContent: "center",
-          justifyItems: "center", gap: .5, borderRadius: 3.5, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
+          justifyItems: "center", gap: .5, borderRadius: 1, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
           <Typography sx={{ fontWeight: 750 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
             : files.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn đầu tiên`, `The first message already holds ${MAX_ATTACHMENTS} files`)
               : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
@@ -217,7 +217,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
               deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${file.name}`} role="button" />} />)}
           </Stack>}
           <Collapse in={advancedOpen} id="piagent-new-session-options">
-            <Box sx={{ mx: .35, mt: 1, px: 1.1, py: 1, borderRadius: 2, bgcolor: "action.hover" }}>
+            <Box sx={{ mx: .35, mt: 1, px: 1.1, py: 1, borderRadius: 1, bgcolor: "action.hover" }}>
               <Typography variant="caption" sx={{ display: "block", mb: .75, fontWeight: 750 }}>
                 {localize(locale, "Tùy chọn cho tin nhắn đầu tiên", "Options for the first message")}
               </Typography>
@@ -261,7 +261,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
             {fastAvailable && <Tooltip title={fastHint(locale)} arrow>
               <Button size="small" color="inherit" variant="outlined" startIcon={<BoltRounded />} aria-pressed={fast}
                 aria-label={`${fastLabel(fast, locale)}. ${fastHint(locale)}`} onClick={() => setFast((value) => !value)}
-                sx={{ flex: "0 0 auto", minWidth: 0, px: { xs: .75, sm: 1 }, borderRadius: 2, borderColor: "divider", color: "text.secondary",
+                sx={{ flex: "0 0 auto", minWidth: 0, px: { xs: .75, sm: 1 }, borderRadius: 1, borderColor: "divider", color: "text.secondary",
                   "& .MuiButton-startIcon": { mr: { xs: 0, sm: .65 }, ml: 0 }, ...(fast ? fastOnSx : {}) }}>
                 <Box component="span" sx={{ display: { xs: "none", sm: "inline" }, whiteSpace: "nowrap" }}>{fastLabel(fast, locale)}</Box></Button>
             </Tooltip>}
@@ -317,14 +317,14 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
             secondary={localize(locale, "Chỉ hỏi việc bắt buộc phải xác nhận", "Asks only what must be confirmed")} /></MenuItem>] : <>
       <MenuItem selected={permissionMode === null} onClick={() => { setPermissionMode(null); closeMenu(); }}><ListItemIcon><SecurityRounded /></ListItemIcon>
         <ListItemText primary={localize(locale, "Theo profile project", "Project profile default")} /></MenuItem>
-      {(["read-only", "workspace-write", "trusted-full-access"] as const).map((value) => <MenuItem key={value} selected={permissionMode === value}
-        onClick={() => { closeMenu(); if (value === "trusted-full-access") setPendingPermission(value); else setPermissionMode(value); }}>
-        <ListItemIcon><SecurityRounded /></ListItemIcon><ListItemText primary={label(value, locale)} /></MenuItem>)}</>}
+      {(["read-only", "workspace-write", "trusted-full-access", "bypass"] as const).map((value) => <MenuItem key={value} selected={permissionMode === value}
+        onClick={() => { closeMenu(); if (value === "trusted-full-access" || value === "bypass") setPendingPermission(value); else setPermissionMode(value); }}>
+        <ListItemIcon><SecurityRounded color={value === "bypass" ? "error" : value === "trusted-full-access" ? "warning" : undefined} /></ListItemIcon><ListItemText primary={label(value, locale)} /></MenuItem>)}</>}
     </Menu>
-    <ActionConfirmationDialog open={pendingPermission !== null} title={managed || company ? localize(locale, "Tạo cuộc trò chuyện với Bypass?", "Create with Bypass?") : localize(locale, "Tạo session với toàn quyền?", "Create with full access?")}
-      description={managed || company ? companyBypassDetail(locale) : localize(locale, "Session mới được phép đọc, sửa file và chạy command trong runtime. Xóa dữ liệu và gửi ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={managed || company || pendingPermission === "bypass" ? localize(locale, "Tạo cuộc trò chuyện với Bypass?", "Create with Bypass?") : localize(locale, "Tạo session với toàn quyền?", "Create with full access?")}
+      description={managed || company ? companyBypassDetail(locale) : pendingPermission === "bypass" ? personalBypassDetail(locale) : localize(locale, "Session mới được phép đọc, sửa file và chạy command trong runtime. Xóa dữ liệu và gửi ra ngoài vẫn cần xác nhận riêng.",
         "The new session may read and edit files and run commands. Deletion and external transfer still require separate approval.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed || company ? localize(locale, "Dùng Bypass", "Use Bypass") : localize(locale, "Dùng toàn quyền", "Use full access")}
-      onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); setPermissionMode("trusted-full-access"); }} />
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={managed || company || pendingPermission === "bypass" ? localize(locale, "Dùng Bypass", "Use Bypass") : localize(locale, "Dùng toàn quyền", "Use full access")}
+      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = managed || company ? "trusted-full-access" : pendingPermission; setPendingPermission(null); if (mode) setPermissionMode(mode); }} />
   </Box>;
 }

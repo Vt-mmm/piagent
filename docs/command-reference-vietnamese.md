@@ -130,7 +130,7 @@ Các command này đến từ package `piagent-core`; tất cả chạy ngay và
 | `/piagent-inspector` | Muốn xem Piagent đang làm gì, sửa file nào, diff bao nhiêu dòng, command nào fail/block và context còn bao nhiêu. | Mở menu `summary/files/commands/security/context/toggle`; read-only, không gọi model. |
 | `/piagent-orchestration` | Xem chính sách helper/subagent. | Mode, giới hạn helper, review lens, Field Guide; không gọi model. |
 | `/context` | Xem index/search/pack/impact/efficiency/preflight/compact. | Menu context, không gọi model. |
-| `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access. |
+| `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access/bypass. |
 | `/fast status\|on\|off` | Xem/bật/tắt Fast service tier cho session OpenAI Codex. | Chạy ngay, 0 model token; giữ nguyên model/thinking. Session trống mặc định tắt, environment override hoặc state đã lưu khi resume có thể được ưu tiên. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/piagent-mcp` | Xem/quản trị MCP trong Pi. | Menu MCP, không gọi model. |
@@ -500,6 +500,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-auto --read-only -p "<task>"` | Auto-run scout/read-only; guard chặn shell/write/unknown tool. |
 | `piagent-auto --full-access -p "<task>"` | Trusted automation style; không tắt protected paths/redaction/human gates. |
 | `pi` rồi `/permission full-access <task>` | Một lệnh trong Pi để bật full-access cho session và giao task. Alias `/full-access <task>` vẫn chạy. |
+| `piagent-auto --bypass`, `/permission bypass` | Bypass như Codex: không hỏi, không chặn gì (xoá, push, migration, gửi ra ngoài, file được bảo vệ đều chạy). Chỉ cho session personal; output vẫn che secret, `/undo` vẫn hoàn tác từng lượt. Company giữ luật của team. |
 | `pi --list-models` | Xem model Pi thấy được theo credentials hiện tại. |
 | `piagent-install --with-mcp --with-subagents` | Cài global package + MCP + subagent baseline từ package bin. |
 | `piagent-setup <project> --profile auto` | Setup đầy đủ cho một project khi muốn preseed bằng bin. |

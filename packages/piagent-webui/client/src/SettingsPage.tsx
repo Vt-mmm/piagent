@@ -1,3 +1,4 @@
+import { personalBypassDetail } from "./SessionComposerControls.tsx";
 import { useEffect, useMemo, useState } from "react";
 import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
 import ImageRounded from "@mui/icons-material/ImageRounded";
@@ -51,7 +52,7 @@ function SettingRow({ icon, title, detail, action }: { icon: React.ReactNode; ti
 
 function GeneralSettings() {
   const { locale, colorMode, setLocale, setColorMode } = useUiPreferences();
-  return <><Title>{localize(locale, "Giao diện", "Appearance")}</Title><Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>
+  return <><Title>{localize(locale, "Giao diện", "Appearance")}</Title><Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>
     <SettingRow icon={<LanguageRounded color="primary" />} title={localize(locale, "Ngôn ngữ", "Language")}
       detail={localize(locale, "Ngôn ngữ của giao diện. Agent trả lời theo ngôn ngữ bạn nhắn.", "The interface language. The agent answers in the language you write.")}
       action={<ToggleButtonGroup exclusive size="small" value={locale} onChange={(_, value) => value && setLocale(value)}>
@@ -102,8 +103,8 @@ function AgentCapabilityCards({ options, snapshot, activeModel, observedProvider
     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>{localize(locale,
       "Capability thực tế của Pi runtime và model đang chọn.", "Capabilities reported by the Pi runtime and selected model.")}</Typography>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
-      {cards.map((card) => <Paper variant="outlined" key={card.key} sx={{ p: 1.75, borderRadius: 2.5 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
-        <Box sx={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: "action.selected", flex: "0 0 auto" }}>{card.icon}</Box>
+      {cards.map((card) => <Paper variant="outlined" key={card.key} sx={{ p: 1.75, borderRadius: 1 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
+        <Box sx={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: 1, bgcolor: "action.selected", flex: "0 0 auto" }}>{card.icon}</Box>
         <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>{card.title}</Typography>
           <Typography variant="body2" color="text.secondary">{card.detail}</Typography></Box>
         <Chip size="small" color={card.ready ? "success" : "default"} variant="outlined" label={card.status} /></Stack></Paper>)}
@@ -130,7 +131,7 @@ function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetMod
     try { await run(); } catch { setChangeError(localize(locale, "Chưa thể áp dụng thay đổi", "Could not apply this change")); }
     finally { setChanging(false); } };
   return <><Title>{localize(locale, "Nhà cung cấp & model", "Providers & models")}</Title>
-    {session && <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 2.5, mb: 2 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "center", mb: 2 }}>
+    {session && <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 1, mb: 2 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "center", mb: 2 }}>
       <ServiceIcon name={observedModel?.provider ?? session.modelLabel ?? "model"} size={38} /><Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700 }}>{localize(locale, "Model của session hiện tại", "Current session model")}</Typography>
         <Typography variant="body2" color="text.secondary" noWrap>{modelDisplay} · {label(session.thinkingLevel, locale)}</Typography></Box>
@@ -154,7 +155,7 @@ function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetMod
     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>{localize(locale,
       "Các model hiện có từ những provider đã xác thực.", "Models currently available from authenticated providers.")}</Typography>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
-      {providers.map(([provider, models]) => <Paper variant="outlined" key={provider} sx={{ p: 1.5, borderRadius: 2 }}><Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
+      {providers.map(([provider, models]) => <Paper variant="outlined" key={provider} sx={{ p: 1.5, borderRadius: 1 }}><Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
         <ServiceIcon name={provider} size={32} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontWeight: 700, textTransform: "capitalize" }}>{provider}</Typography>
           <Typography variant="body2" color="text.secondary">{models.length} model</Typography></Box><Chip size="small" color="success" variant="outlined" label={localize(locale, "Sẵn sàng", "Ready")} /></Stack>
         <Box sx={{ display: "flex", gap: .6, mt: 1.25, flexWrap: "wrap" }}>{models.slice(0, 6).map((model) => <Chip key={model.modelRef} size="small" variant="outlined" label={model.displayName} />)}
@@ -168,7 +169,7 @@ function ConnectionSettings({ value, loading, sessionRef, onChanged }: { value?:
   const { locale } = useUiPreferences();
   return <><Title>{localize(locale, "MCP & kết nối", "MCP & connections")}</Title>
     {loading ? <CircularProgress size={22} /> : <Stack spacing={1}>
-      {(value?.connections ?? []).map((connection) => <Paper variant="outlined" key={connection.connectionRef} sx={{ p: 1.75, borderRadius: 2.5 }}>
+      {(value?.connections ?? []).map((connection) => <Paper variant="outlined" key={connection.connectionRef} sx={{ p: 1.75, borderRadius: 1 }}>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}><ServiceIcon name={connection.name} size={38} /><Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 800 }}>{connection.name}</Typography><Typography variant="body2" color="text.secondary">{mcpConnectionSubtitle(connection, locale)}</Typography></Box>
           {sessionRef ? <McpConnectionActions sessionRef={sessionRef} connection={connection} onChanged={onChanged} />
@@ -179,48 +180,49 @@ function ConnectionSettings({ value, loading, sessionRef, onChanged }: { value?:
 }
 
 function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?: PiagentWebUICanonicalSnapshotV1; session?: SessionRow;
-  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown> }) {
+  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown> }) {
   const { locale } = useUiPreferences();
   const permission = snapshot?.session.permissionProfile as { state?: string; value?: string | null } | undefined;
   const [value, setValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
-  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | null>(null);
+  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | null>(null);
   // A company conversation's choice is on its row (ask first, or Bypass).
   useEffect(() => { setValue(session?.managedPermission ?? (permission?.state === "known" ? permission.value ?? null : null)); },
     [session?.sessionRef, session?.managedPermission, permission?.state, permission?.value]);
-  const apply = async (mode: "read-only" | "workspace-write" | "trusted-full-access") => {
+  const apply = async (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
     if (!onSetPermission) return;
     setBusy(true); setError(null);
     try { await onSetPermission(mode); setValue(mode); }
     catch { setError(localize(locale, "Chưa thể đổi quyền lúc này", "Could not change access right now")); }
     finally { setBusy(false); }
   };
-  const change = (mode: "read-only" | "workspace-write" | "trusted-full-access") => {
-    if (mode === "trusted-full-access") { setPendingPermission(mode); return; }
+  const change = (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
+    if (mode === "trusted-full-access" || mode === "bypass") { setPendingPermission(mode); return; }
     void apply(mode);
   };
   const choices = [
     { mode: "read-only" as const, detail: localize(locale, "Chỉ xem session, task và source; không thay đổi project.", "Inspect the session, task, and source without changing the project.") },
     { mode: "workspace-write" as const, detail: localize(locale, "Đọc, sửa file và chạy command trong project; thao tác nhạy cảm vẫn cần xác nhận.", "Read and edit project files and run commands; sensitive actions still require confirmation.") },
-    { mode: "trusted-full-access" as const, detail: localize(locale, "Quyền rộng hơn trong runtime; xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "Broader runtime access; deleting or sending data externally still requires separate confirmation.") }
+    { mode: "trusted-full-access" as const, detail: localize(locale, "Quyền rộng hơn trong runtime; xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "Broader runtime access; deleting or sending data externally still requires separate confirmation.") },
+    ...(session?.managed ? [] : [{ mode: "bypass" as const, detail: personalBypassDetail(locale) }])
   ];
   return <><Title>{localize(locale, "Quyền truy cập", "Access")}</Title><Typography variant="h2" sx={{ mb: .5 }}>
     {localize(locale, "Hồ sơ quyền", "Permission profile")}</Typography><Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
       {localize(locale, "Áp dụng cho session hiện tại.", "Applies to the current session.")}</Typography>
-    <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>{choices.map((choice, index) => <Box key={choice.mode}>
-      <SettingRow icon={<SecurityRounded color={choice.mode === "trusted-full-access" ? "warning" : "primary"} />}
+    <Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>{choices.map((choice, index) => <Box key={choice.mode}>
+      <SettingRow icon={<SecurityRounded color={choice.mode === "bypass" ? "error" : choice.mode === "trusted-full-access" ? "warning" : "primary"} />}
         title={label(choice.mode, locale)} detail={choice.detail}
         action={<Button size="small" variant={value === choice.mode ? "contained" : "outlined"}
-          color={choice.mode === "trusted-full-access" ? "warning" : "primary"}
+          color={choice.mode === "bypass" ? "error" : choice.mode === "trusted-full-access" ? "warning" : "primary"}
           aria-pressed={value === choice.mode} disabled={busy || !session || !onSetPermission || session.liveState === "running"}
           onClick={() => change(choice.mode)}>{label(choice.mode, locale)}</Button>} />
       {index < choices.length - 1 && <Divider />}</Box>)}</Paper>
     {error && <Typography role="status" color="error" variant="caption" sx={{ mt: 1 }}>{error}</Typography>}
-    <ActionConfirmationDialog open={pendingPermission !== null} title={localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
+      description={pendingPermission === "bypass" ? personalBypassDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={localize(locale, "Bật toàn quyền", "Enable full access")}
-      onCancel={() => setPendingPermission(null)} onConfirm={() => { setPendingPermission(null); void apply("trusted-full-access"); }} />
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
+      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode) void apply(mode); }} />
   </>;
 }
 
@@ -236,7 +238,7 @@ function UsageSettings({ session, snapshot }: { session?: SessionRow; snapshot?:
     ["Verifier", snapshot?.verification.state ?? "—"]];
   return <><Title>{localize(locale, "Usage & context", "Usage & context")}</Title><Box sx={{ display: "grid",
     gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))" }, gap: 1 }}>
-    {cards.map(([name, value]) => <Paper variant="outlined" key={name} sx={{ p: 2, borderRadius: 2.5 }}><Typography variant="caption" color="text.secondary">{name}</Typography>
+    {cards.map(([name, value]) => <Paper variant="outlined" key={name} sx={{ p: 2, borderRadius: 1 }}><Typography variant="caption" color="text.secondary">{name}</Typography>
       <Typography sx={{ mt: .6, fontSize: "1.25rem", fontWeight: 800 }}>{value}</Typography></Paper>)}</Box></>;
 }
 
@@ -244,7 +246,7 @@ function AboutSettings({ capabilities, connection }: { capabilities?: PiagentGat
   const { locale } = useUiPreferences();
   const rows = [["Gateway", connection], ["Mode", capabilities?.mode ?? "unknown"], ["Protocol", capabilities?.protocol.selected ?? "—"],
     [localize(locale, "Runtime", "Runtime"), capabilities?.capabilities.sessionRuntime.status ?? "unknown"]];
-  return <><Title>Piagent</Title><Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>{rows.map(([name, value], index) => <Box key={String(name)}>
+  return <><Title>Piagent</Title><Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>{rows.map(([name, value], index) => <Box key={String(name)}>
     <Stack direction="row" sx={{ px: 2.25, py: 1.6, justifyContent: "space-between", gap: 2 }}><Typography color="text.secondary">{name}</Typography>
       <Typography sx={{ fontWeight: 760 }}>{String(value)}</Typography></Stack>{index < rows.length - 1 && <Divider />}</Box>)}</Paper></>;
 }
@@ -253,7 +255,7 @@ export function SettingsPage({ section, onSection, onBack, session, snapshot, ca
   onSection(value: SettingsSection): void; onBack(): void; session?: SessionRow; snapshot?: PiagentWebUICanonicalSnapshotV1;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: string; onSetModel?(modelRef: string): Promise<unknown>;
   onSetThinking?(thinking: string): Promise<unknown>;
-  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
+  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown>;
   onRuntimeChanged?(): Promise<void> | void }) {
   const { locale } = useUiPreferences();
   const [options, setOptions] = useState<SessionCreationOptions>(), [auth, setAuth] = useState<ProviderAuthCatalog>();

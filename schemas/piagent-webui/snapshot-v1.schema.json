@@ -943,6 +943,7 @@
                 "read-only",
                 "workspace-write",
                 "trusted-full-access",
+                "bypass",
                 null
               ]
             },
@@ -971,7 +972,7 @@
               "then": {
                 "type": "object",
                 "properties": {
-                  "value": { "enum": ["read-only", "workspace-write", "trusted-full-access"] },
+                  "value": { "enum": ["read-only", "workspace-write", "trusted-full-access", "bypass"] },
                   "evidence": { "enum": ["observed", "derived"] },
                   "reasonCode": { "type": "null" }
                 }

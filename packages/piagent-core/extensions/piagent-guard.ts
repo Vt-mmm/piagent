@@ -25,7 +25,7 @@ import { extractShellWritePathCandidates } from "./shell-write-targets.js";
 import { isProjectMutatingShellCommand, isReadOnlyTaskShellCommand } from "./readonly-inline-inspection.ts";
 import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
 import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
-import { registerCompanySessionGuard } from "./company-session-guard.ts";
+import { isCompanySession, registerCompanySessionGuard } from "./company-session-guard.ts";
 import {
   extractDocument,
   resolveDocumentPath,
@@ -344,7 +344,12 @@ const PERMISSION_PROFILE_ALIASES: Record<string, PermissionProfileMode> = {
   "trusted-full-access": "trusted-full-access",
   "trusted_full_access": "trusted-full-access",
   "danger-full-access": "trusted-full-access",
-  "danger_full_access": "trusted-full-access"
+  "danger_full_access": "trusted-full-access",
+  bypass: "bypass",
+  yolo: "bypass",
+  "dangerously-bypass": "bypass",
+  "danger-bypass": "bypass",
+  "dangerously-bypass-approvals-and-sandbox": "bypass"
 };
 const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "find", "ls"]);
 const WRITE_TOOL_NAMES = new Set(["write", "edit"]);
@@ -1126,6 +1131,7 @@ function normalizePermissionProfileMode(value: unknown): PermissionProfileMode |
 function runtimeEquivalentForPermissionProfile(mode: PermissionProfileMode): string {
   if (mode === "read-only") return "sandbox_mode=read-only";
   if (mode === "trusted-full-access") return "sandbox_mode=danger-full-access + approval_policy=never, with Piagent protected-path and human-action gates still enforced";
+  if (mode === "bypass") return "sandbox_mode=danger-full-access + approval_policy=never; every Piagent gate off (output redaction and turn checkpoints remain)";
   return "sandbox_mode=workspace-write + approval_policy=on-request";
 }
 
@@ -1202,6 +1208,9 @@ function resolvePermissionProfile(
 function isPiagentTool(toolName: string): boolean {
   return toolName.startsWith("piagent_");
 }
+
+// Full access or more: the profile does not narrow reads or the tool registry.
+const broadAccess = (mode: PermissionProfileMode) => mode === "trusted-full-access" || mode === "bypass";
 
 function evaluatePermissionProfileToolAccess(
   toolName: string,
@@ -3776,7 +3785,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         }),
         readProtectedPaths: effectiveProtectedPaths(policy, profile).readProtectedPaths,
         filesystemRead: capabilityState.filesystemRead,
-        enforceFilesystemRead: permissionProfile.mode !== "trusted-full-access"
+        enforceFilesystemRead: !broadAccess(permissionProfile.mode)
       };
     },
     activateToolGroups,
@@ -3841,6 +3850,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     },
   });
 
+  // Bypass is for personal sessions only: a company session keeps Studio's rules.
+  const bypassActive = (ctx: ExtensionContext) => !isCompanySession(ctx) && ctx.model?.provider !== "agent_watch_managed"
+    && resolvePermissionProfile(loadProfileFromContext(ctx), policy, permissionOverrideFromContext(ctx)).mode === "bypass";
   registerToolCallHook(pi, {
     extractLikelyPath: extractLikelyPathFromInput,
     redactText,
@@ -3876,6 +3888,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
           role: helperPreflight.role, requestCount: helperPreflight.requestCount });
         return { block: true, reason: `Blocked ${event.toolName}: ${helperPreflight.reason} Do not retry this helper; continue in the parent.` };
       }
+      if (bypassActive(ctx)) return;
       const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
       if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
       if (event.toolName === "edit" || event.toolName === "write" || targetInspection.exactLocalPatchExecutor) {
@@ -3901,6 +3914,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       return undefined;
     },
     authorize: async (event, ctx) => {
+    // Bypass: no Piagent gate asks or blocks, as with Codex's
+    // --dangerously-bypass-approvals-and-sandbox. Tool output is still
+    // redacted and the turn still gets its checkpoint; neither stops a command.
+    if (bypassActive(ctx)) return;
     const preInput = isPlainRecord(event.input) ? event.input : {};
     const authorizationTargetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, preInput);
     if (authorizationTargetInspection.reason) {

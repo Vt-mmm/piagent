@@ -32,15 +32,21 @@ export function SessionEditorLayout({ sessionRef, children, navigationHost, side
     return () => { window.removeEventListener("keydown", shortcut); window.removeEventListener(WORKSPACE_OPEN_EVENT, openFile); };
   }, [sessionRef]);
   useEffect(() => { if (sidebarMode !== "sessions") setOpen(true); }, [sidebarMode]);
-  const explorer = <Suspense fallback={<CircularProgress size={24} />}><Explorer sessionRef={sessionRef} target={target} navigationHost={wide ? navigationHost : null} sidebarMode={sidebarMode} /></Suspense>;
-  const terminal = <Suspense fallback={<CircularProgress size={24} />}><TerminalPanel sessionRef={sessionRef} /></Suspense>;
+  const hideFiles = () => { setOpen(false); onSection("sessions"); };
+  const explorer = <Suspense fallback={<CircularProgress size={24} />}><Explorer sessionRef={sessionRef} target={target} navigationHost={wide ? navigationHost : null} sidebarMode={sidebarMode} onHide={hideFiles} fill={wide} /></Suspense>;
+  const terminal = <Suspense fallback={<CircularProgress size={24} />}><TerminalPanel sessionRef={sessionRef} onHide={() => setTerminalOpen(false)} /></Suspense>;
   return <>
     {quick && <Suspense fallback={<CircularProgress size={20} />}><QuickOpen sessionRef={sessionRef} onClose={() => setQuick(false)}
       onOpen={path => { setQuick(false); setOpen(true); onSection("files"); setTarget({ path }); }} /></Suspense>}
     <Button aria-expanded={open} onClick={() => { setOpen(value => !value); onSection(open ? "sessions" : "files"); }}>{localize(locale, "Tệp", "Files")}</Button>
     <Button aria-expanded={terminalOpen} onClick={() => setTerminalOpen(value => !value)}>Terminal</Button>
     <Box sx={{ display: "flex", minWidth: 0 }}>
-      {wide && (open || terminalOpen) && <Box component="section" sx={{ width: "58%", minWidth: 0, borderRight: 1, borderColor: "divider" }}>{open && explorer}{terminalOpen && terminal}</Box>}
+      {/* Editor above, terminal below, as in an IDE: both share the window height. */}
+      {wide && (open || terminalOpen) && <Box component="section" sx={{ width: "58%", minWidth: 0, borderRight: 1, borderColor: "divider",
+        height: "calc(100vh - 110px)", display: "flex", flexDirection: "column" }}>
+        {open && <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{explorer}</Box>}
+        {terminalOpen && <Box sx={{ flexShrink: 0, maxHeight: open ? "60%" : "100%", overflow: "auto" }}>{terminal}</Box>}
+      </Box>}
       <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
     </Box>
     {!wide && <Drawer anchor="bottom" open={terminalOpen} onClose={() => setTerminalOpen(false)}>

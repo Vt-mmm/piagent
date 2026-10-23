@@ -106,7 +106,7 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
       <Stack direction="row" sx={{ justifyContent: "space-between", mb: .75 }}>
         <Typography variant="body2">{percent === null || percent === undefined ? "—" : `${Math.round(percent)}%`}</Typography>
         <Typography variant="caption" color="text.secondary">{used ? compactTokens(used) : "—"}{window_ ? ` / ${compactTokens(window_)}` : ""}</Typography></Stack>
-      <LinearProgress variant="determinate" value={Math.min(100, Math.max(0, percent ?? 0))} sx={{ height: 6, borderRadius: 3 }}
+      <LinearProgress variant="determinate" value={Math.min(100, Math.max(0, percent ?? 0))} sx={{ height: 6, borderRadius: 1 }}
         color={(percent ?? 0) > 85 ? "warning" : "primary"} aria-label={localize(locale, "Mức dùng ngữ cảnh", "Context usage")} />
     </Section>
     {(helpers || helperRuns.length > 0) && <Section title="Subagent">

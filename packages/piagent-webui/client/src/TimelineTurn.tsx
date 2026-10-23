@@ -44,7 +44,7 @@ export function AttachmentCards({ attachments, locale }: { attachments: readonly
       ? localize(locale, "Tài liệu", "Document") : attachment.kind === "image" ? localize(locale, "Ảnh", "Image") : "File"}${attachment.truncated
         ? ` · ${localize(locale, "đã cắt bớt", "truncated")}` : ""}`;
     return <Paper key={`${attachment.displayName}:${index}`} variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1.1,
-      minWidth: 220, maxWidth: 440, px: 1.2, py: 1, borderRadius: 2, bgcolor: "background.paper" }}>
+      minWidth: 220, maxWidth: 440, px: 1.2, py: 1, borderRadius: 1, bgcolor: "background.paper" }}>
       {attachment.kind === "image" ? <ImageOutlined color="action" /> : <DescriptionOutlined color="action" />}
       <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>{attachment.displayName}</Typography>
         <Typography variant="caption" color="text.secondary">{detail}</Typography></Box>
@@ -89,7 +89,7 @@ export function TurnFailure({ code, detail, locale, onContinue }: { code: string
 
 export function UserBubble({ text, attachments, note, locale }: { text: string | null; attachments: readonly (AttachmentSummary | Attachment)[];
   note?: string | null; locale: UiLocale }) {
-  return <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 3, px: 2, py: 1.4 }}>
+  return <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 1, px: 2, py: 1.4 }}>
     <AttachmentCards attachments={attachments} locale={locale} />
     {text && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}><WorkspaceMentions>{text}</WorkspaceMentions></Typography>}
     {note && <Typography variant="caption" color="text.secondary">{note}</Typography>}

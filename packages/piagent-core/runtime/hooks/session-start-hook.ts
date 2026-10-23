@@ -319,6 +319,9 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     if (permissionProfile.mode === "trusted-full-access") {
       ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
     }
+    if (permissionProfile.mode === "bypass") {
+      ctx.ui.notify("Piagent bypass is active: no confirmation, protected-path or policy gate applies in this personal session. Output redaction and /undo checkpoints remain.", "warning");
+    }
     const mcpNotice = dependencies.mcpReadinessNotice(ctx.cwd);
     if (mcpNotice) ctx.ui.notify(mcpNotice, "warning");
     const updateNotice = dependencies.updateAvailabilityNotice();

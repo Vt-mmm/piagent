@@ -208,7 +208,7 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
       if (
         projectRelative
         && capabilityState.filesystemRead
-        && permissionProfile.mode !== "trusted-full-access"
+        && !["trusted-full-access", "bypass"].includes(permissionProfile.mode)
         && !matchesAnyPath(projectRelative, capabilityState.filesystemRead)
       ) {
         return {

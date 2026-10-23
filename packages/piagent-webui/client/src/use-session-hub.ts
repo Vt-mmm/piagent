@@ -273,7 +273,7 @@ export function useSessionHub(): SessionHub {
   }, [refresh, request]);
 
   const setSessionOption = useCallback(async (session: SessionRow, action: "session.set-model" | "session.set-thinking" | "session.set-permission" | "session.set-fast",
-    payload: { modelRef: string } | { thinkingLevel: string } | { permissionMode: "read-only" | "workspace-write" | "trusted-full-access" } | { fast: boolean }) => {
+    payload: { modelRef: string } | { thinkingLevel: string } | { permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" } | { fast: boolean }) => {
     const submit = (snapshot?: Catalog) => { const exact = snapshot?.sessions.find((item) => item.sessionRef === session.sessionRef);
       if (!snapshot?.catalogRevision || !exact) throw new Error("session-unavailable"); const now = new Date(); return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
         commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action, requestedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
@@ -285,7 +285,7 @@ export function useSessionHub(): SessionHub {
   }, [refresh, request]);
   const setModel = useCallback((session: SessionRow, modelRef: string) => setSessionOption(session, "session.set-model", { modelRef }), [setSessionOption]);
   const setThinking = useCallback((session: SessionRow, thinkingLevel: string) => setSessionOption(session, "session.set-thinking", { thinkingLevel }), [setSessionOption]);
-  const setPermission = useCallback((session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access") =>
+  const setPermission = useCallback((session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") =>
     setSessionOption(session, "session.set-permission", { permissionMode }), [setSessionOption]);
   const setFast = useCallback((session: SessionRow, fast: boolean) => setSessionOption(session, "session.set-fast", { fast }), [setSessionOption]);
 

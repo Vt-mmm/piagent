@@ -26,8 +26,8 @@
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
-          "byteSize": 7631,
-          "digest": "sha256:e50361eda8ca41dc75afdff2ff21498499147b494ad4ed7b444a4a29279ba884",
+          "byteSize": 7647,
+          "digest": "sha256:422b26bca154240747970d948cdf1ded57b9dcb544d6547dedb4d1ddfda4b4da",
           "id": "base-policy",
           "kind": "policies",
           "path": "packages/piagent-core/policies/base-policy.json"

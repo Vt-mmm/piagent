@@ -20,12 +20,15 @@ import Stack from "@mui/material/Stack";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import CloseIcon from "@mui/icons-material/Close";
+import { closableLabel } from "./tab-close.tsx";
 import type { PiagentWebUIWorkspaceTreeV1 } from "../../contracts/generated/workspace-tree-v1.ts";
 import { readWorkspaceFile, readWorkspaceTree } from "./workspace-api.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 const CodeEditor = lazy(() => import("./WorkspaceCodeEditor.tsx"));
 
-export default function WorkspaceExplorer({ sessionRef, target, navigationHost, sidebarMode }: { sessionRef: string; target?: { path: string; line?: number }; navigationHost?: HTMLElement | null; sidebarMode?: "sessions" | "files" | "search" }) {
+export default function WorkspaceExplorer({ sessionRef, target, navigationHost, sidebarMode, onHide, fill }: { sessionRef: string; target?: { path: string; line?: number }; navigationHost?: HTMLElement | null; sidebarMode?: "sessions" | "files" | "search"; onHide?(): void; fill?: boolean }) {
   const { locale } = useUiPreferences();
   const [section, setSection] = useState("files"), [newFile, setNewFile] = useState(false), [newPath, setNewPath] = useState(""), [compare, setCompare] = useState(false);
   const [renaming, setRenaming] = useState<string>(), [renamePath, setRenamePath] = useState("");
@@ -83,15 +86,20 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
       {tree?.truncated && <Typography variant="caption">{localize(locale, "Danh sách đã được giới hạn.", "Listing limit reached.")}</Typography>}
       </>}
     </Box>;
-  return <>{revert.dialog}{lineReview.dialog}<Stack direction="row" sx={{ height: "calc(100vh - 150px)", minHeight: 320 }}>
+  return <>{revert.dialog}{lineReview.dialog}<Stack direction="row" sx={{ height: fill ? "100%" : "calc(100vh - 150px)", minHeight: fill ? 160 : 320 }}>
     {navigationHost ? createPortal(navigation, navigationHost) : navigation}
     <Box sx={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
       {error && <Alert severity="warning">{localize(locale, "Chưa đọc được tệp hoặc thư mục này.", "This file or folder could not be read.")}</Alert>}
       {lineReview.bar}
       {editing.message && <Alert severity="warning">{editing.message}</Alert>}
       {editing.authority?.agentRunning && <Alert severity="info">{localize(locale, "Agent đang chạy và có thể sửa tệp này.", "The agent is running and may change this file.")}</Alert>}
-      {!!tabs.length && <Tabs value={active ?? false} onChange={(_, value) => editing.select(value)} variant="scrollable" scrollButtons="auto" aria-label={localize(locale, "Các tệp đang mở", "Open files")}>
-        {tabs.map(tab => <Tab key={tab.file.path} value={tab.file.path} label={`${tab.file.path}${tabDirty(tab) ? " ●" : ""}${review.counts.get(tab.file.path) ? ` (${review.counts.get(tab.file.path)})` : ""}`} />)}</Tabs>}
+      <Stack direction="row" sx={{ alignItems: "center", borderBottom: 1, borderColor: "divider", minHeight: 36 }}>
+        <Tabs value={active ?? false} onChange={(_, value) => editing.select(value)} variant="scrollable" scrollButtons="auto" aria-label={localize(locale, "Các tệp đang mở", "Open files")} sx={{ flex: 1, minWidth: 0, minHeight: 36 }}>
+          {tabs.map(tab => <Tab key={tab.file.path} value={tab.file.path} sx={{ minHeight: 36, py: 0 }} aria-label={`${tab.file.path}${tabDirty(tab) ? " ●" : ""}${review.counts.get(tab.file.path) ? ` (${review.counts.get(tab.file.path)})` : ""}`}
+            label={closableLabel(`${tab.file.path}${tabDirty(tab) ? " ●" : ""}${review.counts.get(tab.file.path) ? ` (${review.counts.get(tab.file.path)})` : ""}`,
+              localize(locale, `Đóng ${tab.file.path}`, `Close ${tab.file.path}`), () => editing.close(tab.file.path))} />)}</Tabs>
+        {onHide && <IconButton size="small" aria-label={localize(locale, "Ẩn khung tệp", "Hide files panel")} title={localize(locale, "Ẩn khung tệp (tệp đang mở vẫn giữ)", "Hide files panel (open files are kept)")} onClick={onHide}><CloseIcon fontSize="small" /></IconButton>}
+      </Stack>
       {loading && <CircularProgress size={20} />}
       {file && <Stack direction="row">{revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !tab || (!tabDirty(tab) && !tab.pending) || editing.saving} onClick={() => void editing.save(file.path)}>{localize(locale, "Lưu", "Save")}</Button>

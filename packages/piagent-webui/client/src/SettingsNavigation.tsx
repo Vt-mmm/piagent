@@ -64,7 +64,7 @@ export function SettingsNavigation({ section, onSection, onBack }: { section: Se
     <Stack direction="row" sx={{ minHeight: 48, alignItems: "center", justifyContent: "space-between", px: 1 }}>
       <Typography id="piagent-settings-title" sx={{ fontWeight: 700 }}>{localize(locale, "Cài đặt", "Settings")}</Typography>
       <IconButton aria-label={localize(locale, "Đóng cài đặt", "Close settings")} onClick={onBack}><CloseRounded /></IconButton></Stack>
-    <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: .75, px: 1, mx: .5, mb: 1, borderRadius: 1.5 }}>
+    <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: .75, px: 1, mx: .5, mb: 1, borderRadius: 1 }}>
       <SearchRounded fontSize="small" color="action" />
       <InputBase value={query} onChange={(event) => setQuery(event.target.value)} placeholder={localize(locale, "Tìm cài đặt", "Search settings")}
         inputProps={{ "aria-label": localize(locale, "Tìm cài đặt", "Search settings") }}
@@ -99,7 +99,7 @@ export function ShortcutSettings() {
     ["1 – 5", localize(locale, "Chọn đáp án khi main agent hỏi; Enter để gửi câu trả lời", "Pick an answer when the main agent asks; Enter sends it")],
     ["Esc", localize(locale, "Đóng hộp thoại hoặc bảng lệnh", "Close a dialog or the palette")]];
   return <><Typography component="h1" variant="h1" sx={{ mb: 3 }}>{localize(locale, "Phím tắt", "Shortcuts")}</Typography>
-    <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>{rows.map(([keys, text], index) => <Stack key={keys} direction="row"
+    <Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>{rows.map(([keys, text], index) => <Stack key={keys} direction="row"
       sx={{ px: 2.25, py: 1.5, gap: 2, alignItems: "center", justifyContent: "space-between", borderTop: index ? 1 : 0, borderColor: "divider" }}>
       <Typography>{text}</Typography><Box component="kbd" sx={{ px: .9, py: .2, border: 1, borderColor: "divider", borderRadius: 1, fontSize: 12, fontFamily: "inherit",
         whiteSpace: "nowrap", bgcolor: "action.hover" }}>{keys}</Box></Stack>)}</Paper></>;
