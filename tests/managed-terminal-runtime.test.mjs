@@ -43,7 +43,7 @@ test('company runtime pin detects added files and refuses symlinks, versions and
 test('unsupported sandbox or absent native files fail closed before native resolution where possible', () => {
   const resolve = () => { throw Error('absent'); };
   for (const [platform, bubblewrap, reason] of [
-    ['darwin', null, 'seatbelt-unavailable'], ['win32', null, 'platform-unavailable'],
+    ['darwin', null, 'native-unavailable'], ['win32', null, 'platform-unavailable'],
     ['linux', null, 'bubblewrap-unavailable'], ['linux', '/usr/bin/bwrap', 'native-unavailable']
   ]) {
     const diagnostic = companyTerminalDiagnostic({ platform, arch: 'arm64', bubblewrap, resolve });

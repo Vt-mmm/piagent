@@ -240,6 +240,21 @@
         "expectedDigest": {
           "type": "string",
           "pattern": "^(absent|[a-f0-9]{64})$"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "write",
+            "rename",
+            "delete"
+          ],
+          "description": "Absent means write. Rename and delete send empty content and the digest of the file the member saw."
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The new path of a rename."
         }
       },
       "title": "Workspace write payload"

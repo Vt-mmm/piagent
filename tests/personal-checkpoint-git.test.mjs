@@ -227,3 +227,37 @@ test('another live owner makes the edit wait and keeps the history', async t => 
   write('a.txt', 'two'); await first.finish(running);
   assert.equal(store.load().points.length, 2, 'history is kept');
 });
+
+test('a lock or capture owner must predate its record and the last boot', async () => {
+  const { ownerAlive } = await import('../packages/piagent-core/runtime/process-owner.mjs');
+  const now = Date.now();
+  assert.equal(ownerAlive(process.pid, now, { started: () => now - 5000 }), true);
+  assert.equal(ownerAlive(process.pid, now, { started: () => now + 60000 }), false, 'a reused process number');
+  assert.equal(ownerAlive(process.pid, now - 10 * 3600 * 1000, { now, uptime: 3600, started: () => null }), false, 'written before the last boot');
+  assert.equal(ownerAlive(2 ** 22 + 12345, now), false);
+});
+
+test('an undo that stopped midway finishes on the next attempt instead of refusing its own work', async t => {
+  const { cwd, write, adapter } = fixture(t); write('a.txt', 'a0'); write('b.txt', 'b0');
+  const service = new TurnCheckpointService(adapter);
+  const run = { turnRef: 'turn' }; await service.take(run); write('a.txt', 'a1'); write('b.txt', 'b1'); write('made/deep/c.txt', 'c'); await service.finish(run);
+  write('a.txt', 'a0'); // as if the first undo put a.txt back and then stopped
+  const preview = await service.preview((await service.list()).points[0].id);
+  assert.deepEqual(preview.conflicts, []); assert.deepEqual(preview.steps[0].restore, ['b.txt']);
+  const result = await service.undo();
+  assert.equal(result.result, 'done');
+  assert.equal(fs.readFileSync(path.join(cwd, 'b.txt'), 'utf8'), 'b0');
+  assert.equal(fs.existsSync(path.join(cwd, 'made')), false, 'folders the turn made and its undo emptied are gone');
+});
+
+test('a file ignored since the turn is refused rather than overwritten, and refusals are definite', async t => {
+  const { cwd, write, adapter } = fixture(t); write('config.json', 'before');
+  const service = new TurnCheckpointService(adapter);
+  const run = { turnRef: 'turn' }; await service.take(run); write('config.json', 'agent'); await service.finish(run);
+  write('.gitignore', 'config.json\n'); write('config.json', 'member kept editing');
+  const target = (await service.list()).points[0].id;
+  const preview = await service.preview(target);
+  const result = await service.restoreTo(target, preview);
+  assert.equal(result.result, 'refused'); assert.deepEqual(result.conflicts, ['config.json']);
+  assert.equal(fs.readFileSync(path.join(cwd, 'config.json'), 'utf8'), 'member kept editing');
+});

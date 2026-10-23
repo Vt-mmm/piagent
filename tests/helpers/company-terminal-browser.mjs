@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +19,8 @@ export async function qualifyCompanyTerminal(page, project) {
   await expect(rows).toContainText('COMPANY_READY');
   await expect.poll(() => fs.existsSync(path.join(project, 'terminal-proof.txt'))).toBe(true);
   assert.equal(fs.readFileSync(path.join(project, 'terminal-proof.txt'), 'utf8'), 'sandbox-write');
-  await command("test ! -s .env && printf 'CREDENTIAL_%s\\n' MASKED");
+  // Linux masks it with an empty file, macOS refuses to read it.
+  await command("test -z \"$(cat .env 2>/dev/null)\" && printf 'CREDENTIAL_%s\\n' MASKED");
   await expect(rows).toContainText('CREDENTIAL_MASKED');
   await command("if curl --connect-timeout 2 --max-time 3 https://example.com; then echo NETWORK_UNEXPECTED; else printf 'NETWORK_%s\\n' DENIED; fi");
   await expect(rows).toContainText('NETWORK_DENIED', { timeout: 10000 });
@@ -48,10 +50,10 @@ export async function qualifyCompanyTerminal(page, project) {
   await page.getByRole('button', { name: 'Mở terminal', exact: true }).click();
   const marker = `piagent-terminal-child-${Date.now()}`;
   await command(`bash -c 'exec -a ${marker} sleep 300' &`);
-  const childPids = () => fs.readdirSync('/proc').filter(name => /^\d+$/.test(name)).filter(pid => {
-    try { return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').startsWith(marker + '\0'); }
-    catch { return false; }
-  });
+  // ps works on both platforms; `exec -a` names the process after the marker.
+  const processes = () => execFileSync('/bin/ps', ['-axo', 'pid=,stat=,command='], { encoding: 'utf8' }).trim().split('\n')
+    .map(line => line.trim().split(/\s+/)).map(([pid, stat, command]) => ({ pid, stat, command }));
+  const childPids = () => processes().filter(item => item.command === marker && !item.stat.startsWith('Z')).map(item => item.pid);
   await expect.poll(childPids).toHaveLength(1);
   const [pid] = childPids();
   const receipt = await page.evaluate(async () => {
@@ -86,8 +88,5 @@ export async function qualifyCompanyTerminal(page, project) {
   });
   assert.equal(receipt.ok, true, JSON.stringify(receipt));
   assert.equal(receipt.result.phase, 'settled', JSON.stringify(receipt));
-  await expect.poll(() => {
-    try { return fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].startsWith('Z'); }
-    catch { return true; }
-  }).toBe(true);
+  await expect.poll(() => !childPids().includes(pid)).toBe(true);
 }

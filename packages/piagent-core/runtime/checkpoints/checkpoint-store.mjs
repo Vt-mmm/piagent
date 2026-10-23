@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from '../../extensions/local-state-path.js';
+import { ownerAlive } from '../process-owner.mjs';
 
 export const MAX_CHECKPOINTS = 64;
 const MAX_BYTES = 128 * 1024;
@@ -113,8 +114,7 @@ export class CheckpointStore {
         if (error.code !== 'EEXIST') throw error;
         const current = this.#read(this.lock), owner = JSON.parse(current.bytes);
         if (!exact(owner, ['pid', 'token']) || !Number.isInteger(owner.pid) || owner.pid <= 1 || !id(owner.token)) throw Error('checkpoint-lock-invalid');
-        try { process.kill(owner.pid, 0); throw Error('checkpoint-store-busy'); }
-        catch (probe) { if (probe.code !== 'ESRCH') throw probe; }
+        if (ownerAlive(owner.pid, current.stat.mtimeMs)) throw Error('checkpoint-store-busy');
         if (!same(current.stat, fs.lstatSync(this.#safe(this.lock, 'file')))) throw Error('checkpoint-lock-changed');
         fs.unlinkSync(this.lock);
       }

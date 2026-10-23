@@ -112,12 +112,7 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   await qualifyCompanyCheckpoints(page,project,requests,grant.token);
   assert.equal(requests.length,5,'two mutating company turns each use one tool request and one answer');
   await page.getByRole('button',{name:'Terminal',exact:true}).click();
-  if(process.platform==='linux') await qualifyCompanyTerminal(page,project);
-  else {
-  await expect(page.getByText('Sandbox hiện tại trên macOS không hỗ trợ terminal công ty.',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Mở terminal',exact:true})).toBeDisabled();
-  assert.ok(browserFrames.some(frame=>frame.includes('managed-terminal-seatbelt-unavailable')),'terminal state came through CompanyRelay');
-  }
+  await qualifyCompanyTerminal(page,project);
   assert.ok(browserFrames.every(frame=>!frame.includes(grant.token)),'Studio grant never reaches browser frames');
   const companySessions=fs.readdirSync(path.join(companyAgent,'sessions'),{recursive:true}).filter(f=>String(f).endsWith('.jsonl'));
   assert.equal(companySessions.length,1,'the company transcript lives with the company runtime');

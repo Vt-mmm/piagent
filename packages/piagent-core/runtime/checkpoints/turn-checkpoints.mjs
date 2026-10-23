@@ -73,11 +73,18 @@ export class TurnCheckpointService {
       try {
         if (this.#stack.at(-1)?.id !== step.id) return { result: 'stale', completed, files: [...files] };
         const undo = await this.#undo(guard);
-        if (undo.result !== 'done') return { ...undo, completed, changedFiles: [...files] };
+        // `files`: what this restore changed; `conflicts`: why it stopped.
+        if (undo.result !== 'done') return { ...undo, completed, files: [...files].sort(), conflicts: undo.result === 'refused' ? undo.files : [], stoppedAt: step.id };
         completed.push(step.id);
         for (const file of [...step.restore, ...step.remove]) files.add(file);
       } catch (error) {
-        return { result: 'uncertain', completed, files: [...files], stoppedAt: step.id, reason: String(error) };
+        // Refused before a file of this step changed: a definite answer.
+        const reason = String(error?.message ?? error), definite = !/checkpoint-partial/.test(reason);
+        const named = /checkpoint-content-changed: (.+)$/.exec(reason)?.[1]?.split(', ') ?? [];
+        if (definite && /checkpoint-content-changed/.test(reason)) return { result: 'refused', completed, files: [...files], conflicts: named, stoppedAt: step.id };
+        if (definite && /checkpoint-(?:read-only|path-protected)/.test(reason)) return { result: 'read-only', completed, files: [...files], stoppedAt: step.id, reason };
+        if (definite && /^(?:Error: )?checkpoint-/.test(reason)) return { result: 'unavailable', completed, files: [...files], stoppedAt: step.id, reason };
+        return { result: 'uncertain', completed, files: [...files], stoppedAt: step.id, reason };
       }
     }
     return { result: preview.conflicts.length ? 'refused' : 'done', completed, files: [...files].sort(),
@@ -136,7 +143,11 @@ export class TurnCheckpointService {
     await this.history?.prepare();
     const now = await this.git.tree();
     if (!now) return answer({ result: 'failed', restored: 0, removed: 0, files: [] }, 'Không đọc được trạng thái hiện tại của project; không hoàn tác.');
-    const turn = await this.git.changed(point.before, point.after), since = new Set((await this.git.changed(point.after, now)).map(f => f.path));
+    const since = new Set((await this.git.changed(point.after, now)).map(f => f.path));
+    // A file already back as it was before the turn (an undo that stopped
+    // midway) is done, not a conflict: only the rest is put back.
+    const differs = new Set((await this.git.changed(point.before, now)).map(f => f.path));
+    const turn = (await this.git.changed(point.before, point.after)).filter(f => differs.has(f.path));
     // A file the member saved after the turn began is theirs, even when the
     // turn's snapshots captured it: refuse rather than put it back.
     const edited = this.memberEdits(point.at);
@@ -147,7 +158,7 @@ export class TurnCheckpointService {
     if (this.busy()) return answer({ result: 'busy', restored: 0, removed: 0, files: [] }, 'Đang có một lượt chạy: chờ nó xong (hoặc dừng nó) rồi /undo.');
     this.history?.assertCurrent();
     guard?.();
-    await this.git.restore(point.before, restore, remove, now, guard);
+    if (restore.length || remove.length) await this.git.restore(point.before, restore, remove, now, guard);
     const next = this.#stack.slice(0, -1);
     this.#stack = this.history ? await this.history.save(next) : next;
     return answer({ result: 'done', restored: restore.length, removed: remove.length, files: [...restore, ...remove].slice(0, 5), more: this.#stack.length > 0 },

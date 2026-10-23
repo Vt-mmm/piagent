@@ -24,15 +24,20 @@ export async function previewCheckpointRestore(git, points, targetId, busy, memb
       if (!groups.has(source)) groups.set(source, new Set());
       groups.get(source).add(path);
     }
+    // A path already back as it was before this turn (an undo that stopped
+    // midway) needs nothing and conflicts with nothing.
+    const back = new Set(), edited = memberEdits(point.at);
     for (const [source, paths] of groups) {
+      const differs = new Set((await git.changed(point.before, source)).map(change => change.path));
+      for (const path of paths) if (!differs.has(path)) back.add(path);
       const drift = await git.changed(point.after, source);
-      conflicts.push(...drift.filter(change => paths.has(change.path)).map(change => change.path));
+      conflicts.push(...drift.filter(change => paths.has(change.path) && differs.has(change.path)).map(change => change.path));
     }
-    const edited = memberEdits(point.at);
-    conflicts.push(...changes.filter(change => edited.has(change.path)).map(change => change.path));
+    conflicts.push(...changes.filter(change => edited.has(change.path) && !back.has(change.path)).map(change => change.path));
     if (conflicts.length) { stoppedAt = point.id; break; }
-    steps.push({ id: point.id, turnRef: point.turnRef, restore: changes.filter(change => change.status !== 'A').map(change => change.path),
-      remove: changes.filter(change => change.status === 'A').map(change => change.path) });
+    const pending = changes.filter(change => !back.has(change.path));
+    steps.push({ id: point.id, turnRef: point.turnRef, restore: pending.filter(change => change.status !== 'A').map(change => change.path),
+      remove: pending.filter(change => change.status === 'A').map(change => change.path) });
     for (const { path } of changes) sources.set(path, point.before);
   }
   const preview = { ...base, tree, steps, files: [...files].sort(), conflicts: [...new Set(conflicts)].sort(), stoppedAt,

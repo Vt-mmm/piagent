@@ -2,7 +2,7 @@ import type { CheckpointCommand, CheckpointReceipt, CheckpointState } from '../c
 import { CHECKPOINT_VERSION, checkpointSha, parseCheckpointCommand, sameCheckpointValue as same } from './checkpoint-command.ts';
 
 export type CheckpointFacts = Omit<CheckpointState, 'schemaVersion' | 'version' | 'messageType'> & { writable: boolean };
-export type CheckpointRestoreResult = { result: string; completed: string[]; files: string[]; conflicts?: string[]; changedFiles?: string[]; stoppedAt?: string | null };
+export type CheckpointRestoreResult = { result: string; completed: string[]; files: string[]; conflicts?: string[]; stoppedAt?: string | null };
 type Options = {
   facts(): Promise<CheckpointFacts> | CheckpointFacts;
   history(): CheckpointReceipt[];
@@ -73,10 +73,11 @@ export class CheckpointController {
         }, command.identity);
         const after = await this.#options.facts();
         const code = result.result === 'done' ? 'restored' : result.result === 'refused' ? 'conflict'
-          : result.result === 'stale' ? 'stale-revision' : result.result === 'busy' ? 'busy' : 'effect-unknown';
+          : result.result === 'stale' ? 'stale-revision' : result.result === 'busy' ? 'busy' : result.result === 'read-only' ? 'read-only'
+          : ['unavailable', 'failed', 'none'].includes(result.result) ? 'unavailable' : 'effect-unknown';
         settled = { ...receipt, phase: code === 'effect-unknown' ? 'uncertain' : result.completed.length || code === 'restored' ? 'settled' : 'rejected',
           resultCode: code, observedRevisionsAfter: after.revisions, completed: result.completed,
-          files: result.changedFiles ?? result.files, conflicts: result.conflicts ?? (result.result === 'refused' ? result.files : []), stoppedAt: result.stoppedAt ?? null };
+          files: result.files, conflicts: result.conflicts ?? [], stoppedAt: result.stoppedAt ?? null };
       }
     } catch { settled = pending; }
     settled = { ...settled, settledAt: this.#now().toISOString() };

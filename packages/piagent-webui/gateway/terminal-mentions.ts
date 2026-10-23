@@ -12,11 +12,13 @@ function tail(text: string, limit: number) {
 // Terminal output is quoted data, never instructions or a second agent send.
 export function attachTerminalMentions(sessionRef: string, message: string, terminals: TerminalReader | null): string {
   const numbers = [...new Set([...message.matchAll(mention)].map(match => Number(match[2] ?? 1)))];
-  if (!numbers.length) return message;
-  if (!terminals) throw new Error('terminal-attachment-unavailable');
+  if (!numbers.length || !terminals) return message;
   if (numbers.length > 4) throw new Error('terminal-attachment-limit');
-  const limit = Math.floor(TOTAL_BYTES / numbers.length);
-  const snapshots = numbers.map(number => ({ number, ...terminals.forAgent(sessionRef, number) }));
+  // A mention of a terminal that is not open (or prose such as "the
+  // @terminal panel") attaches nothing; it never stops the message.
+  const snapshots = numbers.flatMap(number => { try { return [{ number, ...terminals.forAgent(sessionRef, number) }]; } catch { return []; } });
+  if (!snapshots.length) return message;
+  const limit = Math.floor(TOTAL_BYTES / snapshots.length);
   const blocks = snapshots.map(snapshot => {
     const redacted = redactSensitiveText(stripVTControlCharacters(snapshot.text)).text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
     const text = tail(redacted, limit), truncated = snapshot.truncated || Buffer.byteLength(redacted) > limit;

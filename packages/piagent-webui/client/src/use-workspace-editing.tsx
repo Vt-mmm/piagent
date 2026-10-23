@@ -67,5 +67,32 @@ export function useWorkspaceEditing(session: string) {
     } catch { setMessage(localize(locale, 'Chưa lưu được tệp. Bản sửa vẫn được giữ; thử lưu lại hoặc tải lại để kiểm tra.', 'Could not confirm the save. Your draft is preserved; retry the save or reload to check.')); }
     finally { busy.current = false; setSaving(false); }
   };
-  return { ...state, authority, saving, message, conflict, setConflict, load, select, change, close, reload, save };
+  // Rename or delete the file the member sees; a file changed on disk since is refused.
+  const move = async (path: string, destination?: string) => {
+    const tab = workspaceEditorTabs(session).tabs.find(tab => tab.file.path === path);
+    if (busy.current || tab && (tabDirty(tab) || tab.pending)) {
+      setMessage(localize(locale, 'Lưu hoặc bỏ thay đổi trước khi đổi tên hay xóa tệp.', 'Save or discard your changes before renaming or deleting the file.')); return false;
+    }
+    busy.current = true; setSaving(true); setMessage(undefined);
+    try {
+      const current = await workspaceWriteState(session); setAuthority(current);
+      const digest = tab?.file.digest ?? (await readWorkspaceFile(session, path)).digest;
+      if (!current.writable || !digest) throw Error('unavailable');
+      const receipt = await saveWorkspaceFile(session, await workspaceWriteCommand(current, destination
+        ? { path, content: '', expectedDigest: digest, operation: 'rename', destination } : { path, content: '', expectedDigest: digest, operation: 'delete' }));
+      if (receipt.phase === 'settled' && receipt.resultCode === 'saved') {
+        state.update(value => ({ tabs: value.tabs.filter(item => item.file.path !== path), active: value.active === path ? undefined : value.active }));
+        if (destination) load(await readWorkspaceFile(session, destination));
+        window.dispatchEvent(new CustomEvent('piagent-workspace-saved', { detail: { sessionRef: session, path } }));
+        return true;
+      }
+      setMessage(receipt.phase === 'uncertain'
+        ? localize(locale, 'Chưa xác định được kết quả. Tải lại danh sách tệp để kiểm tra.', 'The result is uncertain. Reload the file list to check.')
+        : receipt.resultCode === 'stale-content' ? localize(locale, 'Tệp đã thay đổi trên đĩa hoặc tên mới đã có. Tải lại rồi thử lại.', 'The file changed on disk or the new name exists. Reload and try again.')
+          : localize(locale, 'Không thực hiện được. Kiểm tra quyền ghi và tên tệp.', 'This could not be done. Check write access and the file name.'));
+      return false;
+    } catch { setMessage(localize(locale, 'Chưa xác nhận được thao tác. Tải lại danh sách tệp để kiểm tra.', 'Could not confirm the action. Reload the file list to check.')); return false; }
+    finally { busy.current = false; setSaving(false); }
+  };
+  return { ...state, authority, saving, message, conflict, setConflict, load, select, change, close, reload, save, move };
 }

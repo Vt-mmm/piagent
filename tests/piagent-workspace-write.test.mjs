@@ -22,7 +22,7 @@ test('workspace save creates and atomically replaces files with the expected dig
  assert.equal(fs.readFileSync(path.join(root,'source.ts'),'utf8'),'after\n');
  assert.equal(fs.statSync(path.join(root,'source.ts')).mode & 0o777,0o750);
  assert.equal(writeWorkspaceFile(root,{path:'new.ts',content:'new',expectedDigest:'absent'},policy).created,true);
- assert.equal(fs.statSync(path.join(root,'new.ts')).mode & 0o777,0o600);
+ assert.equal(fs.statSync(path.join(root,'new.ts')).mode & 0o777,0o666 & ~process.umask());
  assert.equal(fs.readdirSync(root).some(x=>x.startsWith('.piagent-write-')),false);
 });
 test('workspace save refuses intervening edits and existing-file creation without touching content', t => {
@@ -52,4 +52,42 @@ test('workspace save removes its temporary file after a failed rename', t => {
  finally {fs.renameSync=rename;}
  assert.equal(fs.readFileSync(path.join(root,'source.ts'),'utf8'),'before\n');
  assert.equal(fs.readdirSync(root).some(x=>x.startsWith('.piagent-write-')),false);
+});
+
+test('workspace save names refusals that changed nothing and gives new files an ordinary mode in new folders', t => {
+ const root=fixture(t);
+ const created=writeWorkspaceFile(root,{path:'new/deep/file.ts',content:'x',expectedDigest:'absent'},policy);
+ assert.equal(created.created,true);
+ assert.equal(fs.statSync(path.join(root,'new/deep/file.ts')).mode&0o777,0o666&~process.umask());
+ fs.writeFileSync(path.join(root,'big.txt'),Buffer.alloc((1<<20)+1));
+ assert.throws(()=>writeWorkspaceFile(root,{path:'big.txt',content:'x',expectedDigest:sha('y')},policy),error=>error.name==='WorkspaceWriteError'&&error.code==='invalid-write');
+ const outside=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-outside-'));t.after(()=>fs.rmSync(outside,{recursive:true,force:true}));
+ fs.symlinkSync(outside,path.join(root,'linked'));
+ assert.throws(()=>writeWorkspaceFile(root,{path:'linked/a.ts',content:'x',expectedDigest:'absent'},policy),error=>error.name==='WorkspaceWriteError'&&error.code==='unsafe-path');
+ assert.deepEqual(fs.readdirSync(outside),[]);
+});
+
+test('workspace rename and delete apply only to the file the member saw', t => {
+ const root=fixture(t), digest=sha('before\n');
+ assert.throws(()=>writeWorkspaceFile(root,{path:'source.ts',content:'',expectedDigest:sha('other'),operation:'delete'},policy),/stale-content/);
+ assert.throws(()=>writeWorkspaceFile(root,{path:'source.ts',content:'',expectedDigest:digest,operation:'rename',destination:'secret/b'},policy),/path-protected/);
+ assert.throws(()=>writeWorkspaceFile(root,{path:'source.ts',content:'',expectedDigest:digest,operation:'rename',destination:'vendor/b'},policy),/read-only/);
+ fs.writeFileSync(path.join(root,'taken.ts'),'keep');
+ assert.throws(()=>writeWorkspaceFile(root,{path:'source.ts',content:'',expectedDigest:digest,operation:'rename',destination:'taken.ts'},policy),/stale-content/);
+ assert.equal(fs.readFileSync(path.join(root,'taken.ts'),'utf8'),'keep');
+ writeWorkspaceFile(root,{path:'source.ts',content:'',expectedDigest:digest,operation:'rename',destination:'moved/source.ts'},policy);
+ assert.equal(fs.existsSync(path.join(root,'source.ts')),false);
+ assert.equal(fs.readFileSync(path.join(root,'moved/source.ts'),'utf8'),'before\n');
+ writeWorkspaceFile(root,{path:'moved/source.ts',content:'',expectedDigest:digest,operation:'delete'},policy);
+ assert.equal(fs.existsSync(path.join(root,'moved/source.ts')),false);
+ assert.throws(()=>writeWorkspaceFile(root,{path:'taken.ts',content:'',expectedDigest:'absent',operation:'delete'},policy),/invalid-write/);
+});
+
+test('creating a file never replaces one that appeared meanwhile', t => {
+ const root=fixture(t), link=fs.linkSync;
+ t.after(()=>{fs.linkSync=link;});
+ fs.linkSync=(from,to)=>{fs.writeFileSync(to,'agent wrote it first');return link(from,to);};
+ assert.throws(()=>writeWorkspaceFile(root,{path:'race.ts',content:'member',expectedDigest:'absent'},policy),/stale-content/);
+ assert.equal(fs.readFileSync(path.join(root,'race.ts'),'utf8'),'agent wrote it first');
+ assert.deepEqual(fs.readdirSync(root).filter(name=>name.startsWith('.piagent-write')),[]);
 });

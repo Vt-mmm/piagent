@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { BWRAP, bubblewrapArgs, credentialFiles } from './linux-sandbox.mjs';
 import { companyTerminalRuntime } from './terminal-runtime.mjs';
 import { terminalChannel } from './terminal-channel.mjs';
+import { SEATBELT_TERMINAL_RULES, seatbeltTerminal } from './terminal-seatbelt.mjs';
 
 const worker = fileURLToPath(new URL('./terminal-worker.mjs', import.meta.url));
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -40,23 +41,30 @@ export class BoundaryTerminals {
     try {
       const home = path.join(temporary, 'home'), empty = path.join(temporary, 'empty');
       fs.mkdirSync(home, { mode: 0o700 }); fs.writeFileSync(empty, '', { mode: 0o400 });
-      const base = boundary.linuxBase;
-      const protectedPaths = (base.denied ?? []).filter(file => fs.existsSync(file))
-        .map(file => ({ path: file, directory: fs.statSync(file).isDirectory() }));
-      // A separate temporary root excludes the boundary's package-proxy socket.
-      // Terminal writes stay in project/private temp; toolchain caches are read-only.
-      const args = bubblewrapArgs({ ...base, temporary, empty, caches: [], gitDirs: [], network: false, proxySocket: null, docker: null,
-        toolchains: [...base.toolchains, ...(base.caches ?? []), this.#runtime.root],
-        credentials: [...credentialFiles([boundary.cwd, ...base.repository, ...base.references]), ...protectedPaths] });
       const env = Object.fromEntries(Object.entries(boundary.environment.offline)
         .filter(([key]) => !/proxy/i.test(key) && !['NODE_OPTIONS', 'NODE_PATH', 'BASH_ENV', 'ENV', 'PIAGENT_TOOL_SCOPE'].includes(key))
         .map(([key, value]) => [key, String(value).split(boundary.temporary).join(temporary)]));
-      Object.assign(env, { HOME: home, TMPDIR: temporary, TERM: 'xterm-256color', PIAGENT_PROCESS_SCOPE: `${boundary.scope}:${randomUUID()}` });
-      // There is intentionally no alternative spawn path or injected host shell.
-      const child = spawn(BWRAP, [...args, boundary.node, worker, this.#runtime.entry,
-        fs.readlinkSync('/proc/self/ns/pid'), fs.readlinkSync('/proc/self/ns/net'), String(size.cols), String(size.rows)],
-      { cwd: boundary.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env });
-      const id = randomUUID(); channel = terminalChannel(child, emit);
+      Object.assign(env, { HOME: home, TMPDIR: temporary, TERM: 'xterm-256color', BASH_SILENCE_DEPRECATION_WARNING: '1',
+        PIAGENT_PROCESS_SCOPE: `${boundary.scope}:${randomUUID()}` });
+      // A separate temporary root excludes the boundary's package-proxy socket.
+      // Writes reach the project, its Git directories and the project's
+      // package caches, as the agent's own offline commands do.
+      if (!boundary.linux) channel = seatbeltTerminal({ entry: this.#runtime.entry, cwd: boundary.cwd, env, size, emit,
+        profile: boundary.terminalProfile(temporary) + SEATBELT_TERMINAL_RULES });
+      else {
+        const base = boundary.linuxBase;
+        const protectedPaths = (base.denied ?? []).filter(file => fs.existsSync(file))
+          .map(file => ({ path: file, directory: fs.statSync(file).isDirectory() }));
+        const args = bubblewrapArgs({ ...base, temporary, empty, network: false, proxySocket: null, docker: null,
+          toolchains: [...base.toolchains, this.#runtime.root],
+          credentials: [...credentialFiles([boundary.cwd, ...base.repository, ...base.references]), ...protectedPaths] });
+        // There is intentionally no alternative spawn path or injected host shell.
+        const child = spawn(BWRAP, [...args, boundary.node, worker, this.#runtime.entry,
+          fs.readlinkSync('/proc/self/ns/pid'), fs.readlinkSync('/proc/self/ns/net'), String(size.cols), String(size.rows)],
+        { cwd: boundary.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env });
+        channel = terminalChannel(child, emit);
+      }
+      const id = randomUUID();
       this.#entries.set(id, channel);
       void channel.completed.then(() => { this.#entries.delete(id); fs.rmSync(temporary, { recursive: true, force: true }); }).catch(() => {});
       await channel.initialized;

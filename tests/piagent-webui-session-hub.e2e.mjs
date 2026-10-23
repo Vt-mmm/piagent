@@ -2050,6 +2050,17 @@ test("workspace editor saves with Cmd/Ctrl+S, preserves drafts and resolves dige
     await expect(page.getByRole('tab', { name: 'src/new-editor.txt', exact: true })).toBeVisible();
     assert.equal(retryKeys.length, 2); assert.equal(retryKeys[0], retryKeys[1]);
     await expect.poll(() => fs.existsSync(path.join(mentionProject, 'src/new-editor.txt')) && fs.readFileSync(path.join(mentionProject, 'src/new-editor.txt'), 'utf8')).toBe('new file');
+    await page.unroute('**/workspace/write');
+    await page.getByRole('button', { name: /^(Đổi tên|Rename)$/ }).click();
+    await page.getByRole('textbox', { name: /Đường dẫn mới trong project|New path in project/ }).fill('src/renamed/editor.txt');
+    await page.getByRole('dialog').getByRole('button', { name: /^(Đổi tên|Rename)$/ }).click();
+    await expect(page.getByRole('tab', { name: 'src/renamed/editor.txt', exact: true })).toBeVisible();
+    assert.equal(fs.existsSync(path.join(mentionProject, 'src/new-editor.txt')), false);
+    assert.equal(fs.readFileSync(path.join(mentionProject, 'src/renamed/editor.txt'), 'utf8'), 'new file');
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: /^(Xóa|Delete)$/ }).click();
+    await expect(page.getByRole('tab', { name: 'src/renamed/editor.txt', exact: true })).toHaveCount(0);
+    await expect.poll(() => fs.existsSync(path.join(mentionProject, 'src/renamed/editor.txt'))).toBe(false);
     assert.deepEqual(errors, []);
   } finally { workspaceWritable = false; }
 });
@@ -2248,6 +2259,14 @@ test('review counts cover inactive tabs and Keep survives closing the narrow edi
   await expect(page.locator('.cm-agent-added')).toHaveCount(0);
   await page.getByRole('tab', { name: 'src/first-review.txt (1)', exact: true }).click();
   await expect(page.locator('.cm-agent-added')).toHaveCount(1);
+  // A kept hunk stays kept after a reload in this browser.
+  await page.reload();
+  await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+  await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
+  await page.getByRole('button', { name: 'src', exact: true }).click();
+  await page.getByRole('button', { name: 'second-review.txt', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'src/second-review.txt', exact: true })).toBeVisible();
+  await expect(page.locator('.cm-agent-added')).toHaveCount(0);
   expect(fs.readFileSync(path.join(mentionProject, 'src/second-review.txt'), 'utf8')).toBe('second agent line\n');
   expect(errors).toEqual([]);
 });

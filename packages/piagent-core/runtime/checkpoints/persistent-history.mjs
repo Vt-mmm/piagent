@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ownerAlive } from '../process-owner.mjs';
 // The SDK loader and native Gateway may load separate module instances.
 const ownersKey = Symbol.for('piagent.checkpoint.capture-owners');
 const owners = globalThis[ownersKey] ??= new Set();
@@ -40,10 +41,7 @@ export class PersistentCheckpointHistory {
     if (!capture || capture.token === this.#token) return;
     if (capture.pid === process.pid) {
       if (owners.has(capture.token)) throw Error('checkpoint-turn-owned');
-    } else {
-      try { process.kill(capture.pid, 0); throw Error('checkpoint-turn-owned'); }
-      catch (error) { if (error.code !== 'ESRCH') throw error; }
-    }
+    } else if (ownerAlive(capture.pid, capture.point.at)) throw Error('checkpoint-turn-owned');
     // An interrupted turn has no trustworthy after snapshot. Keep its edits,
     // retire only its refs, and leave completed history available for drift checks.
     this.current = this.store.save(this.current.points, this.current.revision, { capture: null });

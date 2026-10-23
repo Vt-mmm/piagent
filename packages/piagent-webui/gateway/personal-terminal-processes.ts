@@ -5,6 +5,7 @@ import { statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { execFileSync } from "node:child_process";
 import type { IPty } from "@lydell/node-pty";
+import { ProcessTreeWatch } from "../../piagent-core/runtime/process-tree-watch.mjs";
 
 type PtyModule = { spawn: typeof import("@lydell/node-pty").spawn };
 type Scope = { sessionRef: string; mode: "personal" | "company"; cwd: string };
@@ -34,6 +35,7 @@ export class PersonalTerminalProcesses {
   readonly #closingSessions = new Set<string>();
   readonly #emit: (event: PersonalTerminalEvent) => void;
   readonly #pty: PtyModule | null;
+  readonly #watch = new ProcessTreeWatch();
   readonly unavailableReason: string | null;
   #closed = false;
   constructor(emit: (event: PersonalTerminalEvent) => void, load?: () => PtyModule) {
@@ -46,11 +48,17 @@ export class PersonalTerminalProcesses {
     if (this.#closed || this.#closingSessions.has(scope.sessionRef)) throw new Error("terminal-session-closed");
     if (!this.#pty) throw new Error(this.unavailableReason!);
     dimensions(size);
-    if (!isAbsolute(scope.cwd) || !statSync(scope.cwd).isDirectory()) throw new Error("terminal-project-unavailable");
+    if (!isAbsolute(scope.cwd) || !statSync(scope.cwd, { throwIfNoEntry: false })?.isDirectory()) throw new Error("terminal-project-unavailable");
     if (!isAbsolute(shell) || shell.includes("\0")) throw new Error("terminal-shell-unavailable");
     if (this.list(scope.sessionRef).length >= 4 || this.#entries.size >= 256) throw new Error("terminal-limit");
     const terminalRef = `terminal.${randomUUID()}`;
-    const child = this.#pty.spawn(shell, [], { ...size, cwd: scope.cwd, env: { ...process.env, TERM: "xterm-256color" }, name: "xterm-256color" });
+    // The member's own environment, without what only this Gateway uses
+    // (its agent folder, transform root, update switches).
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(PI|PIAGENT)_/.test(key)));
+    let child: IPty;
+    try { child = this.#pty.spawn(shell, [], { ...size, cwd: scope.cwd, env: { ...env, TERM: "xterm-256color" }, name: "xterm-256color" }); }
+    catch { throw new Error("terminal-spawn-failed"); }
+    this.#watch.watch(child.pid);
     const entry: Entry = { sessionRef: scope.sessionRef, terminalRef, process: child, exited: false };
     this.#entries.set(terminalRef, entry);
     child.onData(data => { if (!entry.closing) this.#notify({ sessionRef: scope.sessionRef, terminalRef, kind: "output", data }); });
@@ -106,5 +114,6 @@ export class PersonalTerminalProcesses {
     await new Promise(resolve => setTimeout(resolve, 100));
     for (const child of tree) signal(child, "SIGKILL");
     signal(-pid, "SIGKILL");
+    await this.#watch.stop(pid);
   }
 }

@@ -22,7 +22,7 @@ import {
 import { grantedSourceCheckoutRootForPath, piToolPathInput, referenceReadRootForPath, shellTouchesGrantedSourceCheckout } from "./source-checkout-paths.ts";
 import { experimentLoopDecision } from "./experiment-loop-policy.ts";
 import { extractShellWritePathCandidates } from "./shell-write-targets.js";
-import { isProjectMutatingShellCommand } from "./readonly-inline-inspection.ts";
+import { isProjectMutatingShellCommand, isReadOnlyTaskShellCommand } from "./readonly-inline-inspection.ts";
 import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
 import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
 import { registerCompanySessionGuard } from "./company-session-guard.ts";
@@ -3853,8 +3853,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       if (SHELL_TOOL_NAMES.has(event.toolName)) {
         const shell = extractShellCommandInput(input);
         if (shell.command) {
-          const command = normalizeShellCommandForPolicy(shell.command);
-          mutating ||= isProjectMutatingShellCommand(command, evaluateExecPolicy(command, loadProfileFromContext(ctx), policy).segments, ctx.cwd);
+          // Anything not provably read-only may change files (`prettier --write`,
+          // `git stash`, a generator): it gets the turn's checkpoint first.
+          const command = normalizeShellCommandForPolicy(shell.command), segments = evaluateExecPolicy(command, loadProfileFromContext(ctx), policy).segments;
+          mutating ||= isProjectMutatingShellCommand(command, segments, ctx.cwd) || !isReadOnlyTaskShellCommand(command, segments, ctx.cwd);
         }
       }
       if (!mutating) return;

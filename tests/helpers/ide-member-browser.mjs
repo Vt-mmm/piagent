@@ -4,8 +4,7 @@ import path from 'node:path';
 import { expect } from '@playwright/test';
 
 // The member saves through CodeMirror, then runs the project's test in xterm.
-// Company macOS explicitly qualifies only the unavailable state.
-export async function memberEditorAndTests(page, project, { terminal = true } = {}) {
+export async function memberEditorAndTests(page, project) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
   await page.getByRole('button', { name: 'member.txt', exact: true }).click();
@@ -17,7 +16,7 @@ export async function memberEditorAndTests(page, project, { terminal = true } = 
   await expect(page.getByRole('tab', { name: 'member.txt', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
   const open = page.getByRole('button', { name: 'Mở terminal', exact: true });
-  if (terminal) {
+  {
     await open.click();
     await page.locator('.xterm-helper-textarea:visible').focus();
     await page.keyboard.type("env -u NODE_TEST_CONTEXT node --test --test-reporter=tap member.test.mjs && printf 'IDE_%s\\n' TEST_PASS");
@@ -25,9 +24,6 @@ export async function memberEditorAndTests(page, project, { terminal = true } = 
     await expect(page.locator('.xterm-rows')).toContainText('IDE_TEST_PASS', { timeout: 30000 });
     await expect(page.locator('.xterm-rows')).toContainText('# pass 1');
     await page.getByRole('button', { name: /Đóng terminal|Close terminal/ }).click();
-  } else {
-    await expect(page.getByText('Sandbox hiện tại trên macOS không hỗ trợ terminal công ty.', { exact: true })).toBeVisible();
-    await expect(open).toBeDisabled();
   }
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
   await page.getByRole('button', { name: 'checkpoint.txt', exact: true }).click();

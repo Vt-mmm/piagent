@@ -192,11 +192,14 @@ export class PersonalCheckpointGit {
       const changed = currentTree ? this.changed(expectedTree, currentTree).map(entry => entry.path).filter(file => affected.has(file)) : [];
       if (!currentTree || changed.length) throw Error(`checkpoint-content-changed${changed.length ? ': ' + changed.slice(0, 5).join(', ') : ''}`);
     }
-    const entries = this.#entries(before), files = [...restore, ...remove];
+    const entries = this.#entries(before), files = [...restore, ...remove], current = this.#entries(expectedTree);
     if (files.length > MAX_ENTRIES || new Set(files).size !== files.length) throw Error('checkpoint-file-limit');
     const states = new Map<string, FileState | null>(), objects: string[] = [];
     for (const file of files) {
       this.#flags(file, true); states.set(file, this.#state(file));
+      // On disk but outside the current snapshot (ignored since, or too large
+      // to snapshot): its present content was never compared, so keep it.
+      if (states.get(file) && !current.has(file)) throw Error(`checkpoint-content-changed: ${file}`);
       if (!restore.includes(file)) continue;
       const entry = entries.get(file); if (!entry) throw Error('checkpoint-tree-invalid');
       objects.push(entry.object);
@@ -214,11 +217,14 @@ export class PersonalCheckpointGit {
       this.#flags(file, true);
       if ((this.#state(file)?.fingerprint ?? null) !== (states.get(file)?.fingerprint ?? null)) throw Error(`checkpoint-content-changed: ${file}`);
     }
-    for (const file of files) {
+    // An error after the first file changed says so (checkpoint-partial), so
+    // the caller reports an uncertain result rather than a clean refusal.
+    let changed = 0;
+    try { for (const file of files) {
       this.#flags(file, true);
       if ((this.#state(file)?.fingerprint ?? null) !== (states.get(file)?.fingerprint ?? null)) throw Error(`checkpoint-content-changed: ${file}`);
       const target = path.join(this.root, file);
-      if (remove.includes(file)) { if (states.get(file)) fs.unlinkSync(target); continue; }
+      if (remove.includes(file)) { if (states.get(file)) { fs.unlinkSync(target); changed++; this.#prune(file, entries); } continue; }
       const parts = file.split('/');
       for (let i = 1; i < parts.length; i++) {
         const parent = parts.slice(0, i).join('/'); this.#flags(parent, true);
@@ -244,8 +250,18 @@ export class PersonalCheckpointGit {
         const currentParent = fs.lstatSync(parent);
         if (fs.realpathSync(parent) !== parent || currentParent.dev !== parentStat.dev || currentParent.ino !== parentStat.ino
           || (this.#state(file)?.fingerprint ?? null) !== (states.get(file)?.fingerprint ?? null)) throw Error(`checkpoint-content-changed: ${file}`);
-        fs.renameSync(temporary, target);
+        fs.renameSync(temporary, target); changed++;
       } finally { fs.rmSync(temporary, { force: true }); }
+    } } catch (error) { throw changed ? Error(`checkpoint-partial: ${(error as Error).message}`) : error; }
+  }
+  // Folders the turn created and its undo emptied go too; a folder that held
+  // files before the turn, or holds anything now, stays.
+  #prune(file: string, before: Map<string, TreeEntry>) {
+    const parts = file.split('/');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const folder = parts.slice(0, i).join('/');
+      if ([...before.keys()].some(entry => entry.startsWith(folder + '/'))) return;
+      try { fs.rmdirSync(path.join(this.root, folder)); } catch { return; }
     }
   }
   // Only the ref manager receives this plumbing port; it never accepts shell.

@@ -43,6 +43,14 @@ export interface WorkspaceWritePayload {
   path: string;
   content: string;
   expectedDigest: string;
+  /**
+   * Absent means write. Rename and delete send empty content and the digest of the file the member saw.
+   */
+  operation?: "write" | "rename" | "delete";
+  /**
+   * The new path of a rename.
+   */
+  destination?: string;
 }
 export interface WorkspaceWriteReceipt {
   schemaVersion: 1;

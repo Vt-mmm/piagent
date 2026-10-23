@@ -300,6 +300,8 @@ export class ManagedToolBoundary {
     if (this.engine) this.environment.docker = { ...this.environment.network, ...engineEnvironment(this.engine, this.home) };
     this.#applyProxy();
   }
+  // A company terminal's shell (terminal-seatbelt.mjs): offline, its own temporary root.
+  terminalProfile(temporary) { return managedSeatbelt({ ...this.base, temporary, references: this.userHome, loopback: false }); }
   // Plain commands' profile and environment, with the package proxy once it listens.
   #applyProxy() {
     const port = this.proxyUrl && !this.linux ? Number(new URL(this.proxyUrl).port) : null;

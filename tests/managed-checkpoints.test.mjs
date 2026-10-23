@@ -117,7 +117,7 @@ test('company confirmed restore uses exact user turns and sandbox worker policy,
     fs.writeFileSync(path.join(root, '.pi/piagent-profile.json'), JSON.stringify({ readOnlyPaths: ['a.txt'] }));
     const selected = (await checkpoints.list()).points[0].id, denied = await checkpoints.preview(selected);
     const result = await checkpoints.restoreTo(selected, denied);
-    assert.equal(result.result, 'uncertain'); assert.match(result.reason, /checkpoint-read-only/);
+    assert.equal(result.result, 'read-only'); assert.match(result.reason, /checkpoint-read-only/);
     assert.equal(read(root, 'a.txt'), 'three\n');
     assert.ok(requests.every(([tool, kind]) => tool === 'workspace' && kind === 'checkpoint'), 'all Git operations enter the pinned sandbox worker');
     let allowed = true;

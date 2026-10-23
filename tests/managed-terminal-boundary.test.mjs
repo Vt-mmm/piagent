@@ -105,3 +105,37 @@ test('natural shell exit removes detached children from the terminal namespace',
   await wait(() => { try { process.kill(pid, 0); return false; } catch { return true; } });
   await terminal.close();
 });
+
+test('macOS company terminal: the PTY is made outside, the shell runs under Seatbelt and reaches no other terminal', { skip: process.platform !== 'darwin' || !process.env.PI_MANAGED_TEST_SDK, timeout: 60000 }, async t => {
+  const { ManagedToolBoundary } = await import('../packages/piagent-core/managed/tool-boundary.mjs');
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'seatbelt-terminal-')));
+  const cwd = path.join(root, 'project'); fs.mkdirSync(cwd);
+  fs.writeFileSync(path.join(cwd, '.env'), 'CREDENTIAL_SHOULD_NOT_BE_READ');
+  const boundary = new ManagedToolBoundary({ cwd, sdkRoot: process.env.PI_MANAGED_TEST_SDK, searchTools: false });
+  t.after(async () => { await boundary.dispose(); fs.rmSync(root, { recursive: true, force: true }); });
+  assert.equal(boundary.terminals.reasonCode, null);
+  let output = '', exited = false;
+  const terminal = await boundary.terminals.open({ cols: 80, rows: 24 }, message => {
+    if (message.kind === 'output') output += message.data;
+    if (message.kind === 'exit') exited = true;
+  });
+  const command = async (text, expected) => { output = ''; await terminal.input(text + '\n'); await wait(() => expected.test(output)); };
+  await command("printf '\\n%s\\n' 'SEATBELT_READY'", /\r\nSEATBELT_READY\r\n/);
+  await terminal.resize({ cols: 99, rows: 33 });
+  await command("printf '\\nSIZE:'; stty size", /\r\nSIZE:33 99\r\n/);
+  await terminal.input('sleep 20\n'); await new Promise(resolve => setTimeout(resolve, 200));
+  await terminal.input('\x03');
+  await command("printf '\\n%s\\n' 'AFTER_INTERRUPT'", /\r\nAFTER_INTERRUPT\r\n/);
+  await command("printf 'inside' > inside.txt; printf '\\n%s\\n' WROTE", /\r\nWROTE\r\n/);
+  assert.equal(fs.readFileSync(path.join(cwd, 'inside.txt'), 'utf8'), 'inside');
+  const others = fs.readdirSync('/dev').filter(name => /^ttys[0-9]+$/.test(name)).map(name => `/dev/${name}`).slice(0, 3);
+  await command(`for tty in ${others.join(' ')}; do echo x > $tty 2>/dev/null && echo OTHER_TTY_$((1+1)); done; echo hi > /dev/tty && printf '\\n%s\\n' OWN_TTY`, /\r\nOWN_TTY\r\n/);
+  assert.doesNotMatch(output, /OTHER_TTY_2/, 'another terminal stays closed');
+  await command(`echo denied > ${JSON.stringify(path.join(root, 'outside.txt'))} 2>/dev/null; curl -s -m 3 https://example.com >/dev/null && echo NET_$((1+1)); printf '\\n%s\\n' CHECKED`, /\r\nCHECKED\r\n/);
+  assert.equal(fs.existsSync(path.join(root, 'outside.txt')), false); assert.doesNotMatch(output, /NET_2/);
+  await command("sleep 300 & echo BG:$!", /BG:\d+/);
+  const background = Number(/BG:(\d+)/.exec(output)[1]);
+  await terminal.close();
+  await wait(() => exited);
+  await wait(() => { try { process.kill(background, 0); return false; } catch { return true; } });
+});

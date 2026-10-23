@@ -14,6 +14,12 @@ const ref = (value: unknown): value is string => typeof value === "string" && /^
 export function workspaceWriteDigest(command: Pick<WorkspaceWriteCommand, "action" | "identity" | "expectedRevisions" | "payload">): string {
   return sha(canonical({ action: command.action, identity: command.identity, expectedRevisions: command.expectedRevisions, payload: command.payload }));
 }
+// A write, or a rename (with its destination) or delete of a file whose digest the member saw.
+const payloadKeys = (payload: WorkspaceWritePayload) => keys(payload, ["path", "content", "expectedDigest"])
+  || payload?.operation === "write" && keys(payload, ["path", "content", "expectedDigest", "operation"])
+  || payload?.operation === "delete" && keys(payload, ["path", "content", "expectedDigest", "operation"]) && payload.content === "" && payload.expectedDigest !== "absent"
+  || payload?.operation === "rename" && keys(payload, ["path", "content", "expectedDigest", "operation", "destination"]) && payload.content === ""
+    && payload.expectedDigest !== "absent" && typeof payload.destination === "string" && !!payload.destination && payload.destination.length <= 4096;
 function parse(value: unknown): WorkspaceWriteCommand {
   const command = value as WorkspaceWriteCommand;
   if (!keys(value, ["schemaVersion", "version", "messageType", "commandId", "idempotencyKey", "requestedAt", "expiresAt", "action", "actionDigest", "identity", "expectedRevisions", "payload"])
@@ -23,7 +29,7 @@ function parse(value: unknown): WorkspaceWriteCommand {
     || !keys(command.identity, ["projectRef", "runtimeInstanceId", "sessionRef", "taskId", "taskRunId", "agentOperationId", "toolCallId"])
     || !keys(command.expectedRevisions, ["workspaceRevision"]) || typeof command.expectedRevisions.workspaceRevision !== "string"
     || !/^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/.test(command.expectedRevisions.workspaceRevision)
-    || !keys(command.payload, ["path", "content", "expectedDigest"]) || typeof command.payload.path !== "string" || !command.payload.path || command.payload.path.length > 4096
+    || !payloadKeys(command.payload) || typeof command.payload.path !== "string" || !command.payload.path || command.payload.path.length > 4096
     || typeof command.payload.content !== "string" || Buffer.byteLength(command.payload.content) > 1_048_576
     || typeof command.payload.expectedDigest !== "string" || !/^(absent|[a-f0-9]{64})$/.test(command.payload.expectedDigest)
     || command.actionDigest !== workspaceWriteDigest(command)) throw new Error("invalid-workspace-write-command");

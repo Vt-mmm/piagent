@@ -83,7 +83,7 @@ test('changed preview, missing confirmation and busy runtime refuse before effec
   f.adapter.restore = (...args) => { restore(...args); f.write('a', 'member concurrent'); };
   const result = await f.service.restoreTo(target, preview);
   assert.equal(result.result, 'refused'); assert.equal(result.completed.length, 1);
-  assert.deepEqual(result.files, ['a']);
+  assert.deepEqual(result.files, ['b']); assert.deepEqual(result.conflicts, ['a']);
   assert.equal(f.read('a'), 'member concurrent'); assert.equal(f.read('b'), 'before');
   assert.equal(f.store.load().points.length, 1);
 });
@@ -122,13 +122,14 @@ for (const publication of ['before-save', 'after-save']) {
     f.store.save = save;
     const reopened = f.open();
     assert.equal((await reopened.restoreTo(target, preview)).result, 'stale');
-    assert.equal((await reopened.undo()).result, publication === 'before-save' ? 'refused' : 'none');
+    // Before the save, the turn's file is already back: the undo finishes without writing again.
+    assert.equal((await reopened.undo()).result, publication === 'before-save' ? 'done' : 'none');
     assert.equal(effects, 1); assert.equal(f.read('a'), 'before');
     assert.equal(f.git('rev-parse', 'HEAD'), head); assert.deepEqual(fs.readFileSync(path.join(f.cwd, '.git/index')), index);
   });
 }
 
-test('partial file effect remains inspectable after restart and never silently resumes a restore', async t => {
+test('a partial restore stays uncertain, then a fresh confirmed restore finishes only what is left', async t => {
   const f = fixture(t); f.write('a', 'before a'); f.write('b', 'before b');
   await f.turn('first', () => { f.write('a', 'agent a'); f.write('b', 'agent b'); });
   const target = (await f.service.list()).points[0].id, preview = await f.service.preview(target);
@@ -141,9 +142,10 @@ test('partial file effect remains inspectable after restart and never silently r
   assert.equal(f.read('a'), 'before a'); assert.equal(f.read('b'), 'agent b');
   const reopened = f.open();
   assert.equal((await reopened.restoreTo(target, preview)).result, 'stale');
-  const inspection = await reopened.preview(target);
-  assert.equal(inspection.result, 'conflict'); assert.deepEqual(inspection.conflicts, ['a']);
-  assert.equal((await reopened.restoreTo(target, inspection)).result, 'refused');
-  assert.equal(effects, 1); assert.equal(f.read('b'), 'agent b');
   assert.equal((await reopened.list()).points.length, 1, 'history remains available for inspection');
+  const inspection = await reopened.preview(target);
+  assert.equal(inspection.result, 'ready'); assert.deepEqual(inspection.conflicts, []); assert.deepEqual(inspection.steps[0].restore, ['b']);
+  f.adapter.restore = restore;
+  assert.equal((await reopened.restoreTo(target, inspection)).result, 'done');
+  assert.equal(f.read('a'), 'before a'); assert.equal(f.read('b'), 'before b');
 });

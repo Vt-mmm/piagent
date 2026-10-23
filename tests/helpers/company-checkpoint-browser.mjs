@@ -13,7 +13,7 @@ export async function qualifyCompanyCheckpoints(page, project, requests, grant) 
       try { responses.push(await response.json()); } catch { /* Failed transport is asserted by the UI below. */ }
     }
   });
-  await memberEditorAndTests(page, project, { terminal: process.platform === 'linux' });
+  await memberEditorAndTests(page, project);
   for (const turn of [1, 2]) {
     await page.getByPlaceholder('Nhắn cho Piagent…').fill(`checkpoint turn ${turn}`);
     await page.getByRole('button', { name: 'Gửi', exact: true }).click();

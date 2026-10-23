@@ -73,3 +73,21 @@ test('workspace save refuses tampered digest or unknown payload fields',async t=
  const extra={...c,payload:{...c.payload,force:true}};extra.actionDigest=workspaceWriteDigest(extra);
  assert.throws(()=>f.controller.execute(extra),/invalid-workspace-write-command/);assert.equal(f.writes(),0);
 });
+test('rename and delete commands parse only with empty content, a seen digest and the right fields',async()=>{
+  const { WorkspaceWriteController: Controller, workspaceWriteDigest } = await import('../packages/piagent-webui/server/workspace-write-controller.ts');
+  const identity={projectRef:'p',runtimeInstanceId:'r',sessionRef:'s',taskId:null,taskRunId:null,agentOperationId:null,toolCallId:null};
+  const history=[],written=[];
+  const controller=new Controller({facts:()=>({identity,writable:true,agentRunning:false}),history:()=>history,append:r=>history.push(r),
+    write:payload=>{written.push(payload);return{state:'saved',digest:'a'.repeat(64)};}});
+  const state=await controller.state(),now=Date.now();
+  const command=payload=>{const value={schemaVersion:1,version:'piagent-webui-workspace-write-v1',messageType:'command',commandId:`c${written.length}${Math.random().toString(36).slice(2,8)}`,
+    idempotencyKey:`key-${Math.random().toString(36).slice(2)}${'x'.repeat(32)}`,requestedAt:new Date(now).toISOString(),expiresAt:new Date(now+60000).toISOString(),
+    action:'workspace.write',identity,expectedRevisions:state.revisions,payload};return{...value,actionDigest:workspaceWriteDigest(value)};};
+  const seen='b'.repeat(64);
+  await assert.rejects(async()=>controller.execute(command({path:'a',content:'x',expectedDigest:seen,operation:'delete'})),/invalid/);
+  await assert.rejects(async()=>controller.execute(command({path:'a',content:'',expectedDigest:'absent',operation:'delete'})),/invalid/);
+  await assert.rejects(async()=>controller.execute(command({path:'a',content:'',expectedDigest:seen,operation:'rename'})),/invalid/);
+  await assert.rejects(async()=>controller.execute(command({path:'a',content:'',expectedDigest:seen,operation:'delete',destination:'b'})),/invalid/);
+  assert.equal((await controller.execute(command({path:'a',content:'',expectedDigest:seen,operation:'rename',destination:'b'}))).resultCode,'saved');
+  assert.deepEqual(written.map(p=>p.operation),['rename']);
+});

@@ -118,3 +118,22 @@ test('a real flood (yes) keeps the terminal usable and reaches the command after
   await f.service.execute(await f.command({kind:'input',terminalRef:opened.terminalRef,data:"echo AFTER_$((40+2))\n"}));
   await until(()=>messages.some(m=>m.messageType==='output'&&m.data.includes('AFTER_42\r\n')),30000);
 });
+test('a refused open is rejected, not uncertain, and a shell exit stops its orphaned background job',async t=>{
+  const f=setup(t),messages=[];t.after(f.service.subscribe(f.ref,message=>messages.push(message)));
+  fs.rmSync(f.cwd,{recursive:true,force:true});
+  const refused=await f.service.execute(await f.command({kind:'open',cols:80,rows:24}));
+  assert.equal(refused.phase,'rejected');assert.equal(refused.reasonCode,'terminal-project-unavailable');
+  fs.mkdirSync(f.cwd);
+  const opened=await f.service.execute(await f.command({kind:'open',cols:80,rows:24}));
+  await f.service.execute(await f.command({kind:'input',terminalRef:opened.terminalRef,data:"env | grep -c '^PIAGENT_' ; sleep 300 & echo BG:$!\n"}));
+  await until(()=>messages.some(m=>m.messageType==='output'&&/BG:\d+/.test(m.data)));
+  const background=Number(/BG:(\d+)/.exec(messages.map(m=>m.data??'').join(''))[1]);
+  await new Promise(r=>setTimeout(r,2500));
+  // zsh refuses the first exit while a job runs ("you have running jobs").
+  for(let i=0;i<2&&!messages.some(m=>m.messageType==='exit');i++){
+    await f.service.execute(await f.command({kind:'input',terminalRef:opened.terminalRef,data:'exit\n'}));
+    await new Promise(r=>setTimeout(r,500));
+  }
+  await until(()=>messages.some(m=>m.messageType==='exit'));
+  await until(()=>{try{process.kill(background,0);return false;}catch{return true;}});
+});

@@ -28,6 +28,7 @@ test('company workspace reads run inside the real boundary and preserve protecte
   const boundary = new ManagedToolBoundary({ cwd, sdkRoot: sdk, searchTools: false });
   t.after(() => boundary.dispose());
   const tree = await boundary.invoke('workspace', { kind: 'tree', path: '' });
+  assert.equal(tree.source, 'git', 'Git answers inside the sandbox, so ignored files stay out of the tree');
   assert.ok(tree.entries.some(entry => entry.name === 'safe.ts'));
   assert.equal(tree.entries.find(entry => entry.name === '.env').protected, true);
   const paths = await boundary.invoke('workspace', { kind: 'paths', path: 'safe' });

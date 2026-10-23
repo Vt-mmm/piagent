@@ -29,8 +29,11 @@ With write access, edit text and press **Cmd/Ctrl+S** or **Save**. A dot marks
 unsaved tabs. Closing a dirty tab asks before discarding it; hiding Files or
 switching conversations keeps drafts in this page's memory. Leaving the page
 warns about unsaved drafts. Drafts are not restored after a browser restart.
-**New file** accepts a relative path in an existing directory; save to create it.
-Renaming and deleting files are deferred.
+**New file** accepts a relative path; missing folders are created when you save.
+New files get the usual mode for your umask. **Rename** and **Delete** act on the
+open file with no unsaved changes, only if it is still the version shown: a file
+changed on disk, or a new name that already exists, is refused. Delete asks first;
+Git can restore a committed file.
 
 Saving checks the current permission profile, protected/read-only paths and the
 file digest. If the file changed, choose **Reload**, **Compare** or **Overwrite**.
@@ -49,8 +52,9 @@ Read-only access disables saving, and the server checks access again on each sav
 Open files show proven agent hunks with added lines, removed-line blocks and gutter
 markers. Each open tab shows its remaining hunk count. **Alt+ArrowDown/Up** moves
 between hunks. **Keep** removes a hunk from review without changing the file; it
-survives closing the drawer in this page, and changed content needs review again.
-Reloading the page clears these Keep choices.
+survives closing the drawer and reloading the page in this browser (only paths,
+digests and hunk references are stored, never code), and changed content needs
+review again.
 
 **Revert** opens a preview and requires confirmation. It uses the existing guarded
 source revert and preserves the Git index. If the response is lost, **Check again**
@@ -81,9 +85,9 @@ The terminal follows the current theme; Ctrl+C interrupts the foreground command
 Typed commands run with the member's host privileges, without an agent approval
 prompt. Personal terminal execution is not a sandbox. Closing a terminal,
 releasing or restarting its session, or shutting down the Gateway stops its
-process group and observed descendants. A shell exit also cleans remaining
-process-group children. Processes deliberately detached into another session
-are outside that process group's lifetime.
+process group and every process started from it. The shell's tree is watched
+while it runs, so a background job (`cmd &`, then `exit`) stops with its terminal
+too; a process meant to outlive the terminal should be started elsewhere.
 
 A command that prints faster than the browser can draw (`yes`, a large `cat`)
 is paced: the terminal pauses its writer while the page catches up, and output
@@ -100,23 +104,26 @@ Pending commands survive panel changes in page memory, not a page reload.
 
 Write `@terminal` (terminal 1) or `@terminal:2` in the composer, then press Send
 to attach the current redacted output. Repeated mentions attach a tab once, with
-at most four tabs and a combined 64 KB of output. Missing terminals refuse the
-send. Output is quoted as untrusted evidence; merely typing a mention sends
+at most four tabs and a combined 64 KB of output. A mention of a terminal that
+is not open attaches nothing and the message is sent as written. Output is quoted as untrusted evidence; merely typing a mention sends
 nothing. Tab numbers increase within the runtime and are not reused after close.
 
 The optional native PTY module can be unavailable. The panel explains this and
 `piagent-doctor --json` reports `productReadiness.personalTerminal`; other dashboard
 features remain usable. Doctor checks module loading and does not claim a shell
-spawn test. Native Windows is unavailable; use WSL.
+spawn test; a shell that cannot start is reported when you open a terminal. An
+action refused before anything ran (no project folder, an exited terminal) says
+so instead of "the command may have run". Native Windows is unavailable; use WSL.
 
 
 ## Company terminal
 
 Company conversations use the same terminal panel through the company Gateway,
-including when opened from the personal dashboard. On Linux and WSL, the shell
-starts inside the conversation's bubblewrap tool boundary. It has no internet,
-package proxy or Docker access. Writes stay within the project and a private
-temporary directory; a read-only profile keeps the project read-only. Credential
+including when opened from the personal dashboard. The shell runs inside the
+conversation's tool boundary: bubblewrap on Linux and WSL, Seatbelt on macOS. It
+has no internet, package proxy or Docker access. Writes reach the project, its Git
+directories, the project's package caches and a private temporary directory, as
+the agent's own offline commands do; a read-only profile keeps the project read-only. Credential
 files are masked, and protected paths retain the boundary's restrictions.
 The shell is Bash without startup files; it does not load the member's shell config.
 
@@ -128,16 +135,17 @@ connection disables input and reconnects for state and replay; it never resends
 commands automatically. Explicit terminal mentions are attached inside the
 company Gateway, and Studio grants stay there.
 
-On macOS, the existing Seatbelt sandbox refuses PTY allocation, including the
-fallback tested during qualification. The panel reports that company terminals
-are unavailable; it never opens a company shell on the host. Other company
-features remain usable. Native Windows is unavailable; use WSL.
+On macOS, Seatbelt refuses to create a PTY, so the company Gateway creates it
+and starts only the shell under the agent's offline Seatbelt profile. That profile
+gains two rules: terminal control calls on terminal devices, and `/dev/tty`. The
+shell can reach only the terminal it was handed; opening any other terminal stays
+denied. No company shell ever runs on the host. Native Windows is unavailable; use WSL.
 
 `piagent-doctor --json` reports `productReadiness.companyTerminal`. A supported
 result checks runtime files and prerequisites only (`ptySpawnVerified: false`);
 it is not proof that this machine can spawn a sandboxed PTY. The complete
-Gateway, relay and browser workflow was qualified on Linux arm64 in Docker.
-Native Linux x64 and WSL were not independently qualified in this run.
+Gateway, relay and browser workflow was qualified on Linux arm64 in Docker and on
+macOS arm64. Native Linux x64 and WSL were not independently qualified.
 
 ## Restore an agent turn
 
@@ -156,6 +164,13 @@ restrictions. A project without Git has no checkpoints.
 
 A file the member saved from the editor after a turn began counts as the
 member's: restoring that turn names it as a conflict instead of putting it back.
+A file that is on disk but outside the current snapshot (ignored since the turn,
+or an untracked file too large to snapshot) is refused the same way. If a restore
+stopped midway, a fresh preview lists only what is left: files already back as
+they were count as done, not as conflicts. A refusal before any file changed is
+reported as refused, not uncertain. Folders the turn created and the restore
+emptied are removed. Any shell command that is not provably read-only takes the
+turn's checkpoint first.
 Edits typed into a terminal are not tracked this way; the drift check still
 refuses files changed after the turn ended.
 
@@ -189,9 +204,7 @@ report a conflict; inspect and resolve the files before a fresh restore attempt.
 
 Use a disposable Git project with an initial commit and a passing test command.
 For personal mode, open it in `piagent dashboard`. For company mode, select its
-company conversation; the terminal steps require a Linux/WSL company Gateway
-with a working sandboxed PTY. On macOS, check the unavailable notice instead;
-that does not qualify the terminal steps.
+company conversation.
 
 1. Open a tracked file in Files, make a small change and save with Cmd/Ctrl+S.
 2. Open Terminal, run the project's test command and inspect its exit status.

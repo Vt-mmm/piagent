@@ -28,6 +28,7 @@ const CodeEditor = lazy(() => import("./WorkspaceCodeEditor.tsx"));
 export default function WorkspaceExplorer({ sessionRef, target, navigationHost, sidebarMode }: { sessionRef: string; target?: { path: string; line?: number }; navigationHost?: HTMLElement | null; sidebarMode?: "sessions" | "files" | "search" }) {
   const { locale } = useUiPreferences();
   const [section, setSection] = useState("files"), [newFile, setNewFile] = useState(false), [newPath, setNewPath] = useState(""), [compare, setCompare] = useState(false);
+  const [renaming, setRenaming] = useState<string>(), [renamePath, setRenamePath] = useState("");
   const editing = useWorkspaceEditing(sessionRef), { tabs, active } = editing;
   const [folder, setFolder] = useState(""), [tree, setTree] = useState<PiagentWebUIWorkspaceTreeV1>();
   const [error, setError] = useState(false), [loading, setLoading] = useState(false);
@@ -95,6 +96,9 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
       {file && <Stack direction="row">{revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !tab || (!tabDirty(tab) && !tab.pending) || editing.saving} onClick={() => void editing.save(file.path)}>{localize(locale, "Lưu", "Save")}</Button>
         <Button size="small" onClick={() => editing.close(file.path)}>{localize(locale, "Đóng tệp", "Close file")}</Button>
+        <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !file.digest || editing.saving} onClick={() => { setRenamePath(file.path); setRenaming(file.path); }}>{localize(locale, "Đổi tên", "Rename")}</Button>
+        <Button size="small" color="error" disabled={!editing.authority?.writable || file.readOnly || !file.digest || editing.saving}
+          onClick={() => { if (window.confirm(localize(locale, `Xóa ${file.path}? Có thể khôi phục bằng Git nếu tệp đã commit.`, `Delete ${file.path}? Git can restore it if it was committed.`))) void editing.move(file.path); }}>{localize(locale, "Xóa", "Delete")}</Button>
         <Button size="small" onClick={() => { if (!tab || !tabDirty(tab) || window.confirm(localize(locale, "Bỏ thay đổi chưa lưu và tải lại?", "Discard unsaved changes and reload?"))) void editing.reload(file.path); }}>{localize(locale, "Tải lại", "Reload")}</Button>
       </Stack>}
       {file?.binary || file?.oversized ? <Alert severity="info">{localize(locale, "Tệp nhị phân hoặc quá lớn để hiển thị.", "This file is binary or too large to display.")}</Alert>
@@ -114,6 +118,14 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
           path: target.path, language: "text", protected: false, readOnly: false, binary: false, oversized: false, content: "", digest: null, revision: null }, 1, true);
         setNewFile(false);
       }}>{localize(locale, "Tạo", "Create")}</Button></DialogActions>
+    </Dialog>
+    <Dialog open={!!renaming} onClose={() => setRenaming(undefined)} fullWidth>
+      <DialogTitle>{localize(locale, "Đổi tên tệp", "Rename file")}</DialogTitle>
+      <DialogContent><TextField autoFocus fullWidth label={localize(locale, "Đường dẫn mới trong project", "New path in project")} value={renamePath} onChange={event => setRenamePath(event.target.value)} /></DialogContent>
+      <DialogActions><Button onClick={() => setRenaming(undefined)}>{localize(locale, "Hủy", "Cancel")}</Button><Button disabled={!workspaceTarget(renamePath) || workspaceTarget(renamePath)?.path === renaming || editing.saving} onClick={() => {
+        const target = workspaceTarget(renamePath); if (!target || !renaming) return;
+        void editing.move(renaming, target.path).then(done => { if (done) setRenaming(undefined); });
+      }}>{localize(locale, "Đổi tên", "Rename")}</Button></DialogActions>
     </Dialog>
     <Dialog open={!!editing.conflict} onClose={() => { editing.setConflict(undefined); setCompare(false); }} fullWidth maxWidth={compare ? "lg" : "sm"}>
       <DialogTitle>{localize(locale, "Tệp đã thay đổi trên đĩa", "The file changed on disk")}</DialogTitle>

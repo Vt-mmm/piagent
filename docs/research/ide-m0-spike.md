@@ -45,6 +45,11 @@ the controlling-terminal probe confirms the sandbox denial.
 Do not allocate a company PTY on the host as a workaround. The user's approved
 fallback is to omit M4 when neither approach works within the existing sandbox.
 macOS company terminals must therefore remain unavailable with a clear reason.
+
+Update (phase 1 follow-up): the company Gateway now creates the PTY on the
+host and starts only the shell under the unchanged offline Seatbelt profile plus
+`file-ioctl` on `/dev/ttys*` and read/write/ioctl on `/dev/tty`. Opening any other
+terminal stays denied; `tests/managed-terminal-boundary.test.mjs` checks this.
 Linux arm64: Docker Node 22 with the unchanged `bubblewrapArgs` created the
 PTY inside the sandbox, resized to 37x101, interrupted sleep and ran the next
 command successfully. M4 can support Linux while reporting macOS unavailable.
@@ -80,6 +85,10 @@ Trong Seatbelt hiện tại, cả node-pty lẫn script(1) với terminal thật
 chối tạo PTY. Không đổi sandbox và không tạo PTY company trên host để lách.
 Theo ngoại lệ người dùng đã cho phép, terminal company macOS không khả dụng;
 các milestone editor, personal terminal và checkpoint vẫn tiếp tục.
+
+Cập nhật (sau phase 1): Gateway công ty tạo PTY trên host và chỉ chạy shell trong
+profile Seatbelt offline giữ nguyên, thêm `file-ioctl` trên `/dev/ttys*` và đọc/ghi/ioctl
+`/dev/tty`. Mở terminal khác vẫn bị chặn; `tests/managed-terminal-boundary.test.mjs` kiểm việc này.
 
 Linux arm64 đã qua probe PTY trong bubblewrap (resize, Ctrl+C, chạy lệnh tiếp).
 M4 có thể hỗ trợ Linux; macOS vẫn không khả dụng. Namespace trên x64 giả lập

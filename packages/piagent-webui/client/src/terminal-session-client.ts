@@ -2,6 +2,7 @@ import type { TerminalCommand, TerminalReceipt, TerminalState, TerminalSummary }
 import { terminalCommand } from './terminal-command.ts';
 import { terminalTransport, type TerminalTransport } from './terminal-transport.ts';
 export type TerminalClientState = { state: TerminalState | null; connected: boolean; error: string | null; pending: TerminalCommand | null; busy: boolean };
+const stale = (receipt: TerminalReceipt) => receipt.phase === 'rejected' && receipt.reasonCode === 'terminal-stale-revision';
 export class TerminalSessionClient {
   #snapshot: TerminalClientState;
   readonly #listeners = new Set<() => void>();
@@ -50,7 +51,9 @@ export class TerminalSessionClient {
     const state = this.#snapshot.state;
     if (state && state.identity.runtimeInstanceRef === receipt.identity.runtimeInstanceRef && state.identity.gatewayInstanceRef === receipt.identity.gatewayInstanceRef)
       this.#set({ state: { ...state, revisions: receipt.observedRevisions } });
-    if (receipt.phase !== 'settled') this.#generation++;
+    // A stale revision ran nothing: the caller refreshes and sends it again,
+    // so the keystrokes queued behind it are kept.
+    if (receipt.phase !== 'settled' && !stale(receipt)) this.#generation++;
     if (receipt.phase === 'uncertain') { this.#set({ error: receipt.reasonCode ?? 'terminal-effect-uncertain' }); return receipt; }
     this.#set({ pending: null, error: receipt.phase === 'rejected' ? receipt.reasonCode ?? 'terminal-command-rejected' : null });
     return receipt;
@@ -69,7 +72,14 @@ export class TerminalSessionClient {
         if (!tab || tab.cols === payload.cols && tab.rows === payload.rows) return;
       }
       this.#set({ busy: true });
-      try { await this.#send(await terminalCommand(state, payload)); }
+      try {
+        const receipt = await this.#send(await terminalCommand(state, payload));
+        if (stale(receipt)) {
+          await this.refresh();
+          const fresh = this.#snapshot.state;
+          if (fresh?.available) { this.#set({ error: null }); await this.#send(await terminalCommand(fresh, payload)); }
+        }
+      }
       catch (error) { this.#generation++; this.error(error instanceof Error ? error.message : 'terminal-effect-uncertain'); }
       finally { this.#set({ busy: false }); }
     }).finally(() => { this.#bytes -= bytes; this.#queued--; });

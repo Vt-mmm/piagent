@@ -14,8 +14,8 @@ test('terminal attachments redact secret/ANSI, bound UTF8 and quote untrusted ou
  const bounded=attachTerminalMentions('session.one','@terminal @terminal:2',{forAgent(){return {text:'界'.repeat(70000),truncated:false};}});
  assert.ok(Buffer.byteLength(bounded)<66000);assert.ok(!bounded.includes('\ufffd'));assert.match(bounded,/truncated/);
 });
-test('missing terminal, unavailable mode and excessive mentions fail before agent dispatch',()=>{
- assert.throws(()=>attachTerminalMentions('session.one','@terminal',null),/terminal-attachment-unavailable/);
- assert.throws(()=>attachTerminalMentions('session.one','@terminal:9',{forAgent(){throw Error('terminal-not-found');}}),/terminal-not-found/);
+test('a mention of no open terminal attaches nothing; excessive mentions fail before agent dispatch',()=>{
+ assert.equal(attachTerminalMentions('session.one','see the @terminal panel',null),'see the @terminal panel');
+ assert.equal(attachTerminalMentions('session.one','@terminal:9',{forAgent(){throw Error('terminal-not-found');}}),'@terminal:9');
  assert.throws(()=>attachTerminalMentions('session.one','@terminal @terminal:2 @terminal:3 @terminal:4 @terminal:5',{forAgent(){assert.fail();}}),/terminal-attachment-limit/);
 });

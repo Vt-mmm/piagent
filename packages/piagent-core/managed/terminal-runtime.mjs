@@ -8,8 +8,10 @@ const require = createRequire(import.meta.url);
 const VERSION = '1.2.0-beta.15';
 const fail = () => { throw new Error('managed-terminal-runtime-invalid'); };
 
-// Inspect code without loading the native addon on the company Gateway host.
-// The entire platform package is pinned, including its JS and prebuilt binary.
+// Inspect code without loading the native addon. The entire platform package
+// is pinned, including its JS and prebuilt binary. Linux loads it inside the
+// sandbox; macOS loads it on the company Gateway to make the PTY there (the
+// shell itself runs under Seatbelt, terminal-boundary.mjs).
 function inventory(root) {
   const entries = [], queue = [root];
   let bytes = 0, visited = 0;
@@ -36,10 +38,10 @@ function inventory(root) {
 
 export function companyTerminalRuntime({ platform = process.platform, arch = process.arch,
   bubblewrap = BWRAP, resolve = specifier => createRequire(require.resolve('@lydell/node-pty')).resolve(specifier) } = {}) {
-  if (platform !== 'linux') throw new Error(platform === 'darwin' ? 'managed-terminal-seatbelt-unavailable' : 'managed-terminal-platform-unavailable');
-  if (!bubblewrap) throw new Error('managed-terminal-bubblewrap-unavailable');
+  if (!['linux', 'darwin'].includes(platform)) throw new Error('managed-terminal-platform-unavailable');
+  if (platform === 'linux' && !bubblewrap) throw new Error('managed-terminal-bubblewrap-unavailable');
   if (!['arm64', 'x64'].includes(arch)) throw new Error('managed-terminal-platform-unavailable');
-  const name = `@lydell/node-pty-linux-${arch}`;
+  const name = `@lydell/node-pty-${platform}-${arch}`;
   let entry;
   try { entry = fs.realpathSync(resolve(name)); }
   catch { throw new Error('managed-terminal-native-unavailable'); }
@@ -48,7 +50,7 @@ export function companyTerminalRuntime({ platform = process.platform, arch = pro
   const pinned = inventory(root);
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (manifest.name !== name || manifest.version !== VERSION || manifest.dependencies && Object.keys(manifest.dependencies).length) fail();
-  if (!fs.statSync(path.join(root, `prebuilds/linux-${arch}/pty.node`)).isFile()) fail();
+  if (!fs.statSync(path.join(root, `prebuilds/${platform}-${arch}/pty.node`)).isFile()) fail();
   return Object.freeze({ entry, root, version: VERSION,
     assertCurrent() { if (inventory(root) !== pinned) throw new Error('managed-terminal-runtime-changed'); } });
 }

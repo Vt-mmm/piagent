@@ -28,7 +28,10 @@ Khi có quyền ghi, sửa văn bản rồi nhấn **Cmd/Ctrl+S** hoặc **Lưu*
 có dấu chấm. Đóng tab có thay đổi sẽ hỏi trước khi bỏ; ẩn Tệp hoặc chuyển hội
 thoại vẫn giữ bản sửa trong bộ nhớ trang. Rời trang sẽ cảnh báo bản sửa chưa lưu.
 Bản sửa không được khôi phục sau khi khởi động lại trình duyệt. **Tệp mới** nhận
-đường dẫn tương đối trong thư mục đã có; nhấn lưu để tạo. Đổi tên và xóa tệp dời lại.
+đường dẫn tương đối; thư mục chưa có sẽ được tạo khi lưu. Tệp mới có quyền thông
+thường theo umask. **Đổi tên** và **Xóa** áp dụng cho tệp đang mở không có thay đổi
+chưa lưu, và chỉ khi tệp vẫn đúng phiên bản đang hiện: tệp đã đổi trên đĩa, hoặc
+tên mới đã tồn tại, sẽ bị từ chối. Xóa hỏi trước; Git khôi phục được tệp đã commit.
 
 Lưu kiểm tra permission profile hiện tại, đường dẫn được bảo vệ/chỉ đọc và digest
 của tệp. Nếu tệp đã đổi, chọn **Tải lại**, **Xem khác biệt** hoặc **Ghi đè**.
@@ -45,8 +48,9 @@ trong sandbox hiện có. Quyền chỉ đọc tắt lưu; máy chủ kiểm tra
 
 Tệp đang mở hiện hunk đã xác minh của agent bằng dòng thêm, khối dòng đã xóa và dấu
 ở lề. Mỗi tab đang mở hiện số hunk còn lại. **Alt+ArrowDown/Up** chuyển giữa các hunk.
-**Giữ** bỏ hunk khỏi danh sách review mà không sửa tệp; đóng ngăn kéo trong cùng
-trang vẫn giữ lựa chọn, nội dung mới cần review lại. Tải lại trang sẽ xóa lựa chọn Giữ.
+**Giữ** bỏ hunk khỏi danh sách review mà không sửa tệp; lựa chọn còn sau khi đóng
+ngăn kéo và tải lại trang trên trình duyệt này (chỉ lưu đường dẫn, digest và mã
+hunk, không lưu code), nội dung mới cần review lại.
 
 **Hoàn tác** mở preview và cần xác nhận. Thao tác dùng luồng source revert có guard
 hiện có, giữ nguyên Git index. Nếu mất phản hồi, **Kiểm tra lại** hỏi kết quả cùng
@@ -76,9 +80,10 @@ Ctrl+C ngắt lệnh đang chạy ở foreground.
 
 Lệnh tự gõ chạy với quyền host của member, không hỏi duyệt như lệnh agent.
 Terminal personal không phải sandbox. Đóng terminal, release hoặc restart phiên,
-hay tắt Gateway sẽ dừng process group và các tiến trình con đã quan sát. Shell tự
-thoát cũng dọn các tiến trình còn trong process group. Tiến trình chủ động tách
-sang session khác nằm ngoài vòng đời process group đó.
+hay tắt Gateway sẽ dừng process group và mọi tiến trình khởi chạy từ terminal.
+Cây tiến trình của shell được theo dõi khi shell chạy, nên job chạy nền (`cmd &`
+rồi `exit`) cũng dừng theo terminal; tiến trình cần sống lâu hơn terminal nên được
+khởi chạy ở nơi khác.
 
 Lệnh in nhanh hơn trình duyệt vẽ kịp (`yes`, `cat` một file lớn) được giãn nhịp:
 terminal tạm dừng chương trình đang ghi trong lúc trang đuổi kịp, và phần output
@@ -95,23 +100,27 @@ sau khi reload trang.
 
 Gõ `@terminal` (terminal 1) hoặc `@terminal:2` trong composer, rồi bấm Gửi để đính
 output hiện tại đã che secret. Mention lặp chỉ đính một lần, tối đa bốn tab với
-tổng 64 KB output. Terminal không tồn tại sẽ từ chối lần gửi. Output được trích
+tổng 64 KB output. Mention tới terminal chưa mở thì không đính gì và tin nhắn vẫn
+được gửi như đã viết. Output được trích
 như dữ liệu không đáng tin; chỉ gõ mention chưa gửi gì. Số tab tăng trong runtime
 và không dùng lại sau khi đóng.
 
 Module PTY native là tùy chọn và có thể không khả dụng. Panel báo lý do và
 `piagent-doctor --json` có `productReadiness.personalTerminal`; các phần dashboard
 khác vẫn dùng được. Doctor kiểm tra việc nạp module, không khẳng định đã thử mở
-shell. Chưa hỗ trợ Windows native; dùng WSL.
+shell; shell không khởi động được sẽ được báo khi mở terminal. Thao tác bị từ chối
+trước khi chạy gì (không có thư mục project, terminal đã thoát) được báo đúng như
+vậy thay vì "lệnh có thể đã chạy". Chưa hỗ trợ Windows native; dùng WSL.
 
 
 ## Terminal company
 
 Cuộc trò chuyện company dùng cùng panel terminal qua Gateway công ty, kể cả khi
-mở từ dashboard personal. Trên Linux và WSL, shell khởi chạy trong tool boundary
-bubblewrap của cuộc trò chuyện. Shell không có internet, package proxy hoặc
-Docker. Chỉ ghi trong project và thư mục tạm riêng; profile read-only giữ project
-chỉ đọc. File credential bị che, đường dẫn được bảo vệ giữ giới hạn của boundary.
+mở từ dashboard personal. Shell chạy trong tool boundary của cuộc trò chuyện:
+bubblewrap trên Linux và WSL, Seatbelt trên macOS. Shell không có internet, package
+proxy hoặc Docker. Ghi được vào project, thư mục Git của nó, cache package của
+project và thư mục tạm riêng, giống lệnh offline của agent; profile read-only giữ
+project chỉ đọc. File credential bị che, đường dẫn được bảo vệ giữ giới hạn của boundary.
 Shell là Bash không nạp file khởi động hoặc cấu hình shell của member.
 
 Mỗi cuộc trò chuyện có tối đa bốn terminal. Đóng terminal, release cuộc trò chuyện
@@ -121,16 +130,17 @@ còn sống. Mất kết nối relay tạm tắt input và tự nối lại đ�
 output; không tự gửi lại lệnh. Mention terminal được đính bên trong Gateway
 công ty; Studio grant cũng chỉ ở đó.
 
-Trên macOS, sandbox Seatbelt hiện tại từ chối cấp PTY, kể cả phương án dự phòng
-đã thử khi kiểm chứng. Panel báo terminal company không khả dụng; không bao giờ
-mở shell company trên host. Các tính năng company khác vẫn dùng được.
-Chưa hỗ trợ Windows native; dùng WSL.
+Trên macOS, Seatbelt từ chối tạo PTY, nên Gateway công ty tạo PTY và chỉ khởi
+chạy shell trong profile Seatbelt offline của agent. Profile đó thêm hai quy tắc:
+lệnh điều khiển terminal trên thiết bị terminal, và `/dev/tty`. Shell chỉ chạm được
+terminal được giao cho nó; mở terminal khác vẫn bị chặn. Không bao giờ có shell
+company chạy trên host. Chưa hỗ trợ Windows native; dùng WSL.
 
 `piagent-doctor --json` có `productReadiness.companyTerminal`. Kết quả supported
 chỉ kiểm file runtime và điều kiện tiên quyết (`ptySpawnVerified: false`), không
 khẳng định máy này đã mở được PTY trong sandbox. Luồng đầy đủ Gateway, relay và
-trình duyệt đã được kiểm chứng trên Linux arm64 trong Docker. Lần này chưa kiểm
-chứng riêng Linux x64 native và WSL.
+trình duyệt đã được kiểm chứng trên Linux arm64 trong Docker và trên macOS arm64.
+Chưa kiểm chứng riêng Linux x64 native và WSL.
 
 ## Khôi phục một lượt agent
 
@@ -147,7 +157,13 @@ thì cần xem trước lại. Đường dẫn protected và read-only vẫn gi�
 Project không dùng Git thì không có checkpoint.
 
 File member lưu từ editor sau khi một lượt bắt đầu được coi là của member: khôi
-phục lượt đó sẽ báo file này là xung đột thay vì đưa nó về bản cũ. Sửa đổi gõ
+phục lượt đó sẽ báo file này là xung đột thay vì đưa nó về bản cũ. File có trên đĩa
+nhưng nằm ngoài snapshot hiện tại (bị ignore sau lượt đó, hoặc file chưa track quá
+lớn để chụp) cũng bị từ chối như vậy. Nếu một lần khôi phục dừng giữa chừng, bản
+xem trước mới chỉ liệt kê phần còn lại: file đã trở về như trước được tính là xong,
+không phải xung đột. Từ chối trước khi đổi file nào được báo là từ chối, không phải
+không chắc. Thư mục do lượt đó tạo và bị khôi phục làm rỗng sẽ được xóa. Mọi lệnh
+shell không chứng minh được là chỉ đọc đều chụp checkpoint của lượt trước khi chạy. Sửa đổi gõ
 trong terminal không được theo dõi theo cách này; kiểm tra thay đổi sau lượt vẫn
 từ chối file bị sửa sau khi lượt kết thúc.
 
@@ -183,9 +199,7 @@ khôi phục với preview mới.
 
 Dùng project Git thử nghiệm đã có commit đầu tiên và lệnh test đang chạy thành công.
 Với personal, mở project trong `piagent dashboard`. Với company, chọn cuộc hội thoại
-company của project; các bước terminal cần Gateway company Linux/WSL mở được PTY
-trong sandbox. Trên macOS, kiểm tra thông báo không khả dụng; việc này không chứng
-minh các bước terminal chạy được.
+company của project.
 
 1. Mở file tracked trong Tệp, sửa nhỏ và lưu bằng Cmd/Ctrl+S.
 2. Mở Terminal, chạy lệnh test của project và kiểm tra mã thoát.

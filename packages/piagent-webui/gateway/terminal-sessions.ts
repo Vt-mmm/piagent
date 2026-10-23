@@ -28,6 +28,7 @@ type Tab = { summary: TerminalSummary; buffer: TerminalOutputBuffer; live: strin
 // terminal is paused; above LIMIT the oldest unsent output is dropped and the
 // member sees a marker (the redacted replay buffer keeps the latest output).
 const TICK = 16, BUDGET = 64 * 1024, LOW = 64 * 1024, HIGH = 256 * 1024, LIMIT = 1024 * 1024;
+const DEFINITE = /^(?:terminal-(?:exited|not-found|limit|session-closed|invalid-size|input-limit|project-unavailable|shell-unavailable|spawn-failed)|company-boundary-required|managed-terminal-(?:exited|limit|invalid-size|input-limit|permission-denied|boundary-closed|[a-z-]*-unavailable|runtime-[a-z-]+))$/;
 const SKIPPED = "\r\n\x1b[2m[… output skipped …]\x1b[0m\r\n";
 type Session<B extends TerminalBinding> = { binding: B; revision: string; nextNumber: number; tabs: Map<string, Tab> };
 export type TerminalMessage = TerminalOutput | TerminalExit | TerminalState;
@@ -121,18 +122,26 @@ export class TerminalSessions<B extends TerminalBinding> {
     if (tab?.summary.state === "exited" && payload.kind !== "close") return reject("terminal-exited");
     try { session.binding.assertCurrent(); } catch { return reject("terminal-runtime-replaced"); }
     let terminalRef: string;
-    if (payload.kind === "open") {
-      const opened = await this.#processes.open(session.binding, payload); terminalRef = opened.terminalRef;
-      session.tabs.set(terminalRef, { buffer: new TerminalOutputBuffer(), live: [], liveLength: 0, skipped: false, paused: false,
-        summary: { terminalRef, number: session.nextNumber++, state: "running", cols: payload.cols, rows: payload.rows, sequence: 0, exitCode: null } });
-      opened.activate?.();
-    } else {
-      terminalRef = payload.terminalRef;
-      if (payload.kind === "input") await this.#processes.input(identity.sessionRef, terminalRef, payload.data);
-      else if (payload.kind === "resize") {
-        await this.#processes.resize(identity.sessionRef, terminalRef, payload);
-        tab!.summary.cols = payload.cols; tab!.summary.rows = payload.rows;
-      } else { await this.#processes.close(identity.sessionRef, terminalRef); session.tabs.delete(terminalRef); }
+    try {
+      if (payload.kind === "open") {
+        const opened = await this.#processes.open(session.binding, payload); terminalRef = opened.terminalRef;
+        session.tabs.set(terminalRef, { buffer: new TerminalOutputBuffer(), live: [], liveLength: 0, skipped: false, paused: false,
+          summary: { terminalRef, number: session.nextNumber++, state: "running", cols: payload.cols, rows: payload.rows, sequence: 0, exitCode: null } });
+        opened.activate?.();
+      } else {
+        terminalRef = payload.terminalRef;
+        if (payload.kind === "input") await this.#processes.input(identity.sessionRef, terminalRef, payload.data);
+        else if (payload.kind === "resize") {
+          await this.#processes.resize(identity.sessionRef, terminalRef, payload);
+          tab!.summary.cols = payload.cols; tab!.summary.rows = payload.rows;
+        } else { await this.#processes.close(identity.sessionRef, terminalRef); session.tabs.delete(terminalRef); }
+      }
+    } catch (error) {
+      // Refused before anything ran (no shell, an exited terminal, a sandbox
+      // that cannot start): say so instead of "the command may have run".
+      const code = error instanceof Error ? error.message : "";
+      if (DEFINITE.test(code)) return reject(code);
+      throw error;
     }
     try { session.binding.assertCurrent(); } catch { return this.#receipt(command, session, "uncertain", "terminal-runtime-replaced", terminalRef); }
     session.revision = revision(); this.#publish(identity.sessionRef, this.#state(session));
