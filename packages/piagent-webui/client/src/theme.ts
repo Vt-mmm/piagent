@@ -1,21 +1,21 @@
-import { alpha, createTheme, type PaletteMode } from "@mui/material/styles";
+import { alpha, createTheme } from "@mui/material/styles";
+import type { ThemePreset } from "./theme-presets.ts";
 
-export function createPiagentTheme(mode: PaletteMode) {
-  const dark = mode === "dark";
-  const primary = dark ? "#d8ff7a" : "#627400";
-  const secondary = dark ? "#8be9c8" : "#14775f";
+export function createPiagentTheme(preset: ThemePreset) {
+  const dark = preset.mode === "dark", mode = preset.mode;
+  const { primary, secondary, background, paper, text, muted, divider } = preset;
   return createTheme({
   cssVariables: { cssVarPrefix: "piagent" },
   palette: {
     mode,
-    primary: { main: primary, light: dark ? "#e6ff9f" : "#849a17", dark: dark ? "#a7cc45" : "#455400", contrastText: dark ? "#111300" : "#ffffff" },
+    primary: { main: primary, contrastText: preset.onPrimary },
     secondary: { main: secondary },
     success: { main: secondary },
-    warning: { main: "#efba63" },
-    error: { main: "#ff7f86" },
-    background: { default: dark ? "#050505" : "#f5f6f0", paper: dark ? "#101114" : "#ffffff" },
-    text: { primary: dark ? "#f4f4ef" : "#1c2018", secondary: dark ? "#a4a6ad" : "#62685c", disabled: dark ? "#898c95" : "#6b7165" },
-    divider: dark ? "#24262d" : "#dfe2d8"
+    warning: { main: preset.warning },
+    error: { main: preset.error },
+    background: { default: background, paper },
+    text: { primary: text, secondary: muted, disabled: muted },
+    divider
   },
   // Square, editor-like edges: 2px everywhere, so sx radii (n × 2px) stay small.
   shape: { borderRadius: 2 },
@@ -33,13 +33,11 @@ export function createPiagentTheme(mode: PaletteMode) {
   components: {
     MuiCssBaseline: {
       styleOverrides: {
-        html: { backgroundColor: dark ? "#050505" : "#f5f6f0" },
+        html: { backgroundColor: background },
         body: {
           minWidth: 320,
           minHeight: "100vh",
-          backgroundImage: dark
-            ? "radial-gradient(circle at 65% -18%, rgba(139,233,200,.12) 0, transparent 34rem)"
-            : "radial-gradient(circle at 65% -18%, rgba(216,255,122,.22) 0, transparent 34rem)"
+          backgroundImage: `radial-gradient(circle at 65% -18%, ${alpha(dark ? secondary : primary, dark ? 0.12 : 0.16)} 0, transparent 34rem)`
         },
         "::selection": { backgroundColor: alpha(primary, 0.26) }
       }
@@ -54,7 +52,7 @@ export function createPiagentTheme(mode: PaletteMode) {
       defaultProps: { disableElevation: true },
       styleOverrides: {
         root: { minHeight: 32, borderRadius: 2 },
-        outlined: { borderColor: dark ? "#32343c" : "#cfd4c8" }
+        outlined: { borderColor: alpha(text, 0.18) }
       }
     },
     MuiChip: {
@@ -66,9 +64,9 @@ export function createPiagentTheme(mode: PaletteMode) {
           minHeight: 42,
           margin: "1px 6px",
           borderRadius: 2,
-          color: dark ? "#a4a6ad" : "#62685c",
+          color: muted,
           "&.Mui-selected": {
-            color: dark ? "#f4f4ef" : "#1c2018",
+            color: text,
             backgroundColor: alpha(primary, dark ? 0.11 : 0.1),
             boxShadow: `inset 2px 0 ${primary}`
           },

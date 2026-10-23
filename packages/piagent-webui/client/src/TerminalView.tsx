@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
+import { useThemePreset } from './ui-preferences.tsx';
 import { useTheme } from '@mui/material/styles';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -25,8 +26,10 @@ export default function TerminalView({ identity, terminalRef, active, onInput, o
   const host = useRef<HTMLDivElement>(null), terminal = useRef<Terminal | null>(null), fit = useRef<FitAddon | null>(null);
   const theme = useTheme(), callbacks = useRef({ onInput, onResize, onReady, onError });
   callbacks.current = { onInput, onResize, onReady, onError };
+  const [black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite] = useThemePreset().ansi;
   const colors = { background: theme.palette.background.paper, foreground: theme.palette.text.primary,
-    cursor: theme.palette.text.primary, selectionBackground: theme.palette.action.selected };
+    cursor: theme.palette.primary.main, cursorAccent: theme.palette.background.paper, selectionBackground: theme.palette.action.selected,
+    black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite };
   const currentColors = useRef(colors); currentColors.current = colors;
   useEffect(() => {
     const node = host.current, nonce = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')?.content;

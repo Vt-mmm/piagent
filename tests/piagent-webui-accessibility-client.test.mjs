@@ -60,6 +60,8 @@ describe("Piagent WebUI responsive and accessibility contract", () => {
     assert.match(app, /@mui\/material\/Drawer/); assert.match(app, /@mui\/material\/AppBar/);
     assert.match(app, /value="vi"/); assert.match(app, /value="en"/);
     assert.match(main, /ThemeProvider/); assert.match(main, /piagent-webui-locale/); assert.match(main, /piagent-webui-color-mode/);
-    assert.match(theme, /createTheme/); assert.match(theme, /#d8ff7a/); assert.match(theme, /#f5f6f0/);
+    const presets = fs.readFileSync(path.join(root, "packages/piagent-webui/client/src/theme-presets.ts"), "utf8");
+    assert.match(theme, /createTheme/); assert.match(theme, /ThemePreset/); assert.match(main, /piagent-webui-theme/);
+    assert.match(presets, /#d8ff7a/); assert.match(presets, /#f5f6f0/); assert.match(presets, /"dracula"/);
   });
 });

@@ -64,7 +64,7 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
   const revert = useWorkspaceRevert(sessionRef, file?.path, file?.digest ?? null, !!tab && !tabDirty(tab), review.diff);
   const lineReview = useWorkspaceComments(sessionRef, file?.path, tab?.draft ?? '', review.hunks);
   const conflictTab = tabs.find(tab => tab.file.path === editing.conflict?.path);
-  const navigation = <Box component="nav" aria-label={localize(locale, "Tệp dự án", "Project files")} sx={{ width: navigationHost ? "100%" : 180, flexShrink: 0, overflow: "auto", borderRight: 1, borderColor: "divider" }}>
+  const navigation = <Box component="nav" aria-label={localize(locale, "Tệp dự án", "Project files")} sx={{ width: navigationHost ? "100%" : { xs: 136, sm: 200 }, flexShrink: 0, overflow: "auto", borderRight: 1, borderColor: "divider" }}>
       {!navigationHost && <Tabs value={section} onChange={(_, value) => setSection(value)} aria-label={localize(locale, "Khám phá project", "Explore project")}>
         <Tab value="files" label={localize(locale, "Tệp", "Files")} /><Tab value="search" label={localize(locale, "Tìm kiếm", "Search")} />
       </Tabs>}
@@ -88,7 +88,7 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
         {onHide && <IconButton size="small" aria-label={localize(locale, "Ẩn khung tệp", "Hide files panel")} title={localize(locale, "Ẩn khung tệp (tệp đang mở vẫn giữ)", "Hide files panel (open files are kept)")} onClick={onHide}><CloseIcon fontSize="small" /></IconButton>}
       </Stack>
       {loading && <CircularProgress size={20} />}
-      {file && <Stack direction="row">{revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
+      {file && <Stack direction="row" sx={{ flexShrink: 0, overflowX: "auto", "& .MuiButton-root": { whiteSpace: "nowrap", flexShrink: 0 } }}>{revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !tab || (!tabDirty(tab) && !tab.pending) || editing.saving} onClick={() => void editing.save(file.path)}>{localize(locale, "Lưu", "Save")}</Button>
         <Button size="small" onClick={() => editing.close(file.path)}>{localize(locale, "Đóng tệp", "Close file")}</Button>
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !file.digest || editing.saving} onClick={() => { setRenamePath(file.path); setRenaming(file.path); }}>{localize(locale, "Đổi tên", "Rename")}</Button>

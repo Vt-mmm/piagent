@@ -4,8 +4,13 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Added
+
+- **Colour themes.** Settings → Appearance → Color theme, or `Color theme: …` in the command palette (⌘K): Piagent Dark and Light, Dracula, One Dark, Monokai, Nord, Tokyo Night, Catppuccin Mocha, Gruvbox Dark, Solarized Dark and Light, GitHub Dark and Light. A theme colours the interface, the editor's syntax (no longer CodeMirror's light default on a dark page) and the terminal's ANSI palette; Light/Dark switches to that mode's Piagent theme. Kept in this browser like the language.
+
 ### Changed
 
+- **The editor and terminal stay in view.** On wide screens they are pinned under the header while the conversation beside them scrolls, so a long conversation no longer carries them away; the Files/Terminal switches are pinned too, on every width. A splitter (drag, or ←/→ when focused) sets the editor's width, kept in this browser. On phones the folder tree is narrower and the editor's actions stay on one line.
 - **The files panel is a folder tree, as in VS Code.** Folders open in place under their parent (▸/▾) instead of replacing the list, each read when first opened and refreshed while open; the open file is highlighted and a file opened from search, a link or Cmd/Ctrl+P shows in its folder. **New file** starts in the last folder chosen.
 
 ## v1.38.1 - 2026-10-23

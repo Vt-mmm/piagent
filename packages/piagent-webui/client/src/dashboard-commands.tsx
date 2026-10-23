@@ -2,15 +2,16 @@ import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts
 import type { PaletteCommand } from "./CommandPalette.tsx";
 import { settingsEntries, type SettingsSection } from "./SettingsNavigation.tsx";
 import { modifierKey } from "./StatusBar.tsx";
+import { THEME_PRESETS } from "./theme-presets.ts";
 import { localize, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
 
 // The palette's commands: the dashboard's actions first, then each settings
 // section, then the conversations by name (newest first, as listed).
 export function dashboardCommands(input: {
-  locale: UiLocale; colorMode: UiColorMode; canCreate: boolean; hasSelection: boolean; sessions: readonly SessionRow[];
+  locale: UiLocale; colorMode: UiColorMode; themeId?: string; canCreate: boolean; hasSelection: boolean; sessions: readonly SessionRow[];
   update: { available: boolean; latest: string | null };
   actions: { newChat(): void; togglePanel(): void; openChanges(): void; refresh(): void; settings(section: SettingsSection): void;
-    checkUpdates(): void; setColorMode(mode: UiColorMode): void; setLocale(locale: UiLocale): void; openSession(sessionRef: string): void };
+    checkUpdates(): void; setColorMode(mode: UiColorMode): void; setTheme?(id: string): void; setLocale(locale: UiLocale): void; openSession(sessionRef: string): void };
 }): PaletteCommand[] {
   const { locale, actions } = input, group = localize(locale, "Lệnh", "Commands"), mod = modifierKey();
   const commands: PaletteCommand[] = [];
@@ -27,6 +28,9 @@ export function dashboardCommands(input: {
     { id: "language", group, label: locale === "vi" ? "Switch the interface to English" : "Chuyển giao diện sang tiếng Việt", keywords: "language ngôn ngữ english tiếng việt",
       run: () => actions.setLocale(locale === "vi" ? "en" : "vi") },
     { id: "refresh", group, label: localize(locale, "Làm mới", "Refresh"), keywords: "reload tải lại", run: actions.refresh });
+  const setTheme = actions.setTheme, themes = localize(locale, "Chủ đề màu", "Color theme");
+  if (setTheme) for (const preset of THEME_PRESETS) commands.push({ id: `theme-${preset.id}`, group: themes, label: `${themes}: ${preset.label}`,
+    hint: preset.id === input.themeId ? "✓" : undefined, keywords: `theme chủ đề màu color ${preset.mode}`, run: () => setTheme(preset.id) });
   const settings = localize(locale, "Cài đặt", "Settings");
   for (const entry of settingsEntries(locale)) commands.push({ id: `settings-${entry.id}`, group: settings, label: `${settings}: ${entry.label}`,
     hint: entry.id === "general" ? `${mod} ,` : undefined, keywords: entry.keywords, run: () => actions.settings(entry.id) });

@@ -1,4 +1,5 @@
 import { personalBypassDetail } from "./SessionComposerControls.tsx";
+import { THEME_PRESETS } from "./theme-presets.ts";
 import { useEffect, useMemo, useState } from "react";
 import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
 import ImageRounded from "@mui/icons-material/ImageRounded";
@@ -51,7 +52,7 @@ function SettingRow({ icon, title, detail, action }: { icon: React.ReactNode; ti
 }
 
 function GeneralSettings() {
-  const { locale, colorMode, setLocale, setColorMode } = useUiPreferences();
+  const { locale, colorMode, themeId, setLocale, setColorMode, setThemeId } = useUiPreferences();
   return <><Title>{localize(locale, "Giao diện", "Appearance")}</Title><Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>
     <SettingRow icon={<LanguageRounded color="primary" />} title={localize(locale, "Ngôn ngữ", "Language")}
       detail={localize(locale, "Ngôn ngữ của giao diện. Agent trả lời theo ngôn ngữ bạn nhắn.", "The interface language. The agent answers in the language you write.")}
@@ -61,6 +62,17 @@ function GeneralSettings() {
       title={localize(locale, "Chủ đề", "Theme")} detail={localize(locale, "Sáng hoặc tối, lưu trên trình duyệt này.", "Light or dark, kept in this browser.")} action={<ToggleButtonGroup exclusive size="small" value={colorMode}
         onChange={(_, value) => value && setColorMode(value)}><ToggleButton value="light">{localize(locale, "Sáng", "Light")}</ToggleButton>
         <ToggleButton value="dark">{localize(locale, "Tối", "Dark")}</ToggleButton></ToggleButtonGroup>} />
+    <Divider /><Box sx={{ p: 2 }}><Typography sx={{ fontWeight: 600 }}>{localize(locale, "Chủ đề màu", "Color theme")}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{localize(locale, "Đổi màu giao diện, editor và terminal.", "Colours for the interface, the editor and the terminal.")}</Typography>
+      <Box role="radiogroup" aria-label={localize(locale, "Chủ đề màu", "Color theme")} sx={{ display: "grid", gap: 1, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+        {THEME_PRESETS.map(preset => <Box key={preset.id} component="button" type="button" role="radio" aria-checked={preset.id === themeId} onClick={() => setThemeId(preset.id)}
+          sx={{ textAlign: "left", p: 1, cursor: "pointer", font: "inherit", color: preset.text, bgcolor: preset.paper, borderRadius: "2px",
+            border: 2, borderColor: preset.id === themeId ? "primary.main" : preset.divider, outlineOffset: 2 }}>
+          <Box sx={{ display: "flex", gap: .5, mb: .75 }}>{[preset.background, preset.primary, preset.secondary, preset.syntax.keyword, preset.syntax.string, preset.warning].map((color, index) =>
+            <Box key={index} aria-hidden sx={{ width: 14, height: 14, bgcolor: color, border: 1, borderColor: preset.divider }} />)}</Box>
+          <Box component="span" sx={{ fontSize: 13, fontWeight: 500 }}>{preset.label}</Box>
+        </Box>)}
+      </Box></Box>
   </Paper></>;
 }
 

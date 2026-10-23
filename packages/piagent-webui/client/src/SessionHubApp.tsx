@@ -420,7 +420,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     rename(session: SessionRow, title: string): Promise<Receipt>; pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
     archive(session: SessionRow): Promise<Receipt>; unarchive(session: SessionRow): Promise<Receipt>;
     fork(session: SessionRow, title: string | null): Promise<Receipt> }) {
-  const { locale, colorMode, setLocale, setColorMode } = useUiPreferences();
+  const { locale, colorMode, themeId, setLocale, setColorMode, setThemeId } = useUiPreferences();
   const sessionLost = useSessionLost();
   const updates = useUpdates(), [paletteOpen, setPaletteOpen] = useState(false);
   const [workspaceSidebarMode, setWorkspaceSidebarMode] = useState<WorkspaceSidebarMode>("sessions");
@@ -665,11 +665,11 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   if (!catalog && connection !== "failed") return <Stack sx={{ minHeight: "100vh", alignItems: "center", justifyContent: "center" }} spacing={2}>
     <CircularProgress size={24} /><Typography>{localize(locale, "Đang mở Piagent…", "Opening Piagent…")}</Typography></Stack>;
   const title = view === "new" ? localize(locale, "Cuộc trò chuyện mới", "New chat") : selected?.title ?? "Piagent";
-  const commands = dashboardCommands({ locale, colorMode, canCreate, hasSelection: view === "chat" && Boolean(selected),
+  const commands = dashboardCommands({ locale, colorMode, themeId, canCreate, hasSelection: view === "chat" && Boolean(selected),
     sessions: (catalog?.sessions ?? []).filter((item) => !item.archived),
     update: { available: Boolean(updates.status?.updateAvailable && updates.status.installable && !updateInProgress(updates.status)), latest: updates.status?.piagent.latest ?? null },
     actions: { newChat: () => { setCreateError(null); setView("new"); }, togglePanel, openChanges: () => openInspector("source"), refresh: () => void refresh(),
-      settings: openSettings, checkUpdates: () => { openSettings("updates"); void updates.check(); }, setColorMode, setLocale, openSession: choose } });
+      settings: openSettings, checkUpdates: () => { openSettings("updates"); void updates.check(); }, setColorMode, setTheme: setThemeId, setLocale, openSession: choose } });
   const running = Object.values(live).filter((item) => item && !item.complete).length;
   return <WorkspaceNavigationProvider sessionRef={view === "chat" ? selectedSessionRef : undefined} onOpen={() => setInspectorOpen(false)}><Box sx={{ minHeight: "100vh", bgcolor: "background.default", "--piagent-status-bar": { xs: "0px", md: `${STATUS_BAR_HEIGHT}px` } }}>
     <AppBar position="fixed" color="transparent" elevation={0} sx={{ left: { md: `${SIDEBAR_WIDTH}px` }, right: { lg: panelShown ? `${PANEL_WIDTH}px` : 0, xl: inspectorOpen ? INSPECTOR_WIDTH : panelShown ? `${PANEL_WIDTH}px` : 0 },
