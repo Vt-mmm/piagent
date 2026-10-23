@@ -4,6 +4,15 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Fixes
+
+- **A checkpoint that cannot be taken no longer stops the agent's edit.** Personal snapshots failed on a submodule, a file over 16 MB, a tree over 64 MB or a file changing mid-snapshot, and every write was then refused. Snapshots now hash the whole tree in one Git call (about 0.5 s instead of 35 s on a 4,000-file repository), include tracked files of any size, skip untracked files over 100 MB and leave submodules out. A turn whose snapshot fails has no checkpoint and ends the history before it; only another live owner of the session's history makes an edit wait. Company checkpoints get the same snapshot.
+- **Restoring a turn no longer overwrites a file the member saved from the editor during it.** Such files are reported as conflicts by `/undo` and Timeline restore.
+- **Checkpoint snapshots stay out of the project's refs.** They live in a private repository inside the Git directory that borrows the project's objects, so `git push --mirror` cannot publish untracked files; conversations untouched for 30 days lose their checkpoints.
+- **The company explorer, editor and review panels no longer wait behind the agent's running command.** Reads run beside it (three at a time) and the editor's permission poll no longer stacks requests.
+- **A flood of terminal output no longer drops the dashboard connection.** Output is paced at about 4 MB/s, the writer is paused while the browser catches up, output it cannot keep up with is marked as skipped, and a terminal tab never stops rendering for good. Company terminal workers pause instead of exiting when their pipe backs up. A flood of short lines no longer stalls the Gateway: tiny PTY reads are joined before pacing and the replay buffer trims its window once it doubles instead of on every line.
+- Restored files the turn had deleted get a new file's usual mode instead of owner-only.
+
 - Company inline review preserves exact agent observations across trusted internal snapshot reads; ordinary shell commands still invalidate attribution.
 
 ### Added

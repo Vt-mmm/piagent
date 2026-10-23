@@ -16,8 +16,19 @@ export type TerminalProcessOwner<B extends TerminalBinding> = {
   close(sessionRef: string, terminalRef: string): Promise<void>;
   closeSession(sessionRef: string): Promise<void>;
   dispose(): Promise<void>;
+  // Stop reading the terminal while the browser is behind; a writer then blocks
+  // as it would on a real terminal. Owners without it are trimmed instead.
+  pause?(sessionRef: string, terminalRef: string): void;
+  resume?(sessionRef: string, terminalRef: string): void;
 };
-type Tab = { summary: TerminalSummary; buffer: TerminalOutputBuffer };
+type Tab = { summary: TerminalSummary; buffer: TerminalOutputBuffer; live: string[]; liveLength: number; skipped: boolean; paused: boolean };
+// Live output leaves at most BUDGET characters per tick (about 4 MB/s): a
+// `yes` or a large `cat` neither floods the dashboard socket, which also
+// carries the conversation, nor the browser's renderer. Above HIGH the
+// terminal is paused; above LIMIT the oldest unsent output is dropped and the
+// member sees a marker (the redacted replay buffer keeps the latest output).
+const TICK = 16, BUDGET = 64 * 1024, LOW = 64 * 1024, HIGH = 256 * 1024, LIMIT = 1024 * 1024;
+const SKIPPED = "\r\n\x1b[2m[… output skipped …]\x1b[0m\r\n";
 type Session<B extends TerminalBinding> = { binding: B; revision: string; nextNumber: number; tabs: Map<string, Tab> };
 export type TerminalMessage = TerminalOutput | TerminalExit | TerminalState;
 const header = { schemaVersion: 1, version: "piagent-terminal-v1" } as const;
@@ -40,6 +51,7 @@ export class TerminalSessions<B extends TerminalBinding> {
   readonly #queues = new Map<string, { tail: Promise<unknown>; count: number }>();
   readonly #listeners = new Map<string, Set<(message: TerminalMessage) => void>>();
   #closed = false;
+  #timer: ReturnType<typeof setTimeout> | undefined;
   constructor(resolveBinding: (ref: string) => Promise<B>, createProcesses: (emit: (event: TerminalProcessEvent) => void) => TerminalProcessOwner<B>) {
     this.#resolveBinding = resolveBinding; this.#processes = createProcesses(event => this.#event(event));
   }
@@ -69,6 +81,10 @@ export class TerminalSessions<B extends TerminalBinding> {
     return session;
   }
   #state(session: Session<B>): TerminalState {
+    // State and replay name a sequence the member must have received: send
+    // what is still waiting first.
+    const ref = session.binding.identity.sessionRef;
+    for (const tab of session.tabs.values()) while (tab.live.length) this.#drain(ref, session, tab, Infinity);
     return { ...header, messageType: "state", identity: session.binding.identity,
       revisions: { terminalRevision: session.revision }, available: !this.#processes.reason(session.binding),
       reasonCode: this.#processes.reason(session.binding),
@@ -107,8 +123,8 @@ export class TerminalSessions<B extends TerminalBinding> {
     let terminalRef: string;
     if (payload.kind === "open") {
       const opened = await this.#processes.open(session.binding, payload); terminalRef = opened.terminalRef;
-      session.tabs.set(terminalRef, { buffer: new TerminalOutputBuffer(), summary: { terminalRef, number: session.nextNumber++,
-        state: "running", cols: payload.cols, rows: payload.rows, sequence: 0, exitCode: null } });
+      session.tabs.set(terminalRef, { buffer: new TerminalOutputBuffer(), live: [], liveLength: 0, skipped: false, paused: false,
+        summary: { terminalRef, number: session.nextNumber++, state: "running", cols: payload.cols, rows: payload.rows, sequence: 0, exitCode: null } });
       opened.activate?.();
     } else {
       terminalRef = payload.terminalRef;
@@ -130,14 +146,56 @@ export class TerminalSessions<B extends TerminalBinding> {
     try { session.binding.assertCurrent(); } catch { return; }
     if (event.kind === "output") {
       tab.buffer.append(event.data);
-      const parts = chunks(event.data);
-      for (const data of parts) this.#publish(event.sessionRef, { ...header, messageType: "output", identity: session.binding.identity,
-        terminalRef: event.terminalRef, sequence: ++tab.summary.sequence, data, replay: false, reset: false, complete: true, truncated: false });
+      // A PTY delivers a flood as many tiny reads: join them into parts of up
+      // to 16K characters so draining stays linear.
+      const last = tab.live.length - 1;
+      if (last >= 0 && tab.live[last]!.length < 16384) tab.live[last] += event.data; else tab.live.push(event.data);
+      tab.liveLength += event.data.length;
+      if (tab.liveLength > HIGH && !tab.paused && this.#processes.pause) {
+        tab.paused = true;
+        try { this.#processes.pause(event.sessionRef, event.terminalRef); } catch { /* exited meanwhile */ }
+      }
+      while (tab.liveLength > LIMIT && tab.live.length > 1) { tab.liveLength -= tab.live.shift()!.length; tab.skipped = true; }
+      this.#schedule();
     } else {
+      // Everything the terminal printed before it ended reaches the member first.
+      while (tab.live.length) this.#drain(event.sessionRef, session, tab, Infinity);
       tab.summary.state = "exited"; tab.summary.exitCode = event.exitCode; session.revision = revision();
       this.#publish(event.sessionRef, { ...header, messageType: "exit", identity: session.binding.identity,
         terminalRef: event.terminalRef, sequence: ++tab.summary.sequence, exitCode: event.exitCode, signal: event.signal });
       this.#publish(event.sessionRef, this.#state(session));
+    }
+  }
+  #schedule() {
+    if (this.#timer || this.#closed) return;
+    this.#timer = setTimeout(() => {
+      this.#timer = undefined;
+      let more = false;
+      for (const [ref, session] of this.#sessions) for (const tab of session.tabs.values()) {
+        if (!tab.live.length) continue;
+        try { session.binding.assertCurrent(); } catch { tab.live = []; tab.liveLength = 0; continue; }
+        this.#drain(ref, session, tab, BUDGET);
+        more ||= tab.live.length > 0;
+      }
+      if (more) this.#schedule();
+    }, TICK);
+    this.#timer.unref?.();
+  }
+  #drain(ref: string, session: Session<B>, tab: Tab, budget: number) {
+    let text = tab.skipped ? SKIPPED : "";
+    tab.skipped = false;
+    while (tab.live.length && text.length < budget) {
+      const next = tab.live[0]!, room = budget - text.length;
+      if (next.length <= room) { text += tab.live.shift(); continue; }
+      let end = room; if (/[\uD800-\uDBFF]/.test(next[end - 1]!)) end--;
+      text += next.slice(0, end); tab.live[0] = next.slice(end);
+    }
+    tab.liveLength = tab.live.reduce((total, part) => total + part.length, 0);
+    for (const data of chunks(text)) if (data) this.#publish(ref, { ...header, messageType: "output", identity: session.binding.identity,
+      terminalRef: tab.summary.terminalRef, sequence: ++tab.summary.sequence, data, replay: false, reset: false, complete: true, truncated: false });
+    if (tab.paused && tab.liveLength < LOW) {
+      tab.paused = false;
+      try { this.#processes.resume?.(ref, tab.summary.terminalRef); } catch { /* exited meanwhile */ }
     }
   }
   #publish(ref: string, message: TerminalMessage) {
@@ -152,6 +210,9 @@ export class TerminalSessions<B extends TerminalBinding> {
   replay(ref: string): TerminalOutput[] {
     const session = this.#sessions.get(ref); if (!session) return [];
     session.binding.assertCurrent();
+    // The snapshot already holds output not yet sent live: send it first, so
+    // its sequence numbers stay below the replay's and are not shown twice.
+    for (const tab of session.tabs.values()) while (tab.live.length) this.#drain(ref, session, tab, Infinity);
     return [...session.tabs.values()].flatMap(tab => {
       const snapshot = tab.buffer.snapshot(), parts = chunks(snapshot.text);
       return parts.map((data, index) => ({ ...header, messageType: "output" as const, identity: session.binding.identity,
@@ -170,7 +231,7 @@ export class TerminalSessions<B extends TerminalBinding> {
     await this.#processes.closeSession(ref); this.#sessions.delete(ref);
   }); }
   async dispose() {
-    this.#closed = true;
+    this.#closed = true; clearTimeout(this.#timer);
     await Promise.allSettled([...this.#queues.values()].map(queue => queue.tail));
     await this.#processes.dispose(); this.#sessions.clear(); this.#listeners.clear();
   }

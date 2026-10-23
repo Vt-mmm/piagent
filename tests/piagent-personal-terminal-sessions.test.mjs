@@ -7,16 +7,16 @@ import { PersonalTerminalSessions } from '../packages/piagent-webui/gateway/pers
 import { PersonalTerminalProcesses } from '../packages/piagent-webui/gateway/personal-terminal-processes.ts';
 import { sessionRefForPath } from '../packages/piagent-webui/gateway/session-catalog.ts';
 import { controlActionDigest } from '../packages/piagent-webui/server/control-command-digest.ts';
-const until=async check=>{const end=Date.now()+8000;while(!check()){if(Date.now()>end)throw Error('terminal-timeout');await new Promise(r=>setTimeout(r,20));}};
-function setup(t, unavailable=false){
+const until=async(check,ms=8000)=>{const end=Date.now()+ms;while(!check()){if(Date.now()>end)throw Error('terminal-timeout');await new Promise(r=>setTimeout(r,20));}};
+function setup(t, unavailable=false, factory){
   const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'terminal-service-'));t.after(()=>fs.rmSync(cwd,{recursive:true,force:true}));
   const key=Buffer.alloc(32,9),info={id:'raw',path:path.join(cwd,'session.jsonl'),cwd},ref=sessionRefForPath(key,info.path);
   const manager={getSessionId:()=>info.id,buildSessionContext:()=>({model:{provider:'personal'}})};
   const owner={gatewayInstanceRef:'gateway.one',runtimeInstanceRef:'runtime.one',ownerEpoch:1,continuity:'exact'};
   const runtimes={listSessions:async()=>[info],acquire:async()=>({...owner}),liveSessionManager:()=>manager,
     ownership:()=>({state:'gateway-owned',owner})};
-  const service=new PersonalTerminalSessions({key,managed:false,gatewayInstanceRef:'gateway.one',runtimes},emit=>
-    unavailable ? new PersonalTerminalProcesses(emit,()=>{throw Error('absent');}) : new PersonalTerminalProcesses(emit));
+  const service=new PersonalTerminalSessions({key,managed:false,gatewayInstanceRef:'gateway.one',runtimes},factory??(emit=>
+    unavailable ? new PersonalTerminalProcesses(emit,()=>{throw Error('absent');}) : new PersonalTerminalProcesses(emit)));
   t.after(()=>service.dispose());let id=0;
   const command=async payload=>{const state=await service.state(ref),value={schemaVersion:1,version:'piagent-terminal-v1',messageType:'command',
     commandId:`command.${++id}`,idempotencyKey:`key.${id}`,requestedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60000).toISOString(),
@@ -88,4 +88,33 @@ test('actual runtime release and restart close their PTYs before replacing owner
     await until(()=>{try{process.kill(pid,0);return false;}catch{return true;}});
     assert.equal(service.replay(ref).length,0);
   }
+});
+
+test('a flood of output is paced, pauses the terminal, drops the oldest unsent part and flushes before exit',async t=>{
+  let emit;const calls=[];
+  const f=setup(t,false,e=>{emit=e;return {unavailableReason:null,open:()=>({terminalRef:'terminal.flood',pid:1}),input(){},resize(){},
+    close:async()=>{},closeSession:async()=>{},dispose:async()=>{},pause:()=>calls.push('pause'),resume:()=>calls.push('resume')};});
+  const messages=[];t.after(f.service.subscribe(f.ref,message=>messages.push(message)));
+  const opened=await f.service.execute(await f.command({kind:'open',cols:80,rows:24}));
+  const chunk='y\n'.repeat(16*1024);
+  for(let i=0;i<64;i++)emit({sessionRef:f.ref,terminalRef:opened.terminalRef,kind:'output',data:chunk});
+  const live=()=>messages.filter(m=>m.messageType==='output');
+  assert.equal(live().length,0,'nothing is sent in the same tick as 2 MB arrives');
+  assert.deepEqual(calls,['pause']);
+  await until(()=>calls.includes('resume'));
+  const sent=live().map(m=>m.data).join('');
+  assert.ok(sent.includes('output skipped'));assert.ok(sent.length<=1024*1024+128,'at most the retained window is sent');
+  emit({sessionRef:f.ref,terminalRef:opened.terminalRef,kind:'output',data:'LAST LINE\n'});
+  emit({sessionRef:f.ref,terminalRef:opened.terminalRef,kind:'exit',exitCode:0,signal:null});
+  const exit=messages.findIndex(m=>m.messageType==='exit');
+  assert.ok(exit>0&&messages.slice(0,exit).some(m=>m.messageType==='output'&&m.data.includes('LAST LINE')));
+});
+test('a real flood (yes) keeps the terminal usable and reaches the command after it',async t=>{
+  const f=setup(t),messages=[];t.after(f.service.subscribe(f.ref,message=>messages.push(message)));
+  const opened=await f.service.execute(await f.command({kind:'open',cols:80,rows:24}));
+  await f.service.execute(await f.command({kind:'input',terminalRef:opened.terminalRef,data:"yes | head -c 1000000; echo FLOOD_$((40+2))\n"}));
+  await until(()=>messages.some(m=>m.messageType==='output'&&m.data.includes('FLOOD_42\r\n')),30000);
+  assert.ok(messages.filter(m=>m.messageType==='output').every(m=>m.data.length<=8192));
+  await f.service.execute(await f.command({kind:'input',terminalRef:opened.terminalRef,data:"echo AFTER_$((40+2))\n"}));
+  await until(()=>messages.some(m=>m.messageType==='output'&&m.data.includes('AFTER_42\r\n')),30000);
 });

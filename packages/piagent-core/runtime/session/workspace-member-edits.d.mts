@@ -3,4 +3,5 @@ export const WORKSPACE_WRITE_ENTRY: "piagent-workspace-write";
 export function takeWorkspaceMemberEditNotice(manager: { getBranch(): any[] }): {
   customType: string; display: boolean; content: string; details: { throughEntryId: string };
 } | null;
+export function workspaceMemberEditsSince(manager: { getEntries?(): any[] } | null | undefined, since: number): Set<string>;
 export function registerWorkspaceMemberEdits(pi: ExtensionAPI): void;

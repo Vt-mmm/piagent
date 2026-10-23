@@ -8,7 +8,7 @@ import { SessionMutationObserver } from '../packages/piagent-core/runtime/inspec
 import { createManagedSourceRevert } from '../packages/piagent-core/runtime/inspection/managed-source-revert.ts';
 
 test('sandbox source adapter reconstructs exact authority and preserves member hunks and index', async t => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-source-revert-'));
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'managed-source-revert-')));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
   git('init', '-q');
@@ -111,7 +111,7 @@ test('company source preview and revert use the pinned real sandbox worker with 
 });
 
 test('source preview and shared revert executor preserve exact line endings and EOF', async t => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'source-revert-endings-'));
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'source-revert-endings-')));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
   git('init', '-q'); git('config', 'core.autocrlf', 'false');
@@ -141,7 +141,7 @@ test('source preview and shared revert executor preserve exact line endings and 
 });
 
 test('untracked agent creations have display provenance without granting deletion authority', async t => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'source-new-file-'));
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'source-new-file-')));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   execFileSync('git', ['init', '-q', cwd]);
   const policy = { policy: {}, profile: {}, readOnly: false }, observer = new SessionMutationObserver();

@@ -33,7 +33,7 @@ const revisions = { runtimeRevision: "runtime-revision.revert", taskRevision: "t
   sessionOptionRevision: null, queueRevision: null };
 
 function repository(t) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-revert-"));
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-revert-")));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   execFileSync("git", ["init", "-q", cwd]);
   execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);

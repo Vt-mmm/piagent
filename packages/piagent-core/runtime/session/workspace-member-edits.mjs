@@ -22,6 +22,17 @@ export function takeWorkspaceMemberEditNotice(manager) {
     content: `Member edited ${paths.slice(0, 16).map(value => JSON.stringify(value.slice(0, 256))).join(', ')}${paths.length > 16 ? ` and ${paths.length - 16} more files` : ''}. Read their current contents before editing; earlier reads may be stale.` };
 }
 
+// Files the member saved from the workspace editor at or after `since` (ms).
+// Checkpoints treat them as the member's, never as part of an agent turn.
+export function workspaceMemberEditsSince(manager, since) {
+  const paths = new Set();
+  for (const entry of manager?.getEntries?.() ?? []) {
+    const data = entry.type === 'custom' && entry.customType === WORKSPACE_WRITE_ENTRY ? entry.data : null;
+    if (data?.phase === 'settled' && data.resultCode === 'saved' && typeof data.path === 'string' && Date.parse(data.settledAt) >= since) paths.add(data.path);
+  }
+  return paths;
+}
+
 export function registerWorkspaceMemberEdits(pi) {
   pi.on('before_agent_start', (_event, ctx) => {
     const message = takeWorkspaceMemberEditNotice(ctx.sessionManager);

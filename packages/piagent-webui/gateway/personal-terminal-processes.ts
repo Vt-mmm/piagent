@@ -74,6 +74,8 @@ export class PersonalTerminalProcesses {
     if (entry.exited || entry.closing) throw new Error("terminal-exited");
     entry.process.resize(size.cols, size.rows);
   }
+  pause(sessionRef: string, terminalRef: string) { const entry = this.#get(sessionRef, terminalRef); if (!entry.exited) entry.process.pause(); }
+  resume(sessionRef: string, terminalRef: string) { const entry = this.#get(sessionRef, terminalRef); if (!entry.exited) entry.process.resume(); }
   async close(sessionRef: string, terminalRef: string) {
     const entry = this.#get(sessionRef, terminalRef);
     if (!entry.closing) { entry.cleanup ??= this.#stop(entry); entry.closing = entry.cleanup.finally(() => this.#entries.delete(terminalRef)); }

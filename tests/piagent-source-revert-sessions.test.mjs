@@ -13,7 +13,7 @@ import { sessionRefForPath } from '../packages/piagent-webui/gateway/session-cat
 import { createSourceRevertCommand, createSessionSourceRevertCommand } from '../packages/piagent-webui/client/src/source-revert-command.ts';
 
 test('Gateway session revert acquires the catalog runtime and binds its independent inspection identity', async t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'source-revert-sessions-')), cwd = path.join(root, 'project');
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'source-revert-sessions-'))), cwd = path.join(root, 'project');
   fs.mkdirSync(cwd); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   execFileSync('git', ['init', '-q', cwd]);
   const file = path.join(cwd, 'a.txt'), original = Array.from({ length: 30 }, (_, i) => `line ${i}`).join('\n') + '\n';

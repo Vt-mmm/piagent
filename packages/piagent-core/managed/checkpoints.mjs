@@ -1,10 +1,12 @@
 import { BoundaryCheckpointGit } from './checkpoint-git.mjs';
 import { TurnCheckpointService } from '../runtime/checkpoints/turn-checkpoints.mjs';
+import { workspaceMemberEditsSince } from '../runtime/session/workspace-member-edits.mjs';
 
 // Keep the company API and sandbox execution while sharing checkpoint behavior.
 export class TurnCheckpoints extends TurnCheckpointService {
   constructor(managed) {
-    super(new BoundaryCheckpointGit(managed), { busy: () => managed.activePrompt });
+    super(new BoundaryCheckpointGit(managed), { busy: () => managed.activePrompt,
+      memberEdits: since => workspaceMemberEditsSince(managed.session?.sessionManager, since) });
     this.managed = managed;
   }
   take(run = this.managed.run) {

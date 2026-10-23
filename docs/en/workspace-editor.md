@@ -85,6 +85,11 @@ process group and observed descendants. A shell exit also cleans remaining
 process-group children. Processes deliberately detached into another session
 are outside that process group's lifetime.
 
+A command that prints faster than the browser can draw (`yes`, a large `cat`)
+is paced: the terminal pauses its writer while the page catches up, and output
+the page could not keep up with is replaced by an `[… output skipped …]` marker.
+The conversation on the same connection is not interrupted.
+
 Hiding the panel or reloading the page preserves the shell while its Gateway
 runtime remains alive. Reopening replays up to 64 KB of retained output per tab.
 Replay and agent attachments redact recognized secrets; the live terminal shows
@@ -149,11 +154,23 @@ the result reports how many. A running agent, changed preview or revoked write
 permission requires a fresh preview. Protected and read-only paths retain their
 restrictions. A project without Git has no checkpoints.
 
+A file the member saved from the editor after a turn began counts as the
+member's: restoring that turn names it as a conflict instead of putting it back.
+Edits typed into a terminal are not tracked this way; the drift check still
+refuses files changed after the turn ended.
+
 Personal Pi TUI also supports `/undo` for the latest turn without asking the
 model. Personal history retains up to 64 checkpoints per project and session in
-owner-only `.pi/piagent-state/checkpoints` files. Private Git refs under
-`refs/piagent/checkpoints/` keep the before/after trees reachable during garbage
-collection without creating commits or modifying the index. If a personal runtime stops before the final snapshot, recovery leaves its
+owner-only `.pi/piagent-state/checkpoints` files; a conversation untouched for
+30 days loses its checkpoints. Snapshots are kept in a private repository inside
+the Git directory (`.git/piagent/checkpoints.git`), which uses the project's
+objects but has its own refs: `git push --mirror` never publishes them, and the
+project's garbage collection does not remove them. Snapshots include tracked files of any size,
+skip untracked files over 100 MB and leave submodules out; undo never touches
+what a snapshot left out. When a snapshot cannot be taken, the agent's edit
+still proceeds; that turn has no checkpoint and earlier checkpoints are dropped,
+because restoring past it would claim a state it never recorded. Only another
+live runtime holding the same session's history makes an edit wait. If a personal runtime stops before the final snapshot, recovery leaves its
 file edits intact and discards only the unfinished checkpoint metadata. Earlier
 completed checkpoints still apply their member-edit conflict checks. Company checkpoint
 operations run inside the existing sandbox; company history lasts for the runtime.

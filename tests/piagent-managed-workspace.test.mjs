@@ -47,7 +47,7 @@ test('company workspace reads run inside the real boundary and preserve protecte
 });
 
 test('workspace worker refuses missing or modified build artifacts', t => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-workspace-pins-'));
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-workspace-pins-')));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   assert.equal(workspaceWorkerPins(cwd), null); assert.throws(() => verifyWorkspaceWorker(null), /unavailable/);
   fs.cpSync(path.join(root, 'packages/piagent-core/managed/dist/workspace'), path.join(cwd, 'dist/workspace'), { recursive: true });
@@ -135,4 +135,22 @@ test('company exact mutation observations survive worker replacement and reset o
   await boundary.invoke('edit', { path: 'new.txt', edits: [{ oldText: 'new', newText: 'updated' }] });
   assert.equal(boundary.mutationObservation('new.txt')?.baseline.digest, 'absent');
 
+});
+
+test('member reads do not wait behind the agent command and stay bounded', { skip: !sdk || process.platform !== 'darwin' }, async t => {
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-workspace-reads-')));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, 'safe.ts'), 'export const value = 42;\n');
+  execFileSync('git', ['init', '-q', cwd]);
+  const boundary = new ManagedToolBoundary({ cwd, sdkRoot: sdk, searchTools: false });
+  t.after(() => boundary.dispose());
+  let commandDone = false;
+  const command = boundary.invoke('bash', { command: 'sleep 4' }).then(() => { commandDone = true; });
+  await new Promise(resolve => setTimeout(resolve, 300));
+  const file = await boundary.invoke('workspace', { kind: 'file', path: 'safe.ts' });
+  assert.match(file.content, /value = 42/); assert.equal(commandDone, false, 'the read answered while the command ran');
+  const reads = await Promise.allSettled(Array.from({ length: 22 }, () => boundary.invoke('workspace', { kind: 'tree', path: '' })));
+  assert.equal(reads.filter(read => read.status === 'fulfilled').length, 19, 'three run, sixteen wait');
+  assert.ok(reads.filter(read => read.status === 'rejected').every(read => /managed-workspace-busy/.test(read.reason.message)));
+  await command;
 });

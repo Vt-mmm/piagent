@@ -4,7 +4,7 @@ export const checkpointDigest = value => createHash('sha256').update(JSON.string
 
 // Compare each file against the virtual result of undoing newer turns. This
 // preserves member edits between turns without writing preview trees or files.
-export async function previewCheckpointRestore(git, points, targetId, busy) {
+export async function previewCheckpointRestore(git, points, targetId, busy, memberEdits = _since => new Set()) {
   const revision = checkpointDigest(points);
   const index = points.findIndex(point => point.id === targetId);
   const base = { targetId, revision, tree: null, steps: [], files: [], conflicts: [], stoppedAt: null };
@@ -28,6 +28,8 @@ export async function previewCheckpointRestore(git, points, targetId, busy) {
       const drift = await git.changed(point.after, source);
       conflicts.push(...drift.filter(change => paths.has(change.path)).map(change => change.path));
     }
+    const edited = memberEdits(point.at);
+    conflicts.push(...changes.filter(change => edited.has(change.path)).map(change => change.path));
     if (conflicts.length) { stoppedAt = point.id; break; }
     steps.push({ id: point.id, turnRef: point.turnRef, restore: changes.filter(change => change.status !== 'A').map(change => change.path),
       remove: changes.filter(change => change.status === 'A').map(change => change.path) });

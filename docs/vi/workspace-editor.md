@@ -80,6 +80,11 @@ hay tắt Gateway sẽ dừng process group và các tiến trình con đã quan
 thoát cũng dọn các tiến trình còn trong process group. Tiến trình chủ động tách
 sang session khác nằm ngoài vòng đời process group đó.
 
+Lệnh in nhanh hơn trình duyệt vẽ kịp (`yes`, `cat` một file lớn) được giãn nhịp:
+terminal tạm dừng chương trình đang ghi trong lúc trang đuổi kịp, và phần output
+trang không theo kịp được thay bằng dấu `[… output skipped …]`. Cuộc trò chuyện
+dùng chung kết nối không bị gián đoạn.
+
 Ẩn panel hoặc reload trang giữ shell khi runtime Gateway vẫn còn sống. Mở lại
 phát lại tối đa 64 KB output đã giữ của mỗi tab. Bản phát lại và phần đính cho agent
 che secret nhận diện được; terminal trực tiếp hiển thị output gốc cho member.
@@ -141,11 +146,24 @@ cho biết số lượt. Agent đang chạy, preview đã thay đổi hoặc quy
 thì cần xem trước lại. Đường dẫn protected và read-only vẫn giữ giới hạn.
 Project không dùng Git thì không có checkpoint.
 
+File member lưu từ editor sau khi một lượt bắt đầu được coi là của member: khôi
+phục lượt đó sẽ báo file này là xung đột thay vì đưa nó về bản cũ. Sửa đổi gõ
+trong terminal không được theo dõi theo cách này; kiểm tra thay đổi sau lượt vẫn
+từ chối file bị sửa sau khi lượt kết thúc.
+
 Pi TUI personal cũng có `/undo` để hoàn tác lượt gần nhất mà không gọi model.
 Lịch sử personal giữ tối đa 64 checkpoint cho mỗi project và session trong file
-chỉ chủ sở hữu truy cập được ở `.pi/piagent-state/checkpoints`. Git ref riêng dưới
-`refs/piagent/checkpoints/` giữ tree trước/sau khỏi bị garbage collection xóa,
-không tạo commit hoặc sửa index. Nếu runtime personal dừng trước snapshot cuối
+chỉ chủ sở hữu truy cập được ở `.pi/piagent-state/checkpoints`; cuộc trò chuyện
+không dùng trong 30 ngày sẽ mất checkpoint. Snapshot nằm trong một repository
+riêng bên trong thư mục Git (`.git/piagent/checkpoints.git`), dùng chung object
+của project nhưng có ref riêng: `git push --mirror` không bao giờ đẩy chúng lên,
+và garbage collection của project không xóa chúng. Snapshot gồm file đã track với
+mọi kích thước, bỏ qua file chưa track lớn hơn 100 MB và không gồm submodule;
+hoàn tác không bao giờ đụng vào phần snapshot bỏ qua. Khi không chụp được
+snapshot, agent vẫn sửa file bình thường; lượt đó không có checkpoint và các
+checkpoint trước bị bỏ, vì khôi phục vượt qua lượt đó sẽ tạo ra trạng thái chưa
+từng được ghi lại. Chỉ khi một runtime khác đang giữ lịch sử của cùng session
+thì lần sửa mới phải chờ. Nếu runtime personal dừng trước snapshot cuối
 lượt, phục hồi giữ nguyên các file đã sửa và chỉ bỏ metadata checkpoint chưa
 hoàn tất. Checkpoint của các lượt đã kết thúc vẫn kiểm tra xung đột với thay đổi
 của member. Thao tác checkpoint company chạy trong sandbox

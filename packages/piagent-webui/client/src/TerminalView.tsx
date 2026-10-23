@@ -35,15 +35,19 @@ export default function TerminalView({ identity, terminalRef, active, onInput, o
       fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', scrollback: 2000,
       allowProposedApi: false, allowTransparency: false });
     const addon = new FitAddon(); value.loadAddon(addon); value.open(node); terminal.current = value; fit.current = addon;
-    let disposed = false, pendingBytes = 0, sequence = -1, replaying = false, failed = false;
+    let disposed = false, pendingBytes = 0, sequence = -1, replaying = false, skipping = false;
     const receive = (message: TerminalOutput) => {
-      if (failed) return;
       if (message.replay) {
-        if (message.reset) { value.write('', () => { if (!disposed) value.reset(); }); replaying = true; }
+        if (message.reset) { value.write('', () => { if (!disposed) value.reset(); }); replaying = true; skipping = false; }
         if (!replaying) return;
       } else if (replaying || message.sequence <= sequence) return;
-      const bytes = new TextEncoder().encode(message.data).length; pendingBytes += bytes;
-      if (pendingBytes > 512 * 1024) { failed = true; callbacks.current.onError('terminal-render-backpressure'); return; }
+      const bytes = new TextEncoder().encode(message.data).length;
+      // While the renderer is behind, live output is skipped (not the whole
+      // terminal): once it catches up the member sees a marker and carries on.
+      if (!message.replay && pendingBytes + bytes > 512 * 1024) { skipping = true; sequence = message.sequence; return; }
+      if (skipping && pendingBytes < 128 * 1024) { skipping = false; value.write('\r\n\x1b[2m[… output skipped …]\x1b[0m\r\n'); }
+      if (skipping) { sequence = message.sequence; return; }
+      pendingBytes += bytes;
       value.write(message.data, () => { pendingBytes -= bytes; });
       if (!message.replay || message.complete) { sequence = message.sequence; replaying = false; }
     };

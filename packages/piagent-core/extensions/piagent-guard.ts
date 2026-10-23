@@ -140,6 +140,7 @@ import { registerSessionHooks } from "../runtime/hooks/session-hooks.ts";
 import { registerSessionStartHook } from "../runtime/hooks/session-start-hook.ts";
 import { registerToolCallHook } from "../runtime/hooks/tool-call-hook.ts";
 import { PersonalCheckpointRuntime } from "../runtime/checkpoints/personal-runtime.ts";
+import { checkpointOwnershipError } from "../runtime/checkpoints/turn-checkpoints.mjs";
 import { registerToolResultHook } from "../runtime/hooks/tool-result-hook.ts";
 import { readRuntimeVersionMetadata, RuntimeSnapshotCapture } from "../runtime/model/runtime-snapshot.ts";
 import { recordRuntimeSnapshotTelemetry } from "../runtime/model/snapshot-telemetry.ts";
@@ -3857,8 +3858,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
         }
       }
       if (!mutating) return;
+      // A missing checkpoint costs this turn its undo, never the edit itself;
+      // only another live owner of the session's history makes the edit wait.
       try { await personalCheckpoints.beforeMutation(ctx); }
-      catch (error) { return { block: true, reason: `Checkpoint failed before tool start: ${redactText(String(error))}` }; }
+      catch (error) {
+        if (checkpointOwnershipError(error)) return { block: true, reason: `Checkpoint failed before tool start: ${redactText(String(error))}` };
+      }
     },
     beforeAuthorize: (event, ctx) => {
       const toolInput = isPlainRecord(event.input) ? event.input : {};

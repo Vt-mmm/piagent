@@ -10,6 +10,7 @@ import { CheckpointStore } from '../packages/piagent-core/runtime/checkpoints/ch
 import { CheckpointRefs } from '../packages/piagent-core/runtime/checkpoints/checkpoint-refs.mjs';
 import { PersistentCheckpointHistory } from '../packages/piagent-core/runtime/checkpoints/persistent-history.mjs';
 import { TurnCheckpointService } from '../packages/piagent-core/runtime/checkpoints/turn-checkpoints.mjs';
+import { pruneStaleCheckpointSessions } from '../packages/piagent-core/runtime/checkpoints/prune.mjs';
 
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'personal-checkpoint-')));
@@ -65,7 +66,8 @@ test('personal restore refuses stale content, root escape and a symlink ancestor
   assert.throws(() => adapter.restore(before, ['../outside'], [], after), /path-invalid/);
   const outside = path.join(root, 'outside'); fs.mkdirSync(outside); fs.writeFileSync(path.join(outside, 'a.txt'), 'outside');
   fs.rmSync(path.join(cwd, 'dir'), { recursive: true }); fs.symlinkSync(outside, path.join(cwd, 'dir'));
-  assert.throws(() => adapter.restore(before, ['dir/a.txt'], [], after), /symbolic link/);
+  // The link hides dir/a.txt from the snapshot, so the drift check refuses first.
+  assert.throws(() => adapter.restore(before, ['dir/a.txt'], [], after), /symbolic link|content-changed/);
   assert.equal(fs.readFileSync(path.join(outside, 'a.txt'), 'utf8'), 'outside');
 });
 test('personal snapshots in a repository subfolder stay inside that project and never follow link targets', t => {
@@ -118,4 +120,110 @@ test('personal snapshot bypasses Git filters and restore preserves unrelated con
   assert.equal(fs.readFileSync(path.join(cwd, 'a.txt'), 'utf8'), 'before');
   assert.equal(fs.readFileSync(path.join(cwd, 'other.txt'), 'utf8'), 'member changed later');
   assert.equal(fs.existsSync(path.join(cwd, 'filter-ran')), false);
+});
+
+test('personal snapshots keep large tracked files, skip submodules and never block on what Git cannot snapshot', t => {
+  const { cwd, write, git, adapter } = fixture(t);
+  const large = Buffer.alloc(20 << 20, 7);
+  write('large.bin', large); write('a.txt', 'before');
+  const nested = path.join(cwd, 'vendor/lib'); fs.mkdirSync(nested, { recursive: true });
+  execFileSync('git', ['-C', nested, 'init', '-q']); fs.writeFileSync(path.join(nested, 'x'), 'x');
+  execFileSync('git', ['-C', nested, '-c', 'user.name=F', '-c', 'user.email=f@example.com', 'add', 'x']);
+  execFileSync('git', ['-C', nested, '-c', 'user.name=F', '-c', 'user.email=f@example.com', 'commit', '-qm', 'x']);
+  git('add', 'large.bin', 'a.txt', 'vendor/lib');
+  const before = adapter.tree();
+  assert.deepEqual(git('ls-tree', '-r', '--name-only', before).trim().split('\n'), ['a.txt', 'large.bin']);
+  write('large.bin', 'agent'); write('a.txt', 'agent'); fs.writeFileSync(path.join(nested, 'x'), 'agent');
+  const after = adapter.tree(); adapter.restore(before, ['large.bin', 'a.txt'], [], after);
+  assert.deepEqual(fs.readFileSync(path.join(cwd, 'large.bin')), large);
+  assert.equal(fs.readFileSync(path.join(nested, 'x'), 'utf8'), 'agent', 'undo never reaches into a submodule');
+});
+
+test('a file the turn deleted comes back with the mode a new file gets, not owner-only', t => {
+  const { cwd, write, adapter } = fixture(t);
+  write('a.txt', 'before'); const before = adapter.tree();
+  fs.unlinkSync(path.join(cwd, 'a.txt')); const after = adapter.tree();
+  adapter.restore(before, ['a.txt'], [], after);
+  assert.equal(fs.statSync(path.join(cwd, 'a.txt')).mode & 0o777, 0o666 & ~process.umask());
+});
+
+test('the checkpoint store keeps objects and refs out of the project repository and survives its GC', async t => {
+  const { cwd, write, git } = fixture(t); write('a.txt', 'before'); write('secret.local', 'untracked');
+  const adapter = new PersonalCheckpointGit(cwd, () => ({ policy: {}, profile: {} }), { store: true });
+  const store = new CheckpointStore(cwd, 'store-session');
+  const create = () => new TurnCheckpointService(adapter, { history: new PersistentCheckpointHistory(store, new CheckpointRefs(adapter.refsExecutor, store.key)) });
+  const service = create(), run = { turnRef: 'turn' }; await service.take(run);
+  write('a.txt', 'agent'); write('new.txt', 'new'); await service.finish(run);
+  assert.equal(git('for-each-ref', 'refs/piagent'), '', 'git push --mirror finds nothing to publish');
+  const untracked = execFileSync('git', ['hash-object', '--stdin'], { input: 'untracked', encoding: 'utf8' }).trim();
+  assert.throws(() => git('cat-file', '-e', untracked), 'untracked bytes stay out of the project object store');
+  await service.close();
+  git('gc', '--prune=now', '--quiet');
+  const result = await create().undo();
+  assert.equal(result.result, 'done'); assert.equal(fs.readFileSync(path.join(cwd, 'a.txt'), 'utf8'), 'before');
+  assert.equal(fs.existsSync(path.join(cwd, 'new.txt')), false);
+});
+
+test('a failed snapshot lets the edit continue and ends the history it would otherwise sit inside', async t => {
+  const { cwd, write, adapter } = fixture(t); write('a.txt', 'zero');
+  const store = new CheckpointStore(cwd, 'gap');
+  let broken = false;
+  const git = { available: () => adapter.available(), changed: (a, b) => adapter.changed(a, b),
+    restore: (...args) => adapter.restore(...args), tree: () => { if (broken) throw Error('snapshot-failed'); return adapter.tree(); } };
+  const service = new TurnCheckpointService(git, { history: new PersistentCheckpointHistory(store, new CheckpointRefs(adapter.refsExecutor, store.key)) });
+  const first = { turnRef: 'one' }; await service.take(first); write('a.txt', 'one'); await service.finish(first);
+  assert.equal((await service.list()).points.length, 1);
+  broken = true; const second = { turnRef: 'two' };
+  await service.take(second);
+  assert.equal(second.checkpoint, null);
+  write('a.txt', 'two'); await service.finish(second); broken = false;
+  assert.deepEqual((await service.list()).points, []);
+  assert.equal(store.load().points.length, 0);
+  assert.equal((await service.undo()).result, 'none');
+  assert.equal(fs.readFileSync(path.join(cwd, 'a.txt'), 'utf8'), 'two');
+});
+
+test('undo and restore refuse files the member saved from the editor after the turn began', async t => {
+  const { cwd, write, adapter } = fixture(t); write('a.txt', 'before'); write('readme.md', 'before');
+  const edits = new Map();
+  const service = new TurnCheckpointService(adapter, { memberEdits: since => new Set([...edits].filter(([, at]) => at >= since).map(([file]) => file)) });
+  const run = { turnRef: 'turn' }; await service.take(run);
+  write('a.txt', 'agent'); write('readme.md', 'member'); edits.set('readme.md', Date.now());
+  await service.finish(run);
+  const { points } = await service.list();
+  const preview = await service.preview(points[0].id);
+  assert.deepEqual(preview.conflicts, ['readme.md']);
+  const result = await service.undo();
+  assert.equal(result.result, 'refused'); assert.deepEqual(result.files, ['readme.md']);
+  assert.equal(fs.readFileSync(path.join(cwd, 'readme.md'), 'utf8'), 'member');
+  assert.equal(fs.readFileSync(path.join(cwd, 'a.txt'), 'utf8'), 'agent');
+});
+
+test('checkpoints of conversations untouched for 30 days are pruned with their refs', async t => {
+  const { cwd, write } = fixture(t); write('a.txt', 'zero');
+  const adapter = new PersonalCheckpointGit(cwd, () => ({ policy: {}, profile: {} }), { store: true });
+  const keys = [];
+  for (const name of ['old', 'recent']) {
+    const store = new CheckpointStore(cwd, name); keys.push(store.key);
+    const service = new TurnCheckpointService(adapter, { history: new PersistentCheckpointHistory(store, new CheckpointRefs(adapter.refsExecutor, store.key)) });
+    const run = { turnRef: name }; await service.take(run); write('a.txt', name); await service.finish(run); await service.close();
+  }
+  const directory = path.join(cwd, '.pi/piagent-state/checkpoints'), old = path.join(directory, `${keys[0]}.json`);
+  const month = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000); fs.utimesSync(old, month, month);
+  const refs = () => adapter.refsExecutor.run(['for-each-ref', '--format=%(refname)', 'refs/piagent/checkpoints/']);
+  assert.equal(pruneStaleCheckpointSessions(directory, adapter.refsExecutor, keys[1]), 1);
+  assert.equal(fs.existsSync(old), false); assert.equal(refs().includes(keys[0]), false); assert.equal(refs().includes(keys[1]), true);
+});
+
+test('another live owner makes the edit wait and keeps the history', async t => {
+  const { cwd, write, adapter } = fixture(t); write('a.txt', 'zero');
+  const store = new CheckpointStore(cwd, 'owned');
+  const open = () => new TurnCheckpointService(adapter, { history: new PersistentCheckpointHistory(store, new CheckpointRefs(adapter.refsExecutor, store.key)) });
+  const first = open(), done = { turnRef: 'done' }; await first.take(done); write('a.txt', 'one'); await first.finish(done);
+  const running = { turnRef: 'running' }; await first.take(running);
+  const contender = open(), blocked = { turnRef: 'blocked' };
+  await assert.rejects(contender.take(blocked), /checkpoint-turn-owned/);
+  assert.equal(blocked.checkpoint, undefined, 'the blocked turn may try again');
+  write('a.txt', 'two'); await first.finish(running);
+  assert.equal(store.load().points.length, 2, 'history is kept');
 });

@@ -13,7 +13,14 @@ export function useWorkspaceEditing(session: string) {
   useWorkspaceRefresh(session, busy, setConflict);
   useEffect(() => {
     const controller = new AbortController();
-    const refresh = () => { void workspaceWriteState(session, controller.signal).then(setAuthority).catch(() => { if (!controller.signal.aborted) setAuthority(undefined); }); };
+    // One request at a time: a slow answer (a busy company sandbox) must not
+    // stack another every five seconds.
+    let asking = false;
+    const refresh = () => {
+      if (asking) return; asking = true;
+      void workspaceWriteState(session, controller.signal).then(setAuthority)
+        .catch(() => { if (!controller.signal.aborted) setAuthority(undefined); }).finally(() => { asking = false; });
+    };
     refresh(); const timer = window.setInterval(refresh, 5000);
     return () => { controller.abort(); clearInterval(timer); };
   }, [session]);

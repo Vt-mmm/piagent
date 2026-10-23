@@ -30,12 +30,17 @@ if (terminal) {
     const timer = setTimeout(() => process.exit(0), 1000); timer.unref();
     process.stdout.write(JSON.stringify(message) + '\n', () => process.exit(0));
   };
+  // A writer faster than the Gateway reads (`yes`) waits on the terminal, as
+  // on a real one, instead of growing this pipe until the worker gives up.
+  let paused = false;
+  process.stdout.on('drain', () => { if (paused && !ending) { paused = false; terminal.resume(); } });
   terminal.onData(text => {
     for (let start = 0; start < text.length;) {
       let end = Math.min(start + 8192, text.length);
       if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end--;
       send({ kind: 'output', data: text.slice(start, end) }); start = end;
     }
+    if (!paused && process.stdout.writableLength > 128 * 1024) { paused = true; terminal.pause(); }
   });
   terminal.onExit(({ exitCode, signal }) => finish({ kind: 'exit', exitCode, signal: signal ?? null }));
   send({ kind: 'ready' });

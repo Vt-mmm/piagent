@@ -2,6 +2,7 @@ import { consumeReviewSnapshot } from './review-snapshot-request.mjs';
 import { SessionMutationObservations } from "./session-mutation-observations.mjs";
 import { BoundaryTerminals } from './terminal-boundary.mjs';
 import { ToolFreshness } from './tool-freshness.mjs';
+import { BoundaryQueue } from './boundary-queue.mjs';
 import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -195,7 +196,7 @@ function provisionSearchTools(home, userHome) {
 }
 
 export class ManagedToolBoundary {
-  #tail = Promise.resolve();
+  #queue = new BoundaryQueue();
   #freshness = new ToolFreshness();
   #sourceRequests = new SourceRevertRequests();
   get sourceControlRevision() { return this.#sourceRequests.revision; }
@@ -332,9 +333,7 @@ export class ManagedToolBoundary {
   // the worker forwards from inside the command's network namespace (Linux).
   startProxy() { return startBoundaryPackageProxy(this, () => this.#applyProxy()); }
   invoke(name, args, signal, onUpdate, model, options = {}) {
-    // Direct member operations share the agent's read/mutation queue.
-    const run = this.#tail.then(() => this.#queuedInvoke(name, args, signal, onUpdate, model, options));
-    this.#tail = run.catch(() => {}); return run;
+    return this.#queue.run(name, args, () => this.#queuedInvoke(name, args, signal, onUpdate, model, options));
   }
   async #queuedInvoke(name, args, signal, onUpdate, model, { network = false, docker = false, guard = undefined } = {}) {
     await this.proxyReady;
@@ -470,7 +469,7 @@ export class ManagedToolBoundary {
   async dispose() {
     this.#closed = true;
     const stopping = [...this.#children].map(child => new Promise(resolve => { child.once('close', resolve); child.managedCancel(); }));
-    await Promise.all([this.terminals.dispose(), ...stopping]); await this.#tail;
+    await Promise.all([this.terminals.dispose(), ...stopping]); await this.#queue.idle();
     await this.background?.dispose(); await this.stopStrays(); if (!this.linux) await stopMarked(`PIAGENT_PROCESS_SCOPE=${this.scope}:`);
     this.#mutationObservations.clear();
     await this.proxyReady; await this.proxy?.close().catch(() => {});

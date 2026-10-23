@@ -49,9 +49,10 @@ export class TerminalOutputBuffer {
     return { text: tail(combined, LIMIT), truncated: this.#truncated || Buffer.byteLength(combined) > LIMIT };
   }
   forAgent() { const snapshot = this.snapshot(); return { ...snapshot, text: redactSensitiveText(stripVTControlCharacters(snapshot.text)).text }; }
+  // Trimmed once it doubles, not on every line: a flood of short lines would
+  // otherwise copy the whole 64 KB window per line.
   #retain(text: string) {
-    const combined = this.#history + text;
-    if (Buffer.byteLength(combined) > LIMIT) this.#truncated = true;
-    this.#history = tail(combined, LIMIT);
+    this.#history += text;
+    if (this.#history.length > 2 * LIMIT) { this.#history = tail(this.#history, LIMIT); this.#truncated = true; }
   }
 }

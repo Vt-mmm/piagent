@@ -6,7 +6,7 @@ import type { SessionAuthority } from "./session-auth.ts";
 
 const FRAME_LIMIT = 70_000;
 const CLIENT_LIMIT = 8;
-const BACKPRESSURE_LIMIT = 512 * 1024;
+const BACKPRESSURE_LIMIT = 512 * 1024, TERMINAL_BACKLOG = 128 * 1024;
 const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{16,96}$/;
 
@@ -111,7 +111,11 @@ export function attachGatewayWebSocket(options: {
   webSockets.on("connection", (socket, upgradeRequest: IncomingMessage) => {
     const terminalStream = options.protocol.terminalEvents ? new TerminalWebSocketStream({ port: options.protocol.terminalEvents,
       authorized: csrf => Boolean(options.authority.authorizeMutationToken(upgradeRequest, csrf)),
-      send: message => send(socket, message), close: reason => socket.close(1008, reason) }) : null;
+      // Live terminal output yields to the conversation: while the socket is
+      // behind it is skipped (the terminal keeps its replay buffer) rather
+      // than closing the socket the chat also uses.
+      send: message => { if (message.messageType === "output" && !message.replay && socket.bufferedAmount > TERMINAL_BACKLOG) return; send(socket, message); },
+      close: reason => socket.close(1008, reason) }) : null;
     let queued = 0;
     sockets.add(socket); let connected = false, unsubscribe: (() => void) | null = null, chain = Promise.resolve();
     const timeout = setTimeout(() => socket.close(1008, "connect-timeout"), 5_000);

@@ -6,15 +6,18 @@ import { PersonalCheckpointGit } from './personal-git.ts';
 import { CheckpointStore } from './checkpoint-store.mjs';
 import { CheckpointRefs } from './checkpoint-refs.mjs';
 import { PersistentCheckpointHistory } from './persistent-history.mjs';
-import { TurnCheckpointService } from './turn-checkpoints.mjs';
+import { pruneStaleCheckpointSessions } from './prune.mjs';
+import { TurnCheckpointService, checkpointOwnershipError } from './turn-checkpoints.mjs';
 import { checkpointAuthority } from './checkpoint-authority.ts';
+import { workspaceMemberEditsSince } from '../session/workspace-member-edits.mjs';
 
-type Run = { turnRef: string };
+type Run = { turnRef: string; checkpoint?: unknown };
 type Binding = { ctx: ExtensionContext; service: TurnCheckpointService; run?: Run; active: boolean; guard?: () => void; unbind(): void };
 
 // The extension owns these bindings; refreshed contexts supply live permissions.
 export class PersonalCheckpointRuntime {
   #bindings = new Map<string, Binding>();
+  #pruned = new Set<string>();
   #tail = Promise.resolve();
   #pending = 0;
   private policy: (ctx: ExtensionContext) => WorkspacePolicy;
@@ -35,11 +38,16 @@ export class PersonalCheckpointRuntime {
         if (!state.active) throw Error('checkpoint-authority-changed');
         state.guard?.();
         return this.policy(state.ctx);
-      });
+      }, { store: true });
       const store = new CheckpointStore(ctx.cwd, ctx.sessionManager.getSessionId());
+      if (!this.#pruned.has(store.directory)) {
+        this.#pruned.add(store.directory);
+        try { if (git.available()) pruneStaleCheckpointSessions(store.directory, git.refsExecutor, store.key); } catch { /* best effort */ }
+      }
       state.service = new TurnCheckpointService(git, {
         busy: () => { state.guard?.(); return !state.active || !state.ctx.isIdle(); },
         history: new PersistentCheckpointHistory(store, new CheckpointRefs(git.refsExecutor, store.key)),
+        memberEdits: since => workspaceMemberEditsSince(state.ctx.sessionManager, since),
       });
       state.unbind = checkpointAuthority.bind(ctx.cwd, ctx.sessionManager.getSessionId(), {
         revoke: () => { state.active = false; state.service.revoke(); },
@@ -93,14 +101,22 @@ export class PersonalCheckpointRuntime {
   beforeMutation(ctx: ExtensionContext) {
     return this.#serial(async () => {
       const binding = this.#binding(ctx);
-      const user = [...ctx.sessionManager.getBranch()].reverse().find(entry => entry.type === 'message' && entry.message.role === 'user');
-      if (!user?.id) throw Error('checkpoint-turn-unavailable');
-      if (binding.run?.turnRef !== user.id) {
-        // Steering can add a user turn before the enclosing agent settles.
-        if (binding.run) await binding.service.finish(binding.run);
-        binding.run = { turnRef: user.id };
+      let turn: string | undefined;
+      try {
+        const user = [...ctx.sessionManager.getBranch()].reverse().find(entry => entry.type === 'message' && entry.message.role === 'user');
+        turn = user?.id;
+        if (!user?.id) throw Error('checkpoint-turn-unavailable');
+        if (binding.run?.turnRef !== user.id) {
+          // Steering can add a user turn before the enclosing agent settles.
+          if (binding.run) await binding.service.finish(binding.run);
+          binding.run = { turnRef: user.id };
+        }
+        await binding.service.take(binding.run);
+      } catch (error) {
+        // Only a turn that already has its checkpoint may change files unrecorded.
+        if (!checkpointOwnershipError(error) && (!turn || binding.run?.turnRef !== turn || binding.run.checkpoint === undefined)) binding.service.markGap();
+        throw error;
       }
-      await binding.service.take(binding.run);
       if (!binding.active) throw Error('checkpoint-authority-changed');
     });
   }

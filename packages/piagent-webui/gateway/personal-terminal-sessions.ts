@@ -15,6 +15,7 @@ export class PersonalTerminalSessions extends TerminalSessions<Binding> {
         input: (ref, terminal, data) => processes.input(ref, terminal, data),
         resize: (ref, terminal, size) => processes.resize(ref, terminal, size),
         close: (ref, terminal) => processes.close(ref, terminal),
+        pause: (ref, terminal) => processes.pause(ref, terminal), resume: (ref, terminal) => processes.resume(ref, terminal),
         closeSession: ref => processes.closeSession(ref), dispose: () => processes.dispose() };
     });
   }
