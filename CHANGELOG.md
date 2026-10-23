@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.38.2 - 2026-10-23
+
+A folder tree as in VS Code, colour themes, and an editor and terminal that stay in view.
 
 ### Added
 
