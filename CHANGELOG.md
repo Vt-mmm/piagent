@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.40.0 - 2026-10-24
+
+Local projects without a remote are reported to Studio too, every run reports, and the member sees every kind of project warning.
 
 ### Added
 

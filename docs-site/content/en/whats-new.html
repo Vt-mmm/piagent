@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.40.0 · 2026-10-24</p>
+  <h2 id="v1-40-0">Local projects are reported to Studio too</h2>
+  <p class="section-lead">A folder without a readable remote is now reported to Studio as a local project (Agent Studio 0.40.0, <code>managed.workspace.v2</code>): a git checkout by its root commit (<code>local/git/…</code>, the same on every computer with that history, clones included), any other folder by a hash of the computer's name and path (<code>local/dir/…</code>), with the folder's name; a path never leaves the computer. Every agent run reports, so Studio knows which computers never do. The member reads one line for every kind of warning: another team's project, one outside the list, one not registered to the team, or a folder that could not be read. Nothing is blocked.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.39.0 · 2026-10-23</p>
   <h2 id="v1-39-0">Warnings when a key works in the wrong project</h2>
   <p class="section-lead">Company conversations tell Studio which repositories they work in (as <code>host/path</code>, like team memory; never a local path). Administrators see in Logs → "Sai project" when a team's key is used on another team's repository or one outside the team's list (Agent Studio 0.39.0, Team → Repository); the member reads one line, nothing is blocked, and memory works as before. The dashboard keeps its language and colour theme across restarts.</p>

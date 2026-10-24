@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.40.0 · 2026-10-24</p>
+  <h2 id="v1-40-0">Project local cũng được báo cho Studio</h2>
+  <p class="section-lead">Thư mục không có remote đọc được nay cũng được báo cho Studio như một project local (Agent Studio 0.40.0, <code>managed.workspace.v2</code>): repo git theo commit gốc (<code>local/git/…</code>, giống nhau trên mọi máy có cùng lịch sử, kể cả bản clone), thư mục khác theo mã băm của tên máy và đường dẫn (<code>local/dir/…</code>), kèm tên thư mục; đường dẫn không rời khỏi máy. Mỗi lượt agent đều báo, nên Studio biết máy nào chưa báo. Member thấy một dòng cho mọi loại cảnh báo: project của team khác, ngoài danh sách, chưa đăng ký cho team, hoặc thư mục không đọc được. Không chặn gì.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.39.0 · 2026-10-23</p>
   <h2 id="v1-39-0">Cảnh báo key dùng sai project</h2>
   <p class="section-lead">Cuộc trò chuyện công ty báo cho Studio các repository đang làm (dạng <code>host/path</code> như team memory, không gửi đường dẫn trên máy). Admin thấy trong Logs → "Sai project" khi key của team được dùng cho repo của team khác hoặc ngoài danh sách repo của team (Agent Studio 0.39.0, Team → Repository); member thấy một dòng nhắc, không bị chặn, memory chạy như cũ. Dashboard giữ ngôn ngữ và theme màu sau khi khởi động lại.</p>

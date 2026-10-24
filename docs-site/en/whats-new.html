@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.39.0 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.40.0 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -104,6 +104,12 @@
               <h1>1.9.0: ask in plain language, the team's Harness checks</h1>
               <p>The task contract and workflow commands are gone. Company mode asks for checks and a review on its own; Stop, network commands on approval and clearer approval cards.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.40.0 · 2026-10-24</p>
+  <h2 id="v1-40-0">Local projects are reported to Studio too</h2>
+  <p class="section-lead">A folder without a readable remote is now reported to Studio as a local project (Agent Studio 0.40.0, <code>managed.workspace.v2</code>): a git checkout by its root commit (<code>local/git/…</code>, the same on every computer with that history, clones included), any other folder by a hash of the computer's name and path (<code>local/dir/…</code>), with the folder's name; a path never leaves the computer. Every agent run reports, so Studio knows which computers never do. The member reads one line for every kind of warning: another team's project, one outside the list, one not registered to the team, or a folder that could not be read. Nothing is blocked.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.39.0 · 2026-10-23</p>
   <h2 id="v1-39-0">Warnings when a key works in the wrong project</h2>
