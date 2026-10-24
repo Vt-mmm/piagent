@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-document-asset-v1",
+  "generatedAt": "2026-10-24T09:00:00.000Z",
+  "documentRef": "document_01",
+  "name": "../../.env",
+  "state": "unavailable",
+  "mediaType": null,
+  "sizeBytes": null,
+  "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ",
+  "reasonCode": "document-asset-name-invalid"
+}

@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
@@ -63,6 +64,37 @@ class BrowserEventStore {
   }
 }
 
+// A white page with one grey bar, as a PNG, so a change report has real
+// screenshots without a browser running during setup.
+function barPng(width, height, bar) {
+  const raw = Buffer.alloc((width * 3 + 1) * height, 255);
+  for (let y = bar.y; y < bar.y + bar.h; y += 1) {
+    for (let x = bar.x; x < bar.x + bar.w; x += 1) raw.fill(90, y * (width * 3 + 1) + 1 + x * 3, y * (width * 3 + 1) + 4 + x * 3);
+  }
+  for (let y = 0; y < height; y += 1) raw[y * (width * 3 + 1)] = 0;
+  const chunk = (type, data) => {
+    const length = Buffer.alloc(4); length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32(Buffer.concat([Buffer.from(type), data])));
+    return Buffer.concat([length, Buffer.from(type), data, crc]);
+  };
+  const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", header),
+    chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+
+function writeChangeReport(directory) {
+  fs.mkdirSync(path.join(directory, "shots"), { recursive: true });
+  fs.writeFileSync(path.join(directory, "shots", "meta.json"), "{}");
+  fs.writeFileSync(path.join(directory, "shots", "before-home-desktop.png"), barPng(400, 200, { x: 20, y: 40, w: 120, h: 30 }));
+  fs.writeFileSync(path.join(directory, "shots", "after-home-desktop.png"), barPng(400, 200, { x: 20, y: 40, w: 300, h: 30 }));
+  fs.writeFileSync(path.join(directory, "report.json"), JSON.stringify({ kind: "fe-change-report", viewports: ["desktop"],
+    title: "Bao cao doi giao dien <img src=x onerror=alert(1)>", summary: ["Thanh tieu de dai hon"],
+    business: [{ title: "Tieu de", before: "3 tin", after: "Mua ban nha dat", impact: "Co tu khoa khu vuc" }],
+    logic: [{ title: "Dem tin", before: "Khong co", after: "Co dau tach nghin", files: ["src/listings.ts"] }],
+    sections: [{ key: "home", title: "Trang chu", boxes: [{ x: 20, y: 40, w: 300, h: 30, text: "Tieu de moi" }] }],
+    e2e: { command: "npm run test:e2e", result: "failed", passed: 9, failed: 1 }, files: [{ path: "src/listings.ts", kind: "logic", summary: "Dem tin" }] }));
+}
+
 async function createFixture() {
   fixtureStartedAt = Date.now() - 5 * 60_000;
   cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-browser-"));
@@ -79,6 +111,7 @@ async function createFixture() {
   fs.writeFileSync(path.join(cwd, "tai-lieu", "so-lieu.csv"), 'khu vuc,ghi chu,doanh thu\n"Bac, Trung","Da ""xac minh""",120\nNam,"Hai dong\nvan la mot o",240\n');
   fs.writeFileSync(path.join(cwd, "tai-lieu", "bao-cao.docx"), docx("Bao cao quy ba.", "Doanh thu dat 360 ty."));
   fs.writeFileSync(path.join(cwd, "tai-lieu", "khong-doc-duoc.bin"), Buffer.from([0, 1, 2, 3]));
+  writeChangeReport(path.join(cwd, "reports", "fe-change", "demo"));
   git("add", ".");
   git("commit", "-qm", "browser fixture baseline");
   fs.writeFileSync(path.join(cwd, "src", "example.ts"), "export const value = 'DIRTY AT TASK START';\n");
@@ -914,6 +947,37 @@ test("opens markdown, tabular and .docx documents from the project as a read-onl
   await page.getByLabel("Lọc tài liệu").fill("csv");
   await expect(page.getByRole("button", { name: /so-lieu\.csv/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /ke-hoach\.md/ })).toHaveCount(0);
+});
+
+test("draws a front-end change report from report.json and its screenshots, as text and frames only", async ({ page }) => {
+  await page.goto(server.issueLaunchUrl());
+  await openWorkspace(page, "Tài liệu");
+  // The report's own working files in shots/ stay out of the list.
+  await expect(page.getByRole("button", { name: /meta\.json/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /report\.json/ }).click();
+  const report = page.locator(".change-report").first();
+  // The title is shown as the text it is: markup in a report never becomes markup in the page.
+  await expect(report.getByRole("heading", { level: 2, name: "Bao cao doi giao dien <img src=x onerror=alert(1)>" })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "Co tu khoa khu vuc" })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "src/listings.ts" }).first()).toBeVisible();
+  await expect(report.getByText("Lỗi", { exact: true })).toBeVisible();
+  // Both screenshots arrive through the read model and carry the same numbered frame.
+  for (const name of ["Cũ · desktop", "Mới · desktop"]) {
+    await expect(report.getByRole("img", { name, exact: true })).toBeVisible();
+    assert.equal(await report.getByRole("img", { name, exact: true }).evaluate((image) => image.naturalWidth), 400);
+  }
+  await expect(report.locator(".change-report-box")).toHaveCount(2);
+  await expect(report.locator(".change-report-crop")).toHaveCount(2);
+  assert.equal(await report.locator("img").count(), 2);
+  const frame = await report.locator(".change-report-box").first().evaluate((box) => [box.style.left, box.style.top, box.style.width]);
+  assert.deepEqual(frame, ["5%", "20%", "75%"]);
+  // Full screen shows the same report on its own and closes back to the viewer.
+  await page.getByRole("button", { name: "Xem toàn màn hình" }).click();
+  const full = page.getByRole("dialog");
+  await expect(full.getByRole("img", { name: "Mới · desktop", exact: true })).toBeVisible();
+  await full.getByRole("button", { name: "Đóng toàn màn hình" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(report.getByRole("img", { name: "Mới · desktop", exact: true })).toBeVisible();
 });
 
 test("renders and resolves the exact Pi-owned approval card without direct execution", async ({ page }) => {

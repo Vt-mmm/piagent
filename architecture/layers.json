@@ -98,6 +98,12 @@
       ]
     },
     {
+      "name": "skills",
+      "roots": [
+        "packages/piagent-core/skills"
+      ]
+    },
+    {
       "name": "entrypoints",
       "roots": [
         "scripts"
@@ -139,6 +145,9 @@
     ],
     "benchmark": [
       "benchmark"
+    ],
+    "skills": [
+      "skills"
     ],
     "webui-contracts": [
       "webui-contracts"
@@ -219,6 +228,7 @@
       "capabilities": 1200,
       "security": 400,
       "benchmark": 1000,
+      "skills": 500,
       "webui-contracts": 2000,
       "webui-client": 500,
       "webui-server": 500,

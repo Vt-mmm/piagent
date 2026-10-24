@@ -10,6 +10,7 @@ import SearchRounded from "@mui/icons-material/SearchRounded";
 
 import type { Document as DocumentContent, Entry, Listing, Root } from "../../contracts/generated/document-workspace-v1.ts";
 import { readDocument, readDocumentIndex } from "./api.ts";
+import { ChangeReportView, parseChangeReport } from "./ChangeReportView.tsx";
 import { label } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
@@ -72,8 +73,11 @@ function TabularPreview({ text, separator }: { text: string; separator: string }
   </Box>;
 }
 
-function DocumentBody({ document, extension }: { document: DocumentContent; extension: string | undefined }) {
+function DocumentBody({ document, extension, sessionRef }: { document: DocumentContent; extension: string | undefined; sessionRef: string | null }) {
   const text = document.text ?? "";
+  // A change report is drawn as a report; any other report.json stays plain text.
+  const report = document.name === "report.json" && !document.truncated ? parseChangeReport(text) : null;
+  if (report) return <ChangeReportView report={report} sessionRef={sessionRef} documentRef={document.documentRef} />;
   if (MARKDOWN.has(extension ?? "")) {
     return <Suspense fallback={<Box component="pre" className="document-plain">{text}</Box>}>
       <MarkdownMessage>{text}</MarkdownMessage>
@@ -191,7 +195,7 @@ export function DocumentWorkspace({ sessionRef = null }: { sessionRef?: string |
           </div>
           {document.value.state === "unavailable"
             ? <p className="document-empty">{label(document.value.reasonCode, locale)}</p>
-            : <article className="document-content"><DocumentBody document={document.value} extension={selectedEntry?.extension} /></article>}
+            : <article className="document-content"><DocumentBody document={document.value} extension={selectedEntry?.extension} sessionRef={sessionRef} /></article>}
         </>}
       </div>
     </div>

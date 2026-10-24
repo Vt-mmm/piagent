@@ -183,6 +183,15 @@
       "current": true
     },
     {
+      "name": "document-asset-v1",
+      "file": "document-asset-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/document-asset-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
       "name": "control-command-v1",
       "file": "control-command-v1.schema.json",
       "id": "https://piagent.io.vn/schemas/piagent-webui/control-command-v1.schema.json",

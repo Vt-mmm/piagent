@@ -142,6 +142,10 @@ function walkRoot(root: DocumentRoot, budget: { remaining: number }, isProtected
     // an operator keeps documents, and reading all of it is what makes a listing
     // take seconds.
     if (entries.length > DOCUMENT_WORKSPACE_LIMITS.entriesPerDirectory) continue;
+    // A change report's shots/ folder holds screenshots and the capture
+    // bookkeeping (meta.json, regions.json). The report opens them itself, so
+    // listing them would only bury report.json among its own working files.
+    const changeReport = entries.some((entry) => entry.isFile() && entry.name === "report.json");
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (budget.remaining <= 0) break;
       // A Dirent already reports a link as a link, so the isFile and isDirectory
@@ -151,7 +155,7 @@ function walkRoot(root: DocumentRoot, budget: { remaining: number }, isProtected
       const absolute = path.join(current.directory, entry.name);
       const relative = path.relative(root.path, absolute).split(path.sep).join("/");
       if (entry.isDirectory()) {
-        if (entry.name.startsWith(".") || SKIPPED_DIRECTORIES.has(entry.name)) continue;
+        if (entry.name.startsWith(".") || SKIPPED_DIRECTORIES.has(entry.name) || (changeReport && entry.name === "shots")) continue;
         if (current.depth + 1 > DOCUMENT_WORKSPACE_LIMITS.depth) continue;
         if (isProtected(relative, absolute)) continue;
         queue.push({ directory: absolute, depth: current.depth + 1 });
@@ -223,6 +227,40 @@ export function projectDocumentWorkspaceListing(input: DocumentWorkspaceInput): 
   return collectDocuments(input).listing;
 }
 
+// A read names a document only by the ref a listing handed out, so every read
+// goes through this: re-list, match, resolve, and re-prove the ref.
+function locateListedDocument(input: DocumentWorkspaceInput, documentRef: string): { reasonCode: string }
+  | { entry: DocumentWorkspaceEntry; resolved: Extract<ReturnType<typeof resolveDocumentPath>, { status: "ok" }>;
+    isProtected: (relative: string, absolute: string) => boolean } {
+  // The ref is matched against a listing taken now, so opening a document proves
+  // it is still listable rather than trusting a ref the browser has been holding.
+  const { listing, roots, paths } = collectDocuments(input);
+  if (listing.state !== "ready") return { reasonCode: listing.reasonCode ?? "document-roots-unavailable" };
+  const entry = listing.documents.find((candidate) => candidate.documentRef === documentRef);
+  const absolute = paths.get(documentRef);
+  if (!entry || !absolute) return { reasonCode: "document-not-listed" };
+
+  // Resolution runs against the same roots the walk used, so the extension gate,
+  // the size cap, the symlink canonicalisation and the containment check are the
+  // ones the document tool applies — including the identity that extractDocument
+  // re-proves when it opens the file.
+  const resolved = resolveDocumentPath(absolute, roots, { cwd: input.cwd, home: input.home });
+  if (resolved.status === "error") return { reasonCode: "document-unavailable" };
+  // The walk above already dropped protected documents, so a protected ref fails
+  // to match a listing entry before it reaches here. Both of the next two checks
+  // are the invariant stated rather than assumed: they hold the guarantee in
+  // place if the listing filter is ever loosened or the ref scheme changes.
+  const isProtected = protectedPredicate(input);
+  const relative = path.relative(resolved.root.path, resolved.absolutePath).split(path.sep).join("/");
+  if (isProtected(relative, resolved.absolutePath)) return { reasonCode: "document-protected" };
+  // Roots are canonical and the walk never traverses a link, so the listed path
+  // is already the canonical one and this equality holds by construction. It is
+  // re-derived anyway: the cost is a hash, and what it protects is the rule that
+  // the browser can only ever name a document the listing chose to expose.
+  if (ref("document", resolved.absolutePath) !== documentRef) return { reasonCode: "document-changed" };
+  return { entry, resolved, isProtected };
+}
+
 export function projectDocumentWorkspaceDocument(input: DocumentWorkspaceInput & { documentRef: string }): DocumentWorkspaceDocument {
   const now = (input.now ?? (() => new Date()))();
   const base = { schemaVersion: 1 as const, version: "piagent-webui-document-workspace-v1" as const,
@@ -230,32 +268,9 @@ export function projectDocumentWorkspaceDocument(input: DocumentWorkspaceInput &
   const unavailable = (reasonCode: string): DocumentWorkspaceDocument => ({ ...base, state: "unavailable", name: null, relativePath: null,
     rootRef: null, format: null, text: null, sizeBytes: null, truncated: false, redacted: false, reasonCode });
 
-  // The ref is matched against a listing taken now, so opening a document proves
-  // it is still listable rather than trusting a ref the browser has been holding.
-  const { listing, roots, paths } = collectDocuments(input);
-  if (listing.state !== "ready") return unavailable(listing.reasonCode ?? "document-roots-unavailable");
-  const entry = listing.documents.find((candidate) => candidate.documentRef === input.documentRef);
-  const absolute = paths.get(input.documentRef);
-  if (!entry || !absolute) return unavailable("document-not-listed");
-
-  // Resolution runs against the same roots the walk used, so the extension gate,
-  // the size cap, the symlink canonicalisation and the containment check are the
-  // ones the document tool applies — including the identity that extractDocument
-  // re-proves when it opens the file.
-  const resolved = resolveDocumentPath(absolute, roots, { cwd: input.cwd, home: input.home });
-  if (resolved.status === "error") return unavailable("document-unavailable");
-  // The walk above already dropped protected documents, so a protected ref fails
-  // to match a listing entry before it reaches here. Both of the next two checks
-  // are the invariant stated rather than assumed: they hold the guarantee in
-  // place if the listing filter is ever loosened or the ref scheme changes.
-  const isProtected = protectedPredicate(input);
-  const relative = path.relative(resolved.root.path, resolved.absolutePath).split(path.sep).join("/");
-  if (isProtected(relative, resolved.absolutePath)) return unavailable("document-protected");
-  // Roots are canonical and the walk never traverses a link, so the listed path
-  // is already the canonical one and this equality holds by construction. It is
-  // re-derived anyway: the cost is a hash, and what it protects is the rule that
-  // the browser can only ever name a document the listing chose to expose.
-  if (ref("document", resolved.absolutePath) !== input.documentRef) return unavailable("document-changed");
+  const located = locateListedDocument(input, input.documentRef);
+  if ("reasonCode" in located) return unavailable(located.reasonCode);
+  const { entry, resolved } = located;
 
   const extracted = extractDocument(resolved);
   if (extracted.status === "error") {
@@ -273,4 +288,52 @@ export function projectDocumentWorkspaceDocument(input: DocumentWorkspaceInput &
   return { ...base, state: "ready", name: entry.name, relativePath: entry.relativePath, rootRef: entry.rootRef,
     format: extracted.kind, text: capped.text, sizeBytes: entry.sizeBytes,
     truncated: extracted.truncated || capped.truncated, redacted: safe.redacted, reasonCode: null };
+}
+
+// Screenshots of a front-end change report. The report itself is a listed
+// `report.json`; its images are never listed and are named only relative to it,
+// so the browser still cannot point at an arbitrary file. Images cross as base64
+// inside JSON: the read model, the session IPC and the company relay already
+// carry JSON, and a PNG drawn into an <img> runs nothing.
+export const DOCUMENT_ASSET_NAME = /^(before|after|diff)-[a-z0-9][a-z0-9-]{0,100}\.png$/;
+const MAX_DOCUMENT_ASSET_BYTES = 8 * 1024 * 1024;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+export type DocumentWorkspaceAsset = {
+  schemaVersion: 1;
+  version: "piagent-webui-document-asset-v1";
+  generatedAt: string;
+  documentRef: string;
+  // Null when the requested name was refused: a refusal never echoes it back.
+  name: string | null;
+  state: "ready" | "unavailable";
+  mediaType: "image/png" | null;
+  sizeBytes: number | null;
+  base64: string | null;
+  reasonCode: string | null;
+};
+
+export function projectDocumentWorkspaceAsset(input: DocumentWorkspaceInput & { documentRef: string; name: string }): DocumentWorkspaceAsset {
+  const base = { schemaVersion: 1 as const, version: "piagent-webui-document-asset-v1" as const,
+    generatedAt: timestamp((input.now ?? (() => new Date()))()), documentRef: input.documentRef,
+    name: DOCUMENT_ASSET_NAME.test(input.name) ? input.name : null };
+  const unavailable = (reasonCode: string): DocumentWorkspaceAsset => ({ ...base, state: "unavailable", mediaType: null, sizeBytes: null, base64: null, reasonCode });
+  if (base.name === null) return unavailable("document-asset-name-invalid");
+  const located = locateListedDocument(input, input.documentRef);
+  if ("reasonCode" in located) return unavailable(located.reasonCode);
+  if (path.basename(located.resolved.absolutePath) !== "report.json") return unavailable("document-asset-not-a-report");
+  const directory = path.join(path.dirname(located.resolved.absolutePath), "shots"), absolute = path.join(directory, input.name);
+  const relative = path.relative(located.resolved.root.path, absolute).split(path.sep).join("/");
+  if (located.isProtected(relative, absolute)) return unavailable("document-protected");
+  let bytes: Buffer;
+  try {
+    // lstat on both levels: a linked shots folder or image could lead out of the root.
+    if (!fs.lstatSync(directory).isDirectory()) return unavailable("document-asset-unavailable");
+    const stat = fs.lstatSync(absolute);
+    if (!stat.isFile()) return unavailable("document-asset-unavailable");
+    if (stat.size > MAX_DOCUMENT_ASSET_BYTES) return unavailable("document-asset-too-large");
+    bytes = fs.readFileSync(absolute);
+  } catch { return unavailable("document-asset-unavailable"); }
+  if (bytes.length > MAX_DOCUMENT_ASSET_BYTES || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return unavailable("document-asset-unreadable");
+  return { ...base, state: "ready", mediaType: "image/png", sizeBytes: bytes.length, base64: bytes.toString("base64"), reasonCode: null };
 }

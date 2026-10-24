@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-document-asset-v1",
+  "generatedAt": "2026-10-24T09:00:00.000Z",
+  "documentRef": "document_01",
+  "name": "after-listings-desktop.png",
+  "state": "ready",
+  "mediaType": "image/png",
+  "sizeBytes": 67,
+  "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "reasonCode": null
+}

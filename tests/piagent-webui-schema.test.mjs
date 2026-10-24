@@ -41,6 +41,7 @@ const primaryContracts = [
   "model-catalog-v1",
   "attachment-v1",
   "document-workspace-v1",
+  "document-asset-v1",
   "control-command-v1",
   "approval-v1",
   "capabilities-v1",

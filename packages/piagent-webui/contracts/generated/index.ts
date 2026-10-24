@@ -17,6 +17,7 @@ export type * as QueueV1 from "./queue-v1.ts";
 export type * as ModelCatalogV1 from "./model-catalog-v1.ts";
 export type * as AttachmentV1 from "./attachment-v1.ts";
 export type * as DocumentWorkspaceV1 from "./document-workspace-v1.ts";
+export type * as DocumentAssetV1 from "./document-asset-v1.ts";
 export type * as ControlCommandV1 from "./control-command-v1.ts";
 export type * as ApprovalV1 from "./approval-v1.ts";
 export type * as CapabilitiesV1 from "./capabilities-v1.ts";

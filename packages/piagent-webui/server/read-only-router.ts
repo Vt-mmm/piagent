@@ -33,6 +33,12 @@ export async function routeReadOnlyRequest(url: URL, provider: WebUiReadModelPro
     return { handled: true, status: 200, value: await provider.subagentTree(ref) };
   }
   if (url.pathname === "/api/v1/documents" && !url.search) return { handled: true, status: 200, value: await provider.documents() };
+  const asset = /^\/api\/v1\/documents\/([^/]+)\/assets\/([^/]+)$/.exec(url.pathname);
+  if (asset) {
+    if (url.search || !OPAQUE_REF.test(asset[1]) || !OPAQUE_REF.test(asset[2])) return { handled: true, status: 400, value: { error: { code: "invalid-document-asset-ref" } } };
+    if (!provider.documentAsset) return { handled: true, status: 503, value: { error: { code: "document-asset-unavailable" } } };
+    return { handled: true, status: 200, value: await provider.documentAsset(asset[1], asset[2]) };
+  }
   if (url.pathname.startsWith("/api/v1/documents/")) {
     const ref = url.pathname.slice("/api/v1/documents/".length);
     if (url.search || !OPAQUE_REF.test(ref) || ref.includes("/")) return { handled: true, status: 400, value: { error: { code: "invalid-document-ref" } } };

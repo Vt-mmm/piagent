@@ -44,6 +44,7 @@ The machine-readable rule is `architecture/layers.json`; `npm run architecture:c
 | Capabilities | `packages/piagent-core/capabilities/` | Profile resolution, pack validation, locks, source roots | Pi session lifecycle |
 | Security foundation | `packages/piagent-core/security/` | Sensitive-data primitives | Workflow behavior |
 | Benchmark | `packages/piagent-core/benchmark/`, `benchmarks/` | Suite validation, scoring, evidence | Runtime enforcement |
+| Skills | `packages/piagent-core/skills/` | Skill instructions and the helper scripts a skill runs in the member's project | Runtime enforcement, imports from other layers |
 | WebUI contracts | `packages/piagent-webui/contracts/` | Wire types shared by browser and server | Any runtime behavior; it depends on nothing |
 | WebUI shared | `packages/piagent-webui/shared/` | Dependency-free deterministic helpers shared by browser, server, and gateway | Browser state, transport, filesystem access, or runtime policy |
 | WebUI client | `packages/piagent-webui/client/` | Browser views, view models, UI preferences | Server state, filesystem, Pi APIs |

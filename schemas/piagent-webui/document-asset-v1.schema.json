@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/document-asset-v1.schema.json",
+  "title": "Piagent WebUI change report screenshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "documentRef", "name", "state", "mediaType", "sizeBytes", "base64", "reasonCode"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-document-asset-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "documentRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+    "name": {
+      "anyOf": [
+        { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(before|after|diff)-[a-z0-9][a-z0-9-]{0,100}\\.png$" },
+        { "type": "null" }
+      ]
+    },
+    "state": { "enum": ["ready", "unavailable"] },
+    "mediaType": { "enum": ["image/png", null] },
+    "sizeBytes": {
+      "anyOf": [
+        { "type": "integer", "minimum": 8, "maximum": 8388608 },
+        { "type": "null" }
+      ]
+    },
+    "base64": {
+      "anyOf": [
+        { "type": "string", "minLength": 12, "maxLength": 11184812, "pattern": "^[A-Za-z0-9+/]+={0,2}$" },
+        { "type": "null" }
+      ]
+    },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "name": { "type": "string" },
+          "mediaType": { "const": "image/png" },
+          "sizeBytes": { "type": "integer" },
+          "base64": { "type": "string" },
+          "reasonCode": { "type": "null" }
+        }
+      },
+      "else": {
+        "properties": {
+          "mediaType": { "type": "null" },
+          "sizeBytes": { "type": "null" },
+          "base64": { "type": "null" },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+        }
+      }
+    }
+  ]
+}

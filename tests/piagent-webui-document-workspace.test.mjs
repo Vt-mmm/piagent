@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
 
-import { DOCUMENT_WORKSPACE_LIMITS, projectDocumentWorkspaceDocument, projectDocumentWorkspaceListing }
+import { DOCUMENT_WORKSPACE_LIMITS, projectDocumentWorkspaceAsset, projectDocumentWorkspaceDocument, projectDocumentWorkspaceListing }
   from "../packages/piagent-core/runtime/inspection/document-workspace-projection.ts";
+import { routeReadOnlyRequest } from "../packages/piagent-webui/server/read-only-router.ts";
 import { runtimeDocumentReadRoots } from "../packages/piagent-core/runtime/inspection/project-runtime-inspection.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 import { docx } from "./helpers/piagent-docx-fixture.mjs";
@@ -220,5 +221,74 @@ describe("Piagent WebUI bounded document workspace", () => {
     assert.equal(absent.state, "unavailable");
     assert.equal(absent.reasonCode, "no-readable-root");
     assert.deepEqual(absent.documents, []);
+  });
+});
+
+describe("Piagent WebUI change report screenshots", () => {
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("IHDR-and-the-rest")]);
+  function reportTree() {
+    const tree = fixture(), report = path.join(tree.project, "reports", "fe-change", "demo");
+    write(path.join(report, "report.json"), JSON.stringify({ kind: "fe-change-report", sections: [] }));
+    write(path.join(report, "shots", "after-home-desktop.png"), png);
+    write(path.join(report, "shots", "before-home-desktop.png"), "not an image");
+    write(path.join(report, "shots", "meta.json"), "{}");
+    write(path.join(tree.outside, "after-home-mobile.png"), png);
+    fs.symlinkSync(path.join(tree.outside, "after-home-mobile.png"), path.join(report, "shots", "after-home-mobile.png"));
+    const listing = projectDocumentWorkspaceListing({ cwd: tree.project, now });
+    const ref = (relative) => listing.documents.find((entry) => entry.relativePath === relative).documentRef;
+    return { tree, reportRef: ref("reports/fe-change/demo/report.json"), readmeRef: ref("README.md") };
+  }
+  const asset = (cwd, documentRef, name, isProtectedPath) => {
+    const projection = projectDocumentWorkspaceAsset({ cwd, now, documentRef, name, isProtectedPath });
+    const result = validateFixture(registry, "document-asset-v1", projection);
+    assert.equal(result.valid, true, result.errors);
+    return projection;
+  };
+
+  it("lists the report but not its shots folder, and still reads a screenshot from it", () => {
+    const { tree, reportRef } = reportTree();
+    const listed = projectDocumentWorkspaceListing({ cwd: tree.project, now }).documents.map((entry) => entry.relativePath);
+    assert.equal(listed.includes("reports/fe-change/demo/report.json"), true);
+    assert.deepEqual(listed.filter((item) => item.includes("/shots/")), []);
+    // A shots folder with no report beside it is an ordinary folder and stays listed.
+    write(path.join(tree.project, "docs", "shots", "notes.md"), "# Notes\n");
+    assert.equal(projectDocumentWorkspaceListing({ cwd: tree.project, now }).documents.some((entry) => entry.relativePath === "docs/shots/notes.md"), true);
+    const read = asset(tree.project, reportRef, "after-home-desktop.png");
+    assert.equal(read.state, "ready");
+    assert.deepEqual(Buffer.from(read.base64, "base64"), png);
+  });
+
+  it("refuses names outside the screenshot pattern, links, non-images, and documents that are not reports", () => {
+    const { tree, reportRef, readmeRef } = reportTree();
+    for (const [documentRef, name, reasonCode] of [
+      [reportRef, "../report.json", "document-asset-name-invalid"],
+      [reportRef, "after-home-desktop.png.json", "document-asset-name-invalid"],
+      [readmeRef, "after-home-desktop.png", "document-asset-not-a-report"],
+      [reportRef, "after-home-mobile.png", "document-asset-unavailable"],
+      [reportRef, "before-home-desktop.png", "document-asset-unreadable"],
+      [reportRef, "after-missing-desktop.png", "document-asset-unavailable"],
+      ["document.unknown", "after-home-desktop.png", "document-not-listed"]
+    ]) {
+      const read = asset(tree.project, documentRef, name);
+      assert.deepEqual([read.state, read.reasonCode, read.base64], ["unavailable", reasonCode, null], `${name} via ${documentRef}`);
+    }
+  });
+
+  it("keeps a screenshot under a protected path unread", () => {
+    const { tree, reportRef } = reportTree();
+    const read = asset(tree.project, reportRef, "after-home-desktop.png", (candidate) => /(^|\/)shots\//.test(candidate));
+    assert.equal(read.reasonCode, "document-protected");
+  });
+
+  it("routes a screenshot read by report ref and file name, and nothing looser", async () => {
+    const calls = [];
+    const provider = { documentAsset: (ref, name) => { calls.push([ref, name]); return { ok: true }; }, document: () => assert.fail("document route took an asset path") };
+    const route = (pathname) => routeReadOnlyRequest(new URL(`http://127.0.0.1${pathname}`), provider);
+    assert.deepEqual(await route("/api/v1/documents/document.abc/assets/after-home-desktop.png"), { handled: true, status: 200, value: { ok: true } });
+    assert.deepEqual(calls, [["document.abc", "after-home-desktop.png"]]);
+    for (const pathname of ["/api/v1/documents/document.abc/assets/..%2Fx.png", "/api/v1/documents/document.abc/assets/a.png?x=1"]) {
+      assert.equal((await route(pathname)).status, 400, pathname);
+    }
+    assert.equal(calls.length, 1);
   });
 });

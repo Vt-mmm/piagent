@@ -246,6 +246,11 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     return core.projectDocumentWorkspaceDocument({ ...this.#documentWorkspaceInput(core.matchesProtectedPath), documentRef });
   }
 
+  async documentAsset(documentRef: string, name: string): Promise<unknown> {
+    const core = await loadCoreInspection();
+    return core.projectDocumentWorkspaceAsset({ ...this.#documentWorkspaceInput(core.matchesProtectedPath), documentRef, name });
+  }
+
   #documentWorkspaceInput(matchesProtectedPath: (candidate: string, patterns: string[]) => unknown) {
     const protectedPaths = this.#input.protectedPaths?.() ?? [];
     return { cwd: this.#input.cwd, profileRoots: this.#input.documentReadRoots?.(),

@@ -219,6 +219,46 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .document-placeholder { display: grid; height: 100%; align-content: center; justify-items: center; gap: 8px; padding: 48px 24px; color: var(--muted); text-align: center; }
 .document-placeholder .MuiSvgIcon-root { font-size: 30px; opacity: .5; }
 .document-empty { padding: 14px; color: var(--muted); font-size: 11px; }
+.change-report { display: grid; gap: 22px; --report-mark: #ff5a5f; }
+.change-report-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.change-report-full { position: relative; min-height: 100%; padding: 28px max(16px, 4vw) 48px; color: var(--text); background: var(--bg); font-size: 13px; }
+.change-report-full .change-report { max-width: 1400px; margin: 0 auto; }
+.change-report-close { position: fixed !important; top: 12px; right: 16px; z-index: 3; background: var(--surface-strong) !important; }
+.change-report h2 { margin: 0 0 4px; font-size: 18px; }
+.change-report h3 { margin: 0 0 10px; font-size: 14px; }
+.change-report h4 { margin: 0 0 4px; font-size: 13px; }
+.change-report h5 { margin: 16px 0 8px; color: var(--quiet); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.change-report ul { margin: 0; padding-left: 18px; }
+.change-report-note { margin: 0 0 10px; color: var(--muted); }
+.change-report-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.change-report-chips span { padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; }
+.change-report-card { margin-bottom: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-strong); }
+.change-report-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.change-report-pair.narrow { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 300px)); margin-top: 10px; }
+.change-report-figure { min-width: 0; margin: 0; }
+.change-report-figure figcaption { margin-bottom: 5px; font-weight: 700; }
+.change-report-shot { position: relative; border: 1px solid var(--line); border-radius: 4px; line-height: 0; }
+.change-report-shot img { display: block; width: 100%; border-radius: 3px; }
+.change-report-box { position: absolute; box-sizing: border-box; border: 3px solid var(--report-mark); border-radius: 3px; }
+.change-report-box b, .change-report-number { display: inline-grid; width: 20px; height: 20px; flex: none; place-items: center; border-radius: 50%; color: #fff; background: var(--report-mark); font-size: 10px; line-height: 1; }
+.change-report-box b { position: absolute; top: -11px; left: -11px; box-shadow: 0 0 0 2px var(--surface-strong); }
+.change-report-zoom-row { display: grid; gap: 6px; margin-bottom: 12px; }
+.change-report-zoom-row p { display: flex; align-items: center; gap: 8px; margin: 0; }
+.change-report-zoom { min-width: 0; }
+.change-report-zoom span { color: var(--quiet); font-size: 10px; }
+.change-report-crop { width: 100%; box-sizing: border-box; border: 3px solid var(--report-mark); border-radius: 4px; background-repeat: no-repeat; }
+.change-report-missing { padding: 22px; border: 1px dashed var(--line); border-radius: 4px; color: var(--muted); text-align: center; }
+.change-report details { margin-top: 12px; }
+.change-report summary { cursor: pointer; font-weight: 700; }
+.change-report-scroll { overflow-x: auto; }
+.change-report-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.change-report-table th, .change-report-table td { padding: 6px 9px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.change-report-table th { color: var(--quiet); font-weight: 750; }
+.change-report-table code { display: block; word-break: break-all; }
+.change-report-result { font-weight: 800; }
+.change-report-result.passed { color: var(--accent); }
+.change-report-result.failed { color: #ff7a7a; }
+.change-report-result.skipped { color: #e0c25c; }
 @media (max-width: 900px) { .document-body { grid-template-columns: 1fr; } .document-list { max-height: 300px; border-right: 0; border-bottom: 1px solid var(--line); } }
 :root[data-piagent-color-mode="light"] .document-row-copy strong,
 :root[data-piagent-color-mode="light"] .document-content { color: var(--text); }

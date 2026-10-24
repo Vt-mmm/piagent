@@ -415,14 +415,12 @@ export async function stageSessionAttachment(sessionRef: string, command: StageC
   return await response.json() as StageReceipt | DiscardReceipt;
 }
 
-export function readDocumentIndex(sessionRef: string | null, signal?: AbortSignal): Promise<Listing> {
-  return readJson(sessionRef ? sessionInspectionPath(sessionRef, "/api/v1/documents") : "/api/v1/documents", signal);
-}
-
-export function readDocument(sessionRef: string | null, documentRef: string, signal?: AbortSignal): Promise<DocumentContent> {
-  const readPath = `/api/v1/documents/${encodeURIComponent(documentRef)}`;
+export function readInspectionJson<T>(sessionRef: string | null, readPath: string, signal?: AbortSignal): Promise<T> {
   return readJson(sessionRef ? sessionInspectionPath(sessionRef, readPath) : readPath, signal);
 }
+export const readDocumentIndex = (sessionRef: string | null, signal?: AbortSignal) => readInspectionJson<Listing>(sessionRef, "/api/v1/documents", signal);
+export const readDocument = (sessionRef: string | null, documentRef: string, signal?: AbortSignal) =>
+  readInspectionJson<DocumentContent>(sessionRef, `/api/v1/documents/${encodeURIComponent(documentRef)}`, signal);
 
 export async function stageAttachment(command: StageCommand | DiscardCommand, signal?: AbortSignal): Promise<StageReceipt | DiscardReceipt> {
   const csrf = browserCsrfToken();

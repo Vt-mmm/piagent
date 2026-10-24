@@ -27,6 +27,7 @@ export type WebUiReadModelProvider = {
   releaseMonitor(): unknown | Promise<unknown>;
   documents(): unknown | Promise<unknown>;
   document(documentRef: string): unknown | Promise<unknown>;
+  documentAsset?(documentRef: string, name: string): unknown | Promise<unknown>;
   activity(): unknown | Promise<unknown>;
   logPreview(activityRef: string): unknown | Promise<unknown>;
   transcript(beforeCursor: string | null, limit: number): unknown | Promise<unknown>;
