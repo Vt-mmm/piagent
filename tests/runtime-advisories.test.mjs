@@ -145,3 +145,40 @@ describe("runtime advisory policy", () => {
     assert.equal(result.code, 0, result.stderr);
   });
 });
+
+// The Pi host is flagged because its pinned undici is (npm audit names the
+// package in `via` without an advisory of its own): it passes only while
+// every package it names is reported with all of its advisories accepted.
+describe("a package flagged only through its dependencies", () => {
+  const undici = { undici: { ...advisory("undici", "high", "GHSA-xjj6-f33q-929c").undici, nodes: ["node_modules/undici"] } };
+  const host = (via = ["undici"]) => ({ "@earendil-works/pi-coding-agent": { name: "@earendil-works/pi-coding-agent", severity: "moderate", via, nodes: ["node_modules/@earendil-works/pi-coding-agent"] } });
+  const exceptions = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "advisory-carried-")), "exceptions.json");
+  fs.writeFileSync(exceptions, JSON.stringify({ version: 1, exceptions: [{ id: "GHSA-xjj6-f33q-929c", package: "undici", node: "node_modules/undici",
+    decided: "2026-10-24", until: "2026-11-07", reason: "Fixture: undici pinned by the Pi host, accepted until an end day." }] }));
+
+  it("is carried while the advisories it comes through are accepted", () => {
+    const result = run(report({ vulnerabilities: { ...undici, ...host() } }), "2026-10-24", exceptions);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /CARRIED: moderate in @earendil-works\/pi-coding-agent only through accepted advisories of undici/);
+  });
+
+  it("blocks when they are not accepted, have expired, or are not in the report", () => {
+    const unaccepted = run(report({ vulnerabilities: { ...undici, ...host() } }), "2026-10-24");
+    assert.equal(unaccepted.code, 1);
+    assert.match(unaccepted.stderr, /no advisory id, through undici/);
+    const expired = run(report({ vulnerabilities: { ...undici, ...host() } }), "2026-11-08", exceptions);
+    assert.equal(expired.code, 1);
+    assert.match(expired.stderr, /pi-coding-agent/);
+    const missing = run(report({ vulnerabilities: host(["ghost"]) }), "2026-10-24", exceptions);
+    assert.equal(missing.code, 1);
+    const mixed = run(report({ vulnerabilities: { ...undici, ...host(["undici", { url: "https://example.com/advisory" }]) } }), "2026-10-24", exceptions);
+    assert.equal(mixed.code, 1, "an advisory object without a GHSA id still blocks");
+  });
+
+  it("settles a chain of carried packages", () => {
+    const chain = { ...undici, ...host(), "pi-subagents": { name: "pi-subagents", severity: "moderate", via: ["@earendil-works/pi-coding-agent"], nodes: ["node_modules/pi-subagents"] } };
+    const result = run(report({ vulnerabilities: chain }), "2026-10-24", exceptions);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /CARRIED: moderate in pi-subagents/);
+  });
+});

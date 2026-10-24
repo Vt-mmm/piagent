@@ -1,4 +1,29 @@
 {
   "version": 1,
-  "exceptions": []
+  "exceptions": [
+    {
+      "id": "GHSA-xjj6-f33q-929c",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-24",
+      "until": "2026-11-07",
+      "reason": "Denial of service (an unhandled error crashes the process) when a response lists too many content-encodings; no data exposure. undici 8.10.2 is an exact dependency of every published Pi host (1.3.0 and 1.4.0), installed globally, so no Piagent change can update it; 8.12.2 fixes it. Remove when a Pi host carries undici >= 8.12.2."
+    },
+    {
+      "id": "GHSA-4qv8-2p9j-2685",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-24",
+      "until": "2026-11-07",
+      "reason": "Denial of service (unbounded memory) in undici's EventSource parser fed by a hostile server; no data exposure. Pinned by the Pi host as above; fixed in undici 8.12.2."
+    },
+    {
+      "id": "GHSA-f72v-6w45-q472",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-24",
+      "until": "2026-11-07",
+      "reason": "Subresource Integrity check bypassed with a non-lowercase algorithm token; Pi does not fetch with integrity metadata. Pinned by the Pi host as above; fixed in undici 8.12.2."
+    }
+  ]
 }

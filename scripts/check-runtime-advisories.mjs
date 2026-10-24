@@ -7,7 +7,11 @@
 // The only exceptions are listed in runtime-advisory-exceptions.json, each an
 // owner decision for one advisory at one package path in the tree, with a day
 // it stops applying. The same advisory anywhere else, any other advisory, and
-// an exception past its day all block. Its tests check every entry.
+// an exception past its day all block. Its tests check every entry. A package
+// flagged only because it depends on flagged packages (no advisory of its
+// own, `via` names packages) is carried: it passes when every package it
+// names is in the report with all of its advisories accepted, and blocks
+// otherwise.
 import fs from "node:fs";
 
 function readStdin() {
@@ -50,12 +54,14 @@ const { exceptions } = JSON.parse(fs.readFileSync(process.env.PIAGENT_ADVISORY_E
 // A test seam for the day exceptions are judged on; the gate uses today (UTC).
 const today = process.env.PIAGENT_ADVISORY_TODAY ?? new Date().toISOString().slice(0, 10);
 
-const blocking = [], accepted = [];
+const blocking = [], accepted = [], pending = [], carried = [];
 for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})) {
   if (!["moderate", "high", "critical"].includes(vulnerability.severity)) continue;
   const ids = advisoryIdsFor(vulnerability);
   if (ids.length === 0) {
-    blocking.push({ name, severity: vulnerability.severity, id: "(no advisory id)" });
+    const via = vulnerability.via ?? [];
+    if (via.length > 0 && via.every((item) => typeof item === "string")) pending.push({ name, severity: vulnerability.severity, via });
+    else blocking.push({ name, severity: vulnerability.severity, id: "(no advisory id)" });
     continue;
   }
   const nodes = Array.isArray(vulnerability.nodes) ? vulnerability.nodes : [];
@@ -67,8 +73,27 @@ for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})
   }
 }
 
+// Carried packages may chain (a via b via c): settle them until nothing changes;
+// whatever is left names a package that is not accepted.
+const cleared = new Set(accepted.map((entry) => entry.name).filter((name) => !blocking.some((entry) => entry.name === name)));
+for (let changed = true; changed;) {
+  changed = false;
+  for (const entry of [...pending]) {
+    if (!entry.via.every((name) => cleared.has(name))) continue;
+    pending.splice(pending.indexOf(entry), 1);
+    carried.push(entry);
+    cleared.add(entry.name);
+    changed = true;
+  }
+}
+for (const entry of pending) blocking.push({ name: entry.name, severity: entry.severity, id: `(no advisory id, through ${entry.via.join(", ")})` });
+
 for (const entry of accepted) {
   console.log(`ACCEPTED: ${entry.severity} advisory ${entry.id} in ${entry.name} at ${entry.exception.node} until ${entry.exception.until} (owner decision ${entry.exception.decided})`);
+}
+
+for (const entry of carried) {
+  console.log(`CARRIED: ${entry.severity} in ${entry.name} only through accepted advisories of ${entry.via.join(", ")}`);
 }
 
 const failures = blocking.map(

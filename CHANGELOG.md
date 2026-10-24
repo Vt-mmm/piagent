@@ -15,6 +15,10 @@ Local projects without a remote are reported to Studio too, every run reports, a
 - **Every run reports its projects**, not only the first one of a conversation, so Studio counts each use and knows which computers never report. A Studio without the route is asked once, not on every run.
 - **The member sees a line for every warning Studio returns**: another team's project, one outside the team's list, a project not registered to the team, or a folder Piagent could not read. A local project is named by its folder.
 
+### Security
+
+- **Three undici advisories in the Pi host are accepted until 2026-11-07** (GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472: denial of service and an integrity-check bypass Pi does not use; no data exposure). Every published Pi host (1.3.0, 1.4.0) pins undici 8.10.2 and is installed globally, so Piagent cannot update it; 8.12.2 fixes them. The runtime advisory check now carries a package flagged only through accepted advisories of its dependencies (the Pi host here) and still blocks it otherwise.
+
 ## v1.39.0 - 2026-10-23
 
 Studio learns when a team key works in a repository outside its team, and the dashboard keeps its language and theme across restarts.
