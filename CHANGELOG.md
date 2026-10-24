@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Added
+
+- **Local projects are reported too.** A company conversation in a folder without a readable remote now tells Studio about it as a local project (with `managed.workspace.v2`, Agent Studio 0.40.0): a git checkout by its root commit (`local/git/…`, the same on every computer with that history, including clones and checkouts with several remotes but no `origin`), a checkout without commits or any other folder by a hash of the computer's name and path (`local/dir/…`), each with its folder's name; a path never leaves the computer. A folder holding several checkouts reports each (up to six), and a folder with none reports itself.
+
+### Changed
+
+- **Every run reports its projects**, not only the first one of a conversation, so Studio counts each use and knows which computers never report. A Studio without the route is asked once, not on every run.
+- **The member sees a line for every warning Studio returns**: another team's project, one outside the team's list, a project not registered to the team, or a folder Piagent could not read. A local project is named by its folder.
+
 ## v1.39.0 - 2026-10-23
 
 Studio learns when a team key works in a repository outside its team, and the dashboard keeps its language and theme across restarts.

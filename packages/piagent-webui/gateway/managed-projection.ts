@@ -36,10 +36,11 @@ export function managedProjection(context: any, entries: any[]) {
   const permission = chosen === 'bypass' ? (bypassAllowed ? 'bypass' : 'trusted-full-access') : chosen === 'trusted-full-access' ? 'trusted-full-access' : 'workspace-write';
   // Fast mode, only where the conversation's Harness allows it (fast-mode.mjs).
   const fast = last('agent-watch-fast');
-  // Repositories Studio says do not belong to the key's team (workspace-report.mjs).
-  const project = last('agent-watch-project'), kinds = ['other_team', 'unlisted'];
+  // Projects Studio says do not belong to the key's team (workspace-report.mjs);
+  // a local project carries its folder name.
+  const project = last('agent-watch-project'), kinds = ['other_team', 'unlisted', 'unregistered', 'no_repository'];
   const projectWarnings = Array.isArray(project?.warnings) ? project.warnings.filter((w: any) => kinds.includes(w?.kind) && typeof w.repo === 'string' && w.repo.trim())
-    .slice(0, 6).map((w: any) => ({ repo: w.repo.trim().slice(0, 200), kind: w.kind })) : [];
+    .slice(0, 6).map((w: any) => ({ repo: w.repo.trim().slice(0, 200), kind: w.kind, ...(typeof w.name === 'string' && w.name.trim() ? { name: w.name.trim().slice(0, 80) } : {}) })) : [];
   const projectWarning = projectWarnings.length ? { warnings: projectWarnings, ...(typeof project.team === 'string' && project.team.trim() ? { team: project.team.trim().slice(0, 80) } : {}) } : null;
   return {modelLabel:'agent-watch-auto', managedPermission: permission, ...(bypassAllowed ? {managedBypass: true as const} : {}), ...(fast?.allowed === true ? {managedFast: fast.enabled === true ? 'on' as const : 'off' as const} : {}), managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),

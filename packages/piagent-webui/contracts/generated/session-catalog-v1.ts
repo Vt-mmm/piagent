@@ -102,97 +102,118 @@ export type SessionRow = {
       | [
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           }
         ]
       | [
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           }
         ]
       | [
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           }
         ]
       | [
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           }
         ]
       | [
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           }
         ]
       | [
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           },
           {
             repo: string;
-            kind: "other_team" | "unlisted";
+            name?: string;
+            kind: "other_team" | "unlisted" | "unregistered" | "no_repository";
           }
         ];
   };

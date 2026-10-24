@@ -82,8 +82,8 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             if (role === 'main') owner.grant = grant;
             // Tool calls that failed since the last request (tool-failures.mjs).
             void sendToolFailures(owner, grant.token);
-            // Which repositories this conversation works in, once (workspace-report.mjs).
-            if (role === 'main') void reportWorkspace(owner, grant.token);
+            // Which projects this conversation works in, once per run (workspace-report.mjs).
+            if (role === 'main') void reportWorkspace(owner, grant.token, { run: grant.run_id ?? null });
             void link?.flush(grant.token);
             const route = owner.routes.get(runtime);
             if (!route || grant.provider_model_id !== route.native || grant.provider !== route.provider || grant.model_id !== route.model_id || model.id !== 'agent-watch-auto') throw Error('managed-route-changed');

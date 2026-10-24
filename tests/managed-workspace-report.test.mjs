@@ -59,5 +59,39 @@ test('the dashboard reads the latest warning, and a clean report clears it', () 
 
 test('the member line names the repository and says administrators were told', () => {
   assert.match(projectWarningText([{ repo: 'github.com/acme/shop', kind: 'other_team' }], 'Payments', 'vi'), /github\.com\/acme\/shop thuộc team khác.*Payments.*Admin Studio đã được báo/);
-  assert.match(projectWarningText([{ repo: 'github.com/acme/new', kind: 'unlisted' }], null, 'en'), /not in the repository list.*administrators were told/);
+  assert.match(projectWarningText([{ repo: 'github.com/acme/new', kind: 'unlisted' }], null, 'en'), /not in the project list.*administrators were told/);
+});
+
+const v2 = (log = manager()) => ({ ...owner(log), cwd: '/work/notes', capabilities: new Set(['managed.workspace.v1', 'managed.workspace.v2']) });
+const projectsOf = list => async () => list;
+
+test('with managed.workspace.v2 local projects go with their folder names, and every kind reaches the member', async () => {
+  let body = null;
+  const self = v2(), git = 'local/git/' + 'ab'.repeat(20);
+  const fetchImpl = async (_url, init) => { body = JSON.parse(init.body); return reply(200, { team: 'Payments', warnings: [
+    { repo_key: git, project_name: 'shop-noi-bo', kind: 'unregistered' }, { repo_key: 'github.com/acme/shop', kind: 'unlisted' }, { repo_key: null, kind: 'no_repository' }] }); };
+  await reportWorkspace(self, 'tok', { run: 'r1', fetchImpl, projects: projectsOf([{ key: git, name: 'shop-noi-bo' }, { key: 'github.com/acme/shop', name: 'shop' }]), now: () => 0 });
+  assert.deepEqual(body, { repositories: [git, 'github.com/acme/shop'], names: { [git]: 'shop-noi-bo', 'github.com/acme/shop': 'shop' } });
+  const recorded = self.session.sessionManager.entries.filter(e => e.customType === PROJECT_ENTRY).at(-1).data.warnings;
+  assert.deepEqual(recorded, [{ repo: git, kind: 'unregistered', name: 'shop-noi-bo' }, { repo: 'github.com/acme/shop', kind: 'unlisted', name: 'shop' }, { repo: 'notes', kind: 'no_repository' }]);
+  assert.match(projectWarningText(recorded, 'Payments', 'vi'), /shop chưa có trong danh sách project của team Payments\. shop-noi-bo chưa được đăng ký cho team Payments\. .*thư mục notes\. Admin Studio đã được báo\./);
+  const projection = managedProjection({ model: { provider: 'agent_watch_managed' } }, self.session.sessionManager.entries).managedProjectWarning;
+  assert.deepEqual(projection.warnings[0], { repo: git, kind: 'unregistered', name: 'shop-noi-bo' });
+  // An unreadable folder still reports, so Studio knows the run did.
+  await reportWorkspace(v2(), 'tok', { run: 'r1', fetchImpl: async (_url, init) => { body = JSON.parse(init.body); return reply(200, { warnings: [] }); }, projects: projectsOf([]) });
+  assert.deepEqual(body, { repositories: [], folder: 'not_a_repository' });
+});
+
+test('every run reports once; a Studio without the route is not asked again on later runs', async () => {
+  let asked = 0;
+  const self = v2(), ok = async () => { asked += 1; return reply(200, { warnings: [] }); }, found = projectsOf([{ key: 'github.com/acme/shop', name: 'shop' }]);
+  await reportWorkspace(self, 'tok', { run: 'r1', fetchImpl: ok, projects: found });
+  assert.equal(await reportWorkspace(self, 'tok', { run: 'r1', fetchImpl: ok, projects: found }), null, 'once per run');
+  await reportWorkspace(self, 'tok2', { run: 'r2', fetchImpl: ok, projects: found });
+  assert.equal(asked, 2, 'the next run reports again');
+  asked = 0;
+  const old = v2(), missing = async () => { asked += 1; return reply(404); };
+  await reportWorkspace(old, 'tok', { run: 'r1', fetchImpl: missing, projects: found });
+  assert.equal(await reportWorkspace(old, 'tok', { run: 'r2', fetchImpl: missing, projects: found }), null);
+  assert.equal(asked, 1);
 });
