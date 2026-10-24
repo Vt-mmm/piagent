@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.41.0 · 2026-10-24</p>
+  <h2 id="v1-41-0">Front-end change reports</h2>
+  <p class="section-lead">The <code>fe-change-report</code> skill: for a front-end task that asks for a report, the agent captures the old and new versions of the affected pages (headless, same data), frames each change with a numbered red box on both screenshots, runs the checks and the full E2E suite headless, and writes what changed for the business, in the logic, and on screen. The scripts use the project's own Playwright, add no dependency, and write one <code>report.html</code> with no scripts to send to anyone. The dashboard draws the same report in Documents from <code>reports/fe-change/&lt;slug&gt;/report.json</code>, with a full-screen view; it is drawn from data, so the WebUI still renders no model markup.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.40.0 · 2026-10-24</p>
   <h2 id="v1-40-0">Local projects are reported to Studio too</h2>
   <p class="section-lead">A folder without a readable remote is now reported to Studio as a local project (Agent Studio 0.40.0, <code>managed.workspace.v2</code>): a git checkout by its root commit (<code>local/git/…</code>, the same on every computer with that history, clones included), any other folder by a hash of the computer's name and path (<code>local/dir/…</code>), with the folder's name; a path never leaves the computer. Every agent run reports, so Studio knows which computers never do. The member reads one line for every kind of warning: another team's project, one outside the list, one not registered to the team, or a folder that could not be read. Nothing is blocked.</p>

@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.40.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.41.0 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -104,6 +104,12 @@
               <h1>Bản 1.9.0: nói việc bằng lời, Harness của team kiểm tra</h1>
               <p>Bỏ task contract và lệnh workflow. Chế độ công ty tự yêu cầu check và review; nút Dừng, lệnh có mạng theo lần duyệt và thẻ duyệt dễ đọc hơn.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.41.0 · 2026-10-24</p>
+  <h2 id="v1-41-0">Báo cáo thay đổi giao diện</h2>
+  <p class="section-lead">Skill <code>fe-change-report</code>: với task front-end cần báo cáo, agent chụp bản cũ và bản mới của các trang bị ảnh hưởng (chạy nền, cùng dữ liệu), khoanh từng thay đổi bằng khung đỏ đánh số trên cả hai ảnh, chạy check và toàn bộ E2E headless, rồi ghi lại business, logic và giao diện đã đổi. Script dùng Playwright có sẵn trong project, không thêm dependency, xuất một file <code>report.html</code> không có script để gửi cho người khác. Dashboard vẽ cùng báo cáo đó trong Tài liệu từ <code>reports/fe-change/&lt;slug&gt;/report.json</code>, có chế độ toàn màn hình; báo cáo được vẽ từ dữ liệu nên WebUI vẫn không hiển thị markup do model tạo.</p>
+</section>
+
 <section class="section">
   <p class="section-kicker">v1.40.0 · 2026-10-24</p>
   <h2 id="v1-40-0">Project local cũng được báo cho Studio</h2>

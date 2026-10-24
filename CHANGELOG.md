@@ -2,6 +2,15 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.41.0 - 2026-10-24
+
+Front-end change reports: before/after screenshots with numbered red frames, business and logic changes and check results, shown in the dashboard.
+
+### Added
+
+- **The `fe-change-report` skill.** For a front-end task that asks for a report, the agent captures both versions of the affected pages headless on the same data, frames each change with a numbered red box on both screenshots, runs the project's checks and full E2E headless (baseline failures named as such), and writes what changed for the business, in the logic, and on screen. Its scripts use the project's own Playwright and add no dependency: `capture.mjs` (desktop and phone sizes, masks for clocks and other content that changes on its own, login state, an 8 MB cap per screenshot), `diff-regions.mjs` (proposed frames from a pixel diff that skips masked areas, and a red changed-pixels image) and `build-report.mjs` (one self-contained `report.html` with no scripts, to send to anyone).
+- **Change reports in Documents.** The dashboard draws `reports/fe-change/<slug>/report.json` as the report: summary, business and logic tables, before/after screenshots with the same numbered frames, zoom per frame, other sizes, changed pixels, checks and changed files, with a full-screen view. It is drawn from data, never from the HTML file, so the WebUI still renders no model markup. Screenshots come through a new read, `GET /api/v1/documents/<ref>/assets/<name>` (`document-asset-v1`), which answers only `before-`/`after-`/`diff-*.png` in the `shots/` folder beside a listed `report.json`, refuses links and non-PNG files, and applies protected paths; it works for company conversations through the relay. The listing leaves that `shots/` folder out.
+
 ## v1.40.0 - 2026-10-24
 
 Local projects without a remote are reported to Studio too, every run reports, and the member sees every kind of project warning.

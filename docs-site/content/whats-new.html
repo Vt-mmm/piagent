@@ -1,4 +1,10 @@
 <section class="section">
+  <p class="section-kicker">v1.41.0 · 2026-10-24</p>
+  <h2 id="v1-41-0">Báo cáo thay đổi giao diện</h2>
+  <p class="section-lead">Skill <code>fe-change-report</code>: với task front-end cần báo cáo, agent chụp bản cũ và bản mới của các trang bị ảnh hưởng (chạy nền, cùng dữ liệu), khoanh từng thay đổi bằng khung đỏ đánh số trên cả hai ảnh, chạy check và toàn bộ E2E headless, rồi ghi lại business, logic và giao diện đã đổi. Script dùng Playwright có sẵn trong project, không thêm dependency, xuất một file <code>report.html</code> không có script để gửi cho người khác. Dashboard vẽ cùng báo cáo đó trong Tài liệu từ <code>reports/fe-change/&lt;slug&gt;/report.json</code>, có chế độ toàn màn hình; báo cáo được vẽ từ dữ liệu nên WebUI vẫn không hiển thị markup do model tạo.</p>
+</section>
+
+<section class="section">
   <p class="section-kicker">v1.40.0 · 2026-10-24</p>
   <h2 id="v1-40-0">Project local cũng được báo cho Studio</h2>
   <p class="section-lead">Thư mục không có remote đọc được nay cũng được báo cho Studio như một project local (Agent Studio 0.40.0, <code>managed.workspace.v2</code>): repo git theo commit gốc (<code>local/git/…</code>, giống nhau trên mọi máy có cùng lịch sử, kể cả bản clone), thư mục khác theo mã băm của tên máy và đường dẫn (<code>local/dir/…</code>), kèm tên thư mục; đường dẫn không rời khỏi máy. Mỗi lượt agent đều báo, nên Studio biết máy nào chưa báo. Member thấy một dòng cho mọi loại cảnh báo: project của team khác, ngoài danh sách, chưa đăng ký cho team, hoặc thư mục không đọc được. Không chặn gì.</p>
