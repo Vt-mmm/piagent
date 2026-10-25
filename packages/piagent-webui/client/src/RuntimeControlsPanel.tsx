@@ -28,7 +28,7 @@ type Pending = { action: Action; argument: string | null; title: string; descrip
 function ControlGroup({ icon, title, detail, children }: { icon: React.ReactNode; title: string; detail: string; children: React.ReactNode }) {
   return <Paper variant="outlined" sx={{ p: 2, borderRadius: 1 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start", mb: 1.5 }}>
     <Box sx={{ width: 38, height: 38, borderRadius: 1, bgcolor: "action.selected", display: "grid", placeItems: "center", flex: "0 0 auto" }}>{icon}</Box>
-    <Box><Typography sx={{ fontWeight: 820 }}>{title}</Typography><Typography variant="body2" color="text.secondary">{detail}</Typography></Box>
+    <Box><Typography sx={{ fontWeight: 650 }}>{title}</Typography><Typography variant="body2" color="text.secondary">{detail}</Typography></Box>
   </Stack>{children}</Paper>;
 }
 
@@ -158,7 +158,7 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
     {(busy || receipt || error) && <Paper aria-live="polite" variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 1 }}>
       {busy ? <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><CircularProgress size={18} /><Typography>{localize(locale, "Đang chạy trong Pi runtime…", "Running in the Pi runtime…")}</Typography></Stack>
         : <><Stack direction="row" sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}><CheckCircleOutlineRounded color={receipt?.state === "settled" ? "success" : "warning"} />
-          <Typography sx={{ fontWeight: 800 }}>{receipt ? receipt.action : localize(locale, "Không hoàn tất", "Not completed")}</Typography>
+          <Typography sx={{ fontWeight: 650 }}>{receipt ? receipt.action : localize(locale, "Không hoàn tất", "Not completed")}</Typography>
           {receipt && <Chip size="small" color={receipt.state === "settled" ? "success" : "warning"} variant="outlined" label={receipt.resultCode} />}
           {(receipt?.effect === "read-only" || receipt?.effect === "session-setting") && <Chip size="small" color={receipt.modelCallObserved ? "warning" : "success"} variant="outlined"
             label={receipt.modelCallObserved ? localize(locale, "Đã phát hiện model call", "Model call detected") : "0 model token"} />}</Stack>

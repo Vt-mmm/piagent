@@ -1,6 +1,7 @@
 import { WorkspaceMentions } from "./workspace-navigation.tsx";
+import { BrandMark } from "./BrandMark.tsx";
 import { TurnCheckpointButton } from "./CheckpointTimeline.tsx";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, memo, Suspense, type ReactNode } from "react";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import ErrorOutlineRounded from "@mui/icons-material/ErrorOutlineRounded";
 import ImageOutlined from "@mui/icons-material/ImageOutlined";
@@ -26,11 +27,16 @@ import { localize, type UiLocale } from "./ui-preferences.tsx";
 // Its own chunk, fetched when a conversation opens (preloadMarkdown) rather
 // than on the first answer, which showed its markdown as plain text until the
 // chunk arrived.
+// Once it has loaded it renders directly: a lazy boundary would show the raw
+// markdown for a moment and then change every message's height.
 let markdownModule: Promise<typeof import("./MarkdownMessage.tsx")> | null = null;
-export const preloadMarkdown = () => (markdownModule ??= import("./MarkdownMessage.tsx"));
+let loadedMarkdown: typeof import("./MarkdownMessage.tsx")["MarkdownMessage"] | null = null;
+export const preloadMarkdown = () => (markdownModule ??= import("./MarkdownMessage.tsx").then((module) => { loadedMarkdown = module.MarkdownMessage; return module; }));
 const MarkdownMessage = lazy(async () => ({ default: (await preloadMarkdown()).MarkdownMessage }));
 
 export function AssistantText({ children }: { children: string }) {
+  const Ready = loadedMarkdown;
+  if (Ready) return <Ready>{children}</Ready>;
   return <Suspense fallback={<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.75 }}>{children}</Typography>}>
     <MarkdownMessage>{children}</MarkdownMessage>
   </Suspense>;
@@ -98,7 +104,7 @@ export function UserBubble({ text, attachments, note, locale }: { text: string |
 
 // The agent's side of a turn: its steps, then its answer, under one mark.
 export function AgentBlock({ children }: { children: ReactNode }) {
-  return <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}><Box className="brand-mark" aria-hidden="true">π</Box>
+  return <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}><BrandMark size={26} />
     <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>Piagent</Typography>{children}</Stack></Box>;
 }
 
@@ -121,7 +127,9 @@ export function TurnFooter({ turn, locale }: { turn: TimelineTurn; locale: UiLoc
 // `onContinue` is given for the last turn of an idle conversation: a turn that
 // failed, or one with no answer at all (stopped, or the app or the machine
 // went down while it ran), offers to go on from the steps already taken.
-export function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineTurn; locale: UiLocale; onContinue?: () => void }) {
+// A finished turn never changes, so it does not re-render while another turn
+// streams below it (memo compares the turn object the view model keeps).
+export const TimelineTurnView = memo(function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineTurn; locale: UiLocale; onContinue?: () => void }) {
   const unanswered = Boolean(onContinue) && !turn.answer && !turn.failure && !turn.end;
   const agent = turn.steps.length > 0 || turn.answer || turn.failure || unanswered || turn.process || turn.end;
   return <Stack spacing={1.5}>
@@ -143,7 +151,7 @@ export function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineT
     </AgentBlock>}
     <TurnCheckpointButton turnRef={turn.user.messageRef} />
   </Stack>;
-}
+});
 
 // Steps of a running turn that are not tools get a sentence of their own.
 function liveStepName(label: string, locale: UiLocale): string {
@@ -163,7 +171,7 @@ export function LiveTurnView({ user, attachments, activities, assistant, running
       {activities.map((activity) => <ToolCard key={activity.toolCallRef} live locale={locale} waiting={activity.toolLabel === "capacity-wait"} tool={{ toolName: liveStepName(activity.toolLabel, locale), state: activity.state,
         summary: { kind: liveToolKind(activity.toolLabel), target: activity.fileLabel ?? null, detail: null } }} />)}
       {failure && <TurnFailure code={failure} locale={locale} />}
-      {assistant && <Box><AssistantText>{assistant}</AssistantText></Box>}
+      {assistant && <Box className={running ? "streaming-answer" : undefined}><AssistantText>{assistant}</AssistantText></Box>}
       {running && status}
     </AgentBlock>
   </Stack>;

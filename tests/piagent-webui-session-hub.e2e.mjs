@@ -49,6 +49,9 @@ let liveStateUnavailable = false, liveStateReadCount = 0;
 let attachments, lastSendPayload = null, dispatchedContent = null;
 let lastCreatePayload = null;
 let processTranscript = [];
+// A long history served a page at a time, as the Gateway does: `before` is the
+// index the page ends at, and each page holds `limit` turns.
+let pagedHistory = null; const historyReads = [];
 let companyState = "unavailable", companyConnects = 0, transcriptUnavailable = false, transcriptReads = 0;
 const companyModel = { modelRef: COMPANY_MODEL_REF, provider: "agent_watch_managed", modelId: "agent-watch-auto",
   displayName: "agent-watch-auto", reasoning: true, imageInput: true, thinkingLevels: ["low", "medium", "high"] };
@@ -265,7 +268,7 @@ test.beforeAll(async () => {
       text: "# Ke hoach quy ba\n\nMuc tieu la **tang truong**.\n", sizeBytes: 4096,
       truncated: false, redacted: false, reasonCode: null }),
     activity: () => inspectionSnapshot.activity,
-    transcript: () => (transcriptReads += 1, transcriptUnavailable) ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
+    transcript: (before, limit) => pagedHistory ? historyPage(before, limit) : (transcriptReads += 1, transcriptUnavailable) ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
       { ...transcriptFixture.items[0], messageRef: "message_history_user", content: { ...transcriptFixture.items[0].content,
         text: "Open the persisted release checklist" + workspaceMention, textChars: 36 + workspaceMention.length } },
       { ...transcriptFixture.items[0], messageRef: "message_history_assistant", parentMessageRef: "message_history_user", role: "assistant",
@@ -2420,3 +2423,94 @@ for (const scenario of ['lost-response', 'member-conflict', 'storage-unavailable
     } finally { processTranscript = []; fs.rmSync(cwd, { recursive: true, force: true }); }
   });
 }
+
+function historyPage(before, limit = 50) {
+  historyReads.push(before ?? null);
+  const end = before ? Number(before.replace("history_", "")) : pagedHistory.length, start = Math.max(0, end - limit * 2);
+  return { ...transcriptFixture, items: pagedHistory.slice(start, end),
+    page: { ...transcriptFixture.page, beforeCursor: before ?? null, nextBeforeCursor: start > 0 ? `history_${start}` : null,
+      hasOlder: start > 0, limit, truncated: false } };
+}
+
+function longHistory(turns) {
+  const base = transcriptFixture.items[0], text = (value) => ({ ...base.content, text: value, textChars: value.length });
+  return Array.from({ length: turns }, (_, index) => {
+    const at = new Date(Date.UTC(2026, 9, 1, 8, 0, index * 2)).toISOString();
+    return [{ ...base, messageRef: `history_user_${index}`, role: "user", recordedAt: at, toolCalls: [], content: text(`Việc số ${index}: sửa lỗi phân trang.`) },
+      { ...base, messageRef: `history_answer_${index}`, parentMessageRef: `history_user_${index}`, role: "assistant", recordedAt: at, toolCalls: [],
+        content: text(index % 2 ? `Đã sửa \`src/page-${index}.ts\`.\n\n\`\`\`ts\nexport const next = (page: number) => page + 1;\n\`\`\`` : `Trả lời số ${index}. ${"Giải thích điều kiện dừng. ".repeat(1 + index % 5)}`) }];
+  }).flat();
+}
+
+// Older messages load as the reader scrolls up, with no click, and the turn
+// being read stays exactly where it was while a page is added above it: the
+// page used to jump by the whole height of the new history.
+test("older messages load on their own as the reader scrolls up, without moving the message being read", async ({ page }) => {
+  pagedHistory = longHistory(120); historyReads.length = 0;
+  await page.setViewportSize({ width: 1440, height: 800 });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    const turns = () => page.locator("[data-turn]").count();
+    const place = () => page.evaluate(() => ({ y: Math.round(window.scrollY), bottom: document.documentElement.scrollHeight - window.innerHeight }));
+    // It opens at the newest message, with one page of history.
+    await expect(page.getByText("Việc số 119: sửa lỗi phân trang.", { exact: true })).toBeVisible();
+    await expect.poll(async () => { const now = await place(); return now.bottom - now.y; }).toBeLessThanOrEqual(2);
+    expect(await turns()).toBe(50);
+    // History appears formatted from the first frame: no raw markdown that
+    // reflows into a shorter message a moment later.
+    await expect(page.locator("pre code").filter({ hasText: "export const next" }).first()).toBeVisible();
+    expect(await page.getByText("```ts", { exact: false }).count()).toBe(0);
+    // The reader scrolls up, then on into the top of the page. (Positions are
+    // set directly: a wheel scrolls smoothly and would still be moving.)
+    await page.evaluate(() => window.scrollTo(0, 2600));
+    await expect.poll(async () => (await place()).y).toBe(2600);
+    const anchor = await page.evaluate(() => {
+      const turn = [...document.querySelectorAll("[data-turn]")].find((item) => item.getBoundingClientRect().top > 160);
+      return { key: turn.dataset.turn, top: turn.getBoundingClientRect().top };
+    });
+    await page.evaluate(() => window.scrollTo(0, 700));
+    await expect.poll(turns).toBe(100);
+    const topOf = () => page.evaluate((key) => document.querySelector(`[data-turn="${key}"]`).getBoundingClientRect().top, anchor.key);
+    // Exactly the reader's own 1,900 px: nothing added above moved it.
+    await expect.poll(async () => Math.abs(await topOf() - (anchor.top + 1_900))).toBeLessThanOrEqual(2);
+    await page.waitForTimeout(600);
+    expect(Math.abs(await topOf() - (anchor.top + 1_900))).toBeLessThanOrEqual(2);
+    expect(historyReads.filter(Boolean)).toEqual(["history_140"]);
+    // The last page arrives the same way, and the start is marked.
+    await page.evaluate(() => window.scrollTo(0, 400));
+    await expect.poll(turns).toBe(120);
+    await expect(page.getByText("Đầu cuộc trò chuyện", { exact: true })).toBeAttached();
+    await expect(page.getByRole("button", { name: "Tải tin cũ hơn" })).toHaveCount(0);
+  } finally { pagedHistory = null; }
+});
+
+// The page keeps a bounded window of history. When older pages fill it, the
+// newest messages leave it, and the reader is offered a way back to them
+// instead of finding the end of the conversation silently gone.
+test("a history longer than the window says the newest messages are hidden and brings them back", async ({ page }) => {
+  test.setTimeout(90_000);
+  pagedHistory = longHistory(560); historyReads.length = 0;
+  await page.setViewportSize({ width: 1440, height: 800 });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Việc số 559: sửa lỗi phân trang.", { exact: true })).toBeVisible();
+    const back = page.getByRole("button", { name: "Tin mới hơn đã ẩn · về tin mới nhất" });
+    await page.evaluate(() => window.scrollTo(0, 2000));
+    for (let load = 0; load < 14 && !await back.count(); load += 1) {
+      const before = await page.locator("[data-turn]").count();
+      await page.evaluate(() => window.scrollTo(0, 300));
+      // A full window keeps its size: the page that fills it drops the newest turns instead.
+      await expect.poll(async () => await back.count() > 0 || await page.locator("[data-turn]").count() !== before, { timeout: 10_000 }).toBe(true);
+    }
+    await expect(back).toBeAttached();
+    // Each page is asked for once, even when the reader reaches the top again
+    // before the previous page has rendered.
+    expect(new Set(historyReads).size).toBe(historyReads.length);
+    await expect(page.getByText("Việc số 559: sửa lỗi phân trang.", { exact: true })).toHaveCount(0);
+    await back.scrollIntoViewIfNeeded(); await back.click();
+    await expect(page.getByText("Việc số 559: sửa lỗi phân trang.", { exact: true })).toBeVisible();
+    await expect(back).toHaveCount(0);
+    expect(await page.locator("[data-turn]").count()).toBe(50);
+    await expect.poll(async () => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY)).toBeLessThanOrEqual(2);
+  } finally { pagedHistory = null; }
+});

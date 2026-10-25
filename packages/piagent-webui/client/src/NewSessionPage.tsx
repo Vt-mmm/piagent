@@ -1,4 +1,5 @@
 import { companyAccessLabel, companyBypassDetail, companyFullAccessDetail, personalBypassDetail, fastHint, fastLabel, fastOnSx } from "./SessionComposerControls.tsx";
+import { BrandMark } from "./BrandMark.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sendsOnEnter } from "./enter-key.ts";
 import AddRounded from "@mui/icons-material/AddRounded";
@@ -12,7 +13,7 @@ import FolderOpenOutlined from "@mui/icons-material/FolderOpenOutlined";
 import ModelTrainingOutlined from "@mui/icons-material/ModelTrainingOutlined";
 import SecurityRounded from "@mui/icons-material/SecurityRounded";
 import TuneRounded from "@mui/icons-material/TuneRounded";
-import SendRounded from "@mui/icons-material/SendRounded";
+import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -58,6 +59,14 @@ function importFailureText(code: string | null, status: number, locale: UiLocale
   if (status === 429) return localize(locale, "Thao tác quá nhanh. Đợi vài giây rồi thử lại.", "Too many attempts. Wait a few seconds and try again.");
   return localize(locale, "Không thể thêm thư mục. Thử lại; nếu vẫn lỗi, chạy piagent dashboard doctor.", "Could not add this folder. Try again; if it still fails, run piagent dashboard doctor.");
 }
+
+// One click fills the composer with a common first request; nothing is sent.
+const STARTERS: readonly [string, string][] = [
+  ["Đọc project này (chỉ đọc) và ghi lại project context.", "Read this project (read-only) and record the project context."],
+  ["Review diff hiện tại. Chỉ đọc.", "Review the current diff. Read-only."],
+  ["Chạy test của project và giải thích lỗi nếu có.", "Run the project's tests and explain any failure."],
+  ["Lập plan cho việc sau, chưa sửa code: ", "Plan this change before editing any code: "]
+];
 
 export function NewSessionPage({ active, defaultProjectRef, busy, error, onCancel, onCreate }: { active: boolean;
   defaultProjectRef?: string; busy: boolean; error: string | null; onCancel(): void; onCreate(value: CreateValue): Promise<void> | void }) {
@@ -173,12 +182,21 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
     <Box sx={{ p: { xs: 1.5, sm: 2 } }}><IconButton aria-label={localize(locale, "Quay lại", "Back")} onClick={onCancel}><ArrowBackRounded /></IconButton></Box>
     <Stack sx={{ flex: 1, alignItems: "center", justifyContent: "center", px: 2, pb: { xs: 5, md: 12 } }} spacing={4}>
-      <Typography component="h1" sx={{ fontSize: { xs: "2rem", md: "2.45rem" }, fontWeight: 500, letterSpacing: "-.035em", textAlign: "center" }}>
-        {localize(locale, "Hôm nay làm gì?", "What should we work on?")}
-      </Typography>
+      <Stack spacing={1.75} sx={{ alignItems: "center" }}>
+        <BrandMark size={44} />
+        <Typography component="h1" sx={{ fontSize: { xs: "1.9rem", md: "2.3rem" }, fontWeight: 650, letterSpacing: "-.04em", textAlign: "center" }}>
+          {localize(locale, "Hôm nay làm gì?", "What should we work on?")}
+        </Typography>
+        <Typography color="text.secondary" sx={{ textAlign: "center", maxWidth: 520, fontSize: 14.5 }}>
+          {localize(locale, "Nói việc bằng lời thường. Guard kiểm tra mọi tool call; việc rủi ro chờ bạn duyệt.",
+            "Say what you need in plain language. The guard checks every tool call; risky actions wait for you.")}
+        </Typography>
+      </Stack>
       <Box sx={{ position: "relative", width: "100%", maxWidth: 820, border: 1, borderColor: dragging ? "primary.main" : "divider",
-        borderStyle: dragging ? "dashed" : "solid", borderRadius: 1, bgcolor: "background.paper",
-        p: 1.25, boxShadow: "0 18px 55px rgba(0,0,0,.13)" }}
+        borderStyle: dragging ? "dashed" : "solid", borderRadius: 2.5, bgcolor: "background.paper",
+        p: 1.5, boxShadow: "0 24px 60px -24px rgba(0,0,0,.55)", transition: "border-color .16s, box-shadow .16s",
+        "&:focus-within": { borderColor: "rgba(var(--piagent-palette-primary-mainChannel) / .55)",
+          boxShadow: "0 0 0 4px rgba(var(--piagent-palette-primary-mainChannel) / .12), 0 24px 60px -24px rgba(0,0,0,.55)" } }}
       onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
       onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
       onDragLeave={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current -= 1; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false); } } }}
@@ -189,7 +207,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       }}>
         {dragging && <Box role="status" sx={{ position: "absolute", inset: 0, zIndex: 3, display: "grid", alignContent: "center",
           justifyItems: "center", gap: .5, borderRadius: 1, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
-          <Typography sx={{ fontWeight: 750 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
+          <Typography sx={{ fontWeight: 650 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
             : files.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn đầu tiên`, `The first message already holds ${MAX_ATTACHMENTS} files`)
               : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
           {canAttach && <Typography variant="caption" color="text.secondary">
@@ -218,7 +236,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
           </Stack>}
           <Collapse in={advancedOpen} id="piagent-new-session-options">
             <Box sx={{ mx: .35, mt: 1, px: 1.1, py: 1, borderRadius: 1, bgcolor: "action.hover" }}>
-              <Typography variant="caption" sx={{ display: "block", mb: .75, fontWeight: 750 }}>
+              <Typography variant="caption" sx={{ display: "block", mb: .75, fontWeight: 650 }}>
                 {localize(locale, "Tùy chọn cho tin nhắn đầu tiên", "Options for the first message")}
               </Typography>
               <Stack direction="row" sx={{ alignItems: "center", gap: .75, flexWrap: "wrap" }}>
@@ -267,15 +285,22 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
             </Tooltip>}
             <Box sx={{ flex: 1, minWidth: 0 }} />
             <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={busy || failed || !project || !message.trim()} onClick={submit}
-              sx={{ flex: "0 0 auto",
-                bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
-              <SendRounded fontSize="small" /></IconButton>
+              sx={{ flex: "0 0 auto", width: 34, height: 34, borderRadius: 999, transition: "transform .12s",
+                bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.main", color: "primary.contrastText", transform: "translateY(-1px)" },
+                "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
+              <ArrowUpwardRounded fontSize="small" /></IconButton>
           </Stack>
           {fastAvailable && fast && <Typography variant="caption" sx={{ display: "block", px: .5, pt: .75, color: "warning.main" }}>
             {fastHint(locale)}</Typography>}</>}
         {(fileError || importError || error || failed) && <Typography role="status" color="error" variant="caption" sx={{ display: "block", px: .5, pt: 1 }}>
           {fileError ?? importError ?? error ?? localize(locale, "Không tải được lựa chọn", "Could not load choices")}</Typography>}
       </Box>
+      {options && !message && <Stack direction="row" role="group" aria-label={localize(locale, "Việc mẫu", "Starter tasks")}
+        sx={{ flexWrap: "wrap", justifyContent: "center", gap: 1, maxWidth: 820, mt: "16px !important" }}>
+        {STARTERS.map(([vi, en]) => <Chip key={en} variant="outlined" clickable label={localize(locale, vi, en)}
+          onClick={() => { setMessage(localize(locale, vi, en)); requestAnimationFrame(() => mentions.inputRef.current?.focus()); }}
+          sx={{ height: 30, color: "text.secondary", "&:hover": { color: "text.primary" } }} />)}
+      </Stack>}
     </Stack>
     <Menu anchorEl={anchor} open={menu === "project"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 310, maxHeight: 380 } } }}>
       {(options?.projects ?? []).map((value) => <MenuItem key={value.projectRef} selected={projectRef === value.projectRef}

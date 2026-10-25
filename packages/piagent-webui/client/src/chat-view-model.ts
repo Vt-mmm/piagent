@@ -6,10 +6,14 @@ export type TranscriptPageItem = { messageRef: string };
 
 const MAX_LIVE_TEXT = 16_384;
 
+// The history kept in the page is bounded. When older pages fill it, the
+// newest messages leave the window (the reader is reading the old ones); the
+// transcript offers a way back to the newest page when that happened.
+export const TRANSCRIPT_WINDOW = 1_000;
 export function mergeOlderTranscriptPage<T extends TranscriptPageItem>(current: T[], older: T[]): T[] {
   const values = new Map<string, T>();
   for (const item of [...older, ...current]) if (!values.has(item.messageRef)) values.set(item.messageRef, item);
-  return [...values.values()].slice(0, 200);
+  return [...values.values()].slice(0, TRANSCRIPT_WINDOW);
 }
 
 export function liveChatState(events: RuntimeStreamEvent[]): { assistants: LiveAssistant[]; tools: LiveTool[] } {

@@ -54,7 +54,7 @@ function relative(locale: UiLocale, iso: string | null): string {
 
 function VersionRow({ name, detail, chip, tone }: { name: string; detail: string; chip: string; tone: "default" | "primary" | "warning" }) {
   return <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", gap: 1.5, p: 2.25 }}>
-    <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 760 }}>{name}</Typography>
+    <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{name}</Typography>
       <Typography variant="body2" color="text.secondary">{detail}</Typography></Box>
     <Chip size="small" label={chip} color={tone} variant={tone === "default" ? "outlined" : "filled"} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} /></Stack>;
 }

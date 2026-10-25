@@ -13,7 +13,7 @@ import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAf
   type TerminalOperationActivity } from "./live-state-view-model.ts";
 import { GatewayCommandTransportError, gatewayCommandMayHaveEffect, requestUntilAnswered, sessionSendDisposition,
   type OperationObservation } from "./session-send-state.ts";
-import { conversationAfterObservedSend, observeSessionSendEffect } from "./session-send-observation.ts";
+import { conversationAfterObservedSend, observeSessionSendEffect } from "./session-send-observation.ts"; import { useFrameBatchedSetter } from "./frame-batched-state.ts";
 import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSOR_KEY, opaque, SEND_ADMISSION_WINDOW_MS,
   parseGatewayCursor, persistGatewayCursor, revisionStale, SessionSendRejectedError,
   type SessionHub, type SessionHubCreateOptions, type SessionHubSendAttachment,
@@ -28,7 +28,7 @@ export function useSessionHub(): SessionHub {
   const [catalog, setCatalog] = useState<Catalog>();
   const [capabilities, setCapabilities] = useState<PiagentGatewayCapabilityHandshakeV1>();
   const [connection, setConnection] = useState<SessionHub["connection"]>("connecting");
-  const [live, setLive] = useState<Record<string, LiveConversation>>({});
+  const [live, setLiveState] = useState<Record<string, LiveConversation>>({}), { now: setLive, later: setLiveLater } = useFrameBatchedSetter(setLiveState);
   const [terminalActivities, setTerminalActivities] = useState<Record<string, TerminalOperationActivity[]>>({});
   const catalogRef = useRef<Catalog | undefined>(undefined), socketRef = useRef<WebSocket | null>(null), sequenceRef = useRef<number | null>(null);
   const liveRef = useRef<Record<string, LiveConversation>>({}); liveRef.current = live;
@@ -373,7 +373,7 @@ export function useSessionHub(): SessionHub {
             complete: ["message.completed", "operation.settled"].includes(String(frame.kind)) });
         }
         if (frame.kind === "message.delta" && typeof payload?.sessionRef === "string" && typeof payload.delta === "string") {
-          setLive((current) => {
+          setLiveLater((current) => {
             const existing = correlatedLive(current[payload.sessionRef]);
             return { ...current, [payload.sessionRef]: { ...(existing
               ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,

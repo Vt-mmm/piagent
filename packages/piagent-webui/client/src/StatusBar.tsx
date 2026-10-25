@@ -38,10 +38,10 @@ export function StatusBar({ locale, connection, running, session, onBranchSwitch
     {(session?.gitBranch || Boolean(session?.gitRepositories?.length)) && <Stack direction="row" sx={{ ...staticSx, minWidth: 0 }}><BranchSwitcher projectRef={session!.projectRef} projectLabel={session!.projectLabel}
       branch={session!.gitBranch} repositories={session!.gitRepositories} locale={locale} maxWidth={320} onSwitched={onBranchSwitched} /></Stack>}
     {running > 0 && <Stack direction="row" sx={staticSx}>
-      <CircularProgress size={10} thickness={6} /><span>{localize(locale, `${running} đang chạy`, `${running} running`)}</span></Stack>}
+      <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: "primary.main" }} /><span>{localize(locale, `${running} đang chạy`, `${running} running`)}</span></Stack>}
     <Box sx={{ flex: 1 }} />
     {supported && <Tooltip describeChild title={available ? localize(locale, "Mở Cập nhật trong Cài đặt", "Open Updates in Settings") : localize(locale, "Phiên bản và cập nhật", "Version and updates")}>
-      <ButtonBase onClick={onUpdates} sx={{ ...itemSx, ...(available && { color: "primary.contrastText", bgcolor: "primary.main", fontWeight: 700,
+      <ButtonBase onClick={onUpdates} sx={{ ...itemSx, ...(available && { color: "primary.contrastText", bgcolor: "primary.main", fontWeight: 650,
         "&:hover": { bgcolor: "primary.dark", color: "primary.contrastText" } }) }}>
         {updating ? <><CircularProgress size={11} thickness={6} color="inherit" />{localize(locale, `Đang cập nhật lên ${status?.job?.to}…`, `Updating to ${status?.job?.to}…`)}</>
           : available ? <><SystemUpdateAltRounded sx={{ fontSize: 15 }} />{localize(locale, `Cập nhật Piagent ${status?.piagent.latest}`, `Update Piagent ${status?.piagent.latest}`)}</>

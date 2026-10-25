@@ -44,8 +44,8 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
     sx={{ "& .MuiDrawer-paper": { width: { xs: "100%", sm: "min(88vw, 980px)", xl: INSPECTOR_WIDTH }, bgcolor: "background.default" } }}>
     <Box sx={{ position: "sticky", top: 0, zIndex: 3, bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
       <Stack direction="row" sx={{ minHeight: 64, px: { xs: 1.5, md: 2 }, alignItems: "center", gap: 1 }}><Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 820 }}>{localize(locale, "Agent Inspector", "Agent Inspector")}</Typography>
-        <Typography variant="caption" color="text.secondary">{localize(locale, "Task contract · Git truth · verifier", "Task contract · Git truth · verifier")}</Typography></Box>
+        <Typography sx={{ fontWeight: 650 }}>{localize(locale, "Agent Inspector", "Agent Inspector")}</Typography>
+        <Typography variant="caption" color="text.secondary">{localize(locale, "Thay đổi trong Git · tài liệu · hoạt động của agent", "Git changes · documents · agent activity")}</Typography></Box>
         <Tooltip title={localize(locale, "Làm mới Inspector", "Refresh Inspector")}><IconButton onClick={() => void refresh()}><RefreshRounded fontSize="small" /></IconButton></Tooltip>
         <IconButton aria-label={localize(locale, "Đóng Inspector", "Close Inspector")} onClick={onClose}><CloseRounded /></IconButton></Stack>
       <Tabs value={active} onChange={(_, value: SessionWorkspaceId) => onActive(value)} variant="scrollable" scrollButtons="auto">

@@ -71,7 +71,7 @@ export function CommandPalette({ open, onClose, commands, locale }: { open: bool
       {shown.map((command, index) => {
         const header = command.group !== previousGroup ? command.group : null; previousGroup = command.group;
         // Group names are visual; each option is named by its own label.
-        return <Fragment key={command.id}>{header && <ListSubheader component="div" aria-hidden disableSticky sx={{ lineHeight: "28px", fontSize: 11, fontWeight: 800, letterSpacing: ".04em", textTransform: "uppercase" }}>{header}</ListSubheader>}
+        return <Fragment key={command.id}>{header && <ListSubheader component="div" aria-hidden disableSticky sx={{ lineHeight: "28px", fontSize: 11, fontWeight: 650, letterSpacing: ".04em", textTransform: "uppercase" }}>{header}</ListSubheader>}
           <ListItemButton id={`palette-${command.id}`} role="option" aria-selected={index === active} data-index={index} selected={index === active}
             onMouseMove={() => setActive(index)} onClick={() => run(command)} sx={{ mx: .5, borderRadius: 1, gap: 2 }}>
             <Typography sx={{ flex: 1, minWidth: 0, fontSize: 14 }} noWrap>{command.label}</Typography>

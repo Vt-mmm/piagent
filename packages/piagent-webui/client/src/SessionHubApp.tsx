@@ -1,15 +1,16 @@
 import { WorkspaceSidebarTabs, type WorkspaceSidebarMode } from "./WorkspaceSidebarTabs.tsx";
+import { BrandMark } from "./BrandMark.tsx";
 import { WorkspaceNavigationProvider } from "./workspace-navigation.tsx";
 import { SessionEditorLayout } from "./SessionEditorLayout.tsx";
 import { ProjectWarning } from "./ProjectWarning.tsx";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
 import CancelRounded from "@mui/icons-material/CancelRounded";
 import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
 import MenuRounded from "@mui/icons-material/MenuRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
-import SendRounded from "@mui/icons-material/SendRounded";
+import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import ViewSidebarOutlined from "@mui/icons-material/ViewSidebarOutlined";
 import StopCircleRounded from "@mui/icons-material/StopCircleRounded";
 import AppBar from "@mui/material/AppBar";
@@ -48,14 +49,17 @@ import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { conversationCommands, matchConversationCommand, type CommandNotice, type CommandResult, type ConversationCommandContext } from "./conversation-commands.ts";
 import { SessionExpired, useSessionLost } from "./SessionExpired.tsx";
 import { UpdatePrompt } from "./UpdatePrompt.tsx";
-import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
 import { SessionTranscript } from "./SessionTranscript.tsx";
 import { SessionSidebar, sessionActivity, type SessionMenuAction, type ProjectGroup } from "./SessionSidebar.tsx";
 import { useAttention } from "./AttentionToasts.tsx";
 import { sessionNeed } from "./attention-view-model.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
-import { SettingsPage, type SettingsSection } from "./SettingsPage.tsx";
+import type { SettingsSection } from "./SettingsPage.tsx";
+// Settings and the Agent Inspector (source review, documents) load when first
+// opened, so the first paint of a conversation carries neither.
+const SettingsPage = lazy(() => import("./SettingsPage.tsx").then((module) => ({ default: module.SettingsPage })));
+const SessionInspectorDrawer = lazy(() => import("./SessionInspectorDrawer.tsx").then((module) => ({ default: module.SessionInspectorDrawer })));
 import { StatusBar, STATUS_BAR_HEIGHT } from "./StatusBar.tsx";
 import { BranchSwitcher } from "./BranchSwitcher.tsx";
 import { CommandPalette, useDashboardShortcuts } from "./CommandPalette.tsx";
@@ -71,7 +75,7 @@ import { LatestRequestWins } from "./latest-request.ts";
 import { SEND_ADMISSION_WINDOW_MS } from "./session-hub-contract.ts";
 import { sendsOnEnter } from "./enter-key.ts";
 
-const SIDEBAR_WIDTH = 280;
+const SIDEBAR_WIDTH = 272, HEADER_HEIGHT = 52;
 const PANEL_WIDTH = 320;
 const INSPECTOR_WIDTH = "min(44vw, 860px)";
 const PANEL_KEY = "piagent-webui-workspace-panel";
@@ -88,7 +92,11 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
       : activity === "recovery" ? [localize(locale, "Cần khôi phục", "Recovery needed"), "error"] as const
         : activity === "failed" ? [localize(locale, "Lượt cuối lỗi", "Last turn failed"), "error"] as const
           : [localize(locale, "Sẵn sàng", "Ready"), "default"] as const;
-  return <Chip size="small" variant="outlined" color={color} label={text} />;
+  const dot = color === "default" ? "text.disabled" : color === "info" ? "info.main" : `${color}.main`;
+  return <Box role="status" sx={{ display: "inline-flex", alignItems: "center", gap: .75, height: 28, px: 1.1, borderRadius: 999, whiteSpace: "nowrap",
+    fontSize: 12.5, fontWeight: 550, color: color === "default" ? "text.secondary" : dot, bgcolor: "action.hover" }}>
+    <Box component="span" aria-hidden="true" sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: dot,
+      }} />{text}</Box>;
 }
 
 type KeptComposer = { attachments: Attachment[]; messageRequestId: string; sendUnconfirmed: boolean };
@@ -268,9 +276,9 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   };
   // "stale": another process still appears to hold this conversation.
   const recovery = live?.runtimeRecovery ?? (session.state === "recovery-required" ? "stale" as const : null);
-  return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
+  return <Box sx={{ minHeight: `calc(100vh - ${HEADER_HEIGHT + 36}px - var(--piagent-status-bar, 0px))`, display: "flex", flexDirection: "column" }}>
     <Box sx={{ flex: 1, width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 3, md: 4 },
-      display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
       {!canSend && session.modelLabel === "agent-watch-auto" && <CompanyReconnect key={session.sessionRef} locale={locale} onConnected={() => setTranscriptLoad((value) => value + 1)} />}
       <Box sx={{ width: "100%" }}><SessionTranscript key={session.sessionRef} reload={transcriptLoad} sessionRef={session.sessionRef} sessionRevision={session.sessionRevision}
         live={live} approvals={snapshot?.approvals} locale={locale} onOpenActivity={() => onInspector("activity")}
@@ -305,8 +313,10 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
               : localize(locale, "Phát hiện runtime mới. Piagent sẽ giữ câu trả lời hiện tại rồi tự khởi động lại session.", "A new runtime was detected. Piagent will preserve the current response and restart the session automatically.")}
       </Alert>}
       <Box sx={{ position: "relative", maxWidth: 860, mx: "auto", border: 1, borderColor: dragging ? "primary.main" : "divider",
-        borderStyle: dragging ? "dashed" : "solid", borderRadius: 1, bgcolor: "background.paper", p: 1.15,
-        boxShadow: "0 14px 44px rgba(0,0,0,.14)" }}
+        borderStyle: dragging ? "dashed" : "solid", borderRadius: 2, bgcolor: "background.paper", px: 1.5, pt: 1.25, pb: 1,
+        boxShadow: "0 12px 40px -18px rgba(0,0,0,.5)", transition: "border-color .16s, box-shadow .16s",
+        "&:focus-within": { borderColor: "rgba(var(--piagent-palette-primary-mainChannel) / .55)",
+          boxShadow: "0 0 0 3px rgba(var(--piagent-palette-primary-mainChannel) / .14), 0 12px 40px -18px rgba(0,0,0,.5)" } }}
       onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
       onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
       onDragLeave={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current -= 1; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false); } } }}
@@ -317,7 +327,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
       }}>
         {dragging && <Box role="status" sx={{ position: "absolute", inset: 0, zIndex: 3, display: "grid", alignContent: "center", justifyItems: "center",
           gap: .5, borderRadius: 1, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
-          <Typography sx={{ fontWeight: 750 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
+          <Typography sx={{ fontWeight: 650 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
             : attachments.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn này`, `This message already holds ${MAX_ATTACHMENTS} files`)
               : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
           {canAttach && <Typography variant="caption" color="text.secondary">
@@ -380,15 +390,15 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
               sx={{ display: { xs: attachError || sendNotice || uploading ? "block" : "none", sm: "block" } }}>
               {sendNotice?.text ?? attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
                 : live && !live.complete
-                  ? localize(locale, "Piagent đang xử lý; có thể gửi việc tiếp theo khi lượt này xong.",
-                    "Piagent is working; you can send the next task when it finishes.")
+                  ? localize(locale, "Esc để dừng · gửi việc tiếp khi lượt này xong", "Esc to stop · send the next task when this turn ends")
                   : canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
                   : localize(locale, "Session hiện chỉ đọc", "Session is currently read only"))}</Typography>
           </Stack>
           {live?.operationRef && !live.complete && live.abortable !== false
-            ? <Button color="error" startIcon={<StopCircleRounded />} onClick={() => void abort()}>{localize(locale, "Dừng", "Stop")}</Button>
+            ? <Button color="error" variant="outlined" size="small" startIcon={<StopCircleRounded />} onClick={() => void abort()} sx={{ borderRadius: 999 }}>{localize(locale, "Dừng", "Stop")}</Button>
             : <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={!canSend || submitting || sendUnconfirmed || !draft.trim()} color="primary" onClick={() => void submit()}
-              sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}><SendRounded fontSize="small" /></IconButton>}
+              sx={{ width: 32, height: 32, borderRadius: 999, bgcolor: "primary.main", color: "primary.contrastText", transition: "transform .12s, background-color .16s",
+                "&:hover": { bgcolor: "primary.main", color: "primary.contrastText", transform: "translateY(-1px)" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}><ArrowUpwardRounded fontSize="small" /></IconButton>}
         </Stack>
       </Box>
     </Box>
@@ -396,8 +406,8 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
 }
 
 function EmptyHub({ locale, canCreate, onNew }: { locale: UiLocale; canCreate: boolean; onNew(): void }) {
-  return <Stack sx={{ minHeight: "calc(100vh - 68px)", alignItems: "center", justifyContent: "center", px: 3, textAlign: "center" }} spacing={1.5}>
-    <Box className="brand-mark" aria-hidden="true" sx={{ width: 50, height: 50, fontSize: 25 }}>π</Box>
+  return <Stack sx={{ minHeight: `calc(100vh - ${HEADER_HEIGHT}px - var(--piagent-status-bar, 0px))`, alignItems: "center", justifyContent: "center", px: 3, textAlign: "center" }} spacing={1.5}>
+    <BrandMark size={48} />
     <Typography variant="h1">{localize(locale, "Bắt đầu với Piagent", "Start with Piagent")}</Typography>
     <Typography color="text.secondary" sx={{ maxWidth: 520 }}>{localize(locale,
       "Tạo cuộc trò chuyện mới, chọn project và model; session sẽ được lưu để tiếp tục sau khi đóng Gateway.",
@@ -446,6 +456,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     try { window.localStorage.setItem(PANEL_KEY, value ? "closed" : "open"); } catch { /* best effort */ }
     return !value;
   });
+  // Mounted from its first opening on, so closing it keeps its state.
+  const inspectorUsed = useRef(false); if (inspectorOpen) inspectorUsed.current = true;
   const activityInspectorOpenRef = useRef(false);
   activityInspectorOpenRef.current = inspectorOpen && activeInspector === "activity";
   const [inspection, setInspection] = useState<PiagentWebUICanonicalSnapshotV1>();
@@ -676,21 +688,22 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   return <WorkspaceNavigationProvider sessionRef={view === "chat" ? selectedSessionRef : undefined} onOpen={() => setInspectorOpen(false)}><Box sx={{ minHeight: "100vh", bgcolor: "background.default", "--piagent-status-bar": { xs: "0px", md: `${STATUS_BAR_HEIGHT}px` } }}>
     <AppBar position="fixed" color="transparent" elevation={0} sx={{ left: { md: `${SIDEBAR_WIDTH}px` }, right: { lg: panelShown ? `${PANEL_WIDTH}px` : 0, xl: inspectorOpen ? INSPECTOR_WIDTH : panelShown ? `${PANEL_WIDTH}px` : 0 },
       width: { xs: "100%", md: "auto" }, borderBottom: 1, transition: "right .2s ease",
-      borderColor: "divider", bgcolor: "rgba(var(--piagent-palette-background-defaultChannel) / .9)", backdropFilter: "blur(18px)" }}><Toolbar sx={{ minHeight: "60px !important", gap: 1 }}>
+      borderColor: "divider", bgcolor: "rgba(var(--piagent-palette-background-defaultChannel) / .9)", backdropFilter: "blur(18px)" }}><Toolbar sx={{ minHeight: `${HEADER_HEIGHT}px !important`, gap: 1, px: { xs: 1.5, sm: 2.5 } }}>
       <IconButton aria-label={localize(locale, "Mở điều hướng", "Open navigation")} onClick={() => setMobileOpen(true)} sx={{ display: { md: "none" } }}><MenuRounded /></IconButton>
-      <Box sx={{ flex: 1, minWidth: 0 }}><Typography component="h1" noWrap sx={{ fontWeight: 600, fontSize: "inherit" }}>{title}</Typography>
+      <Box sx={{ flex: 1, minWidth: 0 }}><Typography component="h1" noWrap sx={{ fontWeight: 600, fontSize: 14.5, letterSpacing: "-0.01em", lineHeight: 1.3 }}>{title}</Typography>
         {view === "chat" && selected && <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ display: "flex", alignItems: "center", gap: .75, minWidth: 0 }}>
           <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", flexShrink: 3, minWidth: 24 }}>{selected.projectLabel}</Box>
           {(selected.gitBranch || Boolean(selected.gitRepositories?.length)) && <><Box component="span" aria-hidden sx={{ color: "text.disabled" }}>·</Box><BranchSwitcher projectRef={selected.projectRef} projectLabel={selected.projectLabel} branch={selected.gitBranch} repositories={selected.gitRepositories} locale={locale} maxWidth="45%"
             onSwitched={() => void refresh()} /></>}</Typography>}</Box>
-      {view === "chat" && selected && <><SessionComposerControls placement="header" session={selected} snapshot={currentInspection} locale={locale}
+      {view === "chat" && selected && <><SessionComposerControls placement="header" compact={inspectorOpen} session={selected} snapshot={currentInspection} locale={locale}
         onOpenChanges={() => openInspector("source")}
         canSetModel={connection === "connected" && capabilities?.capabilities.sessionActions.setModel.status === "available"}
         canSetThinking={connection === "connected" && capabilities?.capabilities.sessionActions.setThinking.status === "available"}
         canSetPermission={connection === "connected" && capabilities?.capabilities.sessionActions.setPermission.status === "available"}
         onSetModel={(modelRef) => setModel(selected, modelRef)} onSetThinking={(value) => setThinking(selected, value)}
         onSetPermission={(value) => setPermission(selected, value)} onSetFast={(value) => setFast(selected, value)} />
-        <Box sx={{display:{xs:'none',sm:'block'}}}><WorkStatus session={selected} live={selectedLive} locale={locale} /></Box><Tooltip title="Source Changes"><IconButton aria-label={localize(locale, "Mở Source Changes Inspector", "Open Source Changes Inspector")}
+        <Box sx={{ display: { xs: "none", sm: inspectorOpen ? "none" : "block" } }}><WorkStatus session={selected} live={selectedLive} locale={locale} /></Box>
+        <Box aria-hidden="true" sx={{ width: "1px", height: 20, bgcolor: "divider", mx: .5, display: { xs: "none", sm: "block" } }} /><Tooltip title="Source Changes"><IconButton aria-label={localize(locale, "Mở Source Changes Inspector", "Open Source Changes Inspector")}
           onClick={() => openInspector("source")}><DifferenceRounded fontSize="small" /></IconButton></Tooltip>
         <Tooltip title={localize(locale, "Khung Workspace: thay đổi, ngữ cảnh, subagent", "Workspace panel: changes, context, subagents")}>
           <IconButton aria-label={localize(locale, "Khung Workspace", "Workspace panel")} aria-pressed={panelShown} onClick={() => togglePanel()}
@@ -705,7 +718,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
         {!workspaceWide || workspaceSidebarMode === "sessions" || !selected || view !== "chat" ? sidebar : <Box ref={setWorkspaceNavigationHost} sx={{ overflow: "auto", flex: 1 }} />}
       </Drawer></Box>
     <Box component="main" sx={{ ml: { md: `${SIDEBAR_WIDTH}px` }, mr: { lg: panelShown ? `${PANEL_WIDTH}px` : 0, xl: inspectorOpen ? INSPECTOR_WIDTH : panelShown ? `${PANEL_WIDTH}px` : 0 },
-      pt: "60px", transition: "margin-right .2s ease" }}>
+      pt: `${HEADER_HEIGHT}px`, transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={launchProject ?? selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
         onCreate={(value) => createNewSession(value)} />
         : selected ? <SessionEditorLayout key={selected.sessionRef} sessionRef={selected.sessionRef} navigationHost={workspaceNavigationHost} sidebarMode={workspaceSidebarMode} onSection={setWorkspaceSidebarMode}><Conversation key={selected.sessionRef} session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
@@ -728,12 +741,12 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       width: PANEL_WIDTH, borderLeft: 1, borderColor: "divider", zIndex: (theme) => theme.zIndex.appBar - 1 }}>{workspacePanel}</Box>}
     {workspacePanel && <Drawer anchor="right" variant="temporary" open={mobilePanelOpen && !inspectorOpen && narrow} onClose={() => setMobilePanelOpen(false)}
       sx={{ display: { xs: "block", lg: "none" }, "& .MuiDrawer-paper": { width: `min(${PANEL_WIDTH}px, 88vw)` } }}>{workspacePanel}</Drawer>}
-    <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={currentInspection} state={currentInspectionState} sessionRef={selectedSessionRef}
+    {inspectorUsed.current && <Suspense fallback={null}><SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={currentInspection} state={currentInspectionState} sessionRef={selectedSessionRef}
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection}
       findings={selected?.managedReview?.findings} onSendComments={selected && selected.composerAvailable
-        ? (text) => { appendToComposer(selected.sessionRef, text); setInspectorOpen(false); } : undefined} />
+        ? (text) => { appendToComposer(selected.sessionRef, text); setInspectorOpen(false); } : undefined} /></Suspense>}
     <UpdatePrompt locale={locale} onDetails={() => openSettings("updates")} />
     {attention.view}
     <StatusBar locale={locale} connection={connection} running={running} session={view === "chat" ? selected : undefined}
@@ -742,12 +755,12 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },
         height: { xs: "100%", sm: "min(86vh, 840px)" }, maxHeight: { xs: "100%", sm: "86vh" }, borderRadius: { xs: 0, sm: 2.5 }, overflow: "hidden" } } }}>
-      <SettingsPage section={settingsSection} onSection={setSettingsSection} onBack={() => setSettingsOpen(false)} session={selected}
+      <Suspense fallback={<Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center" }}><CircularProgress size={22} /></Stack>}><SettingsPage section={settingsSection} onSection={setSettingsSection} onBack={() => setSettingsOpen(false)} session={selected}
         snapshot={currentInspection} capabilities={capabilities} connection={connection}
         onSetModel={selected ? (modelRef) => setModel(selected, modelRef) : undefined}
         onSetThinking={selected ? (value) => setThinking(selected, value) : undefined}
         onSetPermission={selected ? (value) => setPermission(selected, value) : undefined}
-        onRuntimeChanged={async () => { await refresh(); await refreshInspection(); }} />
+        onRuntimeChanged={async () => { await refresh(); await refreshInspection(); }} /></Suspense>
     </Dialog>
     <Dialog open={Boolean(sessionAction)} onClose={() => !actionBusy && setSessionAction(null)} fullWidth maxWidth="xs">
       <Stack spacing={2} sx={{ p: 3 }}><Typography variant="h2">{sessionAction?.kind === "rename"

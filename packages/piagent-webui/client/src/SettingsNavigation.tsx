@@ -62,7 +62,7 @@ export function SettingsNavigation({ section, onSection, onBack }: { section: Se
   return <Box component="nav" aria-label={localize(locale, "Mục cài đặt", "Settings sections")} sx={{ borderRight: { sm: 1 }, borderBottom: { xs: 1, sm: 0 },
     borderColor: "divider", bgcolor: "background.paper", p: 1.25, minHeight: 0, overflow: "auto", display: "flex", flexDirection: "column" }}>
     <Stack direction="row" sx={{ minHeight: 48, alignItems: "center", justifyContent: "space-between", px: 1 }}>
-      <Typography id="piagent-settings-title" sx={{ fontWeight: 700 }}>{localize(locale, "Cài đặt", "Settings")}</Typography>
+      <Typography id="piagent-settings-title" sx={{ fontWeight: 650 }}>{localize(locale, "Cài đặt", "Settings")}</Typography>
       <IconButton aria-label={localize(locale, "Đóng cài đặt", "Close settings")} onClick={onBack}><CloseRounded /></IconButton></Stack>
     <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: .75, px: 1, mx: .5, mb: 1, borderRadius: 1 }}>
       <SearchRounded fontSize="small" color="action" />
@@ -75,7 +75,7 @@ export function SettingsNavigation({ section, onSection, onBack }: { section: Se
         const header = entry.group !== previousGroup ? entry.group : null; previousGroup = entry.group;
         return <Box key={entry.id} sx={{ display: { xs: "contents", sm: "block" } }}>
           {header && <ListSubheader component="div" disableSticky sx={{ display: { xs: "none", sm: "block" }, bgcolor: "transparent", lineHeight: "30px", fontSize: 11,
-            fontWeight: 800, letterSpacing: ".04em", textTransform: "uppercase", mt: .5 }}>{header}</ListSubheader>}
+            fontWeight: 650, letterSpacing: ".04em", textTransform: "uppercase", mt: .5 }}>{header}</ListSubheader>}
           <ListItemButton selected={section === entry.id} onClick={() => onSection(entry.id)}>
             <ListItemIcon sx={{ minWidth: 36, color: "inherit", "& .MuiSvgIcon-root": { fontSize: 19 } }}>{entry.icon}</ListItemIcon>
             <ListItemText primary={entry.label} slotProps={{ primary: { sx: { fontSize: 13, fontWeight: section === entry.id ? 800 : 650 } } }} />

@@ -64,7 +64,7 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
   const done = plan?.steps.filter((step) => step.status === "completed").length ?? 0;
   const helperRuns = (live?.activities ?? []).filter((activity) => liveToolKind(activity.toolLabel) === "subagent");
   return <Box role="region" sx={{ height: "100%", overflowY: "auto", bgcolor: "background.paper" }} aria-label={localize(locale, "Thay đổi và ngữ cảnh", "Changes and context")}>
-    <Stack direction="row" sx={{ alignItems: "center", gap: 1, px: 2, minHeight: 60, borderBottom: 1, borderColor: "divider" }}>
+    <Stack direction="row" sx={{ alignItems: "center", gap: 1, px: 2, minHeight: 52, borderBottom: 1, borderColor: "divider" }}>
       <Typography sx={{ fontWeight: 600, flex: 1 }}>{localize(locale, "Workspace", "Workspace")}</Typography>
       {onClose && <IconButton size="small" aria-label={localize(locale, "Đóng khung bên", "Close side panel")} onClick={onClose}><CloseRounded fontSize="small" /></IconButton>}
     </Stack>
@@ -83,7 +83,7 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
       {changes && changes.availability.state !== "unavailable" && files.length === 0 && <Typography variant="body2" color="text.secondary">
         {localize(locale, "Chưa có thay đổi nào chưa commit.", "No uncommitted changes.")}</Typography>}
       <Stack spacing={.25}>{files.slice(0, 200).map((file) => <Stack key={file.fileRef} direction="row" sx={{ alignItems: "center", gap: 1, py: .4 }}>
-        <Typography variant="caption" sx={{ fontFamily: MONO, fontWeight: 700, width: 12, ...(STATUS_TONE[file.status] ? toneText(STATUS_TONE[file.status]) : { color: "text.secondary" }) }}>{file.status}</Typography>
+        <Typography variant="caption" sx={{ fontFamily: MONO, fontWeight: 650, width: 12, ...(STATUS_TONE[file.status] ? toneText(STATUS_TONE[file.status]) : { color: "text.secondary" }) }}>{file.status}</Typography>
         <Typography variant="body2" noWrap title={file.path} sx={{ fontFamily: MONO, fontSize: 12.5, flex: 1, minWidth: 0 }}>{file.path}</Typography>
         <Typography variant="caption" sx={{ fontFamily: MONO, flexShrink: 0 }}>
           {(file.stats?.additions ?? 0) > 0 && <Box component="span" sx={toneText("success")}>+{file.stats.additions} </Box>}

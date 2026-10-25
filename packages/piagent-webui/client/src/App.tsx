@@ -116,7 +116,7 @@ export function RuntimeOverview({ snapshot, locale }: { snapshot: PiagentWebUICa
   ];
   return <Paper variant="outlined" className="runtime-overview" aria-label={localize(locale, "Trạng thái Pi session", "Pi session status")} sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0,1fr))", sm: "repeat(3, minmax(0,1fr))", xl: "repeat(6, minmax(0,1fr))" }, overflow: "hidden" }}>
     {facts.map(([name, value]) => <Box key={name} sx={{ minWidth: 0, minHeight: 72, px: 2, py: 1.5, display: "flex", flexDirection: "column", justifyContent: "center", gap: .75, borderRight: 1, borderBottom: { xs: 1, xl: 0 }, borderColor: "divider", "&:last-child": { borderRight: 0 } }}>
-      <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 800, letterSpacing: ".11em", textTransform: "uppercase" }}>{name}</Typography>{value}
+      <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 650, letterSpacing: ".11em", textTransform: "uppercase" }}>{name}</Typography>{value}
     </Box>)}
   </Paper>;
 }
@@ -158,13 +158,13 @@ export function App({ snapshot, connection = "connecting", events = [], refreshS
   const choose = (id: WorkspaceId) => { setActive(id); setMobileOpen(false); };
   const drawer = <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
     <Toolbar sx={{ minHeight: "72px !important", px: "18px !important", gap: 1.25 }}><Box className="brand-mark" aria-hidden="true">π</Box><Box sx={{ minWidth: 0 }}>
-      <Typography sx={{ fontWeight: 760, lineHeight: 1.15 }}>Piagent</Typography><Typography variant="caption" color="text.disabled">WebUI · local</Typography></Box></Toolbar>
+      <Typography sx={{ fontWeight: 650, lineHeight: 1.15 }}>Piagent</Typography><Typography variant="caption" color="text.disabled">WebUI · local</Typography></Box></Toolbar>
     <Box sx={{ mx: 1.5, mb: 1.25, p: 1.35, border: 1, borderColor: "divider", borderRadius: 1, bgcolor: "action.hover" }}>
       <Typography variant="caption" color="text.disabled" sx={{ display: "block", textTransform: "uppercase", letterSpacing: ".09em" }}>{localize(locale, "Pi session hiện tại", "Current Pi session")}</Typography>
-      <Typography variant="body2" noWrap title={snapshot.session.displayName ?? undefined} sx={{ mt: .45, fontWeight: 700 }}>{snapshot.session.displayName ?? "Pi session"}</Typography>
+      <Typography variant="body2" noWrap title={snapshot.session.displayName ?? undefined} sx={{ mt: .45, fontWeight: 650 }}>{snapshot.session.displayName ?? "Pi session"}</Typography>
       <Typography variant="caption" color="text.secondary" title={snapshot.identity.sessionRef}>{compactRef(snapshot.identity.sessionRef)}</Typography>
     </Box>
-    <Typography variant="caption" color="text.disabled" sx={{ px: 2.5, pt: 1, pb: .5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>{localize(locale, "Không gian làm việc", "Workspaces")}</Typography>
+    <Typography variant="caption" color="text.disabled" sx={{ px: 2.5, pt: 1, pb: .5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase" }}>{localize(locale, "Không gian làm việc", "Workspaces")}</Typography>
     <List component="nav" aria-label={localize(locale, "Điều hướng WebUI", "WebUI navigation")} sx={{ py: .5 }}>{nav.map((item) => <ListItemButton key={item.id} selected={active === item.id} aria-current={active === item.id ? "page" : undefined} onClick={() => choose(item.id)}>
       <ListItemIcon sx={{ minWidth: 36, color: "inherit", "& .MuiSvgIcon-root": { fontSize: 19 } }}>{item.icon}</ListItemIcon><ListItemText primary={item.label} slotProps={{ primary: { sx: { fontSize: 13, fontWeight: active === item.id ? 750 : 600 } } }} />
       {Boolean(item.count) && <Badge badgeContent={item.count} color={item.id === "activity" ? "secondary" : "primary"} max={99} sx={{ mr: 1 }} />}</ListItemButton>)}</List>

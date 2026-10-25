@@ -1,11 +1,10 @@
-import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 
-import { App } from "./App.tsx";
 import { SessionHubApp } from "./SessionHubApp.tsx";
 import { UpdateProvider } from "./update-state.tsx";
 import { createPiagentTheme } from "./theme.ts";
@@ -26,9 +25,12 @@ const emotionCache = createCache({
   prepend: true
 });
 
+// The single-session view is the rare mode: it loads on its own, so the
+// conversation hub never carries its code.
+const App = lazy(() => import("./App.tsx").then((module) => ({ default: module.App })));
 function InspectionApp() {
   const state = useInspection();
-  return <App {...state} />;
+  return <Suspense fallback={null}><App {...state} /></Suspense>;
 }
 
 function GatewayApp() {

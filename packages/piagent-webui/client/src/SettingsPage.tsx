@@ -47,7 +47,7 @@ function Title({ children }: { children: React.ReactNode }) {
 
 function SettingRow({ icon, title, detail, action }: { icon: React.ReactNode; title: string; detail?: string; action: React.ReactNode }) {
   return <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", gap: 2, p: 2.25 }}>
-    <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>{icon}<Box><Typography sx={{ fontWeight: 760 }}>{title}</Typography>
+    <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>{icon}<Box><Typography sx={{ fontWeight: 650 }}>{title}</Typography>
       {detail && <Typography variant="body2" color="text.secondary">{detail}</Typography>}</Box></Stack>{action}</Stack>;
 }
 
@@ -117,7 +117,7 @@ function AgentCapabilityCards({ options, snapshot, activeModel, observedProvider
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
       {cards.map((card) => <Paper variant="outlined" key={card.key} sx={{ p: 1.75, borderRadius: 1 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
         <Box sx={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: 1, bgcolor: "action.selected", flex: "0 0 auto" }}>{card.icon}</Box>
-        <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>{card.title}</Typography>
+        <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{card.title}</Typography>
           <Typography variant="body2" color="text.secondary">{card.detail}</Typography></Box>
         <Chip size="small" color={card.ready ? "success" : "default"} variant="outlined" label={card.status} /></Stack></Paper>)}
     </Box></>;
@@ -145,7 +145,7 @@ function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetMod
   return <><Title>{localize(locale, "Nhà cung cấp & model", "Providers & models")}</Title>
     {session && <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 1, mb: 2 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "center", mb: 2 }}>
       <ServiceIcon name={observedModel?.provider ?? session.modelLabel ?? "model"} size={38} /><Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700 }}>{localize(locale, "Model của session hiện tại", "Current session model")}</Typography>
+        <Typography sx={{ fontWeight: 650 }}>{localize(locale, "Model của session hiện tại", "Current session model")}</Typography>
         <Typography variant="body2" color="text.secondary" noWrap>{modelDisplay} · {label(session.thinkingLevel, locale)}</Typography></Box>
       <Chip size="small" variant="outlined" label={localize(locale, "Đang dùng", "In use")} /></Stack>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
@@ -168,7 +168,7 @@ function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetMod
       "Các model hiện có từ những provider đã xác thực.", "Models currently available from authenticated providers.")}</Typography>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
       {providers.map(([provider, models]) => <Paper variant="outlined" key={provider} sx={{ p: 1.5, borderRadius: 1 }}><Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
-        <ServiceIcon name={provider} size={32} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontWeight: 700, textTransform: "capitalize" }}>{provider}</Typography>
+        <ServiceIcon name={provider} size={32} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontWeight: 650, textTransform: "capitalize" }}>{provider}</Typography>
           <Typography variant="body2" color="text.secondary">{models.length} model</Typography></Box><Chip size="small" color="success" variant="outlined" label={localize(locale, "Sẵn sàng", "Ready")} /></Stack>
         <Box sx={{ display: "flex", gap: .6, mt: 1.25, flexWrap: "wrap" }}>{models.slice(0, 6).map((model) => <Chip key={model.modelRef} size="small" variant="outlined" label={model.displayName} />)}
           {models.length > 6 && <Chip size="small" variant="outlined" label={`+${models.length - 6}`} />}</Box></Paper>)}</Box>
@@ -183,7 +183,7 @@ function ConnectionSettings({ value, loading, sessionRef, onChanged }: { value?:
     {loading ? <CircularProgress size={22} /> : <Stack spacing={1}>
       {(value?.connections ?? []).map((connection) => <Paper variant="outlined" key={connection.connectionRef} sx={{ p: 1.75, borderRadius: 1 }}>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}><ServiceIcon name={connection.name} size={38} /><Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography noWrap sx={{ fontWeight: 800 }}>{connection.name}</Typography><Typography variant="body2" color="text.secondary">{mcpConnectionSubtitle(connection, locale)}</Typography></Box>
+          <Typography noWrap sx={{ fontWeight: 650 }}>{connection.name}</Typography><Typography variant="body2" color="text.secondary">{mcpConnectionSubtitle(connection, locale)}</Typography></Box>
           {sessionRef ? <McpConnectionActions sessionRef={sessionRef} connection={connection} onChanged={onChanged} />
             : <Chip size="small" variant="outlined" label={localize(locale, "Đã cấu hình", "Configured")} />}</Stack></Paper>)}
       {!value?.connections.length && <Typography color="text.secondary">{localize(locale, "Chưa có MCP trong project này", "No MCP configured for this project")}</Typography>}
@@ -251,7 +251,7 @@ function UsageSettings({ session, snapshot }: { session?: SessionRow; snapshot?:
   return <><Title>{localize(locale, "Usage & context", "Usage & context")}</Title><Box sx={{ display: "grid",
     gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))" }, gap: 1 }}>
     {cards.map(([name, value]) => <Paper variant="outlined" key={name} sx={{ p: 2, borderRadius: 1 }}><Typography variant="caption" color="text.secondary">{name}</Typography>
-      <Typography sx={{ mt: .6, fontSize: "1.25rem", fontWeight: 800 }}>{value}</Typography></Paper>)}</Box></>;
+      <Typography sx={{ mt: .6, fontSize: "1.25rem", fontWeight: 650 }}>{value}</Typography></Paper>)}</Box></>;
 }
 
 function AboutSettings({ capabilities, connection }: { capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: string }) {
@@ -260,7 +260,7 @@ function AboutSettings({ capabilities, connection }: { capabilities?: PiagentGat
     [localize(locale, "Runtime", "Runtime"), capabilities?.capabilities.sessionRuntime.status ?? "unknown"]];
   return <><Title>Piagent</Title><Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>{rows.map(([name, value], index) => <Box key={String(name)}>
     <Stack direction="row" sx={{ px: 2.25, py: 1.6, justifyContent: "space-between", gap: 2 }}><Typography color="text.secondary">{name}</Typography>
-      <Typography sx={{ fontWeight: 760 }}>{String(value)}</Typography></Stack>{index < rows.length - 1 && <Divider />}</Box>)}</Paper></>;
+      <Typography sx={{ fontWeight: 650 }}>{String(value)}</Typography></Stack>{index < rows.length - 1 && <Divider />}</Box>)}</Paper></>;
 }
 
 export function SettingsPage({ section, onSection, onBack, session, snapshot, capabilities, connection, onSetModel, onSetThinking, onSetPermission, onRuntimeChanged }: { section: SettingsSection;

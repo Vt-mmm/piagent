@@ -23,7 +23,7 @@ export function ActionConfirmationDialog({ open, title, description, confirmLabe
       <Box sx={{ width: 36, height: 36, borderRadius: 1, display: "grid", placeItems: "center", bgcolor: "warning.main", color: "warning.contrastText" }}>
         <WarningAmberRounded fontSize="small" />
       </Box>
-      <Typography component="span" sx={{ fontSize: "1.08rem", fontWeight: 700 }}>{title}</Typography>
+      <Typography component="span" sx={{ fontSize: "1.08rem", fontWeight: 650 }}>{title}</Typography>
     </DialogTitle>
     <DialogContent><DialogContentText id="piagent-confirm-dialog-description" sx={{ color: "text.secondary", lineHeight: 1.65 }}>
       {description}

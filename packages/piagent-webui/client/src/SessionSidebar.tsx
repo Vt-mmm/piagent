@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BrandMark } from "./BrandMark.tsx";
 import AddRounded from "@mui/icons-material/AddRounded";
 import ArchiveRounded from "@mui/icons-material/ArchiveRounded";
 import ChatBubbleOutlineRounded from "@mui/icons-material/ChatBubbleOutlineRounded";
@@ -36,6 +37,7 @@ import { toneText } from "./tone.ts";
 import { outcomeTone } from "./ProcessNote.tsx";
 import { turnEndLabel, turnEndTone } from "./TurnEndNote.tsx";
 import { sessionNeed } from "./attention-view-model.ts";
+import { modifierKey } from "./StatusBar.tsx";
 
 export type SessionMenuAction = "rename" | "pin" | "archive" | "unarchive" | "fork";
 
@@ -58,13 +60,14 @@ export function sessionActivity(session: SessionRow, live?: LiveConversation): "
   return session.liveState === "running" ? "running" : "idle";
 }
 
-function StateDot({ activity, locale, fresh = false, question = false }: { activity: ReturnType<typeof sessionActivity>; locale: UiLocale; fresh?: boolean; question?: boolean }) {
+// The open conversation shows its own progress, so its dot stays still.
+function StateDot({ activity, locale, fresh = false, question = false, calm = false }: { activity: ReturnType<typeof sessionActivity>; locale: UiLocale; fresh?: boolean; question?: boolean; calm?: boolean }) {
   const color = { running: "primary.main", elsewhere: "info.main", attention: "warning.main", recovery: "error.main", failed: "error.main", idle: fresh ? "success.main" : "transparent" }[activity];
   const title = { running: localize(locale, "Đang chạy", "Running"), elsewhere: localize(locale, "Đang chạy ở Terminal hoặc tiến trình khác", "Running in Terminal or another process"), attention: question ? localize(locale, "Cần bạn trả lời", "Needs your answer") : localize(locale, "Cần duyệt", "Needs approval"),
     recovery: localize(locale, "Cần khôi phục", "Needs recovery"), failed: localize(locale, "Lượt cuối lỗi", "Last turn failed"), idle: fresh ? localize(locale, "Xong, chưa xem", "Done, not seen") : "" }[activity];
   return <Box role={activity === "idle" && !fresh ? undefined : "img"} aria-label={title || undefined} title={title}
     sx={{ width: 8, height: 8, mt: .9, ml: .75, flexShrink: 0, borderRadius: "50%", bgcolor: color,
-      animation: activity === "running" || activity === "elsewhere" || activity === "attention" ? "piagent-pulse 1.4s ease-in-out infinite" : "none" }} />;
+      animation: !calm && (activity === "running" || activity === "elsewhere" || activity === "attention") ? "piagent-pulse 1.4s ease-in-out infinite" : "none" }} />;
 }
 
 // How a company conversation's last code-changing turn ended (Harness workflow).
@@ -85,8 +88,9 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
   // than the code process of its last round; neither while it runs.
   const end = company && !fresh && activity !== "running" && activity !== "elsewhere" ? session.managedTurnEnd ?? null : null;
   const outcome = !end && company && session.managedProcess && session.managedProcess.outcome !== "no_change" ? session.managedProcess.outcome : null;
-  return <Box sx={{ display: "flex", alignItems: "center", pr: .5 }} className={activity === "attention" ? "session-item attention" : fresh ? "session-item fresh" : "session-item"}><ListItemButton selected={selected} onClick={onSelect}
-    sx={{ minWidth: 0, alignItems: "flex-start", py: 1, px: 1.4 }}>
+  return <Box sx={{ display: "flex", alignItems: "center", pr: .5, "@media (hover: hover)": { "& .session-item-menu": { opacity: anchor || selected ? 1 : 0, transition: "opacity .12s" },
+    "&:hover .session-item-menu, & .session-item-menu:focus-visible": { opacity: 1 } } }} className={activity === "attention" ? "session-item attention" : fresh ? "session-item fresh" : "session-item"}><ListItemButton selected={selected} onClick={onSelect}
+    sx={{ minWidth: 0, alignItems: "flex-start", py: .7, px: 1.25 }}>
     <ListItemText primary={<>{session.pinned && <PushPinOutlined sx={{ fontSize: 13, mr: .5, verticalAlign: "-2px", color: "text.disabled" }} />}{session.title}</>}
       secondary={<>{company && <Box component="span" sx={{ fontWeight: 650, color: "primary.main" }}>{localize(locale, "Công ty", "Company")}<span> · </span></Box>}
         {status ?? relativeTime(session.updatedAt, locale)}
@@ -94,8 +98,8 @@ function SessionItem({ session, live, selected, locale, onSelect, onAction, show
         {end && <Box component="span" sx={toneText(turnEndTone(end))}> · {turnEndLabel(end, locale)}</Box>}
         {outcome && <Box component="span" sx={toneText(outcomeTone(outcome))}> · {localize(locale, ...OUTCOME_SHORT[outcome])}</Box>}</>}
       slotProps={{ primary: { noWrap: true, sx: { fontSize: 13.25, fontWeight: selected ? 600 : 500 } },
-        secondary: { noWrap: true, sx: { mt: .25, fontSize: 11.25, ...(activity === "attention" ? { color: "warning.main", fontWeight: 650 } : fresh ? { color: activity === "failed" ? "error.main" : "success.main", fontWeight: 650 } : {}) } } }} /><StateDot activity={activity} locale={locale} fresh={fresh} question={sessionNeed(session, live) === "question"} /></ListItemButton>
-    <IconButton size="small" aria-label={localize(locale, "Tùy chọn cuộc trò chuyện", "Chat options")}
+        secondary: { noWrap: true, sx: { mt: .25, fontSize: 11.25, ...(activity === "attention" ? { color: "warning.main", fontWeight: 650 } : fresh ? { color: activity === "failed" ? "error.main" : "success.main", fontWeight: 650 } : {}) } } }} /><StateDot activity={activity} locale={locale} fresh={fresh} calm={selected} question={sessionNeed(session, live) === "question"} /></ListItemButton>
+    <IconButton size="small" className="session-item-menu" aria-label={localize(locale, "Tùy chọn cuộc trò chuyện", "Chat options")}
       onClick={(event) => setAnchor(event.currentTarget)}><MoreHorizRounded fontSize="small" /></IconButton>
     <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} onClick={(event) => event.stopPropagation()}>
       {!session.archived && <MenuItem onClick={() => choose("rename")}>{localize(locale, "Đổi tên", "Rename")}</MenuItem>}
@@ -148,13 +152,15 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
   });
   void count;
   return <Box sx={{ height: "100%", display: "flex", flexDirection: "column", bgcolor: "background.paper" }}>
-    <Toolbar sx={{ minHeight: "60px !important", px: "16px !important", gap: 1.1 }}><Box className="brand-mark" aria-hidden="true">π</Box><Box sx={{ minWidth: 0 }}>
-      <Typography sx={{ fontWeight: 600 }}>Piagent</Typography><Typography variant="caption" color="text.disabled">{localize(locale, "Coding agent", "Coding agent")}</Typography></Box></Toolbar>
+    <Toolbar sx={{ minHeight: "52px !important", px: "16px !important", gap: 1.1 }}><BrandMark size={28} /><Box sx={{ minWidth: 0 }}>
+      <Typography sx={{ fontWeight: 650, fontSize: 14.5, letterSpacing: "-0.01em", lineHeight: 1.2 }}>Piagent</Typography><Typography variant="caption" color="text.disabled" sx={{ lineHeight: 1.2 }}>{localize(locale, "Coding agent", "Coding agent")}</Typography></Box></Toolbar>
     <Box sx={{ px: 1.25 }}><Tooltip title={canCreate ? localize(locale, "Tạo cuộc trò chuyện mới", "Create a new chat")
       : localize(locale, "Gateway hiện chưa cho phép tạo cuộc trò chuyện", "The Gateway cannot create chats right now")}><span><Button fullWidth disabled={!canCreate}
-      variant="outlined" onClick={onNew} startIcon={<AddRounded />} sx={{ justifyContent: "flex-start", py: 1 }}>{localize(locale, "Cuộc trò chuyện mới", "New chat")}</Button></span></Tooltip>
+      variant="outlined" onClick={onNew} startIcon={<AddRounded />} sx={{ justifyContent: "flex-start", minHeight: 36, color: "text.primary" }}>
+      {localize(locale, "Cuộc trò chuyện mới", "New chat")}
+      <Box component="kbd" aria-hidden="true" sx={{ ml: "auto", font: "inherit", fontSize: 11, color: "text.disabled", letterSpacing: ".04em" }}>{modifierKey()}⇧O</Box></Button></span></Tooltip>
       <TextField value={query} onChange={(event) => onQuery(event.target.value)} fullWidth size="small" placeholder={localize(locale, "Tìm cuộc trò chuyện", "Search chats")}
-        sx={{ mt: 1.1 }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRounded fontSize="small" /></InputAdornment> } }} /></Box>
+        sx={{ mt: 1, "& .MuiInputBase-root": { height: 34, fontSize: 13.5 } }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRounded sx={{ fontSize: 17, color: "text.disabled" }} /></InputAdornment> } }} /></Box>
     <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 2, pt: 2, pb: .4 }}><Typography variant="caption" color="text.disabled"
       sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em" }}>{showArchived ? localize(locale, "Đã lưu trữ", "Archived") : localize(locale, "Cuộc trò chuyện", "Chats")}</Typography>
       <Typography variant="caption" color="text.disabled">{shown}</Typography></Stack>

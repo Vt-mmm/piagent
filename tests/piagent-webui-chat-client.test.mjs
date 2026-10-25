@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 
-import { liveChatState, mergeOlderTranscriptPage } from "../packages/piagent-webui/client/src/chat-view-model.ts";
+import { liveChatState, mergeOlderTranscriptPage, TRANSCRIPT_WINDOW } from "../packages/piagent-webui/client/src/chat-view-model.ts";
 import { createAttachmentCommand, createAttachmentDiscardCommand, createChatCommand, createQueueCommand, queueUpdatePayload } from "../packages/piagent-webui/client/src/chat-command.ts";
 import { chatActionDigest, chatContentDigest } from "../packages/piagent-webui/extension/same-session-bridge.ts";
 import { createApprovalDecision } from "../packages/piagent-webui/client/src/approval-command.ts";
@@ -85,11 +85,11 @@ describe("Piagent WebUI bounded chat client", () => {
 
   it("keeps newly loaded older messages when the bounded history window is full", () => {
     const refs = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => ({ messageRef: `message.${from + index}` }));
-    const first = mergeOlderTranscriptPage(refs(101, 300), refs(51, 100));
-    assert.equal(first.length, 200);
+    const first = mergeOlderTranscriptPage(refs(101, 1100), refs(51, 100));
+    assert.equal(first.length, TRANSCRIPT_WINDOW);
     assert.deepEqual(first.slice(0, 3).map((item) => item.messageRef), ["message.51", "message.52", "message.53"]);
     const second = mergeOlderTranscriptPage(first, refs(1, 50));
-    assert.equal(second.length, 200);
+    assert.equal(second.length, TRANSCRIPT_WINDOW);
     assert.deepEqual(second.slice(0, 3).map((item) => item.messageRef), ["message.1", "message.2", "message.3"]);
   });
 

@@ -57,7 +57,7 @@ export function ProviderAccounts({ catalog, refresh }: { catalog?: ProviderAuthC
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
       {(catalog?.providers ?? []).map((provider) => <Paper variant="outlined" key={provider.providerRef} sx={{ p: 1.75, borderRadius: 1 }}>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}><ServiceIcon name={provider.name} size={38} />
-          <Typography sx={{ flex: 1, fontWeight: 800 }}>{provider.name}</Typography>{provider.state === "connected" &&
+          <Typography sx={{ flex: 1, fontWeight: 650 }}>{provider.name}</Typography>{provider.state === "connected" &&
             <Chip size="small" color="success" variant="outlined" icon={<CheckCircleRounded />} label={localize(locale, "Đã kết nối", "Connected")} />}
           <Button size="small" variant="outlined" disabled={busy} onClick={() => void start(provider.providerRef)}>
             {provider.state === "connected" ? localize(locale, "Kết nối lại", "Reconnect") : localize(locale, "Kết nối", "Connect")}</Button></Stack>
@@ -72,7 +72,7 @@ export function ProviderAccounts({ catalog, refresh }: { catalog?: ProviderAuthC
             <Typography>{localize(locale, "Đã kết nối", "Connected")}</Typography></Stack>}
           {latestEvents.map((event) => <Box key={event.sequence}>
             {event.message && <Typography variant="body2" color="text.secondary">{event.message}</Typography>}
-            {event.userCode && <Typography sx={{ my: 1, fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 800, letterSpacing: ".12em" }}>{event.userCode}</Typography>}
+            {event.userCode && <Typography sx={{ my: 1, fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 650, letterSpacing: ".12em" }}>{event.userCode}</Typography>}
             {event.url && <Button component="a" href={event.url} target="_blank" rel="noopener noreferrer" variant="outlined" size="small" endIcon={<LaunchRounded />}>
               {localize(locale, "Mở trang xác thực", "Open authentication")}</Button>}
             {event.links.map((link) => <Button key={link.url} component="a" href={link.url} target="_blank" rel="noopener noreferrer" size="small">

@@ -47,24 +47,28 @@ export const fastLabel = (on: boolean, locale: UiLocale) => on ? localize(locale
 export const fastHint = (locale: UiLocale) => localize(locale,
   "Fast: main agent trả lời nhanh hơn trên model GPT (Codex); token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
   "Fast: the main agent answers faster on GPT (Codex) models; its tokens count 2.5 times toward the quota. Model and thinking level are unchanged.");
-export const fastOnSx = { borderColor: "warning.main", color: "warning.main", fontWeight: 700,
+export const fastOnSx = { borderColor: "warning.main", color: "warning.main", fontWeight: 650,
   bgcolor: (theme: Theme) => alpha(theme.palette.warning.main, .14), "&:hover": { bgcolor: (theme: Theme) => alpha(theme.palette.warning.main, .22), color: "warning.main" } };
 
-function ComposerControl({ title, label: controlLabel, icon, active, badge, tone, onClick }: { title: string; label?: string;
+// `compact` (a narrow header beside the inspector) keeps the icon and the
+// tooltip and drops the text.
+function ComposerControl({ title, label: fullLabel, icon, active, badge, tone, onClick, compact = false }: { title: string; label?: string; compact?: boolean;
   icon: React.ReactNode; active: boolean; badge?: number; tone?: "warning"; onClick(event: React.MouseEvent<HTMLElement>): void }) {
-  const shared = { border: 1, borderColor: active ? "primary.main" : "divider", bgcolor: active ? "action.selected" : "transparent",
-    color: active ? "primary.main" : "text.secondary", borderRadius: 1, "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+  const controlLabel = compact ? undefined : fullLabel;
+  const shared = { border: 1, borderColor: active ? (theme: Theme) => alpha(theme.palette.primary.main, .45) : "transparent",
+    bgcolor: active ? (theme: Theme) => alpha(theme.palette.primary.main, .12) : "action.hover",
+    color: active ? "primary.main" : "text.secondary", borderRadius: 999, fontWeight: 500, "&:hover": { bgcolor: "action.selected", color: "text.primary" },
     ...(active && tone === "warning" ? fastOnSx : {}) };
-  const button = controlLabel ? <Button size="small" aria-label={title} onClick={onClick} startIcon={icon} sx={{ ...shared, minHeight: 34,
-    minWidth: {xs:34,md:64}, maxWidth: 260, px: {xs:.75,md:1.15}, "& .MuiButton-startIcon": { mr: {xs:0,md:.65}, ml:0 }, "& .MuiButton-startIcon svg": { fontSize: 17 } }}>
+  const button = controlLabel ? <Button size="small" aria-label={title} onClick={onClick} startIcon={icon} sx={{ ...shared, minHeight: 30,
+    minWidth: {xs:30,md:64}, maxWidth: 260, px: {xs:.75,md:1.15}, "& .MuiButton-startIcon": { mr: {xs:0,md:.65}, ml:0 }, "& .MuiButton-startIcon svg": { fontSize: 16 } }}>
     <Box component="span" sx={{ display: { xs: "none", md: "inline" }, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{controlLabel}</Box>
-  </Button> : <IconButton size="small" aria-label={title} onClick={onClick} sx={{ ...shared, width: 34, height: 34 }}>{icon}</IconButton>;
-  return <Tooltip title={title} arrow>{!badge ? button : <Badge badgeContent={badge} color="primary" max={9999}
-    sx={{ "& .MuiBadge-badge": { height: 16, minWidth: 16, px: .4, fontSize: 9, fontWeight: 700 } }}>{button}</Badge>}</Tooltip>;
+  </Button> : <IconButton size="small" aria-label={title} onClick={onClick} sx={{ ...shared, width: 30, height: 30 }}>{icon}</IconButton>;
+  return <Tooltip title={title}>{!badge ? button : <Badge badgeContent={badge} color="primary" max={9999}
+    sx={{ "& .MuiBadge-badge": { height: 16, minWidth: 16, px: .4, fontSize: 9, fontWeight: 650 } }}>{button}</Badge>}</Tooltip>;
 }
 
 export function SessionComposerControls({ session, snapshot, connections, locale, onOpenChanges, canSetModel, canSetThinking, canSetPermission, onSetModel, onSetThinking, onSetPermission, onSetFast,
-  onConnectionsChanged, placement = "composer" }: { session: SessionRow;
+  onConnectionsChanged, placement = "composer", compact = false }: { session: SessionRow; compact?: boolean;
   snapshot?: PiagentWebUICanonicalSnapshotV1; connections?: SessionConnections; locale: UiLocale; onOpenChanges(): void;
   canSetModel?: boolean; canSetThinking?: boolean; canSetPermission?: boolean; onSetModel?(modelRef: string): Promise<unknown>;
   onSetThinking?(thinking: string): Promise<unknown>; onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown>; onSetFast?(fast: boolean): Promise<unknown>;
@@ -156,14 +160,14 @@ export function SessionComposerControls({ session, snapshot, connections, locale
       {placement === "header" && managed && (session.managedHelpers?.maximum ?? 2) > 0 && <Typography variant="caption" color="text.secondary" title={localize(locale,
         "Subagent đang chạy trong phiên này; Studio giới hạn tổng số theo thành viên.", "Subagents running in this session; Studio caps the total per member.")}
         sx={{ whiteSpace: "nowrap", display: { xs: "none", sm: "block" }, mr: .5 }}>{localize(locale, "Subagent", "Subagents")} {session.managedHelpers?.active ?? 0}/{session.managedHelpers?.maximum ?? 2}</Typography>}
-      {placement === "header" && <ComposerControl active={panel === "model"} onClick={open("model")} icon={<ModelTrainingOutlined fontSize="small" />}
+      {placement === "header" && <ComposerControl compact={compact} active={panel === "model"} onClick={open("model")} icon={<ModelTrainingOutlined fontSize="small" />}
         label={`${(managed ? "agent-watch-auto" : session.modelLabel) ?? localize(locale, "Model session", "Session model")} · ${
           session.thinkingLevel === "unknown" || thinkingLevels.length > 0 && !thinkingLevels.includes(session.thinkingLevel) ? "—" : label(session.thinkingLevel, locale)}`}
         title={managed ? 'agent-watch-auto · Thinking' : localize(locale, "Đổi model và mức suy luận", "Change model and thinking level")} />}
-      {placement === "header" && <ComposerControl active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
+      {placement === "header" && <ComposerControl compact={compact} active={panel === "permission"} onClick={open("permission")} icon={<ShieldOutlined fontSize="small" />}
         label={managed ? companyAccessLabel(permissionValue, locale) : permissionValue ? label(permissionValue, locale) : localize(locale, "Quyền", "Access")}
         title={localize(locale, "Đổi quyền truy cập", "Change access level")} />}
-      {placement === "header" && managed && session.managedFast && onSetFast && <ComposerControl active={fastOn} tone="warning" onClick={() => void toggleFast()} icon={<BoltRounded fontSize="small" />}
+      {placement === "header" && managed && session.managedFast && onSetFast && <ComposerControl compact={compact} active={fastOn} tone="warning" onClick={() => void toggleFast()} icon={<BoltRounded fontSize="small" />}
         label={fastLabel(fastOn, locale)}
         title={fastOn ? localize(locale, "Fast đang bật: bấm để tắt (về tốc độ thường). Token tính vào quota gấp 2,5 lần.", "Fast is on: click to turn it off (standard speed). Tokens count 2.5 times toward the quota.")
           : localize(locale, "Bật Fast: trả lời nhanh hơn, token tính vào quota gấp 2,5 lần", "Turn Fast on: faster answers, tokens count 2.5 times toward the quota")} />}

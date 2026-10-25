@@ -821,7 +821,7 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef, finding
   return (
     <Paper component="section" variant="outlined" className="source-workspace" aria-labelledby="source-title" sx={{ overflow: "hidden", minHeight: "calc(100vh - 120px)", display: "flex", flexDirection: "column" }}>
       <Box component="header" className="source-heading" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: { xs: 2, sm: 2.5 }, py: 1.75, borderBottom: 1, borderColor: "divider" }}>
-        <Box><Typography variant="overline" color="primary.main" sx={{ fontWeight: 800, letterSpacing: ".14em", lineHeight: 1 }}>Source changes</Typography><Typography variant="h2" id="source-title" sx={{ mt: .5 }}>{localize(locale, "Thay đổi trong project", "Project changes")}</Typography></Box>
+        <Box><Typography variant="overline" color="primary.main" sx={{ fontWeight: 650, letterSpacing: ".14em", lineHeight: 1 }}>Source changes</Typography><Typography variant="h2" id="source-title" sx={{ mt: .5 }}>{localize(locale, "Thay đổi trong project", "Project changes")}</Typography></Box>
         <Chip label="Git + task baseline" variant="outlined" size="small" />
       </Box>
       <Tabs className="source-tabs" value={view} onChange={(_, value: View) => selectView(value)} selectionFollowsFocus variant="scrollable" scrollButtons="auto"

@@ -14,11 +14,11 @@ export type ThemePreset = {
 const preset = (value: ThemePreset) => value;
 
 export const THEME_PRESETS: readonly ThemePreset[] = [
-  preset({ id: "piagent-dark", label: "Piagent Dark", mode: "dark", background: "#050505", paper: "#101114", text: "#f4f4ef", muted: "#a4a6ad", divider: "#24262d",
+  preset({ id: "piagent-dark", label: "Piagent Dark", mode: "dark", background: "#09090b", paper: "#111114", text: "#ededf0", muted: "#a3a3ad", divider: "#232329",
     primary: "#d8ff7a", onPrimary: "#111300", secondary: "#8be9c8", warning: "#efba63", error: "#ff7f86",
     syntax: { keyword: "#d8ff7a", string: "#8be9c8", number: "#efba63", comment: "#7d808a", function: "#9ecbff", type: "#f0a6ff", property: "#e6e6dc", operator: "#c5c7cc", heading: "#d8ff7a", link: "#8be9c8" },
     ansi: ["#1b1c20", "#ff7f86", "#b9e769", "#efba63", "#82aaff", "#f0a6ff", "#8be9c8", "#d6d6d0", "#5c5f68", "#ff9ea3", "#d8ff7a", "#ffd58a", "#a8c5ff", "#f6c4ff", "#b3f5df", "#f4f4ef"] }),
-  preset({ id: "piagent-light", label: "Piagent Light", mode: "light", background: "#f5f6f0", paper: "#ffffff", text: "#1c2018", muted: "#62685c", divider: "#dfe2d8",
+  preset({ id: "piagent-light", label: "Piagent Light", mode: "light", background: "#f5f6f0", paper: "#ffffff", text: "#18181b", muted: "#5b5b63", divider: "#e4e4df",
     primary: "#627400", onPrimary: "#ffffff", secondary: "#14775f", warning: "#9a5b00", error: "#c22f3a",
     syntax: { keyword: "#5a6b00", string: "#14775f", number: "#9a5b00", comment: "#7a8072", function: "#1f5fbf", type: "#8a3fa0", property: "#1c2018", operator: "#4a4f45", heading: "#5a6b00", link: "#14775f" },
     ansi: ["#1c2018", "#c22f3a", "#4d7a00", "#9a5b00", "#1f5fbf", "#8a3fa0", "#14775f", "#d6d8d0", "#62685c", "#e04a55", "#627400", "#b87a12", "#3a7be0", "#a85ac0", "#1f9a7c", "#f5f6f0"] }),
