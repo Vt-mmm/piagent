@@ -23,7 +23,7 @@
   --line-strong: color-mix(in srgb, var(--text) 18%, var(--surface));
   --quiet: var(--muted);
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-  --blue: color-mix(in srgb, #7aa2f7 70%, var(--text));
+  --blue: color-mix(in srgb, #7aa2f7 38%, var(--text));
   --amber: var(--warning);
   --red: var(--danger);
   --page-glow: transparent;
