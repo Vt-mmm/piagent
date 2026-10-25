@@ -55,7 +55,8 @@ import { useAttention } from "./AttentionToasts.tsx";
 import { sessionNeed } from "./attention-view-model.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
-import type { SettingsSection } from "./SettingsPage.tsx";
+import type { SettingsSection } from "./SettingsNavigation.tsx";
+import { AsyncSurface } from "./AsyncSurface.tsx";
 // Settings and the Agent Inspector (source review, documents) load when first
 // opened, so the first paint of a conversation carries neither.
 const SettingsPage = lazy(() => import("./SettingsPage.tsx").then((module) => ({ default: module.SettingsPage })));
@@ -755,12 +756,12 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },
         height: { xs: "100%", sm: "min(86vh, 840px)" }, maxHeight: { xs: "100%", sm: "86vh" }, borderRadius: { xs: 0, sm: 2.5 }, overflow: "hidden" } } }}>
-      <Suspense fallback={<Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center" }}><CircularProgress size={22} /></Stack>}><SettingsPage section={settingsSection} onSection={setSettingsSection} onBack={() => setSettingsOpen(false)} session={selected}
+      {settingsOpen && <AsyncSurface locale={locale}><SettingsPage section={settingsSection} onSection={setSettingsSection} onBack={() => setSettingsOpen(false)} session={selected}
         snapshot={currentInspection} capabilities={capabilities} connection={connection}
         onSetModel={selected ? (modelRef) => setModel(selected, modelRef) : undefined}
         onSetThinking={selected ? (value) => setThinking(selected, value) : undefined}
         onSetPermission={selected ? (value) => setPermission(selected, value) : undefined}
-        onRuntimeChanged={async () => { await refresh(); await refreshInspection(); }} /></Suspense>
+        onRuntimeChanged={async () => { await refresh(); await refreshInspection(); }} /></AsyncSurface>}
     </Dialog>
     <Dialog open={Boolean(sessionAction)} onClose={() => !actionBusy && setSessionAction(null)} fullWidth maxWidth="xs">
       <Stack spacing={2} sx={{ p: 3 }}><Typography variant="h2">{sessionAction?.kind === "rename"

@@ -1,19 +1,15 @@
-import { lazy, StrictMode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, StrictMode, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 
-import { SessionHubApp } from "./SessionHubApp.tsx";
-import { UpdateProvider } from "./update-state.tsx";
+import { AsyncSurface } from "./AsyncSurface.tsx";
 import { createPiagentTheme } from "./theme.ts";
 import { DEFAULT_THEME, THEME_PRESETS, themePreset } from "./theme-presets.ts";
-import { useServerPreferences } from "./use-server-preferences.ts";
 import { preferredLocale } from "./locale-preference.ts";
-import { UiPreferencesProvider, useUiPreferences, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
-import { useInspection } from "./use-inspection.ts";
-import { useSessionHub } from "./use-session-hub.ts";
+import { UiPreferencesProvider, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
 import "./styles.css";
 
 const root = document.getElementById("root");
@@ -25,19 +21,8 @@ const emotionCache = createCache({
   prepend: true
 });
 
-// The single-session view is the rare mode: it loads on its own, so the
-// conversation hub never carries its code.
-const App = lazy(() => import("./App.tsx").then((module) => ({ default: module.App })));
-function InspectionApp() {
-  const state = useInspection();
-  return <Suspense fallback={null}><App {...state} /></Suspense>;
-}
-
-function GatewayApp() {
-  const state = useSessionHub(), { locale, themeId, setLocale, setThemeId } = useUiPreferences();
-  useServerPreferences(Boolean(state.catalog), { locale, themeId }, { setLocale, setThemeId });
-  return <UpdateProvider><SessionHubApp {...state} /></UpdateProvider>;
-}
+const InspectionApp = lazy(() => import("./InspectionApp.tsx"));
+const GatewayApp = lazy(() => import("./GatewayApp.tsx"));
 
 function storedPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try { const value = window.localStorage.getItem(key) as T | null; return value && allowed.includes(value) ? value : fallback; }
@@ -66,7 +51,7 @@ function PiagentUiRoot() {
   }, [colorMode, locale, preset]);
   const preferences = useMemo(() => ({ locale, colorMode, themeId: preset.id, setLocale, setColorMode, setThemeId }), [colorMode, locale, preset, setColorMode]);
   const mode = document.querySelector<HTMLMetaElement>('meta[name="piagent-webui-mode"]')?.content;
-  return <UiPreferencesProvider value={preferences}><ThemeProvider theme={theme}><CssBaseline />{mode === "gateway" ? <GatewayApp /> : <InspectionApp />}</ThemeProvider></UiPreferencesProvider>;
+  return <UiPreferencesProvider value={preferences}><ThemeProvider theme={theme}><CssBaseline /><AsyncSurface locale={locale}>{mode === "gateway" ? <GatewayApp /> : <InspectionApp />}</AsyncSurface></ThemeProvider></UiPreferencesProvider>;
 }
 
 createRoot(root).render(

@@ -3,6 +3,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { afterEach, describe, it } from "node:test";
 
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
@@ -60,6 +61,40 @@ afterEach(async () => {
 });
 
 describe("Piagent WebUI loopback server", () => {
+  it("negotiates compressed static code with exact bytes and matching HEAD headers", async () => {
+    const directory = staticRoot();
+    const code = "document.body.dataset.ready='true';\n".repeat(400);
+    const css = ".message { color: red; }\n".repeat(400);
+    fs.writeFileSync(path.join(directory, "assets/app.js"), code);
+    fs.writeFileSync(path.join(directory, "assets/app.css"), css);
+    const server = await start({ staticRoot: directory });
+    for (const [file, expected] of [["app.js", code], ["app.css", css]]) {
+      const compressed = await request(server.origin, `/assets/${file}`, { headers: { "Accept-Encoding": "br, gzip, deflate" } });
+      assert.equal(compressed.status, 200);
+      assert.equal(compressed.headers["content-encoding"], "gzip");
+      assert.equal(compressed.headers.vary, "Accept-Encoding");
+      assert.equal(compressed.headers["cache-control"], "no-store");
+      assert.equal(Number(compressed.headers["content-length"]), compressed.body.length);
+      assert.ok(compressed.body.length < Buffer.byteLength(expected) / 2);
+      assert.equal(gunzipSync(compressed.body).toString(), expected);
+      const head = await request(server.origin, `/assets/${file}`, { method: "HEAD", headers: { "Accept-Encoding": "gzip" } });
+      for (const name of ["content-encoding", "content-length", "content-type", "vary", "cache-control"])
+        assert.equal(head.headers[name], compressed.headers[name]);
+      assert.equal(head.body.length, 0);
+    }
+    for (const encoding of [undefined, "br", "gzip;q=0", "gzip;q=0, *;q=1", "gzip;q=invalid"]) {
+      const plain = await request(server.origin, "/assets/app.js", { headers: encoding ? { "Accept-Encoding": encoding } : {} });
+      assert.equal(plain.headers["content-encoding"], undefined);
+      assert.equal(plain.body.toString(), code);
+    }
+    const weighted = await request(server.origin, "/assets/app.js", { headers: { "Accept-Encoding": "GZIP; q=0.5" } });
+    assert.equal(weighted.headers["content-encoding"], "gzip");
+    assert.equal(gunzipSync(weighted.body).toString(), code);
+    const page = await request(server.origin, "/", { headers: { "Accept-Encoding": "gzip" } });
+    assert.equal(page.headers["content-encoding"], undefined);
+    assert.doesNotMatch(page.body.toString(), /__PIAGENT_CSP_NONCE__/);
+  });
+
   it("binds exact loopback, keeps bootstrap in the fragment, and serves local CSP assets", async () => {
     const server = await start();
     const origin = new URL(server.origin), launch = new URL(server.launchUrl), capability = bootstrapValue(server.launchUrl);
@@ -78,8 +113,9 @@ describe("Piagent WebUI loopback server", () => {
     assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/);
     assert.doesNotMatch(html, /__PIAGENT_CSP_NONCE__/);
     assert.equal(page.body.includes(Buffer.from(capability)), false);
-    const asset = await request(server.origin, "/assets/app.js");
+    const asset = await request(server.origin, "/assets/app.js", { headers: { "Accept-Encoding": "gzip" } });
     assert.equal(asset.status, 200);
+    assert.equal(asset.headers["content-encoding"], undefined, "tiny assets should not pay gzip overhead");
     assert.match(asset.headers["content-type"], /^text\/javascript/);
     assert.equal((await request(server.origin, "/../package.json")).status, 404);
   });
@@ -92,9 +128,10 @@ describe("Piagent WebUI loopback server", () => {
     const capability = bootstrapValue(server.launchUrl);
     const body = JSON.stringify({ capability });
     const exchange = await request(server.origin, "/api/v1/bootstrap", {
-      method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json" }, body
+      method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json", "Accept-Encoding": "gzip" }, body
     });
     assert.equal(exchange.status, 200, exchange.body.toString());
+    assert.equal(exchange.headers["content-encoding"], undefined, "bootstrap authority is never compressed");
     assert.equal(exchange.body.includes(Buffer.from(capability)), false);
     const cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
     assert.match(exchange.headers["set-cookie"][0], /HttpOnly; SameSite=Strict; Path=\//);

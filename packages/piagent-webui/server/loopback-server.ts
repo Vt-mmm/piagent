@@ -36,12 +36,27 @@ export type LoopbackServer = {
   close(): Promise<void>;
 };
 
-function serveAsset(response: ServerResponse, asset: StaticAsset): void {
+function acceptsGzip(header: string | undefined): boolean {
+  // Opt in only to an explicit gzip token, respecting a refusal/invalid quality.
+  const token = header?.split(",").map(value => value.trim().toLowerCase())
+    .find(value => value.split(";", 1)[0].trim() === "gzip");
+  if (!token) return false;
+  const parameters = token.split(";").slice(1).map(value => value.trim());
+  if (!parameters.length) return true;
+  return parameters.length === 1 && /^q\s*=\s*(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(parameters[0])
+    && Number(parameters[0].split("=")[1].trim()) > 0;
+}
+
+function serveAsset(response: ServerResponse, asset: StaticAsset, encoding: string | undefined, head: boolean): void {
+  const gzip = asset.gzipBody && acceptsGzip(encoding);
+  const body = gzip ? asset.gzipBody! : asset.body;
   response.statusCode = 200;
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("Content-Type", asset.contentType);
-  response.setHeader("Content-Length", asset.body.length);
-  response.end(asset.body);
+  if (asset.gzipBody) response.setHeader("Vary", "Accept-Encoding");
+  if (gzip) response.setHeader("Content-Encoding", "gzip");
+  response.setHeader("Content-Length", body.length);
+  response.end(head ? undefined : body);
 }
 
 export async function startLoopbackServer(options: {
@@ -453,8 +468,7 @@ export async function startLoopbackServer(options: {
     if (request.method !== "GET" && request.method !== "HEAD") return errorResponse(response, 405, "method-not-allowed");
     const asset = assets.get(url.pathname);
     if (!asset || url.search) return errorResponse(response, 404, "not-found");
-    if (request.method === "HEAD") { response.statusCode = 200; response.setHeader("Content-Type", asset.contentType); return response.end(); }
-    serveAsset(response, asset);
+    serveAsset(response, asset, request.headers["accept-encoding"], request.method === "HEAD");
   });
   const gatewaySocket = options.gatewayProtocol ? attachGatewayWebSocket({
     server, origin: () => origin, authority: auth, protocol: options.gatewayProtocol

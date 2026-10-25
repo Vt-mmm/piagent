@@ -297,7 +297,7 @@ test.beforeAll(async () => {
   // 120 requests a minute a page may make before it signs in.
   server = await startLoopbackServer({ anonymousRequestsPerMinute: 1_000,
     workspaceWrite: { state: ref => workspaceController(ref).state(), execute: (ref, command) => workspaceController(ref).execute(command) },
-    staticRoot: path.join(root, "packages/piagent-webui/dist/client"), mode: "gateway",
+    staticRoot: process.env.PIAGENT_WEBUI_STATIC_ROOT ?? path.join(root, "packages/piagent-webui/dist/client"), mode: "gateway",
     readCapabilities: () => capabilities, readSessionCatalog: () => catalog,
     readSessionLiveState: () => {
       liveStateReadCount += 1;
@@ -2513,4 +2513,71 @@ test("a history longer than the window says the newest messages are hidden and b
     expect(await page.locator("[data-turn]").count()).toBe(50);
     await expect.poll(async () => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY)).toBeLessThanOrEqual(2);
   } finally { pagedHistory = null; }
+});
+
+test("gateway startup defers settings code until the dialog is requested", async ({ page }) => {
+  const scripts = [];
+  page.on("request", request => { if (request.resourceType() === "script") scripts.push(request.url()); });
+  await page.goto(server.issueLaunchUrl());
+  await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Implementation result" })).toBeVisible();
+  const bytes = await page.evaluate(() => performance.getEntriesByType("resource")
+    .filter(entry => new URL(entry.name).pathname.endsWith(".js"))
+    .reduce((sum, entry) => sum + entry.decodedBodySize, 0));
+  console.log("PIAGENT_GATEWAY_STARTUP_JS_BYTES=" + bytes);
+  expect(bytes).toBeGreaterThan(0);
+  expect(bytes).toBeLessThan(1_100_000);
+  expect(scripts.some(url => /SettingsPage-.*\.js/.test(url))).toBe(false);
+  await page.getByRole("button", { name: "Cài đặt" }).click();
+  await expect(page.getByRole("dialog").getByText("Cài đặt", { exact: true })).toBeVisible();
+  expect(scripts.some(url => /SettingsPage-.*\.js/.test(url))).toBe(true);
+});
+
+test("settings chunk failure remains inside the dismissible dialog", async ({ page }) => {
+  await page.route("**/assets/SettingsPage-*.js", route => route.abort());
+  await page.goto(server.issueLaunchUrl());
+  await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+  // Earlier cases create sessions in the shared fixture; select this one rather
+  // than depending on whichever session the latest catalog chooses by default.
+  await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+  await page.getByRole("button", { name: "Cài đặt" }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Không tải được giao diện");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
+  await page.unroute("**/assets/SettingsPage-*.js");
+  await page.getByRole("button", { name: "Cài đặt" }).click();
+  await page.getByRole("button", { name: "Tải lại trang", exact: true }).click();
+  await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cài đặt" }).click();
+  await expect(page.getByRole("dialog").getByText("Cài đặt", { exact: true })).toBeVisible();
+});
+
+test("gateway cold load timing sample", async ({ page }, testInfo) => {
+  test.skip(process.env.PIAGENT_WEBUI_PERF !== "1", "Opt-in throttled benchmark; fixture server, no provider calls");
+  const encodingRequested = process.env.PIAGENT_WEBUI_PERF_ENCODING === "paired"
+    ? (testInfo.repeatEachIndex % 2 === 0 ? "identity" : "gzip") : process.env.PIAGENT_WEBUI_PERF_ENCODING;
+  if (encodingRequested === "identity" || encodingRequested === "gzip")
+    await page.setExtraHTTPHeaders({ "Accept-Encoding": encodingRequested });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Network.enable");
+  await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+  await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 40, downloadThroughput: 200_000, uploadThroughput: 100_000 });
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  await page.goto(server.issueLaunchUrl());
+  await expect(page.getByText("Gateway live", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Implementation result" })).toBeVisible({ timeout: 20_000 });
+  const metrics = await page.evaluate(() => {
+    const scripts = performance.getEntriesByType("resource").filter(entry => new URL(entry.name).pathname.endsWith(".js"));
+    return {
+      appReadyObservedMs: performance.now(),
+      firstContentfulPaintMs: performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? null,
+      decodedJsBytes: scripts.reduce((n, entry) => n + entry.decodedBodySize, 0),
+      transferredJsBytes: scripts.reduce((n, entry) => n + entry.transferSize, 0),
+      scriptRequests: scripts.length
+    };
+  });
+  console.log("PIAGENT_LOAD_SAMPLE=" + JSON.stringify({ ...metrics, encodingRequested: encodingRequested ?? "browser-default" }));
+  await testInfo.attach("load-sample.json", { body: JSON.stringify(metrics), contentType: "application/json" });
 });

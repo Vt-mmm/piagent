@@ -55,12 +55,30 @@ try {
   if (!fileRef) throw new Error("benchmark-source-file-missing");
   const diffSamples = [];
   for (let index = 0; index < samples; index += 1) diffSamples.push(await measured(() => provider.diff("working-tree", fileRef)));
+  const legacyWorkloadRssMiB = process.memoryUsage().rss / 1024 / 1024;
+  const legacyWorkloadPeakRssMiB = process.resourceUsage().maxRSS / 1024;
+  // Keep the original mixed sample/gate for historical comparisons. Separately
+  // expire both 200 ms caches before each miss, then immediately read the same
+  // file again. A miss includes source projection refresh and file validation;
+  // it is not an OS cold-disk measurement.
+  const uncachedDiffSamples = [];
+  const cachedDiffSamples = [];
+  for (let index = 0; index < samples; index += 1) {
+    await wait(210);
+    uncachedDiffSamples.push(await measured(() => provider.diff("working-tree", fileRef)));
+    cachedDiffSamples.push(await measured(() => provider.diff("working-tree", fileRef)));
+  }
   const metrics = {
     fixture: { files: fileCount, changed: changedCount, samples },
     cachedSnapshotP95Ms: Number(percentile(snapshotSamples, 0.95).toFixed(2)),
     exactSourceP95Ms: Number(percentile(sourceSamples, 0.95).toFixed(2)),
     smallDiffP95Ms: Number(percentile(diffSamples, 0.95).toFixed(2)),
-    rssMiB: Number((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
+    uncachedDiffWithProjectionP95Ms: Number(percentile(uncachedDiffSamples, 0.95).toFixed(2)),
+    cachedDiffP95Ms: Number(percentile(cachedDiffSamples, 0.95).toFixed(2)),
+    rssMiB: Number(legacyWorkloadRssMiB.toFixed(2)),
+    peakRssMiB: Number(legacyWorkloadPeakRssMiB.toFixed(2)),
+    extendedWorkloadFinalRssMiB: Number((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
+    extendedWorkloadPeakRssMiB: Number((process.resourceUsage().maxRSS / 1024).toFixed(2))
   };
   const budgets = { cachedSnapshotP95Ms: 250, exactSourceP95Ms: 1_250, smallDiffP95Ms: 300, rssMiB: 200 };
   const gates = {
@@ -69,7 +87,15 @@ try {
     smallDiff: metrics.smallDiffP95Ms < budgets.smallDiffP95Ms,
     rss: metrics.rssMiB < budgets.rssMiB
   };
-  process.stdout.write(`${JSON.stringify({ metrics, budgets, gates }, null, 2)}\n`);
+  const rawSamplesMs = { cachedSnapshot: snapshotSamples, exactSource: sourceSamples,
+    mixedSmallDiff: diffSamples, uncachedDiffWithProjection: uncachedDiffSamples, cachedDiff: cachedDiffSamples };
+  const method = {
+    uncachedDiff: "Same file after 210 ms idle, expiring the 200 ms projection and diff caches; includes projection refresh, not OS cold-disk I/O",
+    cachedDiff: "Immediate repeat after each expired-cache diff; cache TTL still applies",
+    memory: "RSS covers this Node process including fixture setup; peak is process.resourceUsage().maxRSS (KiB), not child git processes or provider-only memory",
+    gates: "Original mixed-diff and end-of-original-workload RSS gates retained; added measurements are observational"
+  };
+  process.stdout.write(`${JSON.stringify({ metrics, budgets, gates, rawSamplesMs, method }, null, 2)}\n`);
   if (Object.values(gates).some((value) => !value)) process.exitCode = 1;
 } finally {
   fs.rmSync(cwd, { recursive: true, force: true });

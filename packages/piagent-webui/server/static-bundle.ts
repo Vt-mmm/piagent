@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 16 * 1024 * 1024;
@@ -9,7 +10,7 @@ const MIME = new Map([
   [".svg", "image/svg+xml"], [".woff2", "font/woff2"]
 ]);
 
-export type StaticAsset = { body: Buffer; contentType: string };
+export type StaticAsset = { body: Buffer; contentType: string; gzipBody?: Buffer };
 
 export function loadStaticBundle(root: string): ReadonlyMap<string, StaticAsset> {
   const absoluteRoot = path.resolve(root), rootStat = fs.lstatSync(absoluteRoot);
@@ -30,7 +31,14 @@ export function loadStaticBundle(root: string): ReadonlyMap<string, StaticAsset>
       try {
         const opened = fs.fstatSync(descriptor);
         if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino || opened.size !== stat.size) throw new Error("static-asset-race");
-        assets.set(relative === "index.html" ? "/" : `/${relative}`, { body: fs.readFileSync(descriptor), contentType });
+        const body = fs.readFileSync(descriptor);
+        // Only immutable code/styles. HTML receives a per-server CSP nonce later.
+        // Compression is paid once at startup, never on an API or asset request.
+        const compressed = body.length >= 1024 && [".js", ".css"].includes(path.extname(relative))
+          ? gzipSync(body) : undefined;
+        assets.set(relative === "index.html" ? "/" : `/${relative}`, {
+          body, contentType, gzipBody: compressed && compressed.length < body.length ? compressed : undefined
+        });
       } finally { fs.closeSync(descriptor); }
     }
   };

@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.42.1",
+    "date": "2026-10-25",
+    "status": "stable",
+    "title": {
+      "en": "Faster dashboard loading and less workspace hashing memory",
+      "vi": "Dashboard tải nhanh hơn, hash workspace dùng ít bộ nhớ hơn"
+    },
+    "summary": {
+      "en": "Static code and styles transfer compressed; secondary interfaces load when needed, with recoverable loading errors.",
+      "vi": "Mã và CSS tĩnh được nén khi truyền; giao diện phụ tải khi cần, có cách phục hồi khi tải lỗi."
+    },
+    "items": [
+      {
+        "kind": "improved",
+        "en": "The local dashboard serves gzip JS/CSS to supporting browsers and reuses the compressed bytes.",
+        "vi": "Dashboard local gửi JS/CSS gzip khi trình duyệt hỗ trợ, dùng lại dữ liệu đã nén."
+      },
+      {
+        "kind": "improved",
+        "en": "Gateway and inspection interfaces load separately; Settings failures stay within a dismissible dialog. Theme and server preferences are preserved.",
+        "vi": "Gateway và giao diện inspection tải riêng; lỗi tải Settings nằm trong dialog có thể đóng. Theme và tùy chọn trên server được giữ nguyên."
+      },
+      {
+        "kind": "improved",
+        "en": "Hashing small workspace files allocates a buffer sized to the file while retaining full content and file-identity checks.",
+        "vi": "Hash file workspace nhỏ dùng buffer theo kích thước file, vẫn kiểm tra toàn bộ nội dung và định danh file."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.42.0",
     "date": "2026-10-25",
     "status": "stable",

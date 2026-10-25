@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.42.0" title="v1.42.0 docs · EN"><span class="dot"></span>v1.42.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.42.1" title="v1.42.1 docs · EN"><span class="dot"></span>v1.42.1</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-42-0" data-release>
+<article class="release latest" id="v1-42-1" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-42-1">v1.42.1</a><time class="release-date" datetime="2026-10-25">Oct 25, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-42-1-title">Faster dashboard loading and less workspace hashing memory</h3>
+    <p>Static code and styles transfer compressed; secondary interfaces load when needed, with recoverable loading errors.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The local dashboard serves gzip JS/CSS to supporting browsers and reuses the compressed bytes.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Gateway and inspection interfaces load separately; Settings failures stay within a dismissible dialog. Theme and server preferences are preserved.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Hashing small workspace files allocates a buffer sized to the file while retaining full content and file-identity checks.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-42-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-42-0">v1.42.0</a><time class="release-date" datetime="2026-10-25">Oct 25, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-42-0-title">A redesigned dashboard and older messages that load without jumping</h3>
@@ -419,28 +431,26 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.28.2</p>
   </div>
 </article>
-<article class="release" id="v1-29-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-29-0">v1.29.0</a><time class="release-date" datetime="2026-10-18">Oct 18, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-29-0-title">Company Terminal shows the Harness and keeps work inside the company</h3>
-    <p>The company Terminal gets its own header, footer and plan checklist, blocks commands that send work outside, and Stop no longer breaks the next message.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>A company header shows team, Harness model and effort, review model, Ask first or Bypass, Fast, memory and release.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span><code>/login</code>, <code>/model</code>, <code>/thinking</code>, <code>/settings</code> and their keys say the team's Harness decides instead of opening Pi's pickers.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The footer shows the Harness's real model and effort with no USD cost, and the plan is drawn as a checklist.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span><code>/changelog</code> shows Piagent's release notes, and the loader reads “Đang chờ bạn trả lời” while a question waits.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Stopping a turn while a command ran could break the next message; with the required Studio and Watch, the next message now starts a new run.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span><code>/share</code> and <code>/bug</code> are refused in the company Terminal, since both sent company conversations and code outside the company.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.28.1, Agent Watch 0.15.7 (Windows 0.1.14) for the Stop fix</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">39</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">40</span></summary>
+    <div class="archive-row" id="v1-29-0">
+      <div class="archive-head"><a class="release-version" href="#v1-29-0">v1.29.0</a> <span class="release-date">Oct 18, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Company Terminal shows the Harness and keeps work inside the company</strong> — The company Terminal gets its own header, footer and plan checklist, blocks commands that send work outside, and Stop no longer breaks the next message.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>A company header shows team, Harness model and effort, review model, Ask first or Bypass, Fast, memory and release.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span><code>/login</code>, <code>/model</code>, <code>/thinking</code>, <code>/settings</code> and their keys say the team's Harness decides instead of opening Pi's pickers.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The footer shows the Harness's real model and effort with no USD cost, and the plan is drawn as a checklist.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span><code>/changelog</code> shows Piagent's release notes, and the loader reads “Đang chờ bạn trả lời” while a question waits.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Stopping a turn while a command ran could break the next message; with the required Studio and Watch, the next message now starts a new run.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span><code>/share</code> and <code>/bug</code> are refused in the company Terminal, since both sent company conversations and code outside the company.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-28-3">
       <div class="archive-head"><a class="release-version" href="#v1-28-3">v1.28.3</a> <span class="release-date">Oct 18, 2026</span></div>
       <div class="archive-body">

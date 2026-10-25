@@ -117,7 +117,9 @@ export function hashWorkspaceFile(repoRoot: string, repoPath: string): string {
   const opened = openRegularFile(repoRoot, repoPath);
   try {
     const state = createHash("sha256");
-    const buffer = Buffer.allocUnsafe(256 * 1024);
+    // Most changed source files are small. Keep streaming for large files without
+    // allocating a full 256 KiB chunk for every tiny file in an inspection scan.
+    const buffer = Buffer.allocUnsafe(Math.min(256 * 1024, opened.stat.size));
     let position = 0;
     while (position < opened.stat.size) {
       const count = fs.readSync(opened.descriptor, buffer, 0, Math.min(buffer.length, opened.stat.size - position), position);

@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.42.0" title="v1.42.0 docs · VI"><span class="dot"></span>v1.42.0</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.42.1" title="v1.42.1 docs · VI"><span class="dot"></span>v1.42.1</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-42-0" data-release>
+<article class="release latest" id="v1-42-1" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-42-1">v1.42.1</a><time class="release-date" datetime="2026-10-25">25/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-42-1-title">Dashboard tải nhanh hơn, hash workspace dùng ít bộ nhớ hơn</h3>
+    <p>Mã và CSS tĩnh được nén khi truyền; giao diện phụ tải khi cần, có cách phục hồi khi tải lỗi.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Dashboard local gửi JS/CSS gzip khi trình duyệt hỗ trợ, dùng lại dữ liệu đã nén.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Gateway và giao diện inspection tải riêng; lỗi tải Settings nằm trong dialog có thể đóng. Theme và tùy chọn trên server được giữ nguyên.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Hash file workspace nhỏ dùng buffer theo kích thước file, vẫn kiểm tra toàn bộ nội dung và định danh file.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-42-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-42-0">v1.42.0</a><time class="release-date" datetime="2026-10-25">25/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-42-0-title">Dashboard thiết kế lại, tin cũ tải mà không nhảy trang</h3>
@@ -419,28 +431,26 @@
     <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.28.2</p>
   </div>
 </article>
-<article class="release" id="v1-29-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-29-0">v1.29.0</a><time class="release-date" datetime="2026-10-18">18/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-29-0-title">Terminal công ty hiện Harness và giữ cuộc trò chuyện trong công ty</h3>
-    <p>Terminal công ty có phần đầu, footer và checklist plan riêng, chặn lệnh gửi dữ liệu ra ngoài, và Stop không còn làm hỏng tin nhắn kế tiếp.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Phần đầu công ty hiện team, model và mức thinking của Harness, model review, Hỏi trước hay Bypass, Fast, memory và phiên bản.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span><code>/login</code>, <code>/model</code>, <code>/thinking</code>, <code>/settings</code> và phím tắt tương ứng báo Harness của team quyết định thay vì mở bảng chọn của Pi.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Footer hiện đúng model và mức thinking của Harness, không hiện chi phí USD, và plan hiện thành checklist.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span><code>/changelog</code> hiện ghi chú phát hành của Piagent, và khi chờ bạn trả lời câu hỏi thì hiện “Đang chờ bạn trả lời”.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Dừng lượt khi lệnh đang chạy từng làm hỏng tin nhắn kế tiếp; với Studio và Watch tương ứng, tin nhắn sau giờ mở một run mới.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span><code>/share</code> và <code>/bug</code> bị chặn trong Terminal công ty, vì cả hai từng gửi cuộc trò chuyện và code của công ty ra ngoài.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.28.1, Agent Watch 0.15.7 (Windows 0.1.14) cho bản sửa Stop</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">39</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">40</span></summary>
+    <div class="archive-row" id="v1-29-0">
+      <div class="archive-head"><a class="release-version" href="#v1-29-0">v1.29.0</a> <span class="release-date">18/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Terminal công ty hiện Harness và giữ cuộc trò chuyện trong công ty</strong> — Terminal công ty có phần đầu, footer và checklist plan riêng, chặn lệnh gửi dữ liệu ra ngoài, và Stop không còn làm hỏng tin nhắn kế tiếp.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Phần đầu công ty hiện team, model và mức thinking của Harness, model review, Hỏi trước hay Bypass, Fast, memory và phiên bản.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span><code>/login</code>, <code>/model</code>, <code>/thinking</code>, <code>/settings</code> và phím tắt tương ứng báo Harness của team quyết định thay vì mở bảng chọn của Pi.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Footer hiện đúng model và mức thinking của Harness, không hiện chi phí USD, và plan hiện thành checklist.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span><code>/changelog</code> hiện ghi chú phát hành của Piagent, và khi chờ bạn trả lời câu hỏi thì hiện “Đang chờ bạn trả lời”.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Dừng lượt khi lệnh đang chạy từng làm hỏng tin nhắn kế tiếp; với Studio và Watch tương ứng, tin nhắn sau giờ mở một run mới.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span><code>/share</code> và <code>/bug</code> bị chặn trong Terminal công ty, vì cả hai từng gửi cuộc trò chuyện và code của công ty ra ngoài.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-28-3">
       <div class="archive-head"><a class="release-version" href="#v1-28-3">v1.28.3</a> <span class="release-date">18/10/2026</span></div>
       <div class="archive-body">

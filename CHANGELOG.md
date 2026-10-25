@@ -4,6 +4,16 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.42.1 - 2026-10-25
+
+**Faster dashboard loading and less workspace hashing memory.** Static code and styles transfer compressed; secondary interfaces load when needed, with recoverable loading errors.
+
+### Improved
+
+- The local dashboard serves gzip JS/CSS to supporting browsers and reuses the compressed bytes.
+- Gateway and inspection interfaces load separately; Settings failures stay within a dismissible dialog. Theme and server preferences are preserved.
+- Hashing small workspace files allocates a buffer sized to the file while retaining full content and file-identity checks.
+
 ## v1.42.0 - 2026-10-25
 
 **A redesigned dashboard and older messages that load without jumping.** The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.

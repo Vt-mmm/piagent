@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import DashboardRounded from "@mui/icons-material/DashboardRounded";
 import DescriptionRounded from "@mui/icons-material/DescriptionRounded";
@@ -19,13 +20,15 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
-import { ActivityPanel } from "./ActivityPanel.tsx";
-import { SessionAgentWorkspace, type SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
+import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
+import { AsyncSurface } from "./AsyncSurface.tsx";
 import type { ReviewFinding } from "./line-review.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
 
 const INSPECTOR_WIDTH = "min(44vw, 860px)";
+const ActivityPanel = lazy(async () => ({ default: (await import("./ActivityPanel.tsx")).ActivityPanel }));
+const SessionAgentWorkspace = lazy(async () => ({ default: (await import("./SessionAgentWorkspace.tsx")).SessionAgentWorkspace }));
 
 export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, terminalActivities, liveActivities, onClose, onActive, refresh, findings, onSendComments }: { open: boolean;
   findings?: readonly ReviewFinding[]; onSendComments?: (text: string) => void;
@@ -56,7 +59,7 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
         <Tab value="activity" icon={<TerminalRounded />} iconPosition="start" label={`${localize(locale, "Activity", "Activity")}${activityRunningCount ? ` · ${activityRunningCount}` : ""}`} />
       </Tabs>
     </Box>
-    {state === "loading" ? <Stack sx={{ alignItems: "center", py: 12 }} spacing={1.5}><CircularProgress size={25} /><Typography color="text.secondary">
+    <AsyncSurface key={sessionRef} locale={locale}>{state === "loading" ? <Stack sx={{ alignItems: "center", py: 12 }} spacing={1.5}><CircularProgress size={25} /><Typography color="text.secondary">
       {localize(locale, "Đang dựng Inspector từ session và Git…", "Building the Inspector from the session and Git…")}</Typography></Stack>
       : (state === "error" || !snapshot) && sessionRef && active === "activity" && terminalActivities?.length
         ? <Box sx={{ p: { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: 1500, mx: "auto", width: "100%" }}>
@@ -67,6 +70,6 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
         <Button variant="outlined" onClick={() => void refresh()}>{localize(locale, "Thử lại", "Try again")}</Button></Stack>
         : <Box sx={{ p: active === "source" ? { xs: 1, md: 1.5 } : { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: active === "source" ? "none" : 1500, mx: "auto", width: "100%" }}>
           <SessionAgentWorkspace active={active} snapshot={snapshot} sessionRef={sessionRef} terminalActivities={terminalActivities}
-            liveActivities={liveActivities} refresh={refresh} findings={findings} onSendComments={onSendComments} /></Box>}
+            liveActivities={liveActivities} refresh={refresh} findings={findings} onSendComments={onSendComments} /></Box>}</AsyncSurface>
   </Drawer>;
 }
