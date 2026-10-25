@@ -1,155 +1,244 @@
 <section class="hero">
-  <p class="eyebrow">Piagent 1.41.0</p>
-  <h1>A coding agent for the whole team, checked at every step.</h1>
-  <p>
-    One dashboard for Terminal and the browser. Use models with your own account, or the company's models through Agent Watch and Agent Studio. The guard checks every tool call; in company mode the team's Harness asks for checks, has a subagent review the change and reports the outcome right under the answer.
-  </p>
-  <div class="owner-strip" aria-label="Project information">
-    <span class="owner-label">Project links</span>
-    <a href="https://piagent.io.vn/en/" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
-    <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
-    <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vinh Tam</a>
-  </div>
-  <div class="hero-actions">
-    <a class="button primary" href="/en/quickstart">Get started</a>
-    <a class="button" href="/en/ecosystem">Ecosystem</a>
-    <a class="button" href="/en/whats-new">What’s new in 1.41.0</a>
-    <a class="button" href="/en/commands">View commands</a>
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="home-wrap">
+    <!-- hero-pill -->
+    <h1>A coding agent for the whole team, <span class="grad">checked at every step.</span></h1>
+    <p class="hero-sub">A guard stops risky tool calls before they run. The team's Harness runs checks and has a subagent review the change. One dashboard for Terminal and the browser, with your model or the company's.</p>
+    <div class="hero-cta">
+      <div class="install-box"><span class="prompt" aria-hidden="true">$</span><code>npm i -g @piagent/platform</code><button class="clip-btn" type="button" data-clip="npm install -g @piagent/platform&#10;piagent-setup" aria-label="Copy the install command">{{icon:copy}}</button></div>
+      <a class="button primary lg" href="/en/quickstart">Get started {{icon:arrow-right}}</a>
+      <a class="button lg" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">{{icon:github}} GitHub</a>
+    </div>
+    <p class="hero-note"><span>MIT</span><span>Node.js ≥ 22.19</span><span>macOS · Linux · Windows (WSL2)</span></p>
+
+    <div class="demo" data-reveal>
+      <div class="window" aria-label="Illustration of one company-mode turn" role="img">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span class="title">piagent dashboard · shop-api</span></div>
+        <div class="window-body" aria-hidden="true">
+          <div class="window-side">
+            <p>Conversations</p>
+            <div class="item active">{{icon:message}}<span>Fix money rounding</span><i class="status run"></i></div>
+            <div class="item">{{icon:message}}<span>Paginate /orders</span><i class="status ok"></i></div>
+            <div class="item">{{icon:message}}<span>Read the project</span><i class="status ok"></i></div>
+            <p style="margin-top:18px">Harness</p>
+            <div class="item">{{icon:shield-check}}<span>check · review</span></div>
+            <div class="item">{{icon:branch}}<span>fix/invoice-rounding</span></div>
+          </div>
+          <div class="term" data-term>
+            <div class="term-line you"><span class="g">›</span><span data-type="Fix the invoice rounding bug, run the tests, then push."></span><span class="caret"></span></div>
+            <div class="term-line dim" data-wait="700"><span class="g">·</span><span>Read src/billing/invoice.ts, tests/invoice.test.ts</span></div>
+            <div class="term-line warn"><span class="g">✕</span><span>Guard blocked: read <b>.env</b> · protected file</span></div>
+            <div class="term-line mint"><span class="g">✎</span><span>Edit src/billing/invoice.ts <span class="ok">+12</span> <span class="warn">−3</span></span></div>
+            <div class="term-line" data-wait="800"><span class="g ok">▶</span><span>npm test <span class="dim">— sandbox, no network</span> <span class="ok">48 passed</span></span></div>
+            <div class="term-line" data-wait="800"><span class="g lime">◆</span><span>Review · subagent read the diff: <span class="ok">no blocking issue</span></span></div>
+            <div class="term-result" data-wait="700"><span class="ok">✓</span> Check passed on the final code · Review found no blocking issue</div>
+            <div class="term-card" data-wait="900">The agent wants to run <b>git push origin fix/invoice-rounding</b>
+              <div class="row"><span class="chip yes">Allow once</span><span class="chip">Deny</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="proof" data-reveal>
+      <div><strong><span data-count="54">54</span><em>/54</em></strong><span>tasks resolved in the production benchmark</span><small>codex-cli, same model: 48/54</small></div>
+      <div><strong>−<span data-count="61">61</span><em>%</em></strong><span>fresh tokens on the same workload</span><small>95% confidence: at least −51.6%</small></div>
+      <div><strong><span data-count="52">52</span><em>/52</em></strong><span>secret patterns redacted from output</span><small>0/30 ordinary texts redacted by mistake</small></div>
+      <div><strong><span data-count="{{releaseCount}}">{{releaseCount}}</span></strong><span>releases since 2026-07-21</span><small>4,400+ automated tests on macOS and Linux</small></div>
+    </div>
   </div>
 </section>
 
-<section class="section">
-  <p class="section-kicker">Release 1.9.0</p>
-  <h2 id="release-1-9-0">One company-mode turn</h2>
-  <p class="section-lead">You write the request. The agent reads, edits and runs the tests in a sandbox; a subagent reviews the change; the last line states the outcome. 13 of 13 live scenarios pass on the final install, and 27 of 27 browser tests.</p>
-  <figure class="shot">
-    <img src="/assets/shots/company-run-done.jpg" alt="Piagent dashboard: a company-mode turn with read, edit and test steps and the line A check passed on the final code, Review found no blocking issue" width="1600" height="1000">
-    <figcaption>The Piagent dashboard in company mode. See the whole picture in <a href="/en/ecosystem">Ecosystem</a> and every change in <a href="/en/whats-new">What’s new</a>.</figcaption>
-  </figure>
-</section>
-
-<section class="section">
-  <p class="section-kicker">Production V1 · historical evidence from v1.6.0</p>
-  <h2 id="evidence">Measured, not asserted</h2>
-  <p class="section-lead">Release-bound run <code>production-v1-20260824T040017Z-05b7cf</code> measured 108 sessions on GPT-5.6 Luna Medium at tag <code>v1.6.0</code>, exact commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, with Piagent compared against <code>codex-cli</code>.</p>
-
-  <div class="benchmark-metrics" aria-label="Headline benchmark numbers">
-    <div class="benchmark-metric">
-      <span>Release evidence</span>
-      <strong>v1.6.0</strong>
-      <small>exact commit 3bba8f0</small>
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Why it is different</p>
+      <h2 id="different">The agent works fast. The platform keeps it right.</h2>
+      <p>Every tool call goes through the guard, every risky action waits for you, and in company mode a turn is only reported done once checks ran on the final code.</p>
     </div>
-    <div class="benchmark-metric">
-      <span>Tasks resolved</span>
-      <strong>54/54</strong>
-      <small>Piagent; codex-cli resolved 48/54</small>
+    <div class="bento" data-spotlight>
+      <article class="tile wide" data-reveal>
+        <span class="tile-icon">{{icon:shield-check}}</span>
+        <h3>A guard on every tool call</h3>
+        <p>Fails closed: protected files, permission profiles, oversized files, edits on a stale read. When in doubt it blocks, it does not guess.</p>
+        <div class="mini"><span class="x">✕</span> read .env <span class="d">— protected path</span><br><span class="x">✕</span> edit src/app.ts <span class="d">— read it again first</span><br><span class="w">!</span> git push <span class="d">— waits for one approval</span><br><span class="ok">✓</span> npm test <span class="d">— allowed</span></div>
+      </article>
+      <article class="tile wide" data-reveal>
+        <span class="tile-icon">{{icon:check-circle}}</span>
+        <h3>The team's Harness checks and reviews</h3>
+        <p>Studio sets the plan, the checks and the review rounds for the whole team. A subagent reads the diff on its own; the outcome sits right under the answer.</p>
+        <div class="chips"><span>plan</span><span>check</span><span>review</span><span>main · research · review</span></div>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:key}}</span>
+        <h3>One approval at a time</h3>
+        <p>Push, publish and network commands run only after you press <strong>Allow once</strong>. There is no "always allow".</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:box}}</span>
+        <h3>A sandbox in company mode</h3>
+        <p>Seatbelt on macOS, bubblewrap on Linux and WSL2: no network, no Keychain, no <code>.env</code> or SSH keys.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:code}}</span>
+        <h3>The dashboard is an editor</h3>
+        <p>Folder tree, editor, terminal, hunk-by-hunk review, a Timeline to restore turns and <code>/undo</code>. 13 colour themes.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:clock}}</span>
+        <h3>Long tasks finish</h3>
+        <p>A passing model error is retried; a Studio update is waited out, then work resumes. One turn can run for 24 hours.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:brain}}</span>
+        <h3>Team memory</h3>
+        <p>The agent remembers the team's decisions and rules per repository and branch; <code>memory_ask</code> answers with sources.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:camera}}</span>
+        <h3>Front-end change reports</h3>
+        <p>Before and after screenshots, each change in a numbered red frame, with checks and E2E. Shown right in Documents.</p>
+      </article>
     </div>
-    <div class="benchmark-metric">
-      <span>Fresh tokens</span>
-      <strong>-61.43%</strong>
-      <small>primary fixed-workload family ratio 0.3857</small>
-    </div>
-    <div class="benchmark-metric">
-      <span>Usage evidence</span>
-      <strong>108/108 exact</strong>
-      <small>zero retries</small>
-    </div>
-  </div>
-
-  <div class="benchmark-legend" aria-label="Chart legend">
-    <span><i class="piagent-swatch"></i>Piagent</span>
-    <span><i class="codex-swatch"></i>codex-cli</span>
-  </div>
-
-  <div class="benchmark-usage-chart" aria-label="Fixed-workload family fresh-token ratio: Piagent 38.57 percent, codex-cli baseline 100 percent; tasks resolved: Piagent 54 of 54, codex-cli 48 of 54">
-    <div class="benchmark-usage-group">
-      <h3>Fixed-workload family fresh-token ratio</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 38.57%"></i></div><strong>0.3857</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>1.0000</strong></div>
-    </div>
-    <div class="benchmark-usage-group">
-      <h3>Tasks resolved</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 100%"></i></div><strong>54/54</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 88.89%"></i></div><strong>48/54</strong></div>
-    </div>
-  </div>
-
-  <p>The primary fixed-workload family ratio is <strong>0.3857</strong>, with a 95% confidence interval of <strong>0.3073–0.4840</strong>. The point estimate is 61.43% lower, while the upper confidence bound supports the conservative statement that Piagent used at least 51.60% fewer fresh tokens on this predeclared production-v1 workload and exact release. Usage was exact for all 108 sessions and no retry occurred. <a href="/en/benchmark">See the benchmark methodology and evidence boundary</a>.</p>
-</section>
-
-<section class="section">
-  <h2 id="install">Install with two commands</h2>
-  <p>Requires Node.js <span class="inline-code">&gt;=22.19.0</span>. Run these commands from the project you want to configure.</p>
-  <pre><code>npm install -g @piagent/platform
-piagent-setup</code></pre>
-  <p><span class="inline-code">piagent-setup</span> installs the pinned Pi Coding Agent host, installs the Pi package, initializes the current directory, and runs doctor. It also installs the MCP baseline and subagents; skip them with <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, or <span class="inline-code">--global-only</span>. See the <a href="/en/quickstart">Quickstart</a> for the complete flow.</p>
-</section>
-
-<section class="section">
-  <h2 id="where-to-start">Where to start</h2>
-  <div class="card-grid">
-    <a class="doc-card" href="/en/whats-new">
-      <span class="card-kicker">Release 1.41.0</span>
-      <h3>What’s new</h3>
-      <p>Front-end change reports: before/after screenshots framed in red, business and logic changes and check results, right in Documents; in 1.40.0: local projects without a remote are reported to Studio too, and members see every kind of project warning (Studio 0.40.0); in 1.39.0: warnings when a key works in the wrong project (Studio 0.39.0), and the dashboard keeps its language and theme across restarts; in 1.38.2: a VS Code-style folder tree, colour themes (Dracula, Nord…), and an editor and terminal that stay in view; in 1.38.1: the dashboard becomes an editor: file edits, terminals, inline hunk review and turn restore; Bypass that asks nothing, in company conversations too when the Harness allows it; in 1.37.1: a run Studio did not confirm closed is no longer recorded closed, a helper whose close fails keeps its answer, and team-memory lessons name the right command; in 1.37.0: an answer cut mid-stream no longer stops a long task, and <code>piagent studio --rpc</code>; in 1.36.1: a moment when Agent Watch cannot reach Studio no longer stops a task; in 1.36.0: team memory learns from what went wrong: Studio rates what memory handed over, a repeated command failure becomes a lesson; in 1.35: long tasks go on when Studio is updated or the model has a passing error; in 1.34: helpers report how their work ended, Agent Watch tells you when you are needed; in 1.33.0: runs on Pi 1.3.0; in 1.32.1: Bypass is kept after a reload, and a tab in use no longer signs out after 8 hours; in 1.32.0: a failed or stopped answer ends at Studio too; in 1.31.1: <code>memory_ask</code> right after an update; in 1.31.0: Team memory follows the branch and the team's rules, with <code>memory_ask</code>; in 1.30.1: no model names in the company Terminal; running <code>piagent studio</code> in the home folder now says to open a project folder; in 1.30.0: large contexts reach Studio over slow links and the company Terminal reads like the dashboard; in 1.29.0: the company Terminal gets its own look and Stop no longer breaks the conversation; in 1.28.3: Agent Watch updating itself no longer interrupts the company Terminal; in 1.28.2: no more “binding changed” right after an update; in 1.28.1: the company Terminal and personal Pi stop stepping on each other (no duplicate Piagent, no old company config, company chats stay in piagent studio); in 1.28.0: team memory v2; in 1.27.1: team memory keeps working while the agent calls the model; in 1.27.0: team memory, company agents remember the team's decisions and rules in each repository; in 1.26.1: a conversation is renamed while its turn runs; in 1.26.0: the Terminal's / commands and shortcuts in the dashboard, /undo for the agent's last turn, dev servers that stay up across turns; in 1.25.0: when the machine lacks something the agent asks, and the approved command runs (run_on_host outside the sandbox, start_docker in the same conversation); in 1.24.0: choose Fast on the new chat page for company conversations, and the Fast switch turns amber while on; in 1.23.1: an agent's question waits at the end of the conversation, right above the composer, and reads more easily; in 1.23.0: a Fast switch for company conversations where the Harness allows it, failed tools reported to Studio (Logs → Tool lỗi), new conversations send their first message after a Harness change; in 1.22.1: the dashboard no longer keeps loading when a project is on a Windows drive seen from WSL (/mnt/d…) or the company runtime does not answer; in 1.22.0: attach any source or text file (.html, .css, .ts, .py, Dockerfile…); in 1.21.1: Bypass can be turned on while a turn runs and stays on after a reload; in 1.21.0: questions and approvals one card at a time (the main agent's first), a notification at the top right when another conversation finishes or waits for you, Studio logs each compaction; in 1.20.0: package installs in the company sandbox no longer ask (npm, PyPI, Go, Maven, Gradle… through a registry-only proxy); in 1.19.0: company tasks with a checklist are carried to the end, every turn says whether it finished, stopped midway or failed, Docker in the company sandbox, folders with several repositories; in 1.18.0: switch the Git branch from the dashboard, retries for passing failures, Claude Haiku 5.5; in 1.17.0: the dashboard shows each project's Git branch; in 1.16.3: an updated dashboard keeps checking for releases; in 1.16.2: the Terminal says what the dashboard says: update question, /bypass, failures and Harness notes in Vietnamese; in 1.16.1: new releases are announced in a dialog and checked every hour, dashboard tabs stay signed in; in 1.16.0: Bypass for company conversations, Harness changes never interrupt you; in 1.15.2: long conversations shrink again; in 1.15.1: Studio sees what each model call is for, conversations in one folder keep their changes apart; in 1.15.0: a refused subagent says why; in 1.14: updates keep the models you chose; in 1.13: conversations keep their place, the agent's notes are formatted, Piagent on Windows through WSL2: a bubblewrap sandbox for company conversations and Agent Watch for Windows; in 1.12: @ picks files and folders on the Mac, skills and commands run from /, and forked company conversations take messages.</p>
-    </a>
-    <a class="doc-card" href="/en/ecosystem">
-      <span class="card-kicker">Get started</span>
-      <h3>Ecosystem</h3>
-      <p>Piagent, Agent Watch and Agent Studio: what runs where, and when to use personal or company mode.</p>
-    </a>
-    <a class="doc-card" href="/en/quickstart">
-      <span class="card-kicker">Get started</span>
-      <h3>Quickstart</h3>
-      <p>Install, open a repository, choose its profile and permissions, then make the first request in plain language.</p>
-    </a>
-    <a class="doc-card" href="/en/scope">
-      <span class="card-kicker">Get started</span>
-      <h3>Platform scope</h3>
-      <p>Why this repository exists alongside general coding agents, and which operating concerns it owns.</p>
-    </a>
-    <a class="doc-card" href="/en/profiles">
-      <span class="card-kicker">Build</span>
-      <h3>Project profiles</h3>
-      <p>Choose the operating profile for a repository: protected paths, verification commands, and granted capabilities.</p>
-    </a>
-    <a class="doc-card" href="/en/mcp">
-      <span class="card-kicker">MCP</span>
-      <h3>MCP</h3>
-      <p>Four configuration layers, pinned presets, server management, authentication readiness, and repository approval gates.</p>
-    </a>
-    <a class="doc-card" href="/en/security">
-      <span class="card-kicker">Operate</span>
-      <h3>Security model</h3>
-      <p>A policy enforcement layer, not an OS sandbox, with explicit claims about what is and is not controlled.</p>
-    </a>
-    <a class="doc-card" href="/en/benchmark">
-      <span class="card-kicker">Operate</span>
-      <h3>Production benchmark</h3>
-      <p>Quality, safety, workflow, and token evidence from 108 sessions compared with the <code>codex-cli</code> surface.</p>
-    </a>
-    <a class="doc-card" href="/en/commands">
-      <span class="card-kicker">Build</span>
-      <h3>Command catalog</h3>
-      <p>Slash commands and terminal commands grouped by the job they perform.</p>
-    </a>
   </div>
 </section>
 
-<section class="section">
-  <h2 id="doc-groups">Three documentation groups</h2>
-  <div class="split">
-    <div class="card">
-      <h3 id="get-started-group">Get started</h3>
-      <p>For first-time users: installation, quickstart, and where the platform fits alongside other agent CLIs.</p>
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head center" data-reveal>
+      <p class="section-kicker">One turn</p>
+      <h2 id="one-turn">You say what you need. The rest is verified.</h2>
     </div>
-    <div class="card">
-      <h3 id="build-group">Build</h3>
-      <p>Daily operation: profiles, permissions, commands, workflows, and a dedicated MCP section for its broader command surface.</p>
+    <div class="flow" data-flow>
+      <div class="flow-step"><span class="flow-dot">{{icon:message}}</span><div><h3>Ask</h3><p>Plain language, no task contract or workflow command.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:code}}</span><div><h3>Read and edit</h3><p>The agent reads the files it needs and edits with a clear diff.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:shield-check}}</span><div><h3>Guard checks</h3><p>Every tool call meets the policy; risky ones wait for you.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:check-circle}}</span><div><h3>Check and review</h3><p>Tests run on the final code; a subagent reviews on its own.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:list}}</span><div><h3>Report</h3><p>One closing line: done, stopped part-way, or failed.</p></div></div>
     </div>
-    <div class="card">
-      <h3 id="operate-group">Operate</h3>
-      <p>For operators and reviewers: security boundaries, repository architecture, terminal tools, and the team operating standard.</p>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head center" data-reveal>
+      <p class="section-kicker">Real screens</p>
+      <h2 id="screens">Captured from a running dashboard</h2>
+    </div>
+    <div data-gallery data-reveal>
+      <div class="gallery-tabs">
+        <div class="tab-list" role="tablist" aria-label="Choose a screenshot">
+          <button type="button" role="tab" aria-selected="true" data-shot="/assets/shots/company-run-done.jpg" data-alt="A company-mode turn: read, edit, run tests; the closing line says the check passed and review found no blocking issue" data-caption="A company-mode turn: read, edit, run tests; the closing line records check and review.">Company turn</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/company-review-running.jpg" data-alt="A subagent reviewing the change during a company turn" data-caption="A subagent reviews the change while the turn is still running.">Review</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/network-approval.jpg" data-alt="Approval card for a network command, showing the exact command" data-caption="A network command waits for approval; the card shows the exact command.">Network approval</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/personal-edit-test.jpg" data-alt="Personal mode: editing code and running tests" data-caption="Personal mode: your model, the same guard.">Personal</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-source-review.jpg" data-alt="Agent Inspector: working tree changes, inline diff and an open-in-editor button" data-caption="Source Changes: per-file diff, inline or side by side, review and stage hunk by hunk.">Source Changes</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-palette.jpg" data-alt="Command palette listing commands and colour themes" data-caption="⌘K palette: every command, setting and the 13 colour themes in one search box.">Palette</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-new-chat.jpg" data-alt="New conversation page with project and model pickers and starter tasks" data-caption="New conversation: pick the project and model, or click a starter task.">New chat</button>
+        </div>
+      </div>
+      <figure class="gallery-frame">
+        <img src="/assets/shots/company-run-done.jpg" alt="A company-mode turn: read, edit, run tests; the closing line says the check passed and review found no blocking issue" width="1600" height="1000" loading="lazy" decoding="async" style="transition:opacity .2s">
+        <figcaption>A company-mode turn: read, edit, run tests; the closing line records check and review.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Two modes</p>
+      <h2 id="two-modes">One dashboard, two ways to use models</h2>
+      <p>Switching modes does not change how you work: the same guard, the same history across Terminal and the browser.</p>
+    </div>
+    <div class="modes">
+      <article class="mode" data-reveal>
+        <div class="mode-head"><span class="tile-icon">{{icon:users}}</span><h3>Personal</h3><code>pi</code></div>
+        <p>Sign in with your own model account. Keys stay on your machine.</p>
+        <ul class="checks">
+          <li>{{icon:check}}<span>Pick any model and thinking level</span></li>
+          <li>{{icon:check}}<span>The same guard and protected paths as company mode</span></li>
+          <li>{{icon:check}}<span>Push and publish still wait for approval</span></li>
+          <li>{{icon:check}}<span><code>piagent dashboard</code> opens the web interface</span></li>
+        </ul>
+      </article>
+      <article class="mode featured" data-reveal>
+        <div class="mode-head"><span class="tile-icon">{{icon:building}}</span><h3>Company</h3><code>piagent studio --web</code></div>
+        <p>Agent Watch keeps the company key in Keychain; Agent Studio picks the models and the Harness for the team.</p>
+        <ul class="checks">
+          <li>{{icon:check}}<span>The model never sees the key</span></li>
+          <li>{{icon:check}}<span>Sandbox without network, opened one approval at a time</span></li>
+          <li>{{icon:check}}<span>Checks and review run by the Harness</span></li>
+          <li>{{icon:check}}<span>Usage, budgets and wrong-project warnings in Studio</span></li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Install</p>
+      <h2 id="install">Running in two minutes</h2>
+      <p><code>piagent-setup</code> installs the exact Pi release this version pins, initializes the project and runs the doctor.</p>
+    </div>
+    <div class="tabs" data-tabs="os" data-reveal>
+      <div class="tab-list" role="tablist" aria-label="Operating system">
+        <button type="button" role="tab" data-tab="macos" aria-selected="true">{{icon:apple}} macOS · Linux</button>
+        <button type="button" role="tab" data-tab="windows" aria-selected="false" tabindex="-1">{{icon:windows}} Windows</button>
+      </div>
+      <div class="tab-panel" data-panel="macos">
+        <div class="install-grid">
+          <div class="install-step"><span class="num">01</span><h3>Install</h3><p>Run it in the project folder.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Copy</button></header>
+<pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre></div></div>
+          <div class="install-step"><span class="num">02</span><h3>Open</h3><p>Terminal, or the dashboard in your browser.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="piagent dashboard">Copy</button></header>
+<pre><code>piagent dashboard
+pi                    # Terminal</code></pre></div></div>
+          <div class="install-step"><span class="num">03</span><h3>Update</h3><p>The dashboard tells you about new releases every hour.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="piagent-update">Copy</button></header>
+<pre><code>piagent-update</code></pre></div></div>
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="windows" hidden>
+        <div class="install-grid">
+          <div class="install-step span-2"><span class="num">01</span><h3>One PowerShell command</h3><p>Installs WSL2, Ubuntu, Piagent and Agent Watch, and adds Piagent to the Start menu. Run it again to update.</p>
+            <div class="command-card"><header><span>PowerShell</span><button class="clip-btn" type="button" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Copy</button></header>
+<pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre></div></div>
+          <div class="install-step"><span class="num">02</span><h3>Details</h3><p>The first run restarts once to enable WSL2. The company connect code is optional.</p>
+            <a class="button" href="/en/windows">Windows guide {{icon:arrow-right}}</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Changelog</p>
+      <h2 id="latest-updates">Steady releases, every change written down</h2>
+      <p>Each release says what changed and which Studio or Agent Watch it needs. <a href="/en/whats-new">See the full changelog</a>.</p>
+    </div>
+    <div class="updates">
+<!-- latest-releases -->
+    </div>
+  </div>
+</section>
+
+<section class="home-wrap">
+  <div class="final-cta" data-reveal>
+    <h2>Hand work to the agent. Keep the decisions.</h2>
+    <p>Two commands to install. Docs in the order you need them.</p>
+    <div class="hero-cta" style="margin-top:0">
+      <a class="button primary lg" href="/en/quickstart">Install {{icon:arrow-right}}</a>
+      <a class="button lg" href="/en/ecosystem">Ecosystem</a>
+      <a class="button lg ghost" href="/en/benchmark">{{icon:chart}} Benchmark</a>
     </div>
   </div>
 </section>

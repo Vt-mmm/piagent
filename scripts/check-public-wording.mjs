@@ -4,7 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(import.meta.dirname, "..");
-const surfaces = ["README.md", "docs", "docs-site/content", "scripts/build-docs-site.mjs",
+const surfaces = ["README.md", "docs", "docs-site/content", "docs-site/releases.json", "CHANGELOG.md",
+  "scripts/build-docs-site.mjs", "scripts/docs-site-nav.mjs", "scripts/docs-site-releases.mjs",
   "packages/piagent-core/README.md", "packages/piagent-core/prompts", "packages/piagent-core/mcp",
   "packages/piagent-core/extensions", "packages/piagent-core/runtime", "templates/project/AGENTS.md"];
 const sourceNames = ["Codex CLI", "Claude CLI", "Claude Code"];

@@ -1,396 +1,199 @@
-# Pi Agent Platform
+<p align="center">
+  <a href="https://piagent.io.vn"><img src="https://piagent.io.vn/assets/piagent-logo.svg" alt="Piagent" width="72" height="72"></a>
+</p>
 
-[Tiếng Việt](README.vi.md)
+<h1 align="center">Pi Agent Platform</h1>
 
-Reusable Pi package for freeform coding chat, guarded tools, project context and a managed main/research/review harness.
+<p align="center"><strong>A coding agent for the whole team, checked at every step.</strong></p>
 
-Public docs: [piagent.io.vn](https://piagent.io.vn)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@piagent/platform"><img alt="npm" src="https://img.shields.io/npm/v/@piagent/platform?color=c6f432&labelColor=111114"></a>
+  <a href="https://github.com/Vt-mmm/piagent/actions/workflows/verify.yml"><img alt="verify" src="https://github.com/Vt-mmm/piagent/actions/workflows/verify.yml/badge.svg"></a>
+  <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522.19-111114?labelColor=111114">
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-111114?labelColor=111114"></a>
+</p>
+
+<p align="center">
+  <a href="https://piagent.io.vn/en/">Website</a> ·
+  <a href="https://piagent.io.vn/en/quickstart">Install</a> ·
+  <a href="https://piagent.io.vn/en/whats-new">Changelog</a> ·
+  <a href="https://piagent.io.vn/en/benchmark">Benchmark</a> ·
+  <a href="README.vi.md">Tiếng Việt</a>
+</p>
+
+<p align="center">
+  <img src="https://piagent.io.vn/assets/shots/company-run-done.jpg" alt="Piagent dashboard: a company-mode turn that read, edited and tested the code, with the closing line reporting the check and the review" width="900">
+</p>
+
+Piagent is a Pi package that turns a coding agent into something a team can rely on. A **guard** checks every tool call before it runs. In company mode, the team's **Harness** runs the project's checks and has a subagent review the change before a turn is reported done. One **dashboard** serves Terminal and the browser, with your own model account or the company's models through Agent Watch and Agent Studio.
+
+## Why Piagent
+
+- **Fails closed.** Protected files (`.env`, keys), permission profiles, oversized files and edits on a stale read are blocked before execution, not explained afterwards.
+- **One approval at a time.** Push, publish, GitHub writes and network commands wait for **Allow once**. Broad staging such as `git add .` asks first too.
+- **Verified turns.** In company mode a turn ends with one line: the check passed on the final code, and the review found or did not find a blocking issue.
+- **Built for long work.** Passing provider errors are retried, Studio updates are waited out, and one turn can run for 24 hours.
+- **Measured.** On the [production benchmark](https://piagent.io.vn/en/benchmark) (v1.6.0, 108 sessions, same model and thinking level) Piagent resolved 54/54 tasks against 48/54 for `codex-cli`, with 61.43% fewer fresh tokens (95% interval: at least 51.60% fewer).
 
 ## Install
 
-Node.js `>=22.19.0`. Two commands, run from the project you want to set up:
+Node.js `>=22.19.0`. Run in the project you want to set up:
 
 ```bash
 npm install -g @piagent/platform
 piagent-setup
 ```
 
-`piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. It also installs the MCP baseline, the subagents, and — when `herdr` is already on `PATH` — the Herdr Pi integration; pass `--no-mcp`, `--no-subagents`, `--no-herdr`, or `--global-only` to skip those.
+`piagent-setup` installs the exact Pi host this release pins, installs the package, initializes `.pi/`, adds the MCP baseline and subagents, then runs the doctor. Skip extras with `--no-mcp`, `--no-subagents`, `--no-herdr` or `--global-only`. Install [Herdr](https://herdr.dev/docs/install/) first if you want its Pi integration.
 
-If you want [Herdr](https://herdr.dev/docs/install/), install it *before* `piagent-setup`:
+**Windows** — one PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch; run it again to update:
 
-```bash
-brew install herdr                            # macOS
-curl -fsSL https://herdr.dev/install.sh | sh  # macOS or Linux
+```powershell
+irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex
 ```
 
-The integration step is skipped with a warning when `herdr` is not on `PATH`, so installing Herdr afterwards means running `piagent-setup --global-only` again. The `curl` form runs a script fetched at install time; `brew` and the [GitHub releases](https://github.com/ogulcancelik/herdr/releases) are the reviewable alternatives. Stable Herdr covers macOS and Linux — Windows builds are preview only, which is outside this platform's rollout matrix either way.
-
-Because it runs from an installed package, the source it writes into `.pi/settings.json` is `npm:@piagent/platform@<version>` — which means the same thing on a teammate's machine, so the file can be committed.
-
-| Runtime surface | Team rollout status |
+| Runtime | Status |
 |---|---|
-| macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. |
-| Linux x64 + Bash | Verified in CI for this release. |
-| macOS Intel (`darwin/x64`) + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
-| Linux ARM64 + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
-| WSL2 (Windows) | The way to run Piagent on Windows: company mode with the bubblewrap sandbox and Agent Watch for Windows, and personal mode. One PowerShell command installs everything; the Linux sandbox is checked in CI. See [Windows](docs/en/windows.md). |
-| Native Windows | Preview of personal mode: the guard, path and dashboard tests run in CI on Windows; `piagent-update` does not run there yet. See [Windows](docs/en/windows.md). |
+| macOS Apple Silicon | Verified for this release |
+| Linux x64 | Verified in CI |
+| macOS Intel, Linux ARM64 | Supported; run `piagent-doctor` and smoke tests before a wide rollout |
+| Windows (WSL2) | Personal and company mode, bubblewrap sandbox, Agent Watch for Windows ([guide](docs/en/windows.md)) |
+| Native Windows | Preview of personal mode; `piagent-update` does not run there yet |
 
-Pinned step-by-step rollouts, updates, rollback, and the fast-moving `--dev` channel are in [Release and install policy](docs/release-install-policy.md).
-
-## Daily use
+## Use
 
 ```bash
-cd /path/to/project
-pi
+piagent dashboard          # browser, personal mode
+pi                         # Terminal, personal mode
+piagent studio --web       # company mode, after importing the key in Agent Watch
 ```
 
-Send the request directly in plain language. Since 1.9.0 there is no `/task` or `/workflow` step, no task contract and no projected token-saving threshold.
+Ask in plain language — "fix the pagination bug in /orders and run the tests", "review the current diff, read-only". There is no task contract and no workflow command to learn. Since 1.9.0 the `/workflow`, `/task`, `/fresh`, `/onboard` and `/commands` launchers are retired; start a new session with Pi's `/new`.
 
-For the local macOS team harness, import a managed key through Agent Watch and run `piagent studio` or `piagent studio --web`. Studio chooses the main/research/review routes; the member chooses thinking. Managed sessions have isolated tools and per-run authority. Personal sessions keep their own OAuth and model picker under `pi`.
+## Update
 
-See [local acceptance and remaining release gates](docs/managed-local-acceptance.md). Existing direct CLI keys remain compatible and do not gain managed harness enforcement.
-
-## Uninstall
-
-`piagent-uninstall` reports what it would remove and exits. It only acts with `--apply`, because it edits Pi settings that other tools also write to.
+The dashboard and Terminal check for a new release every hour and offer **Update now** or **Later**. To update yourself:
 
 ```bash
-piagent-uninstall
-piagent-uninstall --apply
+piagent-update                     # latest release
+piagent-update --check             # only check
+piagent-update --version X.Y.Z     # a specific release, newer or older
 ```
 
-That removes the Pi package this platform registered. Add-ons, the Pi host, a project's state, and the npm-global helper are each opt-in and separate — `piagent-uninstall --help` lists them.
+It installs the pinned Pi host first, verifies the version on disk, then runs the installer; with `--project` it also migrates the project and runs the doctor. Team pins, rollback and uninstall: [Update & uninstall](https://piagent.io.vn/en/update) and the [release and install policy](docs/release-install-policy.md).
 
-Removal targets what is registered in Pi's settings rather than what the current version installs, so a package registered by an older release still comes out. Credentials, trust decisions, sessions, todos, and project memory are never removed, at any flag combination. Files written from a template and then edited — `AGENTS.md`, `.pi/settings.json`, `.pi/project-context.md` and the like — are listed for review rather than deleted.
+```bash
+piagent-uninstall           # report only
+piagent-uninstall --apply   # remove
+```
 
-## What it provides
+Credentials, trust decisions, sessions, todos and project memory are never removed.
 
-- Global Pi package with runtime commands, skills, guard extensions, and piagent subagents.
-- Freeform turns: a request in plain language is the whole interface. Scouting, planning, review, commits and pull requests are ordinary requests.
-- Project onboarding on request: ask the agent to inspect the project read-only and record its context, and it writes `.pi/project-context.md`.
-- Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
-- Runtime usage controls via `/usage`, plus Pi native `/name`, `/new` and `/session`.
-- Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
-- Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, bounded current-turn source/test snapshots for automatic tasks, test impact, efficiency telemetry, and semantic compaction. Index storage is owner-only and securely purged when exclusion policy changes; manual packs remain advisory, while current-turn snapshots are freshness-checked and exact edits fail closed on a later mismatch.
-- MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
-- Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
-- Chat image-path intake: paste a screenshot path from the project or a granted `additionalReadRoots` directory and the guard attaches it as `[image1]` before the model sees the prompt.
-- Trusted-run wrapper: `piagent-auto` launches Pi with `--approve` for the current run while keeping piagent guardrails active.
-- Fresh-task capability routing: `piagent-route` explains a catalog-verified low/medium/high/ultra recommendation; provider execution requires explicit `--execute --yes`, while in-extension auto routing remains fail-closed.
-- Runtime policy tools:
-  - `piagent_permission_status`
-  - `piagent_exec_policy_check`
-  - `piagent_context_budget`
-  - `piagent_tool_policy_check`
-  - `piagent_usage_snapshot`
-  - `piagent_context_preflight`
-  - `piagent_orchestration_policy`
-- Context7-ready tech stack manifest and concise `.pi/tech-context/*` snapshots for selected profile roles.
-- Accident-brake guardrails for protected and read-only paths, destructive shell commands, external-provider actions, large-file edits, and edits made against a stale read.
-- Task contracts and workflow commands were retired in 1.9.0: a session no longer
-  creates a contract, scope, acceptance receipt or final gate. Task records left
-  under `.pi/piagent-state/tasks` by earlier releases stay readable as history.
-- Adaptive context planning uses Pi-reported model/thinking/context facts to set
-  a bounded context budget; cited repository-memory hints never replace current
-  source reads. The parent model stays operator-pinned—there is no automatic
-  parent routing or solver in this stabilization baseline.
-- Execution backends are explicit and fail closed: host execution is the
-  default, while a requested isolation backend without an installed adapter
-  blocks mutation instead of silently using the host.
-- Bounded owner-only local state with cross-process JSONL rotation and a shared
-  symlink-safe boundary for task evidence, telemetry, traces, and captures.
-- Two-tier one-command benchmark: `core-v1` is a fast paired smoke gate, while
-  `production-v1` runs 18 generated scenario families across backend, frontend,
-  data, platform, reliability, and security. It compares Piagent with Raw Pi or
-  controlled `codex-cli`, grades hidden acceptance/safety/workflow evidence,
-  reports category/lifecycle/profile bands and 95% token-ratio confidence, and
-  reads exact JSONL usage plus privacy-safe tool histograms. Production claims
-  require zero retries; diagnostic retry overrides remain visible and fail the gate.
-- `deep-logic-v1` adds seven large, generated-variant families for interacting
-  state, orchestration, policy, context-graph, stream-recovery,
-  transactional-config, and exact temporal-billing invariants. It locks
-  Piagent/`codex-cli` to Luna/medium and uses three repeats (42 paired sessions) with token, duration,
-  full-suite, and zero-retry gates. A separate provider-free WebUI
-  parity gate proves the 31 runtime-control paths before any model quota is
-  used (workflow ingress was retired in 1.9.0).
-- The public `v1.6.0` production-v1 run
-  `production-v1-20260824T040017Z-05b7cf`, on exact commit
-  `3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511` with GPT-5.6 Luna Medium,
-  measured 108 sessions. Piagent resolved 54/54 tasks versus 48/54 for
-  `codex-cli`. Its primary fixed-workload family fresh-token ratio was `0.3857`
-  (61.43% lower), with a 95% interval of `0.3073..0.4840`; the upper bound
-  supports the conservative statement of at least 51.60% fewer fresh tokens on
-  this predeclared workload and exact release. Usage was exact for all 108
-  sessions and no retry occurred. See the
-  [benchmark evidence](https://piagent.io.vn/benchmark) and
-  [methodology](docs/quality-benchmark.md).
-- Built-in profiles for frontend, backend, fullstack, BE-readonly/FE-write, data, DevOps, mobile, docs, Python, and Node TypeScript.
-- Versioned capability packs with deterministic catalog, profile resolution, integrity lock, and permission checks.
+## Two modes, one dashboard
 
-## Permission profiles
-
-Project profiles can declare a runtime `permissionProfile`:
-
-| Profile | Use when | Guard behavior |
+| | Personal | Company |
 |---|---|---|
-| `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls`, and piagent state tools; blocks shell, `write`/`edit`/`apply_patch`, and unknown tools. |
-| `workspace-write` | Normal implementation | Default profile. Keeps protected-path, read-only-path, shell and capability checks, and asks before destructive or external actions. |
-| `trusted-full-access` | Trusted local automation | Expands workspace tool/scope autonomy, but still enforces protected paths, secret redaction, capability lock integrity, and destructive/external confirmation. |
-| `bypass` | You accept every risk, as with Codex's `--dangerously-bypass-approvals-and-sandbox` | No Piagent gate asks or blocks: deletes, pushes, migrations, external sends, protected and read-only paths all run. Tool output is still redacted and each turn still gets its `/undo` checkpoint. Remove `bypass` from `permissionProfiles.allowedModes` to forbid it in personal sessions. In a company conversation Bypass asks nothing either (internet, Docker, the member's machine, pushes, deploys), plain commands stay in the sandbox, and the team's Studio administrator can turn it off in the Harness (`bypass_mode`); it then applies as Full access. |
+| Start | `pi`, `piagent dashboard` | `piagent studio`, `piagent studio --web` |
+| Models | Your own account, any model Pi supports | Chosen per role (main · research · review) in Agent Studio |
+| Keys | On your machine, managed by Pi | In Keychain via Agent Watch; the model never sees them |
+| Commands | Normal network; push and publish wait for approval | Sandbox (Seatbelt / bubblewrap) without network; network one approval at a time |
+| Verification | You ask for it | The team's Harness runs checks and review every turn |
 
-For one run, set `PIAGENT_PERMISSION_PROFILE=read-only|workspace-write|trusted-full-access|bypass`, or use `piagent-auto --read-only`, `--workspace-write`, `--full-access`, or `--bypass`.
+## What's in the box
 
-Inside an active Pi session, use `/permission` for the menu or a session-local switch:
-
-```text
-/permission
-/permission status
-/permission read-only
-/permission workspace-write
-/permission full-access
-/permission full-access Implement the requested trusted repo task.
-/permission bypass
-```
-
-Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write`, and `/full-access`. Full-access also accepts a task after the command. The guard switches the current session to `trusted-full-access`, then forwards the remaining text as the next user request.
-
-## Parent-direct orchestration
-
-The parent model owns reasoning, implementation, and verification. When helpers are enabled it may delegate up to two fresh read-only helpers, such as an independent research question or a review of its patch. Token-saving estimates are telemetry, not an admission requirement. Helpers never implement, inherit parent history, spawn nested helpers, or retry a deterministic failure.
-
-Inside Pi:
-
-```text
-/piagent-orchestration
-```
-
-This shows the active mode, helper ceiling, review lenses, Field Guide path, writer policy, and dispatch/skip evidence without triggering a model follow-up.
-
-Source work is freeform: the model reads, edits and runs the project's checks
-directly, with no contract, declared scope or final gate. The guard still
-enforces protected and read-only paths, the permission profile, the context
-budget for large files and stale read-to-edit snapshots, and asks before
-destructive or external actions. In the managed company harness the plan,
-check and review steps per turn are set by the team's Harness in Studio.
-
-## Profiles
-
-Switching profile is one command inside Pi:
-
-```text
-/profile             # status
-/profile fullstack   # apply
-/profile setup       # select profile, then select the tech for each role
-```
-
-`/profile list` shows every profile and its aliases. The setup flow prefers a native select UI; where the Pi host has no select control, it falls back to a compact options card and an exact `/profile tech apply ...` line rather than asking the model to explain every option.
-
-## Capability packs
-
-Capability packs group governed prompts, skills, subagents, policies, adapters, recipes, and eval scenarios behind a declarative manifest. Project profiles select exact pack versions and explicitly grant owner, lifecycle, filesystem, network, and external-action boundaries. The generated lock is deterministic and records profile, pack, artifact, and permission digests.
-
-Commands and lock format: [Capability packs](docs/capability-packs.md).
-
-## Built-in profiles
-
-| Profile | Use when |
+| Area | What you get |
 |---|---|
-| `generic` | Unknown or low-structure repository |
-| `web-frontend` | Frontend-only work |
-| `backend-api` | Backend/API work |
-| `be-readonly-fe` | Backend is source-of-truth/read-only; frontend is write target |
-| `fullstack` | Frontend and backend may both be changed when the task allows |
-| `node-typescript` | Node/TypeScript library or tooling |
-| `python` | Python app/library |
-| `data` | ETL, dbt, DVC, notebook, or data pipeline |
-| `devops` | Docker, Terraform, Kubernetes, Helm, GitHub Actions |
-| `mobile` | React Native or Flutter |
-| `docs` | Documentation portal/manual |
+| Guard | Protected and read-only paths, permission profiles, stale-read and large-file checks, secret redaction on tool output, confirmation for external and destructive actions |
+| Dashboard | Conversations, folder tree, editor, terminals, hunk-by-hunk review, Timeline restore and `/undo`, Documents, 13 colour themes, ⌘K command palette |
+| Company harness | Plan · check · review per turn, decision queue one card at a time, team memory with `memory_ask`, wrong-project warnings, long-task resilience |
+| Context Engine | Local incremental index, hybrid search, token-budgeted packs, semantic compaction — `/context` |
+| MCP | `pi-mcp-adapter` with pinned presets, four config scopes, approval gate for repository servers — `piagent-mcp` |
+| Profiles | 11 built-in profiles (frontend, backend, fullstack, data, DevOps, mobile, docs…) with protected paths and verify commands — `/profile` |
+| Reports | `fe-change-report`: before/after screenshots with numbered red frames, checks and E2E, viewable in Documents |
 
-## Main workflows
+<details>
+<summary><strong>Permission profiles</strong></summary>
 
-Work is requested in plain language; the commands below are settings and read-only views typed inside a Pi session, and none of them starts a model turn. [Command reference](docs/command-reference-vietnamese.md) explains each one.
+| Profile | Use when | Guard behaviour |
+|---|---|---|
+| `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls` and piagent state tools; blocks shell, edits and unknown tools. |
+| `workspace-write` | Normal implementation | Default. Protected-path, read-only-path, shell and capability checks; asks before destructive or external actions. |
+| `trusted-full-access` | Trusted local automation | More autonomy, still enforces protected paths, secret redaction, capability lock integrity and destructive/external confirmation. |
+| `bypass` | You accept every risk | No gate asks or blocks. Output is still redacted and every turn keeps its `/undo` checkpoint. Remove it from `permissionProfiles.allowedModes` to forbid it; in company mode the Studio admin can turn it off (`bypass_mode`). |
 
-| Command | Use when |
+Inside Pi use `/permission` (menu), `/permission status`, `/permission read-only`, `/permission workspace-write`, `/permission full-access [task]` or `/permission bypass`. For one run: `PIAGENT_PERMISSION_PROFILE=…` or `piagent-auto --read-only|--workspace-write|--full-access|--bypass`. The guard exposes `piagent_permission_status` to the model.
+
+</details>
+
+<details>
+<summary><strong>Session commands</strong></summary>
+
+These are settings and read-only views; none of them starts a model turn. Every command is explained in the [command reference](docs/command-reference-vietnamese.md).
+
+| Command | Purpose |
 |---|---|
-| `/profile` | Show or apply the project profile; `/profile setup` selects the tech for each role. |
+| `/profile` | Show or apply the profile. `/profile setup`, `/profile tech`, `/profile auto` pick the tech per role (recorded with `piagent_profile_tech_context_record`). |
 | `/permission` | Show or switch the session permission profile. |
-| `/context` | Context Engine index, search, packs, test impact and compaction. |
-| `/usage` | Session, model, thinking and context usage; `/usage logs` shows compacted tool output. |
+| `/context` | Context Engine index, search, packs, test impact, compaction. |
+| `/usage` | Session, model, thinking and context usage; `/usage logs` for compacted tool output. |
 | `/memory` | Explicit project memory. |
 | `/piagent-mcp` | MCP servers, scopes and approvals. |
 | `/piagent-status` | Profile, guard, runtime and authenticated model state. |
-| `/piagent-inspector` | One read-only menu for the session diff, commands and failures, safety warnings, and context budget. A four-row panel is always shown beside Pi's native footer and can be hidden for the session with `toggle`. |
+| `/piagent-inspector` | Diff, commands and failures, safety warnings and context budget in one read-only menu. |
+| `/piagent-orchestration` | Helper mode, ceiling and dispatch evidence. |
 
-The workflow commands (`/workflow`, `/task`, `/scout`, `/fresh`, `/onboard`, `/commands`, `/model-options`) were retired in 1.9.0. Say what you want instead — "scout the payment flow read-only, do not edit", "review the current diff", "commit these two files". For a heavy session, start a new one with Pi's `/new`.
+Git stays a capability: ask for "commit these two files" or "open a PR" (the `/commit` and `/pr` prompts exist for the same flow). Models are picked with Pi's `/model` or `Ctrl+L`; see [Model options](docs/model-options.md).
 
-Git stays a capability rather than a `/git-*` namespace, so natural language works. `git push`, GitHub writes and publishing ask for confirmation first. Broad staging — `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` — requires confirmation, so unrelated or private files are not swept into a commit silently.
+</details>
 
-Paste a screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The target must be inside the project or a directory listed in `additionalReadRoots`; protected paths, paths outside the resolved filesystem read scope, symlink escapes, and extension-only fake images are refused. Pasted text reaches the model as typed; there is no checklist to paste.
+<details>
+<summary><strong>Subagents and MCP</strong></summary>
 
-Web research and image understanding remain separate capabilities. The pinned `pi-web-access` integration uses the authenticated `openai-codex` route first when it is available and keeps its automatic search fallback; it never copies provider credentials into project or browser state. Images are passed as native image input to the selected session model rather than through a Piagent-owned OCR service. The dashboard reports both effective facts under **Settings → Providers & models**: `Codex Web Search` when that route is ready, and `Codex Vision` only when the current Codex model advertises image input.
+The parent model owns reasoning, implementation and verification. With helpers enabled it may delegate up to two fresh read-only helpers (research, or a review of its patch); helpers never implement or spawn helpers. `piagent-setup` installs the `pi-subagents` runtime with a clamped preset and `/subagents-doctor` runs a health check. Details: [Subagent orchestration capabilities](docs/subagent-orchestration-capabilities.md), [auto-delegation](docs/auto-delegation-policy.md), parallel-review in [subagents and multi-agent](docs/subagents-and-multiagent.md).
 
-The Session Hub can attach browser-selected images and documents to a new or existing conversation. Markdown, text, PDF and DOCX files use bounded local extraction; the chat keeps a compact file card while the project **Documents** workspace provides a readable preview without starting a model turn. Files over the direct-send limit stay in the project workspace instead of being copied into a prompt, and protected paths, redaction, session binding and one-shot attachment references remain enforced by the runtime.
+`piagent-setup` installs `pi-mcp-adapter` and seeds the `core` preset (Context7, Chrome DevTools, GitHub); `popular` adds Playwright and Figma. Seeding writes definitions only; servers connect lazily. Keep provider keys in environment variables. Web research uses the pinned `pi-web-access` add-on. See [MCP and tools](docs/mcp-and-tools.md).
 
-A spec that lives outside the project — the one just downloaded to `~/Downloads` — is read with `piagent_document_read` once its directory is listed in the profile's `additionalReadRoots`. The grant is read-only, covers `.md`, `.txt`, `.csv`, `.json`, `.yaml`, `.pdf`, and `.docx` only, and does not open anything `protectedPaths` covers. See [command reference](docs/command-reference-vietnamese.md).
+</details>
 
-## Model selection
+<details>
+<summary><strong>Security model</strong></summary>
 
-Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
+The guard is an application-level accident-prevention layer, not an OS sandbox. It blocks path-like access to protected paths across built-in, custom and MCP tools (nested objects, `file://` URIs, percent-encoding, case-insensitive matches, symlink escapes), extracts shell operands to block raw `bash` access, confirmation-gates external writes launched through the shell, and redacts sensitive data from tool output. The [redaction benchmark](docs/security-redaction-benchmark.md) detects 52/52 contextual secrets with 0/30 false positives on benign text; it is an internal gate, not an independent audit.
 
-## MCP setup
+For untrusted code or adversarial prompts, run Pi inside a container or VM with filesystem, process, network and credential boundaries. Threat model: [docs/security-threat-model.md](docs/security-threat-model.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-`piagent-setup` and `piagent-install` both install `pi-mcp-adapter` and seed the `core` preset. Pass `--no-mcp` to skip it.
+</details>
 
-| Preset | Includes |
-|---|---|
-| `core` | Context7, Chrome DevTools, GitHub |
-| `popular` | core + Playwright + Figma desktop/local |
-| `all` | popular + Figma remote (requires an approved Figma MCP client) |
+## Evidence
 
-Seeding writes server definitions; it does not start or authenticate anything. Servers connect lazily, so each one needs its own prerequisite before its first call: Chrome DevTools needs a local Chrome, and GitHub needs Docker running plus `GITHUB_PERSONAL_ACCESS_TOKEN` exported. `piagent-mcp --list` prints what each server requires. Project-scope `.mcp.json` files ship empty on purpose — the shared baseline is the global config, not the project one.
+| Measure | Result | Source |
+|---|---|---|
+| Tasks resolved, production-v1 (v1.6.0, GPT-5.6 Luna Medium) | Piagent 54/54 · `codex-cli` 48/54 | [benchmark](https://piagent.io.vn/en/benchmark) |
+| Fresh tokens, primary fixed-workload family | ratio `0.3857` (−61.43%), 95% CI `0.3073..0.4840` | [methodology](docs/quality-benchmark.md) |
+| Usage accounting | 108/108 sessions exact, zero retries | same run |
+| Secret redaction | 52/52 contextual cases, 0/30 benign false positives | [redaction benchmark](docs/security-redaction-benchmark.md) |
+| Release cadence | every release in [CHANGELOG.md](CHANGELOG.md) | [changelog page](https://piagent.io.vn/en/whats-new) |
 
-Keep provider keys in environment variables, never in committed config. Switching presets and per-project scoping: [MCP and tools](docs/mcp-and-tools.md).
+The benchmark is a maintainer-built synthetic suite measured at v1.6.0 and not re-run for later releases; it makes no claim about wall-clock time or cost. Run it yourself with `piagent-benchmark --production --dry-run`, or the quick `core-v1` smoke with `piagent-benchmark --dry-run`.
 
-## Subagents
-
-`piagent-setup` installs the optional `pi-subagents` compatibility runtime with a clamped `safe` preset. Daily tasks stay parent-direct; builtin agents and workers are disabled, and helper mode allows up to two read-only helpers. The inspector states dispatch/skip reasons.
-
-`/subagents-doctor` runs a health check. See [Subagents and multi-agent](docs/subagents-and-multiagent.md) for the read-only helper opt-in contract.
-
-## Repository layout
-
-```text
-piagent/
-├─ architecture/                      machine-readable layer and file budgets
-├─ adapters/                         reusable project profiles
-├─ catalog/                          deterministic capability index
-├─ docs/                             EN/VI canonical docs plus stable operating guides
-├─ evals/                            governed evaluation scenarios
-├─ packs/                            versioned capability manifests and recipes
-├─ packages/
-│  ├─ piagent-core/                  Pi package: extensions, runtime, skills, managed harness
-│  └─ piagent-webui/                 dashboard: contracts, client, server, gateway, ownership
-├─ schemas/                          JSON schemas
-├─ scripts/                          setup, doctor, verification helpers
-└─ templates/                        project/global templates
-```
-
-`piagent-core` is the Pi extension and runs headless on its own. `piagent-webui` is the
-`piagent dashboard` surface — a separate dependency spine that reads the platform but is
-never read by it, so the runtime keeps working with the dashboard absent. Both layer maps
-are enforced by `npm run architecture:check`; see [Architecture](docs/en/architecture.md).
-
-## Verification
-
-One command runs the full local gate — typecheck, tests, capability catalog, doctor, and the scaffold check:
+## Contributing
 
 ```bash
+npm ci
 npm run verify
 ```
 
-Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Run the zero-provider WebUI/Terminal gate with `npm run benchmark:webui-parity`; preview the deeper Piagent/`codex-cli` Luna-medium suite with `npm run benchmark:deep -- --dry-run`. Preview the smoke benchmark with `piagent-benchmark --dry-run`; preview the 108-session production gate with `piagent-benchmark --production --dry-run`. Scoring, isolation, confidence, and quota details are in the [Quality benchmark guide](docs/quality-benchmark.md).
+`npm run verify` runs typecheck, tests, the capability catalog, the doctor and the architecture, wording and docs-site checks. The docs site and `CHANGELOG.md` are generated: edit `docs-site/content/` and `docs-site/releases.json`, then run `node scripts/build-docs-site.mjs`. Contributor flow: [CONTRIBUTING.md](CONTRIBUTING.md). Layout and layer rules: [Architecture](docs/en/architecture.md).
 
-## Public safety
-
-This repository intentionally excludes:
-
-- OAuth tokens and `auth.json`;
-- `.env` files;
-- MCP API keys and provider tokens;
-- Pi sessions, todos, caches, and local trust files;
-- project-private data dumps;
-- local machine paths.
+This repository never contains OAuth tokens, `auth.json`, `.env` files, MCP or provider keys, Pi sessions, project data dumps or local machine paths.
 
 ## Documentation
 
-- [Documentation language index](docs/README.md)
-- [Architecture (English)](docs/en/architecture.md)
-- [Architecture (Tiếng Việt)](docs/vi/architecture.md)
-- [Maintainer guide (English)](docs/en/maintainer-guide.md)
-- [Maintainer guide (Tiếng Việt)](docs/vi/maintainer-guide.md)
-- [Public docs site (VI/EN)](https://piagent.io.vn)
-- [Static team docs site](docs-site/index.html) — bilingual output generated from `docs-site/content/`, preview with `npm run site:preview`
-- [Changelog](CHANGELOG.md)
-- [Vercel docs site deploy](docs/vercel-docs-site.md)
-- [Operator manual tiếng Việt](docs/operator-manual-vietnamese.md)
-- [Quickstart tiếng Việt](docs/quickstart-vietnamese.md)
-- [Command reference tiếng Việt](docs/command-reference-vietnamese.md)
-- [Pi Context Engine](docs/context-engine.md)
-- [Team onboarding](docs/team-onboarding.md)
-- [Project onboarding](docs/project-onboarding.md)
-- [Workflow recipes](docs/workflow-recipes.md)
-- [Project adapters](docs/project-adapters.md)
-- [Architecture](docs/architecture.md)
-- [Distribution standard](docs/distribution-standard.md)
-- [Release and install policy](docs/release-install-policy.md)
-- [Publishing for teams](docs/publishing-for-teams.md)
-- [OAuth providers](docs/oauth-providers.md)
-- [Herdr workflow](docs/herdr-workflow.md)
-- [MCP and tools](docs/mcp-and-tools.md)
-- [Subagents and multi-agent](docs/subagents-and-multiagent.md)
-- [Auto-delegation policy](docs/auto-delegation-policy.md)
-- [Subagent orchestration capabilities](docs/subagent-orchestration-capabilities.md)
-- [Context-window policy](docs/context-window-policy.md)
-- [Memory policy](docs/memory-policy.md)
-- [Task lifecycle tiếng Việt](docs/task-lifecycle-vietnamese.md) (historical, before 1.9.0)
-- [Task implementation contract](docs/task-implementation-contract.md) (historical, before 1.9.0)
-- [Runtime quality baseline](docs/runtime-quality-baseline.md)
-- [Usage observability](docs/usage-observability.md)
-- [Model options](docs/model-options.md)
-- [Quality benchmark guide](docs/quality-benchmark.md)
-- [Sensitive-data redaction benchmark](docs/security-redaction-benchmark.md)
-- [Runtime policy design](docs/runtime-policy-design.md)
-- [Security threat model](docs/security-threat-model.md)
-- [Package architecture notes](docs/package-architecture-notes.md)
-
-## Maturity
-
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.41.0` or a reviewed commit.
-
-Ready for:
-
-- global Pi setup;
-- project onboarding;
-- profile-driven guarded implementation tasks;
-- read-only scouting and planning;
-- backend-readonly/frontend-write workflows;
-- bounded subagent scouting, planning, implementation, and review;
-- runtime checks for exec policy, context budget, context preflight, tool policy, and usage snapshot;
-- project-level quality/token/cost benchmarking.
-
-Application-level policy layer:
-
-- The guard extension is an accident-prevention layer for agent mistakes and common prompt-injection patterns.
-- Raw path-like tool access to protected paths is blocked before execution. This covers Pi built-ins such as `read`, `write`, `edit`, `grep`, `find`, `ls`, and custom/MCP tools when their input contains path-like strings, including nested objects, arrays, and `file://` URIs.
-- The default MCP proxy carrier is decoded only from bounded object-shaped JSON. Provider/action confirmation and protected/read-only path checks then apply to the effective MCP tool; malformed, oversized, scalar, array, or excessively nested proxy payloads fail closed.
-- Runtime permission profiles control autonomy: `read-only`, `workspace-write`, `trusted-full-access`, and `bypass`. The full-access profile is explicit and auditable; it does not disable protected-path checks, secret redaction, capability lock integrity, or destructive/external confirmations. `bypass` does, only when chosen explicitly (and, in a company conversation, only while the team's Harness allows it); it keeps output redaction and turn checkpoints.
-- Protected paths are matched case-insensitively, existing aliases are resolved to their canonical repository path, and scope-aware filesystem tools reject repository escape or symbolic-link traversal.
-- Path-like strings are percent-decoded once before matching. Excessively nested tool input fails closed instead of being silently skipped.
-- Known content fields such as `content`, `query`, `pattern`, `text`, and `command` are excluded from generic path extraction to preserve normal search/edit behavior. Tool-specific checks still validate `grep.glob` and `find.pattern` when they explicitly target protected paths.
-- The ambiguous `source` field remains metadata for configured external providers and piagent tools, but is treated as a filesystem path for file-oriented tools and unknown/local tools; protected-path and read-scope checks then apply before execution.
-- Broad `grep`, `find`, and `ls` sweeps get result-filter backstops: protected file content lines or protected path metadata are redacted before the model sees output. Text tool results and JSON-like result details also pass through shared sensitive-data redaction; image, audio, and resource payloads are left intact.
-- The redaction release gate is a synthetic/internal benchmark for contextual recall, benign preservation, structured fields, and bounded large output. The public security threat model maps current assumptions, attack vectors, controls, and residual risks; it is not an independent audit. Stronger assurance still requires a broader OS/shell matrix, more parser fuzzing, continued symlink/path-traversal testing, third-party review, and an LTS/backport policy. Opaque entropy without a credential-bearing context and transformed output such as base64-encoded content remain outside the redaction guarantee.
-- Raw `bash` access to protected paths is blocked through shell operand extraction. The guard covers partial shell globs, bare filenames, canonical symbolic-link aliases, and attached input/output redirections. `.pi/piagent-state/**` and `.pi/piagent-profile.json` are self-protected; use `piagent_context` and the piagent tools instead.
-- External writes launched through guarded shell tools are confirmation-gated as well as direct provider tools. This includes GitHub CLI write actions and non-read-only `curl`/`wget` forms, including common execution wrappers; known read/list/GET forms remain non-interactive.
-- Observed bash results are persisted under `.pi/piagent-state/observed-bash.jsonl`, so parent agents can check results produced by guarded subagent processes. Command identity is kept as a SHA-256 hash while sensitive command text is redacted at both the in-memory and persisted boundaries.
-- Project memory files are private-by-default in generated projects; opt in to shared memory only after review/redaction.
-- It is not an OS sandbox or complete security boundary. It depends on the controlled tool paths and shell parsing that the platform observes, and it cannot stop another process with the same OS permissions from reading or writing outside the guard. For untrusted code, untrusted prompts, or adversarial workloads, run Pi inside an isolated container/VM with filesystem, process, network, and credential boundaries.
-- Release verification audits the small helper dependency tree separately from the exact Pi host and pinned optional add-ons at the high-severity gate. Upstream lower-severity findings are still reported and tracked; a green helper-only audit is not treated as proof that the deployed runtime tree is clean.
-
-Still requires project-specific validation for:
-
-- high-risk production changes;
-- provider/model changes with materially different behavior;
-- complex parallel writer workflows;
-- environments requiring hard filesystem, network, or process sandboxing outside Pi.
-
-## Security reports
-
-Report suspected vulnerabilities privately using the process in [SECURITY.md](SECURITY.md). Do not put live credentials, OAuth sessions, customer data, or exploit details in a public issue.
+- **Start:** [Website](https://piagent.io.vn/en/) · [Install](https://piagent.io.vn/en/quickstart) · [Ecosystem](https://piagent.io.vn/en/ecosystem) · [Windows](docs/en/windows.md) · [Team onboarding](docs/team-onboarding.md)
+- **Use:** [Command reference](docs/command-reference-vietnamese.md) · [Workflow recipes](docs/workflow-recipes.md) · [Workspace editor](docs/en/workspace-editor.md) · [Model options](docs/model-options.md) · [OAuth providers](docs/oauth-providers.md) · [Context Engine](docs/context-engine.md) · [Memory policy](docs/memory-policy.md)
+- **Operate:** [Release and install policy](docs/release-install-policy.md) · [Publishing for teams](docs/publishing-for-teams.md) · [Distribution standard](docs/distribution-standard.md) · [Usage observability](docs/usage-observability.md) · [Operator manual (VI)](docs/operator-manual-vietnamese.md)
+- **Internals:** [Architecture](docs/en/architecture.md) · [Maintainer guide](docs/en/maintainer-guide.md) · [Runtime policy design](docs/runtime-policy-design.md) · [Security threat model](docs/security-threat-model.md) · [Quality benchmark](docs/quality-benchmark.md) · [Capability packs](docs/capability-packs.md) · [All docs](docs/README.md)
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

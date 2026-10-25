@@ -54,6 +54,8 @@ Do not weaken an existing test to make a change pass. If a test encodes the wron
 
 Update `docs/` only when behavior, setup, commands, architecture, or security posture actually changed. Internal refactors do not need a docs entry.
 
+The public site at piagent.io.vn is generated. Page bodies live in `docs-site/content/` (Vietnamese) and `docs-site/content/en/` (English); navigation, titles and leads live in `scripts/docs-site-nav.mjs`. Release notes have one source, `docs-site/releases.json`, which renders the Changelog page, the landing page's latest releases and `CHANGELOG.md`. After editing any of them, run `node scripts/build-docs-site.mjs` and preview with `npm run site:preview`.
+
 ## Commits and pull requests
 
 - Conventional commit format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.

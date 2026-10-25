@@ -1,0 +1,80 @@
+<section class="section">
+  <h2 id="update">Update</h2>
+  <p>The dashboard and Terminal check for a new release every hour. When one is out, the dashboard opens a dialog with what will change, <strong>Update now</strong> and <strong>Later</strong> (asks again in an hour). To run it yourself, one command:</p>
+  <div class="command-card">
+    <header><span>Move to the latest release</span><button class="clip-btn" data-clip="piagent-update">Copy</button></header>
+    <pre><code>piagent-update</code></pre>
+  </div>
+  <p>Restart the dashboard afterwards so the new interface takes effect.</p>
+
+  <h3 id="what-it-does">What it does, in order</h3>
+  <ol>
+    <li>Resolves the target release and the Pi version it pins.</li>
+    <li>Installs that Pi host, then replaces the <code>piagent-update</code> helper.</li>
+    <li>Checks the version actually on disk before running the installer.</li>
+    <li>With <code>--project</code>: migrates the project's state and runs <code>piagent-doctor --strict-share</code>.</li>
+  </ol>
+  <div class="callout">
+    <strong>Not from a git checkout</strong>
+    <p><code>piagent-update</code> refuses to run when the global package is a link to a source repository, so it never overwrites code you are editing.</p>
+  </div>
+
+  <h3 id="options">Common options</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td><code>piagent-update --check</code></td><td>You only want to know whether a release is out.</td></tr>
+        <tr><td><code>piagent-update --dry-run</code></td><td>You want to see what would be installed, changing nothing.</td></tr>
+        <tr><td><code>piagent-update --version X.Y.Z</code></td><td>You want exactly one release, newer or older.</td></tr>
+        <tr><td><code>piagent-update --project .</code></td><td>You want the current project migrated too.</td></tr>
+        <tr><td><code>--no-host</code> · <code>--no-package</code> · <code>--no-migrate</code></td><td>You want to skip a step.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="pin-for-a-team">Pin one release for a team</h2>
+  <p>For a team rollout, install the exact Pi host and platform release, then run the installer in stable mode. The <code>--dry-run</code> step prints what would change.</p>
+  <div class="command-card">
+    <header><span>Pinned install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{{piHost}}&#10;npm install -g --ignore-scripts @piagent/platform@{{version}}&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Copy</button></header>
+    <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{{piHost}}
+npm install -g --ignore-scripts @piagent/platform@{{version}}
+piagent-install --stable --dry-run
+piagent-install --stable</code></pre>
+  </div>
+  <p>Installed from a package, <code>.pi/settings.json</code> records <code>npm:@piagent/platform@&lt;version&gt;</code>: the same value on every machine, so the team can commit it. The full procedure is in the <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release &amp; install policy</a>.</p>
+</section>
+
+<section class="section">
+  <h2 id="rollback">Roll back</h2>
+  <p>Rolling back is deliberate, never automatic. Move to a specific release with the same update command:</p>
+  <div class="command-card">
+    <header><span>Back to a previous release</span><button class="clip-btn" data-clip="piagent-update --version X.Y.Z --dry-run&#10;piagent-update --version X.Y.Z">Copy</button></header>
+    <pre><code>piagent-update --version X.Y.Z --dry-run
+piagent-update --version X.Y.Z</code></pre>
+  </div>
+  <p>To change only the Pi package and keep the host: <code>piagent-install --version vX.Y.Z --resolve-tag</code>. Run <code>piagent-doctor</code> on the project afterwards.</p>
+</section>
+
+<section class="section">
+  <h2 id="uninstall">Uninstall</h2>
+  <p><code>piagent-uninstall</code> only reports what it would remove and exits. It acts with <code>--apply</code>, because it edits Pi settings that other tools also write to.</p>
+  <div class="command-card">
+    <header><span>Preview, then remove</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply">Copy</button></header>
+    <pre><code>piagent-uninstall
+piagent-uninstall --apply
+npm uninstall -g @piagent/platform</code></pre>
+  </div>
+  <p>Add-ons, the Pi host and project state are opt-in: <code>--with-addons</code>, <code>--with-host</code>, <code>--project &lt;path&gt;</code>.</p>
+  <div class="callout ok-callout">
+    <strong>Never removed</strong>
+    <p>Credentials, trust, sessions, todos and <code>.pi/memory/</code> are kept under every combination of flags. Files generated from a template and then edited (<code>AGENTS.md</code>, <code>.pi/settings.json</code>) are only listed, for you to decide.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="windows">On Windows</h2>
+  <p>Run the same PowerShell command you installed with: it updates WSL, Piagent and Agent Watch. See <a href="/en/windows">Windows</a>.</p>
+</section>

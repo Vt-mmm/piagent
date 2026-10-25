@@ -23,9 +23,11 @@ describe("bilingual docs site", () => {
     const viPages = pagesFor(LOCALES.vi);
     const enPages = pagesFor(LOCALES.en);
 
-    assert.equal(viPages.length, 20);
+    assert.equal(viPages.length, 21);
     assert.equal(enPages.length, viPages.length);
-    assert.equal(outputs.length, viPages.length * 2);
+    // Two HTML pages per topic, plus one search index per locale and CHANGELOG.md.
+    assert.equal(outputs.filter((output) => output.file.endsWith(".html")).length, viPages.length * 2);
+    assert.equal(outputs.length, viPages.length * 2 + 3);
     assert.deepEqual(enPages.map((page) => page.slug), viPages.map((page) => page.slug));
     assert.equal(hrefFor(viPages[0], LOCALES.vi), "/");
     assert.equal(hrefFor(enPages[0], LOCALES.en), "/en/");
@@ -36,8 +38,11 @@ describe("bilingual docs site", () => {
     // Windows setup follows the quickstart: one PowerShell command.
     assert.equal(hrefFor(viPages[3], LOCALES.vi), "/windows");
     assert.equal(hrefFor(enPages[3], LOCALES.en), "/en/windows");
-    assert.equal(hrefFor(viPages[4], LOCALES.vi), "/whats-new");
-    assert.equal(hrefFor(enPages[4], LOCALES.en), "/en/whats-new");
+    // Updating follows installing; the changelog comes right after.
+    assert.equal(hrefFor(viPages[4], LOCALES.vi), "/update");
+    assert.equal(hrefFor(enPages[4], LOCALES.en), "/en/update");
+    assert.equal(hrefFor(viPages[5], LOCALES.vi), "/whats-new");
+    assert.equal(hrefFor(enPages[5], LOCALES.en), "/en/whats-new");
   });
 
   it("emits language-specific canonical, alternates, controls, and copy labels", () => {
@@ -176,5 +181,45 @@ describe("docs site analytics", () => {
     const html = fs.readFileSync(path.join(repositoryRoot, "docs-site", "index.html"), "utf8");
     const sources = [...html.matchAll(/<script[^>]*\bsrc="([^"]+)"/g)].map(([, src]) => src);
     for (const src of sources) assert.ok(src.startsWith("/"), `third-party script: ${src}`);
+  });
+});
+
+describe("release notes from one source", () => {
+  // docs-site/releases.json renders the Changelog page in both languages, the
+  // landing page's latest cards and CHANGELOG.md. The three used to be written
+  // by hand and drifted; now a release that is in one is in all of them.
+  const releases = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "docs-site", "releases.json"), "utf8"));
+
+  it("has the current package version as its newest stable release", () => {
+    assert.equal(releases.find((release) => release.status === "stable").version, packageVersion);
+  });
+
+  it("keeps CHANGELOG.md generated from it, with the section heading release tooling reads", () => {
+    const changelog = fs.readFileSync(path.join(repositoryRoot, "CHANGELOG.md"), "utf8");
+    const changelogOutput = build().find((output) => output.file === path.join(repositoryRoot, "CHANGELOG.md"));
+    assert.equal(changelog, changelogOutput.html, "CHANGELOG.md is stale; run node scripts/build-docs-site.mjs");
+    for (const release of releases) {
+      assert.match(changelog, new RegExp(`^## v${release.version.replace(/\./g, "\\.")} - `, "m"));
+    }
+  });
+
+  it("links every release from the Changelog page in both languages", () => {
+    const outputs = build();
+    for (const locale of Object.values(LOCALES)) {
+      const html = renderedPage(outputs, locale, "whats-new");
+      for (const release of releases) {
+        assert.ok(html.includes(`id="v${release.version.replace(/\./g, "-")}"`), `${locale.code} changelog misses ${release.version}`);
+      }
+    }
+  });
+
+  it("writes every entry in both languages within the length the page is designed for", () => {
+    for (const release of releases) {
+      assert.ok(release.title.en.length <= 90 && release.title.vi.length <= 90, `${release.version} title is too long`);
+      assert.ok(release.items.length >= 1 && release.items.length <= 8, `${release.version} has ${release.items.length} items`);
+      for (const item of release.items) {
+        assert.ok(item.en.length <= 220 && item.vi.length <= 220, `${release.version} has an item over 220 characters`);
+      }
+    }
   });
 });

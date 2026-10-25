@@ -1,108 +1,109 @@
 <!doctype html>
-<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command" data-copy-label="Copy">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Piagent on Windows with one command · Pi Agent Platform Docs</title>
-    <meta name="description" content="One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update." />
-    <meta name="theme-color" content="#050505" />
+    <title>Install on Windows with one command · Pi Agent Platform</title>
+    <meta name="description" content="One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu. Run it again to update." />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfbf9" media="(prefers-color-scheme: light)" />
     <link rel="canonical" href="https://piagent.io.vn/en/windows" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/windows" />
     <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/windows" />
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/windows" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta property="og:title" content="Piagent on Windows with one command · Pi Agent Platform Docs" />
-    <meta property="og:description" content="One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Install on Windows with one command · Pi Agent Platform" />
+    <meta property="og:description" content="One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu. Run it again to update." />
     <meta property="og:url" content="https://piagent.io.vn/en/windows" />
+    <meta property="og:image" content="https://piagent.io.vn/assets/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>try{var t=localStorage.getItem("piagent-docs-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/assets/docs.css" />
     <script src="/assets/docs.js" defer></script>
   </head>
   <body>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="icon-branch" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="7.5" r="2"/><path d="M6 7.5v9M18 9.5c0 4.5-5 4-11 7.5"/></symbol><symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M8.5 16v-5M12.5 16V8M16.5 16v-3"/></symbol><symbol id="icon-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".8"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></symbol><symbol id="icon-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol><symbol id="icon-github" viewBox="0 0 24 24"><path d="M9 19c-4.5 1.5-4.5-2.5-6.5-3m13 6v-3.5a3 3 0 0 0-.9-2.4c3-.3 6.4-1.5 6.4-6.7a5.2 5.2 0 0 0-1.4-3.6 4.8 4.8 0 0 0-.1-3.6s-1.1-.3-3.7 1.4a12.6 12.6 0 0 0-6.6 0C6.6 1.9 5.5 2.2 5.5 2.2a4.8 4.8 0 0 0-.1 3.6A5.2 5.2 0 0 0 4 9.4c0 5.2 3.4 6.4 6.4 6.7a3 3 0 0 0-.9 2.4V22"/></symbol><symbol id="icon-hash" viewBox="0 0 24 24"><path d="M5 9h15M4 15h15M10 3 8 21M16 3l-2 18"/></symbol><symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol><symbol id="icon-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.9 12.1 8.6-8.6M16.5 6.5l2.5 2.5M14 9l2 2"/></symbol><symbol id="icon-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/></symbol><symbol id="icon-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol><symbol id="icon-network" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5V12m0 0-5.2 5.2M12 12l5.2 5.2"/></symbol><symbol id="icon-plug" viewBox="0 0 24 24"><path d="M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></symbol><symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 0 0 5.3 6.7M4 3v4h4"/><path d="M4 13a8 8 0 0 0 14.7 4.3M20 21v-4h-4"/></symbol><symbol id="icon-rocket" viewBox="0 0 24 24"><path d="M5.5 15.5C4 17 3.5 19.5 3.5 20.5c1 0 3.5-.5 5-2"/><path d="M9 15 6.5 12.5C8 8.5 11.5 4.5 20 4c-.5 8.5-4.5 12-8.5 13.5z"/><circle cx="14.5" cy="9.5" r="1.5"/></symbol><symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol><symbol id="icon-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol><symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.7 7.5-9.5V6z"/></symbol><symbol id="icon-shield-check" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.7 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol><symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol><symbol id="icon-sparkles" viewBox="0 0 24 24"><path d="M11 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z"/><path d="M19 15v5M16.5 17.5h5"/></symbol><symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol><symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol><symbol id="icon-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"/></symbol><symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></symbol><symbol id="icon-windows" viewBox="0 0 24 24"><path d="M3.5 5.5 10.5 4.5v7h-7zM13 4.2 20.5 3v8.5H13zM3.5 13h7v7l-7-1zM13 13h7.5v8.5L13 20.3z"/></symbol><symbol id="icon-wrench" viewBox="0 0 24 24"><path d="M15 6.5a4.5 4.5 0 0 1-6 6l-5 5L6.5 20l5-5a4.5 4.5 0 0 0 6-6L15 11.5l-2.5-2.5z"/></symbol></svg>
+    <a class="skip-link" href="#content">Skip to content</a>
     <header class="topbar">
+      <button class="icon-button mobile-menu" type="button" data-menu aria-label="Open docs menu"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-menu"/></svg></button>
       <a class="brand" href="/en/" aria-label="Pi Agent Platform">
-        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
-        <span>Pi Agent Platform</span>
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
+        <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.41.0" title="v1.41.0 docs · EN"><span class="dot"></span>v1.41.0</a>
+      <nav class="top-nav" aria-label="Documentation">
+        <a href="/en/quickstart">Docs</a>
+        <a href="/en/whats-new">Changelog</a>
+        <a href="/en/benchmark">Benchmark</a>
+      </nav>
+      <span class="top-spacer"></span>
+      <button class="search-trigger" type="button" data-search aria-label="Search documentation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search"/></svg><span>Search the docs…</span><kbd>⌘K</kbd></button>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.41.0 docs · EN</span>
-        <nav class="language-switch" aria-label="Language">
-          <a class="language-option" href="/windows" hreflang="vi" lang="vi">VI</a>
-          <a class="language-option current" href="/en/windows" hreflang="en" lang="en" aria-current="true">EN</a>
-        </nav>
-        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          GitHub
-        </a>
-        <button class="button mobile-menu" type="button" data-menu>Menu</button>
-        <a class="button top-command-link" href="/en/commands">Commands</a>
+        <nav class="language-switch" aria-label="Language"><a class="language-option" href="/windows" hreflang="vi" lang="vi">VI</a><a class="language-option current" href="/en/windows" hreflang="en" lang="en" aria-current="true">EN</a></nav>
+        <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Switch light/dark theme"><svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-moon"/></svg><svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sun"/></svg></button>
+        <a class="icon-button" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-github"/></svg></a>
       </div>
     </header>
 
     <div class="layout with-toc">
       <aside class="sidebar" data-sidebar>
-        <div class="sidebar-search" aria-label="Search documentation">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
-          <input type="search" placeholder="Search pages" data-filter />
-        </div>
-
         <nav aria-label="Documentation">
           <div class="nav-group">
             <p class="nav-title">Get started</p>
-            <a class="nav-link" href="/en/">Overview</a>
-            <a class="nav-link" href="/en/ecosystem">Ecosystem</a>
-            <a class="nav-link" href="/en/quickstart">Quickstart</a>
-            <a class="nav-link current" href="/en/windows" aria-current="page">Windows</a>
-            <a class="nav-link" href="/en/whats-new">What’s new</a>
-            <a class="nav-link" href="/en/scope">Platform scope</a>
+            <a class="nav-link" href="/en/"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-home"/></svg><span>Overview</span></a>
+            <a class="nav-link" href="/en/ecosystem"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-network"/></svg><span>Ecosystem</span></a>
+            <a class="nav-link" href="/en/quickstart"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-rocket"/></svg><span>Install</span></a>
+            <a class="nav-link current" href="/en/windows" aria-current="page"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-windows"/></svg><span>Windows</span></a>
+            <a class="nav-link" href="/en/update"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-refresh"/></svg><span>Update &amp; uninstall</span></a>
+            <a class="nav-link" href="/en/whats-new"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sparkles"/></svg><span>Changelog</span></a>
+            <a class="nav-link" href="/en/scope"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-target"/></svg><span>Platform scope</span></a>
           </div>
           <div class="nav-group">
             <p class="nav-title">Build</p>
-            <a class="nav-link" href="/en/profiles">Project profiles</a>
-            <a class="nav-link" href="/en/permissions">Permission modes</a>
-            <a class="nav-link" href="/en/commands">Command catalog</a>
-            <a class="nav-link" href="/en/workflows">Workflows</a>
+            <a class="nav-link" href="/en/profiles"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sliders"/></svg><span>Project profiles</span></a>
+            <a class="nav-link" href="/en/permissions"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-key"/></svg><span>Permission modes</span></a>
+            <a class="nav-link" href="/en/commands"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-terminal"/></svg><span>Command catalog</span></a>
+            <a class="nav-link" href="/en/workflows"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-branch"/></svg><span>Workflows</span></a>
           </div>
           <div class="nav-group">
             <p class="nav-title">MCP</p>
-            <a class="nav-link" href="/en/mcp">MCP overview</a>
-            <a class="nav-link" href="/en/mcp-servers">Server management</a>
-            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
-            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+            <a class="nav-link" href="/en/mcp"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-plug"/></svg><span>MCP overview</span></a>
+            <a class="nav-link" href="/en/mcp-servers"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-server"/></svg><span>Server management</span></a>
+            <a class="nav-link" href="/en/mcp-auth"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-lock"/></svg><span>Authentication</span></a>
+            <a class="nav-link" href="/en/mcp-approval"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield-check"/></svg><span>Approval gate</span></a>
           </div>
           <div class="nav-group">
             <p class="nav-title">Operate</p>
-            <a class="nav-link" href="/en/security">Security model</a>
-            <a class="nav-link" href="/en/architecture">Architecture</a>
-            <a class="nav-link" href="/en/context-engine">Context Engine</a>
-            <a class="nav-link" href="/en/benchmark">Benchmark</a>
-            <a class="nav-link" href="/en/runtime">Runtime tools</a>
-            <a class="nav-link" href="/en/team">Team usage</a>
+            <a class="nav-link" href="/en/security"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield"/></svg><span>Security model</span></a>
+            <a class="nav-link" href="/en/architecture"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-layers"/></svg><span>Architecture</span></a>
+            <a class="nav-link" href="/en/context-engine"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-cpu"/></svg><span>Context Engine</span></a>
+            <a class="nav-link" href="/en/benchmark"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-chart"/></svg><span>Benchmark</span></a>
+            <a class="nav-link" href="/en/runtime"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-wrench"/></svg><span>Runtime tools</span></a>
+            <a class="nav-link" href="/en/team"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-users"/></svg><span>Team usage</span></a>
           </div>
         </nav>
       </aside>
 
-      <main>
+      <main id="content">
         <div class="content-shell" data-article>
             <nav class="breadcrumb" aria-label="Breadcrumb">
               <a href="/en/">Docs</a>
               <span aria-hidden="true">/</span>
               <span>Get started</span>
-              <span aria-hidden="true">/</span>
-              <span>Windows</span>
             </nav>
             <div class="page-head">
-              <h1>Piagent on Windows with one command</h1>
-              <p>One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu; run it again to update.</p>
+              <h1>Install on Windows with one command</h1>
+              <p>One PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch, binds the company key and adds Piagent to the Start menu. Run it again to update.</p>
+              <div class="page-meta">
+                <a href="https://github.com/Vt-mmm/piagent/blob/main/docs-site/content/en/windows.html" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-edit"/></svg>Edit this page</a>
+              </div>
             </div>
 <section class="section">
 
@@ -182,22 +183,22 @@
 </section>
             <nav class="pager" aria-label="Adjacent pages">
               <a class="pager-prev" href="/en/quickstart">
-                <span class="pager-label">Previous</span>
-                <span class="pager-title">Quickstart</span>
+                <span class="pager-label">← Previous</span>
+                <span class="pager-title">Install</span>
               </a>
-              <a class="pager-next" href="/en/whats-new">
-                <span class="pager-label">Next</span>
-                <span class="pager-title">What’s new</span>
+              <a class="pager-next" href="/en/update">
+                <span class="pager-label">Next →</span>
+                <span class="pager-title">Update &amp; uninstall</span>
               </a>
             </nav>
 
             <footer class="footer">
-              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <p>Pi Agent Platform · MIT · static docs, no cookies</p>
               <div class="footer-links" aria-label="External links">
-                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
-                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://www.npmjs.com/package/@piagent/platform" target="_blank" rel="noopener noreferrer">npm</a>
                 <a href="/windows" hreflang="vi">Tiếng Việt</a>
-                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook</a>
               </div>
             </footer>
         </div>
@@ -207,6 +208,13 @@
         <p class="toc-title">On this page</p>
         <nav data-toc></nav>
       </aside>
+    </div>
+    <div class="palette" data-palette data-index="/assets/search-en.json" data-empty="No page matches." role="dialog" aria-modal="true" aria-label="Search documentation">
+      <div class="palette-box">
+        <label class="palette-input"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search"/></svg><input type="search" placeholder="Search the docs…" aria-label="Search documentation" autocomplete="off" spellcheck="false" /></label>
+        <div class="palette-results" data-results role="listbox"></div>
+        <div class="palette-foot"><span>↑↓ select</span><span>↵ open</span><span>esc close</span></div>
+      </div>
     </div>
     <script>
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

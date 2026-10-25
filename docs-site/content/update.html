@@ -1,0 +1,80 @@
+<section class="section">
+  <h2 id="cap-nhat">Cập nhật</h2>
+  <p>Dashboard và Terminal kiểm tra bản mới mỗi giờ. Khi có bản mới, dashboard mở hộp thoại ghi thay đổi gì, với <strong>Cập nhật ngay</strong> và <strong>Để sau</strong> (hỏi lại sau một giờ). Muốn tự chạy thì dùng một lệnh:</p>
+  <div class="command-card">
+    <header><span>Lên bản mới nhất</span><button class="clip-btn" data-clip="piagent-update">Lấy lệnh</button></header>
+    <pre><code>piagent-update</code></pre>
+  </div>
+  <p>Khởi động lại dashboard sau khi cập nhật để giao diện mới có hiệu lực.</p>
+
+  <h3 id="cap-nhat-lam-gi">Lệnh này làm gì, theo thứ tự</h3>
+  <ol>
+    <li>Xác định bản đích và bản Pi mà bản đó pin.</li>
+    <li>Cài đúng Pi host đó, rồi thay helper <code>piagent-update</code>.</li>
+    <li>Kiểm tra version thật trên đĩa trước khi chạy installer.</li>
+    <li>Với <code>--project</code>: migrate state của project và chạy <code>piagent-doctor --strict-share</code>.</li>
+  </ol>
+  <div class="callout">
+    <strong>Không chạy từ git checkout</strong>
+    <p><code>piagent-update</code> từ chối chạy khi package toàn cục là một bản link tới source repo, để không ghi đè code bạn đang sửa.</p>
+  </div>
+
+  <h3 id="tuy-chon">Tuỳ chọn thường dùng</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Lệnh</th><th>Dùng khi</th></tr></thead>
+      <tbody>
+        <tr><td><code>piagent-update --check</code></td><td>Chỉ xem có bản mới không.</td></tr>
+        <tr><td><code>piagent-update --dry-run</code></td><td>Xem sẽ cài gì, không đổi gì.</td></tr>
+        <tr><td><code>piagent-update --version X.Y.Z</code></td><td>Lên hoặc về đúng một bản.</td></tr>
+        <tr><td><code>piagent-update --project .</code></td><td>Cập nhật và migrate project hiện tại.</td></tr>
+        <tr><td><code>--no-host</code> · <code>--no-package</code> · <code>--no-migrate</code></td><td>Bỏ qua từng bước.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="pin-cho-team">Pin một bản cho cả team</h2>
+  <p>Khi rollout cho team, cài đúng bản Pi host và đúng bản platform, rồi chạy installer ở chế độ stable. Bước <code>--dry-run</code> in ra những gì sẽ đổi.</p>
+  <div class="command-card">
+    <header><span>Cài pin theo bản</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{{piHost}}&#10;npm install -g --ignore-scripts @piagent/platform@{{version}}&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
+    <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{{piHost}}
+npm install -g --ignore-scripts @piagent/platform@{{version}}
+piagent-install --stable --dry-run
+piagent-install --stable</code></pre>
+  </div>
+  <p>Vì cài từ package, <code>.pi/settings.json</code> ghi <code>npm:@piagent/platform@&lt;version&gt;</code>: giá trị giống nhau trên mọi máy, commit được cho cả team. Quy trình đầy đủ ở <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release &amp; install policy</a>.</p>
+</section>
+
+<section class="section">
+  <h2 id="rollback">Rollback</h2>
+  <p>Rollback là thao tác có chủ đích, không tự động. Về một bản cụ thể bằng cùng lệnh cập nhật:</p>
+  <div class="command-card">
+    <header><span>Về bản trước</span><button class="clip-btn" data-clip="piagent-update --version X.Y.Z --dry-run&#10;piagent-update --version X.Y.Z">Lấy lệnh</button></header>
+    <pre><code>piagent-update --version X.Y.Z --dry-run
+piagent-update --version X.Y.Z</code></pre>
+  </div>
+  <p>Chỉ muốn đổi Pi package mà giữ host: <code>piagent-install --version vX.Y.Z --resolve-tag</code>. Sau khi về bản cũ, chạy <code>piagent-doctor</code> trên project.</p>
+</section>
+
+<section class="section">
+  <h2 id="go-cai-dat">Gỡ cài đặt</h2>
+  <p><code>piagent-uninstall</code> mặc định chỉ in ra sẽ gỡ gì rồi thoát. Thêm <code>--apply</code> mới thực hiện, vì nó sửa Pi settings mà công cụ khác cũng ghi vào.</p>
+  <div class="command-card">
+    <header><span>Xem trước, rồi gỡ</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply">Lấy lệnh</button></header>
+    <pre><code>piagent-uninstall
+piagent-uninstall --apply
+npm uninstall -g @piagent/platform</code></pre>
+  </div>
+  <p>Add-on, Pi host và state trong project là opt-in: <code>--with-addons</code>, <code>--with-host</code>, <code>--project &lt;path&gt;</code>.</p>
+  <div class="callout ok-callout">
+    <strong>Không bao giờ bị xoá</strong>
+    <p>Credential, trust, session, todo và <code>.pi/memory/</code> được giữ ở mọi tổ hợp cờ. File sinh từ template rồi đã sửa (<code>AGENTS.md</code>, <code>.pi/settings.json</code>) chỉ được liệt kê để bạn tự quyết.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="windows">Trên Windows</h2>
+  <p>Chạy lại đúng lệnh PowerShell đã dùng để cài: nó cập nhật WSL, Piagent và Agent Watch. Xem <a href="/windows">Cài trên Windows</a>.</p>
+</section>

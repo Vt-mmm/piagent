@@ -389,7 +389,7 @@ gh run rerun <run-id> --failed
 
 Re-running the workflow from a branch instead skips publishing, because the publish step requires a tag ref.
 
-1. Update package versions, `CHANGELOG.md`, install examples, and docs metadata on a release-candidate branch.
+1. Update package versions, install examples, and docs metadata on a release-candidate branch. Add the release to the top of `docs-site/releases.json` (title, one-sentence summary, items tagged `new`, `improved`, `fixed`, `security` or `breaking`, in English and Vietnamese, plus any Studio or Agent Watch it `requires`), then run `node scripts/build-docs-site.mjs`: it regenerates `CHANGELOG.md`, the Changelog page in both languages and the landing page's latest releases. Do not edit `CHANGELOG.md` by hand; `build-docs-site.mjs --check` fails when it drifts.
 2. Verify the exact release-candidate source:
 
    ```bash

@@ -1,276 +1,337 @@
 <!doctype html>
-<html lang="vi" data-copy-success="Đã lấy" data-copy-fallback="Chọn lệnh">
+<html lang="vi" data-copy-success="Đã lấy" data-copy-fallback="Chọn lệnh" data-copy-label="Sao chép">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pi Agent Platform Docs</title>
-    <meta name="description" content="Coding agent cho cả team: một dashboard cho Terminal và trình duyệt, model cá nhân hoặc của công ty, guard kiểm tra mọi tool call." />
-    <meta name="theme-color" content="#050505" />
+    <title>Pi Agent Platform — Coding agent cho cả team</title>
+    <meta name="description" content="Coding agent cho cả team: guard kiểm tra mọi tool call, Harness của team tự chạy check và review, một dashboard cho Terminal và trình duyệt." />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfbf9" media="(prefers-color-scheme: light)" />
     <link rel="canonical" href="https://piagent.io.vn/" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/" />
     <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/" />
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta property="og:title" content="Pi Agent Platform Docs" />
-    <meta property="og:description" content="Coding agent cho cả team: một dashboard cho Terminal và trình duyệt, model cá nhân hoặc của công ty, guard kiểm tra mọi tool call." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Pi Agent Platform — Coding agent cho cả team" />
+    <meta property="og:description" content="Coding agent cho cả team: guard kiểm tra mọi tool call, Harness của team tự chạy check và review, một dashboard cho Terminal và trình duyệt." />
     <meta property="og:url" content="https://piagent.io.vn/" />
+    <meta property="og:image" content="https://piagent.io.vn/assets/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>try{var t=localStorage.getItem("piagent-docs-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/assets/docs.css" />
     <script src="/assets/docs.js" defer></script>
   </head>
-  <body>
+  <body class="home">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="icon-apple" viewBox="0 0 24 24"><path d="M16 3.5c-1 .3-2.4 1.3-2.6 3 1.2.1 2.4-.8 2.6-3zM12 8c-1.5-1-5-1-6 2.5S6.5 19 9 20c1.2.5 2-.4 3-.4s1.8.9 3 .4c1.4-.6 2.5-2.7 3-4.5-2.5-1-2.8-4.6-.5-6-1.2-1.6-3.3-2-4.5-1.5z"/></symbol><symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol><symbol id="icon-box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></symbol><symbol id="icon-brain" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 3 3h0a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-3 3h0a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></symbol><symbol id="icon-branch" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="7.5" r="2"/><path d="M6 7.5v9M18 9.5c0 4.5-5 4-11 7.5"/></symbol><symbol id="icon-building" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="1.5"/><path d="M9 7h1.5M13.5 7H15M9 11h1.5M13.5 11H15M9 15h1.5M13.5 15H15M10 21v-3h4v3"/></symbol><symbol id="icon-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol><symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M8.5 16v-5M12.5 16V8M16.5 16v-3"/></symbol><symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol><symbol id="icon-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol><symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol><symbol id="icon-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></symbol><symbol id="icon-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol><symbol id="icon-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".8"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></symbol><symbol id="icon-github" viewBox="0 0 24 24"><path d="M9 19c-4.5 1.5-4.5-2.5-6.5-3m13 6v-3.5a3 3 0 0 0-.9-2.4c3-.3 6.4-1.5 6.4-6.7a5.2 5.2 0 0 0-1.4-3.6 4.8 4.8 0 0 0-.1-3.6s-1.1-.3-3.7 1.4a12.6 12.6 0 0 0-6.6 0C6.6 1.9 5.5 2.2 5.5 2.2a4.8 4.8 0 0 0-.1 3.6A5.2 5.2 0 0 0 4 9.4c0 5.2 3.4 6.4 6.4 6.7a3 3 0 0 0-.9 2.4V22"/></symbol><symbol id="icon-hash" viewBox="0 0 24 24"><path d="M5 9h15M4 15h15M10 3 8 21M16 3l-2 18"/></symbol><symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol><symbol id="icon-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.9 12.1 8.6-8.6M16.5 6.5l2.5 2.5M14 9l2 2"/></symbol><symbol id="icon-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/></symbol><symbol id="icon-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol><symbol id="icon-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="icon-message" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol><symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol><symbol id="icon-network" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5V12m0 0-5.2 5.2M12 12l5.2 5.2"/></symbol><symbol id="icon-plug" viewBox="0 0 24 24"><path d="M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></symbol><symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 0 0 5.3 6.7M4 3v4h4"/><path d="M4 13a8 8 0 0 0 14.7 4.3M20 21v-4h-4"/></symbol><symbol id="icon-rocket" viewBox="0 0 24 24"><path d="M5.5 15.5C4 17 3.5 19.5 3.5 20.5c1 0 3.5-.5 5-2"/><path d="M9 15 6.5 12.5C8 8.5 11.5 4.5 20 4c-.5 8.5-4.5 12-8.5 13.5z"/><circle cx="14.5" cy="9.5" r="1.5"/></symbol><symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol><symbol id="icon-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol><symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.7 7.5-9.5V6z"/></symbol><symbol id="icon-shield-check" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.7 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol><symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol><symbol id="icon-sparkles" viewBox="0 0 24 24"><path d="M11 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z"/><path d="M19 15v5M16.5 17.5h5"/></symbol><symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol><symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol><symbol id="icon-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"/></symbol><symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></symbol><symbol id="icon-windows" viewBox="0 0 24 24"><path d="M3.5 5.5 10.5 4.5v7h-7zM13 4.2 20.5 3v8.5H13zM3.5 13h7v7l-7-1zM13 13h7.5v8.5L13 20.3z"/></symbol><symbol id="icon-wrench" viewBox="0 0 24 24"><path d="M15 6.5a4.5 4.5 0 0 1-6 6l-5 5L6.5 20l5-5a4.5 4.5 0 0 0 6-6L15 11.5l-2.5-2.5z"/></symbol></svg>
+    <a class="skip-link" href="#content">Tới nội dung</a>
     <header class="topbar">
       <a class="brand" href="/" aria-label="Pi Agent Platform">
-        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
-        <span>Pi Agent Platform</span>
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
+        <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.41.0" title="v1.41.0 docs · VI"><span class="dot"></span>v1.41.0</a>
+      <nav class="top-nav" aria-label="Tài liệu">
+        <a href="/quickstart">Tài liệu</a>
+        <a href="/whats-new">Changelog</a>
+        <a href="/benchmark">Benchmark</a>
+      </nav>
+      <span class="top-spacer"></span>
+      <button class="search-trigger" type="button" data-search aria-label="Tìm trong tài liệu"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search"/></svg><span>Tìm trong tài liệu…</span><kbd>⌘K</kbd></button>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.41.0 docs · VI</span>
-        <nav class="language-switch" aria-label="Ngôn ngữ">
-          <a class="language-option current" href="/" hreflang="vi" lang="vi" aria-current="true">VI</a>
-          <a class="language-option" href="/en/" hreflang="en" lang="en">EN</a>
-        </nav>
-        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          GitHub
-        </a>
-        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
-        <a class="button top-command-link" href="/commands">Commands</a>
+        <nav class="language-switch" aria-label="Ngôn ngữ"><a class="language-option current" href="/" hreflang="vi" lang="vi" aria-current="true">VI</a><a class="language-option" href="/en/" hreflang="en" lang="en">EN</a></nav>
+        <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Đổi giao diện sáng/tối"><svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-moon"/></svg><svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sun"/></svg></button>
+        <a class="icon-button" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-github"/></svg></a>
       </div>
     </header>
 
-    <div class="layout with-toc">
-      <aside class="sidebar" data-sidebar>
-        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
-          <input type="search" placeholder="Tìm trang" data-filter />
-        </div>
-
-        <nav aria-label="Tài liệu">
-          <div class="nav-group">
-            <p class="nav-title">Get started</p>
-            <a class="nav-link current" href="/" aria-current="page">Overview</a>
-            <a class="nav-link" href="/ecosystem">Hệ sinh thái</a>
-            <a class="nav-link" href="/quickstart">Quickstart</a>
-            <a class="nav-link" href="/windows">Cài trên Windows</a>
-            <a class="nav-link" href="/whats-new">Có gì mới</a>
-            <a class="nav-link" href="/scope">Phạm vi platform</a>
-          </div>
-          <div class="nav-group">
-            <p class="nav-title">Build</p>
-            <a class="nav-link" href="/profiles">Project profile</a>
-            <a class="nav-link" href="/permissions">Permission modes</a>
-            <a class="nav-link" href="/commands">Command catalog</a>
-            <a class="nav-link" href="/workflows">Workflows</a>
-          </div>
-          <div class="nav-group">
-            <p class="nav-title">MCP</p>
-            <a class="nav-link" href="/mcp">MCP overview</a>
-            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
-            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
-            <a class="nav-link" href="/mcp-approval">Approval gate</a>
-          </div>
-          <div class="nav-group">
-            <p class="nav-title">Operate</p>
-            <a class="nav-link" href="/security">Security model</a>
-            <a class="nav-link" href="/architecture">Architecture</a>
-            <a class="nav-link" href="/context-engine">Context Engine</a>
-            <a class="nav-link" href="/benchmark">Benchmark</a>
-            <a class="nav-link" href="/runtime">Runtime tools</a>
-            <a class="nav-link" href="/team">Team usage</a>
-          </div>
-        </nav>
-      </aside>
-
-      <main>
-        <div class="content-shell" data-article>
+    <main id="content" class="home-main" data-article>
 <section class="hero">
-  <p class="eyebrow">Piagent 1.41.0</p>
-  <h1>Coding agent cho cả team, kiểm tra từng bước.</h1>
-  <p>
-    Một dashboard cho Terminal và trình duyệt. Dùng model bằng tài khoản của bạn, hoặc model của công ty qua Agent Watch và Agent Studio. Guard kiểm tra từng tool call; ở chế độ công ty, Harness của team tự yêu cầu chạy check, cho subagent review và báo kết quả ngay dưới câu trả lời.
-  </p>
-  <div class="owner-strip" aria-label="Thông tin dự án">
-    <span class="owner-label">Project links</span>
-    <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
-    <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
-    <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vĩnh Tâm</a>
-  </div>
-  <div class="hero-actions">
-    <a class="button primary" href="/quickstart">Bắt đầu</a>
-    <a class="button" href="/ecosystem">Hệ sinh thái</a>
-    <a class="button" href="/whats-new">Có gì mới trong 1.41.0</a>
-    <a class="button" href="/commands">Xem command</a>
-  </div>
-</section>
-
-<section class="section">
-  <p class="section-kicker">Bản 1.9.0</p>
-  <h2 id="ban-1-9-0">Một lượt làm việc ở chế độ công ty</h2>
-  <p class="section-lead">Bạn nhắn việc cần làm. Agent đọc, sửa và chạy test trong sandbox; một subagent review bản sửa; dòng cuối ghi kết quả. Đã chạy thật 13/13 kịch bản trên bản cài cuối, 27/27 test trình duyệt.</p>
-  <figure class="shot">
-    <img src="/assets/shots/company-run-done.jpg" alt="Dashboard Piagent: một lượt ở chế độ công ty với các bước đọc, sửa, chạy test và dòng Check đã qua trên code cuối, Review không có lỗi chặn" width="1600" height="1000">
-    <figcaption>Dashboard Piagent ở chế độ công ty. Xem toàn cảnh ở <a href="/ecosystem">Hệ sinh thái</a> và mọi thay đổi ở <a href="/whats-new">Có gì mới</a>.</figcaption>
-  </figure>
-</section>
-
-<section class="section">
-  <p class="section-kicker">Production V1 · bằng chứng lịch sử của v1.6.0</p>
-  <h2 id="bang-chung">Đo được, không phải nói suông</h2>
-  <p class="section-lead">Run gắn với release <code>production-v1-20260824T040017Z-05b7cf</code> đã đo 108 session bằng GPT-5.6 Luna Medium tại tag <code>v1.6.0</code>, đúng commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, với Piagent so với <code>codex-cli</code>.</p>
-
-  <div class="benchmark-metrics" aria-label="Số liệu benchmark nổi bật">
-    <div class="benchmark-metric">
-      <span>Bằng chứng release</span>
-      <strong>v1.6.0</strong>
-      <small>đúng commit 3bba8f0</small>
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="home-wrap">
+    <a class="hero-pill" href="/whats-new#v1-41-0"><b>v1.41.0</b><span>Báo cáo thay đổi giao diện với ảnh trước/sau</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
+    <h1>Coding agent cho cả team, <span class="grad">kiểm tra từng bước.</span></h1>
+    <p class="hero-sub">Guard chặn tool call nguy hiểm trước khi chạy. Harness của team tự chạy check và cho subagent review. Một dashboard cho Terminal và trình duyệt, với model của bạn hoặc của công ty.</p>
+    <div class="hero-cta">
+      <div class="install-box"><span class="prompt" aria-hidden="true">$</span><code>npm i -g @piagent/platform</code><button class="clip-btn" type="button" data-clip="npm install -g @piagent/platform&#10;piagent-setup" aria-label="Sao chép lệnh cài"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-copy"/></svg></button></div>
+      <a class="button primary lg" href="/quickstart">Bắt đầu <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
+      <a class="button lg" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-github"/></svg> GitHub</a>
     </div>
-    <div class="benchmark-metric">
-      <span>Task resolved</span>
-      <strong>54/54</strong>
-      <small>Piagent; codex-cli đạt 48/54</small>
-    </div>
-    <div class="benchmark-metric">
-      <span>Fresh token</span>
-      <strong>-61,43%</strong>
-      <small>tỷ lệ family fixed-workload chính 0,3857</small>
-    </div>
-    <div class="benchmark-metric">
-      <span>Bằng chứng usage</span>
-      <strong>108/108 exact</strong>
-      <small>không có retry</small>
-    </div>
-  </div>
+    <p class="hero-note"><span>MIT</span><span>Node.js ≥ 22.19</span><span>macOS · Linux · Windows (WSL2)</span></p>
 
-  <div class="benchmark-legend" aria-label="Chú thích biểu đồ">
-    <span><i class="piagent-swatch"></i>Piagent</span>
-    <span><i class="codex-swatch"></i>codex-cli</span>
-  </div>
-
-  <div class="benchmark-usage-chart" aria-label="Tỷ lệ fresh token theo family fixed-workload: Piagent 38,57 phần trăm, baseline codex-cli 100 phần trăm; task hoàn thành: Piagent 54 trên 54, codex-cli 48 trên 54">
-    <div class="benchmark-usage-group">
-      <h3>Tỷ lệ fresh token theo family fixed-workload</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 38.57%"></i></div><strong>0,3857</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>1,0000</strong></div>
-    </div>
-    <div class="benchmark-usage-group">
-      <h3>Task resolved</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 100%"></i></div><strong>54/54</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 88.89%"></i></div><strong>48/54</strong></div>
-    </div>
-  </div>
-
-  <p>Tỷ lệ family fixed-workload chính là <strong>0,3857</strong>, với khoảng tin cậy 95% <strong>0,3073–0,4840</strong>. Ước lượng điểm thấp hơn 61,43%; theo cận trên của khoảng tin cậy, có thể phát biểu thận trọng rằng Piagent dùng ít hơn ít nhất 51,60% fresh token trên đúng workload production-v1 đã khai báo trước và đúng release này. Usage của cả 108 session đều exact và không có retry. <a href="/benchmark">Xem phương pháp benchmark và ranh giới bằng chứng</a>.</p>
-</section>
-
-<section class="section">
-  <h2 id="cai-dat">Cài trong hai lệnh</h2>
-  <p>Node.js <span class="inline-code">&gt;=22.19.0</span>. Chạy từ đúng project muốn set up.</p>
-  <pre><code>npm install -g @piagent/platform
-piagent-setup</code></pre>
-  <p><span class="inline-code">piagent-setup</span> cài đúng Pi Coding Agent host mà release này pin, cài Pi package, khởi tạo thư mục hiện tại, rồi chạy doctor. Nó cũng cài MCP baseline và subagents — bỏ qua bằng <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> hoặc <span class="inline-code">--global-only</span>. Chi tiết ở <a href="/quickstart">Quickstart</a>.</p>
-</section>
-
-<section class="section">
-  <h2 id="bat-dau-tu-dau">Bắt đầu từ đâu</h2>
-  <div class="card-grid">
-    <a class="doc-card" href="/whats-new">
-      <span class="card-kicker">Bản 1.41.0</span>
-      <h3>Có gì mới</h3>
-      <p>Báo cáo thay đổi giao diện: ảnh cũ/mới khoanh đỏ, business, logic và kết quả check, xem ngay trong Tài liệu; ở 1.40.0: project local không có remote cũng được báo cho Studio, member thấy mọi loại cảnh báo sai project (Studio 0.40.0); ở 1.39.0: cảnh báo key dùng sai project (Studio 0.39.0), dashboard giữ ngôn ngữ và theme sau khi khởi động lại; ở 1.38.2: cây thư mục như VS Code, theme màu (Dracula, Nord…), editor và terminal đứng yên khi cuộn; ở 1.38.1: dashboard thành editor: sửa file, terminal, review hunk, khôi phục lượt; Bypass không hỏi gì, cả cuộc trò chuyện công ty khi Harness bật; ở 1.37.1: run Studio chưa xác nhận đóng không còn bị ghi là đã đóng, helper đóng lỗi vẫn giữ câu trả lời, bài học team memory ghi đúng lệnh; ở 1.37.0: câu trả lời bị cắt giữa chừng không còn làm dừng task dài, có <code>piagent studio --rpc</code>; ở 1.36.1: Agent Watch mất kết nối tới Studio trong chốc lát không còn làm dừng task; ở 1.36.0: team memory học từ chỗ làm sai: Studio chấm những gì memory đã đưa, lệnh lỗi lặp lại thành bài học; ở 1.35: task dài không dừng khi Studio cập nhật hay model báo lỗi tạm thời; ở 1.34: helper báo kết quả, Agent Watch báo khi cần bạn; ở 1.33.0: chạy trên Pi 1.3.0; ở 1.32.1: Bypass được giữ sau khi tải lại, tab đang dùng không còn bị đăng xuất sau 8 giờ; ở 1.32.0: lượt lỗi hoặc bấm Stop được dừng cả ở Studio; ở 1.31.1: <code>memory_ask</code> có ngay sau khi cập nhật; ở 1.31.0: Memory của team đi theo branch và luật của team, có <code>memory_ask</code>; ở 1.30.1: Terminal công ty không còn hiện tên model, mở <code>piagent studio</code> ở thư mục home báo rõ cần vào thư mục dự án; ở 1.30.0: context lớn đi qua mạng chậm, Terminal công ty gọn như dashboard; ở 1.29.0: Terminal công ty có giao diện riêng, dừng lượt không còn làm hỏng cuộc trò chuyện; ở 1.28.3: Agent Watch tự cập nhật không còn làm gián đoạn Terminal công ty; ở 1.28.2: không còn lỗi “binding changed” ngay sau khi cập nhật; ở 1.28.1: Terminal công ty và Pi cá nhân không còn giẫm chân nhau (không nạp Piagent hai lần, dọn cấu hình công ty cũ, cuộc trò chuyện công ty chỉ mở bằng piagent studio); ở 1.28.0: team memory v2; ở 1.27.1: team memory chạy ổn cả khi agent đang gọi model; ở 1.27.0: team memory, agent công ty nhớ quyết định và quy tắc của team trong từng repo; ở 1.26.1: đổi tên cuộc trò chuyện được cả khi lượt đang chạy; ở 1.26.0: lệnh / và phím tắt của Terminal ngay trên dashboard, /undo hoàn tác lượt trước của agent, dev server chạy qua nhiều lượt; ở 1.25.0: thiếu môi trường thì agent xin quyền và chạy được sau khi bạn duyệt (run_on_host ngoài sandbox, start_docker mở Docker ngay trong cuộc trò chuyện); ở 1.24.0: chọn Fast ngay trên trang tạo cuộc trò chuyện công ty, nút Fast đổi màu vàng khi đang bật; ở 1.23.1: câu hỏi của agent luôn nằm cuối cuộc trò chuyện, ngay trên ô nhập, và dễ đọc hơn; ở 1.23.0: nút Fast cho cuộc trò chuyện công ty khi Harness cho phép, tool lỗi được báo về Studio (Logs → Tool lỗi), cuộc trò chuyện mới gửi được tin nhắn đầu sau khi Harness đổi; ở 1.22.1: dashboard không còn quay mãi khi project nằm trên ổ Windows nhìn từ WSL (/mnt/d…) hoặc phiên công ty không trả lời; ở 1.22.0: đính kèm được mọi file code và văn bản (.html, .css, .ts, .py, Dockerfile…); ở 1.21.1: bật Bypass được cả khi lượt đang chạy và được giữ sau khi tải lại; ở 1.21.0: câu hỏi và yêu cầu duyệt hiện từng cái một (main agent trước), thông báo góc phải khi cuộc trò chuyện khác xong hay đang chờ bạn, Studio ghi lại mỗi lần compact; ở 1.20.0: cài package trong sandbox công ty không phải duyệt (npm, PyPI, Go, Maven, Gradle… qua proxy chỉ cho registry); ở 1.19.0: task công ty có checklist được làm đến hết, cuối mỗi lượt báo rõ xong, dừng giữa chừng hay lỗi, Docker trong sandbox công ty, folder chứa nhiều repo; ở 1.18.0: đổi nhánh Git trên dashboard, tự thử lại khi lỗi tạm thời, Claude Haiku 5.5; ở 1.17.0: dashboard hiện nhánh Git của project; ở 1.16.3: dashboard cập nhật xong vẫn tự kiểm tra bản mới; ở 1.16.2: Terminal nói giống dashboard: hỏi cập nhật, /bypass, lỗi và ghi chú Harness bằng tiếng Việt; ở 1.16.1: bản mới được báo bằng dialog và kiểm tra mỗi giờ, tab dashboard không còn mất đăng nhập; ở 1.16.0: Bypass cho cuộc trò chuyện công ty, đổi Harness không làm gián đoạn; ở 1.15.2: cuộc trò chuyện dài tự thu gọn trở lại; ở 1.15.1: Studio thấy mỗi call của model dùng để làm gì, nhiều cuộc trò chuyện trong một folder không nhận nhầm thay đổi của nhau; ở 1.15.0: subagent bị từ chối nói đúng lý do; ở 1.14: cập nhật giữ model bạn đã chọn; ở 1.13: cuộc trò chuyện giữ chỗ đang đọc, chữ của agent có định dạng, Piagent trên Windows qua WSL2: sandbox công ty bằng bubblewrap và Agent Watch cho Windows; ở 1.12: @ chọn file và folder trên máy, skill và command dùng bằng /, nhánh cuộc trò chuyện công ty gửi được tin nhắn.</p>
-    </a>
-    <a class="doc-card" href="/ecosystem">
-      <span class="card-kicker">Get started</span>
-      <h3>Hệ sinh thái</h3>
-      <p>Piagent, Agent Watch và Agent Studio: phần nào chạy ở đâu, khi nào dùng chế độ cá nhân hay công ty.</p>
-    </a>
-    <a class="doc-card" href="/quickstart">
-      <span class="card-kicker">Get started</span>
-      <h3>Quickstart</h3>
-      <p>Cài, mở repo, chọn profile và quyền, rồi giao việc đầu tiên bằng lời thường.</p>
-    </a>
-    <a class="doc-card" href="/scope">
-      <span class="card-kicker">Get started</span>
-      <h3>Phạm vi platform</h3>
-      <p>Vì sao repo này tồn tại khi đã có agent coding tổng quát, và ranh giới nó nhận về mình.</p>
-    </a>
-    <a class="doc-card" href="/profiles">
-      <span class="card-kicker">Build</span>
-      <h3>Project profile</h3>
-      <p>Chọn đường ray cho repo: protected path, verify command, capability được cấp.</p>
-    </a>
-    <a class="doc-card" href="/mcp">
-      <span class="card-kicker">MCP</span>
-      <h3>MCP</h3>
-      <p>Bốn layer config, preset đã pin, quản lý server, trạng thái auth, và approval gate cho server đến từ repo.</p>
-    </a>
-    <a class="doc-card" href="/security">
-      <span class="card-kicker">Operate</span>
-      <h3>Security model</h3>
-      <p>Policy enforcement layer chứ không phải OS sandbox — nói rõ chặn được gì và không chặn được gì.</p>
-    </a>
-    <a class="doc-card" href="/benchmark">
-      <span class="card-kicker">Operate</span>
-      <h3>Production benchmark</h3>
-      <p>Điểm chất lượng, safety, workflow và biểu đồ token từ phép đo 108 session so với surface <code>codex-cli</code>.</p>
-    </a>
-    <a class="doc-card" href="/commands">
-      <span class="card-kicker">Build</span>
-      <h3>Command catalog</h3>
-      <p>Slash command và terminal command, nhóm theo việc cần làm.</p>
-    </a>
-  </div>
-</section>
-
-<section class="section">
-  <h2 id="ba-nhom">Tài liệu chia làm ba nhóm</h2>
-  <div class="split">
-    <div class="card">
-      <h3 id="get-started-nhom">Get started</h3>
-      <p>Dành cho người chưa chạy lần nào: cài, quickstart, và vị trí của platform so với các agent CLI khác.</p>
-    </div>
-    <div class="card">
-      <h3 id="build-nhom">Build</h3>
-      <p>Dùng hằng ngày: profile, permission, command, workflow — và MCP tách riêng vì có bề mặt lệnh của nó.</p>
-    </div>
-    <div class="card">
-      <h3 id="operate-nhom">Operate</h3>
-      <p>Người vận hành và review: security model, kiến trúc repo, terminal tool, cách team dùng như một chuẩn.</p>
-    </div>
-  </div>
-</section>
-            <nav class="pager" aria-label="Trang kế tiếp">
-              <a class="pager-next" href="/ecosystem">
-                <span class="pager-label">Tiếp</span>
-                <span class="pager-title">Hệ sinh thái</span>
-              </a>
-            </nav>
-
-            <footer class="footer">
-              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
-              <div class="footer-links" aria-label="Liên kết ngoài">
-                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
-                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
-                <a href="/en/" hreflang="en">English</a>
-                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
-              </div>
-            </footer>
+    <div class="demo" data-reveal>
+      <div class="window" aria-label="Minh hoạ một lượt ở chế độ công ty" role="img">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span class="title">piagent dashboard · shop-api</span></div>
+        <div class="window-body" aria-hidden="true">
+          <div class="window-side">
+            <p>Cuộc trò chuyện</p>
+            <div class="item active"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-message"/></svg><span>Sửa làm tròn tiền</span><i class="status run"></i></div>
+            <div class="item"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-message"/></svg><span>Phân trang /orders</span><i class="status ok"></i></div>
+            <div class="item"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-message"/></svg><span>Đọc project</span><i class="status ok"></i></div>
+            <p style="margin-top:18px">Harness</p>
+            <div class="item"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield-check"/></svg><span>check · review</span></div>
+            <div class="item"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-branch"/></svg><span>fix/invoice-rounding</span></div>
+          </div>
+          <div class="term" data-term>
+            <div class="term-line you"><span class="g">›</span><span data-type="Sửa lỗi làm tròn tiền trong hoá đơn, chạy test rồi push."></span><span class="caret"></span></div>
+            <div class="term-line dim" data-wait="700"><span class="g">·</span><span>Đọc src/billing/invoice.ts, tests/invoice.test.ts</span></div>
+            <div class="term-line warn"><span class="g">✕</span><span>Guard chặn: đọc <b>.env</b> · file được bảo vệ</span></div>
+            <div class="term-line mint"><span class="g">✎</span><span>Sửa src/billing/invoice.ts <span class="ok">+12</span> <span class="warn">−3</span></span></div>
+            <div class="term-line" data-wait="800"><span class="g ok">▶</span><span>npm test <span class="dim">— sandbox, không mạng</span> <span class="ok">48 passed</span></span></div>
+            <div class="term-line" data-wait="800"><span class="g lime">◆</span><span>Review · subagent đọc diff: <span class="ok">không có lỗi chặn</span></span></div>
+            <div class="term-result" data-wait="700"><span class="ok">✓</span> Check đã qua trên code cuối · Review không có lỗi chặn</div>
+            <div class="term-card" data-wait="900">Agent muốn chạy <b>git push origin fix/invoice-rounding</b>
+              <div class="row"><span class="chip yes">Cho phép một lần</span><span class="chip">Từ chối</span></div>
+            </div>
+          </div>
         </div>
-      </main>
+      </div>
+    </div>
 
-      <aside class="toc" aria-label="Mục lục trang">
-        <p class="toc-title">Trên trang này</p>
-        <nav data-toc></nav>
-      </aside>
+    <div class="proof" data-reveal>
+      <div><strong><span data-count="54">54</span><em>/54</em></strong><span>task giải quyết trong benchmark production</span><small>codex-cli cùng model: 48/54</small></div>
+      <div><strong>−<span data-count="61">61</span><em>%</em></strong><span>fresh token trên cùng workload</span><small>khoảng tin cậy 95%: ít nhất −51,6%</small></div>
+      <div><strong><span data-count="52">52</span><em>/52</em></strong><span>mẫu secret bị che trong output</span><small>0/30 văn bản thường bị che nhầm</small></div>
+      <div><strong><span data-count="114">114</span></strong><span>bản phát hành từ 21/07/2026</span><small>4.400+ test tự động trên macOS và Linux</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Khác biệt</p>
+      <h2 id="khac-biet">Agent làm nhanh. Platform giữ cho nó làm đúng.</h2>
+      <p>Mọi tool call đi qua guard, mọi việc rủi ro chờ bạn duyệt, và ở chế độ công ty, kết quả chỉ được báo là xong khi check đã chạy trên code cuối.</p>
+    </div>
+    <div class="bento" data-spotlight>
+      <article class="tile wide" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield-check"/></svg></span>
+        <h3>Guard trên mọi tool call</h3>
+        <p>Fail-closed: file bảo vệ, profile quyền, file quá lớn, sửa trên bản đọc đã cũ. Sai thì chặn, không đoán.</p>
+        <div class="mini"><span class="x">✕</span> read .env <span class="d">— protected path</span><br><span class="x">✕</span> edit src/app.ts <span class="d">— đọc lại trước khi sửa</span><br><span class="w">!</span> git push <span class="d">— chờ duyệt một lần</span><br><span class="ok">✓</span> npm test <span class="d">— được phép</span></div>
+      </article>
+      <article class="tile wide" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check-circle"/></svg></span>
+        <h3>Harness của team tự check và review</h3>
+        <p>Studio đặt kế hoạch, check và số vòng review cho cả team. Subagent đọc diff độc lập; kết quả nằm ngay dưới câu trả lời.</p>
+        <div class="chips"><span>plan</span><span>check</span><span>review</span><span>main · research · review</span></div>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-key"/></svg></span>
+        <h3>Duyệt từng lần</h3>
+        <p>Push, publish, lệnh có mạng chỉ chạy sau khi bạn bấm <strong>Cho phép một lần</strong>. Không có "luôn cho phép".</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-box"/></svg></span>
+        <h3>Sandbox ở chế độ công ty</h3>
+        <p>Seatbelt trên macOS, bubblewrap trên Linux và WSL2: không mạng, không đọc Keychain, <code>.env</code> hay SSH key.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-code"/></svg></span>
+        <h3>Dashboard là editor</h3>
+        <p>Cây thư mục, editor, terminal, review từng hunk, Timeline khôi phục lượt và <code>/undo</code>. 13 theme màu.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-clock"/></svg></span>
+        <h3>Task dài không bỏ dở</h3>
+        <p>Model lỗi tạm thời thì tự hỏi lại; Studio cập nhật thì chờ rồi làm tiếp. Một lượt chạy được tới 24 giờ.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-brain"/></svg></span>
+        <h3>Team memory</h3>
+        <p>Agent nhớ quyết định và quy tắc của team theo repo và branch; <code>memory_ask</code> trả lời kèm nguồn.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-camera"/></svg></span>
+        <h3>Báo cáo thay đổi giao diện</h3>
+        <p>Ảnh trước/sau, mỗi thay đổi một khung đỏ đánh số, kèm check và E2E. Xem ngay trong Tài liệu.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head center" data-reveal>
+      <p class="section-kicker">Một lượt làm việc</p>
+      <h2 id="mot-luot">Bạn nói việc. Phần còn lại có kiểm chứng.</h2>
+    </div>
+    <div class="flow" data-flow>
+      <div class="flow-step"><span class="flow-dot"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-message"/></svg></span><div><h3>Nhắn việc</h3><p>Lời thường, không cần task contract hay lệnh workflow.</p></div></div>
+      <div class="flow-step"><span class="flow-dot"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-code"/></svg></span><div><h3>Đọc và sửa</h3><p>Agent đọc đúng file cần, sửa có diff rõ ràng.</p></div></div>
+      <div class="flow-step"><span class="flow-dot"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield-check"/></svg></span><div><h3>Guard kiểm tra</h3><p>Mỗi tool call qua policy; việc rủi ro chờ bạn duyệt.</p></div></div>
+      <div class="flow-step"><span class="flow-dot"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check-circle"/></svg></span><div><h3>Check và review</h3><p>Test chạy trên code cuối, subagent review độc lập.</p></div></div>
+      <div class="flow-step"><span class="flow-dot"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-list"/></svg></span><div><h3>Báo kết quả</h3><p>Một dòng cuối: xong, dừng giữa chừng, hay lỗi.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head center" data-reveal>
+      <p class="section-kicker">Màn hình thật</p>
+      <h2 id="man-hinh">Chụp từ dashboard đang chạy</h2>
+    </div>
+    <div data-gallery data-reveal>
+      <div class="gallery-tabs">
+        <div class="tab-list" role="tablist" aria-label="Chọn ảnh">
+          <button type="button" role="tab" aria-selected="true" data-shot="/assets/shots/company-run-done.jpg" data-alt="Một lượt ở chế độ công ty: đọc, sửa, chạy test, dòng cuối báo check đã qua và review không có lỗi chặn" data-caption="Một lượt ở chế độ công ty: đọc, sửa, chạy test; dòng cuối ghi check và review.">Lượt công ty</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/company-review-running.jpg" data-alt="Subagent đang review bản sửa trong lượt công ty" data-caption="Subagent review bản sửa trong khi lượt vẫn chạy.">Review</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/network-approval.jpg" data-alt="Thẻ duyệt lệnh có mạng, hiện đúng lệnh sẽ chạy" data-caption="Lệnh có mạng chờ duyệt, thẻ hiện đúng lệnh sẽ chạy.">Duyệt mạng</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/personal-edit-test.jpg" data-alt="Chế độ cá nhân: sửa code và chạy test" data-caption="Chế độ cá nhân: model của bạn, cùng guard.">Cá nhân</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-source-review.jpg" data-alt="Agent Inspector: thay đổi trong working tree, diff inline và nút mở trong editor" data-caption="Source Changes: diff theo file, inline hoặc hai cột, review và stage từng hunk.">Source Changes</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-palette.jpg" data-alt="Bảng lệnh mở bằng phím tắt, liệt kê lệnh và chủ đề màu" data-caption="Bảng lệnh ⌘K: mọi lệnh, cài đặt và 13 chủ đề màu trong một ô tìm.">Bảng lệnh</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-new-chat.jpg" data-alt="Trang tạo cuộc trò chuyện mới với chọn project, model và việc mẫu" data-caption="Tạo cuộc trò chuyện: chọn project và model, hoặc bấm một việc mẫu.">Tạo mới</button>
+        </div>
+      </div>
+      <figure class="gallery-frame">
+        <img src="/assets/shots/company-run-done.jpg" alt="Một lượt ở chế độ công ty: đọc, sửa, chạy test, dòng cuối báo check đã qua và review không có lỗi chặn" width="1600" height="1000" loading="lazy" decoding="async" style="transition:opacity .2s">
+        <figcaption>Một lượt ở chế độ công ty: đọc, sửa, chạy test; dòng cuối ghi check và review.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Hai chế độ</p>
+      <h2 id="hai-che-do">Cùng một dashboard, hai cách dùng model</h2>
+      <p>Đổi chế độ không đổi cách làm việc: cùng guard, cùng lịch sử giữa Terminal và trình duyệt.</p>
+    </div>
+    <div class="modes">
+      <article class="mode" data-reveal>
+        <div class="mode-head"><span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-users"/></svg></span><h3>Cá nhân</h3><code>pi</code></div>
+        <p>Đăng nhập bằng tài khoản model của bạn. Key nằm trên máy bạn.</p>
+        <ul class="checks">
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Chọn model và thinking tuỳ ý</span></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Guard và protected path như chế độ công ty</span></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Push và publish vẫn chờ duyệt</span></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span><code>piagent dashboard</code> mở giao diện web</span></li>
+        </ul>
+      </article>
+      <article class="mode featured" data-reveal>
+        <div class="mode-head"><span class="tile-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-building"/></svg></span><h3>Công ty</h3><code>piagent studio --web</code></div>
+        <p>Agent Watch giữ key công ty trong Keychain; Agent Studio chọn model và Harness cho cả team.</p>
+        <ul class="checks">
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Model không bao giờ thấy key</span></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Sandbox không mạng, mạng mở theo từng lần duyệt</span></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Check và review tự động theo Harness</span></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-check"/></svg><span>Usage, ngân sách, cảnh báo sai project trên Studio</span></li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Cài đặt</p>
+      <h2 id="cai-dat">Chạy trong hai phút</h2>
+      <p><code>piagent-setup</code> tự cài đúng bản Pi mà release này pin, khởi tạo project rồi chạy doctor.</p>
+    </div>
+    <div class="tabs" data-tabs="os" data-reveal>
+      <div class="tab-list" role="tablist" aria-label="Hệ điều hành">
+        <button type="button" role="tab" data-tab="macos" aria-selected="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-apple"/></svg> macOS · Linux</button>
+        <button type="button" role="tab" data-tab="windows" aria-selected="false" tabindex="-1"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-windows"/></svg> Windows</button>
+      </div>
+      <div class="tab-panel" data-panel="macos">
+        <div class="install-grid">
+          <div class="install-step"><span class="num">01</span><h3>Cài</h3><p>Chạy trong thư mục project.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Lấy lệnh</button></header>
+<pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre></div></div>
+          <div class="install-step"><span class="num">02</span><h3>Mở</h3><p>Terminal, hoặc dashboard trên trình duyệt.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="piagent dashboard">Lấy lệnh</button></header>
+<pre><code>piagent dashboard
+pi                    # Terminal</code></pre></div></div>
+          <div class="install-step"><span class="num">03</span><h3>Cập nhật</h3><p>Dashboard tự báo khi có bản mới, mỗi giờ.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="piagent-update">Lấy lệnh</button></header>
+<pre><code>piagent-update</code></pre></div></div>
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="windows" hidden>
+        <div class="install-grid">
+          <div class="install-step span-2"><span class="num">01</span><h3>Một lệnh PowerShell</h3><p>Cài WSL2, Ubuntu, Piagent và Agent Watch, thêm Piagent vào Start menu. Chạy lại để cập nhật.</p>
+            <div class="command-card"><header><span>PowerShell</span><button class="clip-btn" type="button" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Lấy lệnh</button></header>
+<pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre></div></div>
+          <div class="install-step"><span class="num">02</span><h3>Chi tiết</h3><p>Lần đầu cần khởi động lại để bật WSL2. Mã kết nối công ty là tuỳ chọn.</p>
+            <a class="button" href="/windows">Hướng dẫn Windows <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Changelog</p>
+      <h2 id="moi-cap-nhat">Phát hành đều, ghi rõ từng thay đổi</h2>
+      <p>Mỗi bản ghi thay đổi gì và cần bản nào của Studio hay Agent Watch. <a href="/whats-new">Xem toàn bộ changelog</a>.</p>
+    </div>
+    <div class="updates">
+      <a class="update" href="/whats-new#v1-41-0" data-reveal>
+        <span class="update-meta"><span class="release-version">v1.41.0</span>24/10/2026</span>
+        <h3>Báo cáo thay đổi giao diện với ảnh trước/sau</h3>
+        <p>Skill mới biến task front-end thành báo cáo có ảnh trước/sau được khoanh khung, thay đổi business và logic, kết quả check, hiện ngay trên dashboard.</p>
+        <span class="update-more">Xem chi tiết <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
+      </a>
+      <a class="update" href="/whats-new#v1-40-0" data-reveal>
+        <span class="update-meta"><span class="release-version">v1.40.0</span>24/10/2026</span>
+        <h3>Project local cũng được báo cho Studio</h3>
+        <p>Cuộc trò chuyện công ty trong thư mục không có remote báo project local cho Studio, mọi lượt chạy đều báo, và member thấy mọi loại cảnh báo project.</p>
+        <span class="update-more">Xem chi tiết <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
+      </a>
+      <a class="update" href="/whats-new#v1-39-0" data-reveal>
+        <span class="update-meta"><span class="release-version">v1.39.0</span>23/10/2026</span>
+        <h3>Cảnh báo khi key của team được dùng ngoài team</h3>
+        <p>Studio biết cuộc trò chuyện công ty làm trong repository nào và cảnh báo khi key của team bị dùng ngoài team; dashboard giữ ngôn ngữ và theme màu.</p>
+        <span class="update-more">Xem chi tiết <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="home-wrap">
+  <div class="final-cta" data-reveal>
+    <h2>Giao việc cho agent, giữ quyền quyết định.</h2>
+    <p>Hai lệnh để cài. Đọc tài liệu theo đúng thứ tự bạn cần.</p>
+    <div class="hero-cta" style="margin-top:0">
+      <a class="button primary lg" href="/quickstart">Cài đặt <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
+      <a class="button lg" href="/ecosystem">Hệ sinh thái</a>
+      <a class="button lg ghost" href="/benchmark"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-chart"/></svg> Benchmark</a>
+    </div>
+  </div>
+</section>
+    </main>
+    <footer class="site-footer">
+      <div class="home-wrap">
+        <p>Pi Agent Platform · MIT · tài liệu tĩnh, không cookie</p>
+        <nav aria-label="Liên kết ngoài">
+          <a href="/quickstart">Tài liệu</a>
+          <a href="/whats-new">Changelog</a>
+          <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://www.npmjs.com/package/@piagent/platform" target="_blank" rel="noopener noreferrer">npm</a>
+          <a href="/en/" hreflang="en">English</a>
+        </nav>
+      </div>
+    </footer>
+    <div class="palette" data-palette data-index="/assets/search-vi.json" data-empty="Không có trang nào khớp." role="dialog" aria-modal="true" aria-label="Tìm trong tài liệu">
+      <div class="palette-box">
+        <label class="palette-input"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search"/></svg><input type="search" placeholder="Tìm trong tài liệu…" aria-label="Tìm trong tài liệu" autocomplete="off" spellcheck="false" /></label>
+        <div class="palette-results" data-results role="listbox"></div>
+        <div class="palette-foot"><span>↑↓ chọn</span><span>↵ mở</span><span>esc đóng</span></div>
+      </div>
     </div>
     <script>
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

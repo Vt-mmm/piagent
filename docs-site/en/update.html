@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command" data-copy-label="Copy">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Update, roll back and uninstall · Pi Agent Platform</title>
+    <meta name="description" content="One command moves to a new release, and the dashboard and Terminal tell you when one is out. Rollback and uninstall both preview first." />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfbf9" media="(prefers-color-scheme: light)" />
+    <link rel="canonical" href="https://piagent.io.vn/en/update" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/update" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/update" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/update" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Update, roll back and uninstall · Pi Agent Platform" />
+    <meta property="og:description" content="One command moves to a new release, and the dashboard and Terminal tell you when one is out. Rollback and uninstall both preview first." />
+    <meta property="og:url" content="https://piagent.io.vn/en/update" />
+    <meta property="og:image" content="https://piagent.io.vn/assets/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>try{var t=localStorage.getItem("piagent-docs-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="icon-branch" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="7.5" r="2"/><path d="M6 7.5v9M18 9.5c0 4.5-5 4-11 7.5"/></symbol><symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M8.5 16v-5M12.5 16V8M16.5 16v-3"/></symbol><symbol id="icon-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".8"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></symbol><symbol id="icon-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol><symbol id="icon-github" viewBox="0 0 24 24"><path d="M9 19c-4.5 1.5-4.5-2.5-6.5-3m13 6v-3.5a3 3 0 0 0-.9-2.4c3-.3 6.4-1.5 6.4-6.7a5.2 5.2 0 0 0-1.4-3.6 4.8 4.8 0 0 0-.1-3.6s-1.1-.3-3.7 1.4a12.6 12.6 0 0 0-6.6 0C6.6 1.9 5.5 2.2 5.5 2.2a4.8 4.8 0 0 0-.1 3.6A5.2 5.2 0 0 0 4 9.4c0 5.2 3.4 6.4 6.4 6.7a3 3 0 0 0-.9 2.4V22"/></symbol><symbol id="icon-hash" viewBox="0 0 24 24"><path d="M5 9h15M4 15h15M10 3 8 21M16 3l-2 18"/></symbol><symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol><symbol id="icon-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.9 12.1 8.6-8.6M16.5 6.5l2.5 2.5M14 9l2 2"/></symbol><symbol id="icon-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/></symbol><symbol id="icon-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol><symbol id="icon-network" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5V12m0 0-5.2 5.2M12 12l5.2 5.2"/></symbol><symbol id="icon-plug" viewBox="0 0 24 24"><path d="M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></symbol><symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 0 0 5.3 6.7M4 3v4h4"/><path d="M4 13a8 8 0 0 0 14.7 4.3M20 21v-4h-4"/></symbol><symbol id="icon-rocket" viewBox="0 0 24 24"><path d="M5.5 15.5C4 17 3.5 19.5 3.5 20.5c1 0 3.5-.5 5-2"/><path d="M9 15 6.5 12.5C8 8.5 11.5 4.5 20 4c-.5 8.5-4.5 12-8.5 13.5z"/><circle cx="14.5" cy="9.5" r="1.5"/></symbol><symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol><symbol id="icon-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol><symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.7 7.5-9.5V6z"/></symbol><symbol id="icon-shield-check" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.8 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.7 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol><symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol><symbol id="icon-sparkles" viewBox="0 0 24 24"><path d="M11 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z"/><path d="M19 15v5M16.5 17.5h5"/></symbol><symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol><symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol><symbol id="icon-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"/></symbol><symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></symbol><symbol id="icon-windows" viewBox="0 0 24 24"><path d="M3.5 5.5 10.5 4.5v7h-7zM13 4.2 20.5 3v8.5H13zM3.5 13h7v7l-7-1zM13 13h7.5v8.5L13 20.3z"/></symbol><symbol id="icon-wrench" viewBox="0 0 24 24"><path d="M15 6.5a4.5 4.5 0 0 1-6 6l-5 5L6.5 20l5-5a4.5 4.5 0 0 0 6-6L15 11.5l-2.5-2.5z"/></symbol></svg>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="icon-button mobile-menu" type="button" data-menu aria-label="Open docs menu"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-menu"/></svg></button>
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
+        <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
+      </a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.41.0" title="v1.41.0 docs · EN"><span class="dot"></span>v1.41.0</a>
+      <nav class="top-nav" aria-label="Documentation">
+        <a href="/en/quickstart">Docs</a>
+        <a href="/en/whats-new">Changelog</a>
+        <a href="/en/benchmark">Benchmark</a>
+      </nav>
+      <span class="top-spacer"></span>
+      <button class="search-trigger" type="button" data-search aria-label="Search documentation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search"/></svg><span>Search the docs…</span><kbd>⌘K</kbd></button>
+      <div class="top-actions">
+        <nav class="language-switch" aria-label="Language"><a class="language-option" href="/update" hreflang="vi" lang="vi">VI</a><a class="language-option current" href="/en/update" hreflang="en" lang="en" aria-current="true">EN</a></nav>
+        <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Switch light/dark theme"><svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-moon"/></svg><svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sun"/></svg></button>
+        <a class="icon-button" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-github"/></svg></a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-home"/></svg><span>Overview</span></a>
+            <a class="nav-link" href="/en/ecosystem"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-network"/></svg><span>Ecosystem</span></a>
+            <a class="nav-link" href="/en/quickstart"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-rocket"/></svg><span>Install</span></a>
+            <a class="nav-link" href="/en/windows"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-windows"/></svg><span>Windows</span></a>
+            <a class="nav-link current" href="/en/update" aria-current="page"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-refresh"/></svg><span>Update &amp; uninstall</span></a>
+            <a class="nav-link" href="/en/whats-new"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sparkles"/></svg><span>Changelog</span></a>
+            <a class="nav-link" href="/en/scope"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-target"/></svg><span>Platform scope</span></a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-sliders"/></svg><span>Project profiles</span></a>
+            <a class="nav-link" href="/en/permissions"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-key"/></svg><span>Permission modes</span></a>
+            <a class="nav-link" href="/en/commands"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-terminal"/></svg><span>Command catalog</span></a>
+            <a class="nav-link" href="/en/workflows"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-branch"/></svg><span>Workflows</span></a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-plug"/></svg><span>MCP overview</span></a>
+            <a class="nav-link" href="/en/mcp-servers"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-server"/></svg><span>Server management</span></a>
+            <a class="nav-link" href="/en/mcp-auth"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-lock"/></svg><span>Authentication</span></a>
+            <a class="nav-link" href="/en/mcp-approval"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield-check"/></svg><span>Approval gate</span></a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-shield"/></svg><span>Security model</span></a>
+            <a class="nav-link" href="/en/architecture"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-layers"/></svg><span>Architecture</span></a>
+            <a class="nav-link" href="/en/context-engine"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-cpu"/></svg><span>Context Engine</span></a>
+            <a class="nav-link" href="/en/benchmark"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-chart"/></svg><span>Benchmark</span></a>
+            <a class="nav-link" href="/en/runtime"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-wrench"/></svg><span>Runtime tools</span></a>
+            <a class="nav-link" href="/en/team"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-users"/></svg><span>Team usage</span></a>
+          </div>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+            </nav>
+            <div class="page-head">
+              <h1>Update, roll back and uninstall</h1>
+              <p>One command moves to a new release, and the dashboard and Terminal tell you when one is out. Rollback and uninstall both preview first.</p>
+              <div class="page-meta">
+                <a href="https://github.com/Vt-mmm/piagent/blob/main/docs-site/content/en/update.html" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-edit"/></svg>Edit this page</a>
+              </div>
+            </div>
+<section class="section">
+  <h2 id="update">Update</h2>
+  <p>The dashboard and Terminal check for a new release every hour. When one is out, the dashboard opens a dialog with what will change, <strong>Update now</strong> and <strong>Later</strong> (asks again in an hour). To run it yourself, one command:</p>
+  <div class="command-card">
+    <header><span>Move to the latest release</span><button class="clip-btn" data-clip="piagent-update">Copy</button></header>
+    <pre><code>piagent-update</code></pre>
+  </div>
+  <p>Restart the dashboard afterwards so the new interface takes effect.</p>
+
+  <h3 id="what-it-does">What it does, in order</h3>
+  <ol>
+    <li>Resolves the target release and the Pi version it pins.</li>
+    <li>Installs that Pi host, then replaces the <code>piagent-update</code> helper.</li>
+    <li>Checks the version actually on disk before running the installer.</li>
+    <li>With <code>--project</code>: migrates the project's state and runs <code>piagent-doctor --strict-share</code>.</li>
+  </ol>
+  <div class="callout">
+    <strong>Not from a git checkout</strong>
+    <p><code>piagent-update</code> refuses to run when the global package is a link to a source repository, so it never overwrites code you are editing.</p>
+  </div>
+
+  <h3 id="options">Common options</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td><code>piagent-update --check</code></td><td>You only want to know whether a release is out.</td></tr>
+        <tr><td><code>piagent-update --dry-run</code></td><td>You want to see what would be installed, changing nothing.</td></tr>
+        <tr><td><code>piagent-update --version X.Y.Z</code></td><td>You want exactly one release, newer or older.</td></tr>
+        <tr><td><code>piagent-update --project .</code></td><td>You want the current project migrated too.</td></tr>
+        <tr><td><code>--no-host</code> · <code>--no-package</code> · <code>--no-migrate</code></td><td>You want to skip a step.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="pin-for-a-team">Pin one release for a team</h2>
+  <p>For a team rollout, install the exact Pi host and platform release, then run the installer in stable mode. The <code>--dry-run</code> step prints what would change.</p>
+  <div class="command-card">
+    <header><span>Pinned install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0&#10;npm install -g --ignore-scripts @piagent/platform@1.41.0&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Copy</button></header>
+    <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0
+npm install -g --ignore-scripts @piagent/platform@1.41.0
+piagent-install --stable --dry-run
+piagent-install --stable</code></pre>
+  </div>
+  <p>Installed from a package, <code>.pi/settings.json</code> records <code>npm:@piagent/platform@&lt;version&gt;</code>: the same value on every machine, so the team can commit it. The full procedure is in the <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release &amp; install policy</a>.</p>
+</section>
+
+<section class="section">
+  <h2 id="rollback">Roll back</h2>
+  <p>Rolling back is deliberate, never automatic. Move to a specific release with the same update command:</p>
+  <div class="command-card">
+    <header><span>Back to a previous release</span><button class="clip-btn" data-clip="piagent-update --version X.Y.Z --dry-run&#10;piagent-update --version X.Y.Z">Copy</button></header>
+    <pre><code>piagent-update --version X.Y.Z --dry-run
+piagent-update --version X.Y.Z</code></pre>
+  </div>
+  <p>To change only the Pi package and keep the host: <code>piagent-install --version vX.Y.Z --resolve-tag</code>. Run <code>piagent-doctor</code> on the project afterwards.</p>
+</section>
+
+<section class="section">
+  <h2 id="uninstall">Uninstall</h2>
+  <p><code>piagent-uninstall</code> only reports what it would remove and exits. It acts with <code>--apply</code>, because it edits Pi settings that other tools also write to.</p>
+  <div class="command-card">
+    <header><span>Preview, then remove</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply">Copy</button></header>
+    <pre><code>piagent-uninstall
+piagent-uninstall --apply
+npm uninstall -g @piagent/platform</code></pre>
+  </div>
+  <p>Add-ons, the Pi host and project state are opt-in: <code>--with-addons</code>, <code>--with-host</code>, <code>--project &lt;path&gt;</code>.</p>
+  <div class="callout ok-callout">
+    <strong>Never removed</strong>
+    <p>Credentials, trust, sessions, todos and <code>.pi/memory/</code> are kept under every combination of flags. Files generated from a template and then edited (<code>AGENTS.md</code>, <code>.pi/settings.json</code>) are only listed, for you to decide.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="windows">On Windows</h2>
+  <p>Run the same PowerShell command you installed with: it updates WSL, Piagent and Agent Watch. See <a href="/en/windows">Windows</a>.</p>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/windows">
+                <span class="pager-label">← Previous</span>
+                <span class="pager-title">Windows</span>
+              </a>
+              <a class="pager-next" href="/en/whats-new">
+                <span class="pager-label">Next →</span>
+                <span class="pager-title">Changelog</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform · MIT · static docs, no cookies</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://www.npmjs.com/package/@piagent/platform" target="_blank" rel="noopener noreferrer">npm</a>
+                <a href="/update" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+    <div class="palette" data-palette data-index="/assets/search-en.json" data-empty="No page matches." role="dialog" aria-modal="true" aria-label="Search documentation">
+      <div class="palette-box">
+        <label class="palette-input"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search"/></svg><input type="search" placeholder="Search the docs…" aria-label="Search documentation" autocomplete="off" spellcheck="false" /></label>
+        <div class="palette-results" data-results role="listbox"></div>
+        <div class="palette-foot"><span>↑↓ select</span><span>↵ open</span><span>esc close</span></div>
+      </div>
+    </div>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </body>
+</html>

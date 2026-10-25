@@ -1,155 +1,244 @@
 <section class="hero">
-  <p class="eyebrow">Piagent 1.41.0</p>
-  <h1>Coding agent cho cả team, kiểm tra từng bước.</h1>
-  <p>
-    Một dashboard cho Terminal và trình duyệt. Dùng model bằng tài khoản của bạn, hoặc model của công ty qua Agent Watch và Agent Studio. Guard kiểm tra từng tool call; ở chế độ công ty, Harness của team tự yêu cầu chạy check, cho subagent review và báo kết quả ngay dưới câu trả lời.
-  </p>
-  <div class="owner-strip" aria-label="Thông tin dự án">
-    <span class="owner-label">Project links</span>
-    <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
-    <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
-    <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vĩnh Tâm</a>
-  </div>
-  <div class="hero-actions">
-    <a class="button primary" href="/quickstart">Bắt đầu</a>
-    <a class="button" href="/ecosystem">Hệ sinh thái</a>
-    <a class="button" href="/whats-new">Có gì mới trong 1.41.0</a>
-    <a class="button" href="/commands">Xem command</a>
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="home-wrap">
+    <!-- hero-pill -->
+    <h1>Coding agent cho cả team, <span class="grad">kiểm tra từng bước.</span></h1>
+    <p class="hero-sub">Guard chặn tool call nguy hiểm trước khi chạy. Harness của team tự chạy check và cho subagent review. Một dashboard cho Terminal và trình duyệt, với model của bạn hoặc của công ty.</p>
+    <div class="hero-cta">
+      <div class="install-box"><span class="prompt" aria-hidden="true">$</span><code>npm i -g @piagent/platform</code><button class="clip-btn" type="button" data-clip="npm install -g @piagent/platform&#10;piagent-setup" aria-label="Sao chép lệnh cài">{{icon:copy}}</button></div>
+      <a class="button primary lg" href="/quickstart">Bắt đầu {{icon:arrow-right}}</a>
+      <a class="button lg" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">{{icon:github}} GitHub</a>
+    </div>
+    <p class="hero-note"><span>MIT</span><span>Node.js ≥ 22.19</span><span>macOS · Linux · Windows (WSL2)</span></p>
+
+    <div class="demo" data-reveal>
+      <div class="window" aria-label="Minh hoạ một lượt ở chế độ công ty" role="img">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span class="title">piagent dashboard · shop-api</span></div>
+        <div class="window-body" aria-hidden="true">
+          <div class="window-side">
+            <p>Cuộc trò chuyện</p>
+            <div class="item active">{{icon:message}}<span>Sửa làm tròn tiền</span><i class="status run"></i></div>
+            <div class="item">{{icon:message}}<span>Phân trang /orders</span><i class="status ok"></i></div>
+            <div class="item">{{icon:message}}<span>Đọc project</span><i class="status ok"></i></div>
+            <p style="margin-top:18px">Harness</p>
+            <div class="item">{{icon:shield-check}}<span>check · review</span></div>
+            <div class="item">{{icon:branch}}<span>fix/invoice-rounding</span></div>
+          </div>
+          <div class="term" data-term>
+            <div class="term-line you"><span class="g">›</span><span data-type="Sửa lỗi làm tròn tiền trong hoá đơn, chạy test rồi push."></span><span class="caret"></span></div>
+            <div class="term-line dim" data-wait="700"><span class="g">·</span><span>Đọc src/billing/invoice.ts, tests/invoice.test.ts</span></div>
+            <div class="term-line warn"><span class="g">✕</span><span>Guard chặn: đọc <b>.env</b> · file được bảo vệ</span></div>
+            <div class="term-line mint"><span class="g">✎</span><span>Sửa src/billing/invoice.ts <span class="ok">+12</span> <span class="warn">−3</span></span></div>
+            <div class="term-line" data-wait="800"><span class="g ok">▶</span><span>npm test <span class="dim">— sandbox, không mạng</span> <span class="ok">48 passed</span></span></div>
+            <div class="term-line" data-wait="800"><span class="g lime">◆</span><span>Review · subagent đọc diff: <span class="ok">không có lỗi chặn</span></span></div>
+            <div class="term-result" data-wait="700"><span class="ok">✓</span> Check đã qua trên code cuối · Review không có lỗi chặn</div>
+            <div class="term-card" data-wait="900">Agent muốn chạy <b>git push origin fix/invoice-rounding</b>
+              <div class="row"><span class="chip yes">Cho phép một lần</span><span class="chip">Từ chối</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="proof" data-reveal>
+      <div><strong><span data-count="54">54</span><em>/54</em></strong><span>task giải quyết trong benchmark production</span><small>codex-cli cùng model: 48/54</small></div>
+      <div><strong>−<span data-count="61">61</span><em>%</em></strong><span>fresh token trên cùng workload</span><small>khoảng tin cậy 95%: ít nhất −51,6%</small></div>
+      <div><strong><span data-count="52">52</span><em>/52</em></strong><span>mẫu secret bị che trong output</span><small>0/30 văn bản thường bị che nhầm</small></div>
+      <div><strong><span data-count="{{releaseCount}}">{{releaseCount}}</span></strong><span>bản phát hành từ 21/07/2026</span><small>4.400+ test tự động trên macOS và Linux</small></div>
+    </div>
   </div>
 </section>
 
-<section class="section">
-  <p class="section-kicker">Bản 1.9.0</p>
-  <h2 id="ban-1-9-0">Một lượt làm việc ở chế độ công ty</h2>
-  <p class="section-lead">Bạn nhắn việc cần làm. Agent đọc, sửa và chạy test trong sandbox; một subagent review bản sửa; dòng cuối ghi kết quả. Đã chạy thật 13/13 kịch bản trên bản cài cuối, 27/27 test trình duyệt.</p>
-  <figure class="shot">
-    <img src="/assets/shots/company-run-done.jpg" alt="Dashboard Piagent: một lượt ở chế độ công ty với các bước đọc, sửa, chạy test và dòng Check đã qua trên code cuối, Review không có lỗi chặn" width="1600" height="1000">
-    <figcaption>Dashboard Piagent ở chế độ công ty. Xem toàn cảnh ở <a href="/ecosystem">Hệ sinh thái</a> và mọi thay đổi ở <a href="/whats-new">Có gì mới</a>.</figcaption>
-  </figure>
-</section>
-
-<section class="section">
-  <p class="section-kicker">Production V1 · bằng chứng lịch sử của v1.6.0</p>
-  <h2 id="bang-chung">Đo được, không phải nói suông</h2>
-  <p class="section-lead">Run gắn với release <code>production-v1-20260824T040017Z-05b7cf</code> đã đo 108 session bằng GPT-5.6 Luna Medium tại tag <code>v1.6.0</code>, đúng commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, với Piagent so với <code>codex-cli</code>.</p>
-
-  <div class="benchmark-metrics" aria-label="Số liệu benchmark nổi bật">
-    <div class="benchmark-metric">
-      <span>Bằng chứng release</span>
-      <strong>v1.6.0</strong>
-      <small>đúng commit 3bba8f0</small>
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Khác biệt</p>
+      <h2 id="khac-biet">Agent làm nhanh. Platform giữ cho nó làm đúng.</h2>
+      <p>Mọi tool call đi qua guard, mọi việc rủi ro chờ bạn duyệt, và ở chế độ công ty, kết quả chỉ được báo là xong khi check đã chạy trên code cuối.</p>
     </div>
-    <div class="benchmark-metric">
-      <span>Task resolved</span>
-      <strong>54/54</strong>
-      <small>Piagent; codex-cli đạt 48/54</small>
+    <div class="bento" data-spotlight>
+      <article class="tile wide" data-reveal>
+        <span class="tile-icon">{{icon:shield-check}}</span>
+        <h3>Guard trên mọi tool call</h3>
+        <p>Fail-closed: file bảo vệ, profile quyền, file quá lớn, sửa trên bản đọc đã cũ. Sai thì chặn, không đoán.</p>
+        <div class="mini"><span class="x">✕</span> read .env <span class="d">— protected path</span><br><span class="x">✕</span> edit src/app.ts <span class="d">— đọc lại trước khi sửa</span><br><span class="w">!</span> git push <span class="d">— chờ duyệt một lần</span><br><span class="ok">✓</span> npm test <span class="d">— được phép</span></div>
+      </article>
+      <article class="tile wide" data-reveal>
+        <span class="tile-icon">{{icon:check-circle}}</span>
+        <h3>Harness của team tự check và review</h3>
+        <p>Studio đặt kế hoạch, check và số vòng review cho cả team. Subagent đọc diff độc lập; kết quả nằm ngay dưới câu trả lời.</p>
+        <div class="chips"><span>plan</span><span>check</span><span>review</span><span>main · research · review</span></div>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:key}}</span>
+        <h3>Duyệt từng lần</h3>
+        <p>Push, publish, lệnh có mạng chỉ chạy sau khi bạn bấm <strong>Cho phép một lần</strong>. Không có "luôn cho phép".</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:box}}</span>
+        <h3>Sandbox ở chế độ công ty</h3>
+        <p>Seatbelt trên macOS, bubblewrap trên Linux và WSL2: không mạng, không đọc Keychain, <code>.env</code> hay SSH key.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:code}}</span>
+        <h3>Dashboard là editor</h3>
+        <p>Cây thư mục, editor, terminal, review từng hunk, Timeline khôi phục lượt và <code>/undo</code>. 13 theme màu.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:clock}}</span>
+        <h3>Task dài không bỏ dở</h3>
+        <p>Model lỗi tạm thời thì tự hỏi lại; Studio cập nhật thì chờ rồi làm tiếp. Một lượt chạy được tới 24 giờ.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:brain}}</span>
+        <h3>Team memory</h3>
+        <p>Agent nhớ quyết định và quy tắc của team theo repo và branch; <code>memory_ask</code> trả lời kèm nguồn.</p>
+      </article>
+      <article class="tile" data-reveal>
+        <span class="tile-icon">{{icon:camera}}</span>
+        <h3>Báo cáo thay đổi giao diện</h3>
+        <p>Ảnh trước/sau, mỗi thay đổi một khung đỏ đánh số, kèm check và E2E. Xem ngay trong Tài liệu.</p>
+      </article>
     </div>
-    <div class="benchmark-metric">
-      <span>Fresh token</span>
-      <strong>-61,43%</strong>
-      <small>tỷ lệ family fixed-workload chính 0,3857</small>
-    </div>
-    <div class="benchmark-metric">
-      <span>Bằng chứng usage</span>
-      <strong>108/108 exact</strong>
-      <small>không có retry</small>
-    </div>
-  </div>
-
-  <div class="benchmark-legend" aria-label="Chú thích biểu đồ">
-    <span><i class="piagent-swatch"></i>Piagent</span>
-    <span><i class="codex-swatch"></i>codex-cli</span>
-  </div>
-
-  <div class="benchmark-usage-chart" aria-label="Tỷ lệ fresh token theo family fixed-workload: Piagent 38,57 phần trăm, baseline codex-cli 100 phần trăm; task hoàn thành: Piagent 54 trên 54, codex-cli 48 trên 54">
-    <div class="benchmark-usage-group">
-      <h3>Tỷ lệ fresh token theo family fixed-workload</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 38.57%"></i></div><strong>0,3857</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>1,0000</strong></div>
-    </div>
-    <div class="benchmark-usage-group">
-      <h3>Task resolved</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 100%"></i></div><strong>54/54</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 88.89%"></i></div><strong>48/54</strong></div>
-    </div>
-  </div>
-
-  <p>Tỷ lệ family fixed-workload chính là <strong>0,3857</strong>, với khoảng tin cậy 95% <strong>0,3073–0,4840</strong>. Ước lượng điểm thấp hơn 61,43%; theo cận trên của khoảng tin cậy, có thể phát biểu thận trọng rằng Piagent dùng ít hơn ít nhất 51,60% fresh token trên đúng workload production-v1 đã khai báo trước và đúng release này. Usage của cả 108 session đều exact và không có retry. <a href="/benchmark">Xem phương pháp benchmark và ranh giới bằng chứng</a>.</p>
-</section>
-
-<section class="section">
-  <h2 id="cai-dat">Cài trong hai lệnh</h2>
-  <p>Node.js <span class="inline-code">&gt;=22.19.0</span>. Chạy từ đúng project muốn set up.</p>
-  <pre><code>npm install -g @piagent/platform
-piagent-setup</code></pre>
-  <p><span class="inline-code">piagent-setup</span> cài đúng Pi Coding Agent host mà release này pin, cài Pi package, khởi tạo thư mục hiện tại, rồi chạy doctor. Nó cũng cài MCP baseline và subagents — bỏ qua bằng <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> hoặc <span class="inline-code">--global-only</span>. Chi tiết ở <a href="/quickstart">Quickstart</a>.</p>
-</section>
-
-<section class="section">
-  <h2 id="bat-dau-tu-dau">Bắt đầu từ đâu</h2>
-  <div class="card-grid">
-    <a class="doc-card" href="/whats-new">
-      <span class="card-kicker">Bản 1.41.0</span>
-      <h3>Có gì mới</h3>
-      <p>Báo cáo thay đổi giao diện: ảnh cũ/mới khoanh đỏ, business, logic và kết quả check, xem ngay trong Tài liệu; ở 1.40.0: project local không có remote cũng được báo cho Studio, member thấy mọi loại cảnh báo sai project (Studio 0.40.0); ở 1.39.0: cảnh báo key dùng sai project (Studio 0.39.0), dashboard giữ ngôn ngữ và theme sau khi khởi động lại; ở 1.38.2: cây thư mục như VS Code, theme màu (Dracula, Nord…), editor và terminal đứng yên khi cuộn; ở 1.38.1: dashboard thành editor: sửa file, terminal, review hunk, khôi phục lượt; Bypass không hỏi gì, cả cuộc trò chuyện công ty khi Harness bật; ở 1.37.1: run Studio chưa xác nhận đóng không còn bị ghi là đã đóng, helper đóng lỗi vẫn giữ câu trả lời, bài học team memory ghi đúng lệnh; ở 1.37.0: câu trả lời bị cắt giữa chừng không còn làm dừng task dài, có <code>piagent studio --rpc</code>; ở 1.36.1: Agent Watch mất kết nối tới Studio trong chốc lát không còn làm dừng task; ở 1.36.0: team memory học từ chỗ làm sai: Studio chấm những gì memory đã đưa, lệnh lỗi lặp lại thành bài học; ở 1.35: task dài không dừng khi Studio cập nhật hay model báo lỗi tạm thời; ở 1.34: helper báo kết quả, Agent Watch báo khi cần bạn; ở 1.33.0: chạy trên Pi 1.3.0; ở 1.32.1: Bypass được giữ sau khi tải lại, tab đang dùng không còn bị đăng xuất sau 8 giờ; ở 1.32.0: lượt lỗi hoặc bấm Stop được dừng cả ở Studio; ở 1.31.1: <code>memory_ask</code> có ngay sau khi cập nhật; ở 1.31.0: Memory của team đi theo branch và luật của team, có <code>memory_ask</code>; ở 1.30.1: Terminal công ty không còn hiện tên model, mở <code>piagent studio</code> ở thư mục home báo rõ cần vào thư mục dự án; ở 1.30.0: context lớn đi qua mạng chậm, Terminal công ty gọn như dashboard; ở 1.29.0: Terminal công ty có giao diện riêng, dừng lượt không còn làm hỏng cuộc trò chuyện; ở 1.28.3: Agent Watch tự cập nhật không còn làm gián đoạn Terminal công ty; ở 1.28.2: không còn lỗi “binding changed” ngay sau khi cập nhật; ở 1.28.1: Terminal công ty và Pi cá nhân không còn giẫm chân nhau (không nạp Piagent hai lần, dọn cấu hình công ty cũ, cuộc trò chuyện công ty chỉ mở bằng piagent studio); ở 1.28.0: team memory v2; ở 1.27.1: team memory chạy ổn cả khi agent đang gọi model; ở 1.27.0: team memory, agent công ty nhớ quyết định và quy tắc của team trong từng repo; ở 1.26.1: đổi tên cuộc trò chuyện được cả khi lượt đang chạy; ở 1.26.0: lệnh / và phím tắt của Terminal ngay trên dashboard, /undo hoàn tác lượt trước của agent, dev server chạy qua nhiều lượt; ở 1.25.0: thiếu môi trường thì agent xin quyền và chạy được sau khi bạn duyệt (run_on_host ngoài sandbox, start_docker mở Docker ngay trong cuộc trò chuyện); ở 1.24.0: chọn Fast ngay trên trang tạo cuộc trò chuyện công ty, nút Fast đổi màu vàng khi đang bật; ở 1.23.1: câu hỏi của agent luôn nằm cuối cuộc trò chuyện, ngay trên ô nhập, và dễ đọc hơn; ở 1.23.0: nút Fast cho cuộc trò chuyện công ty khi Harness cho phép, tool lỗi được báo về Studio (Logs → Tool lỗi), cuộc trò chuyện mới gửi được tin nhắn đầu sau khi Harness đổi; ở 1.22.1: dashboard không còn quay mãi khi project nằm trên ổ Windows nhìn từ WSL (/mnt/d…) hoặc phiên công ty không trả lời; ở 1.22.0: đính kèm được mọi file code và văn bản (.html, .css, .ts, .py, Dockerfile…); ở 1.21.1: bật Bypass được cả khi lượt đang chạy và được giữ sau khi tải lại; ở 1.21.0: câu hỏi và yêu cầu duyệt hiện từng cái một (main agent trước), thông báo góc phải khi cuộc trò chuyện khác xong hay đang chờ bạn, Studio ghi lại mỗi lần compact; ở 1.20.0: cài package trong sandbox công ty không phải duyệt (npm, PyPI, Go, Maven, Gradle… qua proxy chỉ cho registry); ở 1.19.0: task công ty có checklist được làm đến hết, cuối mỗi lượt báo rõ xong, dừng giữa chừng hay lỗi, Docker trong sandbox công ty, folder chứa nhiều repo; ở 1.18.0: đổi nhánh Git trên dashboard, tự thử lại khi lỗi tạm thời, Claude Haiku 5.5; ở 1.17.0: dashboard hiện nhánh Git của project; ở 1.16.3: dashboard cập nhật xong vẫn tự kiểm tra bản mới; ở 1.16.2: Terminal nói giống dashboard: hỏi cập nhật, /bypass, lỗi và ghi chú Harness bằng tiếng Việt; ở 1.16.1: bản mới được báo bằng dialog và kiểm tra mỗi giờ, tab dashboard không còn mất đăng nhập; ở 1.16.0: Bypass cho cuộc trò chuyện công ty, đổi Harness không làm gián đoạn; ở 1.15.2: cuộc trò chuyện dài tự thu gọn trở lại; ở 1.15.1: Studio thấy mỗi call của model dùng để làm gì, nhiều cuộc trò chuyện trong một folder không nhận nhầm thay đổi của nhau; ở 1.15.0: subagent bị từ chối nói đúng lý do; ở 1.14: cập nhật giữ model bạn đã chọn; ở 1.13: cuộc trò chuyện giữ chỗ đang đọc, chữ của agent có định dạng, Piagent trên Windows qua WSL2: sandbox công ty bằng bubblewrap và Agent Watch cho Windows; ở 1.12: @ chọn file và folder trên máy, skill và command dùng bằng /, nhánh cuộc trò chuyện công ty gửi được tin nhắn.</p>
-    </a>
-    <a class="doc-card" href="/ecosystem">
-      <span class="card-kicker">Get started</span>
-      <h3>Hệ sinh thái</h3>
-      <p>Piagent, Agent Watch và Agent Studio: phần nào chạy ở đâu, khi nào dùng chế độ cá nhân hay công ty.</p>
-    </a>
-    <a class="doc-card" href="/quickstart">
-      <span class="card-kicker">Get started</span>
-      <h3>Quickstart</h3>
-      <p>Cài, mở repo, chọn profile và quyền, rồi giao việc đầu tiên bằng lời thường.</p>
-    </a>
-    <a class="doc-card" href="/scope">
-      <span class="card-kicker">Get started</span>
-      <h3>Phạm vi platform</h3>
-      <p>Vì sao repo này tồn tại khi đã có agent coding tổng quát, và ranh giới nó nhận về mình.</p>
-    </a>
-    <a class="doc-card" href="/profiles">
-      <span class="card-kicker">Build</span>
-      <h3>Project profile</h3>
-      <p>Chọn đường ray cho repo: protected path, verify command, capability được cấp.</p>
-    </a>
-    <a class="doc-card" href="/mcp">
-      <span class="card-kicker">MCP</span>
-      <h3>MCP</h3>
-      <p>Bốn layer config, preset đã pin, quản lý server, trạng thái auth, và approval gate cho server đến từ repo.</p>
-    </a>
-    <a class="doc-card" href="/security">
-      <span class="card-kicker">Operate</span>
-      <h3>Security model</h3>
-      <p>Policy enforcement layer chứ không phải OS sandbox — nói rõ chặn được gì và không chặn được gì.</p>
-    </a>
-    <a class="doc-card" href="/benchmark">
-      <span class="card-kicker">Operate</span>
-      <h3>Production benchmark</h3>
-      <p>Điểm chất lượng, safety, workflow và biểu đồ token từ phép đo 108 session so với surface <code>codex-cli</code>.</p>
-    </a>
-    <a class="doc-card" href="/commands">
-      <span class="card-kicker">Build</span>
-      <h3>Command catalog</h3>
-      <p>Slash command và terminal command, nhóm theo việc cần làm.</p>
-    </a>
   </div>
 </section>
 
-<section class="section">
-  <h2 id="ba-nhom">Tài liệu chia làm ba nhóm</h2>
-  <div class="split">
-    <div class="card">
-      <h3 id="get-started-nhom">Get started</h3>
-      <p>Dành cho người chưa chạy lần nào: cài, quickstart, và vị trí của platform so với các agent CLI khác.</p>
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head center" data-reveal>
+      <p class="section-kicker">Một lượt làm việc</p>
+      <h2 id="mot-luot">Bạn nói việc. Phần còn lại có kiểm chứng.</h2>
     </div>
-    <div class="card">
-      <h3 id="build-nhom">Build</h3>
-      <p>Dùng hằng ngày: profile, permission, command, workflow — và MCP tách riêng vì có bề mặt lệnh của nó.</p>
+    <div class="flow" data-flow>
+      <div class="flow-step"><span class="flow-dot">{{icon:message}}</span><div><h3>Nhắn việc</h3><p>Lời thường, không cần task contract hay lệnh workflow.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:code}}</span><div><h3>Đọc và sửa</h3><p>Agent đọc đúng file cần, sửa có diff rõ ràng.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:shield-check}}</span><div><h3>Guard kiểm tra</h3><p>Mỗi tool call qua policy; việc rủi ro chờ bạn duyệt.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:check-circle}}</span><div><h3>Check và review</h3><p>Test chạy trên code cuối, subagent review độc lập.</p></div></div>
+      <div class="flow-step"><span class="flow-dot">{{icon:list}}</span><div><h3>Báo kết quả</h3><p>Một dòng cuối: xong, dừng giữa chừng, hay lỗi.</p></div></div>
     </div>
-    <div class="card">
-      <h3 id="operate-nhom">Operate</h3>
-      <p>Người vận hành và review: security model, kiến trúc repo, terminal tool, cách team dùng như một chuẩn.</p>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head center" data-reveal>
+      <p class="section-kicker">Màn hình thật</p>
+      <h2 id="man-hinh">Chụp từ dashboard đang chạy</h2>
+    </div>
+    <div data-gallery data-reveal>
+      <div class="gallery-tabs">
+        <div class="tab-list" role="tablist" aria-label="Chọn ảnh">
+          <button type="button" role="tab" aria-selected="true" data-shot="/assets/shots/company-run-done.jpg" data-alt="Một lượt ở chế độ công ty: đọc, sửa, chạy test, dòng cuối báo check đã qua và review không có lỗi chặn" data-caption="Một lượt ở chế độ công ty: đọc, sửa, chạy test; dòng cuối ghi check và review.">Lượt công ty</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/company-review-running.jpg" data-alt="Subagent đang review bản sửa trong lượt công ty" data-caption="Subagent review bản sửa trong khi lượt vẫn chạy.">Review</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/network-approval.jpg" data-alt="Thẻ duyệt lệnh có mạng, hiện đúng lệnh sẽ chạy" data-caption="Lệnh có mạng chờ duyệt, thẻ hiện đúng lệnh sẽ chạy.">Duyệt mạng</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/personal-edit-test.jpg" data-alt="Chế độ cá nhân: sửa code và chạy test" data-caption="Chế độ cá nhân: model của bạn, cùng guard.">Cá nhân</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-source-review.jpg" data-alt="Agent Inspector: thay đổi trong working tree, diff inline và nút mở trong editor" data-caption="Source Changes: diff theo file, inline hoặc hai cột, review và stage từng hunk.">Source Changes</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-palette.jpg" data-alt="Bảng lệnh mở bằng phím tắt, liệt kê lệnh và chủ đề màu" data-caption="Bảng lệnh ⌘K: mọi lệnh, cài đặt và 13 chủ đề màu trong một ô tìm.">Bảng lệnh</button>
+          <button type="button" role="tab" aria-selected="false" data-shot="/assets/shots/hub-new-chat.jpg" data-alt="Trang tạo cuộc trò chuyện mới với chọn project, model và việc mẫu" data-caption="Tạo cuộc trò chuyện: chọn project và model, hoặc bấm một việc mẫu.">Tạo mới</button>
+        </div>
+      </div>
+      <figure class="gallery-frame">
+        <img src="/assets/shots/company-run-done.jpg" alt="Một lượt ở chế độ công ty: đọc, sửa, chạy test, dòng cuối báo check đã qua và review không có lỗi chặn" width="1600" height="1000" loading="lazy" decoding="async" style="transition:opacity .2s">
+        <figcaption>Một lượt ở chế độ công ty: đọc, sửa, chạy test; dòng cuối ghi check và review.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Hai chế độ</p>
+      <h2 id="hai-che-do">Cùng một dashboard, hai cách dùng model</h2>
+      <p>Đổi chế độ không đổi cách làm việc: cùng guard, cùng lịch sử giữa Terminal và trình duyệt.</p>
+    </div>
+    <div class="modes">
+      <article class="mode" data-reveal>
+        <div class="mode-head"><span class="tile-icon">{{icon:users}}</span><h3>Cá nhân</h3><code>pi</code></div>
+        <p>Đăng nhập bằng tài khoản model của bạn. Key nằm trên máy bạn.</p>
+        <ul class="checks">
+          <li>{{icon:check}}<span>Chọn model và thinking tuỳ ý</span></li>
+          <li>{{icon:check}}<span>Guard và protected path như chế độ công ty</span></li>
+          <li>{{icon:check}}<span>Push và publish vẫn chờ duyệt</span></li>
+          <li>{{icon:check}}<span><code>piagent dashboard</code> mở giao diện web</span></li>
+        </ul>
+      </article>
+      <article class="mode featured" data-reveal>
+        <div class="mode-head"><span class="tile-icon">{{icon:building}}</span><h3>Công ty</h3><code>piagent studio --web</code></div>
+        <p>Agent Watch giữ key công ty trong Keychain; Agent Studio chọn model và Harness cho cả team.</p>
+        <ul class="checks">
+          <li>{{icon:check}}<span>Model không bao giờ thấy key</span></li>
+          <li>{{icon:check}}<span>Sandbox không mạng, mạng mở theo từng lần duyệt</span></li>
+          <li>{{icon:check}}<span>Check và review tự động theo Harness</span></li>
+          <li>{{icon:check}}<span>Usage, ngân sách, cảnh báo sai project trên Studio</span></li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Cài đặt</p>
+      <h2 id="cai-dat">Chạy trong hai phút</h2>
+      <p><code>piagent-setup</code> tự cài đúng bản Pi mà release này pin, khởi tạo project rồi chạy doctor.</p>
+    </div>
+    <div class="tabs" data-tabs="os" data-reveal>
+      <div class="tab-list" role="tablist" aria-label="Hệ điều hành">
+        <button type="button" role="tab" data-tab="macos" aria-selected="true">{{icon:apple}} macOS · Linux</button>
+        <button type="button" role="tab" data-tab="windows" aria-selected="false" tabindex="-1">{{icon:windows}} Windows</button>
+      </div>
+      <div class="tab-panel" data-panel="macos">
+        <div class="install-grid">
+          <div class="install-step"><span class="num">01</span><h3>Cài</h3><p>Chạy trong thư mục project.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Lấy lệnh</button></header>
+<pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre></div></div>
+          <div class="install-step"><span class="num">02</span><h3>Mở</h3><p>Terminal, hoặc dashboard trên trình duyệt.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="piagent dashboard">Lấy lệnh</button></header>
+<pre><code>piagent dashboard
+pi                    # Terminal</code></pre></div></div>
+          <div class="install-step"><span class="num">03</span><h3>Cập nhật</h3><p>Dashboard tự báo khi có bản mới, mỗi giờ.</p>
+            <div class="command-card"><header><span>bash</span><button class="clip-btn" type="button" data-clip="piagent-update">Lấy lệnh</button></header>
+<pre><code>piagent-update</code></pre></div></div>
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="windows" hidden>
+        <div class="install-grid">
+          <div class="install-step span-2"><span class="num">01</span><h3>Một lệnh PowerShell</h3><p>Cài WSL2, Ubuntu, Piagent và Agent Watch, thêm Piagent vào Start menu. Chạy lại để cập nhật.</p>
+            <div class="command-card"><header><span>PowerShell</span><button class="clip-btn" type="button" data-clip="irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex">Lấy lệnh</button></header>
+<pre><code>irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex</code></pre></div></div>
+          <div class="install-step"><span class="num">02</span><h3>Chi tiết</h3><p>Lần đầu cần khởi động lại để bật WSL2. Mã kết nối công ty là tuỳ chọn.</p>
+            <a class="button" href="/windows">Hướng dẫn Windows {{icon:arrow-right}}</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="home-section">
+  <div class="home-wrap">
+    <div class="home-head" data-reveal>
+      <p class="section-kicker">Changelog</p>
+      <h2 id="moi-cap-nhat">Phát hành đều, ghi rõ từng thay đổi</h2>
+      <p>Mỗi bản ghi thay đổi gì và cần bản nào của Studio hay Agent Watch. <a href="/whats-new">Xem toàn bộ changelog</a>.</p>
+    </div>
+    <div class="updates">
+<!-- latest-releases -->
+    </div>
+  </div>
+</section>
+
+<section class="home-wrap">
+  <div class="final-cta" data-reveal>
+    <h2>Giao việc cho agent, giữ quyền quyết định.</h2>
+    <p>Hai lệnh để cài. Đọc tài liệu theo đúng thứ tự bạn cần.</p>
+    <div class="hero-cta" style="margin-top:0">
+      <a class="button primary lg" href="/quickstart">Cài đặt {{icon:arrow-right}}</a>
+      <a class="button lg" href="/ecosystem">Hệ sinh thái</a>
+      <a class="button lg ghost" href="/benchmark">{{icon:chart}} Benchmark</a>
     </div>
   </div>
 </section>
