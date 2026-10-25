@@ -220,7 +220,17 @@ describe("full-source package install, upgrade, and rollback", () => {
     assert.match(workflow, /- name: Install Linux test tools\s*\n\s*if: runner\.os == 'Linux'[\s\S]*apt-get install --yes ripgrep/);
     assert.match(workflow, /- name: Run local verification\s*\n\s*run: bash scripts\/verify-local\.sh --offline/);
     const gate = fs.readFileSync(path.join(repositoryRoot, "scripts", "verify-local.sh"), "utf8");
-    assert.ok(gate.includes('node --test --test-concurrency=2 "$ROOT"/tests/*.test.mjs'), "the canonical matrix gate must run the complete regression suite");
+    const selectionStart = gate.indexOf("managed_browser_tests=("), selectionEnd = gate.indexOf('run_quietly "npm run test:webui:e2e"');
+    assert.ok(selectionStart >= 0 && selectionEnd > selectionStart, "canonical test selection must precede browser verification");
+    // Execute the real shell selection with a recorder in place of the runner.
+    // Comparing every selected path also catches omissions and duplicate runs.
+    const selected = execFileSync("bash", ["-c", `ROOT="$1"
+run_quietly() { shift; printf '%s\\0' "$@"; }
+${gate.slice(selectionStart, selectionEnd)}`,
+      "verify-test-selection", repositoryRoot], { encoding: "utf8" }).split("\0").filter(value => value.endsWith(".test.mjs"));
+    const expected = fs.readdirSync(path.join(repositoryRoot, "tests")).filter(name => name.endsWith(".test.mjs"))
+      .map(name => path.join(repositoryRoot, "tests", name));
+    assert.deepEqual(selected.sort(), expected.sort(), "the canonical matrix gate must run every regression exactly once");
     assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
   });
 
