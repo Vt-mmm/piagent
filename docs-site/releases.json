@@ -1,5 +1,51 @@
 [
   {
+    "version": "1.42.0",
+    "date": "2026-10-25",
+    "status": "stable",
+    "title": {
+      "en": "A redesigned dashboard and older messages that load without jumping",
+      "vi": "Dashboard thiết kế lại, tin cũ tải mà không nhảy trang"
+    },
+    "summary": {
+      "en": "The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.",
+      "vi": "Dashboard có một thang thiết kế và mọi theme tô tới mọi khung; tin cũ tự tải khi cuộn lên và tin bạn đang đọc đứng yên."
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "Older messages load on their own as you near the top, and the message being read no longer moves when a page is added above it.",
+        "vi": "Tin cũ tự tải khi cuộn gần đầu, và tin đang đọc không còn bị đẩy đi khi có trang mới chèn phía trên."
+      },
+      {
+        "kind": "improved",
+        "en": "All 13 colour themes now reach the diff, approval, question and document views; header, sidebar, composer and new chat page are redesigned.",
+        "vi": "Cả 13 theme giờ tô tới diff, thẻ duyệt, câu hỏi và tài liệu; header, sidebar, ô soạn tin và trang tạo mới được thiết kế lại."
+      },
+      {
+        "kind": "improved",
+        "en": "A running turn shows one moving indicator at a time: the step's spinner, the streaming caret, or a thinking spinner.",
+        "vi": "Một lượt đang chạy chỉ có một hiệu ứng chạy: spinner của bước, con trỏ khi chữ đang về, hoặc spinner khi agent đang nghĩ."
+      },
+      {
+        "kind": "fixed",
+        "en": "History showed raw markdown for a moment and then reflowed; it now appears formatted from the first frame.",
+        "vi": "Lịch sử từng hiện markdown thô rồi co lại; giờ hiện đúng định dạng ngay từ đầu."
+      },
+      {
+        "kind": "fixed",
+        "en": "Loading many older pages silently dropped the newest messages; the window now holds 1,000 items and offers a way back to the newest.",
+        "vi": "Tải nhiều trang tin cũ từng làm mất tin mới nhất mà không báo; cửa sổ giờ giữ 1.000 mục và có nút về tin mới nhất."
+      },
+      {
+        "kind": "improved",
+        "en": "New website and README with an Update & uninstall guide; release notes now come from one file that also writes `CHANGELOG.md`.",
+        "vi": "Website và README mới, có hướng dẫn Cập nhật và gỡ; ghi chú phát hành giờ từ một file duy nhất, file này sinh luôn `CHANGELOG.md`."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.41.0",
     "date": "2026-10-24",
     "status": "stable",

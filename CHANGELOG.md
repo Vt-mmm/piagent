@@ -4,6 +4,25 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.42.0 - 2026-10-25
+
+**A redesigned dashboard and older messages that load without jumping.** The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.
+
+### Added
+
+- Older messages load on their own as you near the top, and the message being read no longer moves when a page is added above it.
+
+### Improved
+
+- All 13 colour themes now reach the diff, approval, question and document views; header, sidebar, composer and new chat page are redesigned.
+- A running turn shows one moving indicator at a time: the step's spinner, the streaming caret, or a thinking spinner.
+- New website and README with an Update & uninstall guide; release notes now come from one file that also writes `CHANGELOG.md`.
+
+### Fixed
+
+- History showed raw markdown for a moment and then reflowed; it now appears formatted from the first frame.
+- Loading many older pages silently dropped the newest messages; the window now holds 1,000 items and offers a way back to the newest.
+
 ## v1.41.0 - 2026-10-24
 
 **Front-end change reports with before/after screenshots.** A new skill turns a front-end task into a report with framed before/after screenshots, business and logic changes and check results, shown in the dashboard.

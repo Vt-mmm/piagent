@@ -123,11 +123,14 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   await page.waitForTimeout(400);
   const look=await toasts.first().evaluate(e=>{const c=getComputedStyle(e);return {opacity:c.opacity,background:c.backgroundColor};});
   assert.equal(look.opacity,'1');assert.doesNotMatch(look.background,/rgba\(.*, 0(\.\d+)?\)$|transparent/,JSON.stringify(look));
-  const box=await toasts.first().boundingBox(),width=page.viewportSize().width;
-  assert.ok(box.x+box.width>width-40&&box.y<120,'toast at the top right');
+  // Bottom right, above the status bar: at the top it covered the inspector's
+  // tabs and the Workspace panel's close button. A phone keeps it under the header.
+  const box=await toasts.first().boundingBox(),{width,height}=page.viewportSize();
+  assert.ok(box.x+box.width>width-40&&box.y+box.height>height-160,'toast at the bottom right');
   for(const [w,h] of [[390,844],[3840,2160]]){
    await page.setViewportSize({width:w,height:h});const t=await toasts.first().boundingBox();
    assert.ok(t.x>=0&&t.x+t.width<=w&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`toast fits at ${w}px`);
+   if(w<720)assert.ok(t.y<120,'toast under the header on a phone');
    if(process.env.PIAGENT_TEST_SHOTS)await page.screenshot({path:`${process.env.PIAGENT_TEST_SHOTS}/toast-${w}.png`});
   }
   await page.setViewportSize({width:1440,height:900});

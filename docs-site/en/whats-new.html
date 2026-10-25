@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.41.0" title="v1.41.0 docs · EN"><span class="dot"></span>v1.41.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.42.0" title="v1.42.0 docs · EN"><span class="dot"></span>v1.42.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,22 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-41-0" data-release>
+<article class="release latest" id="v1-42-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-42-0">v1.42.0</a><time class="release-date" datetime="2026-10-25">Oct 25, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-42-0-title">A redesigned dashboard and older messages that load without jumping</h3>
+    <p>The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Older messages load on their own as you near the top, and the message being read no longer moves when a page is added above it.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>All 13 colour themes now reach the diff, approval, question and document views; header, sidebar, composer and new chat page are redesigned.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A running turn shows one moving indicator at a time: the step's spinner, the streaming caret, or a thinking spinner.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>New website and README with an Update &amp; uninstall guide; release notes now come from one file that also writes <code>CHANGELOG.md</code>.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>History showed raw markdown for a moment and then reflowed; it now appears formatted from the first frame.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Loading many older pages silently dropped the newest messages; the window now holds 1,000 items and offers a way back to the newest.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-41-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-41-0">v1.41.0</a><time class="release-date" datetime="2026-10-24">Oct 24, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-41-0-title">Front-end change reports with before/after screenshots</h3>
@@ -420,23 +435,22 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.28.1, Agent Watch 0.15.7 (Windows 0.1.14) for the Stop fix</p>
   </div>
 </article>
-<article class="release" id="v1-28-3" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-28-3">v1.28.3</a><time class="release-date" datetime="2026-10-18">Oct 18, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-28-3-title">Agent Watch self-updates no longer break the company Terminal</h3>
-    <p>Right after Agent Watch updates itself on macOS, <code>piagent studio</code> and the dashboard wait for the new setup instead of failing for about a minute.</p>
-    <ul class="release-items">
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span><code>piagent studio</code> failed for up to a minute after Agent Watch updated itself; it now waits for the new setup and runs.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>The wait applies only when the changed file is still Agent Watch's own app, and every pinned path and hash is checked again first.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">38</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">39</span></summary>
+    <div class="archive-row" id="v1-28-3">
+      <div class="archive-head"><a class="release-version" href="#v1-28-3">v1.28.3</a> <span class="release-date">Oct 18, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Agent Watch self-updates no longer break the company Terminal</strong> — Right after Agent Watch updates itself on macOS, <code>piagent studio</code> and the dashboard wait for the new setup instead of failing for about a minute.</p>
+        <ul class="release-items">
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span><code>piagent studio</code> failed for up to a minute after Agent Watch updated itself; it now waits for the new setup and runs.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>The wait applies only when the changed file is still Agent Watch's own app, and every pinned path and hash is checked again first.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-28-2">
       <div class="archive-head"><a class="release-version" href="#v1-28-2">v1.28.2</a> <span class="release-date">Oct 18, 2026</span></div>
       <div class="archive-body">
