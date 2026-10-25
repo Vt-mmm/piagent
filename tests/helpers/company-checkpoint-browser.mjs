@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { expect } from '@playwright/test';
 import { memberEditorAndTests, reviewAgentHunk } from './ide-member-browser.mjs';
 
-export async function qualifyCompanyCheckpoints(page, project, requests, grant) {
+export async function qualifyCompanyCheckpoints(page, project, requests, grant, browserFrames) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   const responses = [];
   page.on('response', async response => {
@@ -13,12 +13,18 @@ export async function qualifyCompanyCheckpoints(page, project, requests, grant) 
       try { responses.push(await response.json()); } catch { /* Failed transport is asserted by the UI below. */ }
     }
   });
+  const settlements = () => browserFrames.map(frame => JSON.parse(frame))
+    .filter(frame => frame.kind === 'operation.settled' && frame.payload?.settlement === 'completed');
+  // Visible answer text precedes the managed completion hook. Wait for its
+  // checkpoint to settle before the member edits/commits or starts another turn.
+  await expect.poll(() => settlements().length, { timeout: 30000 }).toBe(1);
   await memberEditorAndTests(page, project);
   for (const turn of [1, 2]) {
     await page.getByPlaceholder('Nhắn cho Piagent…').fill(`checkpoint turn ${turn}`);
     await page.getByRole('button', { name: 'Gửi', exact: true }).click();
     await expect(page.getByText(`COMPANY_CHECKPOINT_${turn}_OK`, { exact: true }).first()).toBeVisible({ timeout: 30000 });
     await expect.poll(() => fs.readFileSync(path.join(project, turn === 1 ? 'checkpoint.txt' : 'checkpoint-new.txt'), 'utf8')).toBe(`agent turn ${turn}\n`);
+    await expect.poll(() => settlements().length, { timeout: 30000 }).toBe(turn + 1);
     if (turn === 1) await reviewAgentHunk(page, project);
   }
   const git = (...args) => execFileSync('git', ['-C', project, ...args], { encoding: 'utf8' });

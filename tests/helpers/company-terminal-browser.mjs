@@ -6,7 +6,7 @@ import { expect } from '@playwright/test';
 
 // Drive the same terminal UI through the personal dashboard's CompanyRelay.
 // Markers are split in commands so echoed input cannot satisfy assertions.
-export async function qualifyCompanyTerminal(page, project) {
+export async function qualifyCompanyTerminal(page, project, browserRequests, browserFrames) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole('button', { name: 'Mở terminal', exact: true }).click();
   const rows = page.locator('.xterm-rows');
@@ -30,8 +30,18 @@ export async function qualifyCompanyTerminal(page, project) {
   await command("stty size > terminal-size.txt");
   await expect.poll(() => fs.existsSync(path.join(project, 'terminal-size.txt'))).toBe(true);
   const before = fs.readFileSync(path.join(project, 'terminal-size.txt'), 'utf8');
+  const requestStart = browserRequests.length;
   await page.getByRole('separator', { name: /Chiều cao terminal|Terminal height/ }).focus();
   await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp');
+  // ResizeObserver queues a separate terminal command. Sampling stty before
+  // its settled receipt only proves the previous size, even if resize works.
+  await expect.poll(() => {
+    const resizeIds = new Set(browserRequests.slice(requestStart).map(frame => JSON.parse(frame))
+      .filter(frame => frame.method === 'terminals.command' && frame.params?.command?.payload?.kind === 'resize')
+      .map(frame => frame.requestId));
+    return browserFrames.map(frame => JSON.parse(frame)).some(frame => resizeIds.has(frame.requestId)
+      && frame.ok === true && frame.result?.phase === 'settled');
+  }).toBe(true);
   await command("stty size > terminal-size.txt");
   await expect.poll(() => fs.readFileSync(path.join(project, 'terminal-size.txt'), 'utf8')).not.toBe(before);
   await command("printf 'INTERRUPT_%s\\n' READY; sleep 30");

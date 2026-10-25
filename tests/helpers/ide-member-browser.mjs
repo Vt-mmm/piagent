@@ -9,7 +9,7 @@ export async function memberEditorAndTests(page, project) {
   await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
   await page.getByRole('button', { name: 'member.txt', exact: true }).click();
   const editor = page.locator('.cm-content').first();
-  await expect(editor).toHaveText('before');
+  await expect(editor).toHaveText('before', { timeout: 30000 });
   await editor.fill('member saved\n');
   await editor.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s');
   await expect.poll(() => fs.readFileSync(path.join(project, 'member.txt'), 'utf8'), { timeout: 30000 }).toBe('member saved\n');

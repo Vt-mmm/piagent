@@ -921,7 +921,23 @@ node "$ROOT/scripts/check-third-party-neutrality.mjs" >/dev/null
 run_quietly "npm run build --workspace @piagent/webui" npm run build --workspace @piagent/webui
 # Integration files each own a real SDK and may run bounded worker processes.
 # Limit competing files without changing selection, assertions or deadlines.
-run_quietly "node --test --test-concurrency=2 tests/*.test.mjs" env PIAGENT_NO_UPDATE_CHECK=1 node --test --test-concurrency=2 "$ROOT"/tests/*.test.mjs
+# These end-to-end managed journeys run Chromium, Gateway, SDK and broker
+# processes together. Give them a dedicated slot rather than competing with
+# another SDK-heavy test on the small macOS CI runner. Keep their assertions
+# and deadlines unchanged, and still select every top-level test exactly once.
+managed_browser_tests=(
+  "$ROOT/tests/managed-dashboard-relay.test.mjs"
+  "$ROOT/tests/managed-inference-error-web.test.mjs"
+)
+other_tests=()
+for test_file in "$ROOT"/tests/*.test.mjs; do
+  case "$test_file" in
+    "${managed_browser_tests[0]}"|"${managed_browser_tests[1]}") ;;
+    *) other_tests+=("$test_file") ;;
+  esac
+done
+run_quietly "managed browser integration tests" env PIAGENT_NO_UPDATE_CHECK=1 node --test --test-concurrency=1 "${managed_browser_tests[@]}"
+run_quietly "remaining Node tests" env PIAGENT_NO_UPDATE_CHECK=1 node --test --test-concurrency=2 "${other_tests[@]}"
 run_quietly "npm run test:webui:e2e" npm run test:webui:e2e
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   run_quietly "npm run typecheck" npm run typecheck

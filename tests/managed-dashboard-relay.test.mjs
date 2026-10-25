@@ -91,8 +91,11 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   manager.appendMessage({role:'user',content:[{type:'text',text:'Personal question'}],timestamp:Date.now()});manager.appendMessage(assistant('Personal answer'));
   const launch=await requestGatewayControl(gatewayProfileState(personalAgent).controlSocket,{action:'issue-launch-url'});assert.equal(launch.ok,true);
   const origin=new URL(launch.value.launchUrl).origin;
-  browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'vi-VN'}),browserFrames=[];
-  page.on('websocket',socket=>socket.on('framereceived',event=>browserFrames.push(String(event.payload))));
+  browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'vi-VN'}),browserFrames=[],browserRequests=[];
+  page.on('websocket',socket=>{
+   socket.on('framereceived',event=>browserFrames.push(String(event.payload)));
+   socket.on('framesent',event=>browserRequests.push(String(event.payload)));
+  });
   await page.goto(launch.value.launchUrl);
   await expect(page.getByText('Gateway live',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Cuộc trò chuyện mới'}).last().click();
@@ -109,10 +112,10 @@ process.stdout.write('ready\\n');process.once('SIGTERM',()=>void gateway.close()
   await expect(page.getByRole('navigation').getByText(/^Công ty/).first()).toBeVisible();
   await expect(page.getByRole('navigation').getByText('Personal question').first()).toBeVisible();
   assert.equal(requests.length,1,'one company turn reached Studio');
-  await qualifyCompanyCheckpoints(page,project,requests,grant.token);
+  await qualifyCompanyCheckpoints(page,project,requests,grant.token,browserFrames);
   assert.equal(requests.length,5,'two mutating company turns each use one tool request and one answer');
   await page.getByRole('button',{name:'Terminal',exact:true}).click();
-  await qualifyCompanyTerminal(page,project);
+  await qualifyCompanyTerminal(page,project,browserRequests,browserFrames);
   assert.ok(browserFrames.every(frame=>!frame.includes(grant.token)),'Studio grant never reaches browser frames');
   const companySessions=fs.readdirSync(path.join(companyAgent,'sessions'),{recursive:true}).filter(f=>String(f).endsWith('.jsonl'));
   assert.equal(companySessions.length,1,'the company transcript lives with the company runtime');
