@@ -278,7 +278,7 @@ describe("Piagent WebUI loopback server", () => {
     assert.equal((await save({ locale: "en", themeId: "dracula" })).status, 200);
     assert.equal((await save({ themeId: "nord" })).status, 200);
     assert.deepEqual(await read(), { locale: "en", themeId: "nord" });
-    assert.equal(fs.statSync(store.file).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(store.file).mode & 0o777, 0o600);
     assert.deepEqual(new UiPreferencesStore(directory).read(), { locale: "en", themeId: "nord" }, "a restarted Gateway reads the same choice");
     fs.writeFileSync(store.file, "not json");
     assert.deepEqual(store.read(), {}, "a damaged file is ignored");

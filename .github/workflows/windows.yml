@@ -60,6 +60,7 @@ jobs:
           tests/piagent-webui-path-mentions.test.mjs
           tests/piagent-webui-native-project-picker.test.mjs
           tests/piagent-webui-loopback-server.test.mjs
+          tests/piagent-workspace-write-store.test.mjs
           tests/piagent-webui-project-registry.test.mjs
           tests/piagent-dashboard-busy-gateway.test.mjs
           tests/piagent-pi-host-discovery.test.mjs

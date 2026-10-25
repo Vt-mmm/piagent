@@ -34,7 +34,7 @@ test('workspace journal survives recreation without source content and settles a
   assert.equal((await retry.execute(c)).deduplicated, true); assert.equal(f.writes(), 1);
   const file = path.join(f.root, 'workspace-writes/session.json'), raw = fs.readFileSync(file, 'utf8');
   assert.equal(raw.includes(c.payload.content), false); assert.equal(raw.includes(c.idempotencyKey), false);
-  assert.equal(fs.statSync(file).mode & 0o077, 0);
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o077, 0);
   assert.deepEqual(fs.readdirSync(path.dirname(file)), ['session.json']);
 });
 test('workspace journal pending record prevents redispatch when settlement persistence fails', async t => {
@@ -61,7 +61,9 @@ test('workspace journal refuses symlinks, hardlinks, public permissions and repl
   const dir = path.join(f.root, 'workspace-writes'), file = path.join(dir, 'session.json');
   assert.throws(() => f.store.history('../escape'), /session-invalid/);
   fs.linkSync(file, path.join(dir, 'link.json')); assert.throws(() => f.store.history('session'), /journal-unsafe/); fs.unlinkSync(path.join(dir, 'link.json'));
-  fs.chmodSync(file, 0o644); assert.throws(() => f.store.history('session'), /journal-unsafe/); fs.chmodSync(file, 0o600);
+  if (process.platform !== "win32") {
+    fs.chmodSync(file, 0o644); assert.throws(() => f.store.history('session'), /journal-unsafe/); fs.chmodSync(file, 0o600);
+  }
   fs.renameSync(file, path.join(dir, 'saved.json')); fs.symlinkSync('saved.json', file); assert.throws(() => f.store.history('session'));
   fs.renameSync(dir, `${dir}-old`); fs.mkdirSync(dir, { mode: 0o700 }); assert.throws(() => f.store.history('session'), /journal-unsafe/);
 });

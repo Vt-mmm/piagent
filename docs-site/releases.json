@@ -26,6 +26,11 @@
         "kind": "improved",
         "en": "Hashing small workspace files allocates a buffer sized to the file while retaining full content and file-identity checks.",
         "vi": "Hash file workspace nhỏ dùng buffer theo kích thước file, vẫn kiểm tra toàn bộ nội dung và định danh file."
+      },
+      {
+        "kind": "fixed",
+        "en": "The Gateway starts on native Windows and persists signed workspace receipts without applying POSIX permission bits or directory fsync to Windows files.",
+        "vi": "Gateway khởi động trên Windows native và lưu receipt workspace có chữ ký mà không áp kiểm tra quyền POSIX hoặc fsync thư mục lên file Windows."
       }
     ],
     "requires": null

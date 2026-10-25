@@ -2,6 +2,8 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+// Windows uses inherited ACLs in the Gateway profile; Node mode bits do not represent them.
+const POSIX_PERMISSIONS = process.platform !== "win32";
 const MAX_BYTES = 8 * 1024 * 1024, MAX_RECORDS = 4000;
 type SessionRecord = { identity: { sessionRef: string }; idempotencyKeyDigest: string };
 type Journal<T> = { version: 1; sequence: number; records: Array<{ sequence: number; receipt: T }> };
@@ -24,7 +26,7 @@ export class SignedSessionJournal<T extends SessionRecord> {
   }
   #checkDirectory(): void {
     const stat = fs.lstatSync(this.#root);
-    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o077)
+    if (!stat.isDirectory() || stat.isSymbolicLink() || (POSIX_PERMISSIONS && (stat.mode & 0o077))
       || typeof process.getuid === "function" && stat.uid !== process.getuid()
       || stat.dev !== this.#directory.dev || stat.ino !== this.#directory.ino) throw new Error("workspace-journal-unsafe");
   }
@@ -37,12 +39,17 @@ export class SignedSessionJournal<T extends SessionRecord> {
   }
   #read(sessionRef: string): Journal<T> {
     this.#checkDirectory();
-    let descriptor: number;
-    try { descriptor = fs.openSync(this.#file(sessionRef), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK); }
+    let descriptor: number, before: fs.Stats;
+    const file = this.#file(sessionRef);
+    try {
+      before = fs.lstatSync(file);
+      if (!before.isFile() || before.isSymbolicLink()) throw new Error("workspace-journal-unsafe");
+      descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
+    }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, sequence: 0, records: [] }; throw error; }
     try {
       const stat = fs.fstatSync(descriptor);
-      if (!stat.isFile() || stat.nlink !== 1 || stat.size > MAX_BYTES || (stat.mode & 0o077)
+      if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.nlink !== 1 || stat.size > MAX_BYTES || (POSIX_PERMISSIONS && (stat.mode & 0o077))
         || typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error("workspace-journal-unsafe");
       const { value, mac } = JSON.parse(fs.readFileSync(descriptor, "utf8")) as { value: Journal<T>; mac: string };
       if (!value || typeof mac !== "string" || !/^[a-f0-9]{64}$/.test(mac) || !timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(this.#sign(sessionRef, value), "hex"))
@@ -70,8 +77,11 @@ export class SignedSessionJournal<T extends SessionRecord> {
       descriptor = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
       fs.writeFileSync(descriptor, bytes); fs.fsyncSync(descriptor); fs.closeSync(descriptor); descriptor = undefined;
       this.#checkDirectory(); fs.renameSync(temporary, this.#file(sessionRef));
-      const directory = fs.openSync(this.#root, fs.constants.O_RDONLY);
-      try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+      // Windows cannot open a directory with the Node read-only file API.
+      if (process.platform !== "win32") {
+        const directory = fs.openSync(this.#root, fs.constants.O_RDONLY);
+        try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+      }
     } finally { if (descriptor !== undefined) fs.closeSync(descriptor); fs.rmSync(temporary, { force: true }); }
   }
 }

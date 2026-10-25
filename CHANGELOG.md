@@ -14,6 +14,10 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 - Gateway and inspection interfaces load separately; Settings failures stay within a dismissible dialog. Theme and server preferences are preserved.
 - Hashing small workspace files allocates a buffer sized to the file while retaining full content and file-identity checks.
 
+### Fixed
+
+- The Gateway starts on native Windows and persists signed workspace receipts without applying POSIX permission bits or directory fsync to Windows files.
+
 ## v1.42.0 - 2026-10-25
 
 **A redesigned dashboard and older messages that load without jumping.** The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.
