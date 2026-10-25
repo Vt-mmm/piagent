@@ -2245,7 +2245,7 @@ test('review counts cover inactive tabs and Keep survives closing the narrow edi
   await page.route('**/source-review/*', route => route.fulfill({ json: diffs.find(diff => route.request().url().endsWith(diff.file.fileRef)) }));
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 900, height: 1000 }); await page.goto(server.issueLaunchUrl());
-  await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+  await page.getByRole('navigation').getByRole('region', { name: 'pi-company-platform', exact: true }).getByText('Release preparation', { exact: true }).click();
   await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
   await page.getByRole('button', { name: 'src', exact: true }).click();
   await page.getByRole('button', { name: 'first-review.txt', exact: true }).click();
@@ -2264,7 +2264,7 @@ test('review counts cover inactive tabs and Keep survives closing the narrow edi
   await expect(page.locator('.cm-agent-added')).toHaveCount(1);
   // A kept hunk stays kept after a reload in this browser.
   await page.reload();
-  await page.getByRole('navigation').getByText('Release preparation', { exact: true }).click();
+  await page.getByRole('navigation').getByRole('region', { name: 'pi-company-platform', exact: true }).getByText('Release preparation', { exact: true }).click();
   await page.getByRole('button', { name: /^(Tệp|Files)$/ }).click();
   await page.getByRole('button', { name: 'src', exact: true }).click();
   await page.getByRole('button', { name: 'second-review.txt', exact: true }).click();
