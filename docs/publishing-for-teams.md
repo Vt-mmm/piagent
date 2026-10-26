@@ -41,7 +41,8 @@ pi install /path/to/piagent
 
 ## Versioning
 
-- `1.43.1`: phát hành adaptive workflow; sửa wording tài liệu làm gate của 1.43.0 không qua.
+- `1.43.2`: adaptive workflow do Dev chọn, nhận diện BE/FE và kiểm chứng release notes đầy đủ.
+- `1.43.1`: (tag, chưa publish do giới hạn độ dài release note) phát hành adaptive workflow; sửa wording tài liệu làm gate của 1.43.0 không qua.
 - `1.43.0`: (tag, chưa publish) company harness tự nhận diện BE/FE theo repo/package; kế thừa skill/plan/requirement Dev chọn, lưu context tùy chọn qua lần mở lại, không ép phương pháp và không thay quyền hạn/approval.
 - `1.42.1`: dashboard gửi JS/CSS gzip và tải Gateway/inspection riêng; lỗi tải Settings có thể đóng hoặc tải lại; hash file workspace nhỏ cấp phát buffer theo kích thước file, giữ kiểm tra nội dung và định danh file.
 - `1.42.0`: dashboard thiết kế lại (một thang thiết kế, 13 theme tô tới mọi khung, header 52px, trang tạo mới có việc mẫu); tin cũ tự tải khi cuộn lên và giữ nguyên chỗ đang đọc, lịch sử hiện đúng định dạng ngay từ đầu, cửa sổ lịch sử 1.000 mục có nút về tin mới nhất; mỗi lượt đang chạy chỉ một hiệu ứng chạy; website và README viết lại; ghi chú phát hành có một nguồn `docs-site/releases.json` sinh ra `CHANGELOG.md`.

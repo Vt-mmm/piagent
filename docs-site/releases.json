@@ -1,6 +1,6 @@
 [
   {
-    "version": "1.43.1",
+    "version": "1.43.2",
     "date": "2026-10-26",
     "status": "stable",
     "title": {
@@ -24,14 +24,14 @@
       },
       {
         "kind": "improved",
-        "en": "The lifecycle is guidance adapted to the chosen workflow and requested stopping point, not mandatory spec files or an automatic release gate. A selected skill never grants access or waives verification, review or deployment approval.",
+        "en": "Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.",
         "vi": "Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy."
       }
     ],
     "requires": null
   },
   {
-    "version": "1.43.0",
+    "version": "1.43.1",
     "date": "2026-10-26",
     "status": "unpublished",
     "title": {
@@ -39,8 +39,8 @@
       "vi": "Dev chọn workflow, harness hỗ trợ BE/FE theo project"
     },
     "summary": {
-      "en": "Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.1.",
-      "vi": "Đã tag nhưng chưa publish: gate wording tài liệu chặn phát hành. Thay bằng 1.43.1."
+      "en": "Tagged but not published: a release-note bullet exceeded the documentation length limit. Superseded by 1.43.2.",
+      "vi": "Đã tag nhưng chưa publish: một bullet release note vượt giới hạn độ dài. Thay bằng 1.43.2."
     },
     "items": [
       {
@@ -55,7 +55,38 @@
       },
       {
         "kind": "improved",
-        "en": "The lifecycle is guidance adapted to the chosen workflow and requested stopping point, not mandatory spec files or an automatic release gate. A selected skill never grants access or waives verification, review or deployment approval.",
+        "en": "Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.",
+        "vi": "Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy."
+      }
+    ],
+    "requires": null
+  },
+  {
+    "version": "1.43.0",
+    "date": "2026-10-26",
+    "status": "unpublished",
+    "title": {
+      "en": "Your workflow, with adaptive backend and frontend support",
+      "vi": "Dev chọn workflow, harness hỗ trợ BE/FE theo project"
+    },
+    "summary": {
+      "en": "Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.2.",
+      "vi": "Đã tag nhưng chưa publish: gate wording tài liệu chặn phát hành. Thay bằng 1.43.2."
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.",
+        "vi": "Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task."
+      },
+      {
+        "kind": "new",
+        "en": "Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.",
+        "vi": "Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa."
+      },
+      {
+        "kind": "improved",
+        "en": "Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.",
         "vi": "Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy."
       }
     ],
