@@ -34,8 +34,8 @@
       },
       {
         "kind": "fixed",
-        "en": "Review now runs when a conversation is opened in a folder that holds several repositories: each changed file is reviewed in its own repository, and a file outside any repository is named as not reviewed instead of the review failing.",
-        "vi": "Review chạy được khi hội thoại mở ở thư mục chứa nhiều repo: mỗi file thay đổi được review trong repo của nó, file nằm ngoài repo được ghi rõ là không review thay vì review lỗi."
+        "en": "Review runs in a folder holding several repositories: each changed file is reviewed in its own repository, and a file outside any repository is named as not reviewed.",
+        "vi": "Review chạy được ở thư mục chứa nhiều repo: mỗi file thay đổi được review trong repo của nó, file ngoài repo được ghi rõ là không review."
       }
     ],
     "requires": null

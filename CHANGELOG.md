@@ -20,7 +20,7 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 ### Fixed
 
 - History loading rechecks the current scroll position and responds to upward scrolling, preventing stale observer events from loading extra pages or leaving history stuck.
-- Review now runs when a conversation is opened in a folder that holds several repositories: each changed file is reviewed in its own repository, and a file outside any repository is named as not reviewed instead of the review failing.
+- Review runs in a folder holding several repositories: each changed file is reviewed in its own repository, and a file outside any repository is named as not reviewed.
 
 ## v1.43.3 - 2026-10-26 (not published)
 
