@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.43.2",
+  "version": "1.43.3",
   "license": "MIT",
   "publishConfig": {
     "access": "public",

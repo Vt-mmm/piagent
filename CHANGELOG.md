@@ -4,7 +4,7 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
-## v1.43.2 - 2026-10-26
+## v1.43.3 - 2026-10-26
 
 **Your workflow, with adaptive backend and frontend support.** Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.
 
@@ -17,9 +17,22 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 
 - Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.
 
+## v1.43.2 - 2026-10-26 (not published)
+
+**Your workflow, with adaptive backend and frontend support.** Tagged but not published: workflow prompt wording matched a forbidden command in the native-session regression test. Superseded by 1.43.3.
+
+### Added
+
+- Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.
+- Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.
+
+### Improved
+
+- Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.
+
 ## v1.43.1 - 2026-10-26 (not published)
 
-**Your workflow, with adaptive backend and frontend support.** Tagged but not published: a release-note bullet exceeded the documentation length limit. Superseded by 1.43.2.
+**Your workflow, with adaptive backend and frontend support.** Tagged but not published: a release-note bullet exceeded the documentation length limit. Superseded by 1.43.3.
 
 ### Added
 
@@ -32,7 +45,7 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 
 ## v1.43.0 - 2026-10-26 (not published)
 
-**Your workflow, with adaptive backend and frontend support.** Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.2.
+**Your workflow, with adaptive backend and frontend support.** Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.3.
 
 ### Added
 

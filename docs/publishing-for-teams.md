@@ -41,7 +41,8 @@ pi install /path/to/piagent
 
 ## Versioning
 
-- `1.43.2`: adaptive workflow do Dev chọn, nhận diện BE/FE và kiểm chứng release notes đầy đủ.
+- `1.43.3`: adaptive workflow Dev lựa chọn; giữ safety, qua kiểm tra wording/native session và release notes.
+- `1.43.2`: (tag, chưa publish do kiểm tra wording native session) adaptive workflow do Dev chọn, nhận diện BE/FE và kiểm chứng release notes đầy đủ.
 - `1.43.1`: (tag, chưa publish do giới hạn độ dài release note) phát hành adaptive workflow; sửa wording tài liệu làm gate của 1.43.0 không qua.
 - `1.43.0`: (tag, chưa publish) company harness tự nhận diện BE/FE theo repo/package; kế thừa skill/plan/requirement Dev chọn, lưu context tùy chọn qua lần mở lại, không ép phương pháp và không thay quyền hạn/approval.
 - `1.42.1`: dashboard gửi JS/CSS gzip và tải Gateway/inspection riêng; lỗi tải Settings có thể đóng hoặc tải lại; hash file workspace nhỏ cấp phát buffer theo kích thước file, giữ kiểm tra nội dung và định danh file.

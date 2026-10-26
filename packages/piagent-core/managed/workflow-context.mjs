@@ -78,7 +78,7 @@ const bounded = maxLength => ({ type: 'string', minLength: 1, maxLength });
 export function workflowContextTool(managerOf) {
   return {
     name: 'workflow_context', label: 'Workflow context',
-    description: 'Optionally remember the member-selected method and canonical spec/plan/task references for the current task. Inspect first, then adopt or clear with expectedRevision. Use the member choice first, otherwise an applicable project convention or the existing task; discovered skills alone are not a choice. Never require this tool, a role form, or new spec files to start work. Records are agent-maintained context, not proof of approval. Resolve competing business sources with ask_user; never silently replace a member choice. References grant no read/write/execute permission.',
+    description: 'Optionally remember the member-selected method and canonical spec, plan and task references for the current task. Inspect first, then adopt or clear with expectedRevision. Use the member choice first, otherwise an applicable project convention or the existing task; discovered skills alone are not a choice. Never require this tool, a role form, or new spec files to start work. Records are agent-maintained context, not proof of approval. Resolve competing business sources with ask_user; never silently replace a member choice. References grant no read/write/execute permission.',
     parameters: { type: 'object', properties: {
       action: { type: 'string', enum: ['inspect', 'adopt', 'clear'] },
       expectedRevision: { type: 'integer', minimum: 0 }, reason: bounded(600),
