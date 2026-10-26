@@ -10,8 +10,23 @@ import { managedGit } from './toolchain.mjs';
 // stale); a reviewer reads it in parts (patch-snapshot.mjs). A new file too
 // large to read is held by its hash: a change to it still changes the digest.
 const MAX_SNAPSHOT = 16 * 1024 * 1024, MAX_UNTRACKED = 2000, READ_FILE = 400_000, BINARY_INLINE = 120_000, HASHED_FILE = 256 * 1024 * 1024;
-const git = args => execFileSync(managedGit(), ['--no-pager', ...args], { encoding: 'utf8', maxBuffer: MAX_SNAPSHOT + 1, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' } });
+// Git speaks English here (LC_ALL=C), so the runtime can tell why a snapshot
+// failed (reviewUnavailableReason), and its errors come back as one line, not
+// a usage page or a stack.
+const git = args => execFileSync(managedGit(), ['--no-pager', ...args], { encoding: 'utf8', maxBuffer: MAX_SNAPSHOT + 1, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', LC_ALL: 'C' } });
+process.on('uncaughtException', error => {
+  const detail = String(error?.stderr ?? '').trim().split('\n').find(Boolean);
+  process.stderr.write(`${String(error?.message ?? error).split('\n')[0]}${detail ? `: ${detail}` : ''}\n`);
+  process.exit(1);
+});
 const sha256 = data => createHash('sha256').update(data).digest('hex');
+const insideWorkTree = () => { try { return git(['rev-parse', '--is-inside-work-tree']).trim() === 'true'; } catch { return false; } };
+// The repository (relative to the folder) that holds a path: the nearest
+// folder below the folder, above the path, with a .git entry; or null.
+function repositoryOf(file) {
+  for (let dir = path.posix.dirname(file); dir !== '.'; dir = path.posix.dirname(dir)) if (fs.existsSync(path.join(dir, '.git'))) return dir;
+  return null;
+}
 const mode = process.argv[2];
 // The arguments after the mode: a scope file, then the commit the patch starts
 // from (the turn's starting HEAD; commits made since are part of the change).
@@ -62,10 +77,41 @@ const scopeName = extra.find(a => a !== given);
 if (scopeName !== undefined && !/^scope-[0-9a-f-]{36}\.json$/.test(scopeName)) throw Error('review-scope-invalid');
 const scope = scopeName ? new Set(JSON.parse(fs.readFileSync(path.join(os.tmpdir(), scopeName), 'utf8'))) : null;
 if (scope && [...scope].some(p => typeof p !== 'string' || !p || path.isAbsolute(p) || p.split('/').includes('..'))) throw Error('review-scope-invalid');
-const patch = scope && !scope.size ? '' : git(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', base, '--', ...(scope ? [...scope].sort().map(p => ':(literal)' + p) : ['.'])]);
-const paths = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).filter(p => !scope || scope.has(p)).sort();
-if (paths.length > MAX_UNTRACKED) throw Error('review-untracked-limit');
-const untracked = paths.map(name => {
+// A folder that is not a repository but holds several (clones side by side):
+// each changed path is diffed in the repository that holds it, against that
+// repository's HEAD, with its paths kept relative to the folder. A path no
+// repository holds is named, not read. With no scope there is nothing to
+// tell which repositories to read: the folder is not a Git repository.
+const repositories = [], outside = [];
+let patch = '', paths;
+if (scope && scope.size && !insideWorkTree()) {
+  const groups = new Map();
+  for (const file of [...scope].sort()) {
+    const repository = repositoryOf(file);
+    if (repository === null) { outside.push(file); continue; }
+    if (!groups.has(repository)) groups.set(repository, []);
+    groups.get(repository).push(file.slice(repository.length + 1));
+  }
+  if (!groups.size) throw Error('managed-review-patch-unreadable: not a git repository');
+  paths = [];
+  for (const [repository, files] of groups) {
+    const spec = files.map(p => ':(literal)' + p), run = args => git(['-C', repository, ...args]);
+    repositories.push(repository);
+    patch += run(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', `--src-prefix=a/${repository}/`, `--dst-prefix=b/${repository}/`, 'HEAD', '--', ...spec]);
+    paths.push(...run(['ls-files', '--others', '--exclude-standard', '-z', '--', ...spec]).split('\0').filter(Boolean).map(p => `${repository}/${p}`));
+  }
+  paths.sort();
+} else {
+  patch = scope && !scope.size ? '' : git(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', base, '--', ...(scope ? [...scope].sort().map(p => ':(literal)' + p) : ['.'])]);
+  paths = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).filter(p => !scope || scope.has(p)).sort();
+}
+if (paths.length + outside.length > MAX_UNTRACKED) throw Error('review-untracked-limit');
+const untracked = [...paths.map(read), ...outside.map(name => {
+  let stat; try { stat = fs.lstatSync(name); } catch { return { path: name, mode: 'outside', encoding: 'omitted', bytes: 0, sha256: 'deleted' }; }
+  const data = stat.isFile() && stat.size <= HASHED_FILE ? fs.readFileSync(name) : Buffer.from(`${stat.size}:${stat.mtimeMs}`);
+  return { path: name, mode: 'outside', encoding: 'omitted', bytes: stat.size, sha256: sha256(data) };
+})];
+function read(name) {
   const stat = fs.lstatSync(name);
   if (stat.isSymbolicLink()) return { path: name, mode: 'symlink', target: fs.readlinkSync(name) };
   // A folder Git lists as one entry is a repository of its own (a clone
@@ -79,8 +125,8 @@ const untracked = paths.map(name => {
   if (!data.includes(0)) { try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data); } catch { text = null; } }
   if (text !== null) return { path: name, mode, contents: text, encoding: 'utf8' };
   return stat.size > BINARY_INLINE ? { path: name, mode, encoding: 'omitted', bytes: stat.size, sha256: sha256(data) } : { path: name, mode, contents: data.toString('base64'), encoding: 'base64' };
-});
-const snapshot = Buffer.from(JSON.stringify(base === 'HEAD' ? { patch, untracked } : { base, patch, untracked }));
+}
+const snapshot = Buffer.from(JSON.stringify(repositories.length ? { repositories, patch, untracked } : base === 'HEAD' ? { patch, untracked } : { base, patch, untracked }));
 if (snapshot.length > MAX_SNAPSHOT) throw Error('review-patch-limit');
 // "digest": the digest and size only (is a review still current?). "file":
 // the snapshot goes to a new file in this boundary's temporary directory,
