@@ -4,6 +4,19 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.43.0 - 2026-10-26
+
+**Your workflow, with adaptive backend and frontend support.** Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.
+
+### Added
+
+- Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.
+- Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.
+
+### Improved
+
+- The lifecycle is guidance adapted to the chosen workflow and requested stopping point, not mandatory spec files or an automatic release gate. A selected skill never grants access or waives verification, review or deployment approval.
+
 ## v1.42.1 - 2026-10-25
 
 **Faster dashboard loading and less workspace hashing memory.** Static code and styles transfer compressed; secondary interfaces load when needed, with recoverable loading errors.

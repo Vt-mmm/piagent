@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.42.1" title="v1.42.1 docs · VI"><span class="dot"></span>v1.42.1</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.43.0" title="v1.43.0 docs · VI"><span class="dot"></span>v1.43.0</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-42-1" data-release>
+<article class="release latest" id="v1-43-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-0">v1.43.0</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-0-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project</h3>
+    <p>Cuộc trò chuyện công ty nhận diện project và kế thừa skill, plan, nguồn requirement của Dev, không ép thêm phương pháp mới. Giữ nguyên quyền hạn và cơ chế duyệt.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-42-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-42-1">v1.42.1</a><time class="release-date" datetime="2026-10-25">25/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-42-1-title">Dashboard tải nhanh hơn, hash workspace dùng ít bộ nhớ hơn</h3>
@@ -417,27 +429,25 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-30-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-30-0">v1.30.0</a><time class="release-date" datetime="2026-10-18">18/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-30-0-title">Context lớn đi qua mạng chậm; Terminal công ty rõ ràng hơn</h3>
-    <p>Lời gọi model lên Studio được nén gzip, nhỏ hơn khoảng 3 lần, và Terminal công ty hiện thống kê lượt, subagent đang chạy và branch Git.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lời gọi model từ 64 KiB trở lên được nén gzip khi gửi lên Studio nếu Studio chấp nhận, nhỏ hơn khoảng 3 lần.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thông báo cuối lượt trong Terminal công ty có thêm số request, token, thời gian và tốc độ output.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thanh dưới hiện <code>Subagent n/m</code> và branch Git; kết quả <code>memory_search</code> và <code>memory_page</code> được thu gọn, bấm Ctrl+O để xem hết.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lần tải lên chậm nhưng vẫn đang gửi không còn bị cắt sau 15 giây.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lệnh <code>/bypass status</code> và <code>/fast on</code> chạy ngay lần Enter đầu, và <code>piagent studio</code> báo đang kết nối Agent Watch trước khi Terminal hiện ra.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.28.2</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">40</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">41</span></summary>
+    <div class="archive-row" id="v1-30-0">
+      <div class="archive-head"><a class="release-version" href="#v1-30-0">v1.30.0</a> <span class="release-date">18/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Context lớn đi qua mạng chậm; Terminal công ty rõ ràng hơn</strong> — Lời gọi model lên Studio được nén gzip, nhỏ hơn khoảng 3 lần, và Terminal công ty hiện thống kê lượt, subagent đang chạy và branch Git.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lời gọi model từ 64 KiB trở lên được nén gzip khi gửi lên Studio nếu Studio chấp nhận, nhỏ hơn khoảng 3 lần.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thông báo cuối lượt trong Terminal công ty có thêm số request, token, thời gian và tốc độ output.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thanh dưới hiện <code>Subagent n/m</code> và branch Git; kết quả <code>memory_search</code> và <code>memory_page</code> được thu gọn, bấm Ctrl+O để xem hết.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lần tải lên chậm nhưng vẫn đang gửi không còn bị cắt sau 15 giây.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lệnh <code>/bypass status</code> và <code>/fast on</code> chạy ngay lần Enter đầu, và <code>piagent studio</code> báo đang kết nối Agent Watch trước khi Terminal hiện ra.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-29-0">
       <div class="archive-head"><a class="release-version" href="#v1-29-0">v1.29.0</a> <span class="release-date">18/10/2026</span></div>
       <div class="archive-body">

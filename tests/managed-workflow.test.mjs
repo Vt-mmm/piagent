@@ -709,3 +709,75 @@ test('a repository inside the project does not stop the review', { skip: !suppor
     assert.match(review, /Patch snapshot [0-9a-f]{64}\.\\nNot read: vendor-clone\/? \(a repository of its own\)\./); assert.match(review, /\+changed/);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('company delivery context refreshes per task without role configuration', { skip: !supported, timeout: 60000 }, async () => {
+  const root = project();
+  // This fixture's explicit check overrides auto discovery; this test exercises
+  // the zero-configuration path instead.
+  fs.unlinkSync(path.join(root, 'AGENTS.md'));
+  const agent = broker({ plan: 'off', verify: 'off', review: 'off' }, { review: false });
+  const script = { roleOf: () => 'main', main: ['Read only.', 'Read only.'] };
+  const server = await studio(script);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Explain this project without changing files.');
+    const first = JSON.stringify(server.requests.at(-1).body.system);
+    assert.match(first, /Adaptive delivery lifecycle/);
+    assert.doesNotMatch(first, /package.json dependency fastify/);
+    fs.mkdirSync(path.join(root, 'services/orders'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'services/orders/package.json'), JSON.stringify({ dependencies: { fastify: '1' }, scripts: { 'test:api': 'node --test' } }));
+    await managed.session.prompt('Explain the new orders service without changing files.');
+    const second = JSON.stringify(server.requests.at(-1).body.system);
+    assert.match(second, /package.json dependency fastify/);
+    assert.match(second, /services\/orders/);
+    assert.equal((second.match(/Adaptive delivery lifecycle/g) ?? []).length, 1, 'no duplicate stale snapshot');
+    assert.ok(managed.checks.commands.includes("cd 'services/orders' && npm run test:api"));
+    assert.match(second, /not a production approval/);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('member workflow survives reopening, reaches reviewers, and can be cleared without changing safety policy', { skip: !supported, timeout: 90000 }, async () => {
+  const root = project();
+  const { currentWorkflow } = await import('../packages/piagent-core/managed/workflow-context.mjs');
+  const agent = broker({ plan: 'suggest', verify: 'require', review: 'require', max_fix_loops: 2 });
+  const selection = { task: 'Fix a.txt', method: 'Team requirement skill', basis: 'member', evidence: 'Use our team workflow and existing plan.', sources: [
+    { purpose: 'plan', scope: 'fixture', ref: 'team-specs/fix-plan.md', revision: 'known-revision' },
+  ], openQuestions: [] };
+  const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [
+      { tool: 'workflow_context', input: { action: 'adopt', expectedRevision: 0, reason: 'The member chose the team method.', selection } },
+      { tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } },
+      { tool: 'bash', input: { command: 'sh check.sh' } }, 'Done using the existing plan.',
+      { tool: 'workflow_context', input: { action: 'clear', expectedRevision: 1, reason: 'The member requested no remembered method for the next task.' } }, 'Selection cleared.',
+      'No remembered method.',
+    ], review: ['```json\n{"findings":[],"brief_issues":[],"summary":"clean"}\n```'] };
+  const server = await studio(script);
+  let managed;
+  try {
+    managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+    await managed.session.prompt('Use our team workflow and existing plan. Make a.txt say fixed.');
+    const manager = managed.session.sessionManager;
+    assert.equal(currentWorkflow(manager).selection.method, selection.method);
+    assert.equal(fs.existsSync(path.join(root, 'team-specs')), false, 'recording a reference does not create a spec or plan');
+    assert.equal(managed.run, null);
+    assert.equal(runReport(agent).verified, true);
+    assert.equal(runReport(agent).reviewed, true, 'choosing a method does not bypass verification or review');
+    const reviewer = server.requests.find(r => r.role === 'review');
+    assert.match(JSON.stringify(reviewer.body.messages), /team-specs\/fix-plan.md/);
+    assert.match(JSON.stringify(reviewer.body.messages), /not proof of approval/);
+    assert.ok(!reviewer.body.tools.some(t => t.name === 'workflow_context'), 'helper has read-only context, not the selection tool');
+    await managed.dispose(); managed = null;
+    managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent, sessionManager: manager });
+    const offset = server.requests.length;
+    await managed.session.prompt('Stop using the remembered workflow. Clear it for the next task; do not change files.');
+    const resumed = JSON.stringify(server.requests.slice(offset).find(r => r.role === 'main').body.system);
+    assert.match(resumed, /Team requirement skill/);
+    assert.match(resumed, /team-specs\/fix-plan.md/);
+    assert.equal(currentWorkflow(manager).selection, null);
+    await managed.session.prompt('Explain the available options, without changing files.');
+    const fresh = JSON.stringify(server.requests.at(-1).body.system);
+    assert.doesNotMatch(fresh, /team-specs\/fix-plan.md/, 'cleared selection not revived by history');
+    assert.match(fresh, /member chooses how to do requirements/);
+    assert.match(fresh, /harness reviews the final patch/);
+  } finally { await managed?.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});

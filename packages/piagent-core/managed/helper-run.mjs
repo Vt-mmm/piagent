@@ -10,6 +10,7 @@ import { shareGrant, releaseGrant } from './grant-share.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { reviewParts, mergeReviews, REVIEW_PARALLEL, emptySnapshot, readBranchBase, readPatchDigest, readPatchSnapshot, resolveReviewBase } from './patch-snapshot.mjs';
 import { reviewFindings, briefIssues } from './workflow.mjs';
+import { currentWorkflow, helperWorkflowPrompt } from './workflow-context.mjs';
 import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
 import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-roles.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
@@ -101,7 +102,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
           ...(setup.web ? managed.webTools(runtime, role) : []), ...memory], resourceLoader: managedResourceLoader(managed.api, { systemPrompt: setup.prompt }) });
       sessions.add(session); trackToolFailures(managed, session, role);
       const abort = () => void session.abort(); signal?.addEventListener('abort', abort, { once: true });
-      try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + checks + extra, { expandPromptTemplates: false }); }
+      try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + helperWorkflowPrompt(currentWorkflow(managed.session.sessionManager)) + checks + extra, { expandPromptTemplates: false }); }
       finally { signal?.removeEventListener('abort', abort); }
       const messages = session.messages.filter(m => m.role === 'assistant');
       // The main agent (and the member) learn why a helper failed, not just that it did.

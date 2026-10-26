@@ -4,6 +4,7 @@ import { reviewUnavailableReason } from './patch-snapshot.mjs';
 import { failureCode } from '../runtime/managed-failure.mjs';
 import { TsDiagnostics } from './ts-diagnostics.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
+import { discoverDeliveryContext } from './delivery-context.mjs';
 
 // The process layer of the company harness: a plan for multi-step work, the
 // repository's checks after a code change, an independent review of the patch.
@@ -43,20 +44,28 @@ export function detectedChecks(dir) {
     try {
       const scripts = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).scripts ?? {};
       const runner = has('pnpm-lock.yaml') ? 'pnpm' : has('yarn.lock') ? 'yarn' : has('bun.lock') || has('bun.lockb') ? 'bun' : 'npm';
-      for (const name of ['typecheck', 'lint', 'test']) if (typeof scripts[name] === 'string') out.push(name === 'test' && runner === 'npm' ? 'npm test' : `${runner} run ${name}`);
+      for (const name of ['typecheck', 'type-check', 'lint', 'test', 'test:unit', 'test:integration', 'test:api', 'test:contract', 'test:e2e']) if (typeof scripts[name] === 'string') out.push(name === 'test' && runner === 'npm' ? 'npm test' : `${runner} run ${name}`);
     } catch { /* not JSON: nothing implied */ }
   }
   if (has('go.mod')) out.push('go vet ./...', 'go test ./...');
   if (has('Package.swift')) out.push('swift build', 'swift test');
   if (has('Cargo.toml')) out.push('cargo check', 'cargo test');
-  if (has('pyproject.toml') || has('pytest.ini')) out.push('pytest');
-  return out.slice(0, 6);
+  if (has('pyproject.toml') || has('pytest.ini')) out.push(has('uv.lock') ? 'uv run pytest' : 'pytest');
+  if (has('pom.xml')) out.push(has('mvnw') ? './mvnw verify' : 'mvn verify');
+  if (has('build.gradle') || has('build.gradle.kts')) out.push(has('gradlew') ? './gradlew test' : 'gradle test');
+  return out.slice(0, 16);
 }
 export function repositoryChecks(agentsFiles, cwd, top = cwd) {
   const declared = declaredChecks(agentsFiles);
   if (declared.length) return { source: 'agents', commands: declared };
   const detected = detectedChecks(cwd);
-  return { source: 'detected', commands: detected.length || cwd === top ? detected : detectedChecks(top) };
+  // Include package/repository-local checks even when the workspace root has a
+  // lint command. These are candidates, not a request to test unrelated repos.
+  const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+  const nested = discoverDeliveryContext(cwd).units.filter(unit => unit.path !== '.').flatMap(unit =>
+    detectedChecks(path.join(cwd, unit.path)).map(command => `cd ${quote(unit.path)} && ${command}`));
+  const commands = [...new Set([...detected, ...nested])].slice(0, 64);
+  return { source: 'detected', commands: commands.length || cwd === top ? commands : detectedChecks(top) };
 }
 // A command that verifies code: a declared check, or a known test, type,
 // lint or build runner. Text tools that merely mention one do not count.
