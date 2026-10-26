@@ -115,13 +115,17 @@ export function reviewUnavailableReason(message) {
 // or since the branch left its default branch.
 const against = (value, from = null) => from?.kind === 'since' ? `diff against ${from.ref} (${String(value.base ?? '').slice(0, 12)}): the commits made since, and changes not committed yet`
   : from?.kind === 'branch' ? `diff against where this branch left ${from.ref} (${String(value.base ?? '').slice(0, 12)}): the branch's commits, and changes not committed yet`
-  : value?.base ? `diff against the commit the turn started from (${String(value.base).slice(0, 12)}), commits made since included` : 'diff against HEAD';
+  : value?.base ? `diff against the commit the turn started from (${String(value.base).slice(0, 12)}), commits made since included`
+  : value?.repositories?.length ? `diff against HEAD of each repository in this folder (${value.repositories.join(', ')}); paths are relative to the folder` : 'diff against HEAD';
+// A new entry a reviewer cannot read, and why.
+const unread = f => f.mode === 'outside' ? `${f.path} (outside any Git repository, not reviewed)` : f.mode === 'directory' ? `${f.path} (a repository of its own)` : `${f.path} (${f.bytes} bytes, too large to review)`;
 // The patch as a reviewer reads it: the diff, then each new file in full.
 export function reviewText(snapshot) {
   let value;
   try { value = JSON.parse(snapshot.patch); } catch { return `Patch snapshot ${snapshot.digest}:\n${snapshot.patch}`; }
   const files = (value.untracked ?? []).map(f => f.mode === 'symlink' ? `=== new symlink ${f.path} -> ${f.target}`
     : f.mode === 'directory' ? `=== new folder ${f.path} (a repository of its own, not reviewed)`
+    : f.mode === 'outside' ? `=== changed file ${unread(f)}`
     : f.encoding === 'omitted' ? `=== new file ${f.path} (${f.bytes} bytes, too large to review)`
     : f.encoding === 'utf8' ? `=== new file ${f.path}\n${f.contents}` : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`);
   return `Patch snapshot ${snapshot.digest}:\n--- ${against(value, snapshot.from)} ---\n${value.patch || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
@@ -143,7 +147,7 @@ export function reviewParts(snapshot, size = REVIEW_PART_BYTES) {
   const whole = reviewText(snapshot);
   let value;
   try { value = JSON.parse(snapshot.patch); } catch { value = null; }
-  const omitted = (value?.untracked ?? []).filter(f => f.encoding === 'omitted').map(f => ({ path: f.path, bytes: f.bytes, ...(f.mode === 'directory' ? { repository: true } : {}) }));
+  const omitted = (value?.untracked ?? []).filter(f => f.encoding === 'omitted').map(f => ({ path: f.path, bytes: f.bytes, ...(f.mode === 'directory' ? { repository: true } : f.mode === 'outside' ? { outside: true } : {}) }));
   if (!value || Buffer.byteLength(whole) <= size && !omitted.length) return { parts: [{ files: null, text: whole }], omitted: [] };
   const sections = [];
   for (const text of String(value.patch ?? '').split(/(?=^diff --git )/m).filter(Boolean)) {
@@ -163,7 +167,7 @@ export function reviewParts(snapshot, size = REVIEW_PART_BYTES) {
     else groups.push({ sections: [section], bytes: section.bytes });
   }
   if (groups.length > REVIEW_PARTS_MAX) throw Error('managed-review-patch-too-large');
-  const skipped = omitted.length ? `\nNot read: ${omitted.map(o => o.repository ? `${o.path} (a repository of its own)` : `${o.path} (${o.bytes} bytes, too large to review)`).join(', ')}.` : '';
+  const skipped = omitted.length ? `\nNot read: ${omitted.map(o => unread({ ...o, mode: o.repository ? 'directory' : o.outside ? 'outside' : null })).join(', ')}.` : '';
   const parts = groups.map((group, i) => {
     const files = group.sections.map(s => s.file), diff = group.sections.filter(s => s.kind === 'diff').map(s => s.text).join(''), news = group.sections.filter(s => s.kind === 'new').map(s => s.text);
     const head = groups.length === 1 ? `Patch snapshot ${snapshot.digest}.` : `Patch snapshot ${snapshot.digest}, part ${i + 1} of ${groups.length}. This part's files: ${files.join(', ')}. The other parts are reviewed separately: judge this part, and read other files only for context.`;

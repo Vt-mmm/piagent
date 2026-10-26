@@ -124,7 +124,7 @@ function useConversationScroll(sessionRef: string, ready: boolean) {
     anchor.current = { key: first.dataset.turn, top: first.getBoundingClientRect().top, until: Date.now() + HOLD_MS };
   };
   // Back to the newest message: follow the end again and drop any pin.
-  const follow = () => { release(); following.current = true; };
+  const follow = () => { release(); following.current = true; scrolledUp.current = false; };
   return { content, hold, reapply, scrolledUp, follow };
 }
 
@@ -191,7 +191,10 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     // The latest transcript, not this render's: the next page may be asked for
     // before the previous one has rendered.
     const latest = transcriptRef.current, before = latest?.page.nextBeforeCursor;
-    if (!latest || !before || loadingOlderRef.current) return;
+    if (!latest?.page.hasOlder || !before || loadingOlderRef.current) return;
+    // Consume this upward movement. Appending and anchoring a page is not a
+    // request to drain another page; the reader must move up again.
+    scrolledUp.current = false;
     loadingOlderRef.current = true; hold(); setLoadingOlder(true); setOlderError(false);
     try {
       const older = await readSessionTranscript(sessionRef, before, latest.page.limit);
@@ -209,19 +212,32 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
   useLayoutEffect(() => { reapply(); }, [items.length, loadingOlder]);
   // Older messages load on their own as the reader nears the top, once they
   // have scrolled up themselves; the button stays for keyboards and failures.
-  const sentinel = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null), autoLoad = useRef<() => void>(() => {});
+  const hasOlder = Boolean(transcript?.page.hasOlder);
+  autoLoad.current = () => {
+    if (!scrolledUp.current || olderError || loadingOlderRef.current) return;
+    // Intersection records describe a previous layout. Recheck after anchoring:
+    // a queued "intersecting" record must not load a second page off screen.
+    const bounds = sentinel.current?.getBoundingClientRect();
+    if (bounds && bounds.bottom >= -900 && bounds.top <= window.innerHeight) void loadOlder();
+  };
   useEffect(() => {
-    const node = sentinel.current; if (!node || !transcript?.page.hasOlder || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && scrolledUp.current && !olderError) void loadOlder();
+    const node = sentinel.current; if (!node || !hasOlder) return;
+    let frame = 0;
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(() => { frame = 0; autoLoad.current(); }); };
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting)) schedule();
     }, { rootMargin: "900px 0px 0px 0px" });
-    observer.observe(node);
-    return () => observer.disconnect();
-  });
+    observer?.observe(node);
+    // A scroll can set upward intent after an observer has already reported
+    // intersection. Check on scroll too; waiting for another edge can stall.
+    window.addEventListener("scroll", schedule, { passive: true });
+    return () => { observer?.disconnect(); window.removeEventListener("scroll", schedule); window.cancelAnimationFrame(frame); };
+  }, [sessionRef, hasOlder]);
   const liveAnswer = live ? successfulAssistantText(live.assistant || "") : null;
   return <CheckpointTimeline sessionRef={sessionRef} refresh={`${refreshIdentity.key}:${reload}`} running={!!live && !live.complete && !live.error} locale={locale}>
     <Stack ref={content} spacing={3}>
-    {transcript?.page.hasOlder && <Box ref={sentinel}>{loadingOlder
+    {transcript?.page.hasOlder && <Box ref={sentinel} data-history-sentinel>{loadingOlder
       ? <TranscriptSkeleton label={localize(locale, "Đang tải tin cũ hơn", "Loading older messages")} />
       : <Box sx={{ textAlign: "center" }}><Button size="small" variant="text" color="inherit" startIcon={<HistoryRounded />} onClick={() => void loadOlder()}
         sx={{ color: olderError ? "warning.main" : "text.secondary" }}>

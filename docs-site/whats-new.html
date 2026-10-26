@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.43.3" title="v1.43.3 docs · VI"><span class="dot"></span>v1.43.3</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.43.4" title="v1.43.4 docs · VI"><span class="dot"></span>v1.43.4</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,11 +108,25 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-43-3" data-release>
+<article class="release latest" id="v1-43-4" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-4">v1.43.4</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-4-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project</h3>
+    <p>Cuộc trò chuyện công ty nhận diện project và kế thừa skill, plan, nguồn requirement của Dev, không ép thêm phương pháp mới. Giữ nguyên quyền hạn và cơ chế duyệt.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Tải lịch sử kiểm tra lại vị trí cuộn và phản hồi khi cuộn lên, tránh sự kiện observer cũ tải thừa trang hoặc làm lịch sử ngừng tải.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Review chạy được ở thư mục chứa nhiều repo: mỗi file thay đổi được review trong repo của nó, file ngoài repo được ghi rõ là không review.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-43-3" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-43-3">v1.43.3</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-43-3-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project</h3>
-    <p>Cuộc trò chuyện công ty nhận diện project và kế thừa skill, plan, nguồn requirement của Dev, không ép thêm phương pháp mới. Giữ nguyên quyền hạn và cơ chế duyệt.</p>
+    <h3 data-toc-skip id="v1-43-3-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project <span class="tag">không phát hành</span></h3>
+    <p>Đã tag nhưng chưa publish: E2E lịch sử WebUI trên Linux phát hiện race giữa scroll và observer. Thay bằng 1.43.4.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
@@ -124,7 +138,7 @@
   <div class="release-meta"><a class="release-version" href="#v1-43-2">v1.43.2</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-2-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project <span class="tag">không phát hành</span></h3>
-    <p>Đã tag nhưng chưa publish: wording prompt trùng chuỗi lệnh bị cấm trong test native session. Thay bằng 1.43.3.</p>
+    <p>Đã tag nhưng chưa publish: wording prompt trùng chuỗi lệnh bị cấm trong test native session. Thay bằng 1.43.4.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
@@ -136,7 +150,7 @@
   <div class="release-meta"><a class="release-version" href="#v1-43-1">v1.43.1</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-1-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project <span class="tag">không phát hành</span></h3>
-    <p>Đã tag nhưng chưa publish: một bullet release note vượt giới hạn độ dài. Thay bằng 1.43.3.</p>
+    <p>Đã tag nhưng chưa publish: một bullet release note vượt giới hạn độ dài. Thay bằng 1.43.4.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
@@ -148,7 +162,7 @@
   <div class="release-meta"><a class="release-version" href="#v1-43-0">v1.43.0</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-0-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project <span class="tag">không phát hành</span></h3>
-    <p>Đã tag nhưng chưa publish: gate wording tài liệu chặn phát hành. Thay bằng 1.43.3.</p>
+    <p>Đã tag nhưng chưa publish: gate wording tài liệu chặn phát hành. Thay bằng 1.43.4.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
@@ -414,24 +428,22 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-32-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-32-0">v1.32.0</a><time class="release-date" datetime="2026-10-19">19/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-32-0-title">Lượt lỗi hoặc bấm Stop được dừng cả ở Studio</h3>
-    <p>Khi lượt trả lời của cuộc trò chuyện công ty lỗi hoặc bạn bấm Stop, Piagent báo Studio dừng yêu cầu, để tài khoản rảnh ngay cho lượt sau.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thông báo lỗi mới cho câu trả lời quá dài, yêu cầu bị hủy và yêu cầu bị thay thế; câu trả lời quá dài được hỏi lại.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lượt bị đứt kết nối có thể vẫn chạy ở Studio tới 10 phút, khiến mọi lần thử lại bị báo &quot;tài khoản đang bận&quot;; giờ Studio được báo để dừng.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.32.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">44</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">45</span></summary>
+    <div class="archive-row" id="v1-32-0">
+      <div class="archive-head"><a class="release-version" href="#v1-32-0">v1.32.0</a> <span class="release-date">19/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Lượt lỗi hoặc bấm Stop được dừng cả ở Studio</strong> — Khi lượt trả lời của cuộc trò chuyện công ty lỗi hoặc bạn bấm Stop, Piagent báo Studio dừng yêu cầu, để tài khoản rảnh ngay cho lượt sau.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thông báo lỗi mới cho câu trả lời quá dài, yêu cầu bị hủy và yêu cầu bị thay thế; câu trả lời quá dài được hỏi lại.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lượt bị đứt kết nối có thể vẫn chạy ở Studio tới 10 phút, khiến mọi lần thử lại bị báo &quot;tài khoản đang bận&quot;; giờ Studio được báo để dừng.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-31-1">
       <div class="archive-head"><a class="release-version" href="#v1-31-1">v1.31.1</a> <span class="release-date">19/10/2026</span></div>
       <div class="archive-body">

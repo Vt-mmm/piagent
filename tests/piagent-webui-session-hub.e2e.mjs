@@ -2484,6 +2484,62 @@ test("older messages load on their own as the reader scrolls up, without moving 
   } finally { pagedHistory = null; }
 });
 
+// Deliver a stale observer record or suppress observer edges altogether. Both
+// orderings occur when scroll intent, React layout and observer delivery race.
+// Keep real scrolling/layout and API responses: no timeouts/assertions relaxed.
+async function controlHistoryObserver(page, suppress) {
+  await page.addInitScript(({ suppress }) => {
+    const NativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback, options) {
+        super((entries, observer) => callback(entries.filter(entry => !suppress || !entry.target.__historySentinel), observer), options);
+        this.deliver = callback;
+      }
+      observe(target) {
+        if (target.hasAttribute("data-history-sentinel") || /Tải tin cũ hơn|Load older messages/.test(target.querySelector("button")?.textContent ?? "")) {
+          target.__historySentinel = true;
+          window.__replayHistoryIntersection = () => this.deliver([{ target, isIntersecting: true }], this);
+        }
+        super.observe(target);
+      }
+    };
+  }, { suppress });
+}
+
+test("a queued history intersection cannot fetch offscreen pages after anchoring", async ({ page }) => {
+  pagedHistory = longHistory(120); historyReads.length = 0;
+  await controlHistoryObserver(page, false);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Việc số 119: sửa lỗi phân trang.", { exact: true })).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 700));
+    await expect(page.locator("[data-turn]")).toHaveCount(100);
+    // The first page has pushed the sentinel out of its 900px prefetch zone.
+    await expect.poll(() => page.getByRole("button", { name: "Tải tin cũ hơn" }).evaluate(node => node.getBoundingClientRect().bottom)).toBeLessThan(-900);
+    await page.evaluate(() => window.__replayHistoryIntersection());
+    await page.waitForTimeout(600);
+    expect(historyReads.filter(Boolean)).toEqual(["history_140"]);
+    await expect(page.locator("[data-turn]")).toHaveCount(100);
+  } finally { pagedHistory = null; }
+});
+
+test("upward scrolling inside the history zone loads even without a new observer edge", async ({ page }) => {
+  pagedHistory = longHistory(120); historyReads.length = 0;
+  await controlHistoryObserver(page, true);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Việc số 119: sửa lỗi phân trang.", { exact: true })).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 700));
+    await expect(page.locator("[data-turn]")).toHaveCount(100);
+    expect(historyReads.filter(Boolean)).toEqual(["history_140"]);
+    await page.evaluate(() => window.scrollTo(0, 300));
+    await expect(page.locator("[data-turn]")).toHaveCount(120);
+    expect(historyReads.filter(Boolean)).toEqual(["history_140", "history_40"]);
+  } finally { pagedHistory = null; }
+});
+
 // The page keeps a bounded window of history. When older pages fill it, the
 // newest messages leave it, and the reader is offered a way back to them
 // instead of finding the end of the conversation silently gone.
