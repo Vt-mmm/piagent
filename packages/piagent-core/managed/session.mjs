@@ -22,9 +22,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction } from './compaction.mjs';
 import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from './patch-snapshot.mjs';
 import { memberTurn } from './continuation.mjs';
-import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
-import { discoverDeliveryContext, deliveryPrompt } from './delivery-context.mjs';
-import { currentWorkflow, workflowContextTool, workflowContextPrompt } from './workflow-context.mjs';
+import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
+import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
 import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
@@ -128,11 +127,7 @@ export class ManagedSession {
     if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles) + SPEC_PROMPT,
       parameters: delegateParameters(), // the brief and its structured fields (helper-settlement.mjs)
       execute: (_id, args, signal) => self.delegate(delegateArgs(self, args), signal) });
-    customTools.push(planTool(async plan => {
-      self.session.sessionManager.appendCustomEntry(PLAN_ENTRY, { ...plan, at: new Date().toISOString() });
-      if (self.run) self.run.planUpdated = true;
-      return { content: [{ type: 'text', text: `Plan updated: ${plan.plan.filter(p => p.status === 'completed').length}/${plan.plan.length} steps completed.` }], details: { plan: plan.plan } };
-    }));
+    customTools.push(sessionPlanTool(self));
     // The member decides what the request leaves open: numbered options, or their own words.
     customTools.push(workflowContextTool(() => self.session.sessionManager));
     customTools.push(askTool(self), ...memoryToolsFor(self, agentDir)); // team memory's tools, once Studio answered memory here (memory.mjs)
@@ -140,14 +135,8 @@ export class ManagedSession {
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
-      skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, [
-        ...terminalExtensions,
-        extension => extension.on('before_agent_start', event => ({
-          // Refresh every task, including a resumed conversation. Discovery is
-          // context only; it never changes the tool/approval boundary.
-          systemPrompt: event.systemPrompt + workflowContextPrompt(currentWorkflow(self.session.sessionManager)) + deliveryPrompt(discoverDeliveryContext(self.cwd)),
-        })),
-      ]) });
+      skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd,
+        [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)]) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main')); self.studioLink = new StudioLink({ origin: self.origin, agentDir, notify: event => self.notify(event), ui: () => self.session?.extensionRunner?.getUIContext?.() });
     const scope = scopeOf(self.origin, manifest);

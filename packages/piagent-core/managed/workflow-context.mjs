@@ -1,6 +1,16 @@
 // Optional working context, not an approval record. The agent records the
 // member's method and source references; it cannot grant access or relax the
 // company's policy. No referenced file is opened or executed by this module.
+import { discoverDeliveryContext, deliveryPrompt } from './delivery-context.mjs';
+
+// Refresh on every agent start, including reopened conversations. Context
+// composition lives here, keeping session orchestration within its budget.
+export function workflowContextExtension(cwd, managerOf) {
+  return extension => extension.on('before_agent_start', event => ({
+    systemPrompt: event.systemPrompt + workflowContextPrompt(currentWorkflow(managerOf())) + deliveryPrompt(discoverDeliveryContext(cwd)),
+  }));
+}
+
 export const WORKFLOW_ENTRY = 'agent-watch-workflow-context';
 const PURPOSES = ['method', 'requirement', 'plan', 'tasks', 'reference'];
 const BASES = ['member', 'project', 'existing-task'];

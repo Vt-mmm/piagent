@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.0" title="v1.43.0 docs · EN"><span class="dot"></span>v1.43.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.1" title="v1.43.1 docs · EN"><span class="dot"></span>v1.43.1</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,11 +108,23 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-43-0" data-release>
+<article class="release latest" id="v1-43-1" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-1">v1.43.1</a><time class="release-date" datetime="2026-10-26">Oct 26, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-1-title">Your workflow, with adaptive backend and frontend support</h3>
+    <p>Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The lifecycle is guidance adapted to the chosen workflow and requested stopping point, not mandatory spec files or an automatic release gate. A selected skill never grants access or waives verification, review or deployment approval.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-43-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-43-0">v1.43.0</a><time class="release-date" datetime="2026-10-26">Oct 26, 2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-43-0-title">Your workflow, with adaptive backend and frontend support</h3>
-    <p>Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.</p>
+    <h3 data-toc-skip id="v1-43-0-title">Your workflow, with adaptive backend and frontend support <span class="tag">not published</span></h3>
+    <p>Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.1.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">New</span><span>Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.</span></li>
       <li data-kind="new"><span class="kind kind-new">New</span><span>Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.</span></li>
@@ -417,24 +429,23 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.30.0</p>
   </div>
 </article>
-<article class="release" id="v1-30-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-30-1">v1.30.1</a><time class="release-date" datetime="2026-10-18">Oct 18, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-30-1-title">Company Terminal hides model names; clear message in the home folder</h3>
-    <p>The company Terminal shows roles instead of model ids, and <code>piagent studio</code> in the home folder now says why it cannot open there and what to do.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Pi's start-up warnings no longer point at /bug, which is off in company conversations, or name a model.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The company Terminal showed the Harness's model ids in its header, footer and /model answers; it now shows roles, such as <code>Main agent • Rất cao</code>.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Running <code>piagent studio</code> in the home folder wrongly said Agent Watch or Piagent had changed; it now says to open a project folder or use <code>--project</code>.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">41</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">42</span></summary>
+    <div class="archive-row" id="v1-30-1">
+      <div class="archive-head"><a class="release-version" href="#v1-30-1">v1.30.1</a> <span class="release-date">Oct 18, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Company Terminal hides model names; clear message in the home folder</strong> — The company Terminal shows roles instead of model ids, and <code>piagent studio</code> in the home folder now says why it cannot open there and what to do.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Pi's start-up warnings no longer point at /bug, which is off in company conversations, or name a model.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The company Terminal showed the Harness's model ids in its header, footer and /model answers; it now shows roles, such as <code>Main agent • Rất cao</code>.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Running <code>piagent studio</code> in the home folder wrongly said Agent Watch or Piagent had changed; it now says to open a project folder or use <code>--project</code>.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-30-0">
       <div class="archive-head"><a class="release-version" href="#v1-30-0">v1.30.0</a> <span class="release-date">Oct 18, 2026</span></div>
       <div class="archive-body">

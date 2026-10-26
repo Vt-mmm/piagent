@@ -121,6 +121,15 @@ export function planTool(run) {
     execute: async (_id, args) => run(normalizePlan(args)) };
 }
 
+// Session persistence belongs to the plan tool, not session orchestration.
+export function sessionPlanTool(owner) {
+  return planTool(async plan => {
+    owner.session.sessionManager.appendCustomEntry(PLAN_ENTRY, { ...plan, at: new Date().toISOString() });
+    if (owner.run) owner.run.planUpdated = true;
+    return { content: [{ type: 'text', text: `Plan updated: ${plan.plan.filter(p => p.status === 'completed').length}/${plan.plan.length} steps completed.` }], details: { plan: plan.plan } };
+  });
+}
+
 // The guidance a policy adds to the main agent's system prompt.
 export function workflowPrompt(policy, checks) {
   const lines = [];

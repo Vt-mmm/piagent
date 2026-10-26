@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:6d46f8946eb8c39e964dd19d787a68b6bc872ba144972eb12beabef4d270d9a5",
+    "packageDigest": "sha256:5e13c83f36d71f2848759c5085793c50df2214a15fca3842c559e3311f4f7df0",
     "packageSource": "../",
-    "packageVersion": "1.43.0",
+    "packageVersion": "1.43.1",
     "runtimeFiles": [
       {
         "byteSize": 7020,
-        "digest": "sha256:2fff3672ec1d7d5eb363999893e242844e301f59f6e64ba0e90dbf70f193c90d",
+        "digest": "sha256:d2bd87ebdbf71f7efa9c0bb4e4eb11e95a73bf7ec6d2facff4d2bb283dbe3909",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:ea6b8dce5c06f51670230eb36691ec3335a828b130409978b2727a3ae87e5808",
+        "digest": "sha256:bd1ec3cf1978bb0820f283344a5ccaa3bc18e138d55bdbfb6afc899d73859fa9",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1418,8 +1418,8 @@
         "path": "packages/piagent-core/managed/session-mutation-observations.mjs"
       },
       {
-        "byteSize": 41483,
-        "digest": "sha256:935ba0573edd3323c78a5535298f8142684612bf5eceb2b7decb9d4d7a45daa0",
+        "byteSize": 40684,
+        "digest": "sha256:774ee424a65543df299c90bf2b15f536aa63336ed6b4ea6d52a9172942f05efa",
         "path": "packages/piagent-core/managed/session.mjs"
       },
       {
@@ -1508,13 +1508,13 @@
         "path": "packages/piagent-core/managed/web-search.mjs"
       },
       {
-        "byteSize": 11188,
-        "digest": "sha256:53693bea30e425eadb0ff016f4702fdf4840415164482fd878791c6fedae330e",
+        "byteSize": 11699,
+        "digest": "sha256:23419cfd6b7364ad0c319cefb14e43dd187e364389af5ef6ffdf0eae7e9d5a90",
         "path": "packages/piagent-core/managed/workflow-context.mjs"
       },
       {
-        "byteSize": 39986,
-        "digest": "sha256:e3d0f6298776f8c723cbd6ad7b39004b5b7c9e751a8bc54592a1f92927ca6a3b",
+        "byteSize": 40494,
+        "digest": "sha256:c21b58d839a7b592f569d9eb992ca70ca177292ee3b9f6c9ecff4e1086927051",
         "path": "packages/piagent-core/managed/workflow.mjs"
       },
       {
@@ -1579,7 +1579,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:ea6b8dce5c06f51670230eb36691ec3335a828b130409978b2727a3ae87e5808",
+        "digest": "sha256:bd1ec3cf1978bb0820f283344a5ccaa3bc18e138d55bdbfb6afc899d73859fa9",
         "path": "packages/piagent-core/package.json"
       },
       {
