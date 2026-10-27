@@ -4,6 +4,18 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.43.6 - 2026-10-27
+
+**Watch the agent's edits while it runs.** Changes and Review follow a running turn, so a run going wrong can be caught and stopped early, and a turn still running never looks finished.
+
+### Improved
+
+- The Workspace panel lists changed files and opens Review while the agent runs, refreshing every few seconds; Review follows the run too.
+
+### Fixed
+
+- An answer the harness sends back to run checks is marked as interim, and the turn keeps showing that it runs, with Stop, until the checks finish.
+
 ## v1.43.5 - 2026-10-27
 
 **Image previews and office attachments.** Sent images show as pictures, spreadsheets and slide decks attach directly, and screenshot-heavy tasks no longer stop on Studio's request size limit.

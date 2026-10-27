@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.43.6`: xem thay đổi và Review khi agent đang chạy; trạng thái đang chạy không bị ẩn sau câu trả lời giữa chừng.
 - `1.43.5`: preview ảnh đính kèm, đọc thêm .xlsx/.pptx/.odt/.ods/.odp/.rtf, ảnh cũ không làm request vượt 4 MiB, text trả lời tách đoạn.
 - `1.43.4`: adaptive workflow Dev chọn và sửa race tải lịch sử WebUI khi cuộn lên; giữ nguyên kiểm chứng và approval.
 - `1.43.3`: (tag, chưa publish do E2E lịch sử WebUI) adaptive workflow Dev lựa chọn; giữ safety, qua kiểm tra wording/native session và release notes.

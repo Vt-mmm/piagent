@@ -1,5 +1,31 @@
 [
   {
+    "version": "1.43.6",
+    "date": "2026-10-27",
+    "status": "stable",
+    "title": {
+      "en": "Watch the agent's edits while it runs",
+      "vi": "Xem thay đổi của agent ngay khi đang chạy"
+    },
+    "summary": {
+      "en": "Changes and Review follow a running turn, so a run going wrong can be caught and stopped early, and a turn still running never looks finished.",
+      "vi": "Thay đổi và Review cập nhật theo lượt đang chạy, thấy sai thì dừng sớm được, và lượt còn chạy không còn trông như đã xong."
+    },
+    "items": [
+      {
+        "kind": "improved",
+        "en": "The Workspace panel lists changed files and opens Review while the agent runs, refreshing every few seconds; Review follows the run too.",
+        "vi": "Panel Workspace liệt kê file thay đổi và mở được Review khi agent đang chạy, tự làm mới vài giây một lần; Review cũng cập nhật theo."
+      },
+      {
+        "kind": "fixed",
+        "en": "An answer the harness sends back to run checks is marked as interim, and the turn keeps showing that it runs, with Stop, until the checks finish.",
+        "vi": "Câu trả lời bị harness trả lại để chạy check được ghi là giữa chừng, và lượt vẫn hiện đang chạy kèm nút Dừng cho tới khi check xong."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.43.5",
     "date": "2026-10-27",
     "status": "stable",
