@@ -5,7 +5,9 @@ export type LiveActivity = { toolCallRef: string; toolLabel: string; fileLabel?:
   reasonCode?: string | null; startedAt?: string; finishedAt?: string | null };
 export type OperationSettlement = "completed" | "blocked" | "aborted" | "error" | "unknown";
 export type UserMessageDelivery = "submitting" | "admitted" | "unconfirmed";
-export type LiveConversation = { user: string; assistant: string; attachments: Attachment[]; activities: LiveActivity[];
+// `assistantMessageRef` is the model message the streamed text last came from:
+// a turn with tools answers in several messages, and each starts a paragraph.
+export type LiveConversation = { user: string; assistant: string; assistantMessageRef?: string | null; attachments: Attachment[]; activities: LiveActivity[];
   operationRef: string | null; complete: boolean; error: string | null; settlement?: OperationSettlement | null;
   messageRequestId?: string | null; delivery?: UserMessageDelivery | null;
   abortable?: boolean; runtimeRecovery?: "required" | "restarting" | "recovered" | "failed" | null;
@@ -19,6 +21,16 @@ export type TerminalOperationActivity = {
   settledAt: string;
   sequence: number;
 };
+
+// Appends streamed text; text from a new model message starts a new paragraph
+// rather than running on from the last sentence of the previous one.
+export function appendAssistantDelta(existing: Pick<LiveConversation, "assistant" | "assistantMessageRef"> | undefined,
+  messageRef: unknown, delta: string): { assistant: string; assistantMessageRef: string | null } {
+  const ref = typeof messageRef === "string" ? messageRef : existing?.assistantMessageRef ?? null;
+  const previous = existing?.assistant ?? "";
+  const separator = previous && ref !== (existing?.assistantMessageRef ?? null) && !/\n\n$/.test(previous) ? (previous.endsWith("\n") ? "\n" : "\n\n") : "";
+  return { assistant: `${previous}${separator}${delta}`, assistantMessageRef: ref };
+}
 
 export function canonicalLiveStateSequence(projection: PiagentWebUICanonicalVolatileSessionOperationStateV1 | undefined,
   gatewayInstanceRef: string): number | null {

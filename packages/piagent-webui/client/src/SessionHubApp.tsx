@@ -17,6 +17,7 @@ import AppBar from "@mui/material/AppBar";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Collapse from "@mui/material/Collapse";
@@ -38,8 +39,9 @@ import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/genera
 import { readSessionConnections, readSessionCreationOptions, readSessionInspectionSnapshot, stageSessionAttachment,
   type SessionConnections } from "./api.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
-import { acceptAttribute, attachmentDetail, discardAttachment, dragCarriesFiles, MAX_ATTACHMENTS,
+import { acceptAttribute, attachmentDetail, attachmentHint, discardAttachment, dragCarriesFiles, MAX_ATTACHMENTS,
   stageFiles } from "./attachment-intake.ts";
+import { stagedPreviewUrl } from "./image-preview-cache.ts";
 import { CompanyReconnect, createFailureText } from "./CompanyReconnect.tsx";
 import { NewSessionPage } from "./NewSessionPage.tsx";
 import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
@@ -332,12 +334,14 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             : attachments.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn này`, `This message already holds ${MAX_ATTACHMENTS} files`)
               : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
           {canAttach && <Typography variant="caption" color="text.secondary">
-            {localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</Typography>}
+            {attachmentHint(locale)}</Typography>}
         </Box>}
         {attachments.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pb: .75 }}
           aria-label={localize(locale, "File sẽ gửi cùng tin nhắn", "Files to send with the message")}>
           {attachments.map((item) => <Chip key={item.attachmentRef} size="small" variant="outlined"
             color={item.kind === "document" ? "success" : "default"}
+            avatar={item.kind === "image" && stagedPreviewUrl(item.attachmentRef)
+              ? <Avatar variant="rounded" alt="" src={stagedPreviewUrl(item.attachmentRef)!} /> : undefined}
             label={`${item.displayName} · ${attachmentDetail(item, locale)}`}
             onDelete={submitting || sendUnconfirmed || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
             deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}

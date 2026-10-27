@@ -109,6 +109,32 @@ export async function stageCompaction(session, api, sdk) {
   };
 }
 
+// Studio takes at most 4 MiB per request body, and a summary is triggered by
+// tokens: an image costs ~1.6k tokens but its base64 can weigh half a megabyte,
+// so a run of screenshots overflows the body long before the window
+// (request_too_large at 130k tokens). Each request therefore carries only the
+// newest images within a byte and count budget; older ones become a line saying
+// so. The session keeps every image; only what is sent shrinks.
+export const REQUEST_IMAGE_BYTES = 2 * 1024 * 1024, REQUEST_IMAGE_COUNT = 20;
+export function boundRequestImages(messages, budget = REQUEST_IMAGE_BYTES, count = REQUEST_IMAGE_COUNT) {
+  let bytes = 0, kept = 0;
+  const out = [...messages];
+  for (let index = out.length - 1; index >= 0; index -= 1) {
+    const message = out[index];
+    if (!Array.isArray(message?.content) || !message.content.some(part => part?.type === 'image')) continue;
+    const content = [...message.content];
+    for (let at = content.length - 1; at >= 0; at -= 1) {
+      const part = content[at];
+      if (part?.type !== 'image') continue;
+      const size = typeof part.data === 'string' ? part.data.length : 0;
+      if (kept < count && bytes + size <= budget) { bytes += size; kept += 1; continue; }
+      content[at] = { type: 'text', text: `[Image left out of this request (${part.mimeType ?? 'image'}, ${Math.ceil(size * 3 / 4 / 1024)} KB): Studio takes at most 4 MiB per request, so only the newest images are sent again. Take a new screenshot or read the file again if you need to see it.]` };
+    }
+    out[index] = { ...message, content };
+  }
+  return out;
+}
+
 // What a compaction did, for Studio's logs (Logs → "Lượt agent"): its summary
 // calls name it (X-Agent-Compaction) and the main agent's next call says how
 // it ended (X-Agent-Compacted, see compactionHeaders). Pi's own token counts

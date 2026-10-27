@@ -90,7 +90,7 @@ export type DocumentWorkspaceDocument = {
   name: string | null;
   relativePath: string | null;
   rootRef: string | null;
-  format: "text" | "docx" | "pdf" | null;
+  format: "text" | "docx" | "pdf" | "office" | null;
   text: string | null;
   sizeBytes: number | null;
   truncated: boolean;

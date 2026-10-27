@@ -6,7 +6,7 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { backOffFailedCompaction, compactEarly, compactionTrigger } from '../packages/piagent-core/managed/compaction.mjs';
+import { boundRequestImages, backOffFailedCompaction, compactEarly, compactionTrigger } from '../packages/piagent-core/managed/compaction.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Long tasks: a company conversation shrinks by summary before it outgrows the
@@ -258,4 +258,23 @@ test('a failed summary is not asked again at every step: 1, 2, 4 … minutes, at
   end({ result: undefined, aborted: true });
   assert.equal(await session._runAutoCompaction('threshold', false), true, 'a stopped summary is not a failure');
   assert.equal(runs, 7);
+});
+
+test('a request carries only the newest images within the body budget; the session keeps them all', () => {
+  const image = (data) => ({ type: 'image', mimeType: 'image/png', data });
+  const messages = [
+    { role: 'user', content: [{ type: 'text', text: 'look' }, image('a'.repeat(400))] },
+    { role: 'toolResult', toolCallId: 't1', content: [{ type: 'text', text: 'shot 1' }, image('b'.repeat(400))] },
+    { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+    { role: 'toolResult', toolCallId: 't2', content: [image('c'.repeat(300)), image('d'.repeat(300))] }
+  ];
+  const before = JSON.stringify(messages);
+  const sent = boundRequestImages(messages, 1000, 20);
+  assert.equal(JSON.stringify(messages), before, 'the session messages are not changed');
+  const kinds = sent.map((message) => message.content.map((part) => part.type === 'image' ? part.data[0] : 'text'));
+  assert.deepEqual(kinds, [['text', 'text'], ['text', 'b'], ['text'], ['c', 'd']]);
+  assert.match(sent[0].content[1].text, /^\[Image left out of this request \(image\/png, 1 KB\)/);
+  assert.equal(sent[2], messages[2]);
+  // The count cap applies even when bytes would fit.
+  assert.equal(boundRequestImages(messages, 10_000, 2).flatMap((message) => message.content).filter((part) => part.type === 'image').length, 2);
 });

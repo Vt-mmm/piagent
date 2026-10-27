@@ -289,6 +289,24 @@ describe("Piagent WebUI bounded attachment store", () => {
     store.close();
   });
 
+  it("extracts spreadsheets, slides, OpenDocument and RTF in-process and always offers them", async () => {
+    const { bridge, store } = documentSurface("runtime_attachment_office", { documentCommand: pdfHost({ installed: false }) });
+    const offered = store.capability().mimeTypes;
+    for (const mime of ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel.sheet.macroenabled.12",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.oasis.opendocument.text",
+      "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "application/rtf"]) assert.equal(offered.includes(mime), true, mime);
+    const letter = await store.stage(stageCommand(bridge.snapshot(), { displayName: "thu.rtf", mimeType: "application/rtf",
+      bytes: Buffer.from("{\\rtf1\\ansi{\\fonttbl\\f0 Arial;}\\f0 Hop dong ky ngay 12/09.\\par Gia tri 100.}", "latin1") }));
+    assert.equal(letter.resultCode, "staged"); validAttachmentReceipt(letter);
+    assert.equal(letter.attachment.kind, "document");
+    const claimed = store.claim([letter.attachment.attachmentRef], letter.attachment.messageRequestId, bridge.snapshot().identity, "Doc thu nay.");
+    assert.match(claimed.content[1].text, /format: application\/rtf\n[\s\S]*Hop dong ky ngay 12\/09\.\nGia tri 100\./);
+    const broken = await store.stage(stageCommand(bridge.snapshot(), { commandId: "attachment_office_broken", idempotencyKey: "attachment-office-broken-key-000001",
+      displayName: "bang.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes: Buffer.from("PK not an archive") }));
+    assert.equal(broken.resultCode, "invalid-content"); assert.equal(broken.error.code, "office-unreadable"); validAttachmentReceipt(broken);
+    store.close();
+  });
+
   it("does not block the runtime while an external PDF converter is pending", async () => {
     let converterCalls = 0;
     const documentCommand = (executable) => executable === "command"

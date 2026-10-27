@@ -3,10 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { extractDocxText, extractPdfCommandResult, extractTextDocument, probeExecutableOnPath } from "../../extensions/document-intake.ts";
+import { extractOfficeText, extractPdfCommandResult, extractTextDocument, probeExecutableOnPath } from "../../extensions/document-intake.ts";
 import { redactSensitiveText } from "../../extensions/redaction-core.js";
 import { runAttachmentDocumentCommand, type AttachmentDocumentCommand } from "./attachment-document-command.ts";
 import { reserveAttachments, type AttachmentReservation } from "./attachment-reservation.ts";
+import { DOCUMENT_MIMES, DOCX_MIME, OFFICE_MIME_EXTENSIONS, OFFICE_MIMES, PDF_MIME } from "./attachment-types.ts";
 import { supportedChatImageMimeType } from "./chat-images.ts";
 import type { BridgeIdentity, BridgeSnapshot } from "../inspection/session-identity.ts";
 
@@ -27,9 +28,6 @@ const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp
 // Plain text needs no extractor, even on a host without poppler.
 const TEXT_MIMES = new Set(["text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
   "application/json", "application/yaml"]);
-const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const PDF_MIME = "application/pdf";
-const DOCUMENT_MIMES = new Set([DOCX_MIME, PDF_MIME]);
 const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const PUBLIC_REF = /^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$/;
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/;
@@ -112,6 +110,7 @@ const REASON_MESSAGES: Record<string, string> = {
   "pdf-text-unavailable": "This PDF holds no extractable text; it is probably scanned images and needs OCR first.",
   "pdf-extraction-failed": "The PDF could not be converted to text.",
   "docx-unreadable": "This .docx could not be read; it is corrupt, encrypted, or not really a Word document.",
+  "office-unreadable": "This file could not be read; it is corrupt, password-protected, or not really the format its extension says.",
   "document-text-empty": "The document contains no readable text.",
   "document-size-limit": "The document is larger than the upload limit.",
   "text-content-invalid": "The file has a text extension but its bytes are not text."
@@ -141,11 +140,11 @@ export function pdfConverterAvailable(now: number, run?: DocumentCommand): boole
 }
 export function attachmentCapability(options: { images: boolean; now: number; documentCommand?: DocumentCommand }):
 { kinds: Array<"file" | "image" | "document">; mimeTypes: string[] } {
-  // .docx needs nothing but this process, so documents are always offered.
+  // .docx and the other office formats need nothing but this process, so are always offered.
   // .pdf is withheld on a host without the converter rather than accepted and
   // refused after the upload, which is the point at which it costs the operator
   // a round trip to find out.
-  const documents = pdfConverterAvailable(options.now, options.documentCommand) ? [DOCX_MIME, PDF_MIME] : [DOCX_MIME];
+  const documents = [DOCX_MIME, ...OFFICE_MIMES, ...(pdfConverterAvailable(options.now, options.documentCommand) ? [PDF_MIME] : [])];
   return { kinds: options.images ? ["file", "document", "image"] : ["file", "document"],
     mimeTypes: [...TEXT_MIMES, ...documents, ...(options.images ? IMAGE_MIMES : [])].sort() };
 }
@@ -432,10 +431,11 @@ export class AttachmentStore {
   // here tells the operator Pi read all of a file it read the front of.
   async #extract(declared: string, source: Buffer, now: number): Promise<{ status: "ok"; text: string; truncated: boolean }
   | { status: "error"; code: Exclude<StageReceipt["resultCode"], "staged">; reason: string }> {
-    if (declared === DOCX_MIME) {
-      const result = extractDocxText(source);
-      return result.status === "ok" ? { status: "ok", text: result.text, truncated: result.truncated }
-        : { status: "error", code: "invalid-content", reason: "docx-unreadable" };
+    const office = declared === DOCX_MIME ? "docx" : OFFICE_MIME_EXTENSIONS[declared];
+    if (office) {
+      const result = extractOfficeText(office, source);
+      return result?.status === "ok" ? { status: "ok", text: result.text, truncated: result.truncated }
+        : { status: "error", code: "invalid-content", reason: office === "docx" ? "docx-unreadable" : "office-unreadable" };
     }
     if (declared === PDF_MIME) {
       if (!pdfConverterAvailable(now, this.#documentCommand)) return { status: "error", code: "capability-unavailable", reason: "pdf-converter-unavailable" };

@@ -12,6 +12,7 @@ import {
   MAX_EXTRACTED_CHARS,
   extractDocument,
   extractDocxText,
+  extractOfficeText,
   extractPdfFromDescriptor,
   extractTextDocument,
   parseRootList,
@@ -694,5 +695,72 @@ describe("document extraction", () => {
     const extracted = extractDocument(resolveIn(project, "notes.md"));
     assert.equal(extracted.status, "ok");
     assert.equal(extracted.text, "stable content\n");
+  });
+});
+
+describe("office document extraction", () => {
+  const xml = (body) => `<?xml version="1.0" encoding="UTF-8"?>${body}`;
+
+  it("reads a workbook as tab-separated rows per sheet, in workbook order", () => {
+    const workbook = buildZip([
+      { name: "xl/workbook.xml", contents: xml(`<workbook><sheets><sheet name="Ng&#226;n s&#225;ch" sheetId="1" r:id="rId2"/><sheet name="Notes" sheetId="2" r:id="rId1"/></sheets></workbook>`) },
+      { name: "xl/_rels/workbook.xml.rels", contents: xml(`<Relationships><Relationship Id="rId1" Target="worksheets/sheet2.xml"/><Relationship Id="rId2" Target="worksheets/sheet1.xml"/></Relationships>`), compressed: true },
+      { name: "xl/sharedStrings.xml", contents: xml(`<sst><si><t>Item</t></si><si><r><t>Q</t></r><r><t>3</t></r></si><si><t>A &amp; B</t><rPh><t>reading</t></rPh></si></sst>`) },
+      { name: "xl/worksheets/sheet1.xml", contents: xml(`<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c></row><row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>1200.5</v></c><c r="C2" t="b"><v>1</v></c></row></sheetData></worksheet>`), compressed: true },
+      { name: "xl/worksheets/sheet2.xml", contents: xml(`<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>ghi ch&#250;</t></is></c></row></sheetData></worksheet>`) }
+    ]);
+    const extracted = extractOfficeText("xlsx", workbook);
+    assert.equal(extracted.status, "ok");
+    assert.equal(extracted.kind, "office");
+    assert.equal(extracted.text, "# Sheet: Ngân sách\nItem\t\tQ3\nA & B\t1200.5\tTRUE\n\n# Sheet: Notes\nghi chú");
+  });
+
+  it("refuses a cell reference that would expand to a row of millions of columns", () => {
+    const forged = buildZip([{ name: "xl/worksheets/sheet1.xml", contents: xml(`<worksheet><sheetData><row><c r="A1"><v>1</v></c><c r="XFD1"><v>2</v></c></row></sheetData></worksheet>`) }]);
+    const extracted = extractOfficeText("xlsx", forged);
+    assert.equal(extracted.status, "ok");
+    assert.equal(extracted.text, "# Sheet: Sheet1\n1");
+  });
+
+  it("reads slides in numeric order with their speaker notes", () => {
+    const slide = (text) => xml(`<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>${text}</a:t></a:r><a:br/><a:r><a:t>line</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`);
+    const deck = buildZip([
+      { name: "ppt/slides/slide10.xml", contents: slide("Ten") },
+      { name: "ppt/slides/slide2.xml", contents: slide("Two"), compressed: true },
+      { name: "ppt/notesSlides/notesSlide2.xml", contents: xml(`<p:notes><a:p><a:r><a:t>Say hello</a:t></a:r></a:p><a:p><a:fld type="slidenum"><a:t>2</a:t></a:fld></a:p></p:notes>`) }
+    ]);
+    const extracted = extractOfficeText("pptx", deck);
+    assert.equal(extracted.status, "ok");
+    assert.equal(extracted.text, "## Slide 1\nTwo\nline\n\nNotes:\nSay hello\n\n## Slide 2\nTen\nline");
+  });
+
+  it("reads OpenDocument text and spreadsheets from content.xml", () => {
+    const text = buildZip([{ name: "content.xml", contents: xml(`<office:document-content><office:body><office:text><text:h>Title</text:h><text:p>A<text:s text:c="2"/>B<text:tab/>C<office:annotation><text:p>comment</text:p></office:annotation></text:p></office:text></office:body></office:document-content>`), compressed: true }]);
+    assert.deepEqual(extractOfficeText("odt", text), { status: "ok", text: "Title\nA  B\tC", truncated: false, kind: "office" });
+    const sheet = buildZip([{ name: "content.xml", contents: xml(`<office:document-content><office:body><office:spreadsheet><table:table table:name="Data"><table:table-row><table:table-cell><text:p>x</text:p></table:table-cell><table:table-cell/><table:table-cell><text:p>z</text:p></table:table-cell></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>`) }]);
+    assert.equal(extractOfficeText("ods", sheet).text, "# Sheet: Data\nx\t\tz");
+  });
+
+  it("reads RTF body text and skips font tables, pictures and starred destinations", () => {
+    const rtf = Buffer.from("{\\rtf1\\ansi\\ansicpg1252{\\fonttbl\\f0 Helvetica;}{\\*\\generator Word;}{\\pict 89504e47}\n"
+      + "\\f0 Xin ch\\'e0o Vi\\uc1\\u7879?t\\par Tab\\tab x \\{braces\\}\\\n}", "latin1");
+    assert.deepEqual(extractOfficeText("rtf", rtf), { status: "ok", text: "Xin chào Việt\nTab\tx {braces}", truncated: false, kind: "office" });
+    assert.match(extractOfficeText("rtf", Buffer.from("plain text")).reason, /RTF header/);
+  });
+
+  it("names the format when an office archive is unreadable", () => {
+    const extracted = extractOfficeText("pptx", Buffer.from("PK not an archive"));
+    assert.equal(extracted.status, "error");
+    assert.match(extracted.reason, /^not a readable \.pptx:/);
+    assert.match(extractOfficeText("xlsx", buildZip([{ name: "other.xml", contents: "<x/>" }])).reason, /no worksheets/);
+    assert.equal(extractOfficeText("txt", Buffer.from("x")), undefined);
+  });
+
+  it("opens the office formats through the document reader too", () => {
+    const project = temporaryDirectory();
+    fs.writeFileSync(path.join(project, "deck.pptx"), buildZip([{ name: "ppt/slides/slide1.xml", contents: xml(`<p:sld><a:p><a:r><a:t>Only slide</a:t></a:r></a:p></p:sld>`) }]));
+    const extracted = extractDocument(resolveIn(project, "deck.pptx"));
+    assert.equal(extracted.status, "ok");
+    assert.equal(extracted.text, "## Slide 1\nOnly slide");
   });
 });

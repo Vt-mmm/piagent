@@ -62,6 +62,12 @@ export async function routeReadOnlyRequest(url: URL, provider: WebUiReadModelPro
     }
     return { handled: true, status: 200, value: await provider.transcript(before, limit) };
   }
+  if (url.pathname.startsWith("/api/v1/transcript-images/")) {
+    const ref = url.pathname.slice("/api/v1/transcript-images/".length), rawIndex = url.searchParams.get("index"), index = Number(rawIndex);
+    if (!OPAQUE_REF.test(ref) || [...url.searchParams.keys()].some((key) => key !== "index") || url.searchParams.getAll("index").length !== 1
+      || !/^\d{1,2}$/.test(rawIndex ?? "") || index > 31) return { handled: true, status: 400, value: { error: { code: "invalid-transcript-image" } } };
+    return { handled: true, status: 200, value: await provider.transcriptImage(ref, index) };
+  }
   if (url.pathname === "/api/v1/source-changes") {
     if ([...url.searchParams.keys()].some((key) => key !== "view") || url.searchParams.getAll("view").length !== 1) return { handled: true, status: 400, value: { error: { code: "invalid-source-view" } } };
     const view = url.searchParams.get("view");

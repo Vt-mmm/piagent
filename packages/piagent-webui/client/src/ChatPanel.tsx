@@ -12,7 +12,7 @@ import { createAttachmentCommand, createAttachmentDiscardCommand, createChatComm
   createResumeAndContinueCommand, queueUpdatePayload } from "./chat-command.ts";
 import { sendChatCommand } from "./api.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
-import { acceptAttribute, attachmentDetail, dragCarriesFiles, discardAttachment, MAX_ATTACHMENTS,
+import { acceptAttribute, attachmentDetail, attachmentHint, dragCarriesFiles, discardAttachment, MAX_ATTACHMENTS,
   stageFiles } from "./attachment-intake.ts";
 
 export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: PiagentWebUICanonicalSnapshotV1; events: RuntimeStreamEvent[];
@@ -172,7 +172,7 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
         <strong>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
           : attachments.length >= 4 ? localize(locale, "Đã đủ 4 file cho tin nhắn này", "This message already holds 4 files")
             : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</strong>
-        {canAttach && <small>{localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</small>}
+        {canAttach && <small>{attachmentHint(locale)}</small>}
       </div>}
       <header className="chat-heading">
         <div><p className="section-kicker">{localize(locale, "Đúng Pi session hiện tại", "Exact current Pi session")}</p><h2 id="chat-heading">Chat</h2></div>

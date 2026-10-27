@@ -33,7 +33,7 @@ export type Document = {
   name: NullableDisplayText;
   relativePath: NullableDisplayText;
   rootRef: string | null;
-  format: "text" | "docx" | "pdf" | null;
+  format: "text" | "docx" | "pdf" | "office" | null;
   text: string | null;
   sizeBytes: number | null;
   truncated: boolean;
@@ -53,7 +53,25 @@ export interface Entry {
   rootRef: string;
   name: DisplayText;
   relativePath: DisplayText;
-  extension: "md" | "markdown" | "txt" | "text" | "csv" | "tsv" | "json" | "yaml" | "yml" | "pdf" | "docx";
+  extension:
+    | "md"
+    | "markdown"
+    | "txt"
+    | "text"
+    | "csv"
+    | "tsv"
+    | "json"
+    | "yaml"
+    | "yml"
+    | "pdf"
+    | "docx"
+    | "xlsx"
+    | "xlsm"
+    | "pptx"
+    | "odt"
+    | "ods"
+    | "odp"
+    | "rtf";
   sizeBytes: number;
   modifiedAt: string;
 }

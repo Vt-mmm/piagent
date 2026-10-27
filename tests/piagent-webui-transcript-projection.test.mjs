@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { WORKFLOW_IDS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../packages/piagent-webui/shared/message-correlation.ts";
-import { projectTranscript } from "../packages/piagent-webui/server/transcript-projection.ts";
+import { projectTranscript, projectTranscriptImage } from "../packages/piagent-webui/server/transcript-projection.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 
 const registry = createWebUiSchemaRegistry();
@@ -29,6 +29,26 @@ function expectValid(value) {
 }
 
 describe("Piagent WebUI bounded transcript projection", () => {
+  it("serves an image card's bytes by message and position, and nothing else", () => {
+    const png = Buffer.from("89504e470d0a1a0a", "hex").toString("base64");
+    const entries = [
+      entry("entry_1", "user", [{ type: "text", text: "Hai anh" }, { type: "image", data: "first", mimeType: "image/jpeg" },
+        { type: "image", data: png, mimeType: "image/png" }, { type: "image", data: "<svg/>", mimeType: "image/svg+xml" }]),
+      entry("entry_2", "assistant", [{ type: "image", data: png, mimeType: "image/png" }], { stopReason: "stop" })
+    ];
+    const value = project(entries), user = value.items.find((item) => item.role === "user");
+    assert.deepEqual(user.attachments.map((item) => item.kind), ["image", "image", "image"]);
+    assert.equal(JSON.stringify(value).includes(png), false);
+    const read = (messageRef, index) => projectTranscriptImage({ sessionRef: identity.sessionRef, entries, messageRef, index });
+    assert.deepEqual(read(user.messageRef, 1), { messageRef: user.messageRef, index: 1, state: "available", mimeType: "image/png", dataBase64: png });
+    assert.equal(read(user.messageRef, 0).dataBase64, "first");
+    // Not a raster a model takes, past the end, or not a user message: not served.
+    assert.equal(read(user.messageRef, 2), null);
+    assert.equal(read(user.messageRef, 3), null);
+    assert.equal(read(value.items.find((item) => item.role === "assistant").messageRef, 0), null);
+    assert.equal(projectTranscriptImage({ sessionRef: "session.other", entries, messageRef: user.messageRef, index: 1 }), null);
+  });
+
   it("projects only terminal assistant success, removes thinking and redacts secrets without exposing raw session IDs", () => {
     const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
     const value = project([

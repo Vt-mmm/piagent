@@ -68,6 +68,7 @@ export class IpcReadModelClient implements WebUiReadModelProvider {
   activity(): Promise<unknown> { return this.#request("activity"); }
   logPreview(activityRef: string): Promise<unknown> { return this.#request("logPreview", [activityRef]); }
   transcript(beforeCursor: string | null, limit: number): Promise<unknown> { return this.#request("transcript", [beforeCursor, limit]); }
+  transcriptImage(messageRef: string, index: number): Promise<unknown> { return this.#request("transcriptImage", [messageRef, index]); }
   queue(): Promise<unknown> { return this.#request("queue"); }
   modelCatalog(): Promise<unknown> { return this.#request("modelCatalog"); }
   approval(approvalRef: string): Promise<unknown> { return this.#request("approval", [approvalRef]); }

@@ -16,6 +16,7 @@ import Typography from "@mui/material/Typography";
 import type { AttachmentSummary, TranscriptItem } from "../../contracts/generated/transcript-v1.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import { attachmentDetail } from "./attachment-intake.ts";
+import { AttachmentImage, type ImageSource } from "./AttachmentImage.tsx";
 import { companyFailureCopy, failureContinuable, failureRole } from "./company-failure.tsx";
 import type { LiveActivity } from "./live-state-view-model.ts";
 import { compactTokens, turnSeconds, turnTokensPerSecond, type TimelineFailure, type TimelineTurn } from "./timeline-view-model.ts";
@@ -42,19 +43,31 @@ export function AssistantText({ children }: { children: string }) {
   </Suspense>;
 }
 
-export function AttachmentCards({ attachments, locale }: { attachments: readonly (AttachmentSummary | Attachment)[]; locale: UiLocale }) {
+// Where a message's images come from: a just-staged one is still in this
+// browser; a sent one is the nth image block of its transcript message, which
+// is the nth image card, since the transcript lists image blocks in order.
+export type MessageImages = { sessionRef: string; messageRef: string };
+
+export function AttachmentCards({ attachments, images, locale }: { attachments: readonly (AttachmentSummary | Attachment)[];
+  images?: MessageImages; locale: UiLocale }) {
   if (!attachments.length) return null;
+  let imageIndex = 0;
   return <Stack spacing={.75} sx={{ mb: 1 }} aria-label={localize(locale, "File đã gửi", "Sent files")}>{attachments.map((attachment, index) => {
     const live = "sourceBytes" in attachment;
     const detail = live ? attachmentDetail(attachment, locale) : `${attachment.kind === "document"
       ? localize(locale, "Tài liệu", "Document") : attachment.kind === "image" ? localize(locale, "Ảnh", "Image") : "File"}${attachment.truncated
         ? ` · ${localize(locale, "đã cắt bớt", "truncated")}` : ""}`;
-    return <Paper key={`${attachment.displayName}:${index}`} variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1.1,
+    const card = <Paper key={`${attachment.displayName}:${index}`} variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1.1,
       minWidth: 220, maxWidth: 440, px: 1.2, py: 1, borderRadius: 1, bgcolor: "background.paper" }}>
       {attachment.kind === "image" ? <ImageOutlined color="action" /> : <DescriptionOutlined color="action" />}
       <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>{attachment.displayName}</Typography>
         <Typography variant="caption" color="text.secondary">{detail}</Typography></Box>
     </Paper>;
+    if (attachment.kind !== "image") return card;
+    const source: ImageSource | null = live ? { staged: attachment.attachmentRef }
+      : images ? { ...images, index: imageIndex } : null;
+    imageIndex += 1;
+    return <AttachmentImage key={`${attachment.displayName}:${index}`} name={attachment.displayName} source={source} locale={locale} fallback={card} />;
   })}</Stack>;
 }
 
@@ -93,10 +106,10 @@ export function TurnFailure({ code, detail, locale, onContinue }: { code: string
   </Alert>;
 }
 
-export function UserBubble({ text, attachments, note, locale }: { text: string | null; attachments: readonly (AttachmentSummary | Attachment)[];
-  note?: string | null; locale: UiLocale }) {
+export function UserBubble({ text, attachments, images, note, locale }: { text: string | null; attachments: readonly (AttachmentSummary | Attachment)[];
+  images?: MessageImages; note?: string | null; locale: UiLocale }) {
   return <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 1, px: 2, py: 1.4 }}>
-    <AttachmentCards attachments={attachments} locale={locale} />
+    <AttachmentCards attachments={attachments} images={images} locale={locale} />
     {text && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}><WorkspaceMentions>{text}</WorkspaceMentions></Typography>}
     {note && <Typography variant="caption" color="text.secondary">{note}</Typography>}
   </Box>;
@@ -129,11 +142,13 @@ export function TurnFooter({ turn, locale }: { turn: TimelineTurn; locale: UiLoc
 // went down while it ran), offers to go on from the steps already taken.
 // A finished turn never changes, so it does not re-render while another turn
 // streams below it (memo compares the turn object the view model keeps).
-export const TimelineTurnView = memo(function TimelineTurnView({ turn, locale, onContinue }: { turn: TimelineTurn; locale: UiLocale; onContinue?: () => void }) {
+export const TimelineTurnView = memo(function TimelineTurnView({ turn, sessionRef, locale, onContinue }: { turn: TimelineTurn; sessionRef?: string;
+  locale: UiLocale; onContinue?: () => void }) {
   const unanswered = Boolean(onContinue) && !turn.answer && !turn.failure && !turn.end;
   const agent = turn.steps.length > 0 || turn.answer || turn.failure || unanswered || turn.process || turn.end;
   return <Stack spacing={1.5}>
-    <UserBubble text={turn.user.content.text} attachments={turn.user.attachments ?? []} note={contentNote(turn.user, locale)} locale={locale} />
+    <UserBubble text={turn.user.content.text} attachments={turn.user.attachments ?? []} note={contentNote(turn.user, locale)} locale={locale}
+      images={sessionRef ? { sessionRef, messageRef: turn.user.messageRef } : undefined} />
     {agent && <AgentBlock>
       {turn.steps.map((step) => step.kind === "tool" ? <ToolCard key={step.key} tool={step.tool} locale={locale} />
         : step.kind === "process" ? <ProcessNote key={step.key} process={step.process} locale={locale} />

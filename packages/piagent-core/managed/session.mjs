@@ -19,7 +19,7 @@ import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fa
 import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction } from './compaction.mjs';
+import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction, boundRequestImages } from './compaction.mjs';
 import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from './patch-snapshot.mjs';
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
@@ -174,11 +174,11 @@ export class ManagedSession {
     self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };
     // A helper's receipt (its tokens, the patch it read) is for the member's
     // eyes: the agent has the helper's answer as the tool result, and a
-    // receipt in its context reads as a message from the member.
+    // receipt in its context reads as a message from the member. Old images beyond Studio's body limit are left out.
     const context = self.session.agent.transformContext;
-    self.session.agent.transformContext = async (messages, signal) => (await prepareMemoryContext(self,
+    self.session.agent.transformContext = async (messages, signal) => boundRequestImages((await prepareMemoryContext(self,
       context ? await context(messages, signal) : messages, signal))
-      .filter(m => !(m.role === 'custom' && ['agent-watch-helper-receipt', 'agent-watch-fast-notice'].includes(m.customType)));
+      .filter(m => !(m.role === 'custom' && ['agent-watch-helper-receipt', 'agent-watch-fast-notice'].includes(m.customType))));
     // Pi answers unknown tools before hooks; count those failures in the run report.
     self.session.subscribe(event => {
       if (event?.type === 'tool_execution_end' && event.isError && textContent(event.result ?? {}) === `Tool ${event.toolName} not found`) self.run && (self.run.unknownTools += 1);

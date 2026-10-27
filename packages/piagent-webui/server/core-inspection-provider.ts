@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
 import { ReadModelNotFound, type SourceView, type StreamEvent, type WebUiReadModelProvider } from "./read-model-provider.ts";
-import { projectTranscript } from "./transcript-projection.ts";
+import { projectTranscript, projectTranscriptImage } from "./transcript-projection.ts";
 import { readTerminalDeliveryReceipt, terminalDeliverySessionEntries } from "./terminal-delivery-receipt.ts";
 
 const CORE_ROOT = "../../piagent-core";
@@ -279,6 +279,11 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       terminalDeliveryEntries: terminalDeliverySessionEntries(this.#input.sessionFile?.(), this.#input.sessionId),
       generatedAt: snapshot.generatedAt, taskOutcome: typeof activeTask?.trace?.outcome === "string" ? activeTask.trace.outcome : null,
       cwd: this.#input.cwd });
+  }
+  async transcriptImage(messageRef: string, index: number): Promise<unknown> {
+    const sessionRef = (await this.snapshot() as any).identity.sessionRef;
+    const image = projectTranscriptImage({ sessionRef, entries: this.#input.sessionEntries?.() ?? [], messageRef, index });
+    if (!image) throw new ReadModelNotFound(); return image;
   }
   async queue(): Promise<unknown> {
     if (!this.#input.queueProjection) throw new ReadModelNotFound();

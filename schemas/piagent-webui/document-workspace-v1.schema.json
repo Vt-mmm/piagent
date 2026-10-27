@@ -40,7 +40,7 @@
         "name": { "$ref": "#/$defs/displayText" },
         "relativePath": { "$ref": "#/$defs/displayText" },
         "extension": {
-          "enum": ["md", "markdown", "txt", "text", "csv", "tsv", "json", "yaml", "yml", "pdf", "docx"]
+          "enum": ["md", "markdown", "txt", "text", "csv", "tsv", "json", "yaml", "yml", "pdf", "docx", "xlsx", "xlsm", "pptx", "odt", "ods", "odp", "rtf"]
         },
         "sizeBytes": { "type": "integer", "minimum": 1, "maximum": 12582912 },
         "modifiedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" }
@@ -106,7 +106,7 @@
         "name": { "$ref": "#/$defs/nullableDisplayText" },
         "relativePath": { "$ref": "#/$defs/nullableDisplayText" },
         "rootRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
-        "format": { "enum": ["text", "docx", "pdf", null] },
+        "format": { "enum": ["text", "docx", "pdf", "office", null] },
         "text": {
           "anyOf": [
             { "type": "string", "maxLength": 400000 },
@@ -131,7 +131,7 @@
               "name": { "$ref": "#/$defs/displayText" },
               "relativePath": { "$ref": "#/$defs/displayText" },
               "rootRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
-              "format": { "enum": ["text", "docx", "pdf"] },
+              "format": { "enum": ["text", "docx", "pdf", "office"] },
               "text": { "type": "string", "maxLength": 400000 },
               "reasonCode": { "type": "null" }
             }

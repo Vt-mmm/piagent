@@ -2,6 +2,7 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import type { Attachment, DiscardReceipt, StageCommand, StageReceipt } from "../../contracts/generated/attachment-v1.ts";
 import { createAttachmentCommand, createAttachmentDiscardCommand } from "./chat-command.ts";
 import { label } from "./view-model.ts";
+import { rememberStagedPreview } from "./image-preview-cache.ts";
 
 // Declared here rather than imported from ui-preferences.tsx: this module is
 // plain .ts and the repository typechecks .ts without JSX, so reaching into a
@@ -28,6 +29,10 @@ export const MIME_BY_EXTENSION: Record<string, DeclaredMimeType> = {
   csv: "text/csv", tsv: "text/tab-separated-values", json: "application/json",
   yaml: "application/yaml", yml: "application/yaml", pdf: "application/pdf",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsm: "application/vnd.ms-excel.sheet.macroenabled.12",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odt: "application/vnd.oasis.opendocument.text", ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation", rtf: "application/rtf",
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp"
 };
 // Source code and any other text a coding agent reads: sent as text/plain
@@ -37,8 +42,7 @@ export const MIME_BY_EXTENSION: Record<string, DeclaredMimeType> = {
 // Binary formats the model cannot read as text, refused before the upload with
 // what to send instead.
 const BINARY_EXTENSIONS: Record<string, "sheet" | "slides" | "word" | "binary"> = {
-  xls: "sheet", xlsx: "sheet", xlsm: "sheet", numbers: "sheet", ods: "sheet",
-  ppt: "slides", pptx: "slides", key: "slides", odp: "slides", doc: "word", pages: "word", odt: "word", rtf: "word",
+  xls: "sheet", numbers: "sheet", ppt: "slides", key: "slides", doc: "word", pages: "word",
   ...Object.fromEntries(["zip", "gz", "tgz", "bz2", "xz", "rar", "7z", "tar", "jar", "war", "exe", "dmg", "pkg", "msi", "deb", "rpm", "apk", "ipa",
     "bin", "so", "dylib", "dll", "o", "a", "lib", "class", "pyc", "wasm", "node", "iso", "img", "sqlite", "sqlite3", "db", "mdb",
     "mp3", "mp4", "m4a", "m4v", "mov", "avi", "mkv", "wav", "flac", "ogg", "webm", "aac", "woff", "woff2", "ttf", "otf", "eot",
@@ -55,8 +59,14 @@ export function declaredType(name: string): DeclaredType {
 }
 // The file picker offers every file; what does not fit is said by name.
 export const supportedAttachmentAccept = "";
-export const DOCUMENT_MIMES = new Set<string>(["application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
+// Everything the host extracts to text rather than reads as text: documents may
+// weigh more on the way in because what reaches Pi is the extracted text.
+export const DOCUMENT_MIMES = new Set<string>(["application/pdf", ...Object.entries(MIME_BY_EXTENSION)
+  .filter(([extension]) => ["docx", "xlsx", "xlsm", "pptx", "odt", "ods", "odp", "rtf"].includes(extension)).map(([, mime]) => mime)]);
+// The one line under each composer naming what attaches.
+export function attachmentHint(locale: UiLocale): string {
+  return localize(locale, "Code, văn bản, .pdf .docx .xlsx .pptx .odt .ods .odp .rtf và ảnh", "Code, text, .pdf .docx .xlsx .pptx .odt .ods .odp .rtf and images");
+}
 export const MAX_ATTACHMENTS = 4;
 
 export function formatSize(value: number): string {
@@ -88,9 +98,9 @@ export function dragCarriesFiles(transfer: DataTransfer | null): boolean {
 
 export function refusedText(kind: "sheet" | "slides" | "word" | "binary", locale: UiLocale): string {
   switch (kind) {
-    case "sheet": return localize(locale, "bảng tính chưa đọc trực tiếp được; hãy xuất sang .csv rồi đính kèm.", "spreadsheets cannot be read directly; export to .csv and attach that.");
-    case "slides": return localize(locale, "file trình chiếu chưa đọc trực tiếp được; hãy xuất sang .pdf rồi đính kèm.", "slide decks cannot be read directly; export to .pdf and attach that.");
-    case "word": return localize(locale, "định dạng này chưa đọc được; hãy lưu sang .docx, .pdf hoặc .txt.", "this format cannot be read; save it as .docx, .pdf or .txt.");
+    case "sheet": return localize(locale, "định dạng bảng tính này chưa đọc trực tiếp được; hãy lưu sang .xlsx hoặc .csv rồi đính kèm.", "this spreadsheet format cannot be read directly; save it as .xlsx or .csv and attach that.");
+    case "slides": return localize(locale, "định dạng trình chiếu này chưa đọc trực tiếp được; hãy lưu sang .pptx hoặc .pdf rồi đính kèm.", "this slide format cannot be read directly; save it as .pptx or .pdf and attach that.");
+    case "word": return localize(locale, "định dạng này chưa đọc được; hãy lưu sang .docx, .pdf, .rtf hoặc .txt.", "this format cannot be read; save it as .docx, .pdf, .rtf or .txt.");
     default: return localize(locale, "file nhị phân không gửi vào chat được; hãy để file trong project để agent tự đọc bằng tool.", "binary files cannot go into the chat; keep it in the project and the agent can use its tools on it.");
   }
 }
@@ -143,11 +153,13 @@ export async function stageFiles(input: {
     const bytes = new Uint8Array(await file.arrayBuffer());
     let binary = "";
     for (let offset = 0; offset < bytes.length; offset += 32_768) binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+    const dataBase64 = btoa(binary);
     const receipt = await input.stage(await createAttachmentCommand(snapshot, input.messageRequestId,
-      { displayName: file.name, declaredMimeType: declared, dataBase64: btoa(binary) }));
+      { displayName: file.name, declaredMimeType: declared, dataBase64 }));
     if (receipt.resultCode !== "staged" || !("attachment" in receipt) || !receipt.attachment) {
       status = `${file.name}: ${label(receipt.error?.code ?? receipt.resultCode, locale)}`; continue;
     }
+    if (receipt.attachment.kind === "image") rememberStagedPreview(receipt.attachment.attachmentRef, receipt.attachment.mimeType, dataBase64);
     next = [...next, receipt.attachment];
   }
   return { attachments: next, status };

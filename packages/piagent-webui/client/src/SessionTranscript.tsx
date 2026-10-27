@@ -248,7 +248,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     {error && !transcript && <Alert severity="warning" icon={<ErrorOutlineRounded />}>
       {localize(locale, "Chưa tải được lịch sử cuộc trò chuyện. Thử lại bằng nút làm mới.", "Session history could not be loaded. You can retry with Refresh.")}
     </Alert>}
-    {turns.map((turn, index) => <Box key={turn.key} data-turn={turn.key}><TimelineTurnView turn={turn} locale={locale}
+    {turns.map((turn, index) => <Box key={turn.key} data-turn={turn.key}><TimelineTurnView turn={turn} sessionRef={sessionRef} locale={locale}
       onContinue={index === turns.length - 1 && !liveVisible && !(approvals?.pending.length) ? onContinue : undefined} /></Box>)}
     {trimmedNewest && <Box sx={{ textAlign: "center" }}><Button size="small" variant="outlined" onClick={() => { follow(); setLatestLoad((value) => value + 1); }}>
       {localize(locale, "Tin mới hơn đã ẩn · về tin mới nhất", "Newer messages are hidden · back to the newest")}</Button></Box>}

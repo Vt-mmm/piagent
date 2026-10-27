@@ -31,6 +31,7 @@ export type WebUiReadModelProvider = {
   activity(): unknown | Promise<unknown>;
   logPreview(activityRef: string): unknown | Promise<unknown>;
   transcript(beforeCursor: string | null, limit: number): unknown | Promise<unknown>;
+  transcriptImage(messageRef: string, index: number): unknown | Promise<unknown>;
   queue(): unknown | Promise<unknown>;
   modelCatalog(): unknown | Promise<unknown>;
   approval(approvalRef: string): unknown | Promise<unknown>;

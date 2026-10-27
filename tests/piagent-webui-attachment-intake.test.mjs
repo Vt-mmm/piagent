@@ -12,8 +12,12 @@ test("any text or source file is sent as text under its own name; binaries are r
   assert.deepEqual(declaredType("data.csv"), { mime: "text/csv" });
   assert.deepEqual(declaredType("shot.PNG"), { mime: "image/png" });
   assert.deepEqual(declaredType("spec.pdf"), { mime: "application/pdf" });
-  assert.deepEqual(declaredType("budget.xlsx"), { refused: "sheet" });
-  assert.deepEqual(declaredType("deck.pptx"), { refused: "slides" });
+  assert.deepEqual(declaredType("budget.xlsx"), { mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  assert.deepEqual(declaredType("deck.PPTX"), { mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  assert.deepEqual(declaredType("notes.odt"), { mime: "application/vnd.oasis.opendocument.text" });
+  assert.deepEqual(declaredType("letter.rtf"), { mime: "application/rtf" });
+  assert.deepEqual(declaredType("budget.xls"), { refused: "sheet" });
+  assert.deepEqual(declaredType("deck.key"), { refused: "slides" });
   assert.deepEqual(declaredType("old.doc"), { refused: "word" });
   for (const name of ["build.zip", "demo.mp4", "font.woff2", "app.exe", "db.sqlite"]) assert.deepEqual(declaredType(name), { refused: "binary" }, name);
 });

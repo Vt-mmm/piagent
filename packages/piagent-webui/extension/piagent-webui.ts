@@ -159,6 +159,8 @@ function readMethod(provider: CoreInspectionProvider, queue: HeldMessageQueue, s
   if (method === "logPreview" && args.length === 1 && typeof args[0] === "string" && REF.test(args[0])) return provider.logPreview(args[0]);
   if (method === "transcript" && args.length === 2 && (args[0] === null || typeof args[0] === "string" && REF.test(args[0]))
     && Number.isInteger(args[1]) && Number(args[1]) >= 1 && Number(args[1]) <= 200) return provider.transcript(args[0] as string | null, Number(args[1]));
+  if (method === "transcriptImage" && args.length === 2 && typeof args[0] === "string" && REF.test(args[0])
+    && Number.isInteger(args[1]) && Number(args[1]) >= 0 && Number(args[1]) < 32) return provider.transcriptImage(args[0], Number(args[1]));
   if (method === "queue" && args.length === 0) return provider.queue();
   if (method === "modelCatalog" && args.length === 0) return provider.modelCatalog();
   if (method === "approval" && args.length === 1 && typeof args[0] === "string" && REF.test(args[0])) return provider.approval(args[0]);

@@ -176,7 +176,7 @@ export function DocumentWorkspace({ sessionRef = null }: { sessionRef?: string |
         {!selected && <div className="document-placeholder"><DescriptionRounded aria-hidden="true" />
           <Typography variant="body2">{localize(locale, "Chọn một tài liệu để đọc nội dung tại đây.", "Pick a document to read it here.")}</Typography>
           <Typography variant="caption" color="text.disabled">{localize(locale,
-            "Hỗ trợ .md .txt .csv .json .yaml .docx .pdf", "Supports .md .txt .csv .json .yaml .docx .pdf")}</Typography></div>}
+            "Hỗ trợ .md .txt .csv .json .yaml .docx .pdf .xlsx .pptx .odt .ods .odp .rtf", "Supports .md .txt .csv .json .yaml .docx .pdf .xlsx .pptx .odt .ods .odp .rtf")}</Typography></div>}
 
         {selected && document.state === "loading" && <p className="document-empty">{localize(locale, "Đang mở tài liệu…", "Opening the document…")}</p>}
         {selected && document.state === "error" && <p className="document-empty">{localize(locale, "Không mở được tài liệu này.", "This document could not be opened.")}</p>}

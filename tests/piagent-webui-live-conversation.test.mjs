@@ -5,7 +5,7 @@ import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAf
   liveProgressStatus, mergeTerminalOperationActivities, parseGatewayCursor,
   reconcileSessionLiveState, reconcileTerminalOperationActivities,
   terminalOperationActivity } from "../packages/piagent-webui/client/src/use-session-hub.ts";
-import { conversationAfterRejectedSend, pendingUserConversation,
+import { appendAssistantDelta, conversationAfterRejectedSend, pendingUserConversation,
   safeLiveFileLabel } from "../packages/piagent-webui/client/src/live-state-view-model.ts";
 
 function running() {
@@ -222,4 +222,14 @@ describe("Piagent WebUI live conversation settlement", () => {
     assert.deepEqual(reconcileTerminalOperationActivities({ ...projection, gatewayInstanceRef: "gateway_restarted",
       eventSequence: 0, settlements: [] }), {});
   });
+});
+
+it("text from each model message of a tool-using turn starts its own paragraph", () => {
+  let live = appendAssistantDelta(undefined, "message.a", "Đã có đủ bức tranh.");
+  live = appendAssistantDelta(live, "message.a", " Bắt đầu.");
+  live = appendAssistantDelta(live, "message.b", "Giờ làm lại canvas.");
+  live = appendAssistantDelta(live, "message.c", "Typecheck sạch.\n");
+  live = appendAssistantDelta(live, "message.d", "Tiếp tục.");
+  assert.equal(live.assistant, "Đã có đủ bức tranh. Bắt đầu.\n\nGiờ làm lại canvas.\n\nTypecheck sạch.\n\nTiếp tục.");
+  assert.equal(appendAssistantDelta({ assistant: "", assistantMessageRef: "message.old" }, "message.new", "x").assistant, "x");
 });

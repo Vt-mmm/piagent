@@ -145,14 +145,14 @@ export async function connectCompany(signal?: AbortSignal): Promise<CompanyStatu
   return await response.json();
 }
 
-async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+export async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" }, signal });
   if (response.status === 401) noteUnauthorized();
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as T;
 }
 
-function sessionInspectionPath(sessionRef: string, readPath: string): string {
+export function sessionInspectionPath(sessionRef: string, readPath: string): string {
   if (!readPath.startsWith("/api/v1/")) throw new Error("invalid-inspection-path");
   return `/api/v1/sessions/${encodeURIComponent(sessionRef)}/inspection/${readPath.slice("/api/v1/".length)}`;
 }

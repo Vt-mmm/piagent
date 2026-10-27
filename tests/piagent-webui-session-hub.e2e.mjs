@@ -46,7 +46,7 @@ let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter =
 let sessionSendAttempts = 0, sessionSendEffects = 0;
 let nextCreateUncertain = false, nextSendRejected = false, nextSendUnconfirmed = false;
 let liveStateUnavailable = false, liveStateReadCount = 0;
-let attachments, lastSendPayload = null, dispatchedContent = null;
+let attachments, lastSendPayload = null, dispatchedContent = null, historyImage = false;
 let lastCreatePayload = null;
 let processTranscript = [];
 // A long history served a page at a time, as the Gateway does: `before` is the
@@ -103,6 +103,8 @@ inspectionSnapshot.activity.recent = [{
 }];
 Object.assign(inspectionSnapshot.activity.page, { total: 1, returned: 1 });
 const sourceFixture = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/source-change-v1.valid.json"), "utf8"));
+// A 2x2 PNG: the bytes behind the history message's image card.
+const HISTORY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==";
 const transcriptFixture = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/transcript-v1.valid.json"), "utf8"));
 
 function session(sessionRef, title, projectLabel, updatedAt, overrides = {}) {
@@ -268,9 +270,12 @@ test.beforeAll(async () => {
       text: "# Ke hoach quy ba\n\nMuc tieu la **tang truong**.\n", sizeBytes: 4096,
       truncated: false, redacted: false, reasonCode: null }),
     activity: () => inspectionSnapshot.activity,
+    transcriptImage: (messageRef, index) => messageRef === "message_history_user" && index === 0
+      ? { messageRef, index, state: "available", mimeType: "image/png", dataBase64: HISTORY_PNG } : Promise.reject(new Error("missing")),
     transcript: (before, limit) => pagedHistory ? historyPage(before, limit) : (transcriptReads += 1, transcriptUnavailable) ? Promise.reject(new Error("company-gateway-stopped")) : ({ ...transcriptFixture, items: [
       { ...transcriptFixture.items[0], messageRef: "message_history_user", content: { ...transcriptFixture.items[0].content,
-        text: "Open the persisted release checklist" + workspaceMention, textChars: 36 + workspaceMention.length } },
+        text: "Open the persisted release checklist" + workspaceMention, textChars: 36 + workspaceMention.length },
+        ...(historyImage ? { attachments: [{ displayName: "Image", kind: "image", mimeType: "image/png", truncated: false }] } : {}) },
       { ...transcriptFixture.items[0], messageRef: "message_history_assistant", parentMessageRef: "message_history_user", role: "assistant",
         recordedAt: "2026-08-13T14:00:00.000Z", content: { ...transcriptFixture.items[0].content,
           text: "## Implementation result\n\n**Status:** ready.\n\nThe durable transcript is available.\n\n- Session isolation\n- Formatted output\n\n| Gate | State |\n| --- | --- |\n| Chromium | Pass |\n\n![remote preview](https://example.invalid/track.png) [unsafe](javascript:alert(1))",
@@ -893,8 +898,8 @@ test("attaches source files such as .html like a coding agent does, and says why
   assert.ok(!(await input.getAttribute("accept")), "no accept filter");
   await input.setInputFiles({ name: "build.zip", mimeType: "application/zip", buffer: Buffer.from("PK\u0003\u0004binary") });
   await expect(page.getByText(/build\.zip: file nhị phân không gửi vào chat được/)).toBeVisible();
-  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({ name: "budget.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("PK") });
-  await expect(page.getByText(/budget\.xlsx: bảng tính chưa đọc trực tiếp được; hãy xuất sang \.csv/)).toBeVisible();
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({ name: "budget.xls", mimeType: "application/octet-stream", buffer: Buffer.from("PK") });
+  await expect(page.getByText(/budget\.xls: định dạng bảng tính này chưa đọc trực tiếp được; hãy lưu sang \.xlsx hoặc \.csv/)).toBeVisible();
   // An unknown extension is tried as text; the host refuses bytes that are not.
   await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({ name: "blob.dat", mimeType: "application/octet-stream", buffer: Buffer.from([0, 159, 146, 150, 0, 255, 254, 0]) });
   await expect(page.getByText(/blob\.dat: Nội dung file không phải văn bản/)).toBeVisible();
@@ -2636,4 +2641,20 @@ test("gateway cold load timing sample", async ({ page }, testInfo) => {
   });
   console.log("PIAGENT_LOAD_SAMPLE=" + JSON.stringify({ ...metrics, encodingRequested: encodingRequested ?? "browser-default" }));
   await testInfo.attach("load-sample.json", { body: JSON.stringify(metrics), contentType: "application/json" });
+});
+
+test("shows a sent image as a picture that opens full size, not a card that says Image", async ({ page }) => {
+  historyImage = true;
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await page.getByRole("button", { name: /Release prep/ }).first().click();
+    const thumbnail = page.getByRole("button", { name: "Xem ảnh Image" });
+    await expect(thumbnail).toBeVisible();
+    assert.equal(await thumbnail.locator("img").evaluate((image) => image.complete && image.naturalWidth), 2);
+    await thumbnail.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator("img")).toBeVisible();
+    await dialog.getByRole("button", { name: "Đóng" }).click();
+    await expect(dialog).toBeHidden();
+  } finally { historyImage = false; }
 });

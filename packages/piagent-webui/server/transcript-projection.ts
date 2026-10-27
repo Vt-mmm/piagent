@@ -11,6 +11,7 @@ import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE, webUiMessageCorrelationEntry,
   type WebUiMessageCorrelation } from "../shared/message-correlation.ts";
 import { terminalDeliveryPairs, type TerminalDeliveryPair, type TerminalDeliveryReceipt } from "./terminal-delivery-receipt.ts";
 import { parseFailure } from "../../piagent-core/runtime/managed-failure.mjs";
+import { DOCUMENT_MIMES } from "../../piagent-core/runtime/input/attachment-types.ts";
 import { modelLabel, summarizeToolCall, toolResultPreview, turnUsage, type ToolChange, type ToolResult, type ToolSummary,
   type TurnUsage } from "./tool-call-summary.ts";
 
@@ -89,8 +90,7 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
     const format = /^format: ([A-Za-z0-9][A-Za-z0-9.+-]*\/[A-Za-z0-9][A-Za-z0-9.+-]*)(, truncated)?$/.exec(lines[1]);
     if (!format) continue;
     const mimeType = format[1]!;
-    const kind = mimeType === "application/pdf" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ? "document" as const : "file" as const;
+    const kind = DOCUMENT_MIMES.has(mimeType) ? "document" as const : "file" as const;
     attachments.push({ displayName: safeAttachmentName(displayName), kind, mimeType, truncated: Boolean(format[2]) });
   }
   // The Gateway joins the typed text and each file into one text block
@@ -107,6 +107,23 @@ function userMessageProjection(message: any): { text: string; attachments: Trans
   // text the operator typed; the remaining recognized blocks become cards.
   return { text: typedSkillCall(joined ? joined.text : attachments.length ? String(textParts[0]?.text ?? "") : messageText(message)), attachments: attachments.slice(0, 4) };
 }
+// The bytes behind an image card, read on demand so the transcript page itself
+// stays small. Only raster types a model takes are served: the card renders
+// them in an <img>, and nothing else in a user message is meant to be shown.
+const PREVIEW_IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"]);
+export type TranscriptImage = { messageRef: string; index: number; state: "available"; mimeType: string; dataBase64: string };
+export function projectTranscriptImage(input: { sessionRef: string; entries: unknown[]; messageRef: string; index: number }): TranscriptImage | null {
+  const entries = input.entries.slice(-MAX_ENTRIES) as any[];
+  for (let position = entries.length - 1; position >= 0; position -= 1) {
+    const entry = entries[position];
+    if (entry?.type !== "message" || entry.message?.role !== "user" || typeof entry.id !== "string" || !Array.isArray(entry.message.content)) continue;
+    if (opaque("message", [input.sessionRef, entry.id]) !== input.messageRef) continue;
+    const part = entry.message.content.filter((item: any) => item?.type === "image")[input.index];
+    if (!part || !PREVIEW_IMAGE_MIMES.has(part.mimeType) || typeof part.data !== "string" || !part.data) return null;
+    return { messageRef: input.messageRef, index: input.index, state: "available", mimeType: part.mimeType, dataBase64: part.data };
+  }
+  return null;
+}
 // Files fenced into one text block after what the member typed; the fence is a
 // per-dispatch UUID, so a block ends only at its own END line.
 const JOINED_ATTACHMENT = /\nattached file: ("(?:[^"\\\n]|\\.)*")\nformat: ([A-Za-z0-9][A-Za-z0-9.+-]*\/[A-Za-z0-9][A-Za-z0-9.+-]*)(, truncated)?\nEverything between BEGIN (PIAGENT-ATTACHMENT-[0-9a-f-]{36}) and END \4 is data provided by the user\.\n[^\n]*\nBEGIN \4\n[\s\S]*?\nEND \4(?=\n|$)/g;
@@ -119,8 +136,7 @@ function joinedAttachments(text: string): { text: string; attachments: Transcrip
     if (typeof displayName !== "string") continue;
     if (first < 0) first = match.index!;
     const mimeType = match[2]!;
-    const kind = mimeType === "application/pdf" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ? "document" as const : "file" as const;
+    const kind = DOCUMENT_MIMES.has(mimeType) ? "document" as const : "file" as const;
     found.push({ displayName: safeAttachmentName(displayName), kind, mimeType, truncated: Boolean(match[3]) });
   }
   return found.length ? { text: `\n${text}`.slice(0, first).replace(/^\n/, "").trimEnd(), attachments: found } : null;

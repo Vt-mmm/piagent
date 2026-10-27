@@ -7,7 +7,7 @@ import { readSessionCatalog, readSessionLiveState } from "./api.ts";
 import { coalescedRefresh } from "./coalesced-refresh.ts";
 import { bootstrapBrowserSession, browserSessionLost } from "./bootstrap.ts";
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
-  liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
+  appendAssistantDelta, liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, conversationAfterRejectedSend, pendingUserConversation, terminalOperationActivity,
   type LiveActivity, type LiveConversation,
   type TerminalOperationActivity } from "./live-state-view-model.ts";
@@ -19,7 +19,7 @@ import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSO
   type SessionHub, type SessionHubCreateOptions, type SessionHubSendAttachment,
   type SessionSendResult } from "./session-hub-contract.ts";
 export { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
-  liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
+  appendAssistantDelta, liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, terminalOperationActivity };
 export type { LiveActivity, LiveConversation, TerminalOperationActivity };
 export { parseGatewayCursor, SessionSendRejectedError } from "./session-hub-contract.ts";
@@ -379,7 +379,7 @@ export function useSessionHub(): SessionHub {
               ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,
               messageRequestId: eventMessageRequestId ?? existing?.messageRequestId, abortable: true, complete: false,
               delivery: existing?.user ? "admitted" : existing?.delivery,
-              assistant: `${existing?.assistant ?? ""}${payload.delta}`,
+              ...appendAssistantDelta(existing, payload.messageRef, payload.delta),
               startedAt: existing?.startedAt ?? eventAt, lastEventAt: eventAt } };
           });
         }

@@ -34,7 +34,7 @@ import Typography from "@mui/material/Typography";
 import type { PermissionMode, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import { companyReason } from "./CompanyReconnect.tsx";
 import { connectCompany, importProjectFolder, readCompanyStatus, readSessionCreationOptions, type CompanyStatus, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
-import { declaredType, dragCarriesFiles, formatSize, MAX_ATTACHMENTS, refusedText, supportedAttachmentAccept } from "./attachment-intake.ts";
+import { attachmentHint, declaredType, dragCarriesFiles, formatSize, MAX_ATTACHMENTS, refusedText, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { label } from "./view-model.ts";
@@ -211,7 +211,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
             : files.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn đầu tiên`, `The first message already holds ${MAX_ATTACHMENTS} files`)
               : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
           {canAttach && <Typography variant="caption" color="text.secondary">
-            {localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</Typography>}
+            {attachmentHint(locale)}</Typography>}
         </Box>}
         {!options && !failed ? <Stack direction="row" spacing={1.5} sx={{ minHeight: 126, alignItems: "center", justifyContent: "center" }}>
           <CircularProgress size={20} /><Typography color="text.secondary">{localize(locale, "Đang mở…", "Opening…")}</Typography></Stack>

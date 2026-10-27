@@ -94,6 +94,7 @@ class MemoryProvider {
   activity() { return { running: [], recent: [] }; }
   logPreview(ref) { return { ref, state: "unavailable" }; }
   transcript(before, limit) { return { before, limit }; }
+  transcriptImage(ref, index) { if (ref === "missing") throw new ReadModelNotFound(); return { ref, index }; }
   queue() { return queueProjection; }
   modelCatalog() { return modelCatalog; }
   async replay(after) {
@@ -121,6 +122,17 @@ describe("Piagent WebUI canonical read routes", () => {
     const summary = await request(server.origin, "/api/v1/commit-summary", { headers });
     assert.equal(summary.status, 200); assert.deepEqual(JSON.parse(summary.body), { version: "commit-summary" });
     assert.equal((await request(server.origin, "/api/v1/commit-summary?path=bad", { headers })).status, 400);
+  });
+
+  it("reads a transcript image by opaque message ref and a bounded index", async () => {
+    const provider = new MemoryProvider(), server = await startLoopbackServer({ staticRoot: staticRoot(), readCapabilities: () => capabilities, readModel: provider });
+    servers.add(server); const cookie = await authenticate(server), headers = { Cookie: cookie, Origin: server.origin };
+    const image = await request(server.origin, "/api/v1/transcript-images/message.abc?index=2", { headers });
+    assert.equal(image.status, 200); assert.deepEqual(JSON.parse(image.body), { ref: "message.abc", index: 2 });
+    for (const path of ["/api/v1/transcript-images/message.abc", "/api/v1/transcript-images/message.abc?index=32",
+      "/api/v1/transcript-images/message.abc?index=-1", "/api/v1/transcript-images/message.abc?index=1&x=2",
+      "/api/v1/transcript-images/%2Fetc%2Fpasswd?index=0"]) assert.equal((await request(server.origin, path, { headers })).status, 400, path);
+    assert.equal((await request(server.origin, "/api/v1/transcript-images/missing?index=0", { headers })).status, 404);
   });
 
   it("serves schema-valid core snapshot/source/diff models through opaque refs with zero model turns", async () => {
