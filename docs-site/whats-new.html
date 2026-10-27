@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.43.6" title="v1.43.6 docs · VI"><span class="dot"></span>v1.43.6</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.43.7" title="v1.43.7 docs · VI"><span class="dot"></span>v1.43.7</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-43-6" data-release>
+<article class="release latest" id="v1-43-7" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-7">v1.43.7</a><time class="release-date" datetime="2026-10-27">27/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-7-title">Đủ skill đã cài, và mở file agent gửi lại</h3>
+    <p>Skill trong plugin Claude Code và Codex, như superpowers, đến được agent; file agent gửi lại mở ngay trong web; hộp chọn thư mục chạy trên Windows.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>File agent gắn link trong câu trả lời mở ngay trong explorer: code đúng dòng, ảnh hiện hình, PDF và file office hiện nội dung chữ.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Skill và lệnh trong plugin Claude Code và Codex của dev được liệt kê và đọc được, lấy bản mới nhất; gõ /plugin:skill cũng được.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Chọn thư mục project mở lại được hộp chọn thư mục của Windows, kể cả khi dashboard chạy nền.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-43-6" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-43-6">v1.43.6</a><time class="release-date" datetime="2026-10-27">27/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-6-title">Xem thay đổi của agent ngay khi đang chạy</h3>
@@ -408,28 +420,26 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-34-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-34-1">v1.34.1</a><time class="release-date" datetime="2026-10-20">20/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-34-1-title">Kết quả helper, comment theo dòng và thông báo Agent Watch</h3>
-    <p>Helper báo kết quả công việc, comment theo dòng trên diff được gửi cho agent, và Agent Watch báo khi cuộc trò chuyện cần bạn.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Mỗi helper báo cách nó kết thúc: thành công, lỗi, đã dừng hay chưa kiểm chứng được; Studio hiện trong Logs → Lượt agent.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Trong Source Changes, bấm số dòng để comment; comment trên nhiều file được đưa vào ô soạn tin thành một tin nhắn có <code>file:line</code>.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Kết quả của helper review hiện ngay dưới dòng nó nói tới, và kết quả không có dòng hiện dưới file.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Trạng thái cuộc trò chuyện được ghi để Agent Watch thông báo, chỉ có tên cuộc trò chuyện và tên project, không có prompt hay câu trả lời.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tool <code>delegate</code> nhận thêm các trường tùy chọn: mục tiêu, thay đổi, ràng buộc, phạm vi được đụng và tiêu chí chấp nhận, đặt ở đầu brief của helper.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Piagent hỏi Studio mỗi giờ những thao tác nó hỗ trợ và chỉ dùng thao tác mới khi có trong danh sách; Studio cũ vẫn chạy như trước.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.34, Agent Watch 0.15.9 (Windows 0.1.15)</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">47</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">48</span></summary>
+    <div class="archive-row" id="v1-34-1">
+      <div class="archive-head"><a class="release-version" href="#v1-34-1">v1.34.1</a> <span class="release-date">20/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Kết quả helper, comment theo dòng và thông báo Agent Watch</strong> — Helper báo kết quả công việc, comment theo dòng trên diff được gửi cho agent, và Agent Watch báo khi cuộc trò chuyện cần bạn.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Mỗi helper báo cách nó kết thúc: thành công, lỗi, đã dừng hay chưa kiểm chứng được; Studio hiện trong Logs → Lượt agent.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Trong Source Changes, bấm số dòng để comment; comment trên nhiều file được đưa vào ô soạn tin thành một tin nhắn có <code>file:line</code>.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Kết quả của helper review hiện ngay dưới dòng nó nói tới, và kết quả không có dòng hiện dưới file.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Trạng thái cuộc trò chuyện được ghi để Agent Watch thông báo, chỉ có tên cuộc trò chuyện và tên project, không có prompt hay câu trả lời.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tool <code>delegate</code> nhận thêm các trường tùy chọn: mục tiêu, thay đổi, ràng buộc, phạm vi được đụng và tiêu chí chấp nhận, đặt ở đầu brief của helper.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Piagent hỏi Studio mỗi giờ những thao tác nó hỗ trợ và chỉ dùng thao tác mới khi có trong danh sách; Studio cũ vẫn chạy như trước.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-33-0">
       <div class="archive-head"><a class="release-version" href="#v1-33-0">v1.33.0</a> <span class="release-date">20/10/2026</span></div>
       <div class="archive-body">

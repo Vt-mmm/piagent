@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.6" title="v1.43.6 docs · EN"><span class="dot"></span>v1.43.6</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.7" title="v1.43.7 docs · EN"><span class="dot"></span>v1.43.7</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-43-6" data-release>
+<article class="release latest" id="v1-43-7" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-7">v1.43.7</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-7-title">Every installed skill, and files the agent hands back</h3>
+    <p>Skills from Claude Code and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Skills and commands of the member's Claude Code and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Choosing a project folder opens the system folder picker on Windows again, also from a dashboard started in the background.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-43-6" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-43-6">v1.43.6</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-6-title">Watch the agent's edits while it runs</h3>
@@ -408,28 +420,26 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-34-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-34-1">v1.34.1</a><time class="release-date" datetime="2026-10-20">Oct 20, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-34-1-title">Helper outcomes, line review and Agent Watch notifications</h3>
-    <p>Helpers report how their work ended, line comments on a diff go to the agent, and Agent Watch notifies when a conversation needs you.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Each helper reports how it ended: succeeded, failed, cancelled or unverifiable; Studio shows it in Logs → Lượt agent.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>In Source Changes, click a line number to comment; comments on several files go to the composer as one message with <code>file:line</code>.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The review helper's findings show under the line they name, and findings without a line under their file.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Conversation states are written for Agent Watch notifications, holding only the title and project name, never prompts or answers.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The <code>delegate</code> tool takes optional target, change, constraints, ownership and acceptance fields, which head the helper's brief.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Piagent asks Studio hourly which operations it serves and uses newer ones only when listed; an older Studio keeps today's behaviour.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.34, Agent Watch 0.15.9 (Windows 0.1.15)</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">47</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">48</span></summary>
+    <div class="archive-row" id="v1-34-1">
+      <div class="archive-head"><a class="release-version" href="#v1-34-1">v1.34.1</a> <span class="release-date">Oct 20, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Helper outcomes, line review and Agent Watch notifications</strong> — Helpers report how their work ended, line comments on a diff go to the agent, and Agent Watch notifies when a conversation needs you.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Each helper reports how it ended: succeeded, failed, cancelled or unverifiable; Studio shows it in Logs → Lượt agent.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>In Source Changes, click a line number to comment; comments on several files go to the composer as one message with <code>file:line</code>.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The review helper's findings show under the line they name, and findings without a line under their file.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Conversation states are written for Agent Watch notifications, holding only the title and project name, never prompts or answers.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The <code>delegate</code> tool takes optional target, change, constraints, ownership and acceptance fields, which head the helper's brief.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Piagent asks Studio hourly which operations it serves and uses newer ones only when listed; an older Studio keeps today's behaviour.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-33-0">
       <div class="archive-head"><a class="release-version" href="#v1-33-0">v1.33.0</a> <span class="release-date">Oct 20, 2026</span></div>
       <div class="archive-body">

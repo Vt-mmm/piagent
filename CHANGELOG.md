@@ -4,6 +4,22 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.43.7 - 2026-10-27
+
+**Every installed skill, and files the agent hands back.** Skills from Claude Code and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.
+
+### Added
+
+- A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.
+
+### Improved
+
+- Skills and commands of the member's Claude Code and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.
+
+### Fixed
+
+- Choosing a project folder opens the system folder picker on Windows again, also from a dashboard started in the background.
+
 ## v1.43.6 - 2026-10-27
 
 **Watch the agent's edits while it runs.** Changes and Review follow a running turn, so a run going wrong can be caught and stopped early, and a turn still running never looks finished.

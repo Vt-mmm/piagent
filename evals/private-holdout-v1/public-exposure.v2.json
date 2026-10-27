@@ -256,8 +256,8 @@
     },
     {
       "path": "tests",
-      "fileCount": 626,
-      "sha256": "89463c23d5aef3d91483d4b791d6e78e0d2b2235bd9c2bfa181347233f81930f"
+      "fileCount": 627,
+      "sha256": "35f2001d0d228f1e09647c63f70c0e18d3ef3509badef51c1dd1aebdcc2a64ca"
     }
   ],
   "custodianComparisonRules": {

@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.43.7",
+    "date": "2026-10-27",
+    "status": "stable",
+    "title": {
+      "en": "Every installed skill, and files the agent hands back",
+      "vi": "Đủ skill đã cài, và mở file agent gửi lại"
+    },
+    "summary": {
+      "en": "Skills from Claude Code and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.",
+      "vi": "Skill trong plugin Claude Code và Codex, như superpowers, đến được agent; file agent gửi lại mở ngay trong web; hộp chọn thư mục chạy trên Windows."
+    },
+    "items": [
+      {
+        "kind": "improved",
+        "en": "Skills and commands of the member's Claude Code and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.",
+        "vi": "Skill và lệnh trong plugin Claude Code và Codex của dev được liệt kê và đọc được, lấy bản mới nhất; gõ /plugin:skill cũng được."
+      },
+      {
+        "kind": "new",
+        "en": "A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.",
+        "vi": "File agent gắn link trong câu trả lời mở ngay trong explorer: code đúng dòng, ảnh hiện hình, PDF và file office hiện nội dung chữ."
+      },
+      {
+        "kind": "fixed",
+        "en": "Choosing a project folder opens the system folder picker on Windows again, also from a dashboard started in the background.",
+        "vi": "Chọn thư mục project mở lại được hộp chọn thư mục của Windows, kể cả khi dashboard chạy nền."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.43.6",
     "date": "2026-10-27",
     "status": "stable",
