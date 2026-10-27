@@ -26,7 +26,7 @@ function commandItems(commands: AgentCommand[], query: string, locale: UiLocale)
   const wanted = fold(query.replace(/^skill:/, ""));
   const rank = (command: AgentCommand) => fold(command.name).startsWith(wanted) ? 0 : fold(command.name).includes(wanted) ? 1
     : fold(command.description).includes(wanted) ? 2 : 3;
-  const where = (command: AgentCommand) => command.origin === "piagent" ? "Piagent" : `${command.scope === "user" ? "~/" : ""}.${command.origin === "pi" ? "pi" : command.origin}`;
+  const where = (command: AgentCommand) => command.origin === "piagent" ? "Piagent" : command.plugin ? `${command.plugin} · ${command.origin === "claude" ? "Claude" : "Codex"} plugin` : `${command.scope === "user" ? "~/" : ""}.${command.origin === "pi" ? "pi" : command.origin}`;
   return commands.filter((command) => rank(command) < 3 && (!query.startsWith("skill:") || command.kind === "skill"))
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).slice(0, LIMIT)
     .map((command) => ({ key: `${command.kind}:${command.name}`, icon: command.kind,

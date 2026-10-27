@@ -13,6 +13,9 @@ import { piSdkRoot } from './helpers/pi-sdk.mjs';
 // model it runs on, including after the harness moved it to a model with a
 // smaller window, and after the model refused a request as too long.
 const sdkRoot = piSdkRoot();
+// The window arithmetic below counts every byte the model is sent: the
+// member's own skills and plugins (read from the home folder) stay out of it.
+process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-home-'));
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 const WINDOW = { 'gpt-6-sol': 272000, 'claude-sonnet-5-5': 1000000 };
 const SUMMARY = /context summarization assistant/;

@@ -59,6 +59,74 @@ test('skills and commands of the project (up to its repository root) and of the 
   } finally { fs.rmSync(base, {recursive: true, force: true}); }
 });
 
+// A member's plugins (superpowers and the like): Claude Code's as its
+// installed_plugins.json records them, Codex's from its plugin cache, the
+// newest version of each, none the member turned off.
+function plugins(home, repo) {
+  const skill = (dir, name, description) => write(path.join(dir, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${description}\n---\nSteps for ${name}.\n`);
+  const claude = path.join(home, '.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.1');
+  write(path.join(claude, '.claude-plugin/plugin.json'), '{"name":"superpowers"}\n');
+  skill(path.join(claude, 'skills'), 'brainstorming', 'Explore an idea before writing code.');
+  write(path.join(claude, 'commands/brainstorm.md'), '---\ndescription: Start a brainstorm\n---\nUse the brainstorming skill.\n');
+  const team = path.join(home, '.claude/plugins/cache/acme/house-style/1.0.0');
+  write(path.join(team, '.claude-plugin/plugin.json'), '{"name":"house-style","skills":["./kit"]}\n');
+  skill(path.join(team, 'kit'), 'house-style', 'Write code in the team house style.');
+  const local = path.join(home, '.claude/plugins/cache/acme/shop-only/1.0.0');
+  skill(path.join(local, 'skills'), 'shop-release', 'Release the shop.');
+  const other = path.join(home, '.claude/plugins/cache/acme/other-project/1.0.0');
+  skill(path.join(other, 'skills'), 'other-release', 'Release another project.');
+  const off = path.join(home, '.claude/plugins/cache/acme/turned-off/1.0.0');
+  skill(path.join(off, 'skills'), 'turned-off', 'Should not be listed.');
+  write(path.join(home, '.claude/plugins/installed_plugins.json'), JSON.stringify({version: 2, plugins: {
+    'superpowers@superpowers-marketplace': [{scope: 'user', installPath: claude, version: '5.0.1'}],
+    'house-style@acme': [{scope: 'user', installPath: team}],
+    'shop-only@acme': [{scope: 'project', projectPath: repo, installPath: local}],
+    'other-project@acme': [{scope: 'project', projectPath: path.join(path.dirname(home), 'elsewhere'), installPath: other}],
+    'turned-off@acme': [{scope: 'user', installPath: off}]}}));
+  write(path.join(home, '.claude/settings.json'), '{"enabledPlugins":{"turned-off@acme":false}}\n');
+  skill(path.join(home, '.claude/plugins/synced/bucket-1/design/skills'), 'ux-copy', 'Write UX copy.');
+  const codex = path.join(home, '.codex/plugins/cache');
+  skill(path.join(codex, 'openai-curated-remote/superpowers/7.0.1/skills'), 'brainstorming', 'Codex copy of the same skill.');
+  skill(path.join(codex, 'openai-curated-remote/superpowers/7.0.1/skills'), 'writing-plans', 'Write an implementation plan.');
+  skill(path.join(codex, 'openai-curated-remote/superpowers/6.9.0/skills'), 'old-skill', 'From an older version.');
+  skill(path.join(codex, 'openai-curated-remote/gmail/1.0.0/skills'), 'gmail', 'Should not be listed.');
+  write(path.join(home, '.codex/config.toml'), '[plugins."gmail@openai-curated"]\nenabled = false\n\n[plugins."superpowers@openai-curated"]\nenabled = true\n');
+}
+
+test('skills and commands of the member\'s Claude Code and Codex plugins are found after their own, as each agent installed them', () => {
+  const {base, repo, app, home} = machine();
+  try {
+    plugins(home, repo);
+    const listed = listAgentCommands({cwd: app, home});
+    const skills = listed.filter((item) => item.kind === 'skill').map((item) => `${item.name}:${item.origin}/${item.plugin ?? item.scope}`);
+    assert.deepEqual(skills, ['deploy:claude/project', 'pdf:codex/user', 'brainstorming:claude/superpowers', 'house-style:claude/house-style',
+      'shop-release:claude/shop-only', 'ux-copy:claude/design', 'writing-plans:codex/superpowers'],
+    'a project install counts in that project only; a plugin turned off, an older version and a duplicate name stay out');
+    assert.ok(listed.some((item) => item.kind === 'command' && item.name === 'brainstorm' && item.plugin === 'superpowers'));
+    const elsewhere = path.join(base, 'elsewhere');
+    fs.mkdirSync(elsewhere);
+    assert.deepEqual(listAgentCommands({cwd: elsewhere, home}).filter((item) => item.name.endsWith('-release')).map((item) => item.name), ['other-release'],
+      'in its own project, the other install counts and the shop\'s does not');
+    // Without installed_plugins.json the Claude cache is read as it is, and settings still turn a plugin off.
+    fs.rmSync(path.join(home, '.claude/plugins/installed_plugins.json'));
+    const cached = listAgentCommands({cwd: app, home}).filter((item) => item.kind === 'skill' && item.origin === 'claude' && item.plugin).map((item) => item.name);
+    assert.deepEqual(cached.sort(), ['brainstorming', 'house-style', 'other-release', 'shop-release', 'ux-copy']);
+  } finally { fs.rmSync(base, {recursive: true, force: true}); }
+});
+
+test('a plugin skill expands from /plugin:name too', {skip: !fs.existsSync(sdkRoot)}, async () => {
+  const api = await import(path.join(sdkRoot, 'dist/index.js'));
+  const {base, repo, app, home} = machine();
+  try {
+    plugins(home, repo);
+    const skills = api.loadSkills({cwd: app, agentDir: app, skillPaths: agentResourcePaths({cwd: app, home}).skillPaths, includeDefaults: false}).skills;
+    const expand = (value) => expandCommand(value, skills, [], api.stripFrontmatter, (text) => text);
+    assert.match(expand('/superpowers:brainstorming a cache'), /^<skill name="brainstorming"[^>]*>\n[\s\S]*Steps for brainstorming\.\n<\/skill>\n\na cache$/);
+    assert.equal(expand('/superpowers:brainstorming a cache'), expand('/skill:brainstorming a cache'));
+    assert.equal(expand('/nope:thing'), '/nope:thing');
+  } finally { fs.rmSync(base, {recursive: true, force: true}); }
+});
+
 test('/command, /skill:name and /skill-name expand as Pi does; other text is left as typed', {skip: !fs.existsSync(sdkRoot)}, async () => {
   const templates = await import(path.join(sdkRoot, 'dist/core/prompt-templates.js'));
   const api = await import(path.join(sdkRoot, 'dist/index.js'));

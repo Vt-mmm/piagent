@@ -444,7 +444,7 @@ export function readPathSuggestions(projectRef: string, query: string, signal?: 
 }
 
 export type AgentCommand = { kind: "command" | "skill"; name: string; description: string; argumentHint: string | null;
-  origin: "claude" | "codex" | "agents" | "pi" | "piagent"; scope: "project" | "user" };
+  origin: "claude" | "codex" | "agents" | "pi" | "piagent"; scope: "project" | "user"; plugin?: string };
 // What a / at the start of a message offers: the project's and the member's
 // commands and skills.
 export function readProjectCommands(projectRef: string, signal?: AbortSignal): Promise<{ commands: AgentCommand[] }> {

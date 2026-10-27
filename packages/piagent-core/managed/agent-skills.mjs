@@ -26,7 +26,7 @@ async function load(api, sdk, cwd, home) {
 }
 
 // A member's /skill:name, /command or /skill-name (as other agents call a
-// skill), expanded as Pi does: a command's prompt with its arguments, or the
+// skill; a plugin's as /plugin:skill-name too), expanded as Pi does: a command's prompt with its arguments, or the
 // skill's instructions followed by what the member asked. Anything else, a
 // path such as /tmp/x included, is left as typed.
 export function expandCommand(text, skills, prompts, stripFrontmatter, expandPromptTemplate) {
@@ -35,7 +35,7 @@ export function expandCommand(text, skills, prompts, stripFrontmatter, expandPro
   const args = space < 0 ? '' : text.slice(space + 1).trim();
   const explicit = head.startsWith('skill:'), name = explicit ? head.slice(6) : head;
   if (!explicit && prompts.some((prompt) => prompt.name === name)) return expandPromptTemplate(text, prompts);
-  const skill = skills.find((item) => item.name === name);
+  const skill = skills.find((item) => item.name === name) ?? (name.includes(':') ? skills.find((item) => item.name === name.slice(name.lastIndexOf(':') + 1)) : undefined);
   if (!skill) return text;
   let body;
   try { body = stripFrontmatter(fs.readFileSync(skill.filePath, 'utf8')).trim(); } catch { return text; }

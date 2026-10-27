@@ -1,12 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { memberPlugins } from './plugin-skills.mjs';
 
 // Skills and commands a member already keeps for coding agents, read by
 // Piagent too: a project's own, from the project folder up to its repository
 // root, and the member's in the home folder. Skills are Agent Skills folders
 // (SKILL.md); commands are Markdown prompts used as /name. Only these folders
-// are read from the provider folders (.claude, .codex): nothing else there.
+// are read from the provider folders (.claude, .codex): nothing else there,
+// besides the skills and commands of the plugins installed there (see
+// plugin-skills.mjs), after the member's own.
 // `pi`: folders Pi reads by itself; a runtime with Pi's own discovery leaves
 // them out.
 const PROJECT_SKILLS = [['.pi/skills', 'pi'], ['.agents/skills', 'pi'], ['.claude/skills'], ['.codex/skills']];
@@ -50,16 +53,18 @@ export function agentResourcePaths({ cwd, home = os.homedir(), piDefaults = true
   const projects = projectFolders(cwd, home);
   const found = (bases, entries) => bases.flatMap((base) => entries.filter(keep).map(([dir]) => folder(path.join(base, dir))).filter(Boolean));
   const unique = (list) => [...new Set(list)];
+  const plugins = memberPlugins({ home, projects });
   return {
-    skillPaths: unique([...found(projects, PROJECT_SKILLS), ...found([home], USER_SKILLS)]),
-    promptPaths: unique([...found(projects, PROJECT_COMMANDS), ...found([home], USER_COMMANDS)].flatMap((root) => commandFolders(root))),
+    skillPaths: unique([...found(projects, PROJECT_SKILLS), ...found([home], USER_SKILLS), ...plugins.flatMap((item) => item.skills)]),
+    promptPaths: unique([...found(projects, PROJECT_COMMANDS), ...found([home], USER_COMMANDS), ...plugins.flatMap((item) => item.commands)].flatMap((root) => commandFolders(root))),
+    plugins,
   };
 }
 
-// The member's own skill folders (for read access: a skill's files are read
-// where it is installed).
+// The member's own skill folders and their plugins' (for read access: a
+// skill's files are read where it is installed).
 export function userSkillFolders(home = os.homedir()) {
-  return USER_SKILLS.map(([dir]) => folder(path.join(home, dir))).filter(Boolean);
+  return [...USER_SKILLS.map(([dir]) => folder(path.join(home, dir))), ...memberPlugins({ home }).flatMap((item) => item.skills)].filter(Boolean);
 }
 
 // Frontmatter fields as text: `key: value`, quoted values, and | or >
@@ -87,7 +92,9 @@ function readSmall(file) {
   try { return fs.statSync(file).size <= MAX_FILE_BYTES ? fs.readFileSync(file, 'utf8').replace(/^﻿/, '') : null; } catch { return null; }
 }
 
-function origin(file, home) {
+function origin(file, home, plugins) {
+  const plugin = plugins.find((item) => file.startsWith(item.root + path.sep));
+  if (plugin) return { origin: plugin.agent, scope: 'user', plugin: plugin.name };
   const name = /(?:^|\/)\.(claude|codex|agents|pi)\//.exec(file)?.[1] ?? 'pi';
   return { origin: name, scope: file.startsWith(`${fs.realpathSync.native(home)}${path.sep}.`) ? 'user' : 'project' };
 }
@@ -111,7 +118,7 @@ function skillFiles(root, depth = 0, files = []) {
 // What a / in the composer offers: commands (/name) and skills (/skill:name),
 // the first of a name winning (project before the member's), as Pi loads them.
 export function listAgentCommands({ cwd, home = os.homedir() }) {
-  const { skillPaths, promptPaths } = agentResourcePaths({ cwd, home });
+  const { skillPaths, promptPaths, plugins } = agentResourcePaths({ cwd, home });
   const items = [], seen = new Set();
   for (const root of promptPaths) {
     let entries = [];
@@ -123,7 +130,7 @@ export function listAgentCommands({ cwd, home = os.homedir() }) {
       seen.add(`command:${name}`);
       const { fields, body } = frontmatter(text);
       const description = fields.description || body.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
-      items.push({ kind: 'command', name, description: description.slice(0, 300), argumentHint: fields['argument-hint'] || null, ...origin(file, home) });
+      items.push({ kind: 'command', name, description: description.slice(0, 300), argumentHint: fields['argument-hint'] || null, ...origin(file, home, plugins) });
     }
   }
   for (const root of skillPaths) {
@@ -133,7 +140,7 @@ export function listAgentCommands({ cwd, home = os.homedir() }) {
       // Pi loads no skill without a description.
       if (!fields.description || seen.has(`skill:${name}`)) continue;
       seen.add(`skill:${name}`);
-      items.push({ kind: 'skill', name, description: fields.description.slice(0, 300), argumentHint: fields['argument-hint'] || null, ...origin(file, home) });
+      items.push({ kind: 'skill', name, description: fields.description.slice(0, 300), argumentHint: fields['argument-hint'] || null, ...origin(file, home, plugins) });
     }
   }
   return items;
