@@ -40,16 +40,22 @@ function Section({ title, action, children }: { title: string; action?: React.Re
 
 // The right panel of the workspace: what the agent changed in the project,
 // how full the context is, and which helpers run. It follows the session's
-// revision, so it refreshes after each turn without polling.
+// revision after each turn, and re-reads every few seconds while a turn runs:
+// the member watches the edits as they land and can stop a run going wrong.
+export const LIVE_CHANGES_REFRESH_MS = 3_000;
 export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, onClose }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; live?: LiveConversation; locale: UiLocale; onOpenReview(): void; onClose?(): void }) {
   const [changes, setChanges] = useState<PiagentWebUISourceChangeViewV1 | null>(), [failed, setFailed] = useState(false);
   const running = Boolean(live && !live.complete);
   useEffect(() => {
-    if (running) return;
     const controller = new AbortController(); setFailed(false);
-    const timer = window.setTimeout(() => void readSessionSourceChanges(session.sessionRef, "working-tree", controller.signal)
-      .then((value) => setChanges(value)).catch(() => { if (!controller.signal.aborted) setFailed(true); }), 250);
+    let timer: number | undefined;
+    const read = () => void readSessionSourceChanges(session.sessionRef, "working-tree", controller.signal)
+      .then((value) => { if (!controller.signal.aborted) { setChanges(value); setFailed(false); } })
+      // A read that fails mid-run (the agent is writing) keeps the last list.
+      .catch(() => { if (!controller.signal.aborted && !running) setFailed(true); })
+      .finally(() => { if (running && !controller.signal.aborted) timer = window.setTimeout(read, LIVE_CHANGES_REFRESH_MS); });
+    timer = window.setTimeout(read, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [session.sessionRef, session.sessionRevision, running]);
   useEffect(() => { setChanges(undefined); }, [session.sessionRef]);
@@ -76,8 +82,9 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
         <Typography variant="caption" sx={{ fontFamily: MONO, ml: "auto" }}>
           <Box component="span" sx={toneText("success")}>+{added}</Box> <Box component="span" sx={toneText("error")}>−{removed}</Box></Typography>
       </Stack>}
-      {changes === undefined && !failed && (running ? <Typography variant="body2" color="text.secondary">
-        {localize(locale, "Cập nhật khi lượt này chạy xong.", "Updates when this turn finishes.")}</Typography> : <LinearProgress sx={{ borderRadius: 1 }} />)}
+      {running && <Typography variant="caption" color="text.secondary" role="status" sx={{ display: "block", mb: .75 }}>
+        {localize(locale, "Agent đang chạy · cập nhật trực tiếp. Thấy sai thì bấm Dừng.", "The agent is running · updating live. Stop it if it goes wrong.")}</Typography>}
+      {changes === undefined && !failed && <LinearProgress sx={{ borderRadius: 1 }} />}
       {(failed || changes?.availability.state === "unavailable") && <Typography variant="body2" color="text.secondary">
         {localize(locale, "Chưa đọc được thay đổi (thư mục có thể không phải git repo).", "Changes are unavailable (the folder may not be a git repository).")}</Typography>}
       {changes && changes.availability.state !== "unavailable" && files.length === 0 && <Typography variant="body2" color="text.secondary">

@@ -46,7 +46,7 @@ let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter =
 let sessionSendAttempts = 0, sessionSendEffects = 0;
 let nextCreateUncertain = false, nextSendRejected = false, nextSendUnconfirmed = false;
 let liveStateUnavailable = false, liveStateReadCount = 0;
-let attachments, lastSendPayload = null, dispatchedContent = null, historyImage = false;
+let attachments, lastSendPayload = null, dispatchedContent = null, historyImage = false, sourceChangeReads = 0;
 let lastCreatePayload = null;
 let processTranscript = [];
 // A long history served a page at a time, as the Gateway does: `before` is the
@@ -248,7 +248,7 @@ test.beforeAll(async () => {
   const inspectionProvider = {
     workspace: personalWorkspaceReader({ cwd: mentionProject, packageRoot: root, identity: () => inspectionSnapshot.identity }),
     snapshot: () => inspectionSnapshot,
-    sourceChanges: (view) => ({ ...sourceFixture, view, bases: view === "task"
+    sourceChanges: (view) => (sourceChangeReads += 1, { ...sourceFixture, view, bases: view === "task"
       ? { taskBaselineDigest: "sha256:" + "a".repeat(64), headOid: null, indexDigest: null, workingTreeDigest: null }
       : sourceFixture.bases, ...(secondSourceFile ? { files: [...sourceFixture.files, { ...sourceFixture.files[0], fileRef: "file_02", path: "api/refund.go" }] } : {}) }),
     diff: (_view, fileRef) => {
@@ -2657,4 +2657,28 @@ test("shows a sent image as a picture that opens full size, not a card that says
     await dialog.getByRole("button", { name: "Đóng" }).click();
     await expect(dialog).toBeHidden();
   } finally { historyImage = false; }
+});
+
+test("shows the agent's edits while it runs, so a run going wrong can be reviewed and stopped", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  const operationRef = "operation_live_changes";
+  protocol.events.publish("runtime.changed", { sessionRef: "session_release_prep",
+    sessionRevision: "revision_session_release_prep", liveState: "running", operationRef, reasonCode: null });
+  try {
+    const panel = page.getByRole("region", { name: "Thay đổi và ngữ cảnh" });
+    await expect(panel.getByText("Agent đang chạy · cập nhật trực tiếp. Thấy sai thì bấm Dừng.")).toBeVisible();
+    await expect(panel.getByText("src/example.ts")).toBeVisible();
+    // Re-read while the turn runs, without a new session revision.
+    const reads = sourceChangeReads;
+    await expect.poll(() => sourceChangeReads, { timeout: 10_000 }).toBeGreaterThan(reads);
+    await panel.getByRole("button", { name: "Xem diff đầy đủ, stage hoặc hoàn tác" }).click();
+    const changes = page.getByRole("dialog").getByRole("region", { name: "Thay đổi trong project" });
+    await expect(changes.getByRole("button", { name: /src\/example\.ts/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(changes.getByRole("region", { name: "Vùng thay đổi 1" })).toBeVisible();
+  } finally {
+    protocol.events.publish("operation.settled", { sessionRef: "session_release_prep", operationRef,
+      messageRef: "message_live_changes", sessionRevision: "revision_session_release_prep", settlement: "completed", reasonCode: null });
+  }
 });

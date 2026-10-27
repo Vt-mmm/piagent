@@ -17,7 +17,7 @@ import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
 import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
 import { liveTokensPerSecond, timelineTurns } from "./timeline-view-model.ts";
-import { LIVE_FAILURES, LiveTurnView, preloadMarkdown, TimelineTurnView } from "./TimelineTurn.tsx";
+import { AgentBlock, LIVE_FAILURES, LiveTurnView, preloadMarkdown, TimelineTurnView } from "./TimelineTurn.tsx";
 import { durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
   persistedLiveConversationMatches, persistedLiveUserExists, successfulAssistantText } from "./transcript-view-model.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
@@ -181,6 +181,9 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     { operationRef: live.operationRef, messageRequestId: live.messageRequestId,
       startedAt: live.startedAt })), [items, live?.user, live?.operationRef, live?.messageRequestId, live?.startedAt]);
   const liveVisible = Boolean(live && !durableFinalVisible && (!live.complete || syncedOperation !== completionKey));
+  // An answer in the transcript does not end the turn: the harness may send it
+  // back to run checks. Until the operation settles it still says it runs.
+  const stillRunning = Boolean(live && durableFinalVisible && !live.complete && !live.error);
   const liveUserDuplicated = useMemo(() => Boolean(live?.user && persistedLiveUserExists(items, live.user,
     { operationRef: live.operationRef, messageRequestId: live.messageRequestId,
       startedAt: live.startedAt })), [items, live?.user, live?.operationRef, live?.messageRequestId, live?.startedAt]);
@@ -249,13 +252,14 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
       {localize(locale, "Chưa tải được lịch sử cuộc trò chuyện. Thử lại bằng nút làm mới.", "Session history could not be loaded. You can retry with Refresh.")}
     </Alert>}
     {turns.map((turn, index) => <Box key={turn.key} data-turn={turn.key}><TimelineTurnView turn={turn} sessionRef={sessionRef} locale={locale}
-      onContinue={index === turns.length - 1 && !liveVisible && !(approvals?.pending.length) ? onContinue : undefined} /></Box>)}
+      onContinue={index === turns.length - 1 && !liveVisible && !stillRunning && !(approvals?.pending.length) ? onContinue : undefined} /></Box>)}
     {trimmedNewest && <Box sx={{ textAlign: "center" }}><Button size="small" variant="outlined" onClick={() => { follow(); setLatestLoad((value) => value + 1); }}>
       {localize(locale, "Tin mới hơn đã ẩn · về tin mới nhất", "Newer messages are hidden · back to the newest")}</Button></Box>}
     {liveVisible && live && <LiveTurnView user={live.user && !liveUserDuplicated ? live.user : null} attachments={live.attachments}
       activities={live.activities} assistant={live.error ? null : liveAnswer} running={!live.complete && !live.error}
       failure={live.complete && live.error && LIVE_FAILURES.has(live.error) ? live.error : null} locale={locale}
       status={<RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} />} />}
+    {stillRunning && live && <AgentBlock><RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} /></AgentBlock>}
     {/* Last, right above the composer: opening a conversation that waits on
         the member lands on its question, however long the running turn. */}
     <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />

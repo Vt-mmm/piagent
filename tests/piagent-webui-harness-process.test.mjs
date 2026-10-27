@@ -165,3 +165,19 @@ test("an /undo note reaches the timeline validated, redacted and worded in both 
   assert.match(headlineText(undos[0], "en"), /^Undid the last turn: 2 file\(s\) restored, 1 file\(s\) it created removed/);
   assert.match(headlineText({ phase: "undo", undo: { result: "refused", restored: 0, removed: 0, files: ["a.txt"] } }, "en"), /^Not undone: .*\(a\.txt\)/);
 });
+
+test("an answer the harness sent back is an interim step; the answer after the checks is the turn's answer", () => {
+  const value = projectTranscript({ identity, revision, eventCursor: "cursor.draft", generatedAt: "2026-10-01T09:02:00.000Z", entries: [
+    message("d1", "user", [{ type: "text", text: "Add the refund endpoint" }]),
+    message("d2", "assistant", [{ type: "text", text: "Done. Test it and tell me to push." }], { stopReason: "stop" }),
+    note("d3", "agent-watch-process", { phase: "verify", loop: 1, maxLoops: 3 }),
+    message("d4", "assistant", [{ type: "toolCall", id: "call_1", name: "bash", arguments: { command: "cd api && go test ./..." } }], { stopReason: "toolUse" }),
+    message("d5", "toolResult", [{ type: "text", text: "ok" }], { toolCallId: "call_1", toolName: "bash", isError: false }),
+    message("d6", "assistant", [{ type: "text", text: "Checks pass. Done." }], { stopReason: "stop" })
+  ] });
+  const [turn] = timelineTurns(value.items);
+  const draft = turn.steps.find((step) => step.kind === "note");
+  assert.equal(draft.text, "Done. Test it and tell me to push.");
+  assert.equal(draft.draft, true);
+  assert.equal(turn.answer, "Checks pass. Done.");
+});

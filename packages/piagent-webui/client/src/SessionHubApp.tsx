@@ -464,7 +464,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   // Mounted from its first opening on, so closing it keeps its state.
   const inspectorUsed = useRef(false); if (inspectorOpen) inspectorUsed.current = true;
   const activityInspectorOpenRef = useRef(false);
-  activityInspectorOpenRef.current = inspectorOpen && activeInspector === "activity";
+  activityInspectorOpenRef.current = inspectorOpen && (activeInspector === "activity" || activeInspector === "source");
   const [inspection, setInspection] = useState<PiagentWebUICanonicalSnapshotV1>();
   const inspectionRef = useRef<{ sessionRef: string; snapshot: PiagentWebUICanonicalSnapshotV1 } | null>(null);
   const [inspectionState, setInspectionState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -569,7 +569,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     return () => controller.abort();
   }, [selectedSessionRef, selected?.sessionRevision]);
   useEffect(() => {
-    if (!inspectorOpen || activeInspector !== "activity" || !selectedSessionRef || !currentInspection
+    // Activity and Changes follow a running turn: its edits can be reviewed (and the run stopped) before it ends.
+    if (!inspectorOpen || (activeInspector !== "activity" && activeInspector !== "source") || !selectedSessionRef || !currentInspection
       || !selectedLive?.operationRef || selectedLive.complete) return;
     const requestedSessionRef = selectedSessionRef;
     let stopped = false, timer: number | undefined;

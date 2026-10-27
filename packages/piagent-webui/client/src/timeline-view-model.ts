@@ -6,7 +6,9 @@ import { assistantFailureReason, successfulAssistantText } from "./transcript-vi
 // what the turn cost: model requests, tokens and wall time.
 export type TimelineTool = TranscriptItem["toolCalls"][number];
 export type TimelineProcess = NonNullable<TranscriptItem["process"]>;
-export type TimelineStep = { kind: "tool"; key: string; tool: TimelineTool } | { kind: "note"; key: string; text: string }
+// `draft`: an answer the harness sent back (run checks, fix findings); the
+// turn went on after it, so it is not the final answer.
+export type TimelineStep = { kind: "tool"; key: string; tool: TimelineTool } | { kind: "note"; key: string; text: string; draft?: true }
   | { kind: "process"; key: string; process: TimelineProcess };
 export type TimelineFailure = NonNullable<TranscriptItem["failure"]>;
 export type TimelineTurnEnd = NonNullable<TranscriptItem["turnEnd"]>;
@@ -52,11 +54,11 @@ export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] 
     if (item.role === "custom" && item.process) {
       // A round's status stays with its round when the harness goes on.
       if (current.process) {
-        if (current.answer) { current.steps.push({ kind: "note", key: `${item.messageRef}:round-answer`, text: current.answer }); current.answer = null; }
+        if (current.answer) { current.steps.push({ kind: "note", key: `${item.messageRef}:round-answer`, text: current.answer, draft: true }); current.answer = null; }
         current.steps.push({ kind: "process", key: `${item.messageRef}:round`, process: current.process }); current.process = null;
       }
       if (item.process.phase === "final") { current.process = item.process; continue; }
-      if (current.answer && !QUIET_PHASES.has(item.process.phase)) { current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer }); current.answer = null; }
+      if (current.answer && !QUIET_PHASES.has(item.process.phase)) { current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer, draft: true }); current.answer = null; }
       current.steps.push({ kind: "process", key: item.messageRef, process: item.process }); continue;
     }
     if (item.role === "assistant" && item.usage?.outputTokens && at > requestedAt) {

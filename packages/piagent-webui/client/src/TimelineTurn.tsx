@@ -152,7 +152,10 @@ export const TimelineTurnView = memo(function TimelineTurnView({ turn, sessionRe
     {agent && <AgentBlock>
       {turn.steps.map((step) => step.kind === "tool" ? <ToolCard key={step.key} tool={step.tool} locale={locale} />
         : step.kind === "process" ? <ProcessNote key={step.key} process={step.process} locale={locale} />
-        : <Box key={step.key} sx={{ color: "text.secondary", fontSize: ".875rem", "& .MuiTypography-root": { fontSize: "inherit" } }}>
+        : <Box key={step.key} sx={{ color: "text.secondary", fontSize: ".875rem", "& .MuiTypography-root": { fontSize: "inherit" },
+          ...(step.draft ? { borderLeft: 2, borderColor: "divider", pl: 1.5 } : {}) }}>
+          {step.draft && <Typography variant="caption" component="div" color="text.disabled" sx={{ mb: .5, fontWeight: 600 }}>
+            {localize(locale, "Trả lời giữa chừng · harness yêu cầu làm tiếp", "Interim answer · the harness asked for more")}</Typography>}
           <AssistantText>{step.text}</AssistantText></Box>)}
       {turn.failure && <TurnFailure code={turn.failure} detail={turn.failureDetail} locale={locale} onContinue={onContinue} />}
       {unanswered && <Alert severity="info" variant="outlined" sx={{ alignSelf: "stretch" }}
