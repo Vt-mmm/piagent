@@ -137,6 +137,21 @@ export function inspectWorkspaceFile(root: string, relative: string, options: Wo
   return { ...base, content, digest, revision: `sha256:${digest}` };
 }
 
+// An image the agent made or names, shown as a picture in the explorer (the
+// page takes data: images only). Protected files are never read.
+const IMAGE_MIMES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif" };
+const MAX_MEDIA_BYTES = 8 << 20;
+export function inspectWorkspaceMedia(root: string, relative: string, options: WorkspacePolicy) {
+  validPath(relative);
+  const mime = IMAGE_MIMES[relative.split(".").at(-1)?.toLowerCase() ?? ""] ?? null;
+  const base = { path: relative, mime, data: null as string | null, reasonCode: null as string | null };
+  if (workspacePathFlags(relative, options).protected) return { ...base, reasonCode: "protected" };
+  if (!mime) return { ...base, reasonCode: "unsupported" };
+  try { return { ...base, data: readWorkspaceFile(root, relative, MAX_MEDIA_BYTES).toString("base64") }; }
+  catch (error) { if (error instanceof WorkspaceReadError && error.code === "oversized") return { ...base, reasonCode: "oversized" }; throw error; }
+}
+
 export async function inspectWorkspacePaths(root: string, query: string, options: WorkspacePolicy) {
   if (query.length > 512 || /[\x00-\x1f\x7f]/.test(query)) throw new Error("workspace-query-invalid");
   const result = await suggestPaths({ root, query, projectOnly: true,

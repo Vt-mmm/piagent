@@ -1,12 +1,12 @@
 import { WorkspaceReadError } from "../../piagent-core/security/workspace-file-reader.ts";
 
-export type WorkspaceRead = (kind: "tree" | "file" | "paths" | "search", path: string) => unknown | Promise<unknown>;
+export type WorkspaceRead = (kind: "tree" | "file" | "media" | "paths" | "search", path: string) => unknown | Promise<unknown>;
 export type WorkspaceRouteResult = { handled: false } | { handled: true; status: number; value: unknown };
 
 // Authentication and company forwarding belong to the session router. This
 // parser accepts only project-relative paths, including an empty tree root.
 export async function routeWorkspaceRead(url: URL, read?: WorkspaceRead): Promise<WorkspaceRouteResult> {
-  const match = /^\/api\/v1\/workspace\/(tree|file|paths|search)$/.exec(url.pathname);
+  const match = /^\/api\/v1\/workspace\/(tree|file|media|paths|search)$/.exec(url.pathname);
   if (!match) return { handled: false };
   const refused = (status: number, code: string): WorkspaceRouteResult => ({ handled: true, status, value: { error: { code } } });
   if (!read) return refused(503, "workspace-unavailable");
@@ -19,7 +19,7 @@ export async function routeWorkspaceRead(url: URL, read?: WorkspaceRead): Promis
     || (parameter === "path" && (relative ? relative.split("/").some(part => !part || part === "." || part === "..") : match[1] !== "tree"))) {
     return refused(400, "workspace-path-invalid");
   }
-  try { return { handled: true, status: 200, value: await read(match[1] as "tree" | "file" | "paths" | "search", relative) }; }
+  try { return { handled: true, status: 200, value: await read(match[1] as "tree" | "file" | "media" | "paths" | "search", relative) }; }
   catch (error) {
     if (error instanceof WorkspaceReadError) return refused(error.code === "changed-during-read" ? 409 : 400, error.code);
     const code = (error as NodeJS.ErrnoException)?.code;

@@ -4,7 +4,7 @@
 // agent's running command: a few run beside it, a few more wait for them, and
 // beyond that they are refused (the panels retry).
 const LIMIT = 3, WAITING = 16;
-const memberRead = (name, args) => name === 'workspace' && (['tree', 'file', 'paths', 'search', 'write-state'].includes(args?.kind)
+const memberRead = (name, args) => name === 'workspace' && (['tree', 'file', 'media', 'paths', 'search', 'write-state'].includes(args?.kind)
   || args?.kind === 'source' && ['sources', 'diff', 'preview'].includes(args.request?.kind));
 export class BoundaryQueue {
   #tail = Promise.resolve();

@@ -39,8 +39,8 @@ import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 let server, protocol;
-let workspaceMention = "";
-test.afterEach(() => { workspaceMention = ""; });
+let workspaceMention = "", answerFiles = "";
+test.afterEach(() => { workspaceMention = ""; answerFiles = ""; });
 let persistedBrowserConversation = false;
 let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
 let sessionSendAttempts = 0, sessionSendEffects = 0;
@@ -278,8 +278,8 @@ test.beforeAll(async () => {
         ...(historyImage ? { attachments: [{ displayName: "Image", kind: "image", mimeType: "image/png", truncated: false }] } : {}) },
       { ...transcriptFixture.items[0], messageRef: "message_history_assistant", parentMessageRef: "message_history_user", role: "assistant",
         recordedAt: "2026-08-13T14:00:00.000Z", content: { ...transcriptFixture.items[0].content,
-          text: "## Implementation result\n\n**Status:** ready.\n\nThe durable transcript is available.\n\n- Session isolation\n- Formatted output\n\n| Gate | State |\n| --- | --- |\n| Chromium | Pass |\n\n![remote preview](https://example.invalid/track.png) [unsafe](javascript:alert(1))",
-          textChars: 258 },
+          text: "## Implementation result\n\n**Status:** ready.\n\nThe durable transcript is available.\n\n- Session isolation\n- Formatted output\n\n| Gate | State |\n| --- | --- |\n| Chromium | Pass |\n\n![remote preview](https://example.invalid/track.png) [unsafe](javascript:alert(1))" + answerFiles,
+          textChars: 258 + answerFiles.length },
         toolCalls: [] },
       { ...transcriptFixture.items[0], messageRef: "message_history_tool", parentMessageRef: "message_history_assistant", role: "tool-result",
         recordedAt: "2026-08-13T14:00:01.000Z", content: { ...transcriptFixture.items[0].content, state: "unavailable", text: null,
@@ -1955,6 +1955,29 @@ test("workspace explorer opens real files in nonce-styled read-only tabs and loc
   await page.getByRole("button", { name: /Mở trong editor|Open in editor/ }).last().click();
   await expect(page.locator(".cm-content")).toContainText("export const fromDiff = true;");
   assert.equal(await page.locator("body").innerText().then(text => text.includes("never-render")), false);
+  assert.deepEqual(errors, []);
+});
+
+test("a file the agent links in its answer opens in the explorer: code at its line, an image as a picture", async ({ page }) => {
+  fs.mkdirSync(path.join(mentionProject, "out"), { recursive: true });
+  fs.writeFileSync(path.join(mentionProject, "out/chart.png"), Buffer.from(HISTORY_PNG, "base64"));
+  fs.writeFileSync(path.join(mentionProject, "src/search.md"), "first line\nsecond line\n  needle third line\n");
+  answerFiles = "\n\nSee [the chart](out/chart.png) and `src/search.md:3`; [the site](https://piagent.io.vn) stays a web link.";
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error" && /Content Security Policy/.test(message.text())) errors.push(message.text()); });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+  await page.getByRole("button", { name: "src/search.md:3", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "src/search.md", exact: true })).toBeVisible();
+  await expect(page.locator(".cm-activeLineGutter")).toHaveText("3");
+  await page.getByRole("button", { name: "the chart", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "out/chart.png", exact: true })).toBeVisible();
+  const picture = page.getByRole("img", { name: "out/chart.png" });
+  await expect(picture).toBeVisible();
+  assert.match(await picture.getAttribute("src"), /^data:image\/png;base64,iVBOR/);
+  await expect(page.getByRole("link", { name: "the site" })).toHaveAttribute("href", "https://piagent.io.vn");
   assert.deepEqual(errors, []);
 });
 

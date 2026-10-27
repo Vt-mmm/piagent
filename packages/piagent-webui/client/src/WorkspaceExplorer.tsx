@@ -24,6 +24,7 @@ import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import { closableLabel } from "./tab-close.tsx";
 import { readWorkspaceFile } from "./workspace-api.ts";
+import { WorkspaceFilePreview } from "./WorkspaceFilePreview.tsx";
 import { WorkspaceFileTree } from "./WorkspaceFileTree.tsx";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 const CodeEditor = lazy(() => import("./WorkspaceCodeEditor.tsx"));
@@ -96,7 +97,7 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
           onClick={() => { if (window.confirm(localize(locale, `Xóa ${file.path}? Có thể khôi phục bằng Git nếu tệp đã commit.`, `Delete ${file.path}? Git can restore it if it was committed.`))) void editing.move(file.path); }}>{localize(locale, "Xóa", "Delete")}</Button>
         <Button size="small" onClick={() => { if (!tab || !tabDirty(tab) || window.confirm(localize(locale, "Bỏ thay đổi chưa lưu và tải lại?", "Discard unsaved changes and reload?"))) void editing.reload(file.path); }}>{localize(locale, "Tải lại", "Reload")}</Button>
       </Stack>}
-      {file?.binary || file?.oversized ? <Alert severity="info">{localize(locale, "Tệp nhị phân hoặc quá lớn để hiển thị.", "This file is binary or too large to display.")}</Alert>
+      {file?.binary || file?.oversized ? <WorkspaceFilePreview sessionRef={sessionRef} path={file.path} />
         : file?.content !== null && file?.content !== undefined ? <Box sx={{ flex: 1, minHeight: 0 }}><Suspense fallback={<CircularProgress size={20} />}>
           <CodeEditor onComment={lineReview.open} hunks={review.hunks} onKeep={review.keep} onRevert={editing.authority?.writable ? ref => void revert.request(ref) : undefined} content={tab?.draft ?? file.content} path={file.path} line={tab?.line ?? 1} readOnly={!editing.authority?.writable || file.readOnly}
             onChange={value => editing.change(file.path, value)} onSave={() => void editing.save(file.path)} /></Suspense></Box>

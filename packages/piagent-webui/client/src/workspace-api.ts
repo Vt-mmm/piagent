@@ -12,6 +12,8 @@ async function read<T>(sessionRef: string, kind: string, path: string, signal?: 
 }
 export const readWorkspaceTree = (session: string, path: string, signal?: AbortSignal) => read<PiagentWebUIWorkspaceTreeV1>(session, "tree", path, signal);
 export const readWorkspaceFile = (session: string, path: string, signal?: AbortSignal) => read<PiagentWebUIWorkspaceFileV1>(session, "file", path, signal);
+export const readWorkspaceMedia = (session: string, path: string, signal?: AbortSignal) =>
+  read<import("../../contracts/generated/workspace-media-v1.ts").PiagentWebUIWorkspaceMediaV1>(session, "media", path, signal);
 
 export async function readWorkspacePaths(sessionRef: string, query: string, signal?: AbortSignal) {
   const response = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/inspection/workspace/paths?${new URLSearchParams({ query })}`,

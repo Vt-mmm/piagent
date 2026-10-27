@@ -4,7 +4,7 @@ import { SessionMutationObserver } from "./session-mutation-observer.ts";
 import { writeWorkspaceFile, WorkspaceWriteError, type WorkspaceWriteInput } from "../../extensions/workspace-write.ts";
 import { searchWorkspace } from "../../extensions/workspace-search.ts";
 import { loadProjectContextIndexPolicy } from "../../extensions/workspace-policy.js";
-import { inspectWorkspaceFile, inspectWorkspaceTree, inspectWorkspacePaths } from "../../extensions/workspace-inspection.ts";
+import { inspectWorkspaceFile, inspectWorkspaceMedia, inspectWorkspaceTree, inspectWorkspacePaths } from "../../extensions/workspace-inspection.ts";
 import { inspectWorkspaceEntry } from "../../security/workspace-file-reader.ts";
 import { managedCheckpointOperation } from "../checkpoints/checkpoint-worker.ts";
 
@@ -14,7 +14,7 @@ export async function inspectManagedWorkspace(cwd: string, assets: string, reque
   const input = request as { kind?: unknown; path?: unknown; payload?: unknown } | null;
   if (input?.kind === "checkpoint") return managedCheckpointOperation(cwd, () => managedWorkspacePolicy(cwd, assets, readOnly), request);
   const writing = input?.kind === "write", state = input?.kind === "write-state";
-  if (!input || (!writing && !state && (!["tree", "file", "paths", "search"].includes(String(input.kind)) || typeof input.path !== "string"))
+  if (!input || (!writing && !state && (!["tree", "file", "media", "paths", "search"].includes(String(input.kind)) || typeof input.path !== "string"))
     || Object.keys(input).some(key => key !== "kind" && key !== (writing ? "payload" : state ? "kind" : "path"))) throw new Error("workspace-request-invalid");
   const context = managedWorkspacePolicy(cwd, assets, readOnly);
   if (state) return { writable: !context.readOnly };
@@ -26,7 +26,7 @@ export async function inspectManagedWorkspace(cwd: string, assets: string, reque
     }
   }
   const relative = input.path as string;
-  return input.kind === "search" ? await searchWorkspace(cwd, relative, context) : input.kind === "paths" ? await inspectWorkspacePaths(cwd, relative, context) : input.kind === "tree" ? inspectWorkspaceTree(cwd, relative, context) : inspectWorkspaceFile(cwd, relative, context);
+  return input.kind === "search" ? await searchWorkspace(cwd, relative, context) : input.kind === "paths" ? await inspectWorkspacePaths(cwd, relative, context) : input.kind === "tree" ? inspectWorkspaceTree(cwd, relative, context) : input.kind === "media" ? inspectWorkspaceMedia(cwd, relative, context) : inspectWorkspaceFile(cwd, relative, context);
 }
 
 function managedWorkspacePolicy(cwd: string, assets: string, readOnly: boolean) {

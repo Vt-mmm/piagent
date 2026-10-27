@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { inspectWorkspaceFile, inspectWorkspaceTree } from "../packages/piagent-core/extensions/workspace-inspection.ts";
+import { inspectWorkspaceFile, inspectWorkspaceMedia, inspectWorkspaceTree } from "../packages/piagent-core/extensions/workspace-inspection.ts";
 
 const policy = { policy: { protectedPaths: ["secrets/**"] }, profile: { readOnlyPaths: ["vendor/**"] } };
 function fixture(t) {
@@ -97,4 +97,18 @@ test("project-only quick open cannot follow links or suggest protected and exter
   for (const query of ["/etc/", "../", "~/", "outside/", "secrets/token"]) {
     assert.deepEqual((await suggestPaths({ ...options, query })).suggestions, [], query);
   }
+});
+
+test("an image the agent hands back is read as data for a preview; protected, other and oversized files are not", t => {
+  const root = fixture(t);
+  const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+  fs.mkdirSync(path.join(root, "out")); fs.writeFileSync(path.join(root, "out/chart.PNG"), png);
+  fs.writeFileSync(path.join(root, "secrets/shot.png"), png);
+  const media = inspectWorkspaceMedia(root, "out/chart.PNG", policy);
+  assert.deepEqual(media, { path: "out/chart.PNG", mime: "image/png", data: png.toString("base64"), reasonCode: null });
+  assert.deepEqual(inspectWorkspaceMedia(root, "secrets/shot.png", policy), { path: "secrets/shot.png", mime: "image/png", data: null, reasonCode: "protected" });
+  assert.equal(inspectWorkspaceMedia(root, "hello.ts", policy).reasonCode, "unsupported");
+  fs.writeFileSync(path.join(root, "out/huge.jpg"), Buffer.alloc((8 << 20) + 1));
+  assert.equal(inspectWorkspaceMedia(root, "out/huge.jpg", policy).reasonCode, "oversized");
+  assert.throws(() => inspectWorkspaceMedia(root, "../outside.png", policy));
 });

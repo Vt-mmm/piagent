@@ -1,4 +1,4 @@
-import { WorkspaceMentions } from "./workspace-navigation.tsx";
+import { fileLink, WorkspaceFileLink, WorkspaceMentions } from "./workspace-navigation.tsx";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Link from "@mui/material/Link";
@@ -7,8 +7,13 @@ import Typography from "@mui/material/Typography";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// `src/app.ts`, `/abs/path/app.ts:42`: inline code that names a file (with a
+// folder, so `process.env` or `v1.2` stay code).
+const CODE_PATH = /^(?:\.\/|\/)?[\w@.+-]+(?:\/[\w@.+ -]+)+\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?$/;
+
 function safeLink(value: string): string {
   if (value.startsWith("#")) return value;
+  if (fileLink(value)) return value;
   try {
     const url = new URL(value);
     return ["http:", "https:", "mailto:"].includes(url.protocol) ? value : "";
@@ -30,11 +35,14 @@ export function MarkdownMessage({ children }: { children: string }) {
       strong: ({ children: value }) => <Box component="strong" sx={{ fontWeight: 650 }}>{value}</Box>,
       blockquote: ({ children: value }) => <Paper component="blockquote" variant="outlined" sx={{ m: "12px 0", px: 1.75, py: .25,
         borderLeft: 3, borderLeftColor: "primary.main", bgcolor: "action.hover", color: "text.secondary" }}>{value}</Paper>,
-      code: ({ children: value }) => <Box component="code" sx={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      code: ({ children: value }) => typeof value === "string" && CODE_PATH.test(value) && fileLink(value)
+        ? <WorkspaceFileLink link={fileLink(value)!}><Box component="code" sx={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontSize: ".88em", bgcolor: "action.hover", borderRadius: .8, px: .55, py: .15 }}>{value}</Box></WorkspaceFileLink>
+        : <Box component="code" sx={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: ".88em", bgcolor: "action.hover", borderRadius: .8, px: .55, py: .15 }}>{value}</Box>,
       pre: ({ children: value }) => <Box component="pre" sx={{ my: 1.4, p: 1.5, overflowX: "auto", borderRadius: 1,
         bgcolor: "action.hover", border: 1, borderColor: "divider", whiteSpace: "pre", "& code": { bgcolor: "transparent", p: 0 } }}>{value}</Box>,
-      a: ({ href, children: value }) => href ? <Link href={href} target={href.startsWith("#") ? undefined : "_blank"}
+      a: ({ href, children: value }) => href && fileLink(href) ? <WorkspaceFileLink link={fileLink(href)!}>{value}</WorkspaceFileLink> : href ? <Link href={href} target={href.startsWith("#") ? undefined : "_blank"}
         rel={href.startsWith("#") ? undefined : "noopener noreferrer"} underline="hover">{value}</Link> : <>{value}</>,
       img: ({ alt }) => <Typography component="span" variant="caption" color="text.secondary">[{alt || "image"}]</Typography>,
       table: ({ children: value }) => <Box sx={{ my: 1.5, overflowX: "auto" }}><Box component="table" sx={{ width: "100%",

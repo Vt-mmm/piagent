@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/workspace-media-v1.schema.json",
+  "title": "Piagent WebUI workspace media v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "path",
+    "mime",
+    "data",
+    "reasonCode"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "version": {
+      "const": "piagent-webui-workspace-media-v1"
+    },
+    "generatedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "identity": {
+      "$ref": "common-v1.schema.json#/$defs/identity"
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "mime": {
+      "enum": [
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+        "image/x-icon",
+        "image/avif",
+        null
+      ]
+    },
+    "data": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 11184812,
+      "contentEncoding": "base64"
+    },
+    "reasonCode": {
+      "enum": [
+        "protected",
+        "unsupported",
+        "oversized",
+        null
+      ]
+    }
+  }
+}

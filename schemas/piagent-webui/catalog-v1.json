@@ -291,6 +291,15 @@
       "current": true
     },
     {
+      "name": "workspace-media-v1",
+      "file": "workspace-media-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/workspace-media-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
       "name": "workspace-paths-v1",
       "file": "workspace-paths-v1.schema.json",
       "id": "https://piagent.io.vn/schemas/piagent-webui/workspace-paths-v1.schema.json",

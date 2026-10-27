@@ -1,6 +1,6 @@
 import { searchWorkspace } from "../../piagent-core/extensions/workspace-search.ts";
 import { loadProjectContextIndexPolicy } from "../../piagent-core/extensions/workspace-policy.js";
-import { inspectWorkspaceFile, inspectWorkspaceTree, inspectWorkspacePaths } from "../../piagent-core/extensions/workspace-inspection.ts";
+import { inspectWorkspaceFile, inspectWorkspaceMedia, inspectWorkspaceTree, inspectWorkspacePaths } from "../../piagent-core/extensions/workspace-inspection.ts";
 import { inspectWorkspaceEntry } from "../../piagent-core/security/workspace-file-reader.ts";
 import type { WorkspaceRead } from "./workspace-read-routes.ts";
 
@@ -16,7 +16,7 @@ export function personalWorkspaceReader(options: {
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     const { policy, profile } = loadProjectContextIndexPolicy(options.packageRoot, options.cwd);
     const context = { policy, profile, readOnly: profile.permissionProfile === "read-only" };
-    const value = kind === "search" ? await searchWorkspace(options.cwd, relative, context) : kind === "paths" ? await inspectWorkspacePaths(options.cwd, relative, context) : kind === "tree" ? inspectWorkspaceTree(options.cwd, relative, context) : inspectWorkspaceFile(options.cwd, relative, context);
+    const value = kind === "search" ? await searchWorkspace(options.cwd, relative, context) : kind === "paths" ? await inspectWorkspacePaths(options.cwd, relative, context) : kind === "tree" ? inspectWorkspaceTree(options.cwd, relative, context) : kind === "media" ? inspectWorkspaceMedia(options.cwd, relative, context) : inspectWorkspaceFile(options.cwd, relative, context);
     return { schemaVersion: 1, version: `piagent-webui-workspace-${kind}-v1`, generatedAt: new Date().toISOString(),
       identity: await options.identity(), ...value };
   };

@@ -293,7 +293,7 @@ describe("runtime session modules", () => {
     );
     assert.equal(compacted.compacted, true);
     assert.match(compacted.systemPrompt, /^prefix\n<!-- piagent-managed:start -->\nWork directly on the user's message\./);
-    assert.match(compacted.systemPrompt, /Runtime checks enforce protected paths and scoped approvals\.\n<!-- piagent-managed:end -->\nsuffix$/);
+    assert.match(compacted.systemPrompt, /Runtime checks enforce protected paths and scoped approvals\.\nTo hand a file back to the member, [^\n]+ \(code at the line, images and documents as a preview\)\.\n<!-- piagent-managed:end -->\nsuffix$/);
     assert.doesNotMatch(compacted.systemPrompt, /piagent_task_start|Task Contract|task-management calls\b(?! )/);
     const protectedOnly = compactManagedProjectInstructions(
       `prefix\n<!-- piagent-managed:start -->\nlong text\n<!-- piagent-managed:end -->\nsuffix`,
