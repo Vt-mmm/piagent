@@ -39,7 +39,12 @@ function javaHome(userHome) {
     for (const dir of (process.env.PATH ?? '/usr/bin').split(':')) {
       try { return existing(path.dirname(path.dirname(fs.realpathSync(path.join(dir, 'javac'))))); } catch { /* next */ }
     }
-    return null;
+    // Linux and Windows (WSL2): a JDK not on PATH, the newest first: SDKMAN's
+    // current Java, the distribution's /usr/lib/jvm, an IDE's ~/.jdks.
+    const jdks = dir => { try { return fs.readdirSync(dir).map(name => path.join(dir, name)).filter(home => fs.existsSync(path.join(home, 'bin/javac'))); } catch { return []; } };
+    const version = home => Number(/(\d+)(?:[.\-_]|$)/.exec(path.basename(home))?.[1] ?? 0);
+    const found = [...jdks('/usr/lib/jvm'), ...jdks(path.join(userHome, '.jdks'))].sort((a, b) => version(b) - version(a));
+    return [path.join(userHome, '.sdkman/candidates/java/current'), ...found].map(existing).find(home => home && fs.existsSync(path.join(home, 'bin/javac'))) ?? null;
   }
   try {
     const home = execFileSync('/usr/libexec/java_home', [], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], env: { HOME: userHome, PATH: '/usr/bin:/bin' } }).trim();

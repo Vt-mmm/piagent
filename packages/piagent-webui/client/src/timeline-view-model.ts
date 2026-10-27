@@ -81,6 +81,15 @@ export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] 
     if (current.answer && current.answer.trim() !== text.trim()) current.steps.push({ kind: "note", key: `${item.messageRef}:previous`, text: current.answer });
     current.answer = text; current.failure = null; current.failureDetail = null;
   }
+  // An agent sent back by the harness often says the same again: an answer
+  // of a round that the next round or the final answer repeats is shown once.
+  for (const turn of turns) {
+    const later = new Set(turn.answer ? [turn.answer.trim()] : []);
+    turn.steps = turn.steps.reduceRight<TimelineStep[]>((kept, step) => {
+      if (step.kind === "note" && step.draft) { const text = step.text.trim(); if (later.has(text)) return kept; later.add(text); }
+      return [step, ...kept];
+    }, []);
+  }
   return turns;
 }
 

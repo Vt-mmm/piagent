@@ -181,3 +181,19 @@ test("an answer the harness sent back is an interim step; the answer after the c
   assert.equal(draft.draft, true);
   assert.equal(turn.answer, "Checks pass. Done.");
 });
+
+test("an agent the harness sent back twice that says the same again shows that answer once", () => {
+  const report = "No JDK on this machine, so ./mvnw verify did not run.\n\nThe approvals were declined; I will not ask again.";
+  const value = projectTranscript({ identity, revision, eventCursor: "cursor.repeat", generatedAt: "2026-10-01T09:02:00.000Z", entries: [
+    message("r1", "user", [{ type: "text", text: "Update the spec" }]),
+    message("r2", "assistant", [{ type: "text", text: report }], { stopReason: "stop" }),
+    note("r3", "agent-watch-process", { phase: "verify", loop: 1, maxLoops: 2 }),
+    message("r4", "assistant", [{ type: "text", text: report }], { stopReason: "stop" }),
+    note("r5", "agent-watch-process", { phase: "verify", loop: 2, maxLoops: 2 }),
+    message("r6", "assistant", [{ type: "text", text: `${report}\n` }], { stopReason: "stop" })
+  ] });
+  const [turn] = timelineTurns(value.items);
+  assert.equal(turn.steps.filter((step) => step.kind === "note").length, 0, "no interim copy of the same answer");
+  assert.equal(turn.steps.filter((step) => step.kind === "process").length, 2, "the harness rounds stay");
+  assert.equal(turn.answer.trim(), report);
+});

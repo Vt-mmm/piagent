@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { workflowPolicy, declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, normalizePlan, planText, planTool, reviewFindings, workflowPrompt, RunProcess } from '../packages/piagent-core/managed/workflow.mjs';
+import { workflowPolicy, declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, normalizePlan, planText, planTool, reviewFindings, workflowPrompt, RunProcess, nonCodePath, onlyNonCode } from '../packages/piagent-core/managed/workflow.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
@@ -262,6 +262,32 @@ test('suggested steps never add a turn; a required check that never passes ends 
       assert.equal(processNotes(managed).length, expected.phases.length);
     } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
   }
+});
+
+test('a turn that changed only documentation is not sent back for checks; code next to it still is', { skip: !supported, timeout: 180000 }, async () => {
+  for (const [writes, expected] of [
+    [[{ path: 'specs/001-init/spec.md', content: '# Spec\n' }, { path: '.specify/feature.json', content: '{"feature":"001"}\n' }], { requests: 3, phases: ['final'], outcome: 'clean', note: /only documentation changed: no check needed/ }],
+    [[{ path: 'specs/001-init/spec.md', content: '# Spec\n' }, { path: 'src/app.js', content: 'export {};\n' }], { requests: 4, phases: ['verify', 'final'], outcome: 'unverified', note: /no check passed on the final code/ }],
+  ]) {
+    const root = project(), agent = broker({ plan: 'off', verify: 'require', review: 'off', max_fix_loops: 1 }, { review: false });
+    const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+      main: [...writes.map(input => ({ tool: 'write', input })), 'Done.', 'No check can run here.'] };
+    const server = await studio(script);
+    const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+    try {
+      await managed.session.prompt('Write the spec');
+      assert.equal(server.requests.length, expected.requests);
+      assert.deepEqual(processNotes(managed).map(n => n.details.phase), expected.phases);
+      assert.equal(runReport(agent).outcome, expected.outcome); assert.equal(runReport(agent).changed, true);
+      assert.match(processNotes(managed).at(-1).content, expected.note);
+    } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('documentation, pictures and Spec Kit state are not code', () => {
+  for (const file of ['README.md', 'specs/a/spec.md', 'docs/guide.mdx', '.specify/feature.json', 'img/shot.PNG', 'LICENSE', 'docs\\notes.md']) assert.ok(nonCodePath(file), file);
+  for (const file of ['src/app.ts', 'pom.xml', 'package.json', 'a.txt', 'icons/logo.svg', 'db/schema.sql', '']) assert.ok(!nonCodePath(file), file);
+  assert.equal(onlyNonCode([]), false, 'no file known: treated as code');
 });
 
 const turnEnds = managed => managed.session.sessionManager.getEntries().filter(e => e.type === 'custom' && e.customType === 'agent-watch-turn-end').map(e => e.data);

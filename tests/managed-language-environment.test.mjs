@@ -126,3 +126,16 @@ test('tests reach servers on this Mac unless a local proxy listens; caches outli
     await assert.rejects(open.invoke('bash', {command: 'echo y > "$MAVEN_USER_HOME/wrapper/dists/apache-maven-3.9.14/db91789b/bin/mvn"'}), /not permitted|managed-sandbox-denied/);
   } finally { await open.dispose(); await guarded.dispose(); await new Promise((resolve) => proxy.close(resolve)); fs.rmSync(base, {recursive: true, force: true}); }
 });
+
+test('on Linux and Windows (WSL2) a JDK outside PATH is found: SDKMAN, then ~/.jdks by version', {skip: process.platform !== 'linux'}, () => {
+  const {base, home, project, sandboxHome} = machine();
+  const saved = {JAVA_HOME: process.env.JAVA_HOME, PATH: process.env.PATH};
+  try {
+    delete process.env.JAVA_HOME; process.env.PATH = path.join(base, 'empty-bin');
+    for (const jdk of ['.jdks/temurin-17.0.12', '.jdks/temurin-99.0.4']) write(path.join(home, jdk, 'bin/javac'));
+    assert.equal(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).env.JAVA_HOME, path.join(home, '.jdks/temurin-99.0.4'));
+    write(path.join(home, '.sdkman/candidates/java/11.0.2/bin/javac'));
+    fs.symlinkSync(path.join(home, '.sdkman/candidates/java/11.0.2'), path.join(home, '.sdkman/candidates/java/current'));
+    assert.equal(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).env.JAVA_HOME, path.join(home, '.sdkman/candidates/java/11.0.2'));
+  } finally { Object.assign(process.env, saved); fs.rmSync(base, {recursive: true, force: true}); }
+});

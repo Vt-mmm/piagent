@@ -70,6 +70,16 @@ export function repositoryChecks(agentsFiles, cwd, top = cwd) {
 // A command that verifies code: a declared check, or a known test, type,
 // lint or build runner. Text tools that merely mention one do not count.
 const RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|lint|typecheck|type-check|check|build|verify)\b|\bnode\s+--test\b|\b(tsc|vitest|jest|eslint|biome|ruff|mypy|pyright|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest|mypy)\b|\bgo\s+(test|vet|build)\b|\bcargo\s+(test|check|clippy|build)\b|\bswift\s+(test|build)\b|\bxcodebuild\b.*\b(test|build)\b|\bmake\s+(test|check|lint)\b|\b(gradle|gradlew|mvn|mvnw)\b.*\b(test|check|verify|compile|package|build)\b|\bdotnet\s+(test|build)\b|\bdeno\s+(test|check|lint)\b/;
+// Files no check covers: documentation, pictures and documents,
+// and Spec Kit's .specify/ state. A turn that changed only these changed no
+// code: no check is required of it (one is still reported if it ran).
+const NON_CODE = /\.(md|mdx|markdown|rst|adoc|asciidoc|org|png|jpe?g|gif|webp|bmp|ico|pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf)$/i;
+export function nonCodePath(file) {
+  const name = String(file ?? '').replaceAll('\\', '/');
+  return !!name && (NON_CODE.test(name) || /(^|\/)\.specify\//.test(name) || /(^|\/)(LICENSE|NOTICE|AUTHORS|CODEOWNERS)$/.test(name));
+}
+export const onlyNonCode = paths => { const list = [...(paths ?? [])]; return list.length > 0 && list.every(nonCodePath); };
+
 // A command that only reads: each part starts with a reading tool and nothing
 // is written to a file. Anything else may change files. Git may name the
 // repository first (git -C <folder>): a workspace folder holding several
@@ -226,7 +236,7 @@ export class RunProcess {
   constructor(policy, { request, complex, checks }) {
     Object.assign(this, { policy, request: String(request ?? ''), complex, checks, startDigest: null, mutations: 0, lastCheck: null, checksRun: 0, checksFailed: 0,
       reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, unplannedChange: false,
-      unknownTools: 0, changed: false, verified: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
+      unknownTools: 0, changed: false, verified: false, docsOnly: false, approvalDeclined: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
       // Helper objections to a brief, disagreements handed to the member, the
       // claims verify marked failed, and where the harness last sent the
       // agent back (to read its answer and see whether the code moved).
@@ -305,6 +315,7 @@ export async function completionGate(managed, run, signal) {
     run.changed = run.startDigest !== null && digest !== null ? digest !== run.startDigest : run.mutations > 0;
     // A check that passed still counts when the turn was cut off after it.
     if (run.changed) run.verified = run.verifiedOn(digest);
+    run.docsOnly = run.changed && onlyNonCode(managed.ownPaths);
     if (stopped()) { interrupted = run.changed; break; }
     if (run.changed) {
       const reviewDigest = managed.review ? await reviewDigestOf() : null;
@@ -313,7 +324,10 @@ export async function completionGate(managed, run, signal) {
       run.blockingOpen = fresh ? review.blocking ?? 0 : run.blockingOpen;
       // Out of fix rounds the check stays unmet, but a required review still runs.
       if (policy.verify === 'require' && !run.verified && !verifyGaveUp && run.fixLoops >= policy.maxFixLoops) verifyGaveUp = true;
-      if (policy.verify === 'require' && !run.verified && !verifyGaveUp) {
+      // The member declined the approval a check needed (a JDK, Docker, the
+      // network): asking again would only repeat the same answer.
+      if (policy.verify === 'require' && !run.verified && run.approvalDeclined && run.fixLoops > 0) verifyGaveUp = true;
+      if (policy.verify === 'require' && !run.verified && !run.docsOnly && !verifyGaveUp) {
         run.fixLoops += 1;
         const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
         await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), request the approval that makes it run (run_with_network, run_with_docker, start_docker, run_on_host) or ask the member with ask_user, then run it; install or start nothing without that approval. If it fails for a reason unrelated to your change, say so plainly.`,
@@ -395,7 +409,7 @@ export async function completionGate(managed, run, signal) {
   // never had a plan is reported as changed without it.
   if (run.changed && run.planMissing(currentPlan(session.sessionManager))) run.planSkipped = true;
   run.legacyOutcome = !run.changed ? 'no_change' : interrupted ? 'interrupted' : run.blockingOpen > 0 ? 'blocking_open'
-    : policy.verify !== 'off' && !run.verified ? 'unverified' : run.reviewUnavailable ? 'review_unavailable' : policy.review !== 'off' && !run.reviewed ? 'unreviewed' : 'clean';
+    : policy.verify !== 'off' && !run.verified && !run.docsOnly ? 'unverified' : run.reviewUnavailable ? 'review_unavailable' : policy.review !== 'off' && !run.reviewed ? 'unreviewed' : 'clean';
   run.outcome = run.legacyOutcome !== 'interrupted' && run.disputes.length ? 'disputed' : run.legacyOutcome;
   const settled = run.outcome !== 'interrupted';
   session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome, ...(managed.base ? { head: managed.base } : {}),
@@ -405,7 +419,7 @@ export async function completionGate(managed, run, signal) {
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
     ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
-  const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : 'no check passed on the final code',
+  const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : 'no check passed on the final code',
     run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
     run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
     run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null].filter(Boolean);
@@ -437,6 +451,7 @@ export function processEditTools(session, tools) {
         // rather than a thrown error: either way the check did not pass.
         let result;
         try { result = await execute(...args); ok = !result?.isError; }
+        catch (error) { if (session.run && /managed-operation-denied/.test(String(error?.message))) session.run.approvalDeclined = true; throw error; }
         finally { if (tool.name === 'bash') await session.claimChanges?.(before); else if (ok) session.claimPath?.(args[1]?.path); }
         // The file's TypeScript errors right after the change (ts-diagnostics.mjs).
         const note = ok && tool.name !== 'bash' && session.boundary?.spawnSandboxed ? await (session.tsDiagnostics ??= new TsDiagnostics(session.boundary)).check(args[1]?.path) : '';
