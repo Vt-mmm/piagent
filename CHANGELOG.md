@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.43.5 - 2026-10-27
+
+**Image previews and office attachments.** Sent images show as pictures, spreadsheets and slide decks attach directly, and screenshot-heavy tasks no longer stop on Studio's request size limit.
+
+### Added
+
+- Attached and sent images show as pictures in the conversation and open full size; the composer chip shows a thumbnail.
+- Attach .xlsx, .xlsm, .pptx, .odt, .ods, .odp and .rtf: sheets come through as tab-separated rows and slides in order with their notes, without a converter.
+
+### Fixed
+
+- A company task with many screenshots no longer fails with request_too_large: each request resends only the newest images within 2 MiB; older ones become a note.
+- A streamed answer from a turn with tools starts a new paragraph for each model message instead of running sentences together.
+
 ## v1.43.4 - 2026-10-26
 
 **Your workflow, with adaptive backend and frontend support.** Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.

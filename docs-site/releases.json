@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.43.5",
+    "date": "2026-10-27",
+    "status": "stable",
+    "title": {
+      "en": "Image previews and office attachments",
+      "vi": "Xem trước ảnh và đính kèm file văn phòng"
+    },
+    "summary": {
+      "en": "Sent images show as pictures, spreadsheets and slide decks attach directly, and screenshot-heavy tasks no longer stop on Studio's request size limit.",
+      "vi": "Ảnh đã gửi hiện thành hình, bảng tính và slide đính kèm trực tiếp được, task chụp nhiều screenshot không còn dừng vì giới hạn dung lượng request của Studio."
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "Attached and sent images show as pictures in the conversation and open full size; the composer chip shows a thumbnail.",
+        "vi": "Ảnh đính kèm và ảnh đã gửi hiện thành hình trong hội thoại, bấm để xem cỡ lớn; chip trong khung soạn có ảnh thu nhỏ."
+      },
+      {
+        "kind": "new",
+        "en": "Attach .xlsx, .xlsm, .pptx, .odt, .ods, .odp and .rtf: sheets come through as tab-separated rows and slides in order with their notes, without a converter.",
+        "vi": "Đính kèm được .xlsx, .xlsm, .pptx, .odt, .ods, .odp, .rtf: bảng tính thành các dòng cách nhau bằng tab, slide theo thứ tự kèm ghi chú, không cần cài converter."
+      },
+      {
+        "kind": "fixed",
+        "en": "A company task with many screenshots no longer fails with request_too_large: each request resends only the newest images within 2 MiB; older ones become a note.",
+        "vi": "Task công ty chụp nhiều screenshot không còn lỗi request_too_large: mỗi request chỉ gửi lại ảnh mới nhất trong 2 MiB, ảnh cũ hơn thành một dòng ghi chú."
+      },
+      {
+        "kind": "fixed",
+        "en": "A streamed answer from a turn with tools starts a new paragraph for each model message instead of running sentences together.",
+        "vi": "Câu trả lời đang stream của lượt có dùng tool xuống đoạn theo từng message của model, không còn dính các câu thành một khối."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.43.4",
     "date": "2026-10-26",
     "status": "stable",

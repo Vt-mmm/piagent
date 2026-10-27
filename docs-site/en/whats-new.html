@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.4" title="v1.43.4 docs · EN"><span class="dot"></span>v1.43.4</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.5" title="v1.43.5 docs · EN"><span class="dot"></span>v1.43.5</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-43-4" data-release>
+<article class="release latest" id="v1-43-5" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-5">v1.43.5</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-5-title">Image previews and office attachments</h3>
+    <p>Sent images show as pictures, spreadsheets and slide decks attach directly, and screenshot-heavy tasks no longer stop on Studio's request size limit.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Attached and sent images show as pictures in the conversation and open full size; the composer chip shows a thumbnail.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Attach .xlsx, .xlsm, .pptx, .odt, .ods, .odp and .rtf: sheets come through as tab-separated rows and slides in order with their notes, without a converter.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A company task with many screenshots no longer fails with request_too_large: each request resends only the newest images within 2 MiB; older ones become a note.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A streamed answer from a turn with tools starts a new paragraph for each model message instead of running sentences together.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-43-4" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-43-4">v1.43.4</a><time class="release-date" datetime="2026-10-26">Oct 26, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-4-title">Your workflow, with adaptive backend and frontend support</h3>
@@ -416,24 +429,23 @@
     <p class="release-requires"><strong>Requires:</strong> Pi 1.3.0</p>
   </div>
 </article>
-<article class="release" id="v1-32-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-32-1">v1.32.1</a><time class="release-date" datetime="2026-10-19">Oct 19, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-32-1-title">Bypass survives a reload, and a tab in use stays signed in</h3>
-    <p>Bypass and Fast turned on right after a reply are kept, the access button follows the open conversation, and a tab in use is no longer signed out.</p>
-    <ul class="release-items">
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Turning on Bypass or Fast right after a reply was refused, so a reload showed &quot;Hỏi trước&quot;; it is now resent against the latest state.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Opening another conversation in Bypass showed &quot;Hỏi trước&quot;; the access button and Settings → Access now follow the open conversation.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A browser session ended 8 hours after launch even while in use; it now renews for up to 7 days, and only a tab unused for 8 hours signs out.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">45</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">46</span></summary>
+    <div class="archive-row" id="v1-32-1">
+      <div class="archive-head"><a class="release-version" href="#v1-32-1">v1.32.1</a> <span class="release-date">Oct 19, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Bypass survives a reload, and a tab in use stays signed in</strong> — Bypass and Fast turned on right after a reply are kept, the access button follows the open conversation, and a tab in use is no longer signed out.</p>
+        <ul class="release-items">
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Turning on Bypass or Fast right after a reply was refused, so a reload showed &quot;Hỏi trước&quot;; it is now resent against the latest state.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Opening another conversation in Bypass showed &quot;Hỏi trước&quot;; the access button and Settings → Access now follow the open conversation.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A browser session ended 8 hours after launch even while in use; it now renews for up to 7 days, and only a tab unused for 8 hours signs out.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-32-0">
       <div class="archive-head"><a class="release-version" href="#v1-32-0">v1.32.0</a> <span class="release-date">Oct 19, 2026</span></div>
       <div class="archive-body">
