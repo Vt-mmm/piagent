@@ -59,7 +59,7 @@ test('skills and commands of the project (up to its repository root) and of the 
   } finally { fs.rmSync(base, {recursive: true, force: true}); }
 });
 
-// A member's plugins (superpowers and the like): Claude Code's as its
+// A member's plugins (superpowers and the like): Claude's as its
 // installed_plugins.json records them, Codex's from its plugin cache, the
 // newest version of each, none the member turned off.
 function plugins(home, repo) {
@@ -93,7 +93,7 @@ function plugins(home, repo) {
   write(path.join(home, '.codex/config.toml'), '[plugins."gmail@openai-curated"]\nenabled = false\n\n[plugins."superpowers@openai-curated"]\nenabled = true\n');
 }
 
-test('skills and commands of the member\'s Claude Code and Codex plugins are found after their own, as each agent installed them', () => {
+test('skills and commands of the member\'s Claude and Codex plugins are found after their own, as each agent installed them', () => {
   const {base, repo, app, home} = machine();
   try {
     plugins(home, repo);

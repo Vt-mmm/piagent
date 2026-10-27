@@ -41,7 +41,8 @@ pi install /path/to/piagent
 
 ## Versioning
 
-- `1.43.7`: đọc skill và lệnh trong plugin Claude Code/Codex (superpowers…); file agent gắn link mở ngay trong WebUI (code, ảnh, PDF/office); sửa hộp chọn thư mục trên Windows.
+- `1.43.8`: đọc skill và lệnh trong plugin Claude/Codex (superpowers…); file agent gắn link mở ngay trong WebUI (code, ảnh, PDF/office); sửa hộp chọn thư mục trên Windows; harness không bắt check khi chỉ sửa tài liệu, không lặp câu trả lời; tìm JDK trên WSL2.
+- `1.43.7`: (tag, chưa publish do kiểm tra wording công khai) cùng nội dung 1.43.8.
 - `1.43.6`: xem thay đổi và Review khi agent đang chạy; trạng thái đang chạy không bị ẩn sau câu trả lời giữa chừng.
 - `1.43.5`: preview ảnh đính kèm, đọc thêm .xlsx/.pptx/.odt/.ods/.odp/.rtf, ảnh cũ không làm request vượt 4 MiB, text trả lời tách đoạn.
 - `1.43.4`: adaptive workflow Dev chọn và sửa race tải lịch sử WebUI khi cuộn lên; giữ nguyên kiểm chứng và approval.

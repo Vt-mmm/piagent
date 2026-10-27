@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// Skills and commands a member installed as Claude Code or Codex plugins
+// Skills and commands a member installed as Claude or Codex plugins
 // (superpowers, a team's own marketplace…). Each agent keeps them in its plugin
 // cache, not in ~/.claude/skills or ~/.codex/skills, so they are found here:
 // the plugins the agent records as installed, the newest version of each, and
@@ -60,7 +60,7 @@ function plugin(root, agent, name, manifestDir) {
 
 const inside = (dir, base) => dir === base || dir.startsWith(base + path.sep);
 
-// Claude Code: installed_plugins.json lists each plugin@marketplace with where
+// Claude: installed_plugins.json lists each plugin@marketplace with where
 // it is installed and for which scope (a project's install counts in that
 // project only); enabledPlugins in the member's and the project's settings
 // turns one off with false. Plugins synced from claude.ai (Cowork) sit under
@@ -119,7 +119,7 @@ function codexPlugins(home) {
   return found.filter(Boolean);
 }
 
-// The member's plugins, Claude Code's first, at most MAX_PLUGINS. A plugin
+// The member's plugins, Claude's first, at most MAX_PLUGINS. A plugin
 // that cannot be read is left out; it never keeps a conversation from opening.
 export function memberPlugins({ home = os.homedir(), projects = [] } = {}) {
   const read = (load) => { try { return load(); } catch { return []; } };
