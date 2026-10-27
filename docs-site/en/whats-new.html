@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.8" title="v1.43.8 docs · EN"><span class="dot"></span>v1.43.8</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.43.9" title="v1.43.9 docs · EN"><span class="dot"></span>v1.43.9</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,11 +108,26 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-43-8" data-release>
+<article class="release latest" id="v1-43-9" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-43-9">v1.43.9</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-43-9-title">Every installed skill, and files the agent hands back</h3>
+    <p>Skills from Claude and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Skills and commands of the member's Claude and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Choosing a project folder opens the system folder picker on Windows again, also from a dashboard started in the background.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A turn that changed only documentation or Spec Kit files is not sent back to run the repository checks, and a declined approval for a check is not asked again.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An answer the agent repeats after the harness sends it back is shown once, not once per round.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>On Linux and Windows (WSL2), checks find a JDK outside PATH: SDKMAN, /usr/lib/jvm or ~/.jdks.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-43-8" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-43-8">v1.43.8</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-43-8-title">Every installed skill, and files the agent hands back</h3>
-    <p>Skills from Claude and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.</p>
+    <h3 data-toc-skip id="v1-43-8-title">Every installed skill, and files the agent hands back <span class="tag">not published</span></h3>
+    <p>Tagged but not published: a new Linux-only test read the wrong field on CI. Superseded by 1.43.9.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">New</span><span>A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.</span></li>
       <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Skills and commands of the member's Claude and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.</span></li>
@@ -127,7 +142,7 @@
   <div class="release-meta"><a class="release-version" href="#v1-43-7">v1.43.7</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-43-7-title">Every installed skill, and files the agent hands back <span class="tag">not published</span></h3>
-    <p>Tagged but not published: the public wording check stopped the release on a product name in the notes. Superseded by 1.43.8.</p>
+    <p>Tagged but not published: the public wording check stopped the release on a product name in the notes. Superseded by 1.43.9.</p>
     <ul class="release-items">
       <li data-kind="new"><span class="kind kind-new">New</span><span>A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.</span></li>
       <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Skills and commands of the member's Claude and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.</span></li>
@@ -415,22 +430,21 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.36.0</p>
   </div>
 </article>
-<article class="release" id="v1-34-3" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-34-3">v1.34.3</a><time class="release-date" datetime="2026-10-20">Oct 20, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-34-3-title">Agent Watch notifies for company conversations</h3>
-    <p>Company conversation states were written where Agent Watch does not read, so it never notified; they are now written where it reads.</p>
-    <ul class="release-items">
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Agent Watch never notified for company conversations; their states now go to <code>~/.pi/agent/status/company</code>, without prompts or answers.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">49</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">50</span></summary>
+    <div class="archive-row" id="v1-34-3">
+      <div class="archive-head"><a class="release-version" href="#v1-34-3">v1.34.3</a> <span class="release-date">Oct 20, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Agent Watch notifies for company conversations</strong> — Company conversation states were written where Agent Watch does not read, so it never notified; they are now written where it reads.</p>
+        <ul class="release-items">
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Agent Watch never notified for company conversations; their states now go to <code>~/.pi/agent/status/company</code>, without prompts or answers.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-34-2">
       <div class="archive-head"><a class="release-version" href="#v1-34-2">v1.34.2</a> <span class="release-date">Oct 20, 2026</span></div>
       <div class="archive-body">

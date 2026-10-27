@@ -133,9 +133,9 @@ test('on Linux and Windows (WSL2) a JDK outside PATH is found: SDKMAN, then ~/.j
   try {
     delete process.env.JAVA_HOME; process.env.PATH = path.join(base, 'empty-bin');
     for (const jdk of ['.jdks/temurin-17.0.12', '.jdks/temurin-99.0.4']) write(path.join(home, jdk, 'bin/javac'));
-    assert.equal(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).env.JAVA_HOME, path.join(home, '.jdks/temurin-99.0.4'));
+    assert.equal(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).env.offline.JAVA_HOME, path.join(home, '.jdks/temurin-99.0.4'));
     write(path.join(home, '.sdkman/candidates/java/11.0.2/bin/javac'));
     fs.symlinkSync(path.join(home, '.sdkman/candidates/java/11.0.2'), path.join(home, '.sdkman/candidates/java/current'));
-    assert.equal(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).env.JAVA_HOME, path.join(home, '.sdkman/candidates/java/11.0.2'));
+    assert.equal(languageEnvironment({userHome: home, repositoryTop: project, home: sandboxHome}).env.offline.JAVA_HOME, path.join(home, '.sdkman/candidates/java/11.0.2'));
   } finally { Object.assign(process.env, saved); fs.rmSync(base, {recursive: true, force: true}); }
 });

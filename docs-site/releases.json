@@ -1,6 +1,6 @@
 [
   {
-    "version": "1.43.8",
+    "version": "1.43.9",
     "date": "2026-10-27",
     "status": "stable",
     "title": {
@@ -46,6 +46,52 @@
     "requires": null
   },
   {
+    "version": "1.43.8",
+    "date": "2026-10-27",
+    "status": "unpublished",
+    "title": {
+      "en": "Every installed skill, and files the agent hands back",
+      "vi": "Đủ skill đã cài, và mở file agent gửi lại"
+    },
+    "summary": {
+      "en": "Tagged but not published: a new Linux-only test read the wrong field on CI. Superseded by 1.43.9.",
+      "vi": "Đã tag nhưng chưa publish: test mới chỉ chạy trên Linux đọc sai trường trên CI. Thay bằng 1.43.9."
+    },
+    "items": [
+      {
+        "kind": "improved",
+        "en": "Skills and commands of the member's Claude and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.",
+        "vi": "Skill và lệnh trong plugin Claude và Codex của dev được liệt kê và đọc được, lấy bản mới nhất; gõ /plugin:skill cũng được."
+      },
+      {
+        "kind": "new",
+        "en": "A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.",
+        "vi": "File agent gắn link trong câu trả lời mở ngay trong explorer: code đúng dòng, ảnh hiện hình, PDF và file office hiện nội dung chữ."
+      },
+      {
+        "kind": "fixed",
+        "en": "Choosing a project folder opens the system folder picker on Windows again, also from a dashboard started in the background.",
+        "vi": "Chọn thư mục project mở lại được hộp chọn thư mục của Windows, kể cả khi dashboard chạy nền."
+      },
+      {
+        "kind": "fixed",
+        "en": "A turn that changed only documentation or Spec Kit files is not sent back to run the repository checks, and a declined approval for a check is not asked again.",
+        "vi": "Lượt chỉ sửa tài liệu hay file Spec Kit không bị harness bắt chạy check của repo, và approval cho check đã bị từ chối thì không bị hỏi lại."
+      },
+      {
+        "kind": "fixed",
+        "en": "An answer the agent repeats after the harness sends it back is shown once, not once per round.",
+        "vi": "Câu trả lời agent lặp lại sau mỗi lần harness trả về chỉ hiện một lần, không lặp theo từng vòng."
+      },
+      {
+        "kind": "fixed",
+        "en": "On Linux and Windows (WSL2), checks find a JDK outside PATH: SDKMAN, /usr/lib/jvm or ~/.jdks.",
+        "vi": "Trên Linux và Windows (WSL2), check tìm được JDK ngoài PATH: SDKMAN, /usr/lib/jvm hoặc ~/.jdks."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.43.7",
     "date": "2026-10-27",
     "status": "unpublished",
@@ -54,8 +100,8 @@
       "vi": "Đủ skill đã cài, và mở file agent gửi lại"
     },
     "summary": {
-      "en": "Tagged but not published: the public wording check stopped the release on a product name in the notes. Superseded by 1.43.8.",
-      "vi": "Đã tag nhưng chưa publish: kiểm tra wording công khai chặn release vì tên sản phẩm trong ghi chú. Thay bằng 1.43.8."
+      "en": "Tagged but not published: the public wording check stopped the release on a product name in the notes. Superseded by 1.43.9.",
+      "vi": "Đã tag nhưng chưa publish: kiểm tra wording công khai chặn release vì tên sản phẩm trong ghi chú. Thay bằng 1.43.9."
     },
     "items": [
       {

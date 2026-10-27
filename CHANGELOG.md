@@ -4,7 +4,7 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
-## v1.43.8 - 2026-10-27
+## v1.43.9 - 2026-10-27
 
 **Every installed skill, and files the agent hands back.** Skills from Claude and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.
 
@@ -23,9 +23,28 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 - An answer the agent repeats after the harness sends it back is shown once, not once per round.
 - On Linux and Windows (WSL2), checks find a JDK outside PATH: SDKMAN, /usr/lib/jvm or ~/.jdks.
 
+## v1.43.8 - 2026-10-27 (not published)
+
+**Every installed skill, and files the agent hands back.** Tagged but not published: a new Linux-only test read the wrong field on CI. Superseded by 1.43.9.
+
+### Added
+
+- A file the agent links in its answer opens in the explorer: code at its line, images as a picture, PDF and office files as their text.
+
+### Improved
+
+- Skills and commands of the member's Claude and Codex plugins are listed and readable, the newest version of each; /plugin:skill works too.
+
+### Fixed
+
+- Choosing a project folder opens the system folder picker on Windows again, also from a dashboard started in the background.
+- A turn that changed only documentation or Spec Kit files is not sent back to run the repository checks, and a declined approval for a check is not asked again.
+- An answer the agent repeats after the harness sends it back is shown once, not once per round.
+- On Linux and Windows (WSL2), checks find a JDK outside PATH: SDKMAN, /usr/lib/jvm or ~/.jdks.
+
 ## v1.43.7 - 2026-10-27 (not published)
 
-**Every installed skill, and files the agent hands back.** Tagged but not published: the public wording check stopped the release on a product name in the notes. Superseded by 1.43.8.
+**Every installed skill, and files the agent hands back.** Tagged but not published: the public wording check stopped the release on a product name in the notes. Superseded by 1.43.9.
 
 ### Added
 
