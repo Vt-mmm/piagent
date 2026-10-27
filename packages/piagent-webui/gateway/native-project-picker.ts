@@ -4,19 +4,31 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // `wsl`: the picker is Windows' own, run from WSL; its paths are converted.
-type PickerSpec = { executable: string; args: string[]; wsl?: boolean };
+// `base64`: each line is a UTF-8 path in base64, safe from code pages.
+type PickerSpec = { executable: string; args: string[]; wsl?: boolean; base64?: boolean };
 
 // Windows' folder dialog, through PowerShell (also from WSL, where Windows
-// programs run as they are). It prints the chosen folder; cancel exits 1.
+// programs run as they are). The Gateway runs detached, without a console or
+// the foreground: the dialog gets a topmost owner so it opens in front of the
+// browser, and the path is printed as base64 so a non-ASCII folder survives
+// the console's code page. Cancel exits 1; any PowerShell error exits 2.
 const WINDOWS_PICKER = [
-  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-  "Add-Type -AssemblyName System.Windows.Forms",
+  "$ErrorActionPreference = 'Stop'",
+  "try { Add-Type -AssemblyName System.Windows.Forms",
+  "[System.Windows.Forms.Application]::EnableVisualStyles()",
+  "$owner = New-Object System.Windows.Forms.Form",
+  "$owner.TopMost = $true",
+  "$owner.ShowInTaskbar = $false",
   "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
   "$dialog.Description = 'Choose a project folder for Piagent'",
-  "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.WriteLine($dialog.SelectedPath); exit 0 } else { exit 1 }"
+  "$result = $dialog.ShowDialog($owner)",
+  "$owner.Dispose()",
+  "if ($result -ne [System.Windows.Forms.DialogResult]::OK) { exit 1 }",
+  "[Console]::Out.WriteLine([Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dialog.SelectedPath)))",
+  "exit 0 } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 2 }"
 ].join("; ");
 const windowsPicker = (executable: string, wsl = false): PickerSpec =>
-  ({ executable, args: ["-NoProfile", "-NonInteractive", "-STA", "-Command", WINDOWS_PICKER], ...(wsl ? { wsl } : {}) });
+  ({ executable, args: ["-NoProfile", "-NonInteractive", "-STA", "-Command", WINDOWS_PICKER], base64: true, ...(wsl ? { wsl } : {}) });
 type PickerEnvironment = Readonly<Record<string, string | undefined>>;
 
 function executableOnPath(name: string, environment: PickerEnvironment): string | null {
@@ -67,35 +79,49 @@ export function nativeProjectPickerAvailable(options: { platform?: NodeJS.Platfo
   return resolveNativeProjectPicker(options) !== null;
 }
 
-function selectedFolders(stdout: string): string[] {
+function selectedFolders(stdout: string, base64 = false): string[] {
   const selected: string[] = [];
   for (const raw of stdout.split("\n")) {
-    const value = raw.trim(); if (!value) continue;
+    let value = raw.trim(); if (!value) continue;
+    if (base64) {
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) continue;
+      value = Buffer.from(value, "base64").toString("utf8");
+    }
     let candidate = value;
     if (value.startsWith("file:")) {
       try { candidate = fileURLToPath(value); } catch { continue; }
     }
-    if (candidate.includes("\0") || /[\u0001-\u001f\u007f]/.test(candidate) || selected.includes(candidate)) continue;
+    if (candidate.includes("\0") || /[\u0001-\u001f\u007f\ufffd]/.test(candidate) || selected.includes(candidate)) continue;
     selected.push(candidate);
     if (selected.length === 32) break;
   }
   return selected;
 }
 
-export function pickNativeProjectFolders(): Promise<string[]> {
-  const picker = resolveNativeProjectPicker();
+type RunPicker = (executable: string, args: string[], options: { timeout: number; maxBuffer: number; windowsHide: boolean },
+  callback: (error: Error | null, stdout: string) => void) => unknown;
+type ToWslPath = (windowsPath: string) => string;
+
+// The folders the operator chose. `run` and `toWslPath` stand in for the
+// process spawns in tests.
+export function pickNativeProjectFolders(options: { picker?: PickerSpec | null; run?: RunPicker; toWslPath?: ToWslPath } = {}): Promise<string[]> {
+  const picker = options.picker === undefined ? resolveNativeProjectPicker() : options.picker;
   if (!picker) return Promise.reject(new Error("native-project-picker-unavailable"));
+  const run = options.run ?? (execFile as unknown as RunPicker);
+  const toWslPath = options.toWslPath ?? ((folder) => execFileSync("wslpath", ["-u", folder], { encoding: "utf8", timeout: 5000 }).trim());
   return new Promise((resolve, reject) => {
-    execFile(picker.executable, picker.args, { timeout: 5 * 60_000, maxBuffer: 64 * 1024 }, (error, stdout) => {
+    // windowsHide: no console window of its own next to the dialog; closing
+    // that window used to kill the picker.
+    run(picker.executable, picker.args, { timeout: 5 * 60_000, maxBuffer: 64 * 1024, windowsHide: true }, (error, stdout) => {
       if (error) {
         const exitCode = typeof (error as NodeJS.ErrnoException & { code?: unknown }).code === "number"
           ? (error as unknown as { code: number }).code : null;
         reject(new Error(exitCode === 1 ? "project-import-cancelled" : "project-import-picker-failed")); return;
       }
-      let selected = selectedFolders(stdout.replace(/\r/g, ""));
+      let selected = selectedFolders(String(stdout).replace(/\r/g, ""), picker.base64);
       // C:\Users\me\shop, as seen from WSL: /mnt/c/Users/me/shop.
       if (picker.wsl) selected = selected.flatMap((folder) => {
-        try { return [execFileSync("wslpath", ["-u", folder], { encoding: "utf8", timeout: 5000 }).trim()]; } catch { return []; }
+        try { return [toWslPath(folder)]; } catch { return []; }
       });
       if (!selected.length) { reject(new Error("project-import-cancelled")); return; }
       resolve(selected);
