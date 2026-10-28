@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.3" title="v1.44.3 docs · EN"><span class="dot"></span>v1.44.3</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.4" title="v1.44.4 docs · EN"><span class="dot"></span>v1.44.4</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-44-3" data-release>
+<article class="release latest" id="v1-44-4" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-44-4">v1.44.4</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-44-4-title">Company conversations come back in Herdr panes</h3>
+    <p>In Herdr (on Windows: inside WSL), a company pane reports its state and reopens the same conversation after Herdr restarts, with piagent studio --session.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>piagent studio --session &lt;file&gt; reopens a company conversation; only a file of the member’s own store is accepted (managed-session-outside-store otherwise).</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>A company conversation in a Herdr pane reports working, waiting or idle to Herdr, which resumes it with piagent studio, not personal pi. Needs Herdr 0.9.2+.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>WSL/Linux: personal Pi no longer opens a company conversation that has no turn yet, and piagent studio --web opens the browser (wslview/explorer.exe).</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-3" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-3">v1.44.3</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-3-title">Prompt injection cannot quietly read the system</h3>
@@ -414,25 +426,24 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Watch 0.15.11 (Windows 0.1.16)</p>
   </div>
 </article>
-<article class="release" id="v1-37-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-37-0">v1.37.0</a><time class="release-date" datetime="2026-10-22">Oct 22, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-37-0-title">A cut answer no longer stops a long task</h3>
-    <p>An answer cut mid-stream behind Studio is asked again and the task goes on, and <code>piagent studio --rpc</code> lets a script drive a company conversation.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>New <code>piagent studio --rpc</code> runs one company conversation over Pi's RPC protocol on stdin/stdout, with several messages and <code>ask_user</code>.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>A long-task soak lane in the repository drives the real company agent through 45–150-minute tasks with a simulated member.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An answer cut mid-stream showed &quot;the request could not be sent&quot; and stopped a long task; it is now asked again and the task goes on.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The company Terminal no longer exits with an error when a conversation closes right after a turn while Git still reports branch status.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">54</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">55</span></summary>
+    <div class="archive-row" id="v1-37-0">
+      <div class="archive-head"><a class="release-version" href="#v1-37-0">v1.37.0</a> <span class="release-date">Oct 22, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>A cut answer no longer stops a long task</strong> — An answer cut mid-stream behind Studio is asked again and the task goes on, and <code>piagent studio --rpc</code> lets a script drive a company conversation.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>New <code>piagent studio --rpc</code> runs one company conversation over Pi's RPC protocol on stdin/stdout, with several messages and <code>ask_user</code>.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>A long-task soak lane in the repository drives the real company agent through 45–150-minute tasks with a simulated member.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An answer cut mid-stream showed &quot;the request could not be sent&quot; and stopped a long task; it is now asked again and the task goes on.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The company Terminal no longer exits with an error when a conversation closes right after a turn while Git still reports branch status.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-36-1">
       <div class="archive-head"><a class="release-version" href="#v1-36-1">v1.36.1</a> <span class="release-date">Oct 22, 2026</span></div>
       <div class="archive-body">

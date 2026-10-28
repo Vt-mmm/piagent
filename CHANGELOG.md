@@ -4,6 +4,19 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.44.4 - 2026-10-28
+
+**Company conversations come back in Herdr panes.** In Herdr (on Windows: inside WSL), a company pane reports its state and reopens the same conversation after Herdr restarts, with piagent studio --session.
+
+### Added
+
+- piagent studio --session <file> reopens a company conversation; only a file of the member’s own store is accepted (managed-session-outside-store otherwise).
+- A company conversation in a Herdr pane reports working, waiting or idle to Herdr, which resumes it with piagent studio, not personal pi. Needs Herdr 0.9.2+.
+
+### Fixed
+
+- WSL/Linux: personal Pi no longer opens a company conversation that has no turn yet, and piagent studio --web opens the browser (wslview/explorer.exe).
+
 ## v1.44.3 - 2026-10-28
 
 **Prompt injection cannot quietly read the system.** Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.

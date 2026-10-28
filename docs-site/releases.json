@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.44.4",
+    "date": "2026-10-28",
+    "status": "stable",
+    "title": {
+      "en": "Company conversations come back in Herdr panes",
+      "vi": "Conversation công ty trở lại trong pane Herdr"
+    },
+    "summary": {
+      "en": "In Herdr (on Windows: inside WSL), a company pane reports its state and reopens the same conversation after Herdr restarts, with piagent studio --session.",
+      "vi": "Trong Herdr (Windows: cài trong WSL), pane công ty báo trạng thái và mở lại đúng conversation sau khi Herdr khởi động lại, bằng piagent studio --session."
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "piagent studio --session <file> reopens a company conversation; only a file of the member’s own store is accepted (managed-session-outside-store otherwise).",
+        "vi": "piagent studio --session <file> mở lại một conversation công ty; chỉ nhận file trong kho của chính member (ngoài kho báo managed-session-outside-store)."
+      },
+      {
+        "kind": "new",
+        "en": "A company conversation in a Herdr pane reports working, waiting or idle to Herdr, which resumes it with piagent studio, not personal pi. Needs Herdr 0.9.2+.",
+        "vi": "Conversation công ty trong pane Herdr báo đang chạy, chờ hay rảnh cho Herdr, và Herdr resume bằng piagent studio, không phải pi cá nhân. Cần Herdr 0.9.2+."
+      },
+      {
+        "kind": "fixed",
+        "en": "WSL/Linux: personal Pi no longer opens a company conversation that has no turn yet, and piagent studio --web opens the browser (wslview/explorer.exe).",
+        "vi": "WSL/Linux: Pi cá nhân không còn mở được conversation công ty chưa có lượt nào, và piagent studio --web mở được trình duyệt (wslview/explorer.exe)."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.44.3",
     "date": "2026-10-28",
     "status": "stable",
