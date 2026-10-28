@@ -24,7 +24,7 @@ import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from '
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, planTool, currentPlan, PLAN_ENTRY, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { beforeDelegate } from './objections.mjs';
-import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
+import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { restorePermission, permissionSetter } from './permission.mjs';
 import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
@@ -112,9 +112,9 @@ export class ManagedSession {
     self.wrapStreams(self.modelRuntime, 'main');
     const customTools = processEditTools(self, self.boundary.tools(api));
     customTools.push(fetchOriginTool(self));
-    // With a research helper the web is its work: search results and pages
-    // are read on its cheaper model, not in the main agent's context.
+    // With a research helper the web is its work (pages read on its cheaper model), beyond the Harness's few quick lookups.
     if (!helperRoles(manifest).includes('research')) customTools.push(...self.webTools(self.modelRuntime, 'main'));
+    else if (mainWebLookups(manifest)) customTools.push(...limitedWebTools(self.webTools(self.modelRuntime, 'main'), () => self.run, mainWebLookups(manifest)));
     // Commands with network, and with Docker when this machine has an engine.
     customTools.push(...commandTools(self));
     // Every helper role passes the tool's schema: Pi fixes a tool's schema
@@ -136,7 +136,7 @@ export class ManagedSession {
     const agentsFiles = projectInstructions(self.cwd, self.boundary.repositoryTop);
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
-    const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
+    const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest), mainWebLookups(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd, terminalExtensions) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main')); self.studioLink = new StudioLink({ origin: self.origin, agentDir, notify: event => self.notify(event), ui: () => self.session?.extensionRunner?.getUIContext?.() });

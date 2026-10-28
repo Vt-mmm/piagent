@@ -12,12 +12,30 @@ export const HELPER_ROLES = Object.freeze(['scout', 'research', 'verify', 'revie
 export const helperRoles = manifest => HELPER_ROLES.filter(role => manifest?.harness?.configuration?.[role]);
 const WIDE_READING = 'when understanding the task needs more reading than a few batches of files, such as a flow across many modules of an unfamiliar codebase';
 const NETWORK_COMMANDS = 'run_with_network only when a command itself needs the internet or starts a local server or browser, such as end-to-end tests (the user approves each one)';
-// How the main agent reaches the web. With a research helper it has no web
-// tools: searching and reading pages happen on the helper's model.
-export function webPrompt(roles) {
-  return roles.includes('research')
-    ? ` Shell commands run without network and you have no web tools: hand anything on the web (current information, news, documentation, releases, error messages) to the research helper, and use ${NETWORK_COMMANDS}.`
-    : ` Shell commands run without network: use web_search for current information or documentation, web_fetch to read a public https page, and ${NETWORK_COMMANDS}.`;
+// With a research helper the main agent may still look one thing up itself:
+// the Harness's workflow.main_web_lookups (0 to 5, default 0) web_search and
+// web_fetch calls per member message. Anything wider is the helper's work.
+export const MAIN_WEB_LOOKUPS_MAX = 5;
+export function mainWebLookups(manifest) {
+  const n = manifest?.harness?.configuration?.workflow?.main_web_lookups;
+  return Number.isInteger(n) && n >= 0 && n <= MAIN_WEB_LOOKUPS_MAX ? n : 0;
+}
+// The main agent's web tools, counted against the current run's lookups.
+export function limitedWebTools(tools, currentRun, limit) {
+  return tools.map(tool => ({ ...tool, execute: async (...args) => {
+    const run = currentRun();
+    if (run && ++run.webLookups > limit) throw Error(`managed-web-lookups-spent: you used your ${limit} quick web lookup(s) for this message. Hand the rest of the web work to the research helper (delegate role "research").`);
+    return tool.execute(...args);
+  } }));
+}
+// How the main agent reaches the web. With a research helper, searching and
+// reading pages happen on the helper's model, beyond a few quick lookups.
+export function webPrompt(roles, lookups = 0) {
+  if (!roles.includes('research'))
+    return ` Shell commands run without network: use web_search for current information or documentation, web_fetch to read a public https page, and ${NETWORK_COMMANDS}.`;
+  return lookups > 0
+    ? ` Shell commands run without network. For one quick fact (a version, a flag, one documentation page) use web_search or web_fetch yourself, at most ${lookups} call(s) per member message; hand anything wider on the web (several sources, comparisons, news, research) to the research helper, and use ${NETWORK_COMMANDS}.`
+    : ` Shell commands run without network and you have no web tools: hand anything on the web (current information, news, documentation, releases, error messages) to the research helper, and use ${NETWORK_COMMANDS}.`;
 }
 export function helperPrompt(roles) {
   const lines = [];

@@ -125,7 +125,7 @@ function broker(workflow, helpers, features = ['process', 'process-v2', 'process
   const grant = role => ({ ...authority, run_id: run, role_id: roles[role], role, fence: ++fence, provider: 'claude', model_id: model(role).id, provider_model_id: model(role).provider_model_id, effort: 'medium', token: `as_run_${roles[role]}_${'x'.repeat(43)}` });
   return { roles, closes, async request(action, args = {}) {
     if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: 'key', user: { id: 'member' }, revision: 'r1', broker_features: features, models: [MAIN, HELPER],
-      harness: { configuration: { main: { model_ids: [MAIN.id] }, ...Object.fromEntries(helpers.map(role => [role, { model_ids: [HELPER.id] }])), workflow } } };
+      harness: { configuration: { main: { model_ids: [MAIN.id] }, ...Object.fromEntries(helpers.map(role => [role, { model_ids: [HELPER.id] }])), workflow: { lanes: false, ...workflow } } } };
     if (['start', 'renew', 'child'].includes(action)) return grant(args.role ?? 'main');
     if (action === 'close') { closes.push(args); return true; }
     throw Error('unexpected-broker-action');
