@@ -104,11 +104,17 @@ function directChildGitEvidenceRootDetails(cwd) {
         complete = false;
         continue;
       }
-      if (!isGitWorkingTree(child)) {
+      // One Git process per child: a parent of thirty repositories ran sixty.
+      let inside, topLevel;
+      try {
+        [inside, topLevel] = gitOutput(child, ["rev-parse", "--is-inside-work-tree", "--show-toplevel"]).trim().split("\n");
+      } catch {
+        inside = "false";
+      }
+      if (inside !== "true" || !topLevel) {
         complete = false;
         continue;
       }
-      const topLevel = gitOutput(child, ["rev-parse", "--show-toplevel"]).trim();
       if (fs.realpathSync(topLevel) !== fs.realpathSync(child)) {
         complete = false;
         continue;
@@ -141,6 +147,26 @@ export function gitEvidenceRootDetails(cwd) {
 
 export function gitEvidenceRoots(cwd) {
   return gitEvidenceRootDetails(cwd).roots;
+}
+
+// Whether the working tree differs from HEAD, without reading any file: the
+// same answer as a non-empty workingTreeSnapshot, which hashes every changed
+// and loose file and blocked the terminal for seconds on each prompt in a
+// folder of repositories. Unknown counts as changed, as it does there.
+export function workingTreeHasChanges(cwd, details = gitEvidenceRootDetails(cwd)) {
+  if (!details.complete) return true;
+  for (const root of details.roots) {
+    try {
+      const status = gitOutput(root.cwd, ["status", "--porcelain", "-z", "--untracked-files=normal",
+        "--", ".", ":(exclude).pi/piagent-state"]);
+      if (status) return true;
+    } catch {
+      return true;
+    }
+  }
+  if (details.roots.length === 0 || details.roots.some((root) => root.prefix === "")) return false;
+  const loose = nonGitWorkspaceFileDetails(cwd, details.roots.map((root) => root.prefix), 1);
+  return loose.files.length > 0 || !loose.complete;
 }
 
 function workspaceEvidenceFileLimit(value) {

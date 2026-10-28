@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { redactSensitiveText } from "../../extensions/redaction-core.js";
-import { workingTreeSnapshot } from "../../extensions/task-state.js";
+import { workingTreeSnapshotOffThread } from "./working-tree-off-thread.ts";
 import { workingTreeEvidenceDigest, workingTreeSnapshotUsesCurrentAlgorithm } from "../../extensions/working-tree-digest.js";
 import { inspectTaskContinuationBudget } from "../recovery/continuation-budget.ts";
 import { handoffIdentityMatchesTask, readHandoffProjection } from "../recovery/handoff-projection.ts";
@@ -365,11 +365,7 @@ export async function buildWebUiInspectionProjection(input: {
   const identity: WebUiIdentity = { projectRef: webUiProjectRef(input.cwd), runtimeInstanceId: input.runtimeInstanceId ?? WEBUI_RUNTIME_INSTANCE_REF,
     sessionRef: webUiSessionRef(input.sessionId), taskId: input.task?.taskId ?? null, taskRunId: input.task?.taskRunId ?? null, agentOperationId: null, toolCallId: null };
   const effectiveProtectedPaths = input.protectedPaths ?? input.task?.protectedPaths ?? [];
-  // Synchronous: the Gateway answers nobody while it runs (task-state.js).
-  const currentSnapshot = workingTreeSnapshot(input.cwd, {
-    gitTimeoutMs: 8_000,
-    isProtectedProjectPath: (projectPath: string) => Boolean(matchesProtectedPath(projectPath, effectiveProtectedPaths))
-  }) as Record<string, string>;
+  const currentSnapshot = await workingTreeSnapshotOffThread(input.cwd, { gitTimeoutMs: 8_000, protectedPaths: effectiveProtectedPaths });
   const taskRevision = input.task ? webUiTaskRevision(input.task) : null;
   const views = await collectSourceChangeViews({ cwd: input.cwd, identity, generatedAt, taskRevision,
     isProtectedPath: (_root, repoPath) => Boolean(matchesProtectedPath(repoPath, effectiveProtectedPaths)) });
