@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { requestGatewayControl } from "../packages/piagent-webui/gateway/control-socket.ts";
 import { browserCommand } from "../packages/piagent-core/runtime/host/browser-opener.mjs";
-import { installedPiHostRoot } from "../packages/piagent-webui/gateway/pi-host.ts";
+import { pinnedPiHostRoot } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { gatewayProfileState, profileRef, readGatewayDescriptor, readOrCreateCatalogKey,
   removeGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
@@ -266,7 +266,7 @@ async function main() {
     const key = readOrCreateCatalogKey(state), descriptor = readGatewayDescriptor(state);
     let actual = null;
     try {
-      const hostRoot = installedPiHostRoot();
+      const hostRoot = pinnedPiHostRoot(expectedPiVersion);
       actual = JSON.parse(fs.readFileSync(path.join(hostRoot, "package.json"), "utf8")).version;
     } catch { /* reported as a failed check below */ }
     let health = null;

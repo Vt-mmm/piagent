@@ -276,6 +276,25 @@ describe("install-global release channels", () => {
     assert.match(disabled.stderr, new RegExp(`Pi Coding Agent ${expectedPiHostVersion.replaceAll(".", "\\.")} is required`));
   });
 
+  it("keeps a member's newer pi and plans a private pinned host instead of replacing it", () => {
+    const newer = expectedPiHostVersion.replace(/^(\d+)\.(\d+)\.\d+.*$/, (_all, major, minor) => `${major}.${Number(minor) + 1}.0`);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-own-pi-"));
+    try {
+      const env = { PI_INSTALL_FAKE_PI_VERSION: newer, HOME: home };
+      const installed = runInstaller(["--stable", "--dry-run", "--no-model-scope"], env);
+      assert.equal(installed.status, 0, installed.stderr);
+      assert.match(installed.stderr, new RegExp(`your pi ${newer.replaceAll(".", "\\.")} stays as it is`));
+      assert.ok(installed.stderr.includes(`--prefix ${path.join(home, ".piagent", "pi-host", expectedPiHostVersion)}`), installed.stderr);
+      assert.match(installed.stdout, /\+ pi install/);
+
+      const setup = runSetup(["--global-only", "--package-source", "git:github.com/Vt-mmm/piagent@v1.0.2", "--dry-run", "--no-mcp", "--no-subagents", "--no-herdr", "--no-model-scope"], env);
+      assert.equal(setup.status, 0, setup.stderr);
+      assert.ok(!setup.stdout.includes("npm install -g --ignore-scripts @earendil-works/pi-coding-agent@"), setup.stdout);
+      assert.match(setup.stdout, /is your own and stays as it is/);
+      assert.match(setup.stdout, /piagent pi /);
+    } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  });
+
   it("rejects --resolve-tag outside stable or exact version channels", () => {
     const dev = runInstaller(["--dev", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     const local = runInstaller(["--local", "--resolve-tag", "--dry-run", "--no-model-scope"]);

@@ -245,8 +245,9 @@ describe("piagent guard integration", () => {
     for (const kept of ["piagent_tools", "piagent_context_engine", "piagent_document_read", "piagent_source_checkout", "piagent_memory_note"]) {
       assert.equal(harness.tools.has(kept), true, kept);
     }
-    assert.equal(harness.commands.size, 28);
+    assert.equal(harness.commands.size, 29);
     assert.equal(harness.commands.has("bypass"), true);
+    assert.equal(harness.commands.has("style"), true);
     assert.equal(harness.commands.has("undo"), true);
     for (const command of ["profile", "context-index", "piagent-mcp", "usage", "logs", "context", "permission", "fast", "memory", "piagent-inspector",
       "piagent-logs", "setname", "piagent-usage", "piagent-session", "piagent-context", "piagent-permission", "memory-policy"]) {

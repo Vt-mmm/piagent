@@ -294,4 +294,23 @@ echo "NPM CALLED: \$*"
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stdout, /--prefix/);
   });
+
+  it("removes Piagent's private host and leaves a member's own newer pi in place", () => {
+    const root = scratch(), home = path.join(root, "home");
+    fs.mkdirSync(path.join(home, ".piagent", "pi-host", "1.3.0"), { recursive: true });
+    const pinned = JSON.parse(fs.readFileSync(path.join(path.dirname(script), "..", "package.json"), "utf8")).peerDependencies["@earendil-works/pi-coding-agent"];
+    const newer = pinned.replace(/^(\d+)\.(\d+)\..*$/, (_all, major, minor) => `${major}.${Number(minor) + 1}.0`);
+    const bin = path.join(root, "own-bin");
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, "pi"), `#!/usr/bin/env bash\n[[ "$1" == "--version" ]] && echo ${newer}\n`, { mode: 0o755 });
+    const npmBin = fakeNpm(root, "/usr/local");
+    const result = spawnSync("bash", [script, "--with-host"], {
+      env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir(root, []), PATH: `${npmBin}${path.delimiter}${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Removing Piagent's private Pi host/);
+    assert.ok(result.stdout.includes(`Pi ${newer} is your own`), result.stdout);
+    assert.doesNotMatch(result.stdout, /npm uninstall -g/);
+  });
 });

@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.44.0`: `/style` chọn giao diện Terminal (bốn theme Piagent); `piagent skills add mattpocock/skills` thêm repo skill GitHub ghim theo commit; member dùng Pi mới hơn (vd 1.4.0) giữ nguyên `pi` của mình, Piagent chạy Pi 1.3.0 riêng trong `~/.piagent/pi-host` (`piagent pi`).
 - `1.43.9`: đọc skill và lệnh trong plugin Claude/Codex (superpowers…); file agent gắn link mở ngay trong WebUI (code, ảnh, PDF/office); sửa hộp chọn thư mục trên Windows; harness không bắt check khi chỉ sửa tài liệu, không lặp câu trả lời; tìm JDK trên WSL2.
 - `1.43.8`: (tag, chưa publish do test Linux mới đọc sai trường) cùng nội dung 1.43.9.
 - `1.43.7`: (tag, chưa publish do kiểm tra wording công khai) cùng nội dung 1.43.9.

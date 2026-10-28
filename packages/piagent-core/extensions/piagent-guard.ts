@@ -171,6 +171,7 @@ import { prefixCompletions, registerPiagentTool as registerToolDefinition, regis
 import { registerTaskEvidenceTools } from "../runtime/registration/task-evidence-tools.ts";
 import { registerAgentResources } from "../runtime/registration/agent-resources.ts";
 import { registerTerminalUpdateOffer } from "../runtime/update/terminal-update-offer.mjs";
+import { registerStyleCommand } from "../runtime/terminal/terminal-style.mjs";
 import { userSkillFolders } from "../runtime/resources/agent-resources.mjs";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
 import { registerPiagentStatusCommand } from "../runtime/registration/runtime-model-status.ts";
@@ -4242,5 +4243,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   registerAgentResources(pi);
   // A new release is asked about in the Terminal, as the dashboard does.
   registerTerminalUpdateOffer(pi, { installed: installedPlatformVersion(), packageRoot: PLATFORM_ROOT, restart: "pi" });
+  // The Terminal's look (/style): Pi keeps the pick in its own settings.
+  registerStyleCommand(pi);
   registerSessionCommands(pi, { ...registrationDeps, ...contextCommandApi });
 }

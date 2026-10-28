@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// Skills and commands a member installed as Claude or Codex plugins
+// Skills and commands a member installed as Claude or Codex plugins, or added
+// to Piagent as a skill source
 // (superpowers, a team's own marketplace…). Each agent keeps them in its plugin
 // cache, not in ~/.claude/skills or ~/.codex/skills, so they are found here:
 // the plugins the agent records as installed, the newest version of each, and
@@ -119,9 +120,37 @@ function codexPlugins(home) {
   return found.filter(Boolean);
 }
 
-// The member's plugins, Claude's first, at most MAX_PLUGINS. A plugin
-// that cannot be read is left out; it never keeps a conversation from opening.
+// Skill repositories the member added with `piagent skills add` (for example
+// mattpocock/skills), each kept at the commit it was added at under
+// ~/.piagent/skill-sources and listed in ~/.piagent/skill-sources.json
+// (scripts/skill-sources.mjs). A repository that ships a Claude or Codex
+// plugin manifest is read through it, so only the skills it publishes load.
+export function skillSourcesRoot(home = os.homedir()) {
+  return path.join(home, '.piagent', 'skill-sources');
+}
+export function skillSourcesIndex(home = os.homedir()) {
+  return path.join(home, '.piagent', 'skill-sources.json');
+}
+function piagentSources(home) {
+  const sources = readJson(skillSourcesIndex(home))?.sources;
+  if (!Array.isArray(sources)) return [];
+  const root = folder(skillSourcesRoot(home));
+  if (!root) return [];
+  return sources.filter((entry) => entry && typeof entry.path === 'string' && entry.enabled !== false).map((entry) => {
+    const dir = folder(path.resolve(root, entry.path));
+    return dir && inside(dir, root) ? skillSourcePlugin(dir, entry.name || entry.repo) : null;
+  }).filter(Boolean);
+}
+// One source's copy read as a plugin: through its Claude or Codex manifest when it has one.
+export function skillSourcePlugin(dir, name) {
+  const manifestDir = fs.existsSync(path.join(dir, '.claude-plugin', 'plugin.json')) ? '.claude-plugin' : '.codex-plugin';
+  return plugin(dir, 'piagent', name, manifestDir);
+}
+
+// The member's plugins, Claude's first, then Codex's and the skill sources
+// added to Piagent, at most MAX_PLUGINS. A plugin that cannot be read is left
+// out; it never keeps a conversation from opening.
 export function memberPlugins({ home = os.homedir(), projects = [] } = {}) {
   const read = (load) => { try { return load(); } catch { return []; } };
-  return [...read(() => claudePlugins(home, projects)), ...read(() => codexPlugins(home))].slice(0, MAX_PLUGINS);
+  return [...read(() => claudePlugins(home, projects)), ...read(() => codexPlugins(home)), ...read(() => piagentSources(home))].slice(0, MAX_PLUGINS);
 }

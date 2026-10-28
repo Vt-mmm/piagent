@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { privateHostRoot } from "../../piagent-core/managed/pi-host.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -73,8 +74,19 @@ export function installedPiHostRoot(): string {
   throw new Error("pi-host-unavailable");
 }
 
+// The host of the pinned release: the installed one when it is that release,
+// else Piagent's private copy, kept beside a member's own newer Pi
+// (packages/piagent-core/managed/pi-host.mjs).
+export function pinnedPiHostRoot(expectedVersion: string): string {
+  const own = privateHostRoot(expectedVersion) as string | null;
+  let root: string;
+  try { root = installedPiHostRoot(); } catch (error) { if (own) return own; throw error; }
+  try { if ((JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { version?: string }).version === expectedVersion) return root; } catch { /* unreadable: the private copy, if any */ }
+  return own ?? root;
+}
+
 export async function loadPinnedPiHost(expectedVersion: string): Promise<any> {
-  const root = installedPiHostRoot();
+  const root = pinnedPiHostRoot(expectedVersion);
   const actual = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { version?: string };
   if (actual.version !== expectedVersion) throw new Error("pi-host-version-mismatch");
   return await import(pathToFileURL(path.join(root, "dist", "index.js")).href);

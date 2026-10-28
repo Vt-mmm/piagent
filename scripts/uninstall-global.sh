@@ -212,7 +212,24 @@ fi
 
 if [[ "$WITH_HOST" == true ]]; then
   echo
-  if command -v npm >/dev/null 2>&1; then
+  # Piagent's private host (kept beside a member's own, newer pi) is Piagent's to remove.
+  PRIVATE_HOSTS="${HOME}/.piagent/pi-host"
+  if [[ -d "$PRIVATE_HOSTS" ]]; then
+    echo "Removing Piagent's private Pi host:"
+    run_cmd rm -rf "$PRIVATE_HOSTS"
+  fi
+  # A pi newer than the pinned release is the member's own: it stays.
+  own_pi_version=""
+  if command -v pi >/dev/null 2>&1 && [[ "$(pi --version 2>/dev/null || true)" =~ ([0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?) ]]; then
+    own_pi_version="${BASH_REMATCH[1]}"
+  fi
+  own_pi_plan=""
+  if [[ -n "$own_pi_version" ]]; then
+    own_pi_plan="$(node --input-type=module -e 'const { hostPlan } = await import(process.argv[1]); process.stdout.write(hostPlan(process.argv[2]));' "$ROOT/packages/piagent-core/managed/pi-host.mjs" "$own_pi_version" 2>/dev/null || true)"
+  fi
+  if [[ "$own_pi_plan" == "private" ]]; then
+    echo "Pi $own_pi_version is your own (newer than the release Piagent pins): left in place."
+  elif command -v npm >/dev/null 2>&1; then
     echo "Uninstalling Pi host:"
     HOST_PREFIX="$(npm_prefix_override)"
     if [[ -n "$HOST_PREFIX" ]]; then

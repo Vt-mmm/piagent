@@ -701,7 +701,19 @@ else
   if [[ "$pi_version_output" =~ ([0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?) ]]; then
     current_pi_version="${BASH_REMATCH[1]}"
   fi
-  if [[ "$current_pi_version" != "$EXPECTED_PI_VERSION" ]]; then
+  pi_host_plan="$(node --input-type=module -e 'const { hostPlan } = await import(process.argv[1]); process.stdout.write(hostPlan(process.argv[2] || null));' "$PLATFORM_ROOT/packages/piagent-core/managed/pi-host.mjs" "$current_pi_version")"
+  if [[ "$pi_host_plan" == "private" ]]; then
+    # The member's own, newer pi stays: it loads the Piagent package as any Pi
+    # package, and company sessions and `piagent pi` run the private pinned host.
+    echo "NOTE: your pi $current_pi_version stays as it is; Piagent is qualified on Pi $EXPECTED_PI_VERSION." >&2
+    pi_host_args=(ensure --force)
+    [[ "$DRY_RUN" == true ]] && pi_host_args+=(--dry-run)
+    if ! node "$PLATFORM_ROOT/scripts/pi-host.mjs" "${pi_host_args[@]}" >&2; then
+      echo "FAIL: could not install the private Pi $EXPECTED_PI_VERSION." >&2
+      exit 1
+    fi
+    echo "NOTE: run \`piagent pi\` for the qualified release; \`pi\` ($current_pi_version) loads Piagent too, unqualified." >&2
+  elif [[ "$current_pi_version" != "$EXPECTED_PI_VERSION" ]]; then
     echo "FAIL: Pi Coding Agent $EXPECTED_PI_VERSION is required; found ${current_pi_version:-${pi_version_output:-unknown}}." >&2
     echo "Install the supported host with: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$EXPECTED_PI_VERSION" >&2
     exit 1

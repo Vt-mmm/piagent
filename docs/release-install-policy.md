@@ -38,6 +38,8 @@ ordinary `release-defaults` treatment.
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `1.3.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
+A member who already runs a newer Pi of their own keeps it. `piagent-setup`, `piagent-install` and `piagent-update` no longer replace it with the pinned release: they install the pinned host privately under `~/.piagent/pi-host/<version>`, and company sessions (`piagent studio`, recorded for Agent Watch in `piagent-runtime.json`), the dashboard and `piagent pi` run that copy. The member's own `pi` still loads the Piagent package as any Pi package, outside the qualified release. A missing or older `pi` is installed or upgraded globally as before. `piagent pi-host status` shows which host is used.
+
 | Surface | Status for v1.8.0 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Local compatibility and browser checks passed; full PR/tag gate required. | Roll out after the v1.8.0 release gate passes. |
@@ -153,7 +155,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0
-npm install -g --ignore-scripts @piagent/platform@1.43.9
+npm install -g --ignore-scripts @piagent/platform@1.44.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -179,7 +181,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.43.9
+pi install git:github.com/Vt-mmm/piagent@v1.44.0
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.

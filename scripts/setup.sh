@@ -80,6 +80,7 @@ CONFIGURE_MODEL_SCOPE=true
 MODEL_SCOPE_PRESET="full"
 DEFAULT_MODEL="openai-codex/gpt-6-sol:high"
 AUTO_INSTALL_PI=true
+PI_HOST_PRIVATE=false
 FORCE_PROFILE=false
 FORCE_SETTINGS=false
 SKIP_AGENTS=false
@@ -347,6 +348,19 @@ ensure_pi_cli() {
     if [[ "$current_version" == "$expected_pi_version" ]]; then
       return
     fi
+    # A newer pi is the member's own: it stays, and the pinned host is
+    # installed privately beside it (scripts/pi-host.mjs).
+    if [[ -n "$current_version" ]] && [[ "$(node -e 'const [a,b]=process.argv.slice(1).map(v=>v.split(/[+-]/)[0].split(".").map(Number)); for (let i=0;i<3;i++) if (a[i]!==b[i]) { process.stdout.write(a[i]>b[i]?"newer":"older"); process.exit(0); } process.stdout.write("same");' "$current_version" "$expected_pi_version")" == "newer" ]]; then
+      echo "Pi CLI $current_version is your own and stays as it is; Piagent runs on a private Pi $expected_pi_version."
+      local ensure_args=(ensure --force)
+      [[ "$DRY_RUN" == true ]] && ensure_args+=(--dry-run)
+      if ! node "$PLATFORM_ROOT/scripts/pi-host.mjs" "${ensure_args[@]}"; then
+        echo "FAIL: could not install the private Pi $expected_pi_version." >&2
+        exit 1
+      fi
+      PI_HOST_PRIVATE=true
+      return
+    fi
     if [[ "$AUTO_INSTALL_PI" == false ]]; then
       echo "FAIL: Pi Coding Agent $expected_pi_version is required; found ${current_version:-${current_output:-unknown}}. Remove --no-install-pi or upgrade it manually." >&2
       exit 1
@@ -490,7 +504,11 @@ echo "Next:"
 if [[ "$DO_PROJECT" == true ]]; then
   echo "  cd \"$PROJECT_PATH\""
 fi
-echo "  pi"
+if [[ "$PI_HOST_PRIVATE" == true ]]; then
+  echo "  piagent pi         # Pi $(node -p 'require(process.argv[1]).peerDependencies["@earendil-works/pi-coding-agent"]' "$PLATFORM_ROOT/package.json"), the release Piagent is qualified on; your own pi also loads Piagent"
+else
+  echo "  pi"
+fi
 echo "  /login             # first time only"
 if [[ "$DO_PROJECT" == true ]]; then
   echo "  /model             # or Ctrl+L: select provider/model from Pi selector"

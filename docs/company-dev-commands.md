@@ -31,6 +31,8 @@ In a git repository, `/undo` in the company Terminal puts back the files the age
 
 Pi commands that would send the conversation outside the company are refused with a notice: `/share` (a GitHub Gist) and `/bug` (a report to Pi's developers); Pi's "/bug sends a report" hint after errors is not shown. `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking`, `/settings` and the keys that do the same (Ctrl+L, Ctrl+P, Shift+Tab) say that the team's Harness decides. `/changelog` shows Piagent's latest release notes. Personal `pi` is unchanged.
 
+`/style` picks the Terminal's look: Pi's `system`, `dark` and `light`, and Piagent's `piagent-ocean` (dark, calm blues for long sessions), `piagent-paper` (light, warm), `piagent-contrast` (high contrast for bright rooms or projectors) and `piagent-focus` (nearly monochrome, one amber accent). `/style` alone lists them; `/style <name>` switches at once. The pick is kept in `~/.pi/piagent-terminal-style.json` and comes back in the next company conversation. In personal Pi the same `/style` (or `/settings` → Theme) keeps it in Pi's own settings.
+
 ## Commands in the dashboard
 
 The dashboard composer takes the Terminal's `/` commands. Typing `/` lists them with the project's commands and skills; a command runs in the dashboard through the same session commands as the buttons and is never sent to the model (`/undo` excepted: the company runtime answers it). `/help` lists them all.

@@ -477,9 +477,14 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.43.9` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.43.9` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.44.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.44.0` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
+| `piagent pi-host status` | Xem Pi host Piagent đang chạy: bản pin, `pi` riêng của bạn, bản Pi riêng của Piagent. |
+| `piagent pi` | Mở Pi đúng bản Piagent đã kiểm định (vd `1.3.0`) khi `pi` của bạn là bản mới hơn (vd `1.4.0`); `pi` của bạn giữ nguyên. |
+| `piagent pi-host ensure` | Cài bản Pi pin vào `~/.piagent/pi-host/<version>` khi `pi` trên máy là bản mới hơn. `piagent-setup`, `piagent-install`, `piagent-update` tự làm bước này và không còn hạ cấp `pi` của member. |
+| `piagent skills add mattpocock/skills` | Thêm một repo skill trên GitHub (giữ ở đúng một commit trong `~/.piagent/skill-sources`). Skill dùng được dạng `/skill:<tên>` trong Pi cá nhân (sau `/reload`), Terminal công ty và dashboard. Repo có `.claude-plugin/plugin.json` chỉ nạp skill repo đó công bố. `--ref <branch|tag|commit>` để ghim bản khác. |
+| `piagent skills list` / `update [<owner/repo>]` / `remove <owner/repo>` | Xem skill từng nguồn thêm vào; lên commit mới nhất của ref; gỡ nguồn và xoá bản sao. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
 | `piagent-update --version X.Y.Z` | Update tới đúng một release thay vì latest; dùng cho rollout theo lô hoặc rollback. |
@@ -499,6 +504,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-auto` | Mở Pi với project trust `--approve` cho lần chạy hiện tại; guard vẫn bật. |
 | `piagent-auto --read-only -p "<task>"` | Auto-run scout/read-only; guard chặn shell/write/unknown tool. |
 | `piagent-auto --full-access -p "<task>"` | Trusted automation style; không tắt protected paths/redaction/human gates. |
+| `/style`, `/style <tên>` | Chọn giao diện Terminal: `system`, `dark`, `light` của Pi và `piagent-ocean`, `piagent-paper`, `piagent-contrast`, `piagent-focus` của Piagent. Pi cá nhân lưu trong settings của Pi; Terminal công ty (`piagent studio`) lưu ở `~/.pi/piagent-terminal-style.json`. |
 | `pi` rồi `/permission full-access <task>` | Một lệnh trong Pi để bật full-access cho session và giao task. Alias `/full-access <task>` vẫn chạy. |
 | `piagent-auto --bypass`, `/permission bypass` | Bypass như Codex: không hỏi, không chặn gì (xoá, push, migration, gửi ra ngoài, file được bảo vệ đều chạy). Output vẫn che secret, `/undo` vẫn hoàn tác từng lượt. Company: `/bypass on` (Bypass), `/bypass full` (Toàn quyền), `/bypass off` (Hỏi trước); admin Studio tắt được Bypass trong Harness, khi đó cuộc trò chuyện chạy như Toàn quyền. |
 | `pi --list-models` | Xem model Pi thấy được theo credentials hiện tại. |

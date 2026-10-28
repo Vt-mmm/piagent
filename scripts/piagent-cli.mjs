@@ -26,7 +26,9 @@ const scriptByCommand = {
   "piagent-context": "scripts/context-engine.mjs",
   "piagent-explain": "scripts/explain-command.mjs",
   "piagent-webui": "scripts/piagent-webui-launcher.mjs",
-  "piagent-dashboard": "scripts/piagent-dashboard.mjs"
+  "piagent-dashboard": "scripts/piagent-dashboard.mjs",
+  "piagent-pi-host": "scripts/pi-host.mjs",
+  "piagent-skills": "scripts/skill-sources.mjs"
 };
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -42,6 +44,10 @@ if (invokedAs === "piagent") {
   } else if (subcommand === "dashboard") {
     script = "scripts/piagent-dashboard.mjs";
     forwardedArgs = forwardedArgs.slice(1);
+  } else if (subcommand === "pi") {
+    // Pi itself, on the release Piagent is qualified on, whatever `pi` the member keeps.
+    script = "scripts/pi-host.mjs";
+    forwardedArgs = ["run", "--", ...forwardedArgs.slice(1)];
   } else if (subcommand === "explain") {
     script = "scripts/explain-command.mjs";
     forwardedArgs = forwardedArgs.slice(1);
@@ -64,6 +70,9 @@ if (invokedAs === "piagent") {
     console.log("Commands:");
     console.log("  dashboard   Open and manage the local session hub");
     console.log("  studio      Open the managed company agent imported by Agent Watch");
+    console.log("  pi          Run Pi on the release Piagent is qualified on (your own pi stays as it is)");
+    console.log("  pi-host     Show or install the Pi host Piagent runs");
+    console.log("  skills      Add, list or remove skill sources such as mattpocock/skills");
     console.log("  explain     Say why the guard would allow or block a shell command");
     console.log("  approve-verification  Preview or approve an independent verification plan");
     console.log("  select-verification   Preview reusable contracts for exact task criteria");
@@ -95,8 +104,10 @@ function benchmarkSourceRoot() {
   process.exit(1);
 }
 
-// The Pi host this member runs: the `pi` found on PATH, as its package root.
-function piHost() {
+// The Pi host this member runs: the `pi` on PATH when it is the pinned release,
+// else Piagent's private copy (a member keeping a newer Pi of their own).
+async function piHost() {
+  try { return (await import("./pi-host.mjs")).activeHostRoot(); } catch { /* the `pi` on PATH, below */ }
   for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
     if (!path.isAbsolute(dir)) continue;
     let root;
@@ -113,7 +124,7 @@ function piHost() {
 // entrypoint, the Node running it and the Pi host. Source checkouts never
 // register, and a failure here never blocks the command. Asking for help or the
 // version changes nothing in the operator's agent directory.
-function recordRuntime() {
+async function recordRuntime() {
   try {
     if (forwardedArgs.some((value) => ["--help", "-h", "--version", "-v"].includes(value))) return;
     if (!packageRoot.split(path.sep).includes("node_modules")) return;
@@ -129,7 +140,7 @@ function recordRuntime() {
       version: JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version,
       entrypoint: fs.realpathSync(path.join(packageRoot, "scripts", "piagent-studio.mjs")),
       node: fs.realpathSync(process.execPath),
-      pi_sdk_root: piHost()
+      pi_sdk_root: await piHost()
     }, null, 2)}\n`;
     const file = path.join(agentDir, "piagent-runtime.json");
     try { if (fs.readFileSync(file, "utf8") === body) return; } catch { /* first run */ }
@@ -138,7 +149,7 @@ function recordRuntime() {
     fs.renameSync(temporary, file);
   } catch { /* optional: Agent Watch falls back to known install locations */ }
 }
-recordRuntime();
+await recordRuntime();
 
 const sourceRoot = invokedAs === "piagent-benchmark" ? benchmarkSourceRoot() : packageRoot;
 const target = path.join(sourceRoot, script);

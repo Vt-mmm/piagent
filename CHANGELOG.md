@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.44.0 - 2026-10-28
+
+**Your own Pi stays, pick a Terminal style, add skill repositories.** A member who runs a newer Pi keeps it while Piagent runs its own pinned copy; /style picks the Terminal's look; piagent skills add brings in skill repositories such as mattpocock/skills.
+
+### Added
+
+- /style picks the Terminal's look: Pi's system, dark and light, or Piagent's ocean, paper, contrast and focus. The company Terminal remembers the pick.
+- piagent skills add mattpocock/skills adds a GitHub skill repository at one commit; its skills work as /skill:name in Pi, the company Terminal and the dashboard.
+
+### Fixed
+
+- Setup, install and update no longer replace a member's newer pi (such as 1.4.0) with the pinned 1.3.0: Piagent keeps its own copy in ~/.piagent/pi-host for company sessions, the dashboard and piagent pi.
+- piagent-uninstall --with-host removes Piagent's private Pi and leaves a member's own newer pi in place.
+
 ## v1.43.9 - 2026-10-27
 
 **Every installed skill, and files the agent hands back.** Skills from Claude and Codex plugins, such as superpowers, reach the agent; a file the agent links opens in the web view; the folder picker works on Windows.

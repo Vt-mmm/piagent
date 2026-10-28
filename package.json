@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.43.9",
+  "version": "1.44.0",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -100,6 +100,9 @@
     ],
     "skills": [
       "packages/piagent-core/skills"
+    ],
+    "themes": [
+      "packages/piagent-core/themes"
     ],
     "subagents": {
       "agents": [

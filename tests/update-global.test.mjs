@@ -66,6 +66,8 @@ function stageGlobalInstall({
     path.join(platformRoot, "scripts/update-global.mjs")
   );
   fs.copyFileSync(path.join(repositoryRoot, "scripts/personal-pi-config.mjs"), path.join(platformRoot, "scripts/personal-pi-config.mjs"));
+  fs.mkdirSync(path.join(platformRoot, "packages/piagent-core/managed"), { recursive: true });
+  fs.copyFileSync(path.join(repositoryRoot, "packages/piagent-core/managed/pi-host.mjs"), path.join(platformRoot, "packages/piagent-core/managed/pi-host.mjs"));
   // Personal Pi with the Piagent package of this helper version installed.
   const piPackage = path.join(root, ".pi", "agent", "git", "github.com", "Vt-mmm", "piagent");
   fs.mkdirSync(piPackage, { recursive: true });
@@ -121,6 +123,12 @@ if [[ "$1" == "install" ]]; then
     if [[ "$previous" == "--prefix" ]]; then prefix="$arg"; fi
     previous="$arg"
   done
+  # A local (not -g) host install lands in <prefix>/node_modules, as npm's does.
+  if [[ " $* " != *" -g "* && "$*" == *"@earendil-works/pi-coding-agent@"* ]]; then
+    spec="\${@: -1}"
+    mkdir -p "$prefix/node_modules/@earendil-works/pi-coding-agent"
+    printf '{"name":"@earendil-works/pi-coding-agent","version":"%s"}\n' "\${spec##*@}" > "$prefix/node_modules/@earendil-works/pi-coding-agent/package.json"
+  fi
   # Only the helper install rewrites the on-disk version, the way npm would.
   if [[ "$*" == *"@piagent/platform@"* ]]; then
     target="$prefix/lib/node_modules/@piagent/platform"
@@ -190,6 +198,22 @@ describe("piagent-update", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.ok(result.installs.some(line => line.startsWith("npm install") && line.includes("@piagent/platform@1.1.4")));
     assert.ok(fs.existsSync(path.join(stage.root, "lib/node_modules/@piagent/platform/package.json")));
+  });
+
+  it("keeps a member's newer pi and installs the pinned host privately instead", () => {
+    const stage = stageGlobalInstall({ helperVersion: "1.1.4", registryVersion: "1.1.4", installedHost: "9.9.0" });
+    const result = runUpdate(stage, ["--no-package"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /your pi 9\.9\.0 stays; Piagent's private Pi -> /);
+    const hostInstalls = result.installs.filter((line) => line.includes("@earendil-works/pi-coding-agent@"));
+    assert.equal(hostInstalls.length, 1);
+    assert.ok(!/ -g( |$)/.test(hostInstalls[0]), hostInstalls[0]);
+    assert.ok(hostInstalls[0].includes(path.join(stage.root, ".piagent", "pi-host")), hostInstalls[0]);
+    // A second run finds the private copy in place (the log keeps the first run's install).
+    const again = runUpdate(stage, ["--no-package"]);
+    assert.equal(again.status, 0, again.stderr);
+    assert.match(again.stdout, /private Pi -> 0\.82\.0 \(already current\)/);
+    assert.equal(again.installs.filter((line) => line.includes("@earendil-works/pi-coding-agent@")).length, 1);
   });
 
   it("refuses no-host with an incompatible Pi before changing globals", () => {

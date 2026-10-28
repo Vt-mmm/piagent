@@ -22,6 +22,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { inspect as inspectPersonalPi } from "./personal-pi-config.mjs";
+import { hostPlan, installPrivateHost, privateHostRoot } from "../packages/piagent-core/managed/pi-host.mjs";
 
 const HELPER_PACKAGE = "@piagent/platform";
 const HOST_PACKAGE = "@earendil-works/pi-coding-agent";
@@ -426,11 +427,15 @@ function main() {
 
   // npm exec is temporary even when its version already matches the target.
   const helperNeedsChange = options.force || currentHelper !== targetHelper || isNpxCacheRoot(platformRoot);
-  const hostNeedsChange = options.host && (options.force || currentHost !== targetHost);
+  // A newer pi is the member's own: kept, with the target host installed privately.
+  const ownHost = hostPlan(currentHost, targetHost) === "private";
+  const hostNeedsChange = options.host && (ownHost ? !privateHostRoot(targetHost) : options.force || currentHost !== targetHost);
 
   console.log("Pi Agent Platform update");
   console.log(`  helper:  ${currentHelper} -> ${targetHelper}${helperNeedsChange ? "" : " (already current)"}`);
-  console.log(`  host:    ${currentHost ?? "not installed"} -> ${targetHost}${hostNeedsChange ? "" : " (already current)"}`);
+  console.log(ownHost
+    ? `  host:    your pi ${currentHost} stays; Piagent's private Pi -> ${targetHost}${hostNeedsChange ? "" : " (already current)"}`
+    : `  host:    ${currentHost ?? "not installed"} -> ${targetHost}${hostNeedsChange ? "" : " (already current)"}`);
   // The Pi package can lag the helper (installed from an older tag), and
   // personal Pi can hold conflicting Piagent or old company entries.
   const personal = inspectPersonalPi(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
@@ -473,7 +478,7 @@ function main() {
   // here rather than trusted from before the move.
   let effectiveHost = currentHost;
   let effectiveHostNeedsChange = hostNeedsChange;
-  if (npmTarget.bin) {
+  if (npmTarget.bin && !ownHost) {
     const activeHost = installedHostVersion();
     if (activeHost !== currentHost) {
       effectiveHost = activeHost;
@@ -484,14 +489,17 @@ function main() {
   }
 
   // Refuse an impossible package installation before replacing either global.
-  if (options.package && !options.host && effectiveHost !== targetHost) {
+  if (options.package && !options.host && effectiveHost !== targetHost && !(ownHost && privateHostRoot(targetHost))) {
     fail(`--no-host cannot install this Pi package: active Pi is ${effectiveHost ?? "missing"}, but v${targetHelper} requires ${targetHost}. Rerun without --no-host.`);
   }
 
   // Host first: piagent-install refuses to run against a host that does not match
   // the version its package.json pins, so a helper installed ahead of the host
   // would fail on its very next step.
-  if (effectiveHostNeedsChange) {
+  if (effectiveHostNeedsChange && ownHost) {
+    try { installPrivateHost({ version: targetHost, dryRun: options.dryRun, log: (line) => console.log(line.startsWith("DRY RUN") ? line : `run: ${line}`) }); }
+    catch { fail(`could not install the private ${HOST_PACKAGE}@${targetHost}`); }
+  } else if (effectiveHostNeedsChange) {
     const args = npmInstallArgs(`${HOST_PACKAGE}@${targetHost}`, npmTarget);
     describeStep(options.dryRun, "npm", args);
     if (!options.dryRun && !run("npm", args).ok) fail(`could not install ${HOST_PACKAGE}@${targetHost}`);

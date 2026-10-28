@@ -27,6 +27,7 @@ import { workflowContextTool, workflowContextExtension } from './workflow-contex
 import { beforeDelegate } from './objections.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
+import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
 import { restorePermission, recordBypass, permissionSetter } from './permission.mjs';
 import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
@@ -135,7 +136,7 @@ export class ManagedSession {
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
-      skills: self.resources.skills, prompts: self.resources.prompts, ...await inlineExtensions(api, sdk, self.cwd,
+      skills: self.resources.skills, prompts: self.resources.prompts, themes: terminalExtensions.length ? await loadPiagentThemes(sdk) : [], ...await inlineExtensions(api, sdk, self.cwd,
         [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)]) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main')); self.studioLink = new StudioLink({ origin: self.origin, agentDir, notify: event => self.notify(event), ui: () => self.session?.extensionRunner?.getUIContext?.() });

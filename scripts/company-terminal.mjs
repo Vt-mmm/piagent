@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
+import { registerStyleCommand } from '../packages/piagent-core/runtime/terminal/terminal-style.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
 import { bypassAllowed, effectivePermission } from '../packages/piagent-core/managed/permission.mjs';
@@ -59,7 +60,7 @@ export function memoryResultLines(text, expanded = false) {
 const branchOf = (cwd) => new Promise((resolve) => execFile('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000 },
   (error, out) => resolve(error ? null : String(out).trim() || null)));
 export const HELP_TEXT = [
-  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass on|full|off|status quyền của cuộc trò chuyện · /fast on|off|status (khi Harness cho phép) · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
+  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass on|full|off|status quyền của cuộc trò chuyện · /fast on|off|status (khi Harness cho phép) · /style giao diện Terminal · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
   'Pi: /session thông tin cuộc trò chuyện · /resume mở cuộc trò chuyện công ty khác · /new cuộc mới · /compact nén ngữ cảnh · /tree, /fork nhánh · /name đặt tên · /copy, /export · /hotkeys toàn bộ phím tắt · /quit thoát.',
   'Phím: ! <lệnh> chạy shell · Esc dừng lượt đang chạy · Ctrl+C xoá ô nhập, hai lần để thoát · Ctrl+O xem thêm.',
   'Mở lại sau: piagent studio --project <thư mục>, rồi /resume. Đừng mở cuộc trò chuyện công ty bằng pi cá nhân.',
@@ -112,7 +113,7 @@ export function companyCommandText(name, summary = {}) {
     case 'login': case 'logout': return 'Cuộc trò chuyện công ty dùng tài khoản AI của team qua Agent Watch: không cần /login hay /logout. Tài khoản và API key cá nhân chỉ dùng trong pi cá nhân.';
     case 'model': case 'scoped-models': return `Model do Harness của team quyết định${main}; Terminal không chọn model. ${ADMIN}`;
     case 'thinking': return `Mức suy luận do Harness của team quyết định${main}. ${ADMIN}`;
-    case 'settings': return `Cài đặt của cuộc trò chuyện công ty (compaction, retry…) do Harness quyết định. Phím tắt: /hotkeys. ${ADMIN}`;
+    case 'settings': return `Cài đặt của cuộc trò chuyện công ty (compaction, retry…) do Harness quyết định. Giao diện Terminal: /style. Phím tắt: /hotkeys. ${ADMIN}`;
     default: return null;
   }
 }
@@ -287,6 +288,9 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
 
     registerTerminalUpdateOffer(pi, { installed, packageRoot, restart: 'piagent studio',
       afterUpdate: () => bindingChanged() ? 'Bản mới đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình (cần Agent Watch đang chạy); piagent studio chờ việc này khi mở lại.' : null });
+
+    // The member's pick of look (/style); /settings is not offered here.
+    registerStyleCommand(pi, { remember: true });
 
     // Ask first or Bypass, kept with the conversation like the dashboard's switch.
     const showPermission = (ctx) => { const mode = managed() ? effectivePermission(managed()) : null; ctx.ui?.setStatus?.(PERMISSION_STATUS, mode && mode !== 'workspace-write' ? PERMISSION_NAME[mode] : undefined); };

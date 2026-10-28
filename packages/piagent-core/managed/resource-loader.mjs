@@ -25,13 +25,14 @@ export function projectInstructions(cwd, top = cwd) {
 // Managed sessions never consult the personal trust store or execute resources
 // discovered in a project. Skills and commands are text (agent-skills.mjs):
 // what they ask for runs with the session's own tools.
-export function managedResourceLoader(api, { systemPrompt, extensions = [], runtime = api.createExtensionRuntime(), agentsFiles = [], skills = [], prompts = [] } = {}) {
+// themes: Piagent's own (the company Terminal's /style), loaded by the host.
+export function managedResourceLoader(api, { systemPrompt, extensions = [], runtime = api.createExtensionRuntime(), agentsFiles = [], skills = [], prompts = [], themes = [] } = {}) {
   const empty = Object.freeze([]);
   return Object.freeze({
     getExtensions: () => ({ extensions, errors: empty, runtime }),
     getSkills: () => ({ skills: [...skills], diagnostics: empty }),
     getPrompts: () => ({ prompts: [...prompts], diagnostics: empty }),
-    getThemes: () => ({ themes: empty, diagnostics: empty }),
+    getThemes: () => ({ themes: [...themes], diagnostics: empty }),
     getAgentsFiles: () => ({ agentsFiles: agentsFiles.map((file) => ({ ...file })) }),
     getSystemPrompt: () => typeof systemPrompt === 'function' ? systemPrompt() : systemPrompt,
     getSystemPromptSource: () => undefined,

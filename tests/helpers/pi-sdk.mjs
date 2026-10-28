@@ -10,7 +10,7 @@ const versionOf = root => { try { return JSON.parse(fs.readFileSync(path.join(ro
 // The pinned Pi host the managed runtime tests drive. PI_MANAGED_TEST_SDK
 // wins; then the installer's prefix (~/.pi/npm-global); then the npm global
 // root, which is where CI and Homebrew-style installs put it, when it holds
-// the pinned version (another version would fail the SDK qualification for a
+// the pinned version, then Piagent's private copy (another version would fail the SDK qualification for a
 // reason that is not the test's). Before, most tests looked only at the
 // installer's prefix and skipped themselves everywhere else, CI included.
 export function piSdkRoot() {
@@ -21,5 +21,8 @@ export function piSdkRoot() {
     const global = path.join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 }).trim(), '@earendil-works/pi-coding-agent');
     if (versionOf(global) === pinned) return global;
   } catch { /* npm unavailable: fall back to the installer's prefix */ }
+  // A machine whose own pi is newer keeps the pinned host privately (pi-host.mjs).
+  const own = path.join(os.homedir(), '.piagent/pi-host', pinned, 'node_modules/@earendil-works/pi-coding-agent');
+  if (versionOf(own) === pinned) return own;
   return personal;
 }
