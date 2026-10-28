@@ -1,5 +1,49 @@
 [
   {
+    "version": "1.46.1",
+    "date": "2026-10-28",
+    "status": "stable",
+    "title": {
+      "en": "Objections on the record, one review per turn, parallel subagents on request",
+      "vi": "Phản biện có sổ ghi, review một nhịp, subagent song song khi được yêu cầu"
+    },
+    "summary": {
+      "en": "The company harness keeps one ledger of helper objections and the main agent's decisions, reviews once per turn, and runs 2–3 helpers of one role in parallel only when the member asks.",
+      "vi": "Harness công ty ghi một sổ phản biện cùng quyết định của main, review một nhịp mỗi lượt, và chỉ chạy 2–3 helper cùng role song song khi member yêu cầu."
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "Objections to a brief, review findings and failed claims share one ledger; the main agent records each decision with resolve_objection, and a wrong-premise objection blocks edits until decided.",
+        "vi": "Phản biện brief, finding review và claim fail chung một sổ; main ghi quyết định bằng resolve_objection, phản biện sai tiền đề chặn sửa file đến khi được quyết."
+      },
+      {
+        "kind": "improved",
+        "en": "Review runs once per turn: a required review is the harness's own, a re-review after a fix reads only the files changed, minor findings are only listed.",
+        "vi": "Review một nhịp mỗi lượt: review bắt buộc do harness làm, review lại sau khi sửa chỉ đọc file đã đổi, finding minor chỉ liệt kê."
+      },
+      {
+        "kind": "new",
+        "en": "One helper per role by default; when the member asks for 2–3 of one role, they run in parallel, each on its own grant with Agent Studio 0.50.0 and Agent Watch 0.15.17.",
+        "vi": "Mặc định mỗi role một helper; khi member yêu cầu 2–3 helper cùng role, chúng chạy song song, mỗi helper một grant với Agent Studio 0.50.0 và Agent Watch 0.15.17."
+      },
+      {
+        "kind": "improved",
+        "en": "The company terminal shows the checklist and what each running subagent is doing above the input.",
+        "vi": "Terminal công ty hiện checklist và việc từng subagent đang làm ngay trên ô nhập."
+      },
+      {
+        "kind": "fixed",
+        "en": "piagent studio installs fd on first start, so @ completion lists files and folders; it was never downloaded, even with fd under /opt/homebrew/bin.",
+        "vi": "piagent studio cài fd ở lần mở đầu tiên nên gợi ý @ hiện file và thư mục; trước đây fd không bao giờ được tải, kể cả khi đã có ở /opt/homebrew/bin."
+      }
+    ],
+    "requires": {
+      "en": "Agent Studio 0.50.0 and Agent Watch 0.15.17 (Windows 0.1.18) for parallel subagents",
+      "vi": "Agent Studio 0.50.0 và Agent Watch 0.15.17 (Windows 0.1.18) để subagent chạy song song"
+    }
+  },
+  {
     "version": "1.46.0",
     "date": "2026-10-28",
     "status": "stable",

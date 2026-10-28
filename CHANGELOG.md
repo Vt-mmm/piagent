@@ -4,6 +4,26 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.46.1 - 2026-10-28
+
+**Objections on the record, one review per turn, parallel subagents on request.** The company harness keeps one ledger of helper objections and the main agent's decisions, reviews once per turn, and runs 2–3 helpers of one role in parallel only when the member asks.
+
+### Added
+
+- Objections to a brief, review findings and failed claims share one ledger; the main agent records each decision with resolve_objection, and a wrong-premise objection blocks edits until decided.
+- One helper per role by default; when the member asks for 2–3 of one role, they run in parallel, each on its own grant with Agent Studio 0.50.0 and Agent Watch 0.15.17.
+
+### Improved
+
+- Review runs once per turn: a required review is the harness's own, a re-review after a fix reads only the files changed, minor findings are only listed.
+- The company terminal shows the checklist and what each running subagent is doing above the input.
+
+### Fixed
+
+- piagent studio installs fd on first start, so @ completion lists files and folders; it was never downloaded, even with fd under /opt/homebrew/bin.
+
+Requires: Agent Studio 0.50.0 and Agent Watch 0.15.17 (Windows 0.1.18) for parallel subagents.
+
 ## v1.46.0 - 2026-10-28
 
 **Piagent runs from its own Pi home and your own pi stays stock.** Piagent installs into ~/.piagent/agent and opens with `piagent`. Plain `pi` no longer loads Piagent, its add-ons, model list or footer panel.

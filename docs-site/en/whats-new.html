@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.0" title="v1.46.0 docs · EN"><span class="dot"></span>v1.46.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.1" title="v1.46.1 docs · EN"><span class="dot"></span>v1.46.1</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,22 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-46-0" data-release>
+<article class="release latest" id="v1-46-1" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-1">v1.46.1</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-1-title">Objections on the record, one review per turn, parallel subagents on request</h3>
+    <p>The company harness keeps one ledger of helper objections and the main agent's decisions, reviews once per turn, and runs 2–3 helpers of one role in parallel only when the member asks.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Objections to a brief, review findings and failed claims share one ledger; the main agent records each decision with resolve_objection, and a wrong-premise objection blocks edits until decided.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>One helper per role by default; when the member asks for 2–3 of one role, they run in parallel, each on its own grant with Agent Studio 0.50.0 and Agent Watch 0.15.17.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Review runs once per turn: a required review is the harness's own, a re-review after a fix reads only the files changed, minor findings are only listed.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The company terminal shows the checklist and what each running subagent is doing above the input.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>piagent studio installs fd on first start, so @ completion lists files and folders; it was never downloaded, even with fd under /opt/homebrew/bin.</span></li>
+    </ul>
+    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.50.0 and Agent Watch 0.15.17 (Windows 0.1.18) for parallel subagents</p>
+  </div>
+</article>
+<article class="release" id="v1-46-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-0">v1.46.0</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-0-title">Piagent runs from its own Pi home and your own pi stays stock</h3>
@@ -411,22 +426,21 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-38-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-38-1">v1.38.1</a><time class="release-date" datetime="2026-10-23">Oct 23, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-38-1-title">Published release of v1.38.0</h3>
-    <p>v1.38.0 failed its release checks on two tests and was never published; v1.38.1 is the same release with those tests fixed.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Two release tests now pass on Linux and on slow runners, so the editor, terminals, review, checkpoints and Bypass of v1.38.0 ship here.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">57</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">58</span></summary>
+    <div class="archive-row" id="v1-38-1">
+      <div class="archive-head"><a class="release-version" href="#v1-38-1">v1.38.1</a> <span class="release-date">Oct 23, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Published release of v1.38.0</strong> — v1.38.0 failed its release checks on two tests and was never published; v1.38.1 is the same release with those tests fixed.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Two release tests now pass on Linux and on slow runners, so the editor, terminals, review, checkpoints and Bypass of v1.38.0 ship here.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-38-0">
       <div class="archive-head"><a class="release-version" href="#v1-38-0">v1.38.0</a> <span class="release-date">Oct 23, 2026</span></div>
       <div class="archive-body">

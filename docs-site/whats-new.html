@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.0" title="v1.46.0 docs · VI"><span class="dot"></span>v1.46.0</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.1" title="v1.46.1 docs · VI"><span class="dot"></span>v1.46.1</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,22 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-46-0" data-release>
+<article class="release latest" id="v1-46-1" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-1">v1.46.1</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-1-title">Phản biện có sổ ghi, review một nhịp, subagent song song khi được yêu cầu</h3>
+    <p>Harness công ty ghi một sổ phản biện cùng quyết định của main, review một nhịp mỗi lượt, và chỉ chạy 2–3 helper cùng role song song khi member yêu cầu.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Phản biện brief, finding review và claim fail chung một sổ; main ghi quyết định bằng resolve_objection, phản biện sai tiền đề chặn sửa file đến khi được quyết.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Mặc định mỗi role một helper; khi member yêu cầu 2–3 helper cùng role, chúng chạy song song, mỗi helper một grant với Agent Studio 0.50.0 và Agent Watch 0.15.17.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Review một nhịp mỗi lượt: review bắt buộc do harness làm, review lại sau khi sửa chỉ đọc file đã đổi, finding minor chỉ liệt kê.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Terminal công ty hiện checklist và việc từng subagent đang làm ngay trên ô nhập.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>piagent studio cài fd ở lần mở đầu tiên nên gợi ý @ hiện file và thư mục; trước đây fd không bao giờ được tải, kể cả khi đã có ở /opt/homebrew/bin.</span></li>
+    </ul>
+    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.50.0 và Agent Watch 0.15.17 (Windows 0.1.18) để subagent chạy song song</p>
+  </div>
+</article>
+<article class="release" id="v1-46-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-0">v1.46.0</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-0-title">Piagent chạy trong Pi home riêng, pi của bạn giữ nguyên bản gốc</h3>
@@ -411,22 +426,21 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-38-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-38-1">v1.38.1</a><time class="release-date" datetime="2026-10-23">23/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-38-1-title">Bản phát hành chính thức của v1.38.0</h3>
-    <p>v1.38.0 không qua release check vì hai test nên chưa từng được phát hành; v1.38.1 là cùng bản đó với hai test đã được sửa.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Hai test phát hành nay pass trên Linux và máy chạy chậm, nên editor, terminal, review, checkpoint và Bypass của v1.38.0 có trong bản này.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">57</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">58</span></summary>
+    <div class="archive-row" id="v1-38-1">
+      <div class="archive-head"><a class="release-version" href="#v1-38-1">v1.38.1</a> <span class="release-date">23/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Bản phát hành chính thức của v1.38.0</strong> — v1.38.0 không qua release check vì hai test nên chưa từng được phát hành; v1.38.1 là cùng bản đó với hai test đã được sửa.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Hai test phát hành nay pass trên Linux và máy chạy chậm, nên editor, terminal, review, checkpoint và Bypass của v1.38.0 có trong bản này.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-38-0">
       <div class="archive-head"><a class="release-version" href="#v1-38-0">v1.38.0</a> <span class="release-date">23/10/2026</span></div>
       <div class="archive-body">
