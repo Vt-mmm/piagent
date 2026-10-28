@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.44.1" title="v1.44.1 docs · VI"><span class="dot"></span>v1.44.1</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.44.2" title="v1.44.2 docs · VI"><span class="dot"></span>v1.44.2</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-44-1" data-release>
+<article class="release latest" id="v1-44-2" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-44-2">v1.44.2</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-44-2-title">Harness công ty theo cỡ thay đổi</h3>
+    <p>Thay đổi nhỏ xong sau khi check, không cần review; thay đổi rủi ro bắt buộc check và review. Main agent được tra web nhanh vài lần bên cạnh research helper.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>workflow.main_web_lookups (0 đến 5) cho main agent tra web_search hoặc web_fetch nhanh chừng ấy lần mỗi tin nhắn, bên cạnh research helper.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Risk lanes, bật mặc định: thay đổi tối đa 2 file, 40 dòng, không chạm file nhạy cảm xong sau khi check, không gọi reviewer. workflow.lanes: false để tắt.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thay đổi rủi ro (migration, auth, CI, dependency, AGENTS.md, yêu cầu phức tạp, hơn 12 file hoặc 400 dòng) bắt buộc qua check và review kể cả khi Harness chỉ đặt suggest.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-1">v1.44.1</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-1-title">Giữ Pi của bạn, chọn giao diện Terminal, thêm repo skill</h3>
@@ -415,26 +427,24 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-36-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-36-0">v1.36.0</a><time class="release-date" datetime="2026-10-21">21/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-36-0-title">Team memory học từ chỗ làm sai</h3>
-    <p>Memory học từ phản hồi của member và lỗi lặp lại, chỉ giữ task hoàn thành có thêm điều mới, và đề xuất xem lại skill hay lỗi.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Những gì memory đưa cho một lượt được gửi lại Studio, để Studio chấm theo câu tiếp theo của member và thôi đưa ghi chú bị nói là sai.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Lệnh lỗi giống nhau hai lần trong một lượt thành bài học, giữ dòng lỗi đầu tiên và không đoán nguyên nhân.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Khi 3 lượt gần nhất của một skill bị lỗi, Piagent ghi đề xuất vào <code>.pi/piagent-state/skill-proposals/</code>, tối đa mỗi tuần; không tự sửa skill.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Memory của repo bỏ qua task chỉ đổi build output, cache, log hay trạng thái của Piagent, hoặc lặp lại file đã biết.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.37.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">52</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">53</span></summary>
+    <div class="archive-row" id="v1-36-0">
+      <div class="archive-head"><a class="release-version" href="#v1-36-0">v1.36.0</a> <span class="release-date">21/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Team memory học từ chỗ làm sai</strong> — Memory học từ phản hồi của member và lỗi lặp lại, chỉ giữ task hoàn thành có thêm điều mới, và đề xuất xem lại skill hay lỗi.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Những gì memory đưa cho một lượt được gửi lại Studio, để Studio chấm theo câu tiếp theo của member và thôi đưa ghi chú bị nói là sai.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Lệnh lỗi giống nhau hai lần trong một lượt thành bài học, giữ dòng lỗi đầu tiên và không đoán nguyên nhân.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Khi 3 lượt gần nhất của một skill bị lỗi, Piagent ghi đề xuất vào <code>.pi/piagent-state/skill-proposals/</code>, tối đa mỗi tuần; không tự sửa skill.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Memory của repo bỏ qua task chỉ đổi build output, cache, log hay trạng thái của Piagent, hoặc lặp lại file đã biết.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-35-1">
       <div class="archive-head"><a class="release-version" href="#v1-35-1">v1.35.1</a> <span class="release-date">21/10/2026</span></div>
       <div class="archive-body">

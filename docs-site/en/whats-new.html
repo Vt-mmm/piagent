@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.1" title="v1.44.1 docs · EN"><span class="dot"></span>v1.44.1</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.2" title="v1.44.2 docs · EN"><span class="dot"></span>v1.44.2</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-44-1" data-release>
+<article class="release latest" id="v1-44-2" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-44-2">v1.44.2</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-44-2-title">The company harness follows the size of a change</h3>
+    <p>A small change ends after its checks without a review; a risky one has its checks and review required. The main agent may keep a few quick web lookups beside the research helper.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>workflow.main_web_lookups (0 to 5) lets the main agent make that many quick web_search or web_fetch calls per message beside the research helper.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Risk lanes, on by default: a change of at most 2 files and 40 lines that touches no sensitive file ends after its checks, without the reviewer. workflow.lanes: false turns them off.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A risky change (migration, auth, CI, dependency or AGENTS.md file, a complex request, over 12 files or 400 lines) must pass its checks and review even where they are only suggested.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-1">v1.44.1</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-1-title">Your own Pi stays, pick a Terminal style, add skill repositories</h3>
@@ -415,26 +427,24 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-36-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-36-0">v1.36.0</a><time class="release-date" datetime="2026-10-21">Oct 21, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-36-0-title">Team memory learns from what went wrong</h3>
-    <p>Memory learns from member feedback and repeated errors, keeps only completed tasks that add something, and proposes failing skills for review.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>What memory hands a round goes back to Studio with it, so Studio rates notes by the member's next words and stops briefing wrong ones.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>A command that fails the same way twice in a round becomes a lesson that keeps the first error line, with no guessed cause.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>When 3 of a skill's last rounds failed, Piagent writes a proposal to <code>.pi/piagent-state/skill-proposals/</code>, at most weekly; it never edits skills.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Repository memory skips completed tasks that change only build output, caches, logs or Piagent's state, or repeat files already known.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.37.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">52</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">53</span></summary>
+    <div class="archive-row" id="v1-36-0">
+      <div class="archive-head"><a class="release-version" href="#v1-36-0">v1.36.0</a> <span class="release-date">Oct 21, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Team memory learns from what went wrong</strong> — Memory learns from member feedback and repeated errors, keeps only completed tasks that add something, and proposes failing skills for review.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>What memory hands a round goes back to Studio with it, so Studio rates notes by the member's next words and stops briefing wrong ones.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>A command that fails the same way twice in a round becomes a lesson that keeps the first error line, with no guessed cause.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>When 3 of a skill's last rounds failed, Piagent writes a proposal to <code>.pi/piagent-state/skill-proposals/</code>, at most weekly; it never edits skills.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Repository memory skips completed tasks that change only build output, caches, logs or Piagent's state, or repeat files already known.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-35-1">
       <div class="archive-head"><a class="release-version" href="#v1-35-1">v1.35.1</a> <span class="release-date">Oct 21, 2026</span></div>
       <div class="archive-body">

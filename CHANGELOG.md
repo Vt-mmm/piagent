@@ -4,6 +4,19 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.44.2 - 2026-10-28
+
+**The company harness follows the size of a change.** A small change ends after its checks without a review; a risky one has its checks and review required. The main agent may keep a few quick web lookups beside the research helper.
+
+### Added
+
+- workflow.main_web_lookups (0 to 5) lets the main agent make that many quick web_search or web_fetch calls per message beside the research helper.
+
+### Improved
+
+- Risk lanes, on by default: a change of at most 2 files and 40 lines that touches no sensitive file ends after its checks, without the reviewer. workflow.lanes: false turns them off.
+- A risky change (migration, auth, CI, dependency or AGENTS.md file, a complex request, over 12 files or 400 lines) must pass its checks and review even where they are only suggested.
+
 ## v1.44.1 - 2026-10-28
 
 **Your own Pi stays, pick a Terminal style, add skill repositories.** A member who runs a newer Pi keeps it while Piagent runs its own pinned copy; /style picks the Terminal's look; piagent skills add brings in skill repositories such as mattpocock/skills.

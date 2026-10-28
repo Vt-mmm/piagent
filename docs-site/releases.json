@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.44.2",
+    "date": "2026-10-28",
+    "status": "stable",
+    "title": {
+      "en": "The company harness follows the size of a change",
+      "vi": "Harness công ty theo cỡ thay đổi"
+    },
+    "summary": {
+      "en": "A small change ends after its checks without a review; a risky one has its checks and review required. The main agent may keep a few quick web lookups beside the research helper.",
+      "vi": "Thay đổi nhỏ xong sau khi check, không cần review; thay đổi rủi ro bắt buộc check và review. Main agent được tra web nhanh vài lần bên cạnh research helper."
+    },
+    "items": [
+      {
+        "kind": "improved",
+        "en": "Risk lanes, on by default: a change of at most 2 files and 40 lines that touches no sensitive file ends after its checks, without the reviewer. workflow.lanes: false turns them off.",
+        "vi": "Risk lanes, bật mặc định: thay đổi tối đa 2 file, 40 dòng, không chạm file nhạy cảm xong sau khi check, không gọi reviewer. workflow.lanes: false để tắt."
+      },
+      {
+        "kind": "improved",
+        "en": "A risky change (migration, auth, CI, dependency or AGENTS.md file, a complex request, over 12 files or 400 lines) must pass its checks and review even where they are only suggested.",
+        "vi": "Thay đổi rủi ro (migration, auth, CI, dependency, AGENTS.md, yêu cầu phức tạp, hơn 12 file hoặc 400 dòng) bắt buộc qua check và review kể cả khi Harness chỉ đặt suggest."
+      },
+      {
+        "kind": "new",
+        "en": "workflow.main_web_lookups (0 to 5) lets the main agent make that many quick web_search or web_fetch calls per message beside the research helper.",
+        "vi": "workflow.main_web_lookups (0 đến 5) cho main agent tra web_search hoặc web_fetch nhanh chừng ấy lần mỗi tin nhắn, bên cạnh research helper."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.44.1",
     "date": "2026-10-28",
     "status": "stable",
