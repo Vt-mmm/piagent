@@ -74,13 +74,17 @@ export function searchToolPath(name, userHome = os.homedir()) {
   return null;
 }
 export async function ensureSearchTools(sdkRoot, userHome = os.homedir(), timeoutMs = 60_000) {
-  const missing = ['rg', 'fd'].filter(name => !searchToolPath(name, userHome));
-  if (!missing.length) return;
   let manager;
   try { manager = await import(pathToFileURL(path.join(sdkRoot, 'dist/utils/tools-manager.js')).href); } catch { return; }
+  // The company terminal looks fd up the way Pi does (its bin folder, then a
+  // PATH of /usr/bin:/bin) and, offline, never downloads it: without fd there
+  // @ file completion shows nothing, even with fd under /opt/homebrew/bin.
+  const missing = ['rg', 'fd'].filter(name => !searchToolPath(name, userHome) || !manager.getToolPath?.(name));
+  if (!missing.length) return;
   await Promise.all(missing.map(async name => {
     try {
-      const found = await Promise.race([manager.ensureTool(name, true), new Promise(resolve => setTimeout(resolve, timeoutMs).unref())]);
+      // Pi 1.3 takes a status callback here; the former `silent` flag (true) made it throw before downloading.
+      const found = await Promise.race([manager.ensureTool(name), new Promise(resolve => setTimeout(resolve, timeoutMs).unref())]);
       if (typeof found === 'string' && path.isAbsolute(found) && executable(found)) downloaded.set(name, found);
     } catch { /* grep/find fall back to the built-in search */ }
   }));
