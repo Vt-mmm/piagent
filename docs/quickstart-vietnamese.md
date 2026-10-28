@@ -43,7 +43,7 @@ brew install herdr                            # macOS
 curl -fsSL https://herdr.dev/install.sh | sh  # macOS hoặc Linux
 ```
 
-Không có `herdr` trên `PATH` thì bước integration bị bỏ qua kèm cảnh báo, cài Herdr sau phải chạy lại `piagent-setup --global-only`. Bản `curl` chạy script tải về lúc cài; muốn kiểm tra được thì dùng `brew` hoặc tải từ [GitHub releases](https://github.com/ogulcancelik/herdr/releases). Herdr bản stable hỗ trợ macOS và Linux; Windows mới ở mức preview, mà cũng nằm ngoài runtime matrix của platform này.
+Không có `herdr` trên `PATH` thì bước integration bị bỏ qua kèm cảnh báo, cài Herdr sau phải chạy lại `piagent-setup --global-only`. Bản `curl` chạy script tải về lúc cài; muốn kiểm tra được thì dùng `brew` hoặc tải từ [GitHub releases](https://github.com/ogulcancelik/herdr/releases). Trên Windows, cài Herdr trong Ubuntu (WSL2) cùng chỗ với Piagent, không cài ngoài Windows; xem [herdr-workflow.md](herdr-workflow.md).
 
 Vì chạy từ package đã cài, source ghi vào `.pi/settings.json` là `npm:@piagent/platform@<version>` — portable, commit được.
 

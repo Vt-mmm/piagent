@@ -44,7 +44,7 @@ npm install -g @piagent/platform
 piagent-setup
 ```
 
-`piagent-setup` cài đúng bản Pi host mà release này pin, cài package, khởi tạo `.pi/`, thêm MCP baseline và subagent, rồi chạy doctor. Bỏ bớt bằng `--no-mcp`, `--no-subagents`, `--no-herdr` hoặc `--global-only`. Muốn dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr trước.
+`piagent-setup` cài đúng bản Pi host mà release này pin, cài package, khởi tạo `.pi/`, thêm MCP baseline và subagent, rồi chạy doctor. Bỏ bớt bằng `--no-mcp`, `--no-subagents`, `--no-herdr` hoặc `--global-only`. Muốn dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr trước; trên Windows thì cài trong Ubuntu (WSL2), cùng chỗ với Piagent.
 
 **Windows** — một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch; chạy lại để cập nhật:
 

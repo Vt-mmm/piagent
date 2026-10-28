@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import {spawn,execFileSync} from 'node:child_process';
+import net from 'node:net';
 import {createHash,randomUUID} from 'node:crypto';
 import {test} from 'node:test';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
@@ -34,6 +35,7 @@ test('production CLI executes both delegated roles from a native tool response w
    emit({type:'message_delta',delta:{stop_reason:delegate?'tool_use':'end_turn',stop_sequence:null},usage:{output_tokens:3}});emit({type:'message_stop'});
   }res.end();
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ let herdr;
  const profileID=createHash('sha256').update(root).digest('hex'),sessions=path.join(os.homedir(),'Library/Application Support/AgentWatch/ManagedSessions',profileID);
  try{
   assert.equal(fs.existsSync(sessions),false);const broker=path.join(root,'broker');
@@ -61,13 +63,19 @@ test('production CLI executes both delegated roles from a native tool response w
   const refused=await new Promise((resolve,reject)=>{const p=spawn(node,[entry,'--config',file,'--project',project,'--json'],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir()},stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>text+=b);p.on('error',reject);p.on('close',code=>resolve({code,text}));});
   assert.notEqual(refused.code,0);assert.match(refused.text,/managed-launch-arguments/,'--json needs --prompt');
   const beforeInteractive=requests.length;
+  // In a Herdr pane the Terminal reports to Herdr's socket, reopening the conversation --session names.
+  const reopened=(function find(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const f=path.join(dir,e.name);if(e.isDirectory()){const r=find(f);if(r)return r;}else if(e.name.endsWith('.jsonl'))return f;}return null;})(path.join(sessions,'sessions'));
+  assert.ok(reopened,'the prompt runs left a conversation');
+  const herdrSocket=path.join(root,'herdr.sock'),herdrReports=[];
+  herdr=net.createServer(c=>c.on('data',b=>{for(const line of String(b).split('\n').filter(Boolean)){const q=JSON.parse(line);herdrReports.push(q);c.write(JSON.stringify({id:q.id,result:{}})+'\n');}}));
+  await new Promise(r=>herdr.listen(herdrSocket,r));
   const interactive=await new Promise((resolve,reject)=>{
    // macOS script requires its own stdin to be a tty. Python's pty opens an
    // actual controlling terminal and keeps this acceptance independent of CUA.
    const code = `import os,pty,select,signal,sys,time
 pid,fd=pty.fork()
 if pid==0:
- os.execve(sys.argv[1],sys.argv[1:],dict(PATH='/usr/bin:/bin',HOME=os.path.expanduser('~'),TERM='xterm-256color'))
+ os.execve(sys.argv[1],sys.argv[1:],dict(PATH='/usr/bin:/bin',HOME=os.path.expanduser('~'),TERM='xterm-256color',**{k:v for k,v in os.environ.items() if k.startswith('HERDR_')}))
 text=b'';ready=False;until=time.monotonic()+10
 try:
  while time.monotonic()<until:
@@ -90,11 +98,15 @@ finally:
  except ChildProcessError:pass
 print('INTERACTIVE_READY' if ready else text.decode('utf8','replace')[-2000:])
 sys.exit(0 if ready else 1)`;
-   const p=spawn('/usr/bin/python3',['-c',code,node,entry,'--config',file,'--project',project],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir()},stdio:['ignore','pipe','pipe']});
+   const p=spawn('/usr/bin/python3',['-c',code,node,entry,'--config',file,'--project',project,'--session',reopened],{env:{PATH:'/usr/bin:/bin',HOME:os.homedir(),HERDR_ENV:'1',HERDR_SOCKET_PATH:herdrSocket,HERDR_PANE_ID:'w1:p1'},stdio:['ignore','pipe','pipe']});
    let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>text+=b);p.on('error',reject);p.on('close',code=>resolve({code,text}));
   });
   assert.equal(interactive.code,0,interactive.text);
   assert.match(interactive.text,/INTERACTIVE_READY/);
   assert.equal(requests.length,beforeInteractive,'opening and closing the interactive CLI must not infer');
- }finally{await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});fs.rmSync(sessions,{recursive:true,force:true});}
+  const report=herdrReports.find(q=>q.method==='pane.report_agent');
+  assert.ok(report,'Herdr heard from the company Terminal');
+  assert.deepEqual([report.params.pane_id,report.params.source,report.params.state],['w1:p1','custom:piagent-studio','idle']);
+  assert.deepEqual(report.params.resume_argv,['piagent','studio','--project',project,'--session',fs.realpathSync(reopened)],'Herdr reopens this company conversation, not personal Pi');
+ }finally{herdr?.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});fs.rmSync(sessions,{recursive:true,force:true});}
 });

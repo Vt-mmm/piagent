@@ -6,7 +6,9 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ManagedBrokerClient } from '../packages/piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { agentWatchDataDirectory, interopEnvironment, resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
+import { agentWatchDataDirectory, companySessionFile, interopEnvironment, resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
+import { companyHerdrExtension, herdrEnvironment } from '../packages/piagent-core/managed/herdr-reporter.mjs';
+import { browserCommand } from '../packages/piagent-core/runtime/host/browser-opener.mjs';
 import { agentWatchRunning, awaitRebind, bindingMismatch, brokerUpdatedAfterBinding, installedAfterBinding } from '../packages/piagent-core/managed/binding-wait.mjs';
 
 const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -15,15 +17,19 @@ const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest
 process.removeAllListeners('warning');
 process.on('warning', warning => { if (warning.name !== 'ExperimentalWarning') process.stderr.write(`${warning.name}: ${warning.message}\n`); });
 const args = process.argv.slice(2), flags = new Map();
-if (args.includes('--help')) { console.log('piagent studio [--web [--no-open] | --serve | --check | --doctor | --prompt <text> [--json] | --rpc] [--config <Agent Watch configuration>] [--project <folder>]\nDefaults: the configuration imported into ~/.pi/agent and the current project. Personal sessions remain under pi / piagent dashboard.\n--json with --prompt writes the event stream of `pi --mode json` (JSONL on stdout; failures on stderr, exit 1).\n--rpc speaks the protocol of `pi --mode rpc` on stdin/stdout for one company conversation (several messages, questions as extension UI requests).'); process.exit(0); }
+if (args.includes('--help')) { console.log('piagent studio [--web [--no-open] | --serve | --check | --doctor | --prompt <text> [--json] | --rpc] [--config <Agent Watch configuration>] [--project <folder>] [--session <company conversation file>]\nDefaults: the configuration imported into ~/.pi/agent and the current project. Personal sessions remain under pi / piagent dashboard.\n--json with --prompt writes the event stream of `pi --mode json` (JSONL on stdout; failures on stderr, exit 1).\n--rpc speaks the protocol of `pi --mode rpc` on stdin/stdout for one company conversation (several messages, questions as extension UI requests).\n--session reopens one of your company conversations in the Terminal (Herdr restores panes with it).'); process.exit(0); }
 for (let i = 0; i < args.length; i++) {
   if (['--check', '--doctor', '--web', '--serve', '--no-open', '--json', '--rpc'].includes(args[i])) { flags.set(args[i], true); continue; }
-  if (!['--config', '--project', '--prompt'].includes(args[i]) || flags.has(args[i]) || !args[i + 1]) throw Error('managed-launch-arguments');
+  if (!['--config', '--project', '--prompt', '--session'].includes(args[i]) || flags.has(args[i]) || !args[i + 1]) throw Error('managed-launch-arguments');
   flags.set(args[i], args[++i]);
 }
 if (flags.has('--json') && !flags.has('--prompt')) throw Error('managed-launch-arguments');
+if (flags.has('--session') && ['--check', '--doctor', '--web', '--serve', '--prompt', '--rpc'].some((f) => flags.has(f))) throw Error('managed-launch-arguments');
 if (flags.has('--rpc') && ['--check', '--doctor', '--web', '--serve', '--prompt', '--json'].some((f) => flags.has(f))) throw Error('managed-launch-arguments');
 const home = os.homedir();
+// Read before the environment is cleared: a Herdr pane's socket for the
+// Terminal's reporter, and the PATH that finds the Windows browser from WSL.
+const herdr = herdrEnvironment(), ambientPath = process.env.PATH;
 // Joining Agent Watch takes a few seconds; keys typed before the Terminal draws are lost, so say so.
 if (!['--check', '--prompt', '--serve', '--doctor', '--web', '--rpc'].some((f) => flags.has(f)) && process.stderr.isTTY) process.stderr.write('Piagent công ty: đang kết nối Agent Watch, chờ ô nhập hiện ra rồi gõ…\n');
 // Do this before importing the SDK: it must not discover personal keys, Node
@@ -122,7 +128,7 @@ try {
       if(!result.ok || !result.value?.launchUrl) throw Error('managed-web-launch-failed');
       result.value.launchUrl+=`&project=${encodeURIComponent(registered.value.projectRef)}`;
       process.stdout.write(`Agent Watch Auto: ${result.value.launchUrl}\n`);
-      if(!flags.has('--no-open')){ const {spawn}=await import('node:child_process'); spawn('/usr/bin/open',[result.value.launchUrl],{stdio:'ignore',env:clean}).unref(); }
+      if(!flags.has('--no-open')){ const {spawn}=await import('node:child_process'); const opener=browserCommand(result.value.launchUrl,{environment:{...clean,PATH:ambientPath}}); if(opener) spawn(opener.command,opener.args,{stdio:'ignore',env:clean,...opener.options}).on('error',()=>{}).unref(); }
     }
     if(gateway){
       process.once('SIGINT',()=>void gateway.close());process.once('SIGTERM',()=>void gateway.close());
@@ -144,6 +150,8 @@ try {
   const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const terminal = companyTerminalExtension({ managed: () => current, packageRoot, sdkRoot: config.sdk_root,
     bindingChanged: () => { try { return digest(config.entrypoint) !== config.entrypoint_sha256; } catch { return true; } } });
+  // Herdr shows the Terminal's state and reopens it after a restart; scripted runs have no pane to show.
+  const reportToHerdr = herdr && !['--check', '--prompt', '--rpc'].some((f) => flags.has(f));
   const factory = async ({ cwd, sessionManager }) => {
     let next;
     try { next = holdManagedSession(agentDir, sessionManager.getSessionFile()); }
@@ -152,12 +160,14 @@ try {
     // A conversation that enrolled again (key or harness changed) holds the live broker.
     if (current) { broker = current.broker; await current.session.abort(); await Promise.allSettled([...current.helpers.values()]); await broker.request('close'); current.session.dispose(); await current.boundary.dispose(); }
     current = await ManagedSession.create({ sdkRoot: config.sdk_root, cwd, origin: config.origin, broker, agentDir, sessionManager,
-      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal] });
+      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal, ...(reportToHerdr ? [companyHerdrExtension(herdr)] : [])] });
     // The plan is drawn as a checklist here; Pi keeps this definition object.
     for (const [name, draw] of Object.entries(toolRenderers)) Object.assign(current.session.getToolDefinition(name) ?? {}, draw);
     return { session: current.session, extensionsResult: current.extensionsResult, services: current.services, diagnostics: [] };
   };
-  const host = await api.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: api.SessionManager.create(cwd, path.join(agentDir, 'sessions')) });
+  const sessions = path.join(agentDir, 'sessions'), reopen = flags.has('--session') ? companySessionFile(sessions, flags.get('--session')) : null;
+  if (flags.has('--session') && !reopen) process.stderr.write('Cuộc trò chuyện này chưa có tin nhắn nào được lưu; mở cuộc trò chuyện mới trong project.\n');
+  const host = await api.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: reopen ? api.SessionManager.open(reopen, sessions, cwd) : api.SessionManager.create(cwd, sessions) });
   if (flags.get('--check')) console.log('agent-watch-auto: connected; native context; isolated tools; no inference sent.');
   else if (flags.has('--prompt')) {
     if (flags.has('--json')) {

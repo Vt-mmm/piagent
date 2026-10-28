@@ -7,11 +7,13 @@ import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const COMPANY_PROVIDER = "agent_watch_managed";
-const STORE = "/AgentWatch/ManagedSessions/";
+// Agent Watch's store: the macOS app's support folder, or the XDG data folder
+// on Linux and WSL (managed/store.mjs).
+const STORE = /\/(AgentWatch|agentwatch)\/ManagedSessions\//;
 
 export function isCompanySession(ctx: Pick<ExtensionContext, "sessionManager">): boolean {
   const file = String(ctx.sessionManager?.getSessionFile?.() ?? "").split(path.sep).join("/");
-  if (file.includes(STORE)) return true;
+  if (STORE.test(file)) return true;
   try {
     return ctx.sessionManager.getEntries().some((entry: any) => typeof entry?.customType === "string" && entry.customType.startsWith("agent-watch-run"));
   } catch {

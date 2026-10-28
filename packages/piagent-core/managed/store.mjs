@@ -74,3 +74,16 @@ export function resolveStore(root, slot, { origin, userId }) {
   for (const name of new Set([slot, store])) { write(path.join(root, name, 'member'), member); write(path.join(root, name, 'store'), store); }
   return store;
 }
+
+// A conversation `piagent studio --session` reopens (Herdr's restore names
+// one): only a file of this store's sessions folder. Null when the file was
+// never written (a conversation with no message yet): a new one starts.
+export function companySessionFile(sessionsDir, file) {
+  const target = path.resolve(String(file));
+  if (!target.endsWith('.jsonl')) throw Error('managed-session-outside-store');
+  const real = candidate => { try { return fs.realpathSync(candidate); } catch { return null; } };
+  const found = real(target), root = real(sessionsDir) ?? path.resolve(sessionsDir);
+  const resolved = found ?? path.join(real(path.dirname(target)) ?? path.dirname(target), path.basename(target));
+  if (!resolved.startsWith(root + path.sep)) throw Error('managed-session-outside-store');
+  return found && fs.statSync(found).isFile() ? found : null;
+}

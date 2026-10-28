@@ -44,7 +44,7 @@ npm install -g @piagent/platform
 piagent-setup
 ```
 
-`piagent-setup` installs the exact Pi host this release pins, installs the package, initializes `.pi/`, adds the MCP baseline and subagents, then runs the doctor. Skip extras with `--no-mcp`, `--no-subagents`, `--no-herdr` or `--global-only`. Install [Herdr](https://herdr.dev/docs/install/) first if you want its Pi integration.
+`piagent-setup` installs the exact Pi host this release pins, installs the package, initializes `.pi/`, adds the MCP baseline and subagents, then runs the doctor. Skip extras with `--no-mcp`, `--no-subagents`, `--no-herdr` or `--global-only`. Install [Herdr](https://herdr.dev/docs/install/) first if you want its Pi integration; on Windows, install it inside Ubuntu (WSL2), next to Piagent.
 
 **Windows** — one PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch; run it again to update:
 

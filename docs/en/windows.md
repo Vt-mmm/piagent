@@ -56,6 +56,8 @@ What the one-line command does, when you need to do it by hand:
 
 Check the machine with `piagent studio --doctor`.
 
+Using [Herdr](../herdr-workflow.md)? Install it inside Ubuntu, not on Windows itself. In a Herdr pane, `piagent studio` reports its state to Herdr, and Herdr reopens the same company conversation after a restart.
+
 ### The sandbox on Linux and WSL2
 
 It keeps the macOS sandbox's promises, built from bubblewrap mounts:

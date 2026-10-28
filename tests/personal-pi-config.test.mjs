@@ -59,6 +59,8 @@ test('personal Pi refuses to continue a company conversation; the company Termin
   assert.deepEqual(await handlers[0]({ text: 'hi' }, ctx(company, 'openai-codex')), { action: 'handled' });
   assert.match(notices.at(-1), /piagent studio --project \/work\/shop/);
   assert.deepEqual(await handlers[0]({ text: 'hi' }, ctx(company, 'agent_watch_managed')), { action: 'continue' });
+  // WSL and Linux keep it in the XDG data folder; a conversation with no run yet is still the company's.
+  assert.deepEqual(await handlers[0]({ text: 'hi' }, ctx('/home/a/.local/share/agentwatch/ManagedSessions/p/sessions/x.jsonl', 'openai-codex')), { action: 'handled' });
   assert.deepEqual(await handlers[0]({ text: 'hi' }, ctx('/tmp/x.jsonl', 'openai-codex', [{ type: 'custom', customType: 'agent-watch-run' }])), { action: 'handled' });
   assert.deepEqual(await handlers[0]({ text: 'hi' }, ctx('/Users/a/.pi/agent/sessions/x.jsonl', 'openai-codex')), { action: 'continue' });
 });

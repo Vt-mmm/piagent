@@ -56,6 +56,8 @@ Những bước lệnh một dòng ở trên tự làm, khi cần làm tay:
 
 Kiểm tra máy: `piagent studio --doctor`.
 
+Dùng [Herdr](../herdr-workflow.md) thì cài Herdr trong Ubuntu, không cài ngoài Windows. Trong pane Herdr, `piagent studio` báo trạng thái cho Herdr, và Herdr mở lại đúng cuộc trò chuyện công ty sau khi khởi động lại.
+
 ### Sandbox trên Linux và WSL2
 
 Cùng những gì sandbox macOS bảo đảm, dựng bằng mount của bubblewrap:
