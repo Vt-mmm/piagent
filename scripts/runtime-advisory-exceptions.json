@@ -24,6 +24,46 @@
       "decided": "2026-10-24",
       "until": "2026-11-07",
       "reason": "Subresource Integrity check bypassed with a non-lowercase algorithm token; Pi does not fetch with integrity metadata. Pinned by the Pi host as above; fixed in undici 8.12.2."
+    },
+    {
+      "id": "GHSA-4w7w-5xrc-9h26",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-28",
+      "until": "2026-11-07",
+      "reason": "Cache poisoning and cross-user disclosure through cross-origin redirects in undici's cache; Pi does not share an HTTP cache between users. Pinned by the Pi host as above (8.10.2 in 1.3.0 and 1.4.0); fixed in undici 8.12.2."
+    },
+    {
+      "id": "GHSA-2m5v-pch6-74hx",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-28",
+      "until": "2026-11-07",
+      "reason": "TLS certificate validation bypassed when an Agent drops its tls options; affects callers that pass custom tls settings to an undici Agent. Pinned by the Pi host as above; fixed in undici 8.12.2. Owner accepted on 2026-10-28 to keep releases going; revisit as soon as a Pi host carries undici >= 8.12.2."
+    },
+    {
+      "id": "GHSA-qrxm-fqhp-jwvm",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-28",
+      "until": "2026-11-07",
+      "reason": "Denial of service through a TLS 1.2 certificate-changing renegotiation by a hostile server; no data exposure. Pinned by the Pi host as above; fixed in undici 8.12.2."
+    },
+    {
+      "id": "GHSA-9fm3-97px-rjf6",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-28",
+      "until": "2026-11-07",
+      "reason": "Denial of service from unbounded automatic PONG buffering in the WebSocket client fed by a hostile server; no data exposure. Pinned by the Pi host as above; fixed in undici 8.12.2."
+    },
+    {
+      "id": "GHSA-55wc-3pg8-jfw6",
+      "package": "undici",
+      "node": "node_modules/undici",
+      "decided": "2026-10-28",
+      "until": "2026-11-07",
+      "reason": "Denial of service from an unhandled exception in the decompress interceptor; no data exposure. Pinned by the Pi host as above; fixed in undici 8.12.2."
     }
   ]
 }

@@ -4,9 +4,27 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
-## v1.44.0 - 2026-10-28
+## v1.44.1 - 2026-10-28
 
 **Your own Pi stays, pick a Terminal style, add skill repositories.** A member who runs a newer Pi keeps it while Piagent runs its own pinned copy; /style picks the Terminal's look; piagent skills add brings in skill repositories such as mattpocock/skills.
+
+### Added
+
+- /style picks the Terminal's look: Pi's system, dark and light, or Piagent's ocean, paper, contrast and focus. The company Terminal remembers the pick.
+- piagent skills add mattpocock/skills adds a GitHub skill repository at one commit; its skills work as /skill:name in Pi, the company Terminal and the dashboard.
+
+### Fixed
+
+- Setup, install and update no longer replace a member's newer pi (such as 1.4.0) with the pinned 1.3.0: Piagent keeps its own copy in ~/.piagent/pi-host for company sessions, the dashboard and piagent pi.
+- piagent-uninstall --with-host removes Piagent's private Pi and leaves a member's own newer pi in place.
+
+### Security
+
+- Five undici advisories published on 2026-10-27 are accepted until 2026-11-07: undici 8.10.2 is pinned by every Pi host and fixed in 8.12.2.
+
+## v1.44.0 - 2026-10-28 (not published)
+
+**Your own Pi stays, pick a Terminal style, add skill repositories.** Tagged but not published: new undici advisories in the Pi host stopped the runtime audit. Superseded by 1.44.1.
 
 ### Added
 
