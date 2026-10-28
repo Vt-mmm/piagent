@@ -504,12 +504,8 @@ echo "Next:"
 if [[ "$DO_PROJECT" == true ]]; then
   echo "  cd \"$PROJECT_PATH\""
 fi
-if [[ "$PI_HOST_PRIVATE" == true ]]; then
-  echo "  piagent pi         # Pi $(node -p 'require(process.argv[1]).peerDependencies["@earendil-works/pi-coding-agent"]' "$PLATFORM_ROOT/package.json"), the release Piagent is qualified on; your own pi also loads Piagent"
-else
-  echo "  pi"
-fi
-echo "  /login             # first time only"
+echo "  piagent            # Piagent in its own Pi home; plain \`pi\` stays your own, stock"
+echo "  /login             # first time only, unless the login of your pi was copied"
 if [[ "$DO_PROJECT" == true ]]; then
   echo "  /model             # or Ctrl+L: select provider/model from Pi selector"
   echo "  /scoped-models     # optional: edit Ctrl+P model cycle scope"

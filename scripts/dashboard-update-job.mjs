@@ -59,8 +59,10 @@ if (installed !== to) finish("failed", { reason: "update-version-mismatch", ...(
 // the launcher needs the binding imported again in Agent Watch.
 let bindingChanged = false;
 try {
-  const agentDir = process.env.PI_CODING_AGENT_DIR?.trim() || path.join(home, ".pi", "agent");
-  const binding = JSON.parse(fs.readFileSync(path.join(agentDir, "agent-watch-managed.json"), "utf8"));
+  // Agent Watch keeps the binding in the personal Pi folder; a test or custom home may hold its own.
+  const homes = [process.env.PI_CODING_AGENT_DIR?.trim(), path.join(home, ".pi", "agent")].filter(Boolean);
+  const file = homes.map((dir) => path.join(dir, "agent-watch-managed.json")).find((candidate) => fs.existsSync(candidate));
+  const binding = JSON.parse(fs.readFileSync(file, "utf8"));
   if (typeof binding?.entrypoint === "string" && typeof binding?.entrypoint_sha256 === "string")
     bindingChanged = crypto.createHash("sha256").update(fs.readFileSync(binding.entrypoint)).digest("hex") !== binding.entrypoint_sha256;
 } catch { /* no company binding on this machine */ }

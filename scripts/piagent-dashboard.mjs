@@ -12,6 +12,7 @@ import { gatewayProfileState, profileRef, readGatewayDescriptor, readOrCreateCat
   removeGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
 import { agentWatchCompanyConnector } from "../packages/piagent-webui/gateway/managed-launch.ts";
+import { agentWatchControlDir, piagentAgentDir } from "../packages/piagent-core/extensions/agent-home.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -177,7 +178,7 @@ async function ensureStarted() {
   }
   const existing = await currentLaunchUrl() ?? await waitForRunningGateway();
   if (existing) return existing;
-  const effectiveAgentDir = path.resolve(agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"));
+  const effectiveAgentDir = path.resolve(agentDir ?? piagentAgentDir());
   const state = gatewayProfileState(effectiveAgentDir);
   writeGatewayErrorLog(state);
   const child = spawn(process.execPath, [
@@ -210,8 +211,9 @@ async function ensureStarted() {
 
 async function serve() {
   // Company sessions come from the Agent Watch binding in this Pi folder.
-  const piAgentDir = path.resolve(agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"));
-  const gateway = await startPiagentGateway({ packageRoot, expectedPiVersion, agentDir, company: agentWatchCompanyConnector(piAgentDir) });
+  // Agent Watch writes the company binding into the personal Pi folder.
+  const bindingDir = agentDir ? path.resolve(agentDir) : agentWatchControlDir();
+  const gateway = await startPiagentGateway({ packageRoot, expectedPiVersion, agentDir: agentDir ?? piagentAgentDir(), company: agentWatchCompanyConnector(bindingDir) });
   const shutdown = () => { void gateway.close(); };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);

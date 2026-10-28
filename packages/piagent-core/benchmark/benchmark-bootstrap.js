@@ -494,7 +494,9 @@ function requestedPiProvider(model, configRoot, credentials) {
 }
 
 function snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay, { providerFreeFinalization = false } = {}) {
-  const sourceRoot = path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
+  // Piagent's own Pi home holds the login benchmarks borrow (see extensions/agent-home.js).
+  const personal = path.resolve(os.homedir(), ".pi", "agent"), configured = process.env.PI_CODING_AGENT_DIR;
+  const sourceRoot = path.resolve(process.env.PIAGENT_AGENT_DIR || (configured && path.resolve(configured) !== personal ? configured : path.join(os.homedir(), ".piagent", "agent")));
   const configRoot = path.join(temporaryRoot, "pi-agent-config");
   fs.mkdirSync(configRoot, { recursive: true, mode: 0o700 });
   const copied = [];

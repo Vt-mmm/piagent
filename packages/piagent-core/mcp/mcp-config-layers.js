@@ -44,7 +44,10 @@ export function configPathForScope(scope, options = {}) {
     case "global":
       return path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "mcp", "mcp.json");
     case "pi-global":
-      return path.join(env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent"), "mcp.json");
+      // Piagent's own Pi home, not the member's personal pi (see extensions/agent-home.js).
+      if (env.PIAGENT_AGENT_DIR) return path.join(env.PIAGENT_AGENT_DIR, "mcp.json");
+      if (env.PI_CODING_AGENT_DIR && path.resolve(env.PI_CODING_AGENT_DIR) !== path.resolve(home, ".pi", "agent")) return path.join(env.PI_CODING_AGENT_DIR, "mcp.json");
+      return path.join(home, ".piagent", "agent", "mcp.json");
     case "project":
       return path.join(projectPath, ".mcp.json");
     case "pi-project":

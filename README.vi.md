@@ -44,7 +44,9 @@ npm install -g @piagent/platform
 piagent-setup
 ```
 
-`piagent-setup` cài đúng bản Pi host mà release này pin, cài package, khởi tạo `.pi/`, thêm MCP baseline và subagent, rồi chạy doctor. Bỏ bớt bằng `--no-mcp`, `--no-subagents`, `--no-herdr` hoặc `--global-only`. Muốn dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr trước; trên Windows thì cài trong Ubuntu (WSL2), cùng chỗ với Piagent.
+`piagent-setup` cài đúng bản Pi host mà release này pin, cài package, khởi tạo `.pi/`, thêm MCP baseline và subagent, rồi chạy doctor. Chạy trong terminal, lần cài đầu sẽ hỏi bạn muốn cài add-on nào và có dùng lại login của pi không; muốn bỏ bớt ngay từ đầu thì dùng `--no-mcp`, `--no-subagents`, `--no-web-access`, `--no-herdr` hoặc `--global-only`.
+
+Piagent cài vào Pi home riêng, `~/.piagent/agent`. `pi` của bạn (`~/.pi/agent`) giữ nguyên bản gốc: không có package Piagent, add-on, danh sách model hay panel dưới footer. Các bản trước 1.45 cài vào `~/.pi/agent`; installer sẽ dời bản cài đó ra, còn `piagent restore-pi` (chỉ báo) / `piagent restore-pi --apply` làm việc này riêng. File nào bị đổi đều có bản sao lưu nằm cạnh. Muốn dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr trước; trên Windows thì cài trong Ubuntu (WSL2), cùng chỗ với Piagent.
 
 **Windows** — một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch; chạy lại để cập nhật:
 
@@ -64,7 +66,7 @@ irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 |
 
 ```bash
 piagent dashboard          # trình duyệt, chế độ cá nhân
-pi                         # Terminal, chế độ cá nhân
+piagent                    # Terminal, chế độ cá nhân (`pi` thường vẫn là của bạn)
 piagent studio --web       # chế độ công ty, sau khi nhập key ở Agent Watch
 ```
 
@@ -93,7 +95,7 @@ Credential, trust, session, todo và memory của project không bao giờ bị 
 
 | | Cá nhân | Công ty |
 |---|---|---|
-| Mở | `pi`, `piagent dashboard` | `piagent studio`, `piagent studio --web` |
+| Mở | `piagent`, `piagent dashboard` | `piagent studio`, `piagent studio --web` |
 | Model | Tài khoản của bạn, model nào Pi hỗ trợ | Chọn theo vai (main · research · review) trong Agent Studio |
 | Key | Trên máy bạn, do Pi quản lý | Trong Keychain qua Agent Watch; model không bao giờ thấy |
 | Lệnh | Mạng bình thường; push và publish chờ duyệt | Sandbox (Seatbelt / bubblewrap) không mạng; mạng mở theo từng lần duyệt |

@@ -22,6 +22,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { inspect as inspectPersonalPi } from "./personal-pi-config.mjs";
+import { personalPiAgentDir, piagentAgentDir } from "../packages/piagent-core/extensions/agent-home.js";
 import { hostPlan, installPrivateHost, privateHostRoot } from "../packages/piagent-core/managed/pi-host.mjs";
 
 const HELPER_PACKAGE = "@piagent/platform";
@@ -438,8 +439,10 @@ function main() {
     : `  host:    ${currentHost ?? "not installed"} -> ${targetHost}${hostNeedsChange ? "" : " (already current)"}`);
   // The Pi package can lag the helper (installed from an older tag), and
   // personal Pi can hold conflicting Piagent or old company entries.
-  const personal = inspectPersonalPi(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
-  const installedPackages = personal.packages.map((item) => item.version ?? "unknown");
+  // The package lives in Piagent's home; old company entries and an older
+  // Piagent install live in the member's personal pi.
+  const personal = inspectPersonalPi(personalPiAgentDir()), own = inspectPersonalPi(piagentAgentDir());
+  const installedPackages = own.packages.map((item) => item.version ?? "unknown");
   const packageNeedsChange = options.package && (options.force || installedPackages.length !== 1 || installedPackages[0] !== targetHelper);
   console.log(`  package: ${installedPackages.join(", ") || "not installed"} -> v${targetHelper}${options.package ? packageNeedsChange ? " (reinstalled as a resolved commit)" : " (already current)" : " (skipped)"}`);
   for (const finding of personal.findings) console.log(`  personal Pi: ${finding.text}`);

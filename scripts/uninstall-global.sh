@@ -9,7 +9,16 @@ set -euo pipefail
 # deleted.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PI_AGENT_DIR="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}"
+# Piagent's own Pi home (same rule as packages/piagent-core/extensions/agent-home.js).
+PERSONAL_PI_DIR="${HOME}/.pi/agent"
+if [[ -n "${PIAGENT_AGENT_DIR:-}" ]]; then
+  PI_AGENT_DIR="$PIAGENT_AGENT_DIR"
+elif [[ -n "${PI_CODING_AGENT_DIR:-}" && "${PI_CODING_AGENT_DIR%/}" != "$PERSONAL_PI_DIR" ]]; then
+  PI_AGENT_DIR="$PI_CODING_AGENT_DIR"
+else
+  PI_AGENT_DIR="${HOME}/.piagent/agent"
+fi
+export PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
 GLOBAL_SETTINGS="$PI_AGENT_DIR/settings.json"
 
 APPLY=false
@@ -26,7 +35,9 @@ usage() {
 Usage:
   piagent-uninstall [--apply] [--with-addons] [--with-host] [--project <path>]
 
-Removes the Pi package this platform installed from Pi's global settings.
+Removes the Pi package this platform installed from Piagent's own Pi home
+(~/.piagent/agent). An install from before 1.45 lives in your personal pi
+(~/.pi/agent): `piagent restore-pi --apply` takes it out of there.
 
   (default)        Dry run. Reports what would be removed and exits 0.
   --apply          Perform the removal.
@@ -291,6 +302,10 @@ NODE
 fi
 
 echo
+if node "$ROOT/scripts/personal-pi-restore.mjs" --json 2>/dev/null | grep -q '"legacy": true'; then
+  echo "Your personal pi ($PERSONAL_PI_DIR) still loads an older Piagent install."
+  echo "  Take it out with: piagent restore-pi --apply"
+fi
 if [[ "$APPLY" == true ]]; then
   echo "Uninstall complete."
   echo "The npm-global helper is separate and stays until you remove it:"

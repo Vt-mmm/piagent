@@ -14,6 +14,7 @@ import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benc
 import { recoverBenchmarkObservationCheckpoints } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { benchmarkSurfaceLabel } from "../packages/piagent-core/benchmark/benchmark-core.js";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
+import { piagentAgentDir } from "../packages/piagent-core/extensions/agent-home.js";
 
 export function fail(message, code = 2) {
   const error = new Error(message);
@@ -96,7 +97,7 @@ export function registeredBenchmarkCustodyRoot(runRoot) {
 
 export function defaultOutputRoot(bootstrapMetadata) {
   if (bootstrapMetadata?.defaultOutputRoot) return bootstrapMetadata.defaultOutputRoot;
-  const agentRoot = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
+  const agentRoot = piagentAgentDir();
   return path.join(agentRoot, "benchmarks", "piagent");
 }
 

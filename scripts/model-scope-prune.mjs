@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { piagentAgentDir } from "../packages/piagent-core/extensions/agent-home.js";
 
 // The Pi install `pi` runs from.
 export function piPackageRoot(environment = process.env) {
@@ -55,7 +56,7 @@ export function pruneSettings(settingsPath, stale) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
   const args = process.argv.slice(2), at = args.indexOf("--settings");
-  const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME ?? "", ".pi", "agent");
+  const agentDir = piagentAgentDir(process.env, process.env.HOME ?? "");
   const settingsPath = at >= 0 && args[at + 1] ? path.resolve(args[at + 1]) : path.join(agentDir, "settings.json");
   const json = args.includes("--json"), fix = args.includes("--fix");
   const out = (value, text) => process.stdout.write(json ? `${JSON.stringify(value)}\n` : `${text}\n`);

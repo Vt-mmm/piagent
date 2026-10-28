@@ -72,8 +72,14 @@ const installations = piagentInstallations();
 if(installations.length>1) warnings.push("Multiple Piagent installations detected. Use the pinned Watch launcher; other PATHs may run an older build: "+installations.map(i=>`${i.version} [${i.fingerprint}] ${i.root}`).join("; "));
 // Personal Pi loading Piagent twice does not start; old company providers send it to Studio outside the Harness.
 const { inspect: inspectPersonalPi } = await import(pathToFileURL(path.join(platformRoot, "scripts/personal-pi-config.mjs")).href);
-for (const finding of inspectPersonalPi(process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "", ".pi", "agent")).findings)
-  (finding.kind === "duplicate-extensions" ? errors : warnings).push(`personal Pi: ${finding.text} Fix: piagent-update`);
+const personalPiDir = path.join(process.env.HOME || "", ".pi", "agent");
+for (const agentDir of new Set([personalPiDir, process.env.PI_CODING_AGENT_DIR || personalPiDir]))
+  for (const finding of inspectPersonalPi(agentDir).findings)
+    (finding.kind === "duplicate-extensions" ? errors : warnings).push(`${agentDir === personalPiDir ? "personal Pi" : "Piagent home"}: ${finding.text} Fix: piagent-update`);
+// Since 1.45 Piagent runs from its own home; an older install left in personal Pi keeps loading there.
+const { plan: personalPiRestorePlan } = await import(pathToFileURL(path.join(platformRoot, "scripts/personal-pi-restore.mjs")).href);
+if (personalPiRestorePlan({ personalDir: personalPiDir }).legacy)
+  warnings.push("personal Pi still loads an older Piagent install (~/.pi/agent). Fix: piagent restore-pi --apply");
 const { verifyCapabilityLock } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "capability-core.js")).href);
 
 function exists(rel) {
@@ -271,9 +277,9 @@ if (commandExists("pi")) {
   piHasMcpAdapter = combined.includes("pi-mcp-adapter");
   piHasSubagents = combined.includes("pi-subagents");
   piHasWebAccess = combined.includes("pi-web-access");
-  if (!piHasMcpAdapter) warnings.push("Pi MCP adapter not found in `pi list`; run setup with --with-mcp or `pi install npm:pi-mcp-adapter@2.15.0`");
-  if (!piHasSubagents) warnings.push("Pi subagents package not found in `pi list`; run setup with --with-subagents or `pi install npm:pi-subagents@0.38.0`");
-  if (!piHasWebAccess) warnings.push("Pi web access package not found in `pi list`; run `piagent-update --force` or `pi install npm:pi-web-access@0.17.0` so researcher subagents can browse/fetch external sources");
+  if (!piHasMcpAdapter) warnings.push("Pi MCP adapter not found in `pi list`; run `piagent-install --with-mcp` (installs into Piagent's home, not your personal pi)");
+  if (!piHasSubagents) warnings.push("Pi subagents package not found in `pi list`; run `piagent-install --with-subagents` if you want them");
+  if (!piHasWebAccess) warnings.push("Pi web access package not found in `pi list`; run `piagent-install --with-web-access` so researcher subagents can browse/fetch external sources");
 }
 
 const mcpFiles = [

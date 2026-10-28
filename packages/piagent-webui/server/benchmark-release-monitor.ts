@@ -10,6 +10,7 @@ import { assertBenchmarkLedgerBinding, inspectBenchmarkLedger, validateBenchmark
 import { completedBenchmarkRecord } from "../../piagent-core/benchmark/benchmark-record-validation.js";
 import { benchmarkGitEnvironment } from "../../piagent-core/benchmark/benchmark-runtime.js";
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
+import { piagentAgentDir } from "../../piagent-core/extensions/agent-home.js";
 
 const MAX_RUNS = 20, MAX_DIRECTORIES = 100, MAX_DIRECTORY_ENTRIES = 5_000, MAX_JSON_BYTES = 32 * 1024 * 1024;
 type Identity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string | null; taskRunId: string | null;
@@ -210,7 +211,7 @@ function releaseReadiness(cwd: string, file: string, repo: ReturnType<typeof rep
 export function projectBenchmarkReleaseMonitor(input: { cwd: string; identity: Identity; generatedAt?: string; benchmarkRoot?: string; releaseReportPath?: string }) {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   try {
-    const repo = repository(input.cwd), root = input.benchmarkRoot ?? path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "benchmarks", "piagent");
+    const repo = repository(input.cwd), root = input.benchmarkRoot ?? path.join(piagentAgentDir(), "benchmarks", "piagent");
     const releasePath = input.releaseReportPath ?? path.join(input.cwd, "plans", "codex-first-product", "evidence", "p7-local-readiness", "report.json");
     const benchmark = benchmarkRuns(input.cwd, root, repo), release = releaseReadiness(input.cwd, releasePath, repo);
     const revision = `release-monitor.${createHash("sha256").update(JSON.stringify({ benchmark, release })).digest("hex")}`;

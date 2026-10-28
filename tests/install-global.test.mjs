@@ -90,6 +90,9 @@ exit 0
 
 function runInstaller(args, env = {}) {
   const fakeBin = makeFakeBin();
+  // The installer reads the personal pi (~/.pi/agent) for an older install;
+  // a temporary HOME keeps the machine running the tests out of the result.
+  env = { HOME: fs.mkdtempSync(path.join(os.tmpdir(), "piagent-install-home-")), ...env };
   return spawnSync("bash", ["scripts/install-global.sh", ...args], {
     cwd: repositoryRoot,
     env: {
@@ -103,6 +106,9 @@ function runInstaller(args, env = {}) {
 
 function runSetup(args, env = {}) {
   const fakeBin = makeFakeBin();
+  // The installer reads the personal pi (~/.pi/agent) for an older install;
+  // a temporary HOME keeps the machine running the tests out of the result.
+  env = { HOME: fs.mkdtempSync(path.join(os.tmpdir(), "piagent-install-home-")), ...env };
   return spawnSync("bash", ["scripts/setup.sh", ...args], {
     cwd: repositoryRoot,
     env: {
@@ -291,7 +297,7 @@ describe("install-global release channels", () => {
       assert.equal(setup.status, 0, setup.stderr);
       assert.ok(!setup.stdout.includes("npm install -g --ignore-scripts @earendil-works/pi-coding-agent@"), setup.stdout);
       assert.match(setup.stdout, /is your own and stays as it is/);
-      assert.match(setup.stdout, /piagent pi /);
+      assert.match(setup.stdout, /^ {2}piagent {2,}# Piagent in its own Pi home/m);
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
   });
 

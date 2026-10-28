@@ -5,6 +5,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { privateHostRoot } from "../../piagent-core/managed/pi-host.mjs";
+import { agentWatchControlDir } from "../../piagent-core/extensions/agent-home.js";
 
 const require = createRequire(import.meta.url);
 
@@ -58,8 +59,7 @@ export function installedPiHostRoot(): string {
   const home = os.homedir(), hostPackage = path.join("lib", "node_modules", "@earendil-works", "pi-coding-agent");
   let recorded: string | null = null;
   try {
-    const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
-    recorded = JSON.parse(fs.readFileSync(path.join(agentDir, "piagent-runtime.json"), "utf8")).pi_sdk_root ?? null;
+    recorded = JSON.parse(fs.readFileSync(path.join(agentWatchControlDir(home), "piagent-runtime.json"), "utf8")).pi_sdk_root ?? null;
   } catch { /* no record yet */ }
   // npm's default Windows prefixes (%APPDATA%\npm, or beside node.exe) have no lib folder.
   const appData = process.env.APPDATA ?? path.join(home, "AppData", "Roaming");

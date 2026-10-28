@@ -23,6 +23,9 @@ Options:
   --with-web-access | --no-web-access
                                   Install pi-web-access for the researcher subagent (default: install).
   --with-herdr                    Also configure Herdr integration.
+  --copy-login | --no-copy-login  Copy (or not) your personal pi login into Piagent's home.
+                                  Default: ask in a terminal; without one, copy only when
+                                  moving an older install out of your personal pi.
   --model-scope <full|codex|claude>
                                   Model families to enable in Pi (default: full). A member who
                                   already has a default model and model list keeps them; an
@@ -36,7 +39,13 @@ Options:
   -h, --help                      Print this help and exit.
 
 Purpose:
-  Install the piagent Pi package into the current user's global Pi settings.
+  Install Piagent into its own Pi home (~/.piagent/agent; PIAGENT_AGENT_DIR overrides).
+  Your personal `pi` (~/.pi/agent) stays stock: open Piagent with `piagent`.
+  An install from an older release that lives in ~/.pi/agent is moved out of it.
+
+  Run in a terminal, a first install asks which add-ons to install and whether
+  to use your pi login; flags answer those questions up front, and a run
+  without a terminal (CI, the dashboard updater) takes the defaults.
 
 Package source examples:
   # Recommended stable install: exact current release tag
@@ -61,7 +70,8 @@ Package source examples:
 Notes:
   - `currentRelease` in output is the version of the terminal helper executing this command.
   - Use exactly one package selector. The first CLI selector overrides environment defaults; a second selector fails closed.
-  - OAuth is intentionally not automated. Run `pi` then `/login`.
+  - OAuth is intentionally not automated. Run `piagent` then `/login`, or let the
+    installer copy the login your personal pi already has.
   - Model scope is configured with Pi's native `enabledModels` so users choose via `/model`, Ctrl+L, `/scoped-models`, and Ctrl+P.
   - Herdr integration is optional and modifies user-level Herdr/Pi config.
   - MCP is installed by default with the core preset: Context7 docs, Chrome DevTools, GitHub.
@@ -76,6 +86,21 @@ USAGE
 }
 
 PLATFORM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Piagent's own Pi home (packages/piagent-core/extensions/agent-home.js has the
+# same rule). Every `pi` call below works there, never in the personal home.
+PERSONAL_PI_DIR="${HOME}/.pi/agent"
+if [[ -n "${PIAGENT_AGENT_DIR:-}" ]]; then
+  PIAGENT_HOME="$PIAGENT_AGENT_DIR"
+elif [[ -n "${PI_CODING_AGENT_DIR:-}" && "${PI_CODING_AGENT_DIR%/}" != "$PERSONAL_PI_DIR" ]]; then
+  PIAGENT_HOME="$PI_CODING_AGENT_DIR"
+else
+  PIAGENT_HOME="${HOME}/.piagent/agent"
+fi
+export PI_CODING_AGENT_DIR="$PIAGENT_HOME"
+MCP_EXPLICIT=false
+WEB_ACCESS_EXPLICIT=false
+MODEL_SCOPE_EXPLICIT=false
+COPY_LOGIN=""
 CURRENT_RELEASE_TAG=""
 EXPECTED_PI_VERSION=""
 EXPECTED_RELEASE_COMMIT="${PIAGENT_EXPECTED_RELEASE_COMMIT:-}"
@@ -486,10 +511,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-mcp)
       WITH_MCP=true
+      MCP_EXPLICIT=true
       shift
       ;;
     --no-mcp)
       WITH_MCP=false
+      MCP_EXPLICIT=true
       shift
       ;;
     --mcp-preset)
@@ -520,10 +547,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-web-access)
       WITH_WEB_ACCESS=true
+      WEB_ACCESS_EXPLICIT=true
       shift
       ;;
     --no-web-access)
       WITH_WEB_ACCESS=false
+      WEB_ACCESS_EXPLICIT=true
       shift
       ;;
     --with-herdr)
@@ -533,6 +562,7 @@ while [[ $# -gt 0 ]]; do
     --model-scope)
       require_value "$1" "${2:-}"
       MODEL_SCOPE_PRESET="$2"
+      MODEL_SCOPE_EXPLICIT=true
       shift 2
       ;;
     --default-model)
@@ -546,6 +576,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-model-scope)
       CONFIGURE_MODEL_SCOPE=false
+      MODEL_SCOPE_EXPLICIT=true
+      shift
+      ;;
+    --copy-login)
+      COPY_LOGIN=true
+      shift
+      ;;
+    --no-copy-login)
+      COPY_LOGIN=false
       shift
       ;;
     -h|--help)
@@ -568,6 +607,54 @@ if [[ "$WITH_MCP" == false && "$MCP_PRESET_EXPLICIT" == true ]]; then
 fi
 
 require_node_version
+
+# What personal Pi holds from an older Piagent release (packages, login).
+LEGACY_REPORT="$(node "$PLATFORM_ROOT/scripts/personal-pi-restore.mjs" --json 2>/dev/null || echo '{}')"
+legacy_field() {
+  node -e 'const r = JSON.parse(process.argv[1] || "{}"); const v = process.argv[2].split(".").reduce((o, k) => o?.[k], r); process.stdout.write(Array.isArray(v) ? v.join("\n") : String(v ?? ""));' "$LEGACY_REPORT" "$1"
+}
+LEGACY_INSTALL="$(legacy_field legacy)"
+LEGACY_SUBAGENTS=false
+if legacy_field remove | grep -q '^npm:pi-subagents@'; then LEGACY_SUBAGENTS=true; fi
+FIRST_INSTALL=true
+if [[ -f "$PIAGENT_HOME/settings.json" ]] && grep -qE '@piagent/platform|Vt-mmm/piagent' "$PIAGENT_HOME/settings.json" 2>/dev/null; then
+  FIRST_INSTALL=false
+fi
+
+# Ask, rather than decide for the member, what goes into Piagent's home: only on
+# a first install (an update keeps what is there), only in a terminal, and never
+# for a question a flag already answered.
+ask_yes_no() {
+  local question="$1" default="$2" answer hint="[Y/n]"
+  [[ "$default" == false ]] && hint="[y/N]"
+  read -r -p "$question $hint " answer </dev/tty || answer=""
+  case "$answer" in
+    [Yy]*) echo true ;;
+    [Nn]*) echo false ;;
+    *) echo "$default" ;;
+  esac
+}
+if [[ "$FIRST_INSTALL" == true && "$DRY_RUN" == false && -t 0 && -t 1 && -z "${PIAGENT_INSTALL_DEFAULTS:-}" ]]; then
+  echo "Piagent installs into its own Pi home: $PIAGENT_HOME"
+  echo "Your personal pi ($PERSONAL_PI_DIR) is not changed by these choices."
+  [[ "$MCP_EXPLICIT" == true ]] || WITH_MCP="$(ask_yes_no "Install the MCP adapter (pi-mcp-adapter, servers: $MCP_PRESET)?" "$WITH_MCP")"
+  if [[ "$SUBAGENTS_EXPLICIT" == false ]]; then
+    WITH_SUBAGENTS="$(ask_yes_no "Install pi-subagents (optional parallel helpers; company sessions use their own)?" "$LEGACY_SUBAGENTS")"
+    SUBAGENTS_EXPLICIT=true
+  fi
+  [[ "$WEB_ACCESS_EXPLICIT" == true ]] || WITH_WEB_ACCESS="$(ask_yes_no "Install pi-web-access (web search and fetch for the researcher subagent)?" "$WITH_WEB_ACCESS")"
+  [[ "$MODEL_SCOPE_EXPLICIT" == true ]] || CONFIGURE_MODEL_SCOPE="$(ask_yes_no "Set Piagent's model list and default model ($DEFAULT_MODEL)?" "$CONFIGURE_MODEL_SCOPE")"
+  if [[ -z "$COPY_LOGIN" && "$(legacy_field loginAvailable)" == true ]]; then
+    COPY_LOGIN="$(ask_yes_no "Use the login your personal pi already has (copies auth.json once)?" true)"
+  fi
+  echo
+fi
+if [[ -z "$COPY_LOGIN" ]]; then
+  COPY_LOGIN="$LEGACY_INSTALL"
+fi
+if [[ "$LEGACY_SUBAGENTS" == true && "$SUBAGENTS_EXPLICIT" == false ]]; then
+  WITH_SUBAGENTS=true
+fi
 
 # The preset is only read at the very last step, after the platform package and
 # the MCP adapter are already installed. A name with a typo therefore failed
@@ -736,9 +823,24 @@ if [[ -n "$RESOLVED_PACKAGE_COMMIT" ]]; then
 fi
 echo "  source: $PACKAGE_SOURCE"
 sync_local_helper
+echo "  home: $PIAGENT_HOME (your personal pi stays in $PERSONAL_PI_DIR)"
+run_cmd mkdir -p "$PIAGENT_HOME"
 echo "Removing previous Pi Agent Platform package registrations:"
 remove_existing_piagent_platform_sources
 run_cmd pi install "$PACKAGE_SOURCE"
+
+# An older release installed Piagent into personal Pi. Move it out: carry the
+# member's model choices (and the login, when agreed) to Piagent's home, then
+# leave personal Pi stock. Backups of every changed file stay beside it.
+if [[ "$LEGACY_INSTALL" == true ]]; then
+  echo "Moving the older Piagent install out of your personal pi:"
+  restore_args=("$PLATFORM_ROOT/scripts/personal-pi-restore.mjs" --apply)
+  [[ "$COPY_LOGIN" == true ]] && restore_args+=(--copy-login)
+  run_cmd node "${restore_args[@]}"
+elif [[ "$COPY_LOGIN" == true && "$(legacy_field loginAvailable)" == true ]]; then
+  echo "Copying your pi login to Piagent's home:"
+  run_cmd node -e 'const fs = require("node:fs"); fs.copyFileSync(process.argv[1], process.argv[2], fs.constants.COPYFILE_EXCL); fs.chmodSync(process.argv[2], 0o600);' "$PERSONAL_PI_DIR/auth.json" "$PIAGENT_HOME/auth.json"
+fi
 
 if [[ "$WITH_MCP" == true ]]; then
   echo "Installing Pi MCP adapter:"
@@ -747,6 +849,9 @@ if [[ "$WITH_MCP" == true ]]; then
   fi
   remove_existing_npm_package_sources "pi-mcp-adapter"
   run_cmd pi install "$PI_MCP_ADAPTER_SOURCE"
+  # Pi's built-in `mcp` extension registers the same /mcp command as the
+  # adapter; Piagent's home turns the built-in off so only one loads.
+  run_cmd node -e 'const fs = require("node:fs"); const f = process.argv[1]; const s = JSON.parse(fs.readFileSync(f, "utf8")); const e = Array.isArray(s.extensions) ? s.extensions : []; if (!e.includes("-builtin:mcp")) { s.extensions = [...e, "-builtin:mcp"]; fs.writeFileSync(f, JSON.stringify(s, null, 2) + "\n"); }' "$PIAGENT_HOME/settings.json"
   if [[ "$DRY_RUN" == false ]] && command -v pi-mcp-adapter >/dev/null 2>&1; then
     pi-mcp-adapter init || true
   fi
@@ -802,10 +907,13 @@ if [[ "$DRY_RUN" == true ]]; then
   print_cmd node "$PLATFORM_ROOT/scripts/personal-pi-config.mjs" repair
 else
   node "$PLATFORM_ROOT/scripts/personal-pi-config.mjs" repair || echo "WARN: could not check the personal Pi configuration; run: node \"$PLATFORM_ROOT/scripts/personal-pi-config.mjs\" check" >&2
+  node "$PLATFORM_ROOT/scripts/personal-pi-config.mjs" repair --agent-dir "$PIAGENT_HOME" >/dev/null || true
 fi
 
 echo
-echo "Installed packages:"
+echo "Open Piagent with: piagent   (your own pi in $PERSONAL_PI_DIR stays stock)"
+echo
+echo "Installed packages in $PIAGENT_HOME:"
 if [[ "$DRY_RUN" == true ]]; then
   print_cmd pi list
 else
@@ -814,8 +922,8 @@ fi
 
 echo
 echo "Next:"
-echo "  pi"
-echo "  /login"
+echo "  piagent         # Piagent in this terminal; plain \`pi\` stays your own"
+echo "  /login          # unless the login of your pi was copied"
 echo "  /model          # or Ctrl+L: select provider/model from Pi selector"
 echo "  /scoped-models  # optional: edit Ctrl+P model cycle scope"
 if [[ "$WITH_MCP" == true ]]; then

@@ -120,7 +120,8 @@ const invoked = process.argv[1] && real(process.argv[1]) === real(fileURLToPath(
 if (invoked) {
   const args = process.argv.slice(2), command = args[0];
   const at = args.indexOf("--agent-dir");
-  const agentDir = at >= 0 ? path.resolve(args[at + 1]) : (process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
+  // The member's personal pi, whatever home Piagent itself runs from.
+  const agentDir = at >= 0 ? path.resolve(args[at + 1]) : path.join(os.homedir(), ".pi", "agent");
   if (!["check", "repair"].includes(command)) { console.error("Usage: personal-pi-config.mjs check|repair [--agent-dir <dir>] [--json]"); process.exit(2); }
   const result = command === "repair" ? repair(agentDir) : inspect(agentDir);
   if (args.includes("--json")) console.log(JSON.stringify(result, null, 2));

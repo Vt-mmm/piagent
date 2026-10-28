@@ -47,8 +47,17 @@ function shortControlSocket(agentDir: string): string {
   return path.join(socketRoot, `${digest}.sock`);
 }
 
+// Piagent's own Pi home (~/.piagent/agent), never the member's personal pi.
+// Same rule as piagent-core/extensions/agent-home.js, which this layer cannot import.
+function defaultAgentDir(): string {
+  const own = process.env.PIAGENT_AGENT_DIR?.trim(), configured = process.env.PI_CODING_AGENT_DIR?.trim();
+  if (own) return own;
+  if (configured && path.resolve(configured) !== path.resolve(os.homedir(), ".pi", "agent")) return configured;
+  return path.join(os.homedir(), ".piagent", "agent");
+}
+
 export function gatewayProfileState(agentDirInput?: string): GatewayProfileState {
-  const agentDir = path.resolve(agentDirInput || process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
+  const agentDir = path.resolve(agentDirInput || defaultAgentDir());
   fs.mkdirSync(agentDir, { recursive: true, mode: 0o700 });
   const agentStat = fs.lstatSync(agentDir);
   if (!agentStat.isDirectory() || agentStat.isSymbolicLink()

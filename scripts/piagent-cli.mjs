@@ -28,7 +28,8 @@ const scriptByCommand = {
   "piagent-webui": "scripts/piagent-webui-launcher.mjs",
   "piagent-dashboard": "scripts/piagent-dashboard.mjs",
   "piagent-pi-host": "scripts/pi-host.mjs",
-  "piagent-skills": "scripts/skill-sources.mjs"
+  "piagent-skills": "scripts/skill-sources.mjs",
+  "piagent-restore-pi": "scripts/personal-pi-restore.mjs"
 };
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,9 +37,28 @@ const invokedAs = path.basename(process.argv[1] ?? "");
 let forwardedArgs = process.argv.slice(2);
 let script = scriptByCommand[invokedAs];
 
+// Piagent's Pi lives in its own home so the member's `pi` (~/.pi/agent) stays
+// stock; Agent Watch's files stay in ~/.pi/agent. Same rule as
+// packages/piagent-core/extensions/agent-home.js, inlined because this
+// launcher runs before anything else of the package resolves.
+const personalPiDir = path.resolve(os.homedir(), ".pi", "agent");
+function piagentHome() {
+  const own = process.env.PIAGENT_AGENT_DIR?.trim();
+  if (own) return path.resolve(own);
+  const configured = process.env.PI_CODING_AGENT_DIR?.trim();
+  if (configured && path.resolve(configured) !== personalPiDir) return path.resolve(configured);
+  return path.resolve(os.homedir(), ".piagent", "agent");
+}
+let terminal = false;
+
 if (invokedAs === "piagent") {
   const subcommand = forwardedArgs[0];
-  if (subcommand === "studio") {
+  if (subcommand === undefined || (subcommand.startsWith("-") && !["--help", "-h"].includes(subcommand))) {
+    // `piagent` on its own (or with Pi's flags, `piagent -c`) opens Piagent here.
+    script = "scripts/pi-host.mjs";
+    forwardedArgs = ["run", "--", ...forwardedArgs];
+    terminal = true;
+  } else if (subcommand === "studio") {
     script = "scripts/piagent-studio.mjs";
     forwardedArgs = forwardedArgs.slice(1);
   } else if (subcommand === "dashboard") {
@@ -48,6 +68,7 @@ if (invokedAs === "piagent") {
     // Pi itself, on the release Piagent is qualified on, whatever `pi` the member keeps.
     script = "scripts/pi-host.mjs";
     forwardedArgs = ["run", "--", ...forwardedArgs.slice(1)];
+    terminal = true;
   } else if (subcommand === "explain") {
     script = "scripts/explain-command.mjs";
     forwardedArgs = forwardedArgs.slice(1);
@@ -61,16 +82,18 @@ if (invokedAs === "piagent") {
     // `piagent doctor` is `piagent-doctor`: members type it both ways.
     script = scriptByCommand[`piagent-${subcommand}`];
     forwardedArgs = forwardedArgs.slice(1);
-  } else if ([undefined, "help", "--help", "-h"].includes(subcommand)) {
+  } else if (["help", "--help", "-h"].includes(subcommand)) {
     // Subcommands are listed, their flags are not. Restating them here meant a
     // second copy that drifts: this line still advertised the dashboard without
     // `--repair` after that flag shipped. Each command states its own surface.
-    console.log("Usage: piagent <command> [options]");
+    console.log("Usage: piagent [pi options]     Open Piagent in this terminal (its own Pi home, ~/.piagent/agent)");
+    console.log("       piagent <command> [options]");
     console.log("");
     console.log("Commands:");
     console.log("  dashboard   Open and manage the local session hub");
     console.log("  studio      Open the managed company agent imported by Agent Watch");
-    console.log("  pi          Run Pi on the release Piagent is qualified on (your own pi stays as it is)");
+    console.log("  pi          Same as `piagent`: Pi on the release Piagent is qualified on, in Piagent's home");
+    console.log("  restore-pi  Take an older Piagent install out of your own pi (~/.pi/agent)");
     console.log("  pi-host     Show or install the Pi host Piagent runs");
     console.log("  skills      Add, list or remove skill sources such as mattpocock/skills");
     console.log("  explain     Say why the guard would allow or block a shell command");
@@ -91,7 +114,7 @@ if (!script) {
 function benchmarkSourceRoot() {
   if (fs.existsSync(path.join(packageRoot, ".git"))) return packageRoot;
   if (process.argv.slice(2).some((value) => value === "--help" || value === "-h")) return packageRoot;
-  const agentRoot = path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
+  const agentRoot = piagentHome();
   const installed = path.join(agentRoot, "git", "github.com", "Vt-mmm", "piagent");
   try {
     const helperVersion = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version;
@@ -133,8 +156,9 @@ async function recordRuntime() {
     // an entrypoint that no longer exists.
     const osTemp = fs.realpathSync.native(os.tmpdir()), installRoot = fs.realpathSync.native(packageRoot);
     if (installRoot === osTemp || installRoot.startsWith(`${osTemp}${path.sep}`)) return;
-    const agentDir = path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
-    if (!fs.statSync(agentDir).isDirectory()) return;
+    // Agent Watch reads the record from the personal Pi folder, not Piagent's home.
+    const agentDir = personalPiDir;
+    fs.mkdirSync(agentDir, { recursive: true, mode: 0o700 });
     const body = `${JSON.stringify({
       schema_version: 1,
       version: JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version,
@@ -151,6 +175,21 @@ async function recordRuntime() {
 }
 await recordRuntime();
 
+if (terminal) {
+  let packages = [];
+  try { packages = JSON.parse(fs.readFileSync(path.join(piagentHome(), "settings.json"), "utf8")).packages ?? []; } catch { /* not installed yet */ }
+  const isPiagent = (entry) => {
+    const source = String(typeof entry === "string" ? entry : entry?.source ?? "");
+    if (/@piagent\/platform|Vt-mmm\/piagent/.test(source)) return true;
+    try { return JSON.parse(fs.readFileSync(path.join(path.resolve(piagentHome(), source), "package.json"), "utf8")).name === "@piagent/platform"; } catch { return false; }
+  };
+  if (!packages.some(isPiagent)) {
+    console.error(`Piagent is not installed in ${piagentHome()} yet. Run: piagent-install --stable`);
+    console.error("An install from before 1.45 lives in your own pi; piagent-install moves it, or run: piagent restore-pi");
+    process.exit(1);
+  }
+}
+
 const sourceRoot = invokedAs === "piagent-benchmark" ? benchmarkSourceRoot() : packageRoot;
 const target = path.join(sourceRoot, script);
 const runner = target.endsWith(".mjs") ? process.execPath : "bash";
@@ -159,7 +198,8 @@ const runnerArgs = target.endsWith(".mjs")
   : [target];
 const child = spawn(runner, [...runnerArgs, ...forwardedArgs], {
   cwd: process.cwd(),
-  env: script === "scripts/piagent-studio.mjs" ? { PATH: "/usr/bin:/bin", HOME: os.homedir(), TERM: process.env.TERM || "xterm-256color", LANG: "en_US.UTF-8" } : process.env,
+  env: script === "scripts/piagent-studio.mjs" ? { PATH: "/usr/bin:/bin", HOME: os.homedir(), TERM: process.env.TERM || "xterm-256color", LANG: "en_US.UTF-8" }
+    : { ...process.env, PI_CODING_AGENT_DIR: piagentHome(), ...(terminal ? { PIAGENT_ACTIVE: "1" } : {}) },
   stdio: "inherit"
 });
 

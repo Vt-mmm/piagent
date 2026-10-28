@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { piagentAgentDir } from "../packages/piagent-core/extensions/agent-home.js";
 
 const USAGE = `Usage:
   scripts/pi-usage-history.mjs [project-path] [options]
@@ -63,7 +64,7 @@ function parseArgs(argv) {
     includeSubagents: true,
     limit: 20,
     sessionsDir: process.env.PI_CODING_AGENT_SESSION_DIR
-      || path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "sessions"),
+      || path.join(piagentAgentDir(), "sessions"),
     projectPath: undefined,
     since: undefined,
     until: undefined

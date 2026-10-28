@@ -34,6 +34,7 @@ import { VSCodeHandoff } from "./vscode-handoff.ts";
 import { browserCommand } from "../../piagent-core/runtime/host/browser-opener.mjs";
 import { TerminalSessionAdapter } from "./terminal-session-adapter.ts";
 import { isGatewayRuntimeContext } from "../ownership/gateway-runtime-context.ts";
+import { dormantInPersonalPi } from "../../piagent-core/extensions/agent-home.js";
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PLATFORM_ROOT = path.resolve(PACKAGE_ROOT, "../..");
@@ -183,6 +184,7 @@ function readMethod(provider: CoreInspectionProvider, queue: HeldMessageQueue, s
 }
 
 export default function piagentWebUiExtension(pi: ExtensionAPI): void {
+  if (dormantInPersonalPi()) return;
   const runtimeInstanceId = createWebUiExtensionRuntimeInstanceRef();
   let terminalAdapter: TerminalSessionAdapter | null = null;
   const managers = new Map<string, Manager>();

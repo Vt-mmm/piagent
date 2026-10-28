@@ -53,6 +53,7 @@ import { CompanyRelay, type CompanyConnector } from "./company-relay.ts";
 import { ProviderAuthBroker } from "./provider-auth-broker.ts";
 import { McpAuthBroker } from "./mcp-auth-broker.ts";
 import { AgentStatusFiles } from "./agent-status-files.ts";
+import { agentWatchControlDir, piagentAgentDir } from "../../piagent-core/extensions/agent-home.js";
 import type { ScopedBrokerRouter, RuntimeFactory } from "./session-runtime-factory.ts";
 import { UiPreferencesStore } from "./ui-preferences-store.ts";
 
@@ -249,7 +250,9 @@ export async function startPiagentGateway(options: {
     // Agent Watch reads the member's ~/.pi/agent/status. The dashboard's
     // agentDir is that folder; the company Gateway's is its private session
     // folder under Agent Watch, so it writes to the member's folder instead.
-    statusFiles = new AgentStatusFiles((options.managed ? path.join(os.homedir(), ".pi", "agent", "status", "company") : path.join(state.agentDir, "status", "dashboard")), async () => { const catalog = await readCatalog(); if (catalog.state !== "ready") throw new Error("catalog-not-ready"); return catalog; }, () => Boolean(options.managed)); statusFiles.start();
+    // Piagent's own home serves the member's dashboard; a test or benchmark home keeps its status beside it.
+    const watchRoot = options.managed || state.agentDir === piagentAgentDir() ? agentWatchControlDir() : state.agentDir;
+    statusFiles = new AgentStatusFiles(path.join(watchRoot, "status", options.managed ? "company" : "dashboard"), async () => { const catalog = await readCatalog(); if (catalog.state !== "ready") throw new Error("catalog-not-ready"); return catalog; }, () => Boolean(options.managed)); statusFiles.start();
     const projectFolder = async (projectRef: string) => projects.resolve(projectRef)
       ?? (await runtimes!.listSessions()).find((info) => typeof info.cwd === "string" && projectRefForCwd(key, info.cwd) === projectRef)?.cwd
       ?? (relay ? (await relay.folders()).find((folder) => projectRefForCwd(key, folder) === projectRef) : undefined);

@@ -37,6 +37,7 @@ import {
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
 import { evaluateUpdateCheck, isInstalledPlatform, readUpdateCache, startUpdateProbe } from "./update-check.js";
+import { dormantInPersonalPi, personalPiAgentDir } from "./agent-home.js";
 import {
   REPOSITORY_SCOPES,
   collectServers,
@@ -366,7 +367,7 @@ const PLATFORM_ROOT = findPlatformRoot(path.dirname(fileURLToPath(import.meta.ur
 // package's and the user's (also those kept for other coding agents, such as
 // ~/.claude/skills). Reading them is allowed; writes stay in the project.
 const SKILL_READ_ROOTS = [path.join(PLATFORM_ROOT, "packages", "piagent-core", "skills"),
-  path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "skills"), ...userSkillFolders()]
+  path.join(process.env.PI_CODING_AGENT_DIR || personalPiAgentDir(), "skills"), path.join(personalPiAgentDir(), "skills"), ...userSkillFolders()]
   .flatMap((root) => { try { return [fs.realpathSync.native(root)]; } catch { return []; } });
 const UPDATE_CHECK_MODULE = fileURLToPath(new URL("./update-check.js", import.meta.url));
 // The installed version, read from the package this file ships in. A maintainer
@@ -3452,6 +3453,9 @@ function activeSessionTask(_cwd: string, _sessionId: string): TaskContract | und
 const noTask = (..._args: unknown[]): undefined => undefined;
 
 export default function piagentGuard(pi: ExtensionAPI) {
+  // The member's own `pi` stays stock even when an older install or a project
+  // still registers this package there; Piagent runs through `piagent`.
+  if (dormantInPersonalPi()) return;
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const policy = loadPolicy(extensionDir);
   const bashResults = createBashResultLedger({ maxEntries: 300 });

@@ -68,11 +68,13 @@ function stageGlobalInstall({
   fs.copyFileSync(path.join(repositoryRoot, "scripts/personal-pi-config.mjs"), path.join(platformRoot, "scripts/personal-pi-config.mjs"));
   fs.mkdirSync(path.join(platformRoot, "packages/piagent-core/managed"), { recursive: true });
   fs.copyFileSync(path.join(repositoryRoot, "packages/piagent-core/managed/pi-host.mjs"), path.join(platformRoot, "packages/piagent-core/managed/pi-host.mjs"));
-  // Personal Pi with the Piagent package of this helper version installed.
-  const piPackage = path.join(root, ".pi", "agent", "git", "github.com", "Vt-mmm", "piagent");
+  fs.mkdirSync(path.join(platformRoot, "packages/piagent-core/extensions"), { recursive: true });
+  fs.copyFileSync(path.join(repositoryRoot, "packages/piagent-core/extensions/agent-home.js"), path.join(platformRoot, "packages/piagent-core/extensions/agent-home.js"));
+  // Piagent's own Pi home with the Piagent package of this helper version installed.
+  const piPackage = path.join(root, ".piagent", "agent", "git", "github.com", "Vt-mmm", "piagent");
   fs.mkdirSync(piPackage, { recursive: true });
   fs.writeFileSync(path.join(piPackage, "package.json"), JSON.stringify({ name: "@piagent/platform", version: helperVersion }));
-  fs.writeFileSync(path.join(root, ".pi", "agent", "settings.json"), JSON.stringify({ packages: [`git:github.com/Vt-mmm/piagent@v${helperVersion}`] }));
+  fs.writeFileSync(path.join(root, ".piagent", "agent", "settings.json"), JSON.stringify({ packages: [`git:github.com/Vt-mmm/piagent@v${helperVersion}`] }));
   fs.writeFileSync(
     path.join(platformRoot, "package.json"),
     `${JSON.stringify({ name: "@piagent/platform", version: helperVersion }, undefined, 2)}\n`
