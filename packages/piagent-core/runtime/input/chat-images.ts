@@ -29,6 +29,25 @@ type ResolvedChatImage =
   | { status: "ok"; absolutePath: string; bytes: Buffer; mimeType: string }
   | { status: "error"; reason: string };
 
+export type ChatPathAccess =
+  | { status: "ok"; canonicalPath: string; stats: fs.Stats }
+  | { status: "error"; reason: string };
+
+// Pi saves a pasted clipboard image as <tmpdir>/pi-clipboard-<uuid>.<ext> and
+// inserts that path into the prompt. The operator created it by pasting, so it
+// counts as granted even though the temporary directory is not.
+const PI_CLIPBOARD_IMAGE = /^pi-clipboard-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:png|jpe?g|gif|webp|bmp)$/i;
+
+function clipboardImageRoot(canonicalPath: string): { path: string; source: string } | undefined {
+  if (!PI_CLIPBOARD_IMAGE.test(path.basename(canonicalPath))) return undefined;
+  try {
+    const temporary = fs.realpathSync.native(os.tmpdir());
+    return path.dirname(canonicalPath) === temporary ? { path: temporary, source: "clipboard" } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -108,12 +127,31 @@ function normalizeImagePathCandidate(candidate: string, cwd: string, options: { 
   }
   const ext = path.extname(raw).toLowerCase().replace(/^\./, "");
   if (!IMAGE_EXTENSIONS.includes(ext as typeof IMAGE_EXTENSIONS[number])) return undefined;
-  return path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
+  const resolved = path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
+  // A file dropped on a terminal arrives shell-escaped: "Screenshot\ 1.png".
+  if (!WINDOWS && /\\[ ()'&]/.test(resolved) && !fs.existsSync(resolved)) {
+    const unescaped = resolved.replace(/\\([ ()'&])/g, "$1");
+    if (fs.existsSync(unescaped)) return unescaped;
+  }
+  return resolved;
 }
 
-export function extractLocalImagePathCandidates(text: string, cwd: string): string[] {
+// Pi's own @file arguments arrive as <file name="..."> blocks with their images
+// already attached; scanning them again would attach each image twice.
+const FILE_ARGUMENT_TAG = /<file name="[^"\n]*">/g;
+
+export function extractLocalImagePathCandidates(input: string, cwd: string): string[] {
+  const text = input.replace(FILE_ARGUMENT_TAG, "");
   const candidates = new Set<string>();
   const imageExt = "(?:png|jpe?g|gif|webp|bmp)";
+
+  // Pi's @ completion inserts @path, or @"path" when the path has spaces.
+  const mention = new RegExp(`(?:^|\\s)@(?:"([^"\\n]+\\.${imageExt})"|([^\\s"'<>@]+\\.${imageExt}))(?=$|[\\s,;:!?)])`, "gi");
+  for (const match of text.matchAll(mention)) {
+    const normalized = normalizeImagePathCandidate(match[1] ?? match[2], cwd);
+    if (normalized) candidates.add(normalized);
+  }
+
   const wholeTextPath = normalizeImagePathCandidate(text, cwd, { allowBareRelative: false });
   if (wholeTextPath) candidates.add(wholeTextPath);
 
@@ -149,11 +187,12 @@ function pathContainedBy(root: string, candidate: string): boolean {
     && !path.isAbsolute(relative);
 }
 
-export function readChatImage(
+/** Whether the operator's policy lets a chat message carry this file at all. */
+export function checkChatPathAccess(
   requestedPath: string,
   cwd: string,
   access: ChatImageAccessPolicy
-): ResolvedChatImage {
+): ChatPathAccess {
   const lexicalRequestedPath = path.isAbsolute(requestedPath)
     ? path.normalize(requestedPath)
     : path.resolve(cwd, requestedPath);
@@ -170,16 +209,15 @@ export function readChatImage(
     return { status: "error", reason: "file does not exist or cannot be inspected" };
   }
   if (!inspected.isFile()) return { status: "error", reason: "not a regular file" };
-  if (inspected.size <= 0) return { status: "error", reason: "empty file" };
-  if (inspected.size > MAX_CHAT_IMAGE_BYTES) {
+
+  const root = access.roots.find((candidate) => pathContainedBy(candidate.path, canonicalPath))
+    ?? clipboardImageRoot(canonicalPath);
+  if (!root) {
     return {
       status: "error",
-      reason: `image is ${formatCount(inspected.size)} bytes > ${formatCount(MAX_CHAT_IMAGE_BYTES)} byte limit`
+      reason: "outside the project; grant its folder with profile additionalReadRoots or PIAGENT_ADDITIONAL_READ_ROOTS"
     };
   }
-
-  const root = access.roots.find((candidate) => pathContainedBy(candidate.path, canonicalPath));
-  if (!root) return { status: "error", reason: "outside the project and every granted additionalReadRoots directory" };
 
   const rootRelative = path.relative(root.path, canonicalPath).split(path.sep).join("/") || ".";
   const projectRoot = access.roots.find((candidate) => candidate.source === "project");
@@ -214,6 +252,24 @@ export function readChatImage(
     return {
       status: "error",
       reason: `outside the resolved filesystem read scope (${access.filesystemRead.join(", ")})`
+    };
+  }
+  return { status: "ok", canonicalPath, stats: inspected };
+}
+
+export function readChatImage(
+  requestedPath: string,
+  cwd: string,
+  access: ChatImageAccessPolicy
+): ResolvedChatImage {
+  const checked = checkChatPathAccess(requestedPath, cwd, access);
+  if (checked.status === "error") return checked;
+  const { canonicalPath, stats: inspected } = checked;
+  if (inspected.size <= 0) return { status: "error", reason: "empty file" };
+  if (inspected.size > MAX_CHAT_IMAGE_BYTES) {
+    return {
+      status: "error",
+      reason: `image is ${formatCount(inspected.size)} bytes > ${formatCount(MAX_CHAT_IMAGE_BYTES)} byte limit`
     };
   }
 

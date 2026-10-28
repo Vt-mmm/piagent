@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { classifyContextTask } from "../../extensions/context-engine.js";
@@ -5,6 +7,7 @@ import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
 import { attachLocalImagesFromText, extractLocalImagePathCandidates } from "../input/chat-images.ts";
 import type { ChatImageAccessPolicy } from "../input/chat-images.ts";
+import { reviewFileArguments } from "../input/file-arguments.ts";
 import type { AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
 import { registerAdaptiveContextGovernor } from "../session/adaptive-context-governor.ts";
 import { toolGroupsForPrompt, PIAGENT_TOOL_NAMES, PIAGENT_TOOL_ORDER, PIAGENT_TOOL_GROUPS } from "../tools/tool-groups.ts";
@@ -74,10 +77,21 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
       .filter((group) => !["intake", "task", "recovery"].includes(group)));
     dependencies.telemetry(ctx, { event: "user_input", turnId: turn.turnId, source: event.source,
       promptHash: signal.promptHash, promptChars: text.length, inputMode: "freeform" });
-    const attachment = attachLocalImagesFromText(text, event.images, ctx.cwd, () => dependencies.imageAccess(ctx));
+    const reviewed = reviewFileArguments(text, event.images, ctx.cwd, () => dependencies.imageAccess(ctx));
+    if (reviewed && !reviewed.text) {
+      ctx.ui.notify("Not sent: a file changed while Pi was reading the @file arguments. Run the command again.", "error");
+      return { action: "handled" };
+    }
+    if (reviewed) ctx.ui.notify(`Withheld ${reviewed.withheld.map((item) => `${path.basename(item.path)} (${item.reason})`).join(", ")}`, "warning");
+    const nextText = reviewed?.text ?? text;
+    const nextImages = reviewed ? reviewed.images as typeof event.images : event.images;
+    const attachment = attachLocalImagesFromText(nextText, nextImages, ctx.cwd, () => dependencies.imageAccess(ctx));
+    if (attachment?.skipped.length) {
+      ctx.ui.notify(`Skipped ${attachment.skipped.map((item) => `${path.basename(item.path)} (${item.reason})`).join(", ")}`, "warning");
+    }
     if (attachment?.attached.length) return { action: "transform", text: attachment.text,
-      images: [...(event.images ?? []), ...attachment.images] };
-    if (attachment?.skipped.length) ctx.ui.notify(`Skipped ${attachment.skipped.length} inaccessible image(s)`, "warning");
+      images: [...(nextImages ?? []), ...attachment.images] };
+    if (reviewed) return { action: "transform", text: nextText, images: nextImages };
     return { action: "continue" };
   });
 }
