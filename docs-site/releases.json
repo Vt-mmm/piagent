@@ -1,5 +1,44 @@
 [
   {
+    "version": "1.46.0",
+    "date": "2026-10-28",
+    "status": "stable",
+    "title": {
+      "en": "Piagent runs from its own Pi home and your own pi stays stock",
+      "vi": "Piagent chạy trong Pi home riêng, pi của bạn giữ nguyên bản gốc"
+    },
+    "summary": {
+      "en": "Piagent installs into ~/.piagent/agent and opens with `piagent`. Plain `pi` no longer loads Piagent, its add-ons, model list or footer panel.",
+      "vi": "Piagent cài vào ~/.piagent/agent và mở bằng `piagent`. `pi` thường không còn nạp Piagent, add-on, danh sách model hay panel footer."
+    },
+    "items": [
+      {
+        "kind": "breaking",
+        "en": "Piagent installs into its own Pi home, ~/.piagent/agent, and opens with `piagent`. Plain `pi` in ~/.pi/agent stays stock.",
+        "vi": "Piagent cài vào Pi home riêng ~/.piagent/agent và mở bằng `piagent`. `pi` thường trong ~/.pi/agent giữ nguyên bản gốc."
+      },
+      {
+        "kind": "new",
+        "en": "A first install in a terminal asks which add-ons to install and whether to reuse your pi login; flags answer up front.",
+        "vi": "Lần cài đầu trong terminal hỏi cài add-on nào và có dùng lại login của pi không; cờ dòng lệnh trả lời trước được."
+      },
+      {
+        "kind": "new",
+        "en": "`piagent restore-pi --apply` moves an older install out of ~/.pi/agent with backups; the installer does it on update.",
+        "vi": "`piagent restore-pi --apply` dời bản cài cũ khỏi ~/.pi/agent, có sao lưu; installer tự làm khi cập nhật."
+      },
+      {
+        "kind": "fixed",
+        "en": "Pi's built-in mcp is turned off in Piagent's home when pi-mcp-adapter is installed, so /mcp no longer clashes.",
+        "vi": "Khi cài pi-mcp-adapter, Piagent tắt mcp có sẵn của Pi trong home của mình nên /mcp không còn xung đột."
+      }
+    ],
+    "requires": {
+      "en": "Agent Watch 0.15.16 to list Piagent's personal sessions",
+      "vi": "Agent Watch 0.15.16 để thấy session cá nhân của Piagent"
+    }
+  },
+  {
     "version": "1.45.0",
     "date": "2026-10-28",
     "status": "stable",

@@ -4,6 +4,25 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.46.0 - 2026-10-28
+
+**Piagent runs from its own Pi home and your own pi stays stock.** Piagent installs into ~/.piagent/agent and opens with `piagent`. Plain `pi` no longer loads Piagent, its add-ons, model list or footer panel.
+
+### Breaking changes
+
+- Piagent installs into its own Pi home, ~/.piagent/agent, and opens with `piagent`. Plain `pi` in ~/.pi/agent stays stock.
+
+### Added
+
+- A first install in a terminal asks which add-ons to install and whether to reuse your pi login; flags answer up front.
+- `piagent restore-pi --apply` moves an older install out of ~/.pi/agent with backups; the installer does it on update.
+
+### Fixed
+
+- Pi's built-in mcp is turned off in Piagent's home when pi-mcp-adapter is installed, so /mcp no longer clashes.
+
+Requires: Agent Watch 0.15.16 to list Piagent's personal sessions.
+
 ## v1.45.0 - 2026-10-28
 
 **Files and images in a prompt follow the read policy, and the terminal stays responsive.** pi @file can no longer send a protected file to the model, images attach the way you add them, and a prompt in a folder of repositories no longer freezes the terminal.

@@ -36,7 +36,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.45.0" title="v1.45.0 docs · EN"><span class="dot"></span>v1.45.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.0" title="v1.46.0 docs · EN"><span class="dot"></span>v1.46.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new">Changelog</a>
@@ -56,7 +56,7 @@
   <div class="hero-bg" aria-hidden="true"></div>
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="home-wrap">
-    <a class="hero-pill" href="/en/whats-new#v1-45-0"><b>v1.45.0</b><span>Files and images in a prompt follow the read policy, and the terminal stays responsive</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
+    <a class="hero-pill" href="/en/whats-new#v1-46-0"><b>v1.46.0</b><span>Piagent runs from its own Pi home and your own pi stays stock</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
     <h1>A coding agent for the whole team, <span class="grad">checked at every step.</span></h1>
     <p class="hero-sub">A guard stops risky tool calls before they run. The team's Harness runs checks and has a subagent review the change. One dashboard for Terminal and the browser, with your model or the company's.</p>
     <div class="hero-cta">
@@ -99,7 +99,7 @@
       <div><strong><span data-count="54">54</span><em>/54</em></strong><span>tasks resolved in the production benchmark</span><small>codex-cli, same model: 48/54</small></div>
       <div><strong>−<span data-count="61">61</span><em>%</em></strong><span>fresh tokens on the same workload</span><small>95% confidence: at least −51.6%</small></div>
       <div><strong><span data-count="52">52</span><em>/52</em></strong><span>secret patterns redacted from output</span><small>0/30 ordinary texts redacted by mistake</small></div>
-      <div><strong><span data-count="125">125</span></strong><span>releases since 2026-07-21</span><small>4,400+ automated tests on macOS and Linux</small></div>
+      <div><strong><span data-count="126">126</span></strong><span>releases since 2026-07-21</span><small>4,400+ automated tests on macOS and Linux</small></div>
     </div>
   </div>
 </section>
@@ -280,6 +280,12 @@ pi                    # Terminal</code></pre></div></div>
       <p>Each release says what changed and which Studio or Agent Watch it needs. <a href="/en/whats-new">See the full changelog</a>.</p>
     </div>
     <div class="updates">
+      <a class="update" href="/en/whats-new#v1-46-0" data-reveal>
+        <span class="update-meta"><span class="release-version">v1.46.0</span>Oct 28, 2026</span>
+        <h3>Piagent runs from its own Pi home and your own pi stays stock</h3>
+        <p>Piagent installs into ~/.piagent/agent and opens with <code>piagent</code>. Plain <code>pi</code> no longer loads Piagent, its add-ons, model list or footer panel.</p>
+        <span class="update-more">Read more <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
+      </a>
       <a class="update" href="/en/whats-new#v1-45-0" data-reveal>
         <span class="update-meta"><span class="release-version">v1.45.0</span>Oct 28, 2026</span>
         <h3>Files and images in a prompt follow the read policy, and the terminal stays responsive</h3>
@@ -290,12 +296,6 @@ pi                    # Terminal</code></pre></div></div>
         <span class="update-meta"><span class="release-version">v1.44.4</span>Oct 28, 2026</span>
         <h3>Company conversations come back in Herdr panes</h3>
         <p>In Herdr (on Windows: inside WSL), a company pane reports its state and reopens the same conversation after Herdr restarts, with piagent studio --session.</p>
-        <span class="update-more">Read more <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
-      </a>
-      <a class="update" href="/en/whats-new#v1-44-3" data-reveal>
-        <span class="update-meta"><span class="release-version">v1.44.3</span>Oct 28, 2026</span>
-        <h3>Prompt injection cannot quietly read the system</h3>
-        <p>Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.</p>
         <span class="update-more">Read more <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
       </a>
     </div>

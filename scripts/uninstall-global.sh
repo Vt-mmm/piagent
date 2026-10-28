@@ -36,7 +36,7 @@ Usage:
   piagent-uninstall [--apply] [--with-addons] [--with-host] [--project <path>]
 
 Removes the Pi package this platform installed from Piagent's own Pi home
-(~/.piagent/agent). An install from before 1.45 lives in your personal pi
+(~/.piagent/agent). An install from before 1.46 lives in your personal pi
 (~/.pi/agent): `piagent restore-pi --apply` takes it out of there.
 
   (default)        Dry run. Reports what would be removed and exits 0.

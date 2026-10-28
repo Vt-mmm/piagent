@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Takes Piagent out of the member's personal Pi (~/.pi/agent) and leaves it as
-// stock Pi. Releases before 1.45 installed Piagent, its add-ons, a model scope
+// stock Pi. Releases before 1.46 installed Piagent, its add-ons, a model scope
 // and a subagent baseline there, so every plain `pi` loaded them. Piagent now
 // runs from its own home (~/.piagent/agent, opened with `piagent`).
 //

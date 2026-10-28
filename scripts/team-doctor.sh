@@ -76,7 +76,7 @@ const personalPiDir = path.join(process.env.HOME || "", ".pi", "agent");
 for (const agentDir of new Set([personalPiDir, process.env.PI_CODING_AGENT_DIR || personalPiDir]))
   for (const finding of inspectPersonalPi(agentDir).findings)
     (finding.kind === "duplicate-extensions" ? errors : warnings).push(`${agentDir === personalPiDir ? "personal Pi" : "Piagent home"}: ${finding.text} Fix: piagent-update`);
-// Since 1.45 Piagent runs from its own home; an older install left in personal Pi keeps loading there.
+// Since 1.46 Piagent runs from its own home; an older install left in personal Pi keeps loading there.
 const { plan: personalPiRestorePlan } = await import(pathToFileURL(path.join(platformRoot, "scripts/personal-pi-restore.mjs")).href);
 if (personalPiRestorePlan({ personalDir: personalPiDir }).legacy)
   warnings.push("personal Pi still loads an older Piagent install (~/.pi/agent). Fix: piagent restore-pi --apply");

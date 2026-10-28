@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.46.0`: Piagent chạy trong Pi home riêng `~/.piagent/agent`, mở bằng lệnh `piagent`; `pi` của member giữ nguyên bản gốc (không còn package Piagent, add-on, danh sách model hay panel footer). Lần cài đầu hỏi add-on và có dùng lại login của pi không; `piagent restore-pi --apply` dời bản cài cũ khỏi `~/.pi/agent`, có sao lưu. Cần Agent Watch 0.15.16 để thấy session cá nhân mới.
 - `1.45.0`: file và ảnh trong prompt theo quyền đọc: `pi @file` giữ lại file được bảo vệ hoặc ngoài project; ảnh đính kèm qua `@path`, Ctrl+V, kéo thả, không còn đính kèm hai lần; prompt trong thư mục nhiều repo không còn làm terminal đứng hình.
 - `1.44.4`: Herdr resume chế độ công ty: pane `piagent studio` báo trạng thái cho Herdr (cần 0.9.2+) và mở lại đúng conversation bằng `piagent studio --session`; guard WSL nhận đúng kho `agentwatch`; `--web` mở trình duyệt trong WSL.
 - `1.44.3`: chống prompt injection hỏi hệ thống: `web_fetch` hỏi member trước trang lạ hoặc địa chỉ có `?`/`#`; câu trả lời helper và kết quả memory nằm trong rào "data, not instructions"; `run_on_host` ở Bypass vẫn hỏi khi đụng credential.

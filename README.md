@@ -46,7 +46,7 @@ piagent-setup
 
 `piagent-setup` installs the exact Pi host this release pins, installs the package, initializes `.pi/`, adds the MCP baseline and subagents, then runs the doctor. Run in a terminal, a first install asks which add-ons you want and whether to reuse your pi login; skip extras up front with `--no-mcp`, `--no-subagents`, `--no-web-access`, `--no-herdr` or `--global-only`.
 
-Piagent installs into its own Pi home, `~/.piagent/agent`. Your own `pi` (`~/.pi/agent`) stays stock: no Piagent package, add-ons, model list or footer panel. Releases before 1.45 installed into `~/.pi/agent`; the installer moves such an install out, and `piagent restore-pi` (report) / `piagent restore-pi --apply` does it on its own. Backups of every changed file stay beside it. Install [Herdr](https://herdr.dev/docs/install/) first if you want its Pi integration; on Windows, install it inside Ubuntu (WSL2), next to Piagent.
+Piagent installs into its own Pi home, `~/.piagent/agent`. Your own `pi` (`~/.pi/agent`) stays stock: no Piagent package, add-ons, model list or footer panel. Releases before 1.46 installed into `~/.pi/agent`; the installer moves such an install out, and `piagent restore-pi` (report) / `piagent restore-pi --apply` does it on its own. Backups of every changed file stay beside it. Install [Herdr](https://herdr.dev/docs/install/) first if you want its Pi integration; on Windows, install it inside Ubuntu (WSL2), next to Piagent.
 
 **Windows** — one PowerShell command installs WSL2, Ubuntu, Piagent and Agent Watch; run it again to update:
 

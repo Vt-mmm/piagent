@@ -46,7 +46,7 @@ piagent-setup
 
 `piagent-setup` cài đúng bản Pi host mà release này pin, cài package, khởi tạo `.pi/`, thêm MCP baseline và subagent, rồi chạy doctor. Chạy trong terminal, lần cài đầu sẽ hỏi bạn muốn cài add-on nào và có dùng lại login của pi không; muốn bỏ bớt ngay từ đầu thì dùng `--no-mcp`, `--no-subagents`, `--no-web-access`, `--no-herdr` hoặc `--global-only`.
 
-Piagent cài vào Pi home riêng, `~/.piagent/agent`. `pi` của bạn (`~/.pi/agent`) giữ nguyên bản gốc: không có package Piagent, add-on, danh sách model hay panel dưới footer. Các bản trước 1.45 cài vào `~/.pi/agent`; installer sẽ dời bản cài đó ra, còn `piagent restore-pi` (chỉ báo) / `piagent restore-pi --apply` làm việc này riêng. File nào bị đổi đều có bản sao lưu nằm cạnh. Muốn dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr trước; trên Windows thì cài trong Ubuntu (WSL2), cùng chỗ với Piagent.
+Piagent cài vào Pi home riêng, `~/.piagent/agent`. `pi` của bạn (`~/.pi/agent`) giữ nguyên bản gốc: không có package Piagent, add-on, danh sách model hay panel dưới footer. Các bản trước 1.46 cài vào `~/.pi/agent`; installer sẽ dời bản cài đó ra, còn `piagent restore-pi` (chỉ báo) / `piagent restore-pi --apply` làm việc này riêng. File nào bị đổi đều có bản sao lưu nằm cạnh. Muốn dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr trước; trên Windows thì cài trong Ubuntu (WSL2), cùng chỗ với Piagent.
 
 **Windows** — một lệnh PowerShell cài WSL2, Ubuntu, Piagent và Agent Watch; chạy lại để cập nhật:
 

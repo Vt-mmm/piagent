@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.45.0" title="v1.45.0 docs · EN"><span class="dot"></span>v1.45.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.0" title="v1.46.0 docs · EN"><span class="dot"></span>v1.46.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,21 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-45-0" data-release>
+<article class="release latest" id="v1-46-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-0">v1.46.0</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-0-title">Piagent runs from its own Pi home and your own pi stays stock</h3>
+    <p>Piagent installs into ~/.piagent/agent and opens with <code>piagent</code>. Plain <code>pi</code> no longer loads Piagent, its add-ons, model list or footer panel.</p>
+    <ul class="release-items">
+      <li data-kind="breaking"><span class="kind kind-breaking">Breaking</span><span>Piagent installs into its own Pi home, ~/.piagent/agent, and opens with <code>piagent</code>. Plain <code>pi</code> in ~/.pi/agent stays stock.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>A first install in a terminal asks which add-ons to install and whether to reuse your pi login; flags answer up front.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span><code>piagent restore-pi --apply</code> moves an older install out of ~/.pi/agent with backups; the installer does it on update.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Pi's built-in mcp is turned off in Piagent's home when pi-mcp-adapter is installed, so /mcp no longer clashes.</span></li>
+    </ul>
+    <p class="release-requires"><strong>Requires:</strong> Agent Watch 0.15.16 to list Piagent's personal sessions</p>
+  </div>
+</article>
+<article class="release" id="v1-45-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-45-0">v1.45.0</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-45-0-title">Files and images in a prompt follow the read policy, and the terminal stays responsive</h3>
@@ -407,28 +421,26 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-38-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-38-0">v1.38.0</a><time class="release-date" datetime="2026-10-23">Oct 23, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-38-0-title">Piagent becomes an editor, and Bypass asks nothing <span class="tag">not published</span></h3>
-    <p>Files, terminals, inline review and checkpoints in the dashboard, and a Bypass mode that asks nothing, in company conversations where the Harness allows it.</p>
-    <ul class="release-items">
-      <li data-kind="breaking"><span class="kind kind-breaking">Breaking</span><span>Company conversations have Ask first, Full access (formerly called Bypass) and Bypass, offered only when the Harness allows it.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The <code>bypass</code> mode (<code>/permission bypass</code>, <code>piagent-auto --bypass</code>) turns every gate off; output is still redacted and <code>/undo</code> still works.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The dashboard opens, edits, saves, renames and deletes project files, with Cmd/Ctrl+P, search and conflicts when a file changed on disk.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Project terminals in the dashboard; company terminals run in the sandbox, on macOS too, and never on the host.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Inline review of the agent's hunks with Keep and Revert, and Timeline restore with a preview, sharing checkpoints with <code>/undo</code>.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A checkpoint that could not be taken blocked every edit; it no longer does, and snapshots take about 0.5 s instead of 35 s on 4,000 files.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.38.0 and Agent Watch 0.15.14 (Windows 0.1.17) for the company Bypass level</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">56</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">57</span></summary>
+    <div class="archive-row" id="v1-38-0">
+      <div class="archive-head"><a class="release-version" href="#v1-38-0">v1.38.0</a> <span class="release-date">Oct 23, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Piagent becomes an editor, and Bypass asks nothing</strong> <span class="tag">not published</span> — Files, terminals, inline review and checkpoints in the dashboard, and a Bypass mode that asks nothing, in company conversations where the Harness allows it.</p>
+        <ul class="release-items">
+        <li data-kind="breaking"><span class="kind kind-breaking">Breaking</span><span>Company conversations have Ask first, Full access (formerly called Bypass) and Bypass, offered only when the Harness allows it.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The <code>bypass</code> mode (<code>/permission bypass</code>, <code>piagent-auto --bypass</code>) turns every gate off; output is still redacted and <code>/undo</code> still works.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The dashboard opens, edits, saves, renames and deletes project files, with Cmd/Ctrl+P, search and conflicts when a file changed on disk.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Project terminals in the dashboard; company terminals run in the sandbox, on macOS too, and never on the host.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Inline review of the agent's hunks with Keep and Revert, and Timeline restore with a preview, sharing checkpoints with <code>/undo</code>.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A checkpoint that could not be taken blocked every edit; it no longer does, and snapshots take about 0.5 s instead of 35 s on 4,000 files.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-37-1">
       <div class="archive-head"><a class="release-version" href="#v1-37-1">v1.37.1</a> <span class="release-date">Oct 22, 2026</span></div>
       <div class="archive-body">

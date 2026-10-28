@@ -185,7 +185,7 @@ if (terminal) {
   };
   if (!packages.some(isPiagent)) {
     console.error(`Piagent is not installed in ${piagentHome()} yet. Run: piagent-install --stable`);
-    console.error("An install from before 1.45 lives in your own pi; piagent-install moves it, or run: piagent restore-pi");
+    console.error("An install from before 1.46 lives in your own pi; piagent-install moves it, or run: piagent restore-pi");
     process.exit(1);
   }
 }
