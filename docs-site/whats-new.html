@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.44.2" title="v1.44.2 docs · VI"><span class="dot"></span>v1.44.2</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.44.3" title="v1.44.3 docs · VI"><span class="dot"></span>v1.44.3</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-44-2" data-release>
+<article class="release latest" id="v1-44-3" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-44-3">v1.44.3</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-44-3-title">Prompt injection không lặng lẽ đọc được hệ thống</h3>
+    <p>Nội dung trong trang web, file, memory hay câu trả lời của helper không còn gửi dữ liệu tới trang lạ, đọc credential ở Bypass hay điều khiển agent mà member không biết.</p>
+    <ul class="release-items">
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>web_fetch đọc tự do trang tài liệu và registry; trang khác hỏi member một lần mỗi cuộc trò chuyện, địa chỉ có query hoặc fragment thì hỏi mỗi lần.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Câu trả lời của helper và kết quả team memory tới agent trong rào dữ liệu không thể đóng; agent không lộ cấu hình, credential hay xin bí mật theo lời của chúng.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Ở Bypass, run_on_host vẫn hỏi khi lệnh đụng credential: ~/.ssh, ~/.pi, .env, auth.json, key, Keychain hoặc biến môi trường.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-2">v1.44.2</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-2-title">Harness công ty theo cỡ thay đổi</h3>
@@ -415,24 +427,23 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-36-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-36-1">v1.36.1</a><time class="release-date" datetime="2026-10-22">22/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-36-1-title">Agent Watch lỗi thoáng qua không còn làm dừng task</h3>
-    <p>Khi Agent Watch tạm thời không tới được Studio đang chạy, Piagent hỏi lại trong tối đa 3 phút thay vì dừng task.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Mỗi lần chờ được ghi vào log trên máy và báo về Studio trong Logs → &quot;Mất kết nối&quot;; key hay báo cáo bị từ chối vẫn lỗi ngay.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Một lần gia hạn quyền qua Agent Watch bị lỗi từng làm dừng task 25 phút; giờ Piagent hỏi lại, mỗi lần chờ lâu hơn, trong tối đa 3 phút.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Bước đóng run cuối lượt cũng chờ như vậy, nên lỗi gateway thoáng qua không còn làm hỏng lượt đã làm xong.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">53</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">54</span></summary>
+    <div class="archive-row" id="v1-36-1">
+      <div class="archive-head"><a class="release-version" href="#v1-36-1">v1.36.1</a> <span class="release-date">22/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Agent Watch lỗi thoáng qua không còn làm dừng task</strong> — Khi Agent Watch tạm thời không tới được Studio đang chạy, Piagent hỏi lại trong tối đa 3 phút thay vì dừng task.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Mỗi lần chờ được ghi vào log trên máy và báo về Studio trong Logs → &quot;Mất kết nối&quot;; key hay báo cáo bị từ chối vẫn lỗi ngay.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Một lần gia hạn quyền qua Agent Watch bị lỗi từng làm dừng task 25 phút; giờ Piagent hỏi lại, mỗi lần chờ lâu hơn, trong tối đa 3 phút.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Bước đóng run cuối lượt cũng chờ như vậy, nên lỗi gateway thoáng qua không còn làm hỏng lượt đã làm xong.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-36-0">
       <div class="archive-head"><a class="release-version" href="#v1-36-0">v1.36.0</a> <span class="release-date">21/10/2026</span></div>
       <div class="archive-body">

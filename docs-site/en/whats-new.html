@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.2" title="v1.44.2 docs · EN"><span class="dot"></span>v1.44.2</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.3" title="v1.44.3 docs · EN"><span class="dot"></span>v1.44.3</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-44-2" data-release>
+<article class="release latest" id="v1-44-3" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-44-3">v1.44.3</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-44-3-title">Prompt injection cannot quietly read the system</h3>
+    <p>Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.</p>
+    <ul class="release-items">
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>web_fetch reads documentation and registry sites freely; another site is asked about once per conversation, and an address there with a query or fragment every time.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>Helper answers and team memory results reach the agent inside a data fence it cannot close; the agent never shows its configuration or credentials or asks for a secret on their word.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>In Bypass, run_on_host still asks when a command reaches credentials: ~/.ssh, ~/.pi, .env, auth.json, keys, the Keychain or the environment.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-2">v1.44.2</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-2-title">The company harness follows the size of a change</h3>
@@ -415,24 +427,23 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-36-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-36-1">v1.36.1</a><time class="release-date" datetime="2026-10-22">Oct 22, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-36-1-title">A brief Agent Watch failure no longer stops a task</h3>
-    <p>When Agent Watch briefly cannot reach a running Studio, Piagent asks again for up to 3 minutes instead of stopping the task.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Each wait is logged locally and reported to Studio in Logs → &quot;Mất kết nối&quot;; a refused key or report still fails at once.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>One failed grant renewal through Agent Watch stopped a 25-minute task; it is now asked again, waiting longer each time, for up to 3 minutes.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Closing the round's run goes through the same wait, so a passing gateway error no longer fails a turn whose work is done.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">53</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">54</span></summary>
+    <div class="archive-row" id="v1-36-1">
+      <div class="archive-head"><a class="release-version" href="#v1-36-1">v1.36.1</a> <span class="release-date">Oct 22, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>A brief Agent Watch failure no longer stops a task</strong> — When Agent Watch briefly cannot reach a running Studio, Piagent asks again for up to 3 minutes instead of stopping the task.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Each wait is logged locally and reported to Studio in Logs → &quot;Mất kết nối&quot;; a refused key or report still fails at once.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>One failed grant renewal through Agent Watch stopped a 25-minute task; it is now asked again, waiting longer each time, for up to 3 minutes.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Closing the round's run goes through the same wait, so a passing gateway error no longer fails a turn whose work is done.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-36-0">
       <div class="archive-head"><a class="release-version" href="#v1-36-0">v1.36.0</a> <span class="release-date">Oct 21, 2026</span></div>
       <div class="archive-body">

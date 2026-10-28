@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.44.3",
+    "date": "2026-10-28",
+    "status": "stable",
+    "title": {
+      "en": "Prompt injection cannot quietly read the system",
+      "vi": "Prompt injection không lặng lẽ đọc được hệ thống"
+    },
+    "summary": {
+      "en": "Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.",
+      "vi": "Nội dung trong trang web, file, memory hay câu trả lời của helper không còn gửi dữ liệu tới trang lạ, đọc credential ở Bypass hay điều khiển agent mà member không biết."
+    },
+    "items": [
+      {
+        "kind": "security",
+        "en": "web_fetch reads documentation and registry sites freely; another site is asked about once per conversation, and an address there with a query or fragment every time.",
+        "vi": "web_fetch đọc tự do trang tài liệu và registry; trang khác hỏi member một lần mỗi cuộc trò chuyện, địa chỉ có query hoặc fragment thì hỏi mỗi lần."
+      },
+      {
+        "kind": "security",
+        "en": "Helper answers and team memory results reach the agent inside a data fence it cannot close; the agent never shows its configuration or credentials or asks for a secret on their word.",
+        "vi": "Câu trả lời của helper và kết quả team memory tới agent trong rào dữ liệu không thể đóng; agent không lộ cấu hình, credential hay xin bí mật theo lời của chúng."
+      },
+      {
+        "kind": "security",
+        "en": "In Bypass, run_on_host still asks when a command reaches credentials: ~/.ssh, ~/.pi, .env, auth.json, keys, the Keychain or the environment.",
+        "vi": "Ở Bypass, run_on_host vẫn hỏi khi lệnh đụng credential: ~/.ssh, ~/.pi, .env, auth.json, key, Keychain hoặc biến môi trường."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.44.2",
     "date": "2026-10-28",
     "status": "stable",

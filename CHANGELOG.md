@@ -4,6 +4,16 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.44.3 - 2026-10-28
+
+**Prompt injection cannot quietly read the system.** Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.
+
+### Security
+
+- web_fetch reads documentation and registry sites freely; another site is asked about once per conversation, and an address there with a query or fragment every time.
+- Helper answers and team memory results reach the agent inside a data fence it cannot close; the agent never shows its configuration or credentials or asks for a secret on their word.
+- In Bypass, run_on_host still asks when a command reaches credentials: ~/.ssh, ~/.pi, .env, auth.json, keys, the Keychain or the environment.
+
 ## v1.44.2 - 2026-10-28
 
 **The company harness follows the size of a change.** A small change ends after its checks without a review; a risky one has its checks and review required. The main agent may keep a few quick web lookups beside the research helper.
