@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from '../packages/piagent-core/managed/helper-roles.mjs';
+import { HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from '../packages/piagent-core/managed/helper-roles.mjs';
 import { searchResultText } from '../packages/piagent-core/managed/web-search.mjs';
 import { FETCH_LIMITS, fetchLimits } from '../packages/piagent-core/managed/web-fetch.mjs';
 import { verifyVerdicts } from '../packages/piagent-core/managed/workflow.mjs';
@@ -71,4 +71,20 @@ test('a helper reads less of a page than the main agent', () => {
   assert.deepEqual(fetchLimits('main'), { usual: 30_000, most: 100_000 });
   for (const role of ['scout', 'research', 'verify', 'review']) assert.deepEqual(fetchLimits(role), FETCH_LIMITS.helper);
   assert.deepEqual(FETCH_LIMITS.helper, { usual: 12_000, most: 20_000 });
+});
+
+test('with a research helper the main agent may keep a few quick web lookups per message', async () => {
+  const of = n => ({ harness: { configuration: { workflow: { main_web_lookups: n } } } });
+  assert.equal(mainWebLookups(of(2)), 2);
+  for (const n of [undefined, -1, 6, 1.5, '2']) assert.equal(mainWebLookups(of(n)), 0, String(n));
+  assert.match(webPrompt(['research'], 2), /use web_search or web_fetch yourself, at most 2 call\(s\) per member message; hand anything wider/);
+  assert.match(webPrompt(['research'], 0), /you have no web tools/);
+  let run = { webLookups: 0 }, calls = 0;
+  const [search, fetch] = limitedWebTools([{ name: 'web_search', execute: async () => ++calls }, { name: 'web_fetch', execute: async () => ++calls }], () => run, 2);
+  await search.execute('1', { query: 'a' }); await fetch.execute('2', { url: 'https://example.com' });
+  await assert.rejects(search.execute('3', { query: 'b' }), /managed-web-lookups-spent: .*research helper/);
+  assert.equal(calls, 2);
+  run = { webLookups: 0 };
+  await search.execute('4', { query: 'c' });
+  assert.equal(calls, 3, 'the next member message has its own lookups');
 });

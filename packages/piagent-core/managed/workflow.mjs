@@ -5,6 +5,7 @@ import { failureCode } from '../runtime/managed-failure.mjs';
 import { TsDiagnostics } from './ts-diagnostics.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 import { discoverDeliveryContext } from './delivery-context.mjs';
+import { LANE_LIMITS, patchStats, changeLane, lanePolicy } from './risk-lanes.mjs';
 
 // The process layer of the company harness: a plan for multi-step work, the
 // repository's checks after a code change, an independent review of the patch.
@@ -17,7 +18,7 @@ export function workflowPolicy(manifest) {
   const mode = value => MODES.includes(value) ? value : 'suggest';
   const loops = Number.isInteger(w.max_fix_loops) && w.max_fix_loops >= 0 && w.max_fix_loops <= 3 ? w.max_fix_loops : 2;
   // A review needs a review helper; without one in the Harness it is off.
-  return { plan: mode(w.plan), verify: mode(w.verify), review: config.review ? mode(w.review) : 'off', maxFixLoops: loops };
+  return { plan: mode(w.plan), verify: mode(w.verify), review: config.review ? mode(w.review) : 'off', maxFixLoops: loops, lanes: w.lanes !== false };
 }
 
 // Checks come from the repository: a "## Checks" section in AGENTS.md (code
@@ -150,6 +151,10 @@ export function workflowPrompt(policy, checks) {
   }
   if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix, or to answer when a finding is wrong: the reviewer then judges your answer, and a disagreement that remains goes to the member.'
     : '- Review: before you finish a code change, ask the review helper (delegate role "review") to review the patch, then fix blocking findings.');
+  if (policy.lanes && (policy.verify !== 'off' || policy.review !== 'off')) {
+    const L = LANE_LIMITS;
+    lines.push(`- Size: the process follows the size of your change. A small change (at most ${L.tinyFiles} files and ${L.tinyLines} changed lines, no migration, auth, security, CI, dependency or AGENTS.md file) ends after its checks, without a review: do not ask for one. A risky change (a complex request, one of those files, more than ${L.riskyFiles} files or ${L.riskyLines} lines) must pass the checks${policy.review !== 'off' ? ' and the harness review' : ''} even where they are only suggested.`);
+  }
   return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\n${process.platform === 'darwin' ? 'End-to-end and UI checks run in bash with the project\'s Playwright (@playwright/test; add it with npm when the project lacks it) and the browsers installed on this Mac, against a server the test or start_process starts; while a local proxy listens they need run_with_network. When Playwright\'s browsers are missing, ask with run_on_host to run `npx playwright install chromium`.' : 'End-to-end tests that start a local server and a browser run through run_with_network, which the user approves.'} If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), do not stop there: request the approval that makes it run (run_with_network, run_with_docker, start_docker, or run_on_host to install what is missing) or ask the member with ask_user; never install or start anything without that approval.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.${process.platform === 'darwin' ? ' A dev server, watcher or local service you need across turns runs with start_process (read it with process_output, stop it with stop_process).' : ''}` : '';
 }
 
@@ -241,7 +246,9 @@ export class RunProcess {
       // claims verify marked failed, and where the harness last sent the
       // agent back (to read its answer and see whether the code moved).
       objections: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false,
-      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, objectionsAsked: false });
+      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, objectionsAsked: false,
+      // The patch's risk lane (workflow.lanes) and the main agent's own web lookups.
+      lane: null, laneStats: null, laneDigest: null, webLookups: 0 });
   }
   // Plan "require" on a complex task that has no plan yet.
   planMissing(plan) {
@@ -299,7 +306,18 @@ export class RunProcess {
 // A finding, a failed claim or an objection to a brief is the agent's to fix
 // or answer; the same disagreement a second time goes to the member.
 export async function completionGate(managed, run, signal) {
-  const session = managed.session, policy = run.policy;
+  const session = managed.session, configured = run.policy;
+  let policy = configured;
+  // The lane of the patch as it is now, read again only when it changed.
+  const laneOf = async digest => {
+    if (!configured.lanes) return configured;
+    if (run.laneDigest === null || run.laneDigest !== digest) {
+      let stats = null;
+      try { stats = patchStats(await managed.patchSnapshot?.()); } catch { /* unreadable: standard */ }
+      run.lane = changeLane(stats, run); run.laneStats = stats ? { files: stats.files, lines: stats.lines } : null; run.laneDigest = digest;
+    }
+    return lanePolicy(configured, run.lane);
+  };
   const digestOf = async () => { try { return await (managed.changeDigest ?? managed.patchDigest).call(managed); } catch { return null; } };
   const reviewDigestOf = async () => { try { return await managed.patchDigest(); } catch { return null; } };
   const stopped = () => signal?.aborted || ['aborted', 'error'].includes(session.messages.findLast(m => m.role === 'assistant')?.stopReason);
@@ -316,6 +334,7 @@ export async function completionGate(managed, run, signal) {
     // A check that passed still counts when the turn was cut off after it.
     if (run.changed) run.verified = run.verifiedOn(digest);
     run.docsOnly = run.changed && onlyNonCode(managed.ownPaths);
+    policy = run.changed ? await laneOf(digest) : configured;
     if (stopped()) { interrupted = run.changed; break; }
     if (run.changed) {
       const reviewDigest = managed.review ? await reviewDigestOf() : null;
@@ -424,7 +443,8 @@ export async function completionGate(managed, run, signal) {
     run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
     run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null].filter(Boolean);
   await session.sendCustomMessage({ customType: 'agent-watch-process', content: `Process status for this turn: ${run.changed ? 'code changed' : 'no code changed'}; ${words.join('; ') || 'no process step configured'}.`, display: true,
-    details: { phase: 'final', outcome: run.outcome, ...status, ...(run.reviewUnavailable ? { reviewUnavailable: run.reviewUnavailableReason } : {}), policy: { verify: policy.verify, review: policy.review } } }, { triggerTurn: false });
+    details: { phase: 'final', outcome: run.outcome, ...status, ...(run.reviewUnavailable ? { reviewUnavailable: run.reviewUnavailableReason } : {}), policy: { verify: policy.verify, review: policy.review },
+      ...(configured.lanes && run.lane ? { lane: run.lane, ...(run.laneStats ? { size: run.laneStats } : {}) } : {}) } }, { triggerTurn: false });
 }
 
 // The run's process sees each edit and command: plan guard before, check

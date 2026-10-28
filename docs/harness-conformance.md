@@ -119,6 +119,20 @@ Absent: every step `suggest`, `max_fix_loops` 2. An unknown step value is read a
 - Piagent: `managed-workflow` › suggested steps never add a turn; a required check that never passes ends the turn as unverified
 - Piagent: `managed-harness-conformance` › max_fix_loops is read within 0 to 3 and falls back to 2
 
+### `workflow.lanes`
+
+On unless set to `false` (Agent Studio does not offer this setting yet). The configured plan, verify and review policy is the standard lane, sized on the patch the run made: a tiny change (at most 2 files and 40 changed lines, no sensitive file) ends after its checks without a review; a risky change (a complex request, a migration, auth, security, CI, dependency or `AGENTS.md` file, more than 12 files or 400 lines) has a suggested check and review required. A step set to `off` stays off.
+
+- Piagent: `managed-workflow` › risk lanes size the patch: tiny drops the review, risky requires what was suggested, off stays off
+- Piagent: `managed-workflow` › with lanes, a tiny change ends after its checks without the required review
+- Piagent: `managed-workflow` › with lanes, a change to a migration has its suggested check and review required
+
+### `workflow.main_web_lookups`
+
+0 to 5; anything else is read as 0 (Agent Studio does not offer this setting yet). With a research helper, the main agent keeps that many web_search or web_fetch calls per member message for a quick fact; the rest of the web work goes to the research helper.
+
+- Piagent: `managed-helper-roles` › with a research helper the main agent may keep a few quick web lookups per message
+
 ### `fast_mode`
 
 Off unless the Harness allows it. Only the main agent's calls on a model that serves the priority tier ask for it; a refusal puts the conversation back to standard speed.

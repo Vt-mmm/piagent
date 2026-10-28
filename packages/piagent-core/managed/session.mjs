@@ -25,7 +25,7 @@ import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
 import { beforeDelegate } from './objections.mjs';
-import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
+import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
 import { restorePermission, recordBypass, permissionSetter } from './permission.mjs';
@@ -114,9 +114,9 @@ export class ManagedSession {
     self.wrapStreams(self.modelRuntime, 'main');
     const customTools = processEditTools(self, self.boundary.tools(api));
     customTools.push(fetchOriginTool(self));
-    // With a research helper the web is its work: search results and pages
-    // are read on its cheaper model, not in the main agent's context.
+    // With a research helper the web is its work (pages read on its cheaper model), beyond the Harness's few quick lookups.
     if (!helperRoles(manifest).includes('research')) customTools.push(...self.webTools(self.modelRuntime, 'main'));
+    else if (mainWebLookups(manifest)) customTools.push(...limitedWebTools(self.webTools(self.modelRuntime, 'main'), () => self.run, mainWebLookups(manifest)));
     // Commands with network, and with Docker when this machine has an engine.
     customTools.push(...commandTools(self));
     // Every helper role passes the tool's schema: Pi fixes a tool's schema
@@ -135,7 +135,7 @@ export class ManagedSession {
     const agentsFiles = projectInstructions(self.cwd, self.boundary.repositoryTop);
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
-    const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
+    const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest), mainWebLookups(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, themes: terminalExtensions.length ? await loadPiagentThemes(sdk) : [], ...await inlineExtensions(api, sdk, self.cwd,
         [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)]) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });

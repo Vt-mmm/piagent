@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { workflowPolicy, declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, normalizePlan, planText, planTool, reviewFindings, workflowPrompt, RunProcess, nonCodePath, onlyNonCode } from '../packages/piagent-core/managed/workflow.mjs';
+import { patchStats, changeLane, lanePolicy, sensitivePath } from '../packages/piagent-core/managed/risk-lanes.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
@@ -18,9 +19,9 @@ const sdkRoot = piSdkRoot();
 const supported = process.platform === 'darwin' && fs.existsSync(sdkRoot);
 
 test('policy, checks and review findings are read conservatively', () => {
-  assert.deepEqual(workflowPolicy({ harness: { configuration: { main: {}, review: { model_ids: ['r'] } } } }), { plan: 'suggest', verify: 'suggest', review: 'suggest', maxFixLoops: 2 });
+  assert.deepEqual(workflowPolicy({ harness: { configuration: { main: {}, review: { model_ids: ['r'] } } } }), { plan: 'suggest', verify: 'suggest', review: 'suggest', maxFixLoops: 2, lanes: true });
   // No review helper: review is off whatever the policy says; unknown values fall back.
-  assert.deepEqual(workflowPolicy({ harness: { configuration: { main: {}, workflow: { plan: 'always', verify: 'require', review: 'require', max_fix_loops: 9 } } } }), { plan: 'suggest', verify: 'require', review: 'off', maxFixLoops: 2 });
+  assert.deepEqual(workflowPolicy({ harness: { configuration: { main: {}, workflow: { plan: 'always', verify: 'require', review: 'require', max_fix_loops: 9 } } } }), { plan: 'suggest', verify: 'require', review: 'off', maxFixLoops: 2, lanes: true });
   const agents = [{ content: '# Repo\n## Checks\n```sh\nnpm test\n# a comment\nnpm run typecheck\n```\n- `go test ./...`\n## Other\n```\nrm -rf /\n```' }];
   assert.deepEqual(declaredChecks(agents), ['npm test', 'npm run typecheck', 'go test ./...']);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'checks-'));
@@ -175,6 +176,8 @@ async function studio(script) {
   return { requests, origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise(resolve => server.close(resolve)) };
 }
 const MODELS = { main: { id: 'claude-sonnet-5-5', provider_model_id: 'claude-sonnet-5-5', owned_by: 'claude' }, review: { id: 'claude-opus-5-5', provider_model_id: 'claude-opus-5-5', owned_by: 'claude' } };
+// These fixtures change one line of a.txt: risk lanes (on by default) are off
+// unless a test turns them on, so review and checks follow the policy as set.
 function broker(workflow, { features = ['process'], review = true, failProcessClose = false, failClose = false } = {}) {
   const authority = { studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 };
   const roles = { main: randomUUID(), research: randomUUID(), review: randomUUID() }, run = randomUUID(), closes = []; let fence = 0;
@@ -182,7 +185,7 @@ function broker(workflow, { features = ['process'], review = true, failProcessCl
     provider_model_id: MODELS[role === 'main' ? 'main' : 'review'].provider_model_id, effort: 'medium', token: `as_run_${roles[role]}_${'x'.repeat(43)}` });
   return { roles, closes, async request(action, args = {}) {
     if (action === 'config') return { schema_version: 2, credential_mode: 'managed', authority, key_id: 'key', user: { id: 'member' }, revision: 'r1', ...(features ? { broker_features: features } : {}),
-      models: [MODELS.main, MODELS.review], harness: { configuration: { main: { model_ids: [MODELS.main.id] }, research: null, review: review ? { model_ids: [MODELS.review.id] } : null, workflow } } };
+      models: [MODELS.main, MODELS.review], harness: { configuration: { main: { model_ids: [MODELS.main.id] }, research: null, review: review ? { model_ids: [MODELS.review.id] } : null, workflow: { lanes: false, ...workflow } } } };
     if (['start', 'renew', 'child'].includes(action)) return grant(args.role ?? 'main');
     if (action === 'close') { if (failClose && !args.role) throw Error('managed-broker:offline'); if (args.process && failProcessClose) throw Error('managed-broker:invalidResponse'); closes.push(args); return true; }
     throw Error('unexpected-broker-action');
@@ -806,4 +809,72 @@ test('member workflow survives reopening, reaches reviewers, and can be cleared 
     assert.match(fresh, /member chooses how to do requirements/);
     assert.match(fresh, /harness reviews the final patch/);
   } finally { await managed?.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('risk lanes size the patch: tiny drops the review, risky requires what was suggested, off stays off', () => {
+  const snapshot = value => ({ patch: JSON.stringify(value) });
+  const small = patchStats(snapshot({ patch: 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-start\n+fixed\n', untracked: [{ path: 'b.txt', encoding: 'utf8', contents: 'one\ntwo\n' }] }));
+  assert.deepEqual(small, { files: 2, lines: 4, paths: ['a.txt', 'b.txt'] });
+  assert.equal(changeLane(small), 'tiny');
+  assert.equal(changeLane(small, { complex: true }), 'risky', 'a complex request is risky whatever its size');
+  assert.equal(changeLane({ files: 3, lines: 10, paths: ['a', 'b', 'c'] }), 'standard');
+  assert.equal(changeLane({ files: 1, lines: 401, paths: ['a'] }), 'risky');
+  assert.equal(changeLane({ files: 13, lines: 13, paths: [...'abcdefghijklm'] }), 'risky');
+  for (const file of ['db/migrations/001.sql', 'src/auth/token.ts', 'package.json', '.github/workflows/ci.yml', 'AGENTS.md', '.env.local', 'infra/main.tf']) assert.equal(sensitivePath(file), true, file);
+  for (const file of ['src/author.ts', 'docs/security-notes.md.txt', 'README.md']) assert.equal(sensitivePath(file), false, file);
+  assert.equal(changeLane({ files: 1, lines: 2, paths: ['src/auth/token.ts'] }), 'risky');
+  assert.equal(changeLane(null), 'standard', 'an unreadable patch keeps the configured policy');
+  assert.equal(patchStats({ patch: 'not json' }), null);
+  const policy = { plan: 'suggest', verify: 'suggest', review: 'require', maxFixLoops: 2, lanes: true };
+  assert.equal(lanePolicy(policy, 'standard'), policy);
+  assert.deepEqual(lanePolicy(policy, 'tiny'), { ...policy, review: 'off' });
+  assert.deepEqual(lanePolicy(policy, 'risky'), { ...policy, verify: 'require', review: 'require' });
+  assert.deepEqual(lanePolicy({ ...policy, verify: 'off', review: 'off' }, 'risky'), { ...policy, verify: 'off', review: 'off' });
+  assert.equal(lanePolicy({ ...policy, lanes: false }, 'tiny').review, 'require', 'without lanes the configured policy applies');
+  // On by default; only an explicit false turns lanes off.
+  assert.equal(workflowPolicy({ harness: { configuration: { main: {}, workflow: {} } } }).lanes, true);
+  assert.equal(workflowPolicy({ harness: { configuration: { main: {}, workflow: { lanes: 'no' } } } }).lanes, true);
+  assert.equal(workflowPolicy({ harness: { configuration: { main: {}, workflow: { lanes: false } } } }).lanes, false);
+  const checks = { source: 'agents', commands: ['npm test'] };
+  assert.match(workflowPrompt(policy, checks), /- Size: .*at most 2 files and 40 changed lines.*without a review.*more than 12 files or 400 lines/);
+  assert.doesNotMatch(workflowPrompt({ ...policy, lanes: false }, checks), /- Size:/);
+});
+
+test('with lanes, a tiny change ends after its checks without the required review', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project();
+  const agent = broker({ plan: 'suggest', verify: 'require', review: 'require', lanes: true });
+  const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'bash', input: { command: 'sh check.sh' } }, 'Done.'], review: [] };
+  const server = await studio(script);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Make a.txt say fixed');
+    assert.equal(server.requests.filter(r => r.role === 'review').length, 0, 'no reviewer for a one-line change');
+    const final = processNotes(managed).at(-1);
+    assert.equal(final.details.outcome, 'clean');
+    assert.equal(final.details.lane, 'tiny');
+    assert.deepEqual(final.details.size, { files: 1, lines: 2 });
+    assert.deepEqual(final.details.policy, { verify: 'require', review: 'off' });
+    assert.doesNotMatch(final.content, /not reviewed/);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('with lanes, a change to a migration has its suggested check and review required', { skip: !supported, timeout: 180000 }, async () => {
+  const root = project();
+  const agent = broker({ plan: 'suggest', verify: 'suggest', review: 'suggest', lanes: true });
+  const script = { roleOf: id => Object.keys(agent.roles).find(r => agent.roles[r] === id),
+    main: [[{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'write', input: { path: 'migrations/001_init.sql', content: 'create table t (id int);\n' } }], 'Done.',
+      { tool: 'bash', input: { command: 'sh check.sh' } }, 'Checked.'],
+    review: ['Fine.\n```json\n{"findings":[],"summary":"clean"}\n```'] };
+  const server = await studio(script);
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt('Add the first migration and mark a.txt fixed');
+    const notes = processNotes(managed);
+    assert.deepEqual(notes.map(n => n.details.phase), ['verify', 'final'], 'the suggested check became required');
+    assert.equal(server.requests.filter(r => r.role === 'review').length, 1, 'the harness ran the review itself');
+    assert.equal(notes.at(-1).details.lane, 'risky');
+    assert.equal(notes.at(-1).details.outcome, 'clean');
+    assert.deepEqual(notes.at(-1).details.policy, { verify: 'require', review: 'require' });
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
