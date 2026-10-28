@@ -3,6 +3,7 @@
 // A helper whose company model account is out of usage, or resting after a
 // refusal, starts once more: Studio then gives the new helper the next model
 // of its role that serves (an auto role's list).
+import { fenced, HELPER_UNTRUSTED_RULE } from './untrusted.mjs';
 import { jobTitle } from './call-purpose.mjs';
 import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { managedResourceLoader } from './resource-loader.mjs';
@@ -99,7 +100,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
         settingsManager: managed.api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' }),
         sessionManager: managed.api.SessionManager.inMemory(managed.cwd), noTools: 'builtin', tools: [...READ_TOOLS, ...(setup.commands ? ['bash'] : []), ...(setup.web ? ['web_search', 'web_fetch'] : []), ...memory.map(tool => tool.name)],
         customTools: [...boundary.tools(managed.api).filter(tool => READ_TOOLS.includes(tool.name) || setup.commands && tool.name === 'bash').map(tool => countedCheck(managed, tool)),
-          ...(setup.web ? managed.webTools(runtime, role) : []), ...memory], resourceLoader: managedResourceLoader(managed.api, { systemPrompt: setup.prompt }) });
+          ...(setup.web ? managed.webTools(runtime, role) : []), ...memory], resourceLoader: managedResourceLoader(managed.api, { systemPrompt: setup.prompt + HELPER_UNTRUSTED_RULE }) });
       sessions.add(session); trackToolFailures(managed, session, role);
       const abort = () => void session.abort(); signal?.addEventListener('abort', abort, { once: true });
       try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + helperWorkflowPrompt(currentWorkflow(managed.session.sessionManager)) + checks + extra, { expandPromptTemplates: false }); }
@@ -149,7 +150,8 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     // An objection to the brief comes with the answer; a stale review has none to act on.
     const objection = stale ? '' : await relayObjection(managed, role, reply, harness);
     const ending = `Outcome: ${report.outcome}${report.outcome === 'unverifiable' ? ` (${report.summary})` : ''}.\n\n`;
-    return { content: [{ type: 'text', text: ending + (stale ? 'Review is stale: the patch changed during review. Obtain a new review for the current patch.' : reply + objection) }], details };
+    // The helper read untrusted content: its answer is data for the main agent.
+    return { content: [{ type: 'text', text: ending + (stale ? 'Review is stale: the patch changed during review. Obtain a new review for the current patch.' : fenced(`${setup.label} helper's answer`, reply) + objection) }], details };
   } catch (error) { report = failedSettlement(role, error, signal, spec); throw error; }
   finally {
     for (const session of sessions) session.dispose(); await boundary?.dispose();

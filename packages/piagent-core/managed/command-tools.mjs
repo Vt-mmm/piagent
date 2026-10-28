@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { asksNothing, broadAccess, networkConfirmation } from './permission.mjs';
 import { engineAlive, engineLauncher } from './container-engine.mjs';
-import { MEMBER_ONLY, memberOnlyReason, runHostCommand } from './host-command.mjs';
+import { MEMBER_ONLY, memberOnlyReason, credentialReason, runHostCommand } from './host-command.mjs';
 import { processTools } from './background-process.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 
@@ -11,7 +11,8 @@ import { checkpointsOf } from './checkpoints.mjs';
 // socket) and run_on_host (on the member's machine, outside the sandbox).
 // Bypass runs the first two without asking (owner, 2026-10-09), except what
 // must be confirmed for any command (bypass-policy.mjs: pushes, deploys,
-// registry logins, deletes known only at run time); run_on_host always asks.
+// registry logins, deletes known only at run time). run_on_host asks in every
+// mode but Bypass; Bypass still asks when the command reaches credentials.
 const PARAMETERS = { type: 'object', properties: { command: { type: 'string', minLength: 1, maxLength: 4000 }, reason: { type: 'string', minLength: 1, maxLength: 300 }, timeout: { type: 'number', minimum: 1, maximum: 1800 } }, required: ['command', 'reason'], additionalProperties: false };
 
 const KINDS = {
@@ -35,8 +36,9 @@ const KINDS = {
     allow: 'Run this exact command once on this machine, outside the sandbox, as you: it can read and change your files and use your sign-ins.',
     title: 'Chạy lệnh trên máy (ngoài sandbox)', allowText: 'chạy đúng lệnh này một lần trên máy bạn, ngoài sandbox, bằng quyền của bạn: lệnh đọc/sửa được file và dùng được tài khoản đã đăng nhập trên máy.',
     // Full access does not cover it: the member approves each command (with
-    // what Full access would still have asked about). Bypass asks nothing.
-    confirm: async (self, command) => asksNothing(self) ? null : await networkConfirmation(self, command) ?? 'ask',
+    // what Full access would still have asked about). Bypass asks only about
+    // credentials: a prompt injection's "cat ~/.ssh/id_rsa" is never silent.
+    confirm: async (self, command) => asksNothing(self) ? credentialReason(command) : await networkConfirmation(self, command) ?? 'ask',
   },
 };
 
@@ -48,7 +50,7 @@ async function engineReady(boundary) {
 const DOCKER_STOPPED = 'managed-docker-unreachable: Docker engine trên máy không chạy. Gọi start_docker để xin member duyệt mở Docker, rồi chạy lại đúng lệnh này bằng run_with_docker.';
 
 // One approval of the member (the dashboard card, else the Terminal).
-async function approve(self, id, signal, ctx, action, { title, body }) {
+export async function approve(self, id, signal, ctx, action, { title, body }) {
   const { piApprovalBroker } = await import('../runtime/inspection/approval-broker.ts');
   const decision = await piApprovalBroker.request({ cwd: self.cwd, rawSessionId: self.session.sessionManager.getSessionId(), toolCallId: id,
     action: { kind: 'external-provider-action', preconditionClass: 'runtime-only', targetPaths: [self.cwd], urlOrigin: null, ...action },

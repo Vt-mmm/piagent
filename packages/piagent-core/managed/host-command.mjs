@@ -25,6 +25,15 @@ export function memberOnlyReason(command) {
   }
   return null;
 }
+// Where credentials live on the member's machine. A command that names one
+// reads or moves secrets, so it is asked about even in Bypass.
+const CREDENTIALS = [/~\/\.(ssh|aws|gnupg|kube|docker|pi|codex|claude|piagent|config\/gh|config\/gcloud|azure|npmrc|netrc|pypirc|git-credentials)\b/, /\$HOME\/\.(ssh|aws|gnupg|kube|docker|pi|codex|claude|piagent)\b/,
+  /(^|[\s'"/])\.env(\.[\w-]+)?\b/, /\bauth\.json\b/, /\bcredentials(\.json)?\b/, /\bid_(rsa|ed25519|ecdsa|dsa)\b/, /\.(pem|p12|pfx|key)\b/,
+  /\bsecurity\s+(find-(generic|internet)-password|dump-keychain|export)\b/, /Library\/Keychains\b/, /\bprintenv\b|(^|[;&|]\s*)env\s*($|[|;&>])/];
+export function credentialReason(command) {
+  const text = String(command ?? '');
+  return CREDENTIALS.some(rule => rule.test(text)) ? 'the command reaches credentials (keys, tokens, Keychain or environment)' : null;
+}
 // What a command printed when it stopped to ask for a password or a terminal.
 export const NEEDS_MEMBER = /sudo: a (terminal|password) is required|no tty present|askpass|Password:\s*$|must be run from a terminal|Inappropriate ioctl for device/im;
 
