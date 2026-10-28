@@ -176,6 +176,15 @@ export function reviewParts(snapshot, size = REVIEW_PART_BYTES) {
   return { parts: parts.length ? parts : [{ files: [], text: `Patch snapshot ${snapshot.digest}: every changed file is too large to review.${skipped}` }], omitted };
 }
 
+// A re-review after a fix (focus: the files changed since the last review)
+// reads only the parts that hold one of them: the other parts were reviewed
+// and have not changed. Without such a part, or in one part, all of it.
+export function focusParts(review, focus) {
+  if (!focus?.files?.length || review.parts.length < 2) return review;
+  const files = new Set(focus.files), kept = review.parts.filter(part => part.files?.some(file => files.has(file)));
+  return kept.length ? { ...review, parts: kept } : review;
+}
+
 // One answer from the review of every part: each part's summary, then the
 // findings of all parts (most severe first) and their objections to the brief
 // in one JSON block. `parsed`: every part gave its JSON.

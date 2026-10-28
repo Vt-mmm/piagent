@@ -24,7 +24,11 @@ export function delegateParameters() {
     title: { type: 'string', maxLength: 120, description: 'One line naming the job, for the company logs (for example "Find where login tokens are stored").' },
     task: { type: 'string', minLength: 1, maxLength: 12000 },
     ...Object.fromEntries(Object.entries(SPEC_FIELDS).map(([name, description]) => [name, field(description)])),
-    since: { type: 'string', maxLength: 200, description: 'Review only: the commit, branch or HEAD~N the work to review started from (work committed in earlier turns).' } },
+    since: { type: 'string', maxLength: 200, description: 'Review only: the commit, branch or HEAD~N the work to review started from (work committed in earlier turns).' },
+    // Several helpers of the role, only at the member's request (copies.mjs).
+    copies: { type: 'integer', minimum: 2, maximum: 3, description: 'Only when the member asked for several helpers of this role: how many (2 or 3) run side by side on this brief. Never on your own.' },
+    split: { type: 'array', minItems: 2, maxItems: 3, items: { type: 'string', minLength: 1, maxLength: 500 }, description: 'Instead of copies: one line per helper naming its share of the work, when the member asked for several and the work divides.' },
+    member_words: { type: 'string', maxLength: 300, description: 'With copies or split: the member\'s own words, verbatim, that ask for that many helpers.' } },
   required: ['role', 'task'], additionalProperties: false };
 }
 export const SPEC_PROMPT = ' Give a helper target and acceptance at least (also change, constraints and ownership when they matter): it answers against them, and its ending is recorded with them.';

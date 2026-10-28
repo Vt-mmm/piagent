@@ -14,6 +14,7 @@ import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.m
 import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
 import { bypassAllowed, effectivePermission } from '../packages/piagent-core/managed/permission.mjs';
 import { memoryOn } from '../packages/piagent-core/managed/memory.mjs';
+import { currentPlan, unfinished } from '../packages/piagent-core/managed/workflow.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
@@ -144,6 +145,18 @@ export function planLines(plan) {
   const mark = { completed: '☑', in_progress: '☐', deferred: '⊘', pending: '☐' };
   return [`Plan · ${steps.filter((p) => p.status === 'completed').length}/${steps.length} bước xong`,
     ...steps.map((p) => `  ${mark[p.status] ?? '☐'} ${p.step}${p.status === 'in_progress' ? '  ← đang làm' : p.status === 'deferred' ? '  (để sau)' : ''}`)];
+}
+
+// The panel above the input while a turn works: the checklist while a step
+// is open, and each subagent running now with its job and latest step.
+export function planWidget(plan) {
+  return unfinished(plan) ? planLines(plan.plan) : undefined;
+}
+export function helperLines(helpers) {
+  const list = Array.isArray(helpers) ? helpers.filter((h) => typeof h?.role === 'string') : [];
+  if (!list.length) return undefined;
+  const many = (role) => list.filter((h) => h.role === role).length > 1;
+  return [`Subagent đang chạy · ${list.length}`, ...list.map((h) => `  ⟳ ${h.role}${many(h.role) ? ` ${h.slot ?? 1}` : ''}${h.job ? ` · ${String(h.job).slice(0, 60)}` : ''}${h.step ? ` — ${String(h.step).slice(0, 70)}` : ''}`)];
 }
 
 // A harness note's details, in the shape the shared copy reads.
@@ -402,7 +415,12 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       const showBranch = async () => { try { const branch = await branchOf(managed()?.cwd ?? ctx.cwd); ctx.ui?.setStatus?.('agent-watch-branch', branch ? `⎇ ${branch}` : undefined); } catch { /* closed meanwhile */ } };
       ctx.ui?.setWorkingMessage?.(WORKING);
       void showBranch();
+      // The checklist and the subagents working now stay above the input (setWidget).
+      const showPlan = () => ctx.ui?.setWidget?.('agent-watch-plan', planWidget(currentPlan(session.sessionManager)));
+      showPlan();
       session.subscribe((event) => {
+        if (event?.type === 'tool_execution_end' && event.toolName === 'update_plan' || event?.type === 'agent_end') showPlan();
+        if (event?.type === 'managed_helper_state') ctx.ui?.setWidget?.('agent-watch-helpers', helperLines(event.helpers));
         if (event?.type === 'managed_helpers') ctx.ui?.setStatus?.('agent-watch-helpers', event.active ? `Subagent ${event.active}/${event.maximum}` : undefined);
         if (event?.type === 'managed_project_warning') ctx.ui?.notify?.(projectWarningText(event.warnings, event.team, LOCALE), 'warning');
         const end = event?.type === 'managed_turn_end' ? turnEndOf(event.end) : null;
@@ -413,7 +431,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       });
     });
     pi.registerMessageRenderer('agent-watch-review-status', (_message, _options, theme) =>
-      box('Review đã cũ: code đổi sau khi review. Cần review lại cho thay đổi hiện tại.', theme, 'warning'));
+      box('Review đã cũ: code đổi sau khi review. Chỉ cần review lại khi đã sửa lỗi blocking.', theme, 'warning'));
     pi.registerMessageRenderer('agent-watch-helper-receipt', (message, _options, theme) =>
       box(String(message.content ?? '').replace(/(\d[\d,]*) tokens/, '$1 token').replace('review is stale', 'review đã cũ'), theme, 'dim'));
 

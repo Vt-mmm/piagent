@@ -103,7 +103,7 @@ Absent: every step `suggest`, `max_fix_loops` 2. An unknown step value is read a
 
 ### `workflow.review`
 
-`suggest` asks the agent to have the review helper read its patch. `require` makes the harness review the final patch itself, send blocking findings back, have the reviewer judge an answer given instead of a fix, and hand a lasting disagreement to the member.
+`suggest` asks the agent to have the review helper read its finished patch once, and again only after fixing blocking findings. `require` makes the harness review the final patch itself (the agent's own review call is refused), send blocking findings back, have the reviewer judge a rejection given instead of a fix, re-review after a fix only the files changed since, and hand a lasting disagreement to the member. Blocking findings are fixed or rejected; major ones are fixed or rejected with no new review; minor ones are only listed.
 
 - Piagent: `managed-workflow` › required checks and review: the harness sends the agent back until the final patch is checked and clean
 - Piagent: `managed-workflow` › a change the agent commits during the turn is still checked and reviewed
@@ -111,6 +111,8 @@ Absent: every step `suggest`, `max_fix_loops` 2. An unknown step value is read a
 - Piagent: `managed-workflow` › the harness reviews a patch larger than one reviewer reads in parts
 - Piagent: `managed-objections` › an answer instead of a fix goes back to the reviewer, who withdraws the finding or keeps it for the member
 - Piagent: `managed-objections` › after a fix the reviewer also reads the answer the agent gave with it
+- Piagent: `managed-objections` › the main agent asks for a review once; under a required review the harness reviews and refuses its call
+- Piagent: `managed-objections` › a re-review after a fix reads only the parts holding a file changed since
 
 ### `workflow.max_fix_loops`
 
@@ -146,11 +148,26 @@ Off unless the Harness allows it. Only the main agent's calls on a model that se
 
 ### `objections`
 
-A helper may object to its brief with evidence; it never decides. The main agent answers; the same objection a second time goes to the member.
+A helper may object to its brief with evidence; it never decides. Objections, review findings and failed verify claims are items of one ledger: the main agent records a decision on each with `resolve_objection` (accepted with what it changed, or rejected with what it checked and why). An objection that the brief rests on a wrong premise or conflicts with the request, with evidence pointing at a place that exists, refuses file changes and a new brief to that helper until it is decided; a rejected one goes back to the helper, which withdraws it or keeps it for the member. An item never decided is put to the agent once. The same helper objecting a second time goes to the member. The run's ledger is kept as one session entry.
 
-- Piagent: `managed-objections` › a corrected brief answers the objection without another turn
-- Piagent: `managed-objections` › an objection the agent never answers with a new brief is answered to the member once; the helper read the member request
+- Piagent: `managed-objections` › evidence names a place the harness can find; a premise objection with evidence is required
+- Piagent: `managed-objections` › the main agent records each decision; a premise objection refuses edits and briefs until it is decided
+- Piagent: `managed-objections` › review findings and failed claims are ledger items: a repeated finding keeps its item, minor ones are only counted
+- Piagent: `managed-objections` › an objection the agent does not decide is put to it once; a decision or its absence is on the record
+- Piagent: `managed-objections` › a premise objection refuses file changes and a new brief until it is decided; then the corrected brief goes through
+- Piagent: `managed-objections` › a rejected premise objection goes back to the helper, which withdraws it or keeps it for the member
 - Piagent: `managed-objections` › a second objection from the same helper stops the exchange: the member decides and the helper is refused until then
+
+### `helper_copies`
+
+One helper per role works on a brief. Only when the member asks for several helpers of one role does one delegate call run 2 or 3 of them side by side: the same brief for independent answers, or a share of the work each. The call quotes the member's own words, which must name the number; the harness never adds helpers. With a Studio and an Agent Watch that hold helper slots (broker feature `helper-slots`), each copy holds a grant of its own (slot 2 or 3 beside the role's first) and runs in parallel; otherwise the copies share the role's grant and Studio takes their requests in turn. Each copy counts against the role's calls for the message; their answers merge, and any finding, failed claim or objection one of them reports stands. Reviewers the member asked for run under a required review too, and a fresh review from them is the final one.
+
+- Piagent: `managed-objections` › several helpers of a role run only when the member asks for that many, up to 3
+- Piagent: `managed-objections` › the answers of several helpers merge: every finding, failed claim and objection any of them reports stands
+- Piagent: `managed-objections` › helpers the member asks for run side by side on one brief; without the member asking only one runs
+- Piagent: `managed-objections` › reviewers the member asks for run even under a required review; their fresh review is the final one
+- Piagent: `managed-objections` › with helper slots in Studio and Agent Watch, each helper the member asked for holds a grant of its own and the terminal shows what each does
+- Studio: `TestHelperSlotsRunInParallel`
 
 ### `process_report`
 
@@ -158,7 +175,7 @@ Every run closes with its process report, in the version the broker negotiates (
 
 - Studio: `TestHarnessWorkflowPolicyAndProcessReport`
 - Piagent: `managed-workflow` › a broker without process reports, or a Studio that refuses one, still closes the run
-- Piagent: `managed-objections` › a helper that objected twice is refused until the member answers; reports keep older versions unchanged
+- Piagent: `managed-objections` › the main agent records each decision; a premise objection refuses edits and briefs until it is decided
 
 ### `interrupted_turn`
 

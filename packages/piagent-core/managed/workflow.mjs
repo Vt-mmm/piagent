@@ -6,6 +6,7 @@ import { TsDiagnostics } from './ts-diagnostics.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 import { discoverDeliveryContext } from './delivery-context.mjs';
 import { LANE_LIMITS, patchStats, changeLane, lanePolicy } from './risk-lanes.mjs';
+import { briefCounts, decisionsText, ledgerGuard, ledgerOf, ledgerWords, reviewFocus, saveLedger, setStatus, settleLedger } from './ledger.mjs';
 
 // The process layer of the company harness: a plan for multi-step work, the
 // repository's checks after a code change, an independent review of the patch.
@@ -149,8 +150,10 @@ export function workflowPrompt(policy, checks) {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
     lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''}`);
   }
-  if (policy.review !== 'off') lines.push(policy.review === 'require' ? '- Review: the harness reviews the final patch with an independent reviewer; blocking findings come back to you to fix, or to answer when a finding is wrong: the reviewer then judges your answer, and a disagreement that remains goes to the member.'
-    : '- Review: before you finish a code change, ask the review helper (delegate role "review") to review the patch, then fix blocking findings.');
+  // What each severity asks: blocking is fixed or argued, major decided, minor only listed.
+  const severities = ' Blocking findings: fix them, or reject one with resolve_objection and the reviewer judges your reason; a disagreement that remains goes to the member. Major findings: fix them or reject them with resolve_objection; no new review follows. Minor findings are listed for the member and need nothing.';
+  if (policy.review !== 'off') lines.push(policy.review === 'require' ? `- Review: when you finish, the harness reviews the final patch with an independent reviewer, and after a fix only what you changed; do not ask for a review yourself.${severities}`
+    : `- Review: when your code change is finished, ask the review helper (delegate role "review") once; ask again only after fixing blocking findings.${severities}`);
   if (policy.lanes && (policy.verify !== 'off' || policy.review !== 'off')) {
     const L = LANE_LIMITS;
     lines.push(`- Size: the process follows the size of your change. A small change (at most ${L.tinyFiles} files and ${L.tinyLines} changed lines, no migration, auth, security, CI, dependency or AGENTS.md file) ends after its checks, without a review: do not ask for one. A risky change (a complex request, one of those files, more than ${L.riskyFiles} files or ${L.riskyLines} lines) must pass the checks${policy.review !== 'off' ? ' and the harness review' : ''} even where they are only suggested.`);
@@ -242,11 +245,12 @@ export class RunProcess {
     Object.assign(this, { policy, request: String(request ?? ''), complex, checks, startDigest: null, mutations: 0, lastCheck: null, checksRun: 0, checksFailed: 0,
       reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, unplannedChange: false,
       unknownTools: 0, changed: false, verified: false, docsOnly: false, approvalDeclined: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
-      // Helper objections to a brief, disagreements handed to the member, the
-      // claims verify marked failed, and where the harness last sent the
-      // agent back (to read its answer and see whether the code moved).
-      objections: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false,
-      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, objectionsAsked: false,
+      // The objection ledger (ledger.mjs), disagreements handed to the
+      // member, the claims verify marked failed, the reviews the main agent
+      // asked for, and where the harness last sent the agent back (to read
+      // its answer and see whether the code moved).
+      ledger: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false, mainReviews: 0, minorFindings: 0,
+      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, decideAsked: false,
       // The patch's risk lane (workflow.lanes) and the main agent's own web lookups.
       lane: null, laneStats: null, laneDigest: null, webLookups: 0 });
   }
@@ -295,7 +299,7 @@ export class RunProcess {
       verified: this.verified, reviews: count(this.reviews), reviewed: this.reviewed, blocking: count(this.blocking), blocking_open: Math.min(this.blockingOpen, this.blocking, 1000),
       fix_loops: this.fixLoops, outcome: (version === 3 ? this.outcome : this.legacyOutcome) ?? fallback,
       ...(version >= 2 ? { plan_skipped: this.planSkipped, unknown_tools: count(this.unknownTools) } : {}),
-      ...(version === 3 ? { objections: count(this.objections.length), objections_answered: count(this.objections.filter(o => o.answered && !o.disputed).length), disputes: count(this.disputes.length) } : {}) };
+      ...(version === 3 ? { objections: count(briefCounts(this).objections), objections_answered: count(briefCounts(this).answered), disputes: count(this.disputes.length) } : {}) };
   }
 }
 
@@ -355,15 +359,18 @@ export async function completionGate(managed, run, signal) {
       }
       if (policy.review === 'require' && !fresh && !run.reviewSettled) {
         // After a round of findings the reviewer also reads the agent's answer to them.
-        const answer = run.sentAt !== null ? answerSince(run.sentAt) : '';
-        const brief = `Review the current patch against the member's request.\n\nChecks: ${run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.${answer ? `\n\nThe main agent's answer to your previous blocking findings (the code changed after it):\n${answer}` : ''}`;
+        const answer = run.sentAt !== null ? answerSince(run.sentAt) + decisionsText(run, 'review') : '';
+        // After a fix the reviewer checks its blocking findings and the files changed since.
+        const focus = run.sentAt !== null ? await reviewFocus(managed) : null, previous = (review?.findings ?? []).filter(f => f.severity === 'blocking').map((f, i) => `${i + 1}. ${findingText(f)}`).join('\n');
+        const brief = `Review the current patch against the member's request.\n\nChecks: ${run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.${answer ? `\n\nThe main agent's answer to your previous blocking findings (the code changed after it):\n${answer}` : ''}${focus ? `\n\nSince your last review only these files changed: ${focus.files.join(', ')}. Judge whether each previous blocking finding is fixed (repeat it when it is not) and review the changes in these files; the rest of the patch was reviewed and has not changed.${previous ? `\nYour previous blocking findings:\n${previous}` : ''}` : ''}`;
+        managed.reviewFocus = focus;
         try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
         catch (error) {
           run.reviewUnavailable = !stopped(); run.reviewUnavailableReason = reviewUnavailableReason(error?.message); interrupted = stopped();
           // Why the review could not run, as a code only (the report says "failed").
           if (run.reviewUnavailable) try { session.sessionManager.appendCustomEntry('agent-watch-failure-detail', { role: 'review', code: failureCode(error?.message) }); } catch { /* the report still says it */ }
           break;
-        }
+        } finally { managed.reviewFocus = null; }
         continue;
       }
       if (policy.review === 'require' && fresh && (review.blocking ?? 0) > 0 && !run.reviewSettled) {
@@ -373,7 +380,7 @@ export async function completionGate(managed, run, signal) {
           // reviewer reads that answer once and judges its findings again.
           run.rejudged = true;
           await note('Harness: the main agent answered the review instead of changing the code; the reviewer judges its answer.', { phase: 'rejudge', role: 'review' });
-          const brief = `Judge your previous blocking findings on this patch again. The main agent answered them without changing the code:\n${answerSince(run.sentAt) || '(no answer)'}\n\nYour previous blocking findings:\n${list}\n\nKeep a finding as blocking when the answer does not hold against the code; leave it out when the answer is right.`;
+          const brief = `Judge your previous blocking findings on this patch again. The main agent answered them without changing the code:\n${answerSince(run.sentAt) || '(no answer)'}${decisionsText(run, 'review')}\n\nYour previous blocking findings:\n${list}\n\nKeep a finding as blocking when the answer does not hold against the code; leave it out when the answer is right.`;
           try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
           catch { if (stopped()) { interrupted = true; break; } run.reviewSettled = true; }
           continue;
@@ -381,11 +388,12 @@ export async function completionGate(managed, run, signal) {
         if (run.sentDigest === digest) {
           // It heard the answer and kept its findings: the member decides.
           run.reviewSettled = true; run.disputes.push({ source: 'review' });
+          for (const item of ledgerOf(run)) if (item.source === 'review' && item.kind === 'blocking' && ['open', 'rejected'].includes(item.status)) setStatus(item, 'disputed');
           await note(`Harness: the main agent and the review subagent still disagree after two rounds; the member decides.\n${list}`, { phase: 'dispute', role: 'review', findings: blocking.slice(0, 10) });
         } else if (run.fixLoops >= policy.maxFixLoops) run.reviewSettled = true;
         else {
           run.fixLoops += 1; run.sentDigest = digest; run.sentAt = session.messages.length;
-          await send(`Harness review of the current patch found ${blocking.length} blocking issue(s):\n${list}\nFix them, or explain why an issue is not real: an answer without a code change goes back to the reviewer, who judges it. The patch is reviewed again after your change.`,
+          await send(`Harness review of the current patch found ${blocking.length} blocking issue(s):\n${list}\nFix them, or reject one with resolve_objection (what you checked and why): a rejection without a code change goes back to the reviewer, who judges it. After your fix the reviewer checks these findings and the files you changed, not the whole patch again.`,
             { phase: 'review', loop: run.fixLoops, maxLoops: policy.maxFixLoops, findings: blocking.slice(0, 10) });
           continue;
         }
@@ -398,30 +406,25 @@ export async function completionGate(managed, run, signal) {
       const fails = run.verifyFails, list = fails.map((v, i) => `${i + 1}. ${v.claim}${v.evidence ? `\n   Evidence: ${v.evidence}` : ''}`).join('\n'), claims = fails.slice(0, 10).map(v => ({ claim: v.claim }));
       if (!run.claimsAsked) {
         run.claimsAsked = true; run.claimsAt = session.messages.length;
-        await send(`Harness: the verify subagent marked ${fails.length} claim(s) as failed:\n${list}\nFix the cause, or explain why a verdict is wrong. The verify subagent then checks these claims again with your answer.`, { phase: 'claims', claims });
+        await send(`Harness: the verify subagent marked ${fails.length} claim(s) as failed:\n${list}\nFix the cause, or reject a verdict with resolve_objection (what you checked and why). The verify subagent then checks these claims again with your answer.`, { phase: 'claims', claims });
         continue;
       }
       if (!run.claimsRechecked) {
         run.claimsRechecked = true;
         await note("Harness: the verify subagent checks the failed claims again with the main agent's answer.", { phase: 'rejudge', role: 'verify' });
-        try { await managed.delegate({ role: 'verify', task: `Check these claims again on the current code; they were marked failed before:\n${list}\n\nThe main agent's answer:\n${answerSince(run.claimsAt) || '(no answer)'}\n\nA claim passes only on evidence you see yourself. It stays failed when it does not hold and the result the member asked for depends on it. When the answer shows the claim is not part of what the member asked and the result does not depend on it, mark it unverifiable and say why.` }, signal, { harness: true }); }
+        try { await managed.delegate({ role: 'verify', task: `Check these claims again on the current code; they were marked failed before:\n${list}\n\nThe main agent's answer:\n${answerSince(run.claimsAt) || '(no answer)'}${decisionsText(run, 'verify')}\n\nA claim passes only on evidence you see yourself. It stays failed when it does not hold and the result the member asked for depends on it. When the answer shows the claim is not part of what the member asked and the result does not depend on it, mark it unverifiable and say why.` }, signal, { harness: true }); }
         catch { if (stopped()) { interrupted = run.changed; break; } }
         continue;
       }
       run.claimsDone = true; run.disputes.push({ source: 'verify' });
+      for (const item of ledgerOf(run)) if (item.source === 'verify' && ['open', 'accepted', 'rejected'].includes(item.status)) setStatus(item, 'disputed');
       await note(`Harness: the main agent and the verify subagent still disagree after two rounds; the member decides.\n${list}`, { phase: 'dispute', role: 'verify', claims });
     }
     // Plan "require": a checklist left with open steps is the next round's
     // (continuation.mjs), after this run's checks and review.
-    // An objection no corrected brief followed is answered to the member, once.
-    const open = run.objections.filter(o => !o.answered && !o.disputed);
-    if (open.length && !run.objectionsAsked) {
-      run.objectionsAsked = true;
-      await send(`Harness: ${open.length} objection(s) to a brief got no corrected brief:\n${open.map(o => `- ${o.role} subagent: ${o.issues.map(i => `[${i.kind}] ${i.detail}`).join('; ')}`).join('\n')}\nIn your answer to the member, say in one or two sentences what you decided about ${open.length === 1 ? 'it' : 'each'} and why.`,
-        { phase: 'answer', role: open[0].role, issues: open.flatMap(o => o.issues).slice(0, 10) });
-      for (const o of open) o.answered = true;
-      continue;
-    }
+    // A rejected premise objection goes back to its helper; then what the
+    // main agent never decided is asked once (ledger.mjs).
+    if (await settleLedger(managed, run, { note, send, signal })) continue;
     break;
   }
   // However the code was changed, a complex task under plan "require" that
@@ -434,14 +437,15 @@ export async function completionGate(managed, run, signal) {
   session.sessionManager.appendCustomEntry(BASELINE_ENTRY, { digest: settled ? digest : run.startDigest, settled, outcome: run.outcome, ...(managed.base ? { head: managed.base } : {}),
     ...(settled ? {} : { paths: [...(managed.ownPaths ?? [])].slice(0, 2000) }) });
   if (run.checkpoint) await checkpointsOf(managed).finish(run);
-  if (!run.changed && !run.disputes.length) return;
+  saveLedger(managed);
+  if (!run.changed && !run.disputes.length && !ledgerOf(run).length) return;
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
     ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
   const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : 'no check passed on the final code',
     run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
     run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
-    run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null].filter(Boolean);
+    run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null, ledgerWords(run)].filter(Boolean);
   await session.sendCustomMessage({ customType: 'agent-watch-process', content: `Process status for this turn: ${run.changed ? 'code changed' : 'no code changed'}; ${words.join('; ') || 'no process step configured'}.`, display: true,
     details: { phase: 'final', outcome: run.outcome, ...status, ...(run.reviewUnavailable ? { reviewUnavailable: run.reviewUnavailableReason } : {}), policy: { verify: policy.verify, review: policy.review },
       ...(configured.lanes && run.lane ? { lane: run.lane, ...(run.laneStats ? { size: run.laneStats } : {}) } : {}) } }, { triggerTurn: false });
@@ -457,6 +461,8 @@ export function processEditTools(session, tools) {
     return { ...tool, execute: async (...args) => {
       const plan = currentPlan(session.session.sessionManager);
       session.run?.beforeEdit(tool.name, plan, session.mainAnswers);
+      // An open premise objection is resolved before files change (ledger.mjs).
+      if (tool.name !== 'bash' || !isReadOnlyCommand(args[1]?.command)) ledgerGuard(session.run, session.mainAnswers);
       // While a required plan is missing, a command that changes files
       // counts as an edit: the code is compared after each command.
       const watch = tool.name === 'bash' && !!session.run?.planMissing(plan) && !session.run.unplannedChange && session.run.startDigest !== null;

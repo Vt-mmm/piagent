@@ -8,7 +8,7 @@ import { ensureSearchTools, trustSystemCertificates } from './toolchain.mjs';
 import { inlineExtensions, managedResourceLoader, projectInstructions } from './resource-loader.mjs';
 import { fetchPublicPage, fetchLimits } from './web-fetch.mjs'; import { guardFetch } from './fetch-guard.mjs'; import { UNTRUSTED_RULE } from './untrusted.mjs';
 import { searchForRole } from './web-search.mjs';
-import { shareGrant, releaseGrant } from './grant-share.mjs';
+import { shareGrant, releaseGrant, slotArgs } from './grant-share.mjs';
 import { managedThinkingLevels, nearestLevel } from './capabilities.mjs';
 import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from './native-catalog.mjs';
 import { fetchOriginTool } from './repository-operation.mjs';
@@ -24,7 +24,7 @@ import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from '
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
-import { beforeDelegate } from './objections.mjs';
+import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut } from './copies.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
@@ -75,8 +75,9 @@ async function patiently(ask, times) {
     catch (error) { if (attempt >= times || !BUSY.test(String(error?.message))) throw error; await sleep(1500 * attempt); }
   }
 }
-function verifyGrant(grant, manifest, role) {
-  if (!grant || !sameAuthority(grant, manifest.authority) || grant.role !== role || !Number.isSafeInteger(grant.fence) || grant.fence < 1
+function verifyGrant(grant, manifest, key) {
+  const { role, slot = 1 } = slotArgs(key); // a helper beside another of its role: role#slot (grant-share.mjs)
+  if (!grant || !sameAuthority(grant, manifest.authority) || grant.role !== role || (grant.slot ?? 1) !== slot || !Number.isSafeInteger(grant.fence) || grant.fence < 1
     || !/^as_run_[a-f0-9-]{36}_[\w-]{43}$/.test(grant.token) || !(['claude', 'codex'].includes(grant.provider) || isVendor(grant.provider))
     || !manifest.models.some(m => m.id === grant.model_id && m.owned_by === grant.provider && m.provider_model_id === grant.provider_model_id)) throw Error('managed-grant-invalid');
 }
@@ -128,7 +129,7 @@ export class ManagedSession {
     if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles) + SPEC_PROMPT,
       parameters: delegateParameters(), // the brief and its structured fields (helper-settlement.mjs)
       execute: (_id, args, signal) => self.delegate(delegateArgs(self, args), signal) });
-    customTools.push(sessionPlanTool(self));
+    customTools.push(sessionPlanTool(self), ...(roles.length ? [resolveTool(self)] : [])); // the objection ledger's decisions (ledger.mjs)
     // The member decides what the request leaves open: numbered options, or their own words.
     customTools.push(workflowContextTool(() => self.session.sessionManager));
     customTools.push(askTool(self), ...memoryToolsFor(self, agentDir)); // team memory's tools, once Studio answered memory here (memory.mjs)
@@ -459,20 +460,19 @@ export class ManagedSession {
     this.review = { ...this.review, stale: true };
     this.session.sessionManager.appendCustomEntry('agent-watch-review', this.review);
     await this.session.sendCustomMessage({ customType: 'agent-watch-review-status', display: true,
-      content: 'Review is stale: code changed after review. Obtain a new review for the current patch.', details: this.review }, { triggerTurn: false });
+      content: 'Review is stale: code changed after review. Ask for another review only after fixing blocking findings; under a required review the harness reviews the final patch.', details: this.review }, { triggerTurn: false });
   }
   // `harness`: the completion gate asks, not the main agent (its brief, its turn).
-  async delegate({ role, task, title, since }, signal, { harness = false } = {}) {
+  async delegate({ role, task, title, since, ...more }, signal, { harness = false } = {}) {
     if (!this.grant || !HELPER_ROLES.includes(role) || typeof task !== 'string' || !task.trim() || task.length > 12000 || this.helpers.has(role)) throw Error('managed-helper-unavailable');
     const enabled = helperRoles(this.manifest);
     if (!enabled.includes(role)) throw Error(`managed-helper-not-configured: the company Harness has no ${role} subagent${enabled.length ? `; use ${enabled.join(', ')}` : ''}.`);
-    // Studio gives a run each helper role once. Say so at once instead of
-    // letting the main agent retry a call that cannot succeed.
     // Studio lets each helper role run HELPER_CALLS times per run (one user
-    // message). Say so at once instead of asking for a grant it refuses.
-    if ((this.helperCalls.get(role) ?? 0) >= HELPER_CALLS) throw Error(`managed-helper-limit: the ${role} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
-    beforeDelegate(this.run, role, harness);
-    const job = this.runHelper(role, task, signal, harness, title, role === 'review' && typeof since === 'string' && since.trim() ? since.trim() : null); this.helpers.set(role, job); this.publishHelpers();
+    // message), each helper the member asked for counted (copies.mjs). Say so at once.
+    const fan = fanOut(this.session?.sessionManager, role, more, harness);
+    if ((this.helperCalls.get(role) ?? 0) + (fan?.n ?? 1) > HELPER_CALLS) throw Error(`managed-helper-limit: the ${role} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
+    beforeDelegate(this.run, role, harness, { since, review: this.review, changed: (this.ownPaths?.size ?? 0) > 0, asked: !!fan });
+    const job = this.runHelper(role, task, signal, harness, title, role === 'review' && typeof since === 'string' && since.trim() ? since.trim() : null, fan); this.helpers.set(role, job); this.publishHelpers();
     // While a helper works (a verify running a long suite) the main agent is
     // quiet: a beat each minute tells the dashboard's watchdog, which stops a
     // turn after 15 minutes without an event, that the turn is working.
@@ -490,7 +490,7 @@ export class ManagedSession {
   notify(event) {
     for (const listener of [...this.listeners]) { try { listener(event); } catch { /* a listener's failure is its own */ } }
   }
-  runHelper(role, task, signal, harness, title, since = null) { return runHelper(this, role, task, signal, harness, { verifyGrant, patiently, title: typeof title === 'string' ? title : '', since }); }
+  runHelper(role, task, signal, harness, title, since = null, fan = null) { return runHelper(this, role, task, signal, harness, { verifyGrant, patiently, title: typeof title === 'string' ? title : '', since, fan }); }
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;
