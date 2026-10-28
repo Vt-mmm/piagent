@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.44.4" title="v1.44.4 docs · EN"><span class="dot"></span>v1.44.4</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.45.0" title="v1.45.0 docs · EN"><span class="dot"></span>v1.45.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-44-4" data-release>
+<article class="release latest" id="v1-45-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-45-0">v1.45.0</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-45-0-title">Files and images in a prompt follow the read policy, and the terminal stays responsive</h3>
+    <p>pi @file can no longer send a protected file to the model, images attach the way you add them, and a prompt in a folder of repositories no longer freezes the terminal.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Images attach when named with @path or @&quot;path&quot;, pasted with Ctrl+V, or dropped on the terminal; a skipped image says why and how to grant its folder.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>In a folder of repositories a prompt no longer freezes the terminal for seconds: the change check asks Git and the inspector scans in the background.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An image passed as pi @image.png is attached once, not twice.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>pi @file arguments follow the read policy: a protected file (.env) or one outside the project reaches the model as a withheld note, and its image is dropped.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-4" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-4">v1.44.4</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-4-title">Company conversations come back in Herdr panes</h3>
@@ -410,28 +423,26 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.38.0 and Agent Watch 0.15.14 (Windows 0.1.17) for the company Bypass level</p>
   </div>
 </article>
-<article class="release" id="v1-37-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-37-1">v1.37.1</a><time class="release-date" datetime="2026-10-22">Oct 22, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-37-1-title">Run closes and helper reports Studio can trust</h3>
-    <p>A retried close counts only when it reaches Studio, helpers keep their answers, and outbound requests refuse every IPv6 form of a private address.</p>
-    <ul class="release-items">
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A close retried after a brief failure could be recorded without reaching Studio; it now counts only when Studio receives it.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A helper whose close failed for a moment was turned into a failure; it now keeps its answer, and its report is resent after passing errors.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Team memory merged failures of two commands of one executable into one lesson; the whole command is now the key.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Skill feedback mixed skills with alike names such as <code>a/b</code> and <code>a_b</code>; each skill name now keeps its own file.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>The <code>web_fetch</code> tool and the package proxy let some IPv6 forms of a private address through; every such form is now refused.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>With a company upstream proxy (<code>HTTPS_PROXY</code>), the package proxy now checks each destination itself instead of leaving it to the upstream.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Watch 0.15.11 (Windows 0.1.16)</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">55</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">56</span></summary>
+    <div class="archive-row" id="v1-37-1">
+      <div class="archive-head"><a class="release-version" href="#v1-37-1">v1.37.1</a> <span class="release-date">Oct 22, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Run closes and helper reports Studio can trust</strong> — A retried close counts only when it reaches Studio, helpers keep their answers, and outbound requests refuse every IPv6 form of a private address.</p>
+        <ul class="release-items">
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A close retried after a brief failure could be recorded without reaching Studio; it now counts only when Studio receives it.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A helper whose close failed for a moment was turned into a failure; it now keeps its answer, and its report is resent after passing errors.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Team memory merged failures of two commands of one executable into one lesson; the whole command is now the key.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Skill feedback mixed skills with alike names such as <code>a/b</code> and <code>a_b</code>; each skill name now keeps its own file.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>The <code>web_fetch</code> tool and the package proxy let some IPv6 forms of a private address through; every such form is now refused.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>With a company upstream proxy (<code>HTTPS_PROXY</code>), the package proxy now checks each destination itself instead of leaving it to the upstream.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-37-0">
       <div class="archive-head"><a class="release-version" href="#v1-37-0">v1.37.0</a> <span class="release-date">Oct 22, 2026</span></div>
       <div class="archive-body">

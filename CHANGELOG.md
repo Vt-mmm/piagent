@@ -4,6 +4,26 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.45.0 - 2026-10-28
+
+**Files and images in a prompt follow the read policy, and the terminal stays responsive.** pi @file can no longer send a protected file to the model, images attach the way you add them, and a prompt in a folder of repositories no longer freezes the terminal.
+
+### Added
+
+- Images attach when named with @path or @"path", pasted with Ctrl+V, or dropped on the terminal; a skipped image says why and how to grant its folder.
+
+### Improved
+
+- In a folder of repositories a prompt no longer freezes the terminal for seconds: the change check asks Git and the inspector scans in the background.
+
+### Fixed
+
+- An image passed as pi @image.png is attached once, not twice.
+
+### Security
+
+- pi @file arguments follow the read policy: a protected file (.env) or one outside the project reaches the model as a withheld note, and its image is dropped.
+
 ## v1.44.4 - 2026-10-28
 
 **Company conversations come back in Herdr panes.** In Herdr (on Windows: inside WSL), a company pane reports its state and reopens the same conversation after Herdr restarts, with piagent studio --session.

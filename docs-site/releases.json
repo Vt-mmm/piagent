@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.45.0",
+    "date": "2026-10-28",
+    "status": "stable",
+    "title": {
+      "en": "Files and images in a prompt follow the read policy, and the terminal stays responsive",
+      "vi": "File và ảnh trong prompt theo đúng quyền đọc, terminal không còn đứng hình"
+    },
+    "summary": {
+      "en": "pi @file can no longer send a protected file to the model, images attach the way you add them, and a prompt in a folder of repositories no longer freezes the terminal.",
+      "vi": "pi @file không còn gửi file được bảo vệ cho model, ảnh được đính kèm theo mọi cách thêm vào, và prompt trong thư mục nhiều repo không còn làm terminal đứng hình."
+    },
+    "items": [
+      {
+        "kind": "security",
+        "en": "pi @file arguments follow the read policy: a protected file (.env) or one outside the project reaches the model as a withheld note, and its image is dropped.",
+        "vi": "Tham số pi @file theo quyền đọc: file được bảo vệ (.env) hoặc ngoài project chỉ tới model dưới dạng ghi chú bị giữ lại, ảnh của nó bị bỏ."
+      },
+      {
+        "kind": "new",
+        "en": "Images attach when named with @path or @\"path\", pasted with Ctrl+V, or dropped on the terminal; a skipped image says why and how to grant its folder.",
+        "vi": "Ảnh được đính kèm khi gọi bằng @path hoặc @\"path\", dán bằng Ctrl+V hay kéo thả vào terminal; ảnh bị bỏ qua nói rõ lý do và cách cấp quyền thư mục."
+      },
+      {
+        "kind": "fixed",
+        "en": "An image passed as pi @image.png is attached once, not twice.",
+        "vi": "Ảnh truyền bằng pi @image.png chỉ được đính kèm một lần, không còn hai lần."
+      },
+      {
+        "kind": "improved",
+        "en": "In a folder of repositories a prompt no longer freezes the terminal for seconds: the change check asks Git and the inspector scans in the background.",
+        "vi": "Trong thư mục nhiều repo, prompt không còn làm terminal đứng hình vài giây: kiểm tra thay đổi hỏi Git, inspector quét ở nền."
+      }
+    ],
+    "requires": null
+  },
+  {
     "version": "1.44.4",
     "date": "2026-10-28",
     "status": "stable",

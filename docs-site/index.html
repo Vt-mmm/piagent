@@ -36,7 +36,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.44.4" title="v1.44.4 docs · VI"><span class="dot"></span>v1.44.4</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.45.0" title="v1.45.0 docs · VI"><span class="dot"></span>v1.45.0</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new">Changelog</a>
@@ -56,7 +56,7 @@
   <div class="hero-bg" aria-hidden="true"></div>
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="home-wrap">
-    <a class="hero-pill" href="/whats-new#v1-44-4"><b>v1.44.4</b><span>Conversation công ty trở lại trong pane Herdr</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
+    <a class="hero-pill" href="/whats-new#v1-45-0"><b>v1.45.0</b><span>File và ảnh trong prompt theo đúng quyền đọc, terminal không còn đứng hình</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
     <h1>Coding agent cho cả team, <span class="grad">kiểm tra từng bước.</span></h1>
     <p class="hero-sub">Guard chặn tool call nguy hiểm trước khi chạy. Harness của team tự chạy check và cho subagent review. Một dashboard cho Terminal và trình duyệt, với model của bạn hoặc của công ty.</p>
     <div class="hero-cta">
@@ -99,7 +99,7 @@
       <div><strong><span data-count="54">54</span><em>/54</em></strong><span>task giải quyết trong benchmark production</span><small>codex-cli cùng model: 48/54</small></div>
       <div><strong>−<span data-count="61">61</span><em>%</em></strong><span>fresh token trên cùng workload</span><small>khoảng tin cậy 95%: ít nhất −51,6%</small></div>
       <div><strong><span data-count="52">52</span><em>/52</em></strong><span>mẫu secret bị che trong output</span><small>0/30 văn bản thường bị che nhầm</small></div>
-      <div><strong><span data-count="124">124</span></strong><span>bản phát hành từ 21/07/2026</span><small>4.400+ test tự động trên macOS và Linux</small></div>
+      <div><strong><span data-count="125">125</span></strong><span>bản phát hành từ 21/07/2026</span><small>4.400+ test tự động trên macOS và Linux</small></div>
     </div>
   </div>
 </section>
@@ -280,6 +280,12 @@ pi                    # Terminal</code></pre></div></div>
       <p>Mỗi bản ghi thay đổi gì và cần bản nào của Studio hay Agent Watch. <a href="/whats-new">Xem toàn bộ changelog</a>.</p>
     </div>
     <div class="updates">
+      <a class="update" href="/whats-new#v1-45-0" data-reveal>
+        <span class="update-meta"><span class="release-version">v1.45.0</span>28/10/2026</span>
+        <h3>File và ảnh trong prompt theo đúng quyền đọc, terminal không còn đứng hình</h3>
+        <p>pi @file không còn gửi file được bảo vệ cho model, ảnh được đính kèm theo mọi cách thêm vào, và prompt trong thư mục nhiều repo không còn làm terminal đứng hình.</p>
+        <span class="update-more">Xem chi tiết <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
+      </a>
       <a class="update" href="/whats-new#v1-44-4" data-reveal>
         <span class="update-meta"><span class="release-version">v1.44.4</span>28/10/2026</span>
         <h3>Conversation công ty trở lại trong pane Herdr</h3>
@@ -290,12 +296,6 @@ pi                    # Terminal</code></pre></div></div>
         <span class="update-meta"><span class="release-version">v1.44.3</span>28/10/2026</span>
         <h3>Prompt injection không lặng lẽ đọc được hệ thống</h3>
         <p>Nội dung trong trang web, file, memory hay câu trả lời của helper không còn gửi dữ liệu tới trang lạ, đọc credential ở Bypass hay điều khiển agent mà member không biết.</p>
-        <span class="update-more">Xem chi tiết <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
-      </a>
-      <a class="update" href="/whats-new#v1-44-2" data-reveal>
-        <span class="update-meta"><span class="release-version">v1.44.2</span>28/10/2026</span>
-        <h3>Harness công ty theo cỡ thay đổi</h3>
-        <p>Thay đổi nhỏ xong sau khi check, không cần review; thay đổi rủi ro bắt buộc check và review. Main agent được tra web nhanh vài lần bên cạnh research helper.</p>
         <span class="update-more">Xem chi tiết <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
       </a>
     </div>

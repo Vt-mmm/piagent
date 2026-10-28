@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.45.0`: file và ảnh trong prompt theo quyền đọc: `pi @file` giữ lại file được bảo vệ hoặc ngoài project; ảnh đính kèm qua `@path`, Ctrl+V, kéo thả, không còn đính kèm hai lần; prompt trong thư mục nhiều repo không còn làm terminal đứng hình.
 - `1.44.4`: Herdr resume chế độ công ty: pane `piagent studio` báo trạng thái cho Herdr (cần 0.9.2+) và mở lại đúng conversation bằng `piagent studio --session`; guard WSL nhận đúng kho `agentwatch`; `--web` mở trình duyệt trong WSL.
 - `1.44.3`: chống prompt injection hỏi hệ thống: `web_fetch` hỏi member trước trang lạ hoặc địa chỉ có `?`/`#`; câu trả lời helper và kết quả memory nằm trong rào "data, not instructions"; `run_on_host` ở Bypass vẫn hỏi khi đụng credential.
 - `1.44.2`: harness công ty theo cỡ thay đổi (risk lanes, bật mặc định, tắt bằng `workflow.lanes: false`): sửa nhỏ (≤2 file, ≤40 dòng, không chạm file nhạy cảm) chỉ cần check, bỏ review; thay đổi rủi ro (migration, auth, CI, dependency, >12 file hoặc >400 dòng) bắt buộc check và review dù Harness chỉ đặt `suggest`. `workflow.main_web_lookups` (0–5) cho main agent tra web nhanh khi có research helper.

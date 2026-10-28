@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.44.4" title="v1.44.4 docs · VI"><span class="dot"></span>v1.44.4</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.45.0" title="v1.45.0 docs · VI"><span class="dot"></span>v1.45.0</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-44-4" data-release>
+<article class="release latest" id="v1-45-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-45-0">v1.45.0</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-45-0-title">File và ảnh trong prompt theo đúng quyền đọc, terminal không còn đứng hình</h3>
+    <p>pi @file không còn gửi file được bảo vệ cho model, ảnh được đính kèm theo mọi cách thêm vào, và prompt trong thư mục nhiều repo không còn làm terminal đứng hình.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Ảnh được đính kèm khi gọi bằng @path hoặc @&quot;path&quot;, dán bằng Ctrl+V hay kéo thả vào terminal; ảnh bị bỏ qua nói rõ lý do và cách cấp quyền thư mục.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Trong thư mục nhiều repo, prompt không còn làm terminal đứng hình vài giây: kiểm tra thay đổi hỏi Git, inspector quét ở nền.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Ảnh truyền bằng pi @image.png chỉ được đính kèm một lần, không còn hai lần.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Tham số pi @file theo quyền đọc: file được bảo vệ (.env) hoặc ngoài project chỉ tới model dưới dạng ghi chú bị giữ lại, ảnh của nó bị bỏ.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-44-4" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-44-4">v1.44.4</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-44-4-title">Conversation công ty trở lại trong pane Herdr</h3>
@@ -410,28 +423,26 @@
     <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.38.0 và Agent Watch 0.15.14 (Windows 0.1.17) cho mức Bypass ở chế độ công ty</p>
   </div>
 </article>
-<article class="release" id="v1-37-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-37-1">v1.37.1</a><time class="release-date" datetime="2026-10-22">22/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-37-1-title">Đóng run và báo cáo helper mà Studio tin được</h3>
-    <p>Lần đóng run hỏi lại chỉ được tính khi tới Studio, helper giữ câu trả lời, và yêu cầu ra ngoài chặn mọi dạng IPv6 của địa chỉ nội bộ.</p>
-    <ul class="release-items">
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lần đóng run hỏi lại sau lỗi thoáng qua có thể được ghi nhận dù không tới Studio; giờ chỉ được tính khi Studio nhận được.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Helper đóng lỗi trong chốc lát từng bị coi là thất bại; giờ nó giữ câu trả lời, và báo cáo được gửi lại sau lỗi thoáng qua.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Team memory từng gộp lỗi của hai lệnh khác nhau cùng một chương trình thành một bài học; giờ khóa là cả câu lệnh.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Phản hồi skill từng trộn các skill có tên giống nhau như <code>a/b</code> và <code>a_b</code>; giờ mỗi tên skill có file riêng.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Tool <code>web_fetch</code> và package proxy từng cho qua một số dạng IPv6 của địa chỉ nội bộ; giờ mọi dạng như vậy đều bị chặn.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Khi có upstream proxy của công ty (<code>HTTPS_PROXY</code>), package proxy giờ tự kiểm tra từng đích kết nối thay vì để upstream tự xử lý.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Watch 0.15.11 (Windows 0.1.16)</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">55</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">56</span></summary>
+    <div class="archive-row" id="v1-37-1">
+      <div class="archive-head"><a class="release-version" href="#v1-37-1">v1.37.1</a> <span class="release-date">22/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Đóng run và báo cáo helper mà Studio tin được</strong> — Lần đóng run hỏi lại chỉ được tính khi tới Studio, helper giữ câu trả lời, và yêu cầu ra ngoài chặn mọi dạng IPv6 của địa chỉ nội bộ.</p>
+        <ul class="release-items">
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Lần đóng run hỏi lại sau lỗi thoáng qua có thể được ghi nhận dù không tới Studio; giờ chỉ được tính khi Studio nhận được.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Helper đóng lỗi trong chốc lát từng bị coi là thất bại; giờ nó giữ câu trả lời, và báo cáo được gửi lại sau lỗi thoáng qua.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Team memory từng gộp lỗi của hai lệnh khác nhau cùng một chương trình thành một bài học; giờ khóa là cả câu lệnh.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Phản hồi skill từng trộn các skill có tên giống nhau như <code>a/b</code> và <code>a_b</code>; giờ mỗi tên skill có file riêng.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Tool <code>web_fetch</code> và package proxy từng cho qua một số dạng IPv6 của địa chỉ nội bộ; giờ mọi dạng như vậy đều bị chặn.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Khi có upstream proxy của công ty (<code>HTTPS_PROXY</code>), package proxy giờ tự kiểm tra từng đích kết nối thay vì để upstream tự xử lý.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-37-0">
       <div class="archive-head"><a class="release-version" href="#v1-37-0">v1.37.0</a> <span class="release-date">22/10/2026</span></div>
       <div class="archive-body">
