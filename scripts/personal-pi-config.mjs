@@ -15,11 +15,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parsePiModelsJson } from "./pi-models-json.mjs";
 
 const COMPANY_PROVIDER = /^agent_watch_/;
 const SESSION_HEADER_EXTENSION = "agentwatch-studio-session.mjs";
 
 const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; } };
+// models.json may carry comments, as Pi allows; a strict read would miss company providers in it.
+const readModels = (file) => { try { return parsePiModelsJson(fs.readFileSync(file, "utf8")).data; } catch { return null; } };
 const real = (file) => { try { return fs.realpathSync(file); } catch { return null; } };
 
 // The Piagent package a path belongs to (its root), or null.
@@ -47,7 +50,7 @@ export function packageVersion(agentDir, source) {
 
 export function inspect(agentDir) {
   const settingsFile = path.join(agentDir, "settings.json"), modelsFile = path.join(agentDir, "models.json");
-  const settings = readJson(settingsFile) ?? {}, models = readJson(modelsFile) ?? {};
+  const settings = readJson(settingsFile) ?? {}, models = readModels(modelsFile) ?? {};
   const managed = fs.existsSync(path.join(agentDir, "agent-watch-managed.json"));
   const packages = Array.isArray(settings.packages) ? settings.packages : [];
   const piagentPackages = packages.filter(isPiagentSource);
@@ -109,7 +112,7 @@ export function repair(agentDir, now = new Date()) {
     backups.push(backup(settingsFile, stamp)); writeJson(settingsFile, settings); changed.push(settingsFile);
   }
   if (kinds.has("company-providers")) {
-    const models = readJson(modelsFile);
+    const models = readModels(modelsFile);
     for (const name of Object.keys(models.providers ?? {})) if (COMPANY_PROVIDER.test(name)) delete models.providers[name];
     backups.push(backup(modelsFile, stamp)); writeJson(modelsFile, models); changed.push(modelsFile);
   }

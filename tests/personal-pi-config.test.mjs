@@ -48,6 +48,17 @@ test('without a managed binding the company providers are a direct setup and sta
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, 'models.json'), 'utf8')).providers.agent_watch_codex);
 });
 
+test('a commented models.json, as Pi allows, still has its old company providers found and removed', () => {
+  const dir = agentDir();
+  const models = path.join(dir, 'models.json');
+  const commented = `// ==== member notes ====\n${JSON.stringify(JSON.parse(fs.readFileSync(models, 'utf8')), null, 2).replace(/\n}$/, ',\n}')}\n`;
+  fs.writeFileSync(models, commented);
+  assert.ok(inspect(dir).findings.some((f) => f.kind === 'company-providers'));
+  const fixed = repair(dir, new Date('2026-10-29T00:00:00Z'));
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(models, 'utf8')).providers), ['anthropic']);
+  assert.ok(fixed.backups.some((file) => fs.readFileSync(file, 'utf8') === commented), 'the commented original is kept as a backup');
+});
+
 test('personal Pi refuses to continue a company conversation; the company Terminal and personal chats go on', async () => {
   const handlers = [];
   registerCompanySessionGuard({ on: (name, handler) => name === 'input' && handlers.push(handler) });

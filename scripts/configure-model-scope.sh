@@ -168,7 +168,11 @@ function parseDefaultModel(input) {
 
 const parsedDefault = parseDefaultModel(defaultModelInput);
 const settingsBefore = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : null;
-const settings = settingsBefore === null ? {} : JSON.parse(settingsBefore);
+let settings = {};
+if (settingsBefore !== null) {
+  try { settings = JSON.parse(settingsBefore); }
+  catch (error) { console.error(`FAIL: cannot read Pi settings ${settingsPath}: ${error.message}`); process.exit(1); }
+}
 
 // What Piagent last offered, so an update adds only models new to this
 // release and never puts back one the member removed.
@@ -213,6 +217,7 @@ if (dryRun) {
   console.log(`  preset: ${preset}`);
   console.log(`  default: ${settings.defaultProvider}/${settings.defaultModel}:${settings.defaultThinkingLevel}`);
   console.log(`  enabledModels: ${settings.enabledModels.length}`);
+  if (catalogEdit?.skipped) console.log(`  note: ${catalogEdit.skipped}`);
   for (const note of notes) console.log(`  ${note}`);
 }
 NODE

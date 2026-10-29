@@ -881,10 +881,16 @@ fi
 
 if [[ "$CONFIGURE_MODEL_SCOPE" == true ]]; then
   echo "Configuring Pi model selector scope:"
-  if [[ "$RESET_MODEL_SCOPE" == true ]]; then
-    run_cmd bash "$PLATFORM_ROOT/scripts/configure-model-scope.sh" --preset "$MODEL_SCOPE_PRESET" --default-model "$DEFAULT_MODEL"
-  else
-    run_cmd bash "$PLATFORM_ROOT/scripts/configure-model-scope.sh" --preset "$MODEL_SCOPE_PRESET" --default-model "$DEFAULT_MODEL" --keep-member-choices
+  MODEL_SCOPE_ARGS=(--preset "$MODEL_SCOPE_PRESET" --default-model "$DEFAULT_MODEL")
+  if [[ "$RESET_MODEL_SCOPE" != true ]]; then
+    MODEL_SCOPE_ARGS+=(--keep-member-choices)
+  fi
+  # The model list is a convenience: a member's settings or models.json that the
+  # script cannot read must not stop the install (Pi and the package are already
+  # in place). The script restores settings.json when it fails part way.
+  if ! run_cmd bash "$PLATFORM_ROOT/scripts/configure-model-scope.sh" "${MODEL_SCOPE_ARGS[@]}"; then
+    echo "WARN: the Pi model selector scope was not changed; the install continues." >&2
+    echo "      Fix the file named above, then run: piagent-model-scope ${MODEL_SCOPE_ARGS[*]}" >&2
   fi
 fi
 

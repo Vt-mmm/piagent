@@ -49,6 +49,22 @@ test("never overwrites existing model, custom endpoint or concurrent edit", t =>
   fs.writeFileSync(file, '{"changed":true}');
   assert.throws(() => plan.apply(), /changed/);
 });
+test("reads a commented models.json like Pi and leaves its comments alone", t => {
+  const { dir, file } = fixture(t);
+  const commented = '// ==== member notes ====\n{\n  "providers": { "anthropic": { "apiKey": "$K", "models": [{ "id": "a//b" },] } }\n}\n';
+  fs.writeFileSync(file, commented);
+  const plan = prepareClaudeModelAdditions(file);
+  assert.match(plan.skipped, /comments/); plan.apply();
+  assert.equal(fs.readFileSync(file, "utf8"), commented);
+  const settings = path.join(dir, "settings.json");
+  const run = spawnSync("bash", [path.resolve("scripts/configure-model-scope.sh"), "--preset", "full", "--settings", settings, "--default-model", "openai-codex/gpt-6-sol:high", "--keep-member-choices"], { cwd: dir, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr); assert.match(run.stdout, /note: .*has comments/);
+  assert.equal(fs.readFileSync(file, "utf8"), commented);
+  fs.writeFileSync(file, "\uFEFF{}"); prepareClaudeModelAdditions(file).apply();
+  assert.ok(JSON.parse(fs.readFileSync(file, "utf8")).providers.anthropic.models.length > 0, "a BOM alone is still plain JSON");
+  fs.writeFileSync(file, "// only a comment\n{ broken");
+  assert.throws(() => prepareClaudeModelAdditions(file), /Cannot read model configuration/);
+});
 test("dry-run writes neither settings nor catalog; explicit setup works outside repo", t => {
   const { dir, file } = fixture(t), settings = path.join(dir, "settings.json");
   const script = path.resolve("scripts/configure-model-scope.sh");

@@ -66,6 +66,7 @@ function stageGlobalInstall({
     path.join(platformRoot, "scripts/update-global.mjs")
   );
   fs.copyFileSync(path.join(repositoryRoot, "scripts/personal-pi-config.mjs"), path.join(platformRoot, "scripts/personal-pi-config.mjs"));
+  fs.copyFileSync(path.join(repositoryRoot, "scripts/pi-models-json.mjs"), path.join(platformRoot, "scripts/pi-models-json.mjs"));
   fs.mkdirSync(path.join(platformRoot, "packages/piagent-core/managed"), { recursive: true });
   fs.copyFileSync(path.join(repositoryRoot, "packages/piagent-core/managed/pi-host.mjs"), path.join(platformRoot, "packages/piagent-core/managed/pi-host.mjs"));
   fs.mkdirSync(path.join(platformRoot, "packages/piagent-core/extensions"), { recursive: true });
