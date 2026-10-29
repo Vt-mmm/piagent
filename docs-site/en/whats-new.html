@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.2" title="v1.46.2 docs · EN"><span class="dot"></span>v1.46.2</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.3" title="v1.46.3 docs · EN"><span class="dot"></span>v1.46.3</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-46-2" data-release>
+<article class="release latest" id="v1-46-3" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-3">v1.46.3</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-3-title">A subagent request the member did not make runs one helper; piagent-update reads a commented models.json</h3>
+    <p>Company sessions no longer loop on a refused subagent call, and the update no longer stops when the Pi model list file has comments.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A model-list setup problem no longer stops the whole install: it warns, names the file and gives the command to run again.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An agent asking for 2–3 subagents the member did not ask for was refused, and some models retried until the member stopped the turn. One subagent now runs, and the agent is told why.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>piagent-update failed when models.json had // comments, which Pi allows. It reads the file as Pi does and leaves a commented file unchanged.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-2">v1.46.2</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-2-title">A message sent after an answer shows at once; the WebUI streams word by word</h3>
@@ -411,26 +423,24 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.40.0</p>
   </div>
 </article>
-<article class="release" id="v1-39-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-39-0">v1.39.0</a><time class="release-date" datetime="2026-10-23">Oct 23, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-39-0-title">Warnings when a team key is used outside its team</h3>
-    <p>Studio learns which repositories a company conversation works in and warns when a team key is used outside its team; the dashboard keeps its language and theme.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Company conversations tell Studio their repositories, using the same <code>host/path</code> keys team memory already sends.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Administrators see the warnings in Logs → &quot;Sai project&quot;; the member reads one line above the composer and in <code>piagent studio</code>.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Nothing is blocked, and team memory works as before.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The dashboard went back to the default language and colour theme on every restart; it now keeps both.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.39.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">59</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">60</span></summary>
+    <div class="archive-row" id="v1-39-0">
+      <div class="archive-head"><a class="release-version" href="#v1-39-0">v1.39.0</a> <span class="release-date">Oct 23, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Warnings when a team key is used outside its team</strong> — Studio learns which repositories a company conversation works in and warns when a team key is used outside its team; the dashboard keeps its language and theme.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Company conversations tell Studio their repositories, using the same <code>host/path</code> keys team memory already sends.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Administrators see the warnings in Logs → &quot;Sai project&quot;; the member reads one line above the composer and in <code>piagent studio</code>.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Nothing is blocked, and team memory works as before.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The dashboard went back to the default language and colour theme on every restart; it now keeps both.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-38-2">
       <div class="archive-head"><a class="release-version" href="#v1-38-2">v1.38.2</a> <span class="release-date">Oct 23, 2026</span></div>
       <div class="archive-body">

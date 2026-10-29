@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.46.3`: agent xin nhiều subagent mà member không yêu cầu thì chạy một subagent thay vì bị chặn (một số model từng gọi lại liên tục đến khi member dừng); `piagent-update` đọc được `models.json` có comment như Pi, và lỗi cấu hình danh sách model không còn làm dừng cả bản cài.
 - `1.46.2`: tin nhắn gửi ngay sau một câu trả lời hiện ngay trong terminal (trước đây mất 1–2 giây vì panel PIAGENT quét working tree trước khi Pi nhận tin tiếp theo); WebUI hiện câu trả lời từng chữ trong khi model đang viết thay vì đợi hết đoạn, vẫn che bí mật viết qua nhiều từ.
 - `1.46.1`: harness công ty có sổ phản biện (phản biện brief, finding review, claim fail; main ghi quyết định bằng `resolve_objection`), review một nhịp mỗi lượt, và 2–3 subagent cùng role chạy song song khi member yêu cầu (cần Agent Studio 0.50.0 và Agent Watch 0.15.17 / Windows 0.1.18 để mỗi subagent có grant riêng). Terminal công ty hiện checklist và việc từng subagent đang làm; gợi ý `@` hiện file và thư mục.
 - `1.46.0`: Piagent chạy trong Pi home riêng `~/.piagent/agent`, mở bằng lệnh `piagent`; `pi` của member giữ nguyên bản gốc (không còn package Piagent, add-on, danh sách model hay panel footer). Lần cài đầu hỏi add-on và có dùng lại login của pi không; `piagent restore-pi --apply` dời bản cài cũ khỏi `~/.pi/agent`, có sao lưu. Cần Agent Watch 0.15.16 để thấy session cá nhân mới.

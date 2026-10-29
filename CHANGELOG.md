@@ -4,6 +4,19 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.46.3 - 2026-10-29
+
+**A subagent request the member did not make runs one helper; piagent-update reads a commented models.json.** Company sessions no longer loop on a refused subagent call, and the update no longer stops when the Pi model list file has comments.
+
+### Improved
+
+- A model-list setup problem no longer stops the whole install: it warns, names the file and gives the command to run again.
+
+### Fixed
+
+- An agent asking for 2–3 subagents the member did not ask for was refused, and some models retried until the member stopped the turn. One subagent now runs, and the agent is told why.
+- piagent-update failed when models.json had // comments, which Pi allows. It reads the file as Pi does and leaves a commented file unchanged.
+
 ## v1.46.2 - 2026-10-29
 
 **A message sent after an answer shows at once; the WebUI streams word by word.** The terminal takes the next message as soon as an answer ends, and the WebUI shows an answer while the model writes it instead of once its paragraph ends.

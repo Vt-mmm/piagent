@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.2" title="v1.46.2 docs · VI"><span class="dot"></span>v1.46.2</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.3" title="v1.46.3 docs · VI"><span class="dot"></span>v1.46.3</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-46-2" data-release>
+<article class="release latest" id="v1-46-3" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-3">v1.46.3</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-3-title">Yêu cầu subagent member không đặt chạy một helper; piagent-update đọc được models.json có comment</h3>
+    <p>Session công ty không còn lặp lại lệnh gọi subagent bị chặn, và bản cập nhật không còn dừng khi file danh sách model của Pi có comment.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lỗi khi cấu hình danh sách model không còn làm dừng cả bản cài: bản cài cảnh báo, nêu tên file và lệnh để chạy lại.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Agent xin 2–3 subagent mà member không yêu cầu từng bị chặn, và một số model gọi lại liên tục đến khi member phải dừng. Giờ một subagent chạy, và agent được báo lý do.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>piagent-update lỗi khi models.json có comment //, dù Pi cho phép. Giờ file được đọc như Pi đọc, và file có comment được giữ nguyên.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-2">v1.46.2</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-2-title">Tin gửi sau câu trả lời hiện ngay; WebUI hiện chữ dần</h3>
@@ -411,26 +423,24 @@
     <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.40.0</p>
   </div>
 </article>
-<article class="release" id="v1-39-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-39-0">v1.39.0</a><time class="release-date" datetime="2026-10-23">23/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-39-0-title">Cảnh báo khi key của team được dùng ngoài team</h3>
-    <p>Studio biết cuộc trò chuyện công ty làm trong repository nào và cảnh báo khi key của team bị dùng ngoài team; dashboard giữ ngôn ngữ và theme màu.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Cuộc trò chuyện công ty báo cho Studio các repository đang làm, dùng cùng key <code>host/path</code> mà team memory đã gửi.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Admin thấy cảnh báo trong Logs → &quot;Sai project&quot;; member thấy một dòng nhắc phía trên ô soạn tin và trong <code>piagent studio</code>.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Không có gì bị chặn, và team memory chạy như cũ.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Dashboard trước đây quay về ngôn ngữ và theme màu mặc định sau mỗi lần khởi động lại; giờ nó giữ cả hai.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.39.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">59</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">60</span></summary>
+    <div class="archive-row" id="v1-39-0">
+      <div class="archive-head"><a class="release-version" href="#v1-39-0">v1.39.0</a> <span class="release-date">23/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Cảnh báo khi key của team được dùng ngoài team</strong> — Studio biết cuộc trò chuyện công ty làm trong repository nào và cảnh báo khi key của team bị dùng ngoài team; dashboard giữ ngôn ngữ và theme màu.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Cuộc trò chuyện công ty báo cho Studio các repository đang làm, dùng cùng key <code>host/path</code> mà team memory đã gửi.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Admin thấy cảnh báo trong Logs → &quot;Sai project&quot;; member thấy một dòng nhắc phía trên ô soạn tin và trong <code>piagent studio</code>.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Không có gì bị chặn, và team memory chạy như cũ.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Dashboard trước đây quay về ngôn ngữ và theme màu mặc định sau mỗi lần khởi động lại; giờ nó giữ cả hai.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-38-2">
       <div class="archive-head"><a class="release-version" href="#v1-38-2">v1.38.2</a> <span class="release-date">23/10/2026</span></div>
       <div class="archive-body">
