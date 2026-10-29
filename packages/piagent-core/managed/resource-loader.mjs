@@ -56,6 +56,11 @@ export async function inlineExtensions(api, sdkRoot, cwd, factories = [], paths 
   const bus = createEventBus(), extensions = [], errors = [];
   for (const [index, factory] of factories.entries()) extensions.push(await loadExtensionFromFactory(factory, cwd, bus, runtime, `<inline:company-terminal-${index + 1}>`));
   if (paths.length) {
+    // Pi's theme exists only once a terminal draws; the MCP adapter colours its
+    // status line with it in every mode, and without one (RPC, the WebUI) its
+    // start failed. The Terminal sets its own theme later.
+    const { theme, initTheme } = await load('modes/interactive/theme/theme.js');
+    try { void theme.fg; } catch { initTheme(); }
     try { const loaded = await loadExtensions(paths, cwd, bus, runtime); extensions.push(...loaded.extensions); errors.push(...loaded.errors); }
     catch (error) { errors.push({ path: paths.join(', '), error: error instanceof Error ? error.message : String(error) }); }
   }

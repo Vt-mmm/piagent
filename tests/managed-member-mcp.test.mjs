@@ -26,7 +26,8 @@ function home(t, { listed = true, reply = 'issue PROJ-1: Login fails' } = {}) {
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'pi-mcp-adapter', type: 'module', pi: { extensions: ['./index.js'] } }));
   fs.writeFileSync(path.join(dir, 'index.js'), `export default function (pi) {
   pi.registerTool({ name: 'mcp', label: 'MCP', description: 'MCP proxy', parameters: { type: 'object', properties: { server: { type: 'string' } } },
-    async execute() { return { content: [{ type: 'text', text: ${JSON.stringify(reply)} }] }; } });
+    // The real adapter colours its status with the session's theme, terminal or not.
+    async execute(_id, _params, _signal, _update, ctx) { ctx?.ui?.theme?.fg('accent', 'mcp'); return { content: [{ type: 'text', text: ${JSON.stringify(reply)} }] }; } });
 }\n`);
   return { root, agentDir, dir: fs.realpathSync(dir) };
 }
