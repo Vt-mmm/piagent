@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.1" title="v1.46.1 docs · EN"><span class="dot"></span>v1.46.1</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.2" title="v1.46.2 docs · EN"><span class="dot"></span>v1.46.2</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-46-1" data-release>
+<article class="release latest" id="v1-46-2" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-2">v1.46.2</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-2-title">A message sent after an answer shows at once; the WebUI streams word by word</h3>
+    <p>The terminal takes the next message as soon as an answer ends, and the WebUI shows an answer while the model writes it instead of once its paragraph ends.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The WebUI shows an answer word by word while the model writes it; a one-paragraph answer appeared only once complete (first text at about 1.5 s, now 0.4 s, measured locally).</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>In a folder of repositories, a message sent right after an answer reached the terminal 1–2 s late: Pi waited for the PIAGENT panel's working-tree scan. The panel now refreshes afterwards.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>Streaming holds back a line's last words, so a secret written over several words (Authorization: Basic …, password: …, --token …, a quoted value) is redacted whole.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-1">v1.46.1</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-1-title">Objections on the record, one review per turn, parallel subagents on request</h3>
@@ -413,25 +425,24 @@
     <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.39.0</p>
   </div>
 </article>
-<article class="release" id="v1-38-2" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-38-2">v1.38.2</a><time class="release-date" datetime="2026-10-23">Oct 23, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-38-2-title">Folder tree, colour themes and an editor that stays in view</h3>
-    <p>The files panel becomes a folder tree, 13 colour themes arrive, and the editor and terminal stay pinned while the conversation scrolls.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Colour themes in Settings → Appearance or the command palette (⌘K) colour the interface, the editor's syntax and the terminal.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>On wide screens the editor and terminal stay pinned under the header while the conversation scrolls; a splitter sets the editor's width.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The files panel is a folder tree: folders open in place, the open file is highlighted, and New file starts in the last folder chosen.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The Files/Terminal switches stay pinned on every width; on phones the folder tree is narrower and the editor's actions fit on one line.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">58</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">59</span></summary>
+    <div class="archive-row" id="v1-38-2">
+      <div class="archive-head"><a class="release-version" href="#v1-38-2">v1.38.2</a> <span class="release-date">Oct 23, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Folder tree, colour themes and an editor that stays in view</strong> — The files panel becomes a folder tree, 13 colour themes arrive, and the editor and terminal stay pinned while the conversation scrolls.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Colour themes in Settings → Appearance or the command palette (⌘K) colour the interface, the editor's syntax and the terminal.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>On wide screens the editor and terminal stay pinned under the header while the conversation scrolls; a splitter sets the editor's width.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The files panel is a folder tree: folders open in place, the open file is highlighted, and New file starts in the last folder chosen.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The Files/Terminal switches stay pinned on every width; on phones the folder tree is narrower and the editor's actions fit on one line.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-38-1">
       <div class="archive-head"><a class="release-version" href="#v1-38-1">v1.38.1</a> <span class="release-date">Oct 23, 2026</span></div>
       <div class="archive-body">

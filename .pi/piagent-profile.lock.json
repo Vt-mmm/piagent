@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:ebe58ae2544ae3f7d621c0f9f69979aa987877a280b25678498262ccd74442dc",
+    "packageDigest": "sha256:f99cff39ef0c72412a4171e5edd1d4e14974b882fa39e2e8e6c31854f623b626",
     "packageSource": "../",
-    "packageVersion": "1.46.1",
+    "packageVersion": "1.46.2",
     "runtimeFiles": [
       {
         "byteSize": 7080,
-        "digest": "sha256:7af758f56f2603e8029c8f326789a788701d30c575168d13f30b0751bf95a710",
+        "digest": "sha256:1a3ee438c53c116dec6aef4169f3930ff7f4ba4cc1c71dd0fac0c9175835b828",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:91f9681c8eff402510586ed94b5d4c6dfc89671ab2a14299273dd2ca557cfe60",
+        "digest": "sha256:b24f3ed34b74a494e17e6b7567ca80247d0aaca9101d83a7e8f886e4101e1d01",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -168,8 +168,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 207448,
-        "digest": "sha256:a088a8a8457b44a4708922333c8441889f3daa4979688b82384525ac49e0b771",
+        "byteSize": 207585,
+        "digest": "sha256:7830a3385fe023939a198f359fcfb99a4fac1620ef7e3f3eeef5aae069cef03e",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -988,8 +988,8 @@
         "path": "packages/piagent-core/extensions/path-suggestions.ts"
       },
       {
-        "byteSize": 207448,
-        "digest": "sha256:a088a8a8457b44a4708922333c8441889f3daa4979688b82384525ac49e0b771",
+        "byteSize": 207585,
+        "digest": "sha256:7830a3385fe023939a198f359fcfb99a4fac1620ef7e3f3eeef5aae069cef03e",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -1614,7 +1614,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:91f9681c8eff402510586ed94b5d4c6dfc89671ab2a14299273dd2ca557cfe60",
+        "digest": "sha256:b24f3ed34b74a494e17e6b7567ca80247d0aaca9101d83a7e8f886e4101e1d01",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1753,8 +1753,8 @@
         "path": "packages/piagent-core/runtime/hooks/protected-refusal-completion.ts"
       },
       {
-        "byteSize": 4862,
-        "digest": "sha256:cb10460a8bfbcad22686dce818a0ba283947bb77f9ab3343cb00c49963fa88d9",
+        "byteSize": 5236,
+        "digest": "sha256:06e82b465594b10dc4d1264ed91d998cf455c3b37cf23a9eaea9d10900cc4553",
         "path": "packages/piagent-core/runtime/hooks/session-hooks.ts"
       },
       {
@@ -3273,8 +3273,8 @@
         "path": "packages/piagent-webui/gateway/gateway-service.ts"
       },
       {
-        "byteSize": 23431,
-        "digest": "sha256:35af74b4a032f2500650e14121e8ca5778d6978fb98fe925911fb2c7506e7862",
+        "byteSize": 24848,
+        "digest": "sha256:0798311bc8c0ac6329fb70e6e5182ba6364a7c04918550b636577c04697836c7",
         "path": "packages/piagent-webui/gateway/gateway-session-stream.ts"
       },
       {

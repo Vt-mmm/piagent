@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.1" title="v1.46.1 docs · VI"><span class="dot"></span>v1.46.1</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.2" title="v1.46.2 docs · VI"><span class="dot"></span>v1.46.2</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-46-1" data-release>
+<article class="release latest" id="v1-46-2" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-2">v1.46.2</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-2-title">Tin gửi sau câu trả lời hiện ngay; WebUI hiện chữ dần</h3>
+    <p>Terminal nhận tin tiếp theo ngay khi câu trả lời kết thúc, và WebUI hiện câu trả lời trong lúc model đang viết thay vì đợi hết đoạn.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>WebUI hiện câu trả lời từng chữ trong lúc model viết; trước đây câu trả lời một đoạn chỉ hiện khi viết xong (chữ đầu tiên khoảng 1,5 giây, nay 0,4 giây khi đo cục bộ).</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Ở thư mục nhiều repo, tin gửi ngay sau câu trả lời hiện trễ 1–2 giây trong terminal: Pi chờ panel PIAGENT quét working tree. Panel giờ làm mới sau khi Pi nhận tin.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Khi hiện chữ dần, vài từ cuối của dòng được giữ lại để bí mật viết qua nhiều từ (Authorization: Basic …, password: …, --token …, giá trị trong ngoặc) được che trọn.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-1">v1.46.1</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-1-title">Phản biện có sổ ghi, review một nhịp, subagent song song khi được yêu cầu</h3>
@@ -413,25 +425,24 @@
     <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.39.0</p>
   </div>
 </article>
-<article class="release" id="v1-38-2" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-38-2">v1.38.2</a><time class="release-date" datetime="2026-10-23">23/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-38-2-title">Cây thư mục, theme màu và editor luôn trong tầm nhìn</h3>
-    <p>Khung Tệp thành cây thư mục, có 13 theme màu, và editor cùng terminal đứng yên khi cuộc trò chuyện cuộn.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Theme màu trong Cài đặt → Giao diện hoặc bảng lệnh (⌘K) đổi màu cả giao diện, cú pháp trong editor và terminal.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Trên màn hình rộng, editor và terminal đứng yên dưới header khi cuộc trò chuyện cuộn; kéo thanh chia để đổi độ rộng editor.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Khung Tệp là cây thư mục: thư mục mở ngay tại chỗ, file đang mở được tô sáng, và Tệp mới bắt đầu ở thư mục vừa chọn.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Nút Tệp/Terminal luôn hiện ở mọi độ rộng; trên điện thoại cây thư mục hẹp hơn và các nút của editor nằm trên một dòng.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">58</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">59</span></summary>
+    <div class="archive-row" id="v1-38-2">
+      <div class="archive-head"><a class="release-version" href="#v1-38-2">v1.38.2</a> <span class="release-date">23/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Cây thư mục, theme màu và editor luôn trong tầm nhìn</strong> — Khung Tệp thành cây thư mục, có 13 theme màu, và editor cùng terminal đứng yên khi cuộc trò chuyện cuộn.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Theme màu trong Cài đặt → Giao diện hoặc bảng lệnh (⌘K) đổi màu cả giao diện, cú pháp trong editor và terminal.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Trên màn hình rộng, editor và terminal đứng yên dưới header khi cuộc trò chuyện cuộn; kéo thanh chia để đổi độ rộng editor.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Khung Tệp là cây thư mục: thư mục mở ngay tại chỗ, file đang mở được tô sáng, và Tệp mới bắt đầu ở thư mục vừa chọn.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Nút Tệp/Terminal luôn hiện ở mọi độ rộng; trên điện thoại cây thư mục hẹp hơn và các nút của editor nằm trên một dòng.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-38-1">
       <div class="archive-head"><a class="release-version" href="#v1-38-1">v1.38.1</a> <span class="release-date">23/10/2026</span></div>
       <div class="archive-body">

@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.46.2",
+    "date": "2026-10-29",
+    "status": "stable",
+    "title": {
+      "en": "A message sent after an answer shows at once; the WebUI streams word by word",
+      "vi": "Tin gửi sau câu trả lời hiện ngay; WebUI hiện chữ dần"
+    },
+    "summary": {
+      "en": "The terminal takes the next message as soon as an answer ends, and the WebUI shows an answer while the model writes it instead of once its paragraph ends.",
+      "vi": "Terminal nhận tin tiếp theo ngay khi câu trả lời kết thúc, và WebUI hiện câu trả lời trong lúc model đang viết thay vì đợi hết đoạn."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "In a folder of repositories, a message sent right after an answer reached the terminal 1–2 s late: Pi waited for the PIAGENT panel's working-tree scan. The panel now refreshes afterwards.",
+        "vi": "Ở thư mục nhiều repo, tin gửi ngay sau câu trả lời hiện trễ 1–2 giây trong terminal: Pi chờ panel PIAGENT quét working tree. Panel giờ làm mới sau khi Pi nhận tin."
+      },
+      {
+        "kind": "improved",
+        "en": "The WebUI shows an answer word by word while the model writes it; a one-paragraph answer appeared only once complete (first text at about 1.5 s, now 0.4 s, measured locally).",
+        "vi": "WebUI hiện câu trả lời từng chữ trong lúc model viết; trước đây câu trả lời một đoạn chỉ hiện khi viết xong (chữ đầu tiên khoảng 1,5 giây, nay 0,4 giây khi đo cục bộ)."
+      },
+      {
+        "kind": "security",
+        "en": "Streaming holds back a line's last words, so a secret written over several words (Authorization: Basic …, password: …, --token …, a quoted value) is redacted whole.",
+        "vi": "Khi hiện chữ dần, vài từ cuối của dòng được giữ lại để bí mật viết qua nhiều từ (Authorization: Basic …, password: …, --token …, giá trị trong ngoặc) được che trọn."
+      }
+    ]
+  },
+  {
     "version": "1.46.1",
     "date": "2026-10-28",
     "status": "stable",

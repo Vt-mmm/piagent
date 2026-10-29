@@ -4,6 +4,22 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.46.2 - 2026-10-29
+
+**A message sent after an answer shows at once; the WebUI streams word by word.** The terminal takes the next message as soon as an answer ends, and the WebUI shows an answer while the model writes it instead of once its paragraph ends.
+
+### Improved
+
+- The WebUI shows an answer word by word while the model writes it; a one-paragraph answer appeared only once complete (first text at about 1.5 s, now 0.4 s, measured locally).
+
+### Fixed
+
+- In a folder of repositories, a message sent right after an answer reached the terminal 1–2 s late: Pi waited for the PIAGENT panel's working-tree scan. The panel now refreshes afterwards.
+
+### Security
+
+- Streaming holds back a line's last words, so a secret written over several words (Authorization: Basic …, password: …, --token …, a quoted value) is redacted whole.
+
 ## v1.46.1 - 2026-10-28
 
 **Objections on the record, one review per turn, parallel subagents on request.** The company harness keeps one ledger of helper objections and the main agent's decisions, reviews once per turn, and runs 2–3 helpers of one role in parallel only when the member asks.
