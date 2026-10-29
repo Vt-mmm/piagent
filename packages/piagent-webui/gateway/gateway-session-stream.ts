@@ -13,6 +13,16 @@ const MAX_EVENTS = 128;
 const MAX_DELTA = 16_384;
 const PRIVATE_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 const PRIVATE_END = /-----END [A-Z ]*PRIVATE KEY-----/;
+// Within a line, text goes out as it arrives except its last words: a secret
+// written over several words ("Authorization: Basic …", "password: …",
+// "--token …") is then whole on one side of every cut.
+const HELD_WORDS = 6;
+// A key whose quoted value has not closed yet (`password = "two words…`).
+const OPEN_QUOTED_VALUE = /(?:(?::=|:|=)\s*|--[A-Za-z][A-Za-z0-9_.-]*\s+)(["'])(?:(?!\1)[^\r\n])*$/;
+// Pieces of a line share MAX_EVENTS with whole lines: they grow as the
+// operation's events are spent, and stop leaving whole lines a reserve.
+const PIECE_EVENTS = 96;
+const PIECE_MIN_CHARS = 24;
 const RUNTIME_DRIFT = /Installed Piagent runtime changed (?:during this session|while the capability lock was being re-pinned)/i;
 const COMPLETION_GATE = /^\[Piagent completion gate: (CONTINUING|NOT APPROVED)\]/i;
 
@@ -327,6 +337,7 @@ export class GatewaySessionStream {
       const space = this.#buffer.search(/\s\S*$/);
       take = space >= 0 ? space + 1 : this.#buffer.length >= 16_384 ? this.#buffer.length : 0;
     }
+    if (take <= 0 && !final) take = this.#pieceEnd();
     if (take <= 0) return;
     const candidate = this.#buffer.slice(0, take), privateStart = candidate.search(PRIVATE_BEGIN);
     if (privateStart >= 0 && !PRIVATE_END.test(candidate.slice(privateStart))) {
@@ -339,6 +350,19 @@ export class GatewaySessionStream {
     if (take <= 0) return;
     const source = this.#buffer.slice(0, take); this.#buffer = this.#buffer.slice(take);
     this.#emit(redactSensitiveText(clean(source)).text);
+  }
+
+  #pieceEnd(): number {
+    if (this.#eventCount >= PIECE_EVENTS) return 0;
+    const line = this.#buffer, words = [...line.matchAll(/\s+(?=\S)/g)];
+    if (words.length < HELD_WORDS) return 0;
+    const word = words[words.length - HELD_WORDS]!, end = word.index + word[0].length;
+    if (end < PIECE_MIN_CHARS * 2 ** Math.floor(this.#eventCount / 32)) return 0;
+    // Wait for the quote to close: its words would otherwise leave the key.
+    if (OPEN_QUOTED_VALUE.test(line)) return 0;
+    const head = line.slice(0, end), tail = line.slice(end);
+    // The cut must not change what redaction finds in the text known so far.
+    return redactSensitiveText(head).text + redactSensitiveText(tail).text === redactSensitiveText(line).text ? end : 0;
   }
 
   #emit(value: string): void {

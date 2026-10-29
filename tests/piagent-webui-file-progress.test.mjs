@@ -92,4 +92,61 @@ describe("Piagent WebUI compact file progress", () => {
     assert.equal(text.includes("abcdefghij"), false);
     assert.match(text, /\[REDACTED_SECRET\] and more text/);
   });
+
+  function streamed(text, step) {
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const stream = new GatewaySessionStream({ sessionRef: "session_stream_live", operationRef: "operation_stream_live", events });
+    stream.observe({ type: "agent_start" });
+    stream.observe({ type: "message_start", message: { role: "assistant", content: [] } });
+    const pieces = step === "word" ? text.match(/\S+\s*/g) : Array.from({ length: Math.ceil(text.length / step) }, (_, i) => text.slice(i * step, (i + 1) * step));
+    for (const delta of pieces) stream.observe({ type: "message_update", message: { role: "assistant" }, assistantMessageEvent: { type: "text_delta", delta } });
+    const beforeEnd = observed.filter((event) => event.kind === "message.delta").length;
+    stream.observe({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" } });
+    const deltas = observed.filter((event) => event.kind === "message.delta");
+    for (const event of deltas) assert.equal(validateFixture(registry, "gateway-protocol-v1", event).valid, true);
+    return { beforeEnd, deltas: deltas.length, text: deltas.map((event) => event.payload.delta).join("") };
+  }
+
+  // The WebUI showed a one-paragraph answer only once the line ended, while
+  // the terminal showed it word by word: the same answer felt slower.
+  it("streams a paragraph word by word, before its line ends", () => {
+    const text = "Đã xem qua project. Lỗi nằm ở bước đọc cấu hình: biến môi trường bị bỏ trống nên server dùng cổng mặc định và trả lời chậm hơn.";
+    for (const step of ["word", 1, 5]) {
+      const result = streamed(text, step);
+      assert.ok(result.beforeEnd > 0, `text reached the page before the line ended (${step})`);
+      assert.equal(result.text, text, `nothing lost or repeated (${step})`);
+    }
+  });
+
+  it("never sends part of a secret written over several words while a line streams", () => {
+    const lines = [
+      ["Use Authorization: Basic dXNlcjpwYXNzd29yZDEyMzQ= to call it", "dXNlcjpw"],
+      ["Header Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345 and then", "abcdefghijkl"],
+      ["set password: hunter2secretvalue then we restart", "hunter2"],
+      ["run cli --token ghp_abcdefghijklmnopqrstuvwxyz0123456789 now", "ghp_abc"],
+      ["config password = \"correct horse battery staple long phrase here\" applied", "horse battery"],
+      ["curl -H \"Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345\" https://x", "abcdefghijkl"],
+      ["export aws_secret_access_key wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY then deploy", "wJalrXUtn"],
+      ["connect postgres://admin:s3cr3tpass@db.local:5432/app and run it", "s3cr3t"],
+      ["the client_secret: 'alpha beta gamma delta epsilon zeta' must stay private", "alpha beta"]
+    ];
+    for (const [secretLine, raw] of lines) {
+      const text = `Here is the note you asked for this morning about the service, ${secretLine} and the rest of the reply keeps going for a while longer.`;
+      for (const step of ["word", 1, 3, 11]) {
+        const result = streamed(text, step);
+        assert.equal(result.text.includes(raw), false, `${raw} leaked (${step})`);
+        assert.match(result.text, /\[REDACTED_SECRET\]/, `${raw} (${step})`);
+        assert.ok(result.beforeEnd > 0, `${raw} streamed (${step})`);
+      }
+    }
+  });
+
+  it("keeps a long single paragraph within the operation's event budget", () => {
+    const text = Array.from({ length: 3_000 }, (_, i) => `từ${i}`).join(" ");
+    const result = streamed(text, "word");
+    assert.ok(result.beforeEnd > 0);
+    assert.ok(result.deltas <= 128, `${result.deltas} deltas`);
+    assert.equal(result.text, text);
+  });
 });

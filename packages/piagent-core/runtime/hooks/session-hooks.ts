@@ -25,6 +25,9 @@ type SessionHookDependencies = {
   ) => TaskContract | undefined;
   onTurnEnd?: (ctx: ExtensionContext) => void;
   onAgentSettled?: (ctx: ExtensionContext) => void | Promise<void>;
+  // Display-only work after settlement. Pi takes the next message only when
+  // agent_settled handlers return, so this runs without holding the host.
+  afterAgentSettled?: (ctx: ExtensionContext) => void | Promise<void>;
   beforeShutdown?: (ctx: ExtensionContext) => void | Promise<void>;
 };
 
@@ -103,6 +106,9 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
       taskOutcome: task?.trace.outcome
     });
     await dependencies.onAgentSettled?.(ctx);
+    if (dependencies.afterAgentSettled) {
+      void Promise.resolve().then(() => dependencies.afterAgentSettled?.(ctx)).catch(() => undefined);
+    }
   });
 
   pi.on("session_compact", async (event, ctx) => {

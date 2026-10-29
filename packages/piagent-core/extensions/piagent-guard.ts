@@ -3756,7 +3756,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     appendTrace,
     flushObservedTaskContext: noTask,
     onTurnEnd: activityInspector.refresh,
-    onAgentSettled: async ctx => { await personalCheckpoints.finish(ctx); await activityInspector.refresh(ctx); },
+    onAgentSettled: ctx => personalCheckpoints.finish(ctx),
+    // The panel hashes the working tree: seconds in a folder of repositories,
+    // during which a message sent next stayed off the screen.
+    afterAgentSettled: activityInspector.refresh,
     beforeShutdown: async (ctx) => {
       try { await personalCheckpoints.close(ctx); }
       finally {

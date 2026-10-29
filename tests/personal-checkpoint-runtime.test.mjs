@@ -27,6 +27,33 @@ test('agent settlement awaits checkpoint completion before returning to the host
   assert.equal(returned, true);
 });
 
+test('agent settlement returns before the display refresh so the next message shows at once', async () => {
+  const handlers = new Map(), order = [];
+  registerSessionHooks({ on: (name, fn) => handlers.set(name, fn) }, {
+    state: {}, maxManifestFiles: 1, telemetry: () => {}, activeTask: () => undefined,
+    onAgentSettled: async () => { order.push('checkpoint'); },
+    // A working-tree scan that has not finished: the host must not wait for it.
+    afterAgentSettled: () => { order.push('refresh'); return new Promise(() => {}); },
+  });
+  await handlers.get('agent_settled')({}, { cwd: '/fixture', isIdle: () => true,
+    sessionManager: { getSessionId: () => 'session' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(order, ['checkpoint', 'refresh']);
+});
+
+test('a failing display refresh after settlement never reaches the host', async () => {
+  const handlers = new Map();
+  let refreshed = false;
+  registerSessionHooks({ on: (name, fn) => handlers.set(name, fn) }, {
+    state: {}, maxManifestFiles: 1, telemetry: () => {}, activeTask: () => undefined,
+    afterAgentSettled: async () => { refreshed = true; throw Error('fixture-stale-context'); },
+  });
+  await handlers.get('agent_settled')({}, { cwd: '/fixture', isIdle: () => true,
+    sessionManager: { getSessionId: () => 'session' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(refreshed, true);
+});
+
 test('shutdown clears runtime state even when final checkpoint persistence fails', async () => {
   const handlers = new Map(), observed = [];
   const failure = Error('fixture-checkpoint-save-failed');
