@@ -24,6 +24,25 @@ Từ `v0.3.7`, repo có thêm:
 - template `.mcp.json` project-shared;
 - doctor warning khi adapter có nhưng không có MCP server nào.
 
+## MCP trong phiên công ty
+
+Phiên công ty (`piagent studio`, terminal và WebUI công ty) dùng chính các MCP server dev đã cài cho Piagent cá nhân: cùng `pi-mcp-adapter` trong `~/.piagent/agent`, cùng config (`piagent-mcp add`, `~/.config/mcp/mcp.json`, `.mcp.json` của project, `/mcp`) và cùng login (`/mcp-auth`). Dev tự thêm server, Studio không quản lý danh sách này.
+
+```bash
+piagent-mcp --preset atlassian
+```
+
+Sau đó đăng nhập một lần bằng `/mcp-auth atlassian` (trong `piagent` hoặc terminal công ty). Phiên công ty mở sau đó có tool `mcp` với server `atlassian`.
+
+Phiên công ty giữ hai lớp bảo vệ như Piagent cá nhân:
+
+- server do repo khai báo (`.mcp.json`, `.pi/mcp.json`) chỉ chạy sau khi có người trên máy duyệt (`/piagent-mcp approve <name>`), xem mục approval gate bên dưới;
+- kết quả MCP tới agent dưới dạng dữ liệu trong vùng rào, không phải lệnh: một issue Jira viết "bỏ qua hướng dẫn" không điều khiển được agent.
+
+Host công ty chạy với môi trường đã xoá sạch. Server MCP local nhận `PATH` gồm Homebrew, `~/.local/bin` và các toolchain trên máy (nvm, volta, pyenv…), cộng với `env` khai trong config của server; không nhận biến nào khác từ shell của dev.
+
+Adapter chưa cài, hoặc đã gỡ khỏi `packages` trong `~/.piagent/agent/settings.json`, thì phiên công ty mở bình thường, không có tool `mcp`.
+
 ## Hai bề mặt
 
 Trong session Pi thì dùng slash command, ngoài terminal thì dùng CLI. Cùng module đọc config, cùng cách phân loại trạng thái.
@@ -270,9 +289,10 @@ Quy ước của platform:
 | `google-mail` | Gmail | **experimental**, chỉ hộp thư |
 | `google` | Drive, Docs, Sheets | **experimental**, không gồm hộp thư |
 | `google-all` | Drive, Gmail, Docs, Sheets | **experimental**, toàn bộ Google Workspace |
+| `atlassian` | Atlassian Rovo (Jira, Confluence Cloud) | issue/page Jira và Confluence, đăng nhập bằng tài khoản Atlassian của dev |
 | `core` | Context7, Chrome DevTools, GitHub | default team baseline |
 | `popular` | core + Playwright + Figma desktop | baseline nhiều team dev dùng |
-| `all` | popular + Figma remote + MarkItDown + toàn bộ Google | mọi thứ trong catalog |
+| `all` | popular + Figma remote + MarkItDown + Atlassian + toàn bộ Google | mọi thứ trong catalog |
 
 Mỗi sản phẩm Google là **một server riêng, một preset riêng** — đó là lý do
 Google tách làm bốn. Đọc một spreadsheet không nên tốn một grant lên cả Drive

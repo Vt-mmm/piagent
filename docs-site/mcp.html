@@ -203,6 +203,7 @@
         <tr><td><span class="inline-code">web</span></td><td>Context7, Chrome DevTools, Playwright</td><td>FE/web workflow</td></tr>
         <tr><td><span class="inline-code">core</span></td><td>Context7, Chrome DevTools, GitHub</td><td>Baseline mặc định của team</td></tr>
         <tr><td><span class="inline-code">popular</span></td><td>core + Playwright + Figma</td><td>Baseline nhiều team dev dùng</td></tr>
+        <tr><td><span class="inline-code">atlassian</span></td><td>Atlassian Rovo (Jira, Confluence Cloud)</td><td>Issue Jira và trang Confluence, đăng nhập bằng tài khoản Atlassian của dev</td></tr>
         <tr><td><span class="inline-code">all</span></td><td>popular + Figma desktop</td><td>Đầy đủ</td></tr>
       </tbody>
     </table>
@@ -214,6 +215,13 @@
     <strong>Ghi config không bằng dùng được</strong>
     <p>Server connect lazy — không có gì được kiểm tra cho tới lần gọi đầu tiên. <a href="/mcp-auth">Trạng thái auth</a> cho biết server nào thật sự sẵn sàng.</p>
   </div>
+</section>
+
+<section class="section">
+  <h2 id="phien-cong-ty">Trong phiên công ty</h2>
+  <p>Phiên công ty (<span class="inline-code">piagent studio</span>, terminal và WebUI công ty) dùng chính các MCP server dev đã cài cho Piagent cá nhân: cùng <span class="inline-code">pi-mcp-adapter</span> trong <span class="inline-code">~/.piagent/agent</span>, cùng config và cùng login. Dev tự thêm server; Studio không quản lý danh sách này.</p>
+  <p>Với Jira: <span class="inline-code">piagent-mcp --preset atlassian</span>, rồi đăng nhập một lần bằng <span class="inline-code">/mcp-auth atlassian</span>.</p>
+  <p>Hai lớp bảo vệ vẫn giữ: server do repo khai báo chỉ chạy sau khi có người trên máy duyệt, và kết quả từ server tới agent dưới dạng dữ liệu trong vùng rào, không bao giờ là lệnh.</p>
 </section>
 
 <section class="section">

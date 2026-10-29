@@ -151,6 +151,18 @@ export const CATALOG_SERVERS = {
       directTools: false
     }
   },
+  // Atlassian's own remote server (Jira and Confluence Cloud). It registers its
+  // OAuth client itself (the metadata sits at the origin, not at the protected
+  // resource), so the member signs in with /mcp-auth and their own Jira access.
+  atlassian: {
+    description: "Atlassian Rovo MCP server: Jira and Confluence Cloud, with the member's own Atlassian login (OAuth).",
+    config: {
+      url: "https://mcp.atlassian.com/v1/mcp",
+      auth: "oauth",
+      lifecycle: "lazy",
+      directTools: false
+    }
+  },
   // Converts .docx, .xlsx, .pptx and .pdf to Markdown locally. Local matters:
   // the alternative to this is uploading a document somewhere to read it, and a
   // document worth converting is usually one worth not uploading.
@@ -202,6 +214,10 @@ export const CATALOG_PREREQUISITES = {
     "Developer Preview: no Pi OAuth end-to-end release proof exists yet",
     "Google's supported client guides use an OAuth client id and secret; Pi's public-client/PKCE compatibility is unverified"
   ],
+  atlassian: [
+    "a Jira or Confluence Cloud site (Server and Data Center are not served by this endpoint)",
+    "sign in once with /mcp-auth atlassian; a site admin may have to allow the Atlassian MCP connection"
+  ],
   markitdown: [
     "uv on PATH (https://docs.astral.sh/uv); the first run downloads a Python runtime and roughly 120 MB of dependencies",
     "note: markitdown-mcp is published as an alpha, so pin changes deliberately"
@@ -244,11 +260,12 @@ export const CATALOG_PRESETS = {
   "google-mail": ["gmail"],
   google: ["google-drive", "google-docs", "google-sheets"],
   "google-all": ["google-drive", "gmail", "google-docs", "google-sheets"],
+  atlassian: ["atlassian"],
   core: ["context7", "chrome-devtools", "github"],
   popular: ["context7", "chrome-devtools", "playwright", "github", "figma-desktop"],
   all: [
     "context7", "chrome-devtools", "playwright", "github", "figma-desktop", "figma",
-    "markitdown", "google-drive", "gmail", "google-docs", "google-sheets"
+    "markitdown", "atlassian", "google-drive", "gmail", "google-docs", "google-sheets"
   ]
 };
 

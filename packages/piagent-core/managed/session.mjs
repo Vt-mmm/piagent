@@ -24,7 +24,7 @@ import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from '
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
-import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut, withDroppedNote } from './copies.mjs';
+import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut, withDroppedNote } from './copies.mjs'; import { withMemberMcp } from './member-mcp.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
@@ -137,8 +137,8 @@ export class ManagedSession {
     self.checks = repositoryChecks(agentsFiles, self.cwd, self.boundary.repositoryTop);
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest), mainWebLookups(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
-      skills: self.resources.skills, prompts: self.resources.prompts, themes: terminalExtensions.length ? await loadPiagentThemes(sdk) : [], ...await inlineExtensions(api, sdk, self.cwd,
-        [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)]) });
+      skills: self.resources.skills, prompts: self.resources.prompts, themes: terminalExtensions.length ? await loadPiagentThemes(sdk) : [], ...await inlineExtensions(api, sdk, self.cwd, // and the member's MCP servers (member-mcp.mjs)
+        ...withMemberMcp(self.cwd, [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)])) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main')); self.studioLink = new StudioLink({ origin: self.origin, agentDir, notify: event => self.notify(event), ui: () => self.session?.extensionRunner?.getUIContext?.() });
     const scope = scopeOf(self.origin, manifest);

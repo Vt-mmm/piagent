@@ -22,7 +22,7 @@ Options:
   --project-only, --no-global    Only initialize project, skip global install
   --no-project                   Skip project initialization
   --with-mcp / --no-mcp          Install/skip Pi MCP adapter during global install (default: install)
-  --mcp-preset <minimal|core|popular|all|docs|browser|github|design|design-local|web|documents|google|google-mail|google-all>
+  --mcp-preset <minimal|core|popular|all|docs|browser|github|design|design-local|web|documents|google|google-mail|google-all|atlassian>
                                   Configure shared global MCP baseline when --with-mcp is enabled (default: core)
   --with-subagents / --no-subagents
                                   Install/skip pi-subagents during global install (default: install)

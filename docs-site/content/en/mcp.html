@@ -69,6 +69,7 @@
         <tr><td><span class="inline-code">web</span></td><td>Context7, Chrome DevTools, Playwright</td><td>Frontend and web workflows</td></tr>
         <tr><td><span class="inline-code">core</span></td><td>Context7, Chrome DevTools, GitHub</td><td>Default team baseline</td></tr>
         <tr><td><span class="inline-code">popular</span></td><td>core + Playwright + Figma</td><td>A broader development baseline</td></tr>
+        <tr><td><span class="inline-code">atlassian</span></td><td>Atlassian Rovo (Jira, Confluence Cloud)</td><td>Jira issues and Confluence pages with the developer's own Atlassian login</td></tr>
         <tr><td><span class="inline-code">all</span></td><td>popular + Figma desktop</td><td>Complete preset</td></tr>
       </tbody>
     </table>
@@ -78,6 +79,13 @@
     <strong>Writing configuration does not prove readiness</strong>
     <p>Servers connect lazily and are not checked until first use. <a href="/en/mcp-auth">Authentication and readiness</a> explains which servers can actually run.</p>
   </div>
+</section>
+
+<section class="section">
+  <h2 id="company-sessions">In company sessions</h2>
+  <p>Company sessions (<span class="inline-code">piagent studio</span>, the company Terminal and WebUI) use the MCP servers the developer set up for personal Piagent: the same <span class="inline-code">pi-mcp-adapter</span> in <span class="inline-code">~/.piagent/agent</span>, the same configuration and the same logins. Developers add servers themselves; Studio does not manage the list.</p>
+  <p>For Jira: <span class="inline-code">piagent-mcp --preset atlassian</span>, then sign in once with <span class="inline-code">/mcp-auth atlassian</span>.</p>
+  <p>Two protections stay: a server a repository defines runs only after someone on the machine approves it, and what a server returns reaches the agent as fenced data, never as instructions.</p>
 </section>
 
 <section class="section">

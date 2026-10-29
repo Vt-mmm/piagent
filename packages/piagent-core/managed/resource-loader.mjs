@@ -26,10 +26,10 @@ export function projectInstructions(cwd, top = cwd) {
 // discovered in a project. Skills and commands are text (agent-skills.mjs):
 // what they ask for runs with the session's own tools.
 // themes: Piagent's own (the company Terminal's /style), loaded by the host.
-export function managedResourceLoader(api, { systemPrompt, extensions = [], runtime = api.createExtensionRuntime(), agentsFiles = [], skills = [], prompts = [], themes = [] } = {}) {
+export function managedResourceLoader(api, { systemPrompt, extensions = [], runtime = api.createExtensionRuntime(), errors = [], agentsFiles = [], skills = [], prompts = [], themes = [] } = {}) {
   const empty = Object.freeze([]);
   return Object.freeze({
-    getExtensions: () => ({ extensions, errors: empty, runtime }),
+    getExtensions: () => ({ extensions, errors: [...errors], runtime }),
     getSkills: () => ({ skills: [...skills], diagnostics: empty }),
     getPrompts: () => ({ prompts: [...prompts], diagnostics: empty }),
     getThemes: () => ({ themes: [...themes], diagnostics: empty }),
@@ -45,12 +45,19 @@ export function managedResourceLoader(api, { systemPrompt, extensions = [], runt
 
 // Extensions the company Terminal adds itself (its commands and how Harness
 // notes read), built the way Pi builds an inline extension. Never project code.
-export async function inlineExtensions(api, sdkRoot, cwd, factories = []) {
+// `paths`: installed extensions loaded the way Pi loads a package's (only the
+// member's MCP adapter, member-mcp.mjs); one that fails to load is reported in
+// `errors` and the session opens without it.
+export async function inlineExtensions(api, sdkRoot, cwd, factories = [], paths = []) {
   const runtime = api.createExtensionRuntime();
-  if (!factories.length) return { extensions: [], runtime };
+  if (!factories.length && !paths.length) return { extensions: [], runtime };
   const load = (file) => import(pathToFileURL(path.join(sdkRoot, 'dist', ...file.split('/'))).href);
-  const [{ loadExtensionFromFactory }, { createEventBus }] = await Promise.all([load('core/extensions/loader.js'), load('core/event-bus.js')]);
-  const bus = createEventBus(), extensions = [];
+  const [{ loadExtensionFromFactory, loadExtensions }, { createEventBus }] = await Promise.all([load('core/extensions/loader.js'), load('core/event-bus.js')]);
+  const bus = createEventBus(), extensions = [], errors = [];
   for (const [index, factory] of factories.entries()) extensions.push(await loadExtensionFromFactory(factory, cwd, bus, runtime, `<inline:company-terminal-${index + 1}>`));
-  return { extensions, runtime };
+  if (paths.length) {
+    try { const loaded = await loadExtensions(paths, cwd, bus, runtime); extensions.push(...loaded.extensions); errors.push(...loaded.errors); }
+    catch (error) { errors.push({ path: paths.join(', '), error: error instanceof Error ? error.message : String(error) }); }
+  }
+  return { extensions, runtime, errors };
 }
