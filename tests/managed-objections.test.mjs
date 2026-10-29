@@ -189,16 +189,20 @@ test('several helpers of a role run only when the member asks for that many, up 
   assert.equal(fanOut(asked, 'review', { role: 'review', task: 'x' }, false), null, 'a plain call');
   assert.deepEqual(fanOut(asked, 'review', { copies: 3, member_words: 'dùng 3 subagent review' }, false), { n: 3, split: null });
   assert.deepEqual(fanOut(asked, 'review', { copies: 2, member_words: 'Dùng  3 subagent   review' }, false), { n: 2, split: null }, 'fewer than asked, spacing and case aside');
-  assert.throws(() => fanOut(asked, 'review', { copies: 3, member_words: 'dùng 3 reviewer giỏi' }, false), /^Error: managed-copies-not-asked: more than one review helper runs only when the member asks for it/, 'words the member did not write');
-  assert.throws(() => fanOut(manager('Sửa 3 file này rồi review nhé'), 'review', { copies: 3, member_words: 'Sửa 3 file' }, false), /managed-copies-not-asked/, 'a number of files, not of helpers');
-  assert.throws(() => fanOut(manager('dùng 2 scout'), 'scout', { copies: 3, member_words: 'dùng 2 scout' }, false), /managed-copies-not-asked/, 'more than the member asked for');
+  // Helpers the member did not ask for: one runs instead (no refusal to retry around).
+  assert.deepEqual(fanOut(asked, 'review', { copies: 3, member_words: 'dùng 3 reviewer giỏi' }, false), { dropped: 3 }, 'words the member did not write');
+  assert.deepEqual(fanOut(manager('Sửa 3 file này rồi review nhé'), 'review', { copies: 3, member_words: 'Sửa 3 file' }, false), { dropped: 3 }, 'a number of files, not of helpers');
+  assert.deepEqual(fanOut(manager('dùng 2 scout'), 'scout', { copies: 3, member_words: 'dùng 2 scout' }, false), { dropped: 3 }, 'more than the member asked for');
+  assert.deepEqual(fanOut(manager('phân tích repo này'), 'research', { copies: 2 }, false), { dropped: 2 }, 'copies without the member\'s words');
+  assert.deepEqual(fanOut(manager('dùng 5 scout'), 'scout', { copies: 9 }, false), { dropped: 9 }, 'an unasked count above the limit is still one helper');
+  assert.equal(fanOut(asked, 'review', { copies: 1, member_words: 'dùng 3 subagent review' }, false), null, 'one helper is a plain call');
   assert.throws(() => fanOut(manager('dùng 5 scout'), 'scout', { copies: 5, member_words: 'dùng 5 scout' }, false), /^Error: managed-copies-invalid: ask for 2 to 3 scout helpers/);
   assert.throws(() => fanOut(asked, 'review', { copies: 2, member_words: 'dùng 3 subagent review' }, true), /managed-copies-invalid: the harness runs one helper per call/);
   const split = fanOut(manager('cho 2 scout: một bên client, một bên server'), 'scout', { split: ['the client', 'the server'], member_words: 'cho 2 scout' }, false);
   assert.deepEqual(split, { n: 2, split: ['the client', 'the server'] });
   assert.match(copyNote('scout', 1, split), /you are scout helper 2 of 2\. Your share of the work: the server\. The others cover the rest\./);
   assert.match(copyNote('review', 0, { n: 3, split: null }), /you are review helper 1 of 3\. The others have the same brief/);
-  assert.equal(parseFailure('managed-copies-not-asked: x').kind, 'tool');
+  assert.equal(parseFailure('managed-copies-invalid: x').kind, 'tool');
   // Under a required review, reviewers the member asked for still run.
   assert.doesNotThrow(() => beforeDelegate(newRun({ review: 'require' }), 'review', false, { changed: true, asked: true }));
 });
@@ -486,11 +490,11 @@ test('helpers the member asks for run side by side on one brief; without the mem
     assert.match(receipt.content, / · 3 helpers · /);
     assert.equal(s.agent.closes.filter(c => c.role === 'scout').length, 1, 'the copies share the role\'s grant');
   } finally { await s.close(); }
-  const plain = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where the discount is computed.', copies: 3, member_words: 'tìm chỗ tính discount' } }, 'I will use one scout.'], scout: [] });
+  const plain = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where the discount is computed.', copies: 3, member_words: 'tìm chỗ tính discount' } }, 'One scout: cart.js:3.'], scout: [answers[0]] });
   try {
     await plain.managed.session.prompt('Tìm chỗ tính discount.');
-    assert.match(delegateResults(plain.managed)[0], /managed-copies-not-asked: more than one scout helper runs only when the member asks for it/);
-    assert.equal(plain.server.requests.filter(r => r.role === 'scout').length, 0);
+    assert.match(delegateResults(plain.managed)[0], /^One scout helper ran, not 3: the member's own words did not ask for 3 scout helpers\./);
+    assert.equal(plain.server.requests.filter(r => r.role === 'scout').length, 1, 'one helper ran instead of a refusal');
   } finally { await plain.close(); }
 });
 

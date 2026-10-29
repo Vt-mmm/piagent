@@ -96,7 +96,6 @@ const CODES = {
   'managed-review-by-harness': ['tool', 'the harness reviews the final patch; the agent does not ask for one'],
   'managed-review-once': ['tool', 'this change was reviewed already; ask again only after fixing blocking findings'],
   'managed-copies-invalid': ['tool', 'several helpers of a role run 2 or 3 at a time, at the member\'s request'],
-  'managed-copies-not-asked': ['tool', 'more than one helper of a role runs only when the member asks for it'],
   helper_run_limit_reached: ['tool', 'this subagent already ran 8 times for this message'],
   'managed-helper-cancelled': ['tool', 'the subagent was stopped'],
   'managed-helper-failed': ['failed', 'the subagent ended without an answer'],

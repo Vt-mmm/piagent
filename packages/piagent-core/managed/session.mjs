@@ -24,7 +24,7 @@ import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from '
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
-import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut } from './copies.mjs';
+import { beforeDelegate, resolveTool } from './objections.mjs'; import { droppedNote, fanOut } from './copies.mjs';
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
@@ -469,7 +469,8 @@ export class ManagedSession {
     if (!enabled.includes(role)) throw Error(`managed-helper-not-configured: the company Harness has no ${role} subagent${enabled.length ? `; use ${enabled.join(', ')}` : ''}.`);
     // Studio lets each helper role run HELPER_CALLS times per run (one user
     // message), each helper the member asked for counted (copies.mjs). Say so at once.
-    const fan = fanOut(this.session?.sessionManager, role, more, harness);
+    let fan = fanOut(this.session?.sessionManager, role, more, harness);
+    const dropped = fan?.dropped; if (dropped) fan = null;
     if ((this.helperCalls.get(role) ?? 0) + (fan?.n ?? 1) > HELPER_CALLS) throw Error(`managed-helper-limit: the ${role} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
     beforeDelegate(this.run, role, harness, { since, review: this.review, changed: (this.ownPaths?.size ?? 0) > 0, asked: !!fan });
     const job = this.runHelper(role, task, signal, harness, title, role === 'review' && typeof since === 'string' && since.trim() ? since.trim() : null, fan); this.helpers.set(role, job); this.publishHelpers();
@@ -477,7 +478,11 @@ export class ManagedSession {
     // quiet: a beat each minute tells the dashboard's watchdog, which stops a
     // turn after 15 minutes without an event, that the turn is working.
     const beat = setInterval(() => this.notify({ type: 'managed_helper_progress', role }), this.helperBeatMs ?? HELPER_BEAT_MS); beat.unref?.();
-    try { return await job; } finally { clearInterval(beat); this.helpers.delete(role); this.publishHelpers(); }
+    try {
+      const result = await job;
+      if (dropped && result?.content?.[0]?.type === 'text') result.content[0] = { ...result.content[0], text: droppedNote(role, dropped) + result.content[0].text };
+      return result;
+    } finally { clearInterval(beat); this.helpers.delete(role); this.publishHelpers(); }
   }
   publishHelpers() {
     // One of each enabled helper role can run at a time.

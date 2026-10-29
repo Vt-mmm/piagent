@@ -20,16 +20,22 @@ export function namedCount(words) {
 }
 // The copies a delegate call asks for, checked against the member's words;
 // null for a plain call. `split`: one line per copy naming its share of the work.
+// Copies the member did not ask for come back as `{ dropped }`: one helper runs
+// and the main agent is told why. A refusal here sent agents round in retries,
+// each quoting other words, until the member stopped the turn.
 export function fanOut(manager, role, args, harness) {
   const split = Array.isArray(args?.split) ? args.split.map(s => typeof s === 'string' ? s.trim().slice(0, 500) : '').filter(Boolean) : [];
   const n = split.length || (Number.isInteger(args?.copies) ? args.copies : 1);
-  if (n <= 1 && !args?.member_words) return null;
+  if (n <= 1) return null;
   if (harness) throw Error('managed-copies-invalid: the harness runs one helper per call.');
-  if (n < 2 || n > MAX_COPIES) throw Error(`managed-copies-invalid: ask for 2 to ${MAX_COPIES} ${role} helpers (copies, or one split line per helper).`);
   const words = normal(args?.member_words);
-  if (words.length < 3 || !memberRequest(memberMessages(manager)).some(text => normal(text).includes(words)) || namedCount(words) < n || !HELPER_WORDS.test(words))
-    throw Error(`managed-copies-not-asked: more than one ${role} helper runs only when the member asks for it. Quote in member_words the member's own words that ask for ${n} (verbatim, with the number); otherwise use one helper.`);
+  if (words.length < 3 || !memberRequest(memberMessages(manager)).some(text => normal(text).includes(words)) || namedCount(words) < n || !HELPER_WORDS.test(words)) return { dropped: n };
+  if (n > MAX_COPIES) throw Error(`managed-copies-invalid: ask for 2 to ${MAX_COPIES} ${role} helpers (copies, or one split line per helper).`);
   return { n, split: split.length ? split : null };
+}
+// What the main agent reads above the answer when it asked for helpers the member did not.
+export function droppedNote(role, n) {
+  return `One ${role} helper ran, not ${n}: the member's own words did not ask for ${n} ${role} helpers. Go on with this answer; run several only when the member asks for that many.\n\n`;
 }
 // What one copy reads under its brief.
 export function copyNote(role, i, fan) {
