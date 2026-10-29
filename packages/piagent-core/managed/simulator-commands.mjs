@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 // What run_on_simulator runs on the member's machine: the iOS Simulator and
 // Android emulator, and the builds that install an app on them (the sandbox
 // reaches neither CoreSimulator nor adb). Only these programs, joined by &&,
@@ -5,14 +7,21 @@
 // (a screenshot), nothing else leaves it. Anything wider is run_on_host.
 
 const XCRUN = new Set(['simctl', 'xcodebuild', 'devicectl', 'xcresulttool', 'xctrace']);
+// `simctl spawn` starts a program of the simulator's runtime as the member:
+// only `log` (the app's logs).
+const simctl = words => words[1] !== 'simctl' || words[2] !== 'spawn' || words.slice(3).filter(word => !word.startsWith('-'))[1] === 'log';
 const NPX = /^(expo|react-native|@react-native-community\/cli|cap|@capacitor\/cli)(@[\w.-]+)?$/;
-// Program → whether its arguments are allowed (`words` without assignments).
+// Program → whether its arguments are allowed (`words` without assignments,
+// `inProject` a path check against the project folder).
 const PROGRAMS = {
-  xcrun: words => XCRUN.has(words[1]),
+  xcrun: words => XCRUN.has(words[1]) && simctl(words),
   xcodebuild: () => true,
   open: words => words.length === 3 && words[1] === '-a' && words[2] === 'Simulator',
   adb: () => true, emulator: () => true, avdmanager: () => true, sdkmanager: () => true,
-  gradlew: words => relative(words[0]),
+  gradlew: (words, inProject) => inProject(words[0]),
+  // Taps, typing and the screen's accessibility tree; `axe init` writes into other tools' settings.
+  axe: words => !!words[1] && words[1] !== 'init',
+  xcodegen: words => words[1] === 'generate',
   flutter: () => true,
   pod: words => words[1] === 'install',
   npx: words => NPX.test(words[1] === '--yes' || words[1] === '-y' ? words[2] ?? '' : words[1] ?? ''),
@@ -20,16 +29,24 @@ const PROGRAMS = {
   sleep: words => words.length === 2 && /^\d{1,3}$/.test(words[1]),
   xcbeautify: () => true, xcpretty: () => true,
   grep: () => true, head: () => true, tail: () => true, wc: () => true, sort: () => true, uniq: () => true, jq: () => true,
-  cd: words => words.length === 2 && relative(words[1]),
+  cd: (words, inProject) => words.length === 2 && inProject(words[1]),
+  mkdir: (words, inProject) => { const paths = words.slice(1).filter(word => word !== '-p'); return paths.length > 0 && paths.every(inProject); },
 };
 // Variables a command may set for itself; never what changes how programs load.
 const ASSIGNMENT = /^([A-Z][A-Z0-9_]*)=/;
 const UNSAFE_VARIABLE = /^(PATH|DYLD_\w*|LD_\w*|NODE_OPTIONS|BASH_ENV|ENV|ZDOTDIR|SHELL|HOME)$/;
 
-// A path in the project: relative, never climbing out of it.
-function relative(target) {
-  return typeof target === 'string' && target.length > 0 && !target.startsWith('/') && !target.startsWith('~')
-    && !target.split('/').includes('..') && !target.includes('$');
+// A path in the project folder: relative without climbing out of it, or
+// absolute inside it (agents name files by their full path). Without the
+// folder, only a relative one.
+function insideProject(cwd) {
+  return target => {
+    if (typeof target !== 'string' || !target || target.startsWith('~') || target.includes('$') || target.split('/').includes('..')) return false;
+    if (!target.startsWith('/')) return true;
+    if (!cwd) return false;
+    const relative = path.relative(path.resolve(cwd), path.resolve(target));
+    return !relative.startsWith('..') && !path.isAbsolute(relative);
+  };
 }
 
 // Shell words with their quotes resolved, and the operators between them.
@@ -57,9 +74,10 @@ function tokens(command) {
   return out;
 }
 
-// Why the command is not a simulator command, or null when it is.
-export function simulatorCommandReason(command) {
-  const text = String(command ?? '');
+// Why the command is not a simulator command, or null when it is. `cwd`:
+// the project folder, where output files and `cd` may go.
+export function simulatorCommandReason(command, cwd = null) {
+  const text = String(command ?? ''), inProject = insideProject(cwd);
   if (!text.trim()) return 'the command is empty';
   if (/[`;\n]|\$\(|<\(|>\(|</.test(text) || text.replaceAll('&&', '').replaceAll('2>&1', '').includes('&')) return 'only commands joined by &&, || or | are run (no ;, &, $( ), backticks or subshells)';
   const list = tokens(text);
@@ -73,7 +91,7 @@ export function simulatorCommandReason(command) {
       words = words.slice(1);
     }
     const name = words[0]?.split('/').pop();
-    const allowed = Object.hasOwn(PROGRAMS, name) && PROGRAMS[name](words);
+    const allowed = Object.hasOwn(PROGRAMS, name) && PROGRAMS[name](words, inProject);
     words = [];
     return allowed ? null : `${name ?? 'this part'} is not a simulator or app build command (use run_on_host for other commands)`;
   };
@@ -83,7 +101,7 @@ export function simulatorCommandReason(command) {
     if (op === '2>&1') continue;
     if (op === '>' || op === '>>' || op === '2>') {
       const target = list[i + 1]?.word;
-      if (!(target === '/dev/null' || relative(target))) return 'output may go only to a file inside the project or /dev/null';
+      if (!(target === '/dev/null' || inProject(target))) return 'output may go only to a file inside the project or /dev/null';
       i += 1; continue;
     }
     const reason = close(); if (reason) return reason;

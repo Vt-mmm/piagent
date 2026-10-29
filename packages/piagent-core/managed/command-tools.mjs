@@ -46,7 +46,7 @@ const KINDS = {
   // Full access and Bypass run them, except what reaches credentials.
   simulator: {
     name: 'run_on_simulator', label: 'Run on simulator', scope: 'simulator-command-once', provider: 'host', riskClass: 'medium',
-    description: 'Run one iOS Simulator or Android emulator command on the member\'s machine, outside the sandbox: xcrun simctl (list, boot, install, launch, openurl, io booted screenshot <file in the project>), open -a Simulator, xcodebuild for a simulator destination, adb (devices, install, shell am start, shell input tap/text/swipe, exec-out screencap -p > <file in the project>, logcat -d), emulator -avd <name> (started in the background), avdmanager, ./gradlew installDebug, flutter, pod install, npx expo/react-native/cap. Parts may be joined by && or || and piped into grep, head, tail, xcbeautify or jq; output may be written only to a file in the project or /dev/null. Read a screenshot you saved with read to see the screen. Other commands: run_on_host.',
+    description: 'Run one iOS Simulator or Android emulator command on the member\'s machine, outside the sandbox. iOS: xcrun simctl (list, boot, bootstatus -b, install, launch, terminate, openurl, io <device> screenshot <file>, ui appearance, status_bar, spawn <device> log show --info --last 5m --predicate \'process == "<App>"\'), xcodebuild with a simulator destination (build, test: XCUITest is the reliable way to tap, type and answer system dialogs), xcodegen generate, axe (describe-ui reads the screen\'s elements; tap, type, swipe where this Xcode accepts them), open -a Simulator (some Xcode versions run simulators without that window; the device works without it). Android: adb (devices, install, shell am start, shell input tap/text/swipe, exec-out screencap -p > <file>, logcat -d), emulator -avd <name> (started in the background), avdmanager, ./gradlew installDebug. Also flutter, pod install, npx expo/react-native/cap, mkdir -p and cd inside the project. Parts may be joined by && or || and piped into grep, head, tail, xcbeautify or jq; files may be written only inside the project or to /dev/null. Read a screenshot you saved with read to see the screen. Other commands: run_on_host.',
     allow: 'Run this exact simulator or app build command once on this machine, outside the sandbox: a build can run the project\'s build scripts as you.',
     title: 'Chạy lệnh simulator', allowText: 'chạy đúng lệnh simulator/build app này một lần trên máy bạn, ngoài sandbox: build có thể chạy script build của project bằng quyền của bạn.',
     confirm: async (self, command) => credentialReason(command) ?? await networkConfirmation(self, command),
@@ -77,7 +77,7 @@ function commandTool(self, kind) {
       if (kind === 'docker' && !await engineReady(self.boundary)) throw Error(DOCKER_STOPPED);
       const memberOnly = kind === 'host' ? memberOnlyReason(args.command) : null;
       if (memberOnly) throw Error(MEMBER_ONLY(memberOnly));
-      const notSimulator = kind === 'simulator' ? simulatorCommandReason(args.command) : null;
+      const notSimulator = kind === 'simulator' ? simulatorCommandReason(args.command, self.cwd) : null;
       if (notSimulator) throw Error(`managed-simulator-command: ${notSimulator}.`);
       const confirm = await spec.confirm(self, args.command);
       if (confirm !== null) await approve(self, id, signal, ctx, { toolName: spec.name, rawAction: { command: args.command }, commandPreview: String(args.command),

@@ -47,6 +47,30 @@ test('simulator and app build commands run; anything wider is run_on_host', () =
     '': /empty/,
   };
   for (const [command, reason] of Object.entries(refused)) assert.match(simulatorCommandReason(command) ?? 'allowed', reason, command);
+  // What a company session ran into on a real iPhone simulator (2026-10-29):
+  // full paths inside the project, folders for screenshots, the project
+  // generator, the app's logs, and the accessibility tree.
+  const project = '/Users/dev/app';
+  for (const command of [
+    'cd /Users/dev/app && xcodebuild -scheme App build',
+    'xcrun simctl io booted screenshot /Users/dev/app/shots/a.png',
+    'adb exec-out screencap -p > /Users/dev/app/s.png',
+    'mkdir -p shots build/screens',
+    'xcodegen generate',
+    'axe describe-ui --udid X',
+    'axe tap --label Open --udid X',
+    "xcrun simctl spawn booted log show --info --last 5m --predicate 'process == \"App\"'",
+    'xcrun simctl spawn -w booted log stream',
+  ]) assert.equal(simulatorCommandReason(command, project), null, command);
+  for (const [command, reason] of Object.entries({
+    'cd /Users/dev && ls': /cd is not/,
+    'cd /Users/dev/app-evil && adb devices': /cd is not/,
+    'adb exec-out screencap -p > /Users/dev/x.png': /only to a file inside the project/,
+    'mkdir -p /tmp/x': /mkdir is not/,
+    'axe init': /axe is not/,
+    'xcrun simctl spawn booted launchctl list': /xcrun is not/,
+  })) assert.match(simulatorCommandReason(command, project) ?? 'allowed', reason, command);
+  assert.match(simulatorCommandReason('cd /Users/dev/app && adb devices') ?? 'allowed', /cd is not/, 'without the project folder only relative paths');
   assert.equal(detachedEmulator('emulator -avd Pixel_8'), true);
   assert.equal(detachedEmulator('emulator -list-avds | head'), false, 'a command that ends is run as one');
   assert.equal(detachedEmulator('adb devices'), false);
