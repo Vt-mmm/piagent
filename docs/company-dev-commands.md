@@ -65,12 +65,13 @@ Each refusal names the tool that asks; nothing below runs silently.
 | `git fetch` from GitHub | — | `fetch_origin` |
 | `git push`, `git pull`, `gh`, private registries, SSH | `managed-credentials-unavailable` | `run_on_host` (asks every time, Bypass included) |
 | Installing a missing runtime (`brew install openjdk@21`) or Playwright's browsers (`npx playwright install chromium`) | `managed-toolchain-missing` | `run_on_host` |
+| iOS Simulator and Android emulator: `xcrun simctl`, `xcodebuild` for a simulator, `adb`, `emulator`, `./gradlew installDebug`, `flutter`, `pod install`, `npx expo` / `react-native` / `cap`, screenshots saved in the project | `managed-simulator-unreachable` | `run_on_simulator` (asks in Ask mode; Full access and Bypass run it unless it reaches credentials; other programs are refused and go to `run_on_host`) |
 
 ## Not covered yet
 
 - GitHub work beyond `fetch_origin` (pull requests, CI status, review comments) goes through `run_on_host` one command at a time; there is no scoped GitHub tool.
 - Private npm registries, `gh` and SSH-agent operations have no sandboxed path.
 - There is no browser tool of Piagent's own: UI checks use the project's Playwright (owner, 2026-10-15).
-- MCP servers do not run in company sessions (owner, 2026-10-15: later, after a Studio allowlist is designed).
+- MCP servers run in company sessions from the member's own Piagent setup, with no Studio allowlist (owner, 2026-10-29); see docs/mcp-and-tools.md.
 - `start_process` is not offered on Linux and WSL yet.
 - At the end of a turn, a process a bash command left running is found by the marker in its environment; `ps` cannot read that for Apple's own binaries (`/bin/sleep`), so such a process is not stopped until it ends. Processes started with `start_process` are stopped by process group and parent as well.

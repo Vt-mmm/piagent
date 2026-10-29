@@ -83,7 +83,7 @@ test('run_with_docker is offered with Docker on the machine; Bypass runs it with
     boundary: { engine: null, dockerCli: null, userHome: path.join(base, 'member'), refreshEnvironment: () => Boolean(self.boundary.engine), invoke: async (...args) => { calls.push(args); return { content: [{ type: 'text', text: 'ok' }] }; } },
     changedFiles: async () => [], claimChanges: async () => {}, refreshReview: async () => {} };
   // Background processes (background-process.mjs) are offered where the macOS sandbox runs them.
-  assert.deepEqual(commandTools(self).map(tool => tool.name), ['run_with_network', 'start_docker', 'run_on_host', ...(process.platform === 'darwin' ? ['start_process', 'process_output', 'stop_process'] : [])]);
+  assert.deepEqual(commandTools(self).map(tool => tool.name), ['run_with_network', 'start_docker', 'run_on_host', 'run_on_simulator', ...(process.platform === 'darwin' ? ['start_process', 'process_output', 'stop_process'] : [])]);
   assert.match(servicesPrompt(self.boundary), /Docker is not installed.*ask_user/);
   self.boundary.dockerCli = '/usr/local/bin/docker';
   assert.match(servicesPrompt(self.boundary), /installed but not running.*start_docker/);

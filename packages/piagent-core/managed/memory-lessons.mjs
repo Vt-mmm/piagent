@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { redactedText } from '../runtime/managed-failure.mjs';
 import { isCheckCommand } from './workflow.mjs';
 
-const COMMAND_TOOLS = new Set(['bash','run_with_network','run_with_docker','run_on_host']);
+const COMMAND_TOOLS = new Set(['bash','run_with_network','run_with_docker','run_on_host','run_on_simulator']);
 const textOf = result => (result?.content ?? []).filter(p => p?.type === 'text').map(p => p.text ?? '').join('\n');
 const clean = (value, max) => redactedText(String(value ?? '')).replace(/\bas_(?:live|run)_[A-Za-z0-9_-]{8,}/g,'[REDACTED_SECRET]').split(os.homedir()).join('~').replace(/\s+/g,' ').trim().slice(0,max);
 const hash = s => createHash('sha256').update(s).digest('hex').slice(0,20);

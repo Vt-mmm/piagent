@@ -4,6 +4,7 @@ import { engineAlive, engineLauncher } from './container-engine.mjs';
 import { MEMBER_ONLY, memberOnlyReason, credentialReason, runHostCommand } from './host-command.mjs';
 import { processTools } from './background-process.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
+import { detachedEmulator, simulatorCommandReason } from './simulator-commands.mjs';
 
 // Commands that leave the plain sandbox, each after the member approves that
 // exact command: run_with_network (internet, a local server or browser),
@@ -40,6 +41,16 @@ const KINDS = {
     // credentials: a prompt injection's "cat ~/.ssh/id_rsa" is never silent.
     confirm: async (self, command) => asksNothing(self) ? credentialReason(command) : await networkConfirmation(self, command) ?? 'ask',
   },
+  // The sandbox reaches neither CoreSimulator nor adb. Simulator and app build
+  // commands only (simulator-commands.mjs), asked about as network commands:
+  // Full access and Bypass run them, except what reaches credentials.
+  simulator: {
+    name: 'run_on_simulator', label: 'Run on simulator', scope: 'simulator-command-once', provider: 'host', riskClass: 'medium',
+    description: 'Run one iOS Simulator or Android emulator command on the member\'s machine, outside the sandbox: xcrun simctl (list, boot, install, launch, openurl, io booted screenshot <file in the project>), open -a Simulator, xcodebuild for a simulator destination, adb (devices, install, shell am start, shell input tap/text/swipe, exec-out screencap -p > <file in the project>, logcat -d), emulator -avd <name> (started in the background), avdmanager, ./gradlew installDebug, flutter, pod install, npx expo/react-native/cap. Parts may be joined by && or || and piped into grep, head, tail, xcbeautify or jq; output may be written only to a file in the project or /dev/null. Read a screenshot you saved with read to see the screen. Other commands: run_on_host.',
+    allow: 'Run this exact simulator or app build command once on this machine, outside the sandbox: a build can run the project\'s build scripts as you.',
+    title: 'Chạy lệnh simulator', allowText: 'chạy đúng lệnh simulator/build app này một lần trên máy bạn, ngoài sandbox: build có thể chạy script build của project bằng quyền của bạn.',
+    confirm: async (self, command) => credentialReason(command) ?? await networkConfirmation(self, command),
+  },
 };
 
 // The engine answers, looked up again when it did not (started since).
@@ -66,6 +77,8 @@ function commandTool(self, kind) {
       if (kind === 'docker' && !await engineReady(self.boundary)) throw Error(DOCKER_STOPPED);
       const memberOnly = kind === 'host' ? memberOnlyReason(args.command) : null;
       if (memberOnly) throw Error(MEMBER_ONLY(memberOnly));
+      const notSimulator = kind === 'simulator' ? simulatorCommandReason(args.command) : null;
+      if (notSimulator) throw Error(`managed-simulator-command: ${notSimulator}.`);
       const confirm = await spec.confirm(self, args.command);
       if (confirm !== null) await approve(self, id, signal, ctx, { toolName: spec.name, rawAction: { command: args.command }, commandPreview: String(args.command),
         provider: spec.provider, requestedScope: spec.scope, reason: (confirm === 'ask' ? String(args.reason) : `Full access still asks: ${confirm}. ${args.reason}`).slice(0, 300), riskClass: spec.riskClass,
@@ -75,7 +88,8 @@ function commandTool(self, kind) {
       if (self.run) await checkpointsOf(self).take();
       const before = await self.changedFiles();
       try {
-        const result = kind === 'host' ? await runHostCommand({ command: args.command, cwd: self.cwd, userHome: self.boundary.userHome, timeout: args.timeout, signal, onUpdate })
+        const result = kind === 'simulator' && detachedEmulator(args.command) ? await runHostCommand({ command: `nohup ${args.command} >/dev/null 2>&1 & sleep 3; echo "Emulator started in the background; wait for it with: adb wait-for-device"`, cwd: self.cwd, userHome: self.boundary.userHome, timeout: 60, signal, onUpdate })
+          : kind === 'host' || kind === 'simulator' ? await runHostCommand({ command: args.command, cwd: self.cwd, userHome: self.boundary.userHome, timeout: args.timeout, signal, onUpdate })
           : await self.boundary.invoke('bash', { command: args.command, ...(args.timeout ? { timeout: args.timeout } : {}) }, signal, onUpdate, ctx?.model, kind === 'docker' ? { docker: true } : { network: true });
         ok = !result?.isError; return result;
       } finally {
@@ -115,14 +129,14 @@ function startDockerTool(self, { wait = 180_000, every = 2000, launcher: found =
 
 export function commandTools(self, options) {
   const docker = self.boundary.engine || self.boundary.dockerCli;
-  return [commandTool(self, 'network'), ...(docker ? [commandTool(self, 'docker')] : []), startDockerTool(self, options), commandTool(self, 'host'), ...processTools(self)];
+  return [commandTool(self, 'network'), ...(docker ? [commandTool(self, 'docker')] : []), startDockerTool(self, options), commandTool(self, 'host'), commandTool(self, 'simulator'), ...processTools(self)];
 }
 
 // What the system prompt says about services and what the sandbox blocks: it
 // is read for every request, so a Docker started since shows up.
 const HOST_PROMPT = ' When the sandbox blocks something the task needs (a missing runtime such as a JDK or a Node version, the member\'s sign-in for git pull or git push or a private registry, a file outside the project), do not stop and do not tell the member to run it: request run_on_host with the exact command; it runs on the member\'s machine once they approve. Only what needs the member themselves (their password for sudo or an installer, an interactive sign-in, a window to click) goes to ask_user, with the exact steps and the options to continue or skip; after their answer, check and carry on.';
 export function servicesPrompt(boundary) {
-  const simulator = ' The iOS Simulator is not available in the sandbox: ask the member with ask_user to run those tests.';
+  const simulator = ' The iOS Simulator and Android emulator are not reachable from bash: boot them, build and install the app, launch it, tap and type, and take screenshots with run_on_simulator (save the screenshot in the project, then read it to see the screen). Do not ask the member to run simulator steps you can run.';
   if (boundary.engine) return ' Docker is available through run_with_docker (the member approves each command): a database or service for tests (docker compose up -d, then the tests through bash or run_with_network), docker build, or Testcontainers tests. If the engine stops answering, start_docker asks the member to start it. Stop what you started when done unless the member wants it kept.' + simulator + HOST_PROMPT;
   if (boundary.dockerCli) return ' Docker is installed but not running: when the task needs it, call start_docker (the member approves), then run_with_docker.' + simulator + HOST_PROMPT;
   return ' Docker is not installed on this machine: when the task needs it, ask the member with ask_user (install it, or check another way).' + simulator + HOST_PROMPT;
