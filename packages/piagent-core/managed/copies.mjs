@@ -33,9 +33,13 @@ export function fanOut(manager, role, args, harness) {
   if (n > MAX_COPIES) throw Error(`managed-copies-invalid: ask for 2 to ${MAX_COPIES} ${role} helpers (copies, or one split line per helper).`);
   return { n, split: split.length ? split : null };
 }
-// What the main agent reads above the answer when it asked for helpers the member did not.
-export function droppedNote(role, n) {
-  return `One ${role} helper ran, not ${n}: the member's own words did not ask for ${n} ${role} helpers. Go on with this answer; run several only when the member asks for that many.\n\n`;
+// The helper's answer, with what the main agent reads above it when it asked
+// for helpers the member did not (`asked`: what fanOut returned).
+export function withDroppedNote(result, role, asked) {
+  const n = asked?.dropped, first = result?.content?.[0];
+  if (!n || first?.type !== 'text') return result;
+  const note = `One ${role} helper ran, not ${n}: the member's own words did not ask for ${n} ${role} helpers. Go on with this answer; run several only when the member asks for that many.\n\n`;
+  return { ...result, content: [{ ...first, text: note + first.text }, ...result.content.slice(1)] };
 }
 // What one copy reads under its brief.
 export function copyNote(role, i, fan) {
