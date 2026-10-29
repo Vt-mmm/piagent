@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.47.0 - 2026-10-29
+
+**Company sessions use your MCP servers and drive iOS and Android simulators.** Jira, GitHub and every MCP server you set up for Piagent now work in company sessions, and the agent builds, runs, screenshots and tests mobile apps on simulators itself.
+
+### Added
+
+- Company sessions load the MCP servers set up for personal Piagent, with the same logins. Repository-defined servers still need approval; results reach the agent as data.
+- The atlassian preset adds Jira and Confluence Cloud: piagent-mcp --preset atlassian, then /mcp-auth atlassian with your own Atlassian login.
+- run_on_simulator boots simulators, builds, installs and launches apps, runs XCUITest, takes screenshots and reads logs: xcrun simctl, xcodebuild, adb, emulator, gradlew, flutter, expo.
+
+### Security
+
+- run_on_simulator refuses other programs, ;, &, $( ) and files outside the project. Full access and Bypass run it, but still ask when a command reaches credentials.
+
 ## v1.46.4 - 2026-10-29
 
 **One subagent instead of a refused request; update reads a commented models.json.** Company sessions no longer loop on a refused subagent call, and the update no longer stops when the Pi model list file has comments.

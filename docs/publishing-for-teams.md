@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.47.0`: phiên công ty dùng các MCP server dev đã cài cho Piagent (cùng login; server do repo khai báo vẫn cần duyệt), thêm preset `atlassian` cho Jira và Confluence Cloud; tool `run_on_simulator` cho agent tự boot simulator iOS/Android, build, cài, mở app, chạy XCUITest, chụp màn hình và đọc log.
 - `1.46.4`: agent xin nhiều subagent mà member không yêu cầu thì chạy một subagent thay vì bị chặn (một số model từng gọi lại liên tục đến khi member dừng); `piagent-update` đọc được `models.json` có comment như Pi, và lỗi cấu hình danh sách model không còn làm dừng cả bản cài.
 - `1.46.3`: (tag, chưa publish do tiêu đề bản phát hành dài quá giới hạn của trang) cùng nội dung 1.46.4.
 - `1.46.2`: tin nhắn gửi ngay sau một câu trả lời hiện ngay trong terminal (trước đây mất 1–2 giây vì panel PIAGENT quét working tree trước khi Pi nhận tin tiếp theo); WebUI hiện câu trả lời từng chữ trong khi model đang viết thay vì đợi hết đoạn, vẫn che bí mật viết qua nhiều từ.

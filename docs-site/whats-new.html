@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.4" title="v1.46.4 docs · VI"><span class="dot"></span>v1.46.4</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.47.0" title="v1.47.0 docs · VI"><span class="dot"></span>v1.47.0</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-46-4" data-release>
+<article class="release latest" id="v1-47-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-47-0">v1.47.0</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-47-0-title">Phiên công ty dùng MCP server của bạn và điều khiển simulator iOS, Android</h3>
+    <p>Jira, GitHub và mọi MCP server bạn cài cho Piagent giờ dùng được trong phiên công ty, và agent tự build, chạy, chụp màn hình và test app mobile trên simulator.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Phiên công ty nạp các MCP server đã cài cho Piagent cá nhân, dùng chung login. Server do repo khai báo vẫn cần duyệt; kết quả tới agent dưới dạng dữ liệu.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Preset atlassian thêm Jira và Confluence Cloud: piagent-mcp --preset atlassian, rồi /mcp-auth atlassian bằng tài khoản Atlassian của bạn.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>run_on_simulator boot simulator, build, cài và mở app, chạy XCUITest, chụp màn hình, đọc log: xcrun simctl, xcodebuild, adb, emulator, gradlew, flutter, expo.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>run_on_simulator từ chối chương trình khác, ;, &amp;, $( ) và file ngoài project. Full access và Bypass chạy luôn, nhưng vẫn hỏi khi lệnh đụng tới credentials.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-4" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-4">v1.46.4</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-4-title">Một subagent thay vì bị chặn; bản cập nhật đọc được models.json có comment</h3>
@@ -405,26 +418,25 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-41-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-41-0">v1.41.0</a><time class="release-date" datetime="2026-10-24">24/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-41-0-title">Báo cáo thay đổi giao diện với ảnh trước/sau</h3>
-    <p>Skill mới biến task front-end thành báo cáo có ảnh trước/sau được khoanh khung, thay đổi business và logic, kết quả check, hiện ngay trên dashboard.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Skill <code>fe-change-report</code> chụp trang cũ và mới ở chế độ headless trên cùng dữ liệu, khoanh từng thay đổi bằng khung đỏ đánh số trên cả hai ảnh.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Agent chạy check của project và toàn bộ E2E headless, ghi rõ lỗi có từ trước, rồi viết lại thay đổi về business, logic và giao diện.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tài liệu trên dashboard vẽ <code>reports/fe-change/&lt;slug&gt;/report.json</code> thành báo cáo, có phóng to từng khung, kích thước màn hình khác và toàn màn hình.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Script dùng Playwright có sẵn của project, không thêm dependency, và xuất một file <code>report.html</code> độc lập, không có script, để gửi cho bất kỳ ai.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Báo cáo được vẽ từ dữ liệu, không từ file HTML, và chỉ ảnh PNG của nó được trả về, nên dashboard vẫn không hiển thị markup do model tạo.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">61</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">62</span></summary>
+    <div class="archive-row" id="v1-41-0">
+      <div class="archive-head"><a class="release-version" href="#v1-41-0">v1.41.0</a> <span class="release-date">24/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Báo cáo thay đổi giao diện với ảnh trước/sau</strong> — Skill mới biến task front-end thành báo cáo có ảnh trước/sau được khoanh khung, thay đổi business và logic, kết quả check, hiện ngay trên dashboard.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Skill <code>fe-change-report</code> chụp trang cũ và mới ở chế độ headless trên cùng dữ liệu, khoanh từng thay đổi bằng khung đỏ đánh số trên cả hai ảnh.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Agent chạy check của project và toàn bộ E2E headless, ghi rõ lỗi có từ trước, rồi viết lại thay đổi về business, logic và giao diện.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tài liệu trên dashboard vẽ <code>reports/fe-change/&lt;slug&gt;/report.json</code> thành báo cáo, có phóng to từng khung, kích thước màn hình khác và toàn màn hình.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Script dùng Playwright có sẵn của project, không thêm dependency, và xuất một file <code>report.html</code> độc lập, không có script, để gửi cho bất kỳ ai.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Báo cáo được vẽ từ dữ liệu, không từ file HTML, và chỉ ảnh PNG của nó được trả về, nên dashboard vẫn không hiển thị markup do model tạo.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-40-0">
       <div class="archive-head"><a class="release-version" href="#v1-40-0">v1.40.0</a> <span class="release-date">24/10/2026</span></div>
       <div class="archive-body">

@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.4" title="v1.46.4 docs · EN"><span class="dot"></span>v1.46.4</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.47.0" title="v1.47.0 docs · EN"><span class="dot"></span>v1.47.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-46-4" data-release>
+<article class="release latest" id="v1-47-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-47-0">v1.47.0</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-47-0-title">Company sessions use your MCP servers and drive iOS and Android simulators</h3>
+    <p>Jira, GitHub and every MCP server you set up for Piagent now work in company sessions, and the agent builds, runs, screenshots and tests mobile apps on simulators itself.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Company sessions load the MCP servers set up for personal Piagent, with the same logins. Repository-defined servers still need approval; results reach the agent as data.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>The atlassian preset adds Jira and Confluence Cloud: piagent-mcp --preset atlassian, then /mcp-auth atlassian with your own Atlassian login.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>run_on_simulator boots simulators, builds, installs and launches apps, runs XCUITest, takes screenshots and reads logs: xcrun simctl, xcodebuild, adb, emulator, gradlew, flutter, expo.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>run_on_simulator refuses other programs, ;, &amp;, $( ) and files outside the project. Full access and Bypass run it, but still ask when a command reaches credentials.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-4" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-4">v1.46.4</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-46-4-title">One subagent instead of a refused request; update reads a commented models.json</h3>
@@ -405,26 +418,25 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-41-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-41-0">v1.41.0</a><time class="release-date" datetime="2026-10-24">Oct 24, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-41-0-title">Front-end change reports with before/after screenshots</h3>
-    <p>A new skill turns a front-end task into a report with framed before/after screenshots, business and logic changes and check results, shown in the dashboard.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The <code>fe-change-report</code> skill captures old and new pages headless on the same data and frames each change with a numbered red box on both.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The agent runs the project's checks and full E2E headless, naming baseline failures, and writes what changed in business, logic and on screen.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Documents draws <code>reports/fe-change/&lt;slug&gt;/report.json</code> as the report, with zoom per frame, other screen sizes and a full-screen view.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>The scripts use the project's own Playwright and add no dependency; they write one self-contained <code>report.html</code> with no scripts, to send to anyone.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>The report is drawn from data, never from the HTML file, and only its PNG screenshots are served, so the dashboard still renders no model markup.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">61</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">62</span></summary>
+    <div class="archive-row" id="v1-41-0">
+      <div class="archive-head"><a class="release-version" href="#v1-41-0">v1.41.0</a> <span class="release-date">Oct 24, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Front-end change reports with before/after screenshots</strong> — A new skill turns a front-end task into a report with framed before/after screenshots, business and logic changes and check results, shown in the dashboard.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The <code>fe-change-report</code> skill captures old and new pages headless on the same data and frames each change with a numbered red box on both.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The agent runs the project's checks and full E2E headless, naming baseline failures, and writes what changed in business, logic and on screen.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Documents draws <code>reports/fe-change/&lt;slug&gt;/report.json</code> as the report, with zoom per frame, other screen sizes and a full-screen view.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>The scripts use the project's own Playwright and add no dependency; they write one self-contained <code>report.html</code> with no scripts, to send to anyone.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>The report is drawn from data, never from the HTML file, and only its PNG screenshots are served, so the dashboard still renders no model markup.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-40-0">
       <div class="archive-head"><a class="release-version" href="#v1-40-0">v1.40.0</a> <span class="release-date">Oct 24, 2026</span></div>
       <div class="archive-body">

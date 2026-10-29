@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.47.0",
+    "date": "2026-10-29",
+    "status": "stable",
+    "title": {
+      "en": "Company sessions use your MCP servers and drive iOS and Android simulators",
+      "vi": "Phiên công ty dùng MCP server của bạn và điều khiển simulator iOS, Android"
+    },
+    "summary": {
+      "en": "Jira, GitHub and every MCP server you set up for Piagent now work in company sessions, and the agent builds, runs, screenshots and tests mobile apps on simulators itself.",
+      "vi": "Jira, GitHub và mọi MCP server bạn cài cho Piagent giờ dùng được trong phiên công ty, và agent tự build, chạy, chụp màn hình và test app mobile trên simulator."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "new",
+        "en": "Company sessions load the MCP servers set up for personal Piagent, with the same logins. Repository-defined servers still need approval; results reach the agent as data.",
+        "vi": "Phiên công ty nạp các MCP server đã cài cho Piagent cá nhân, dùng chung login. Server do repo khai báo vẫn cần duyệt; kết quả tới agent dưới dạng dữ liệu."
+      },
+      {
+        "kind": "new",
+        "en": "The atlassian preset adds Jira and Confluence Cloud: piagent-mcp --preset atlassian, then /mcp-auth atlassian with your own Atlassian login.",
+        "vi": "Preset atlassian thêm Jira và Confluence Cloud: piagent-mcp --preset atlassian, rồi /mcp-auth atlassian bằng tài khoản Atlassian của bạn."
+      },
+      {
+        "kind": "new",
+        "en": "run_on_simulator boots simulators, builds, installs and launches apps, runs XCUITest, takes screenshots and reads logs: xcrun simctl, xcodebuild, adb, emulator, gradlew, flutter, expo.",
+        "vi": "run_on_simulator boot simulator, build, cài và mở app, chạy XCUITest, chụp màn hình, đọc log: xcrun simctl, xcodebuild, adb, emulator, gradlew, flutter, expo."
+      },
+      {
+        "kind": "security",
+        "en": "run_on_simulator refuses other programs, ;, &, $( ) and files outside the project. Full access and Bypass run it, but still ask when a command reaches credentials.",
+        "vi": "run_on_simulator từ chối chương trình khác, ;, &, $( ) và file ngoài project. Full access và Bypass chạy luôn, nhưng vẫn hỏi khi lệnh đụng tới credentials."
+      }
+    ]
+  },
+  {
     "version": "1.46.4",
     "date": "2026-10-29",
     "status": "stable",
