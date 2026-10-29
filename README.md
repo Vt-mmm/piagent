@@ -123,7 +123,18 @@ Credentials, trust decisions, sessions, todos and project memory are never remov
 | `trusted-full-access` | Trusted local automation | More autonomy, still enforces protected paths, secret redaction, capability lock integrity, and asks before destructive steps and the handoff. |
 | `bypass` | The work runs unattended | No gate asks or blocks the work. The handoff is still asked. Output is still redacted and every turn keeps its `/undo` checkpoint. Remove it from `permissionProfiles.allowedModes` to forbid it; in company mode the Studio admin can turn it off (`bypass_mode`). |
 
-The handoff is what sends the work out of this machine: `git push`, creating or merging a pull request, a release, a package publish, a deploy, a registry push, `ssh`, cloud and cluster tools (`vercel`, `aws`, `kubectl`, `terraform`…), uploads, and MCP tools that write to the system behind them. Every mode asks before it, personal and company, Bypass included; one list decides it ([handoff-policy.mjs](packages/piagent-core/runtime/policy/handoff-policy.mjs)).
+The handoff is what sends the work out of this machine: `git push`, creating or merging a pull request, a release, a package publish, a deploy, a registry push, `ssh`, cloud and cluster tools (`vercel`, `aws`, `kubectl`, `terraform`…), uploads, and MCP tools that write to the system behind them. Every mode asks before it, personal and company, Bypass included; one list decides it ([handoff-policy.mjs](packages/piagent-core/runtime/policy/handoff-policy.mjs)). Commands are read twice, by the policy scanner and by a shell syntax tree, so a push or a destructive delete inside a function, a `case` arm, `bash -c`, `eval` or a heredoc substitution is found.
+
+Every approval offers four answers: **Allow once**, **Allow for session** (the same exact action runs without asking until the session ends; never offered for a handoff), **Deny**, and **Deny and stop**, which also ends the agent's turn so it does not try again. The dashboard card shows the four buttons; the terminal shows them as a menu.
+
+A project can refuse commands outright with `autoDeny` in `.pi/piagent-profile.json`. The rules hold in every mode, Bypass included; `terminate` also ends the turn:
+
+```json
+"autoDeny": [
+  { "pattern": "sleep ", "reason": "Do not wait with sleep; background processes report when they end.", "terminate": true },
+  { "pattern": "^npm run seed", "match": "regex", "reason": "Seeding is done by hand." }
+]
+```
 
 Inside Pi use `/permission` (menu), `/permission status`, `/permission read-only`, `/permission workspace-write`, `/permission full-access [task]` or `/permission bypass`. For one run: `PIAGENT_PERMISSION_PROFILE=…` or `piagent-auto --read-only|--workspace-write|--full-access|--bypass`. The guard exposes `piagent_permission_status` to the model.
 

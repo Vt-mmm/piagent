@@ -123,7 +123,18 @@ Credential, trust, session, todo và memory của project không bao giờ bị 
 | `trusted-full-access` | Tự động hoá tin cậy trên máy | Tự chủ hơn, vẫn giữ protected path, che secret, toàn vẹn capability lock, và hỏi trước việc phá huỷ và việc bàn giao. |
 | `bypass` | Để việc chạy không cần trông | Không gate nào hỏi hay chặn việc làm. Việc bàn giao vẫn hỏi. Output vẫn được che secret và mỗi lượt vẫn có checkpoint `/undo`. Bỏ khỏi `permissionProfiles.allowedModes` để cấm; ở chế độ công ty admin Studio tắt được (`bypass_mode`). |
 
-Việc bàn giao là bước đưa việc ra khỏi máy này: `git push`, tạo hoặc merge pull request, release, publish package, deploy, push lên registry, `ssh`, tool cloud và cluster (`vercel`, `aws`, `kubectl`, `terraform`…), upload, và công cụ MCP ghi vào hệ thống phía sau. Mọi chế độ đều hỏi trước bước này, personal lẫn công ty, kể cả Bypass; một danh sách duy nhất quyết định ([handoff-policy.mjs](packages/piagent-core/runtime/policy/handoff-policy.mjs)).
+Việc bàn giao là bước đưa việc ra khỏi máy này: `git push`, tạo hoặc merge pull request, release, publish package, deploy, push lên registry, `ssh`, tool cloud và cluster (`vercel`, `aws`, `kubectl`, `terraform`…), upload, và công cụ MCP ghi vào hệ thống phía sau. Mọi chế độ đều hỏi trước bước này, personal lẫn công ty, kể cả Bypass; một danh sách duy nhất quyết định ([handoff-policy.mjs](packages/piagent-core/runtime/policy/handoff-policy.mjs)). Lệnh được đọc hai lần, bằng bộ quét của policy và bằng cây cú pháp shell, nên lệnh push hay lệnh xoá nguy hiểm nằm trong function, nhánh `case`, `bash -c`, `eval` hay substitution trong heredoc đều bị phát hiện.
+
+Mỗi lần duyệt có bốn lựa chọn: **Cho phép đúng 1 lần**, **Cho cả session** (lệnh giống hệt chạy không hỏi lại tới hết session; không có với việc bàn giao), **Từ chối**, và **Từ chối và dừng**, kết thúc luôn lượt của agent để nó không thử lại. Thẻ trên dashboard có bốn nút; terminal hiện thành menu.
+
+Project có thể chặn hẳn một số lệnh bằng `autoDeny` trong `.pi/piagent-profile.json`. Luật áp dụng ở mọi chế độ, kể cả Bypass; `terminate` kết thúc luôn lượt:
+
+```json
+"autoDeny": [
+  { "pattern": "sleep ", "reason": "Không chờ bằng sleep; tiến trình nền tự báo khi xong.", "terminate": true },
+  { "pattern": "^npm run seed", "match": "regex", "reason": "Seed dữ liệu do người làm bằng tay." }
+]
+```
 
 Trong Pi dùng `/permission` (menu), `/permission status`, `/permission read-only`, `/permission workspace-write`, `/permission full-access [việc]` hoặc `/permission bypass`. Cho một lần chạy: `PIAGENT_PERMISSION_PROFILE=…` hoặc `piagent-auto --read-only|--workspace-write|--full-access|--bypass`.
 

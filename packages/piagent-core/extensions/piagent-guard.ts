@@ -1154,7 +1154,7 @@ function normalizePermissionProfileMode(value: unknown): PermissionProfileMode |
 }
 
 function runtimeEquivalentForPermissionProfile(mode: PermissionProfileMode): string {
-  // What the mode resembles in Codex terms. A personal session runs on this
+  // What the mode resembles in common sandbox terms. A personal session runs on this
   // machine with no OS sandbox (execution-backend.js "host"): Piagent's policy
   // checks are the boundary.
   if (mode === "read-only") return "like sandbox_mode=read-only, enforced by Piagent policy (no OS sandbox)";

@@ -15,8 +15,9 @@ const readLock = () => JSON.parse(fs.readFileSync(path.join(repositoryRoot, "pac
 
 test("the scoped lock closure includes real transitive declarations and canonical archive names", () => {
   const entries = lockedRuntimeDependencies(readManifest(), readLock());
-  assert.equal(new Set(entries.map(entry => entry.name)).size, 5);
-  assert.equal(entries.length, 5);
+  assert.equal(new Set(entries.map(entry => entry.name)).size, 6);
+  assert.equal(entries.length, 6);
+  assert.equal(entries.find(entry => entry.name === "@aliou/sh").filename, "aliou-sh-0.3.4.tgz", "the shell parser has no dependencies of its own");
   const parser = entries.find(entry => entry.name === "@babel/parser");
   assert.equal(parser.filename, "babel-parser-7.29.8.tgz");
   assert.equal(parser.lock.resolved, "https://registry.npmjs.org/@babel/parser/-/parser-7.29.8.tgz");
@@ -55,7 +56,7 @@ test("scoped runtime packages and their locked closure install from an isolated 
   const manifest = readManifest(), lock = readLock();
   const offline = await seedOfflinePackageCache(repositoryRoot, path.join(root, "archives"), cache);
   assert.deepEqual(offline.dependencies.map(({ name, version }) => [name, version]).sort(), [
-    ["@babel/helper-string-parser", "7.29.7"], ["@babel/helper-validator-identifier", "7.29.7"],
+    ["@aliou/sh", "0.3.4"], ["@babel/helper-string-parser", "7.29.7"], ["@babel/helper-validator-identifier", "7.29.7"],
     ["@babel/parser", "7.29.8"], ["@babel/types", "7.29.8"], ["ws", "8.21.3"]
   ]);
   await assert.rejects(new Promise((resolve, reject) => {
