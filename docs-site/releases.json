@@ -40,8 +40,8 @@
       },
       {
         "kind": "improved",
-        "en": "Smoother dashboard: a streaming answer redraws only its last paragraph, off-screen turns skip layout, sidebar rows redraw only when they change, dropped links reconnect sooner.",
-        "vi": "Dashboard mượt hơn: câu trả lời đang stream chỉ vẽ lại đoạn cuối, lượt ngoài màn hình không tốn layout, sidebar chỉ vẽ dòng thay đổi, kết nối rớt được nối lại sớm hơn."
+        "en": "Smoother dashboard: a streaming answer redraws only its last paragraph, sidebar rows redraw only when they change, and a dropped connection is noticed and restored sooner.",
+        "vi": "Dashboard mượt hơn: câu trả lời đang stream chỉ vẽ lại đoạn cuối, sidebar chỉ vẽ lại dòng thay đổi, kết nối bị rớt được phát hiện và nối lại sớm hơn."
       },
       {
         "kind": "fixed",

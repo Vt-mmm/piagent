@@ -1009,7 +1009,8 @@ test("renders and resolves the exact Pi-owned approval card without direct execu
     approvalProvider.invalidate(); await page.goto(approvalServer.issueLaunchUrl());
     await expect(page.getByRole("heading", { name: "mcp__github__create_issue" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Cho phép đúng 1 lần" })).toBeVisible();
-    await page.getByRole("button", { name: "Từ chối" }).click(); assert.equal((await deniedPromise).allowed, false);
+    await expect(page.getByRole("button", { name: "Từ chối và dừng" })).toBeVisible();
+    await page.getByRole("button", { name: "Từ chối", exact: true }).click(); assert.equal((await deniedPromise).allowed, false);
     await expect(page.getByRole("heading", { name: "mcp__github__create_issue" })).not.toBeVisible();
 
     const allowedPromise = broker.request({ cwd, rawSessionId: sessionId, toolCallId: "tool.browser-allow", action,

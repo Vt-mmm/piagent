@@ -15,7 +15,7 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 
 ### Improved
 
-- Smoother dashboard: a streaming answer redraws only its last paragraph, off-screen turns skip layout, sidebar rows redraw only when they change, dropped links reconnect sooner.
+- Smoother dashboard: a streaming answer redraws only its last paragraph, sidebar rows redraw only when they change, and a dropped connection is noticed and restored sooner.
 
 ### Fixed
 

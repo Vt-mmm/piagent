@@ -825,6 +825,3 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 @keyframes piagent-toast-in { from { opacity: 0; transform: translateY(8px); } }
 @media (max-width: 720px) { .attention-toasts { top: 60px; bottom: auto; } }
 @media (prefers-reduced-motion: reduce) { .attention-toast { animation: none; } }
-/* A turn off screen is not laid out or painted; its last size is kept so the
-   scroll position and the transcript's anchoring stay where they were. */
-[data-turn] { content-visibility: auto; contain-intrinsic-size: auto 640px; }
