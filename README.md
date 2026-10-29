@@ -119,9 +119,11 @@ Credentials, trust decisions, sessions, todos and project memory are never remov
 | Profile | Use when | Guard behaviour |
 |---|---|---|
 | `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls` and piagent state tools; blocks shell, edits and unknown tools. |
-| `workspace-write` | Normal implementation | Default. Protected-path, read-only-path, shell and capability checks; asks before destructive or external actions. |
-| `trusted-full-access` | Trusted local automation | More autonomy, still enforces protected paths, secret redaction, capability lock integrity and destructive/external confirmation. |
-| `bypass` | You accept every risk | No gate asks or blocks. Output is still redacted and every turn keeps its `/undo` checkpoint. Remove it from `permissionProfiles.allowedModes` to forbid it; in company mode the Studio admin can turn it off (`bypass_mode`). |
+| `workspace-write` | Normal implementation | Default. Protected-path, read-only-path, shell and capability checks; asks before destructive steps and the handoff. |
+| `trusted-full-access` | Trusted local automation | More autonomy, still enforces protected paths, secret redaction, capability lock integrity, and asks before destructive steps and the handoff. |
+| `bypass` | The work runs unattended | No gate asks or blocks the work. The handoff is still asked. Output is still redacted and every turn keeps its `/undo` checkpoint. Remove it from `permissionProfiles.allowedModes` to forbid it; in company mode the Studio admin can turn it off (`bypass_mode`). |
+
+The handoff is what sends the work out of this machine: `git push`, creating or merging a pull request, a release, a package publish, a deploy, a registry push, `ssh`, cloud and cluster tools (`vercel`, `aws`, `kubectl`, `terraform`…), uploads, and MCP tools that write to the system behind them. Every mode asks before it, personal and company, Bypass included; one list decides it ([handoff-policy.mjs](packages/piagent-core/runtime/policy/handoff-policy.mjs)).
 
 Inside Pi use `/permission` (menu), `/permission status`, `/permission read-only`, `/permission workspace-write`, `/permission full-access [task]` or `/permission bypass`. For one run: `PIAGENT_PERMISSION_PROFILE=…` or `piagent-auto --read-only|--workspace-write|--full-access|--bypass`. The guard exposes `piagent_permission_status` to the model.
 

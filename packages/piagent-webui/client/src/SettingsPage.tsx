@@ -1,4 +1,4 @@
-import { personalBypassDetail } from "./SessionComposerControls.tsx";
+import { companyBypassDetail, companyFullAccessDetail, personalBypassDetail } from "./SessionComposerControls.tsx";
 import { THEME_PRESETS } from "./theme-presets.ts";
 import { useEffect, useMemo, useState } from "react";
 import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
@@ -198,7 +198,7 @@ function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?:
   const [value, setValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | null>(null);
-  // A company conversation's choice is on its row (ask first, or Bypass).
+  // A company conversation's choice is on its row (Ask first, Full access or Bypass).
   useEffect(() => { setValue(session?.managedPermission ?? (permission?.state === "known" ? permission.value ?? null : null)); },
     [session?.sessionRef, session?.managedPermission, permission?.state, permission?.value]);
   const apply = async (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
@@ -215,8 +215,8 @@ function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?:
   const choices = [
     { mode: "read-only" as const, detail: localize(locale, "Chỉ xem session, task và source; không thay đổi project.", "Inspect the session, task, and source without changing the project.") },
     { mode: "workspace-write" as const, detail: localize(locale, "Đọc, sửa file và chạy command trong project; thao tác nhạy cảm vẫn cần xác nhận.", "Read and edit project files and run commands; sensitive actions still require confirmation.") },
-    { mode: "trusted-full-access" as const, detail: localize(locale, "Quyền rộng hơn trong runtime; xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "Broader runtime access; deleting or sending data externally still requires separate confirmation.") },
-    ...(!session?.managed || session.managedBypass ? [{ mode: "bypass" as const, detail: personalBypassDetail(locale) }] : [])
+    { mode: "trusted-full-access" as const, detail: session?.managed ? companyFullAccessDetail(locale) : localize(locale, "Quyền rộng hơn trong runtime; xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "Broader runtime access; deleting or sending data externally still requires separate confirmation.") },
+    ...(!session?.managed || session.managedBypass ? [{ mode: "bypass" as const, detail: session?.managed ? companyBypassDetail(locale) : personalBypassDetail(locale) }] : [])
   ];
   return <><Title>{localize(locale, "Quyền truy cập", "Access")}</Title><Typography variant="h2" sx={{ mb: .5 }}>
     {localize(locale, "Hồ sơ quyền", "Permission profile")}</Typography><Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
@@ -231,7 +231,7 @@ function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?:
       {index < choices.length - 1 && <Divider />}</Box>)}</Paper>
     {error && <Typography role="status" color="error" variant="caption" sx={{ mt: 1 }}>{error}</Typography>}
     <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={pendingPermission === "bypass" ? personalBypassDetail(locale) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
+      description={pendingPermission === "bypass" ? (session?.managed ? companyBypassDetail(locale) : personalBypassDetail(locale)) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
       cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
       onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode) void apply(mode); }} />

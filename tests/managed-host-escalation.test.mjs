@@ -79,21 +79,21 @@ test('a host command runs as the member, without Piagent\'s environment, and rep
   await assert.rejects(runHostCommand({ command: "printf 'Password:'; read x; exit 1", cwd: base }), /managed-host-member-only: .*ask_user/);
 });
 
-test('run_on_host always asks, even in Bypass, runs on the host once approved and looks the machine up again', async () => {
+test('run_on_host asks in Ask first and Full access, runs on the host once approved and looks the machine up again', async () => {
   const self = member();
   await assert.rejects(tool(self, 'run_on_host').execute('c1', { command: 'sudo softwareupdate -i -a', reason: 'x' }, undefined, undefined, never), /^Error: managed-host-member-only: sudo needs the member's password.*ask_user/);
   const seen = [];
   await assert.rejects(tool(self, 'run_on_host').execute('c2', { command: 'brew install openjdk@21', reason: 'build needs JDK 21' }, undefined, undefined, answer(false, seen)), /managed-operation-denied/);
   assert.equal(seen[0].title, 'Chạy lệnh trên máy (ngoài sandbox)');
   assert.match(seen[0].text, /brew install openjdk@21\n\nLý do: build needs JDK 21\n\nĐồng ý: chạy đúng lệnh này một lần trên máy bạn, ngoài sandbox/);
-  const bypass = member('trusted-full-access'), asked = [];
-  const result = await tool(bypass, 'run_on_host').execute('c3', { command: 'echo installed', reason: 'x' }, undefined, undefined, answer(true, asked));
-  assert.equal(asked.length, 1, 'Bypass asks too');
+  const full = member('trusted-full-access'), asked = [];
+  const result = await tool(full, 'run_on_host').execute('c3', { command: 'echo installed', reason: 'x' }, undefined, undefined, answer(true, asked));
+  assert.equal(asked.length, 1, 'Full access asks too');
   assert.equal(result.content[0].text, 'installed');
-  assert.equal(bypass.refreshed, 1, 'what it installed is looked up');
-  // What Bypass would still have asked about is said.
-  await tool(bypass, 'run_on_host').execute('c4', { command: 'git push origin main --dry-run || true', reason: 'x' }, undefined, undefined, answer(true, asked));
-  assert.match(asked[1].text, /Bypass vẫn hỏi: .*git/);
+  assert.equal(full.refreshed, 1, 'what it installed is looked up');
+  // Why Full access asks this one is said, with the mode named.
+  await tool(full, 'run_on_host').execute('c4', { command: 'git push origin main --dry-run || true', reason: 'x' }, undefined, undefined, answer(true, asked));
+  assert.match(asked[1].text, /Full access vẫn hỏi: .*git/);
 });
 
 test('start_docker starts the installed engine after approval and waits until it answers', async () => {

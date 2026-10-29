@@ -1,11 +1,13 @@
 // A company conversation's access, chosen by the member and kept with the
-// conversation: "workspace-write" asks before every command that needs the
-// internet; "trusted-full-access" (Full access) asks only for what must be
-// confirmed (runtime/policy/bypass-policy.mjs); "bypass" asks nothing, as
-// Codex's bypass mode, where the team's Harness allows it
+// conversation (runtime/policy/handoff-policy.mjs has both lists):
+// "workspace-write" (Ask first) asks before every command that leaves the
+// sandbox; "trusted-full-access" (Full access) asks only about the handoff and
+// what is destructive (mustConfirm); "bypass" runs the work and asks only about
+// the handoff (handoffReason: push, PR, publish, deploy, remote and cloud
+// tools, uploads), where the team's Harness allows it
 // (harness.configuration.bypass_mode, an administrator's switch in Studio).
-// The sandbox itself stays: bypass removes the questions, not the boundary.
-import { mustConfirm } from '../runtime/policy/bypass-policy.mjs';
+// The sandbox itself stays: bypass removes questions, not the boundary.
+import { handoffReason, mustConfirm } from '../runtime/policy/handoff-policy.mjs';
 
 export const PERMISSIONS = ['workspace-write', 'trusted-full-access', 'bypass'];
 const ENTRY = 'agent-watch-permission';
@@ -36,10 +38,15 @@ export function recordBypass(owner, manager) {
   const last = manager.getEntries().filter(e => e.type === 'custom' && e.customType === ALLOWANCE).at(-1)?.data;
   if ((last?.allowed === true) !== allowed) manager.appendCustomEntry(ALLOWANCE, { allowed, at: new Date().toISOString() });
 }
-// Whether this conversation may skip the questions Full access still asks.
-export const asksNothing = owner => effectivePermission(owner) === 'bypass';
+// Whether this conversation skips the questions Full access still asks
+// (everything but the handoff).
+export const asksOnlyHandoff = owner => effectivePermission(owner) === 'bypass';
 export const broadAccess = owner => ['trusted-full-access', 'bypass'].includes(effectivePermission(owner));
-// Why a network command must still be asked about: null runs it in Full
-// access or Bypass, 'ask' when the member asks first.
-export const networkConfirmation = async (owner, command) => asksNothing(owner) ? null
-  : effectivePermission(owner) === 'trusted-full-access' ? mustConfirm(command) : 'ask';
+// Why a command that leaves the sandbox must be asked about: the reason, or
+// 'ask' in Ask first, or null to run it. Every mode asks about the handoff.
+export const networkConfirmation = async (owner, command) => {
+  const mode = effectivePermission(owner);
+  if (mode === 'bypass') return handoffReason(command);
+  if (mode === 'trusted-full-access') return mustConfirm(command);
+  return 'ask';
+};

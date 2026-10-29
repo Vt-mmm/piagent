@@ -1,49 +1,55 @@
 import { spawn } from 'node:child_process';
-import { asksNothing, broadAccess, networkConfirmation } from './permission.mjs';
+import { asksOnlyHandoff, broadAccess, effectivePermission, networkConfirmation } from './permission.mjs';
+import { handoffReason } from '../runtime/policy/handoff-policy.mjs';
 import { engineAlive, engineLauncher } from './container-engine.mjs';
 import { MEMBER_ONLY, memberOnlyReason, credentialReason, runHostCommand } from './host-command.mjs';
 import { processTools } from './background-process.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 import { detachedEmulator, simulatorCommandReason } from './simulator-commands.mjs';
 
-// Commands that leave the plain sandbox, each after the member approves that
-// exact command: run_with_network (internet, a local server or browser),
-// run_with_docker when this machine has Docker (the same plus the engine's
-// socket) and run_on_host (on the member's machine, outside the sandbox).
-// Bypass runs the first two without asking (owner, 2026-10-09), except what
-// must be confirmed for any command (bypass-policy.mjs: pushes, deploys,
-// registry logins, deletes known only at run time). run_on_host asks in every
-// mode but Bypass; Bypass still asks when the command reaches credentials.
+// Commands that leave the plain sandbox: run_with_network (internet, a local
+// server or browser), run_with_docker when this machine has Docker (the same
+// plus the engine's socket), run_on_host (on the member's machine, outside the
+// sandbox) and run_on_simulator. What each mode asks (permission.mjs):
+// - Ask first: every command.
+// - Full access: run_with_network, run_with_docker and run_on_simulator run,
+//   except the handoff and destructive steps (mustConfirm); run_on_host asks
+//   every command.
+// - Bypass: all four run, except the handoff (handoffReason: push, PR,
+//   publish, deploy, remote and cloud tools, uploads) and, on the host, a
+//   command that reaches credentials.
 const PARAMETERS = { type: 'object', properties: { command: { type: 'string', minLength: 1, maxLength: 4000 }, reason: { type: 'string', minLength: 1, maxLength: 300 }, timeout: { type: 'number', minimum: 1, maximum: 1800 } }, required: ['command', 'reason'], additionalProperties: false };
 
 const KINDS = {
   network: {
     name: 'run_with_network', label: 'Run with network', scope: 'network-command-once', provider: 'network', riskClass: 'medium',
-    description: 'Run one shell command that needs the internet beyond the package registries bash already reaches (a download site or registry the package proxy refuses), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command. Normal bash has no internet; on macOS it reaches servers on this Mac and runs Playwright\'s Chromium against them, except while a local proxy listens. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
+    description: 'Run one shell command that needs the internet beyond the package registries bash already reaches (a download site or registry the package proxy refuses), or that starts a local server or a browser (end-to-end tests with Playwright\'s Chromium against a server on 127.0.0.1), after the user approves that exact command (Full access and Bypass run it without asking, but a push, publish, deploy or upload is always asked). Normal bash has no internet; on macOS it reaches servers on this Mac and runs Playwright\'s Chromium against them, except while a local proxy listens. Credentials (.npmrc, SSH keys, Keychain) stay unavailable, so private registries and git push are not possible here.',
     allow: 'Run this exact command once, with internet access; a server it starts accepts connections while it runs.',
     title: 'Chạy lệnh có internet', allowText: 'chạy đúng lệnh này một lần, có internet; server nó mở nhận kết nối trong lúc chạy.',
     confirm: (self, command) => networkConfirmation(self, command),
   },
   docker: {
     name: 'run_with_docker', label: 'Run with Docker', scope: 'docker-command-once', provider: 'docker', riskClass: 'high',
-    description: 'Run one shell command that needs the Docker engine of this machine: docker, docker compose (a database or service for tests), docker build, or tests that start containers themselves (Testcontainers), after the user approves that exact command. It has internet access too. Normal bash and run_with_network cannot reach Docker. Mount only folders inside the project. Registry credentials are unavailable: public images pull, private registries and docker push do not. Containers started in the background (-d, compose up -d) keep running after the command: stop them (docker compose down) when the work is done unless the member wants them kept.',
+    description: 'Run one shell command that needs the Docker engine of this machine: docker, docker compose (a database or service for tests), docker build, or tests that start containers themselves (Testcontainers), after the user approves that exact command (Full access and Bypass run it without asking, but docker push or login and any other handoff is always asked). It has internet access too. Normal bash and run_with_network cannot reach Docker. Mount only folders inside the project. Registry credentials are unavailable: public images pull, private registries and docker push do not. Containers started in the background (-d, compose up -d) keep running after the command: stop them (docker compose down) when the work is done unless the member wants them kept.',
     allow: 'Run this exact command once, with internet access and the Docker engine; a container it starts can read folders Docker shares from this machine and may keep running.',
     title: 'Chạy lệnh dùng Docker', allowText: 'chạy đúng lệnh này một lần, có internet và Docker; container nó tạo có thể đọc thư mục Docker được chia sẻ trên máy và có thể tiếp tục chạy.',
     confirm: (self, command) => networkConfirmation(self, command),
   },
   host: {
     name: 'run_on_host', label: 'Run on this machine', scope: 'host-command-once', provider: 'host', riskClass: 'high',
-    description: 'Run one shell command on the member\'s machine, outside the sandbox, as the member, after they approve that exact command. Use it when the sandbox blocks what the task needs and no other tool covers it: install a runtime or tool the project needs (brew install openjdk@21, brew install node@22, sdk install java…), git pull or git push with the member\'s sign-in, a private registry, a file outside the project. It has the member\'s files, Keychain and sign-ins, so ask only for what the task needs and say why in reason. No input can be typed: commands that need the member\'s password (sudo, a .pkg installer) or an interactive sign-in are refused; ask the member with ask_user for those.',
+    description: 'Run one shell command on the member\'s machine, outside the sandbox, as the member, after they approve that exact command (only Bypass runs it without asking, and even there a push, PR, publish, deploy or a command that reaches credentials is asked). Use it when the sandbox blocks what the task needs and no other tool covers it: install a runtime or tool the project needs (brew install openjdk@21, brew install node@22, sdk install java…), git pull with the member\'s sign-in, git push only when the member asked for it, a private registry, a file outside the project. It has the member\'s files, Keychain and sign-ins, so ask only for what the task needs and say why in reason. No input can be typed: commands that need the member\'s password (sudo, a .pkg installer) or an interactive sign-in are refused; ask the member with ask_user for those.',
     allow: 'Run this exact command once on this machine, outside the sandbox, as you: it can read and change your files and use your sign-ins.',
     title: 'Chạy lệnh trên máy (ngoài sandbox)', allowText: 'chạy đúng lệnh này một lần trên máy bạn, ngoài sandbox, bằng quyền của bạn: lệnh đọc/sửa được file và dùng được tài khoản đã đăng nhập trên máy.',
     // Full access does not cover it: the member approves each command (with
-    // what Full access would still have asked about). Bypass asks only about
-    // credentials: a prompt injection's "cat ~/.ssh/id_rsa" is never silent.
-    confirm: async (self, command) => asksNothing(self) ? credentialReason(command) : await networkConfirmation(self, command) ?? 'ask',
+    // what Full access would still have asked about). Bypass asks about the
+    // handoff and about credentials: a prompt injection's "cat ~/.ssh/id_rsa"
+    // or "git push --force" is never silent.
+    confirm: async (self, command) => asksOnlyHandoff(self) ? credentialReason(command) ?? await handoffReason(command) : await networkConfirmation(self, command) ?? 'ask',
   },
   // The sandbox reaches neither CoreSimulator nor adb. Simulator and app build
   // commands only (simulator-commands.mjs), asked about as network commands:
-  // Full access and Bypass run them, except what reaches credentials.
+  // Full access and Bypass run them, except what reaches credentials and what
+  // either mode asks about any command.
   simulator: {
     name: 'run_on_simulator', label: 'Run on simulator', scope: 'simulator-command-once', provider: 'host', riskClass: 'medium',
     description: 'Run one iOS Simulator or Android emulator command on the member\'s machine, outside the sandbox. iOS: xcrun simctl (list, boot, bootstatus -b, install, launch, terminate, openurl, io <device> screenshot <file>, ui appearance, status_bar, spawn <device> log show --info --last 5m --predicate \'process == "<App>"\'), xcodebuild with a simulator destination (build, test: XCUITest is the reliable way to tap, type and answer system dialogs), xcodegen generate, axe (describe-ui reads the screen\'s elements; tap, type, swipe where this Xcode accepts them), open -a Simulator (some Xcode versions run simulators without that window; the device works without it). Android: adb (devices, install, shell am start, shell input tap/text/swipe, exec-out screencap -p > <file>, logcat -d), emulator -avd <name> (started in the background), avdmanager, ./gradlew installDebug. Also flutter, pod install, npx expo/react-native/cap, mkdir -p and cd inside the project. Parts may be joined by && or || and piped into grep, head, tail, xcbeautify or jq; files may be written only inside the project or to /dev/null. Read a screenshot you saved with read to see the screen. Other commands: run_on_host.',
@@ -59,6 +65,13 @@ async function engineReady(boundary) {
   return boundary.refreshEnvironment() && engineAlive(boundary.engine.socket);
 }
 const DOCKER_STOPPED = 'managed-docker-unreachable: Docker engine trên máy không chạy. Gọi start_docker để xin member duyệt mở Docker, rồi chạy lại đúng lệnh này bằng run_with_docker.';
+
+// Why a mode that runs commands without asking asks about this one, as the
+// card says it: the mode named as it is.
+export function stillAsks(self, reason) {
+  return effectivePermission(self) === 'bypass' ? { en: `Bypass still asks: ${reason}`, vi: `Bypass vẫn hỏi: ${reason}` }
+    : { en: `Full access still asks: ${reason}`, vi: `Full access vẫn hỏi: ${reason}` };
+}
 
 // One approval of the member (the dashboard card, else the Terminal).
 export async function approve(self, id, signal, ctx, action, { title, body }) {
@@ -80,10 +93,13 @@ function commandTool(self, kind) {
       const notSimulator = kind === 'simulator' ? simulatorCommandReason(args.command, self.cwd) : null;
       if (notSimulator) throw Error(`managed-simulator-command: ${notSimulator}.`);
       const confirm = await spec.confirm(self, args.command);
-      if (confirm !== null) await approve(self, id, signal, ctx, { toolName: spec.name, rawAction: { command: args.command }, commandPreview: String(args.command),
-        provider: spec.provider, requestedScope: spec.scope, reason: (confirm === 'ask' ? String(args.reason) : `Full access still asks: ${confirm}. ${args.reason}`).slice(0, 300), riskClass: spec.riskClass,
-        allowConsequence: spec.allow, denyConsequence: 'The command does not run; the agent is told you declined.' },
-      { title: spec.title, body: `${args.command}\n\nLý do: ${args.reason}${confirm === 'ask' ? '' : `\nBypass vẫn hỏi: ${confirm}`}\n\nĐồng ý: ${spec.allowText}\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.` });
+      if (confirm !== null) {
+        const why = confirm === 'ask' ? null : stillAsks(self, confirm);
+        await approve(self, id, signal, ctx, { toolName: spec.name, rawAction: { command: args.command }, commandPreview: String(args.command),
+          provider: spec.provider, requestedScope: spec.scope, reason: (why ? `${why.en}. ${args.reason}` : String(args.reason)).slice(0, 300), riskClass: spec.riskClass,
+          allowConsequence: spec.allow, denyConsequence: 'The command does not run; the agent is told you declined.' },
+        { title: spec.title, body: `${args.command}\n\nLý do: ${args.reason}${why ? `\n${why.vi}` : ''}\n\nĐồng ý: ${spec.allowText}\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.` });
+      }
       let ok = false;
       if (self.run) await checkpointsOf(self).take();
       const before = await self.changedFiles();
@@ -101,7 +117,8 @@ function commandTool(self, kind) {
 }
 
 // start_docker: the engine the member installed, started after they approve
-// (Bypass starts it without asking: local and reversible), then waited for.
+// (Full access and Bypass start it without asking: local and reversible),
+// then waited for.
 const textResult = text => ({ content: [{ type: 'text', text }], details: {} });
 function startDockerTool(self, { wait = 180_000, every = 2000, launcher: found = engineLauncher, spawnImpl = spawn } = {}) {
   return { name: 'start_docker', label: 'Start Docker',
@@ -134,10 +151,10 @@ export function commandTools(self, options) {
 
 // What the system prompt says about services and what the sandbox blocks: it
 // is read for every request, so a Docker started since shows up.
-const HOST_PROMPT = ' When the sandbox blocks something the task needs (a missing runtime such as a JDK or a Node version, the member\'s sign-in for git pull or git push or a private registry, a file outside the project), do not stop and do not tell the member to run it: request run_on_host with the exact command; it runs on the member\'s machine once they approve. Only what needs the member themselves (their password for sudo or an installer, an interactive sign-in, a window to click) goes to ask_user, with the exact steps and the options to continue or skip; after their answer, check and carry on.';
+const HOST_PROMPT = ' When the sandbox blocks something the task needs (a missing runtime such as a JDK or a Node version, the member\'s sign-in for git pull or a private registry, a file outside the project), do not stop and do not tell the member to run it: request run_on_host with the exact command; it runs on the member\'s machine once they approve. The work ends at the handoff: commit locally, then report what is ready; push, open or merge a pull request, publish or deploy only when the member asked for it in this conversation, and each of those steps is asked about in every access mode. Only what needs the member themselves (their password for sudo or an installer, an interactive sign-in, a window to click) goes to ask_user, with the exact steps and the options to continue or skip; after their answer, check and carry on.';
 export function servicesPrompt(boundary) {
   const simulator = ' The iOS Simulator and Android emulator are not reachable from bash: boot them, build and install the app, launch it, tap and type, and take screenshots with run_on_simulator (save the screenshot in the project, then read it to see the screen). Do not ask the member to run simulator steps you can run.';
-  if (boundary.engine) return ' Docker is available through run_with_docker (the member approves each command): a database or service for tests (docker compose up -d, then the tests through bash or run_with_network), docker build, or Testcontainers tests. If the engine stops answering, start_docker asks the member to start it. Stop what you started when done unless the member wants it kept.' + simulator + HOST_PROMPT;
+  if (boundary.engine) return ' Docker is available through run_with_docker (in Ask first the member approves each command): a database or service for tests (docker compose up -d, then the tests through bash or run_with_network), docker build, or Testcontainers tests. If the engine stops answering, start_docker asks the member to start it. Stop what you started when done unless the member wants it kept.' + simulator + HOST_PROMPT;
   if (boundary.dockerCli) return ' Docker is installed but not running: when the task needs it, call start_docker (the member approves), then run_with_docker.' + simulator + HOST_PROMPT;
   return ' Docker is not installed on this machine: when the task needs it, ask the member with ask_user (install it, or check another way).' + simulator + HOST_PROMPT;
 }

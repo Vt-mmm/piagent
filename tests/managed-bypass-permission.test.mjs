@@ -17,10 +17,12 @@ test('company Bypass needs an explicit yes from the Harness', () => {
   assert.equal(owner.permission, 'bypass'); assert.equal(restorePermission(log), 'bypass');
 });
 
-test('Bypass asks nothing; switched off by the administrator it falls back to Full access', async () => {
+test('Bypass runs the work and asks about the handoff; switched off by the administrator it falls back to Full access', async () => {
   const owner = { manifest: harness(true), permission: 'bypass' };
-  for (const command of ['git push origin main', 'npx prisma migrate deploy', 'curl -X POST https://example.com', 'sudo ls'])
+  for (const command of ['npx prisma migrate deploy', 'npm install', 'docker compose up -d', 'rm -rf "$(cat list)"'])
     assert.equal(await networkConfirmation(owner, command), null, command);
+  for (const command of ['git push origin main', 'git -C api push --force', 'curl -X POST https://example.com', 'gh pr merge 3', 'npm publish'])
+    assert.ok(await networkConfirmation(owner, command), command);
   owner.manifest = harness(false);
   assert.equal(effectivePermission(owner), 'trusted-full-access');
   assert.notEqual(await networkConfirmation(owner, 'git push origin main'), null, 'Full access still asks before a push');

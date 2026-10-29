@@ -113,7 +113,7 @@ test('/bypass switches the conversation between ask first, Full access and Bypas
   const { pi, emit, commands, renderers } = fakePi();
   await companyTerminalExtension({ managed: () => managed, packageRoot: path.resolve('.'), sdkRoot })(pi);
   assert.ok(renderers.has('agent-watch-process') && renderers.has('agent-watch-review-status') && renderers.has('agent-watch-helper-receipt'));
-  const ui = fakeUi(['Toàn quyền: chỉ hỏi việc bắt buộc']);
+  const ui = fakeUi(['Toàn quyền: hỏi việc bàn giao và việc phá huỷ']);
   await emit('session_start', {}, ui.ctx);
   assert.equal(ui.status.get('agent-watch-permission'), undefined);
   await commands.get('bypass').handler('', ui.ctx);

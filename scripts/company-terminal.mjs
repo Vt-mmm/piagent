@@ -67,11 +67,11 @@ export const HELP_TEXT = [
   'Mở lại sau: piagent studio --project <thư mục>, rồi /resume. Đừng mở cuộc trò chuyện công ty bằng pi cá nhân.',
 ].join('\n');
 const PERMISSION_STATUS = 'agent-watch-permission';
-const ASK = 'Hỏi trước (mặc định)', FULL = 'Toàn quyền: chỉ hỏi việc bắt buộc', BYPASS = 'Bypass: không hỏi gì';
+const ASK = 'Hỏi trước (mặc định)', FULL = 'Toàn quyền: hỏi việc bàn giao và việc phá huỷ', BYPASS = 'Bypass: chỉ hỏi việc bàn giao';
 const PERMISSION_TEXT = {
-  'workspace-write': 'Hỏi trước: mọi lệnh cần internet đều hỏi bạn.',
-  'trusted-full-access': 'Toàn quyền: lệnh cần internet chạy luôn; vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài, chạy migration, xoá không rõ đích hoặc dùng sudo.',
-  bypass: 'Bypass: không hỏi gì nữa (internet, Docker, lệnh trên máy, push, deploy, migration đều chạy luôn); lệnh thường vẫn trong sandbox, /undo vẫn dùng được.',
+  'workspace-write': 'Hỏi trước: mọi lệnh ra ngoài sandbox (internet, Docker, trên máy) đều hỏi bạn.',
+  'trusted-full-access': 'Toàn quyền: lệnh cần internet hoặc Docker chạy luôn; vẫn hỏi việc bàn giao (push, PR, publish, deploy, upload, ssh), migration, xoá không rõ đích, sudo và từng lệnh trên máy.',
+  bypass: 'Bypass: việc làm chạy luôn (internet, Docker, lệnh trên máy, migration); việc bàn giao vẫn hỏi (push, PR, publish, deploy, upload, ssh, MCP ghi ra ngoài) cùng lệnh đụng thông tin đăng nhập. Lệnh thường vẫn trong sandbox, /undo vẫn dùng được.',
 };
 const PERMISSION_NAME = { 'workspace-write': 'Hỏi trước', 'trusted-full-access': 'Toàn quyền', bypass: 'Bypass' };
 
@@ -305,7 +305,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     // The member's pick of look (/style); /settings is not offered here.
     registerStyleCommand(pi, { remember: true });
 
-    // Ask first or Bypass, kept with the conversation like the dashboard's switch.
+    // Ask first, Full access or Bypass, kept with the conversation like the dashboard's switch.
     const showPermission = (ctx) => { const mode = managed() ? effectivePermission(managed()) : null; ctx.ui?.setStatus?.(PERMISSION_STATUS, mode && mode !== 'workspace-write' ? PERMISSION_NAME[mode] : undefined); };
     pi.on('session_start', async (_event, ctx) => showPermission(ctx));
     pi.registerCommand('bypass', {

@@ -138,7 +138,7 @@ export class ManagedSession {
     // The Harness workflow (possibly changed on a later enrollment) adds its process to the prompt.
     const loader = managedResourceLoader(api, { systemPrompt: () => BASE_PROMPT + referencePrompt(self.boundary.userHome) + TEST_PROMPT + servicesPrompt(self.boundary) + webPrompt(helperRoles(manifest), mainWebLookups(manifest)) + helperPrompt(helperRoles(self.manifest)) + workflowPrompt(workflowPolicy(self.manifest), self.checks), agentsFiles,
       skills: self.resources.skills, prompts: self.resources.prompts, themes: terminalExtensions.length ? await loadPiagentThemes(sdk) : [], ...await inlineExtensions(api, sdk, self.cwd, // and the member's MCP servers (member-mcp.mjs)
-        ...withMemberMcp(self.cwd, [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)])) });
+        ...withMemberMcp(self.cwd, [...terminalExtensions, workflowContextExtension(self.cwd, () => self.session.sessionManager)], undefined, self)) });
     const settings = api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off', enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: true });
     const manager = sessionManager ?? api.SessionManager.inMemory(self.cwd); attachMemory(self, manager, agentDir, g => verifyGrant(g, self.manifest, 'main')); self.studioLink = new StudioLink({ origin: self.origin, agentDir, notify: event => self.notify(event), ui: () => self.session?.extensionRunner?.getUIContext?.() });
     const scope = scopeOf(self.origin, manifest);
@@ -169,7 +169,7 @@ export class ManagedSession {
     self.session = result.session;
     self.session.managedExecution = true;
     self.turnRetry = enableCompanyTurnRetry(self.session, settings, self.studioLink);
-    // The member's access for this conversation: ask first, or Bypass (permission.mjs).
+    // The member's access for this conversation: Ask first, Full access or Bypass (permission.mjs).
     self.permission = restorePermission(manager); recordBypass(self, manager); self.session.managedSetPermission = permissionSetter(self, manager);
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
     self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null where the Harness does not allow it

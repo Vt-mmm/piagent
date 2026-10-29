@@ -77,7 +77,7 @@ test('a failure names the way to Docker: run_with_docker, or the engine is not r
   assert.match(sandboxDiagnostic('Could not find a valid Docker environment', { engine: true }), /^managed-docker-blocked/);
 });
 
-test('run_with_docker is offered with Docker on the machine; Bypass runs it without asking, the default mode asks', async () => {
+test('run_with_docker is offered with Docker on the machine; Full access runs it without asking, the default mode asks', async () => {
   const calls = [];
   const self = { permission: 'trusted-full-access', cwd: path.join(base, 'tools-project'), grant: {}, session: { sessionManager: { getSessionId: () => 'session' } },
     boundary: { engine: null, dockerCli: null, userHome: path.join(base, 'member'), refreshEnvironment: () => Boolean(self.boundary.engine), invoke: async (...args) => { calls.push(args); return { content: [{ type: 'text', text: 'ok' }] }; } },
@@ -99,15 +99,19 @@ test('run_with_docker is offered with Docker on the machine; Bypass runs it with
   await docker.execute('call_1', { command: 'docker compose up -d', reason: 'database for tests' }, undefined, undefined, {});
   assert.deepEqual(calls[0].slice(0, 2), ['bash', { command: 'docker compose up -d' }]);
   assert.deepEqual(calls[0][5], { docker: true });
-  // Bypass: no question, whatever the container mounts (owner, 2026-10-09).
+  // Full access: no question, whatever the container mounts (owner, 2026-10-09).
   await docker.execute('call_2', { command: 'docker run --rm -v "$HOME/.cache":/c --privileged alpine ls /c', reason: 'x' }, undefined, undefined,
-    { ui: { confirm: async () => { throw Error('Bypass asked'); } } });
+    { ui: { confirm: async () => { throw Error('Full access asked'); } } });
   assert.equal(calls.length, 2);
   // What must be confirmed for any command still is (a push to a registry).
   let asked = null;
   await assert.rejects(docker.execute('call_3', { command: 'docker push ghcr.io/x/y', reason: 'x' }, undefined, undefined,
     { ui: { confirm: async (title, text) => { asked = text; return false; } } }), /managed-operation-denied/);
-  assert.match(asked, /Bypass vẫn hỏi: docker push sends to a registry/);
+  assert.match(asked, /Full access vẫn hỏi: docker push sends to a registry/, 'the card names the mode that asks');
+  self.permission = 'bypass'; self.manifest = { harness: { configuration: { bypass_mode: true } } }; asked = null;
+  await assert.rejects(docker.execute('call_3b', { command: 'docker push ghcr.io/x/y', reason: 'x' }, undefined, undefined,
+    { ui: { confirm: async (title, text) => { asked = text; return false; } } }), /managed-operation-denied/);
+  assert.match(asked, /Bypass vẫn hỏi: docker push sends to a registry/, 'Bypass stops at the handoff too');
   // The default mode asks before each command.
   self.permission = 'workspace-write'; asked = null;
   await assert.rejects(docker.execute('call_4', { command: 'docker compose up -d', reason: 'database' }, undefined, undefined,

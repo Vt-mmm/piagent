@@ -27,7 +27,7 @@ In a git repository, `/undo` in the company Terminal puts back the files the age
 
 ## The company Terminal's screen
 
-`piagent studio` opens with a company header instead of Pi's: the team, the Harness's main model and effort, the review model, Ask first or Bypass, Fast (where the Harness allows it), team memory and the Piagent release. The footer shows the Harness's main model and effort from the start (the granted ones after a run) and no USD cost. While `ask_user` waits for the member the loader reads "Đang chờ bạn trả lời", and the plan is drawn as a checklist (☑ done, ☐ open, ⊘ deferred).
+`piagent studio` opens with a company header instead of Pi's: the team, the Harness's main model and effort, the review model, Ask first, Full access or Bypass, Fast (where the Harness allows it), team memory and the Piagent release. The footer shows the Harness's main model and effort from the start (the granted ones after a run) and no USD cost. While `ask_user` waits for the member the loader reads "Đang chờ bạn trả lời", and the plan is drawn as a checklist (☑ done, ☐ open, ⊘ deferred).
 
 Pi commands that would send the conversation outside the company are refused with a notice: `/share` (a GitHub Gist) and `/bug` (a report to Pi's developers); Pi's "/bug sends a report" hint after errors is not shown. `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking`, `/settings` and the keys that do the same (Ctrl+L, Ctrl+P, Shift+Tab) say that the team's Harness decides. `/changelog` shows Piagent's latest release notes. Personal `pi` is unchanged.
 
@@ -44,7 +44,7 @@ The dashboard composer takes the Terminal's `/` commands. Typing `/` lists them 
 | `/thinking <level>` | Thinking level, from the levels this conversation offers |
 | `/model <name>` | Model, by name or ref (personal conversations) |
 | `/permission read-only\|ask\|full` | Access (personal; `full` asks for confirmation) |
-| `/bypass on\|off`, `/fast [on\|off]`, `/undo` | Company conversations: Bypass (`on` asks for confirmation), Fast where the Harness allows it, undo the last turn |
+| `/bypass on\|full\|off`, `/fast [on\|off]`, `/undo` | Company conversations: Bypass (`on`, asks for confirmation), Full access (`full`), Ask first (`off`); Fast where the Harness allows it; undo the last turn |
 | `/changes`, `/settings`, `/help` | Source Changes, Settings, this list |
 
 Shortcuts: ⌘K command palette, ⌘⇧O new chat, ⌘, Settings, ⌘/ opens the `/` commands in the composer, Esc stops the running turn.
@@ -55,7 +55,7 @@ Shortcuts: ⌘K command palette, ⌘⇧O new chat, ⌘, Settings, ⌘/ opens the
 
 ## Needs the member's approval
 
-Each refusal names the tool that asks; nothing below runs silently.
+Each refusal names the tool to use. In Ask first every one of these tools asks; Full access runs `run_with_network`, `run_with_docker`, `run_on_simulator`, `start_docker` and `fetch_origin` without asking, and Bypass runs `run_on_host` too. The handoff (push, pull request, publish, deploy, registry push, `ssh`, cloud tools, uploads, MCP writes) is asked in every mode.
 
 | Work | What the agent is told | Tool |
 |---|---|---|
@@ -63,7 +63,7 @@ Each refusal names the tool that asks; nothing below runs silently.
 | Tests against a localhost server while a local proxy (VPN, corporate proxy) listens | `managed-loopback-blocked` | `run_with_network` |
 | Docker, `docker compose`, Testcontainers | `managed-docker-blocked` / `managed-docker-unavailable` | `run_with_docker`, `start_docker` |
 | `git fetch` from GitHub | — | `fetch_origin` |
-| `git push`, `git pull`, `gh`, private registries, SSH | `managed-credentials-unavailable` | `run_on_host` (asks every time, Bypass included) |
+| `git push`, `git pull`, `gh`, private registries, SSH | `managed-credentials-unavailable` | `run_on_host` (Ask first and Full access ask every command; Bypass asks before a push, pull request, publish, deploy, `ssh` or a command that reaches credentials) |
 | Installing a missing runtime (`brew install openjdk@21`) or Playwright's browsers (`npx playwright install chromium`) | `managed-toolchain-missing` | `run_on_host` |
 | iOS Simulator and Android emulator: `xcrun simctl`, `xcodebuild` for a simulator, `adb`, `emulator`, `./gradlew installDebug`, `flutter`, `pod install`, `npx expo` / `react-native` / `cap`, screenshots saved in the project | `managed-simulator-unreachable` | `run_on_simulator` (asks in Ask mode; Full access and Bypass run it unless it reaches credentials; other programs are refused and go to `run_on_host`) |
 

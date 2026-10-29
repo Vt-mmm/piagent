@@ -2136,7 +2136,7 @@ non-secret metadata are safe alternatives.`;
     assert.equal(migrationPrompt.block, true);
   });
 
-  it("bypass asks and blocks nothing in a personal session, keeps output redaction, and never reaches a company session", async () => {
+  it("bypass asks and blocks nothing about the work in a personal session, keeps output redaction, and never reaches a company session", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
@@ -2152,7 +2152,7 @@ non-secret metadata are safe alternatives.`;
     assert.equal(ctx.ui.notices.some((notice) => /bypass is active/i.test(notice.message)), true);
     const toolCall = harness.handlers.get("tool_call");
     for (const [tool, input] of [
-      ["custom_reader", { path: ".env" }], ["bash", { command: "cat .env" }], ["bash", { command: "git push" }],
+      ["custom_reader", { path: ".env" }], ["bash", { command: "cat .env" }], ["bash", { command: "git commit -m done" }],
       ["bash", { command: "npx prisma migrate deploy" }], ["bash", { command: "rm -rf build" }], ["write", { path: ".env", content: "X=1\n" }]
     ]) {
       const decision = await callToolCall(toolCall, ctx, tool, input);
@@ -2168,6 +2168,48 @@ non-secret metadata are safe alternatives.`;
     company.model = { provider: "agent_watch_managed", id: "agent-watch-auto" };
     const companyPush = await callToolCall(toolCall, company, "bash", { command: "cat .env" });
     assert.equal(companyPush.block, true, "a company session keeps every gate");
+  });
+
+  it("bypass stops at the handoff: a push, pull request, deploy, remote shell or MCP write is asked, and a no blocks it", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.permissionProfile = "bypass";
+    profile.mcpCapabilities = [];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const toolCall = harness.handlers.get("tool_call");
+    const handoffs = [["bash", { command: "git push --force origin main" }], ["bash", { command: "git -C api push" }], ["bash", { command: "gh pr merge 3 --admin" }],
+      ["bash", { command: "npx vercel deploy --prod" }], ["bash", { command: "ssh prod ls" }], ["bash", { command: "if true; then git push; fi" }],
+      ["mcp", { server: "github", tool: "create_pull_request", args: "{\"title\":\"x\"}" }]];
+    for (const [tool, input] of handoffs) {
+      const decision = await callToolCall(toolCall, ctx, tool, input);
+      assert.equal(decision?.block, true, `${tool} ${JSON.stringify(input)} is asked and a no blocks it`);
+      assert.match(decision.reason, /User denied the handoff/);
+    }
+    assert.equal(ctx.confirmations.length, handoffs.length, "each handoff was asked once");
+    assert.match(ctx.confirmations[0].message, /Bypass still asks before a handoff/);
+    const yes = createContext(cwd, { confirm: true });
+    assert.notEqual((await callToolCall(toolCall, yes, "bash", { command: "git push origin feature" }))?.block, true, "a yes runs it");
+  });
+
+  it("workspace-write and full access ask before ssh, deploy tools and git -C push, which the plain patterns missed", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+    for (const command of ["ssh prod rm -rf /srv", "vercel deploy --prod", "git -C api push", "kubectl apply -f k8s.yml"]) {
+      const ctx = createContext(cwd);
+      await harness.handlers.get("session_start")({}, ctx);
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.equal(ctx.confirmations.length, 1, `${command} was asked`);
+    }
   });
 
   it("fails closed when an unavailable execution backend is requested", async () => {

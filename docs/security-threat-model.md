@@ -65,7 +65,9 @@ The final category is outside the containment capability of the Piagent guard. I
 
 ## Permission model
 
-`read-only`, `workspace-write`, and `trusted-full-access` change the allowed working scope; they do not disable protected paths, secret redaction, capability integrity, destructive confirmation, or external-provider confirmation. `trusted-full-access` is intended for an already trusted repository in an externally safe environment. It is not a bypass or sandbox mode.
+`read-only`, `workspace-write`, and `trusted-full-access` change the allowed working scope; they do not disable protected paths, secret redaction, capability integrity, destructive confirmation, or the handoff confirmation. `trusted-full-access` is intended for an already trusted repository in an externally safe environment. It is not a bypass or sandbox mode.
+
+`bypass` removes every question and block on the work itself (protected paths, destructive confirmation, the policy gates). It keeps secret redaction, the turn checkpoints and the handoff confirmation: a push, pull request, merge, release, publish, deploy, registry push, remote shell, cloud or cluster tool, upload, or MCP write is asked about in every mode (`runtime/policy/handoff-policy.mjs`). Personal sessions run on the host with no OS sandbox in every mode; company sessions run plain commands in the sandbox.
 
 ## Outbound network from a session
 

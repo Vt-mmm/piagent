@@ -119,9 +119,11 @@ Credential, trust, session, todo và memory của project không bao giờ bị 
 | Profile | Dùng khi | Guard làm gì |
 |---|---|---|
 | `read-only` | Khảo sát, audit, review | Cho `read`, `grep`, `find`, `ls` và tool state của piagent; chặn shell, sửa file và tool lạ. |
-| `workspace-write` | Code bình thường | Mặc định. Kiểm tra protected path, read-only path, shell và capability; hỏi trước việc phá huỷ hay bên ngoài. |
-| `trusted-full-access` | Tự động hoá tin cậy trên máy | Tự chủ hơn, vẫn giữ protected path, che secret, toàn vẹn capability lock và xác nhận việc phá huỷ/bên ngoài. |
-| `bypass` | Bạn chấp nhận mọi rủi ro | Không gate nào hỏi hay chặn. Output vẫn được che secret và mỗi lượt vẫn có checkpoint `/undo`. Bỏ khỏi `permissionProfiles.allowedModes` để cấm; ở chế độ công ty admin Studio tắt được (`bypass_mode`). |
+| `workspace-write` | Code bình thường | Mặc định. Kiểm tra protected path, read-only path, shell và capability; hỏi trước việc phá huỷ và việc bàn giao. |
+| `trusted-full-access` | Tự động hoá tin cậy trên máy | Tự chủ hơn, vẫn giữ protected path, che secret, toàn vẹn capability lock, và hỏi trước việc phá huỷ và việc bàn giao. |
+| `bypass` | Để việc chạy không cần trông | Không gate nào hỏi hay chặn việc làm. Việc bàn giao vẫn hỏi. Output vẫn được che secret và mỗi lượt vẫn có checkpoint `/undo`. Bỏ khỏi `permissionProfiles.allowedModes` để cấm; ở chế độ công ty admin Studio tắt được (`bypass_mode`). |
+
+Việc bàn giao là bước đưa việc ra khỏi máy này: `git push`, tạo hoặc merge pull request, release, publish package, deploy, push lên registry, `ssh`, tool cloud và cluster (`vercel`, `aws`, `kubectl`, `terraform`…), upload, và công cụ MCP ghi vào hệ thống phía sau. Mọi chế độ đều hỏi trước bước này, personal lẫn công ty, kể cả Bypass; một danh sách duy nhất quyết định ([handoff-policy.mjs](packages/piagent-core/runtime/policy/handoff-policy.mjs)).
 
 Trong Pi dùng `/permission` (menu), `/permission status`, `/permission read-only`, `/permission workspace-write`, `/permission full-access [việc]` hoặc `/permission bypass`. Cho một lần chạy: `PIAGENT_PERMISSION_PROFILE=…` hoặc `piagent-auto --read-only|--workspace-write|--full-access|--bypass`.
 

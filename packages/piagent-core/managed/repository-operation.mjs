@@ -107,7 +107,7 @@ export async function executeRepositoryFetch(boundary,plan,signal,{transport=fet
 }
 
 // The fetch_origin tool of a company conversation: one approved fetch of the
-// GitHub origin (Bypass fetches without asking).
+// GitHub origin (Full access and Bypass fetch without asking: it only downloads).
 export function fetchOriginTool(self) {
   return {name:'fetch_origin',label:'Fetch origin',description:'Request one approved GitHub origin fetch. Refreshes origin branches without changing working files. Does not expose credentials or allow arbitrary network commands. When the conversation folder holds several repositories, pass path: the repository folder inside it. Use this instead of git fetch, which has no GitHub sign-in here.',
     parameters:{type:'object',properties:{path:{type:'string',maxLength:500,description:'Repository folder inside the conversation folder, such as "api"; omit when the conversation folder is the repository.'}},additionalProperties:false},

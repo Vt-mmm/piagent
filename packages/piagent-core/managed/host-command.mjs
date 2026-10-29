@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { redactedText } from '../runtime/managed-failure.mjs';
+import { commandSegments, stripWrapper } from '../runtime/policy/handoff-policy.mjs';
 
 // Commands the member approved to run on their machine, outside the sandbox
 // (run_on_host, start_docker): installing a runtime the project needs, git
@@ -13,12 +14,14 @@ import { redactedText } from '../runtime/managed-failure.mjs';
 const PASSWORD = new Set(['sudo', 'doas', 'su', 'pkexec', 'passwd']);
 const SIGN_IN = [/^gh auth (login|refresh)\b/, /^(npm|pnpm) (login|adduser)\b/, /^yarn npm login\b/, /^docker login\b(?!.*--password-stdin)/, /^az login\b/,
   /^gcloud auth (login|application-default login)\b/, /^aws (configure\s*$|sso login\b)/, /^(firebase|vercel|wrangler|heroku|netlify) login\b/];
-const WRAPPERS = new Set(['env', 'command', 'exec', 'time', 'nohup']);
+// Read through the shared shell parser (policy-core.js): `(sudo ls)`,
+// `echo x & sudo ls` and `if …; then sudo …` are each a sudo.
 export function memberOnlyReason(command) {
-  for (const part of String(command).split(/&&|\|\||;|\||\n/)) {
-    const words = part.trim().split(/\s+/).filter(Boolean);
-    while (words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || WRAPPERS.has(words[0]))) words.shift();
-    const name = words[0]?.split('/').pop(), rest = words.join(' ');
+  for (const { words } of commandSegments(command)) {
+    const run = stripWrapper(words), prefix = words.slice(0, words.length - run.length).map(word => word.split('/').pop());
+    const elevated = prefix.find(word => PASSWORD.has(word));
+    if (elevated) return `${elevated} needs the member's password`;
+    const name = run[0], rest = run.join(' ');
     if (PASSWORD.has(name)) return `${name} needs the member's password`;
     if (name === 'installer' || name === 'softwareupdate') return `${name} needs the member's password`;
     if (SIGN_IN.some(rule => rule.test(rest))) return 'an interactive sign-in needs the member';
@@ -26,8 +29,13 @@ export function memberOnlyReason(command) {
   return null;
 }
 // Where credentials live on the member's machine. A command that names one
-// reads or moves secrets, so it is asked about even in Bypass.
-const CREDENTIALS = [/~\/\.(ssh|aws|gnupg|kube|docker|pi|codex|claude|piagent|config\/gh|config\/gcloud|azure|npmrc|netrc|pypirc|git-credentials)\b/, /\$HOME\/\.(ssh|aws|gnupg|kube|docker|pi|codex|claude|piagent)\b/,
+// reads or moves secrets, so it is asked about even in Bypass. A text check,
+// not a boundary: it catches the usual spellings (~/.ssh, $HOME/.ssh,
+// /Users/me/.ssh, `tar -C ~ .ssh`); the sandbox is what keeps secrets out of
+// plain bash. Folders whose names projects also use (.docker, .pi) count only
+// under a home directory.
+const HOME = String.raw`(?:~|\$HOME|\$\{HOME\}|/Users/[^/\s'"]+|/home/[^/\s'"]+|/root)/`;
+const CREDENTIALS = [/(^|[\s'"=:/])\.(ssh|aws|gnupg|kube|azure|npmrc|netrc|pypirc|git-credentials)(\b|\/|$)/, new RegExp(String.raw`${HOME}\.(docker|pi|codex|claude|piagent|config/gh|config/gcloud)\b`),
   /(^|[\s'"/])\.env(\.[\w-]+)?\b/, /\bauth\.json\b/, /\bcredentials(\.json)?\b/, /\bid_(rsa|ed25519|ecdsa|dsa)\b/, /\.(pem|p12|pfx|key)\b/,
   /\bsecurity\s+(find-(generic|internet)-password|dump-keychain|export)\b/, /Library\/Keychains\b/, /\bprintenv\b|(^|[;&|]\s*)env\s*($|[|;&>])/];
 export function credentialReason(command) {

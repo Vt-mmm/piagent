@@ -320,7 +320,7 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
       ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
     }
     if (permissionProfile.mode === "bypass") {
-      ctx.ui.notify("Piagent bypass is active: no confirmation, protected-path or policy gate applies in this personal session. Output redaction and /undo checkpoints remain.", "warning");
+      ctx.ui.notify("Piagent bypass is active: the work runs without confirmation, protected-path or policy gates in this personal session. The handoff (push, PR, publish, deploy, remote tools, MCP writes) is still asked; output redaction and /undo checkpoints remain.", "warning");
     }
     const mcpNotice = dependencies.mcpReadinessNotice(ctx.cwd);
     if (mcpNotice) ctx.ui.notify(mcpNotice, "warning");

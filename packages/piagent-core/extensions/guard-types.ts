@@ -322,8 +322,9 @@ export type ResolvedOrchestrationPolicy = {
   rules: string[];
 };
 
-// "bypass": personal sessions only; no Piagent gate asks or blocks (as Codex's
-// --dangerously-bypass-approvals-and-sandbox). Output redaction and turn checkpoints still run.
+// "bypass": personal sessions only; no Piagent gate asks or blocks the work. The
+// handoff (runtime/policy/handoff-policy.mjs) is still asked; output redaction
+// and turn checkpoints still run.
 export type PermissionProfileMode = "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
 
 export type PermissionProfilesConfig = {

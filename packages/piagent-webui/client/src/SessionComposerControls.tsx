@@ -89,7 +89,7 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const sourceCount = source?.workingTree.counts.files ?? 0;
   const permission = snapshot?.session.permissionProfile as { state?: string; value?: string | null } | undefined;
   const [permissionValue, setPermissionValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
-  // A company conversation keeps its own choice: ask first, or Bypass. Read
+  // A company conversation keeps its own choice: Ask first, Full access or Bypass. Read
   // again for every conversation: the next one may have the same choice, and
   // an effect keyed on the choice alone would leave the reset of the switch.
   useEffect(() => { setPermissionValue(session.managedPermission ?? (permission?.state === "known" ? permission.value ?? null : null)); },
@@ -225,23 +225,28 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   </>;
 }
 
-// A company conversation's access: ask before each command that needs the
-// internet, or Bypass (asks only for what must be confirmed).
+// A company conversation's access: Ask first (every command that leaves the
+// sandbox), Full access (asks about the handoff and destructive steps) or
+// Bypass (asks only about the handoff).
 export function companyAccessLabel(value: string | null | undefined, locale: UiLocale) {
   return value === "bypass" ? "Bypass" : value === "trusted-full-access" ? localize(locale, "Toàn quyền", "Full access") : localize(locale, "Hỏi trước", "Ask first");
 }
-// A personal conversation's Bypass: every Piagent gate off.
+// What Bypass still asks in every session: the handoff
+// (runtime/policy/handoff-policy.mjs).
+const HANDOFF_VI = "git push, tạo hoặc merge pull request, publish, deploy, ssh và tool cloud, upload, công cụ MCP ghi ra ngoài";
+const HANDOFF_EN = "git push, creating or merging a pull request, publish, deploy, ssh and cloud tools, uploads, MCP tools that write outside";
+// A personal conversation's Bypass: the work runs; the handoff is still asked.
 export function personalBypassDetail(locale: UiLocale) {
-  return localize(locale, "Không hỏi, không chặn gì trong cuộc trò chuyện personal này: xoá, push, gửi ra ngoài, file được bảo vệ đều chạy luôn, như chế độ bypass của Codex. Output vẫn được che secret và /undo vẫn hoàn tác được từng lượt. Cuộc trò chuyện company theo công tắc Bypass trong Harness của Studio.",
-    "Nothing is asked or blocked in this personal conversation: deletes, pushes, external sends and protected files all run, as with Codex's bypass mode. Output is still redacted and /undo can still revert each turn. Company conversations follow the Bypass switch of the Studio Harness.");
+  return localize(locale, `Việc làm chạy luôn, không hỏi, không chặn trong cuộc trò chuyện personal này: xoá, file được bảo vệ, lệnh trên máy đều chạy. Việc bàn giao ra ngoài vẫn hỏi: ${HANDOFF_VI}. Output vẫn được che secret và /undo vẫn hoàn tác được từng lượt. Cuộc trò chuyện company theo công tắc Bypass trong Harness của Studio.`,
+    `The work runs without questions or blocks in this personal conversation: deletes, protected files and commands on this machine all run. The handoff is still asked: ${HANDOFF_EN}. Output is still redacted and /undo can still revert each turn. Company conversations follow the Bypass switch of the Studio Harness.`);
 }
 // A company conversation's Bypass, where the team's Harness allows it.
 export function companyBypassDetail(locale: UiLocale) {
-  return localize(locale, "Không hỏi gì nữa trong cuộc trò chuyện này: lệnh cần internet, Docker, chạy trên máy, push, deploy, migration đều chạy luôn, như bypass của Codex. Lệnh thường vẫn chạy trong sandbox, output vẫn che secret và /undo vẫn hoàn tác được. Admin Studio có thể tắt Bypass trong Harness.",
-    "Nothing is asked in this conversation any more: commands that need the internet, Docker or this machine, pushes, deploys and migrations all run, as with Codex's bypass. Plain commands still run in the sandbox, output is still redacted and /undo still works. A Studio administrator can turn Bypass off in the Harness.");
+  return localize(locale, `Việc làm chạy luôn, không hỏi: lệnh cần internet, Docker, simulator, lệnh trên máy, migration. Việc bàn giao ra ngoài vẫn hỏi: ${HANDOFF_VI}; lệnh trên máy đụng tới thông tin đăng nhập cũng hỏi. Lệnh thường vẫn chạy trong sandbox, output vẫn che secret và /undo vẫn hoàn tác được. Admin Studio có thể tắt Bypass trong Harness.`,
+    `The work runs without asking: commands that need the internet, Docker, the simulator or this machine, migrations. The handoff is still asked: ${HANDOFF_EN}; a command on this machine that reaches credentials is asked too. Plain commands still run in the sandbox, output is still redacted and /undo still works. A Studio administrator can turn Bypass off in the Harness.`);
 }
 export function companyFullAccessDetail(locale: UiLocale) {
   return localize(locale,
-    "Lệnh cần internet (cài package, tải file, git pull, test có server hay browser) chạy luôn, không hỏi. Vẫn hỏi trước khi đẩy hoặc gửi dữ liệu ra ngoài (git push, publish, deploy, upload, ssh), chạy migration database, xóa mà không rõ đích hoặc dùng sudo.",
-    "Commands that need the internet (package installs, downloads, git pull, tests with a server or browser) run without asking. You are still asked before anything that pushes or sends data out (git push, publish, deploy, uploads, ssh), database migrations, deletes whose target is unknown, and sudo.");
+    `Lệnh cần internet hoặc Docker (cài package, tải file, test có server hay browser) chạy luôn, không hỏi. Vẫn hỏi việc bàn giao (${HANDOFF_VI}), migration database, xóa mà không rõ đích, sudo, và từng lệnh chạy trên máy ngoài sandbox.`,
+    `Commands that need the internet or Docker (package installs, downloads, tests with a server or browser) run without asking. You are still asked about the handoff (${HANDOFF_EN}), database migrations, deletes whose target is unknown, sudo, and each command on this machine outside the sandbox.`);
 }

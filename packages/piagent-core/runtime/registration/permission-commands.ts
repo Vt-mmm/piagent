@@ -65,10 +65,10 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
     ctx.ui.notify(message, level);
     if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
     if (permissionProfile.mode === "trusted-full-access") {
-      ctx.ui.notify("Trusted full access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
+      ctx.ui.notify("Trusted full access is active; protected paths, secret redaction, and destructive and handoff confirmations remain enforced.", "warning");
     }
     if (permissionProfile.mode === "bypass") {
-      ctx.ui.notify("Bypass is active: nothing is asked or blocked in this personal session (deletes, pushes, protected paths included). Output redaction and /undo checkpoints remain. Company sessions keep their own rules.", "warning");
+      ctx.ui.notify("Bypass is active: the work is not asked about or blocked in this personal session (deletes and protected paths included). The handoff (push, PR, publish, deploy, remote tools, MCP writes) is still asked; output redaction and /undo checkpoints remain. Company sessions keep their own rules.", "warning");
     }
     emitPermissionStatus(ctx, permissionProfile);
     if (request.trim()) sendWorkflowFollowUp(request.trim());

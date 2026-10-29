@@ -88,6 +88,7 @@ import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-stat
 import { hasDurableContextEvidence } from "./context-evidence.js";
 import { piApprovalBroker, type ApprovalActionDraft, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
+import { FULL_ACCESS_RUNS, handoffReason, mcpWriteAction } from "../runtime/policy/handoff-policy.mjs";
 import { createWorkspaceWriteAuthorityBindings } from "../runtime/policy/workspace-write-authority.ts";
 import { registerWorkspaceMemberEdits } from "../runtime/session/workspace-member-edits.mjs";
 import {
@@ -554,8 +555,6 @@ function verifyProjectCapabilityState(
   }
 }
 
-// Exec-policy prompts a full-access session does not show: local, reversible.
-const FULL_ACCESS_SKIPPED_PROMPTS = ["prompt-git-add-broad"];
 
 function evaluateExecPolicy(command: string, profile: ProjectProfile, policy: BasePolicy): {
   mode: RuntimePolicySettings["execPolicy"];
@@ -1124,10 +1123,13 @@ function normalizePermissionProfileMode(value: unknown): PermissionProfileMode |
 }
 
 function runtimeEquivalentForPermissionProfile(mode: PermissionProfileMode): string {
-  if (mode === "read-only") return "sandbox_mode=read-only";
-  if (mode === "trusted-full-access") return "sandbox_mode=danger-full-access + approval_policy=never, with Piagent protected-path and human-action gates still enforced";
-  if (mode === "bypass") return "sandbox_mode=danger-full-access + approval_policy=never; every Piagent gate off (output redaction and turn checkpoints remain)";
-  return "sandbox_mode=workspace-write + approval_policy=on-request";
+  // What the mode resembles in Codex terms. A personal session runs on this
+  // machine with no OS sandbox (execution-backend.js "host"): Piagent's policy
+  // checks are the boundary.
+  if (mode === "read-only") return "like sandbox_mode=read-only, enforced by Piagent policy (no OS sandbox)";
+  if (mode === "trusted-full-access") return "like sandbox_mode=danger-full-access; protected paths, destructive steps and the handoff (push, PR, publish, deploy, remote tools) are still asked";
+  if (mode === "bypass") return "like sandbox_mode=danger-full-access + approval_policy=never for the work; the handoff (push, PR, publish, deploy, remote tools, MCP writes) is still asked, and output redaction and turn checkpoints remain";
+  return "like sandbox_mode=workspace-write + approval_policy=on-request, enforced by Piagent policy (no OS sandbox)";
 }
 
 function sessionPermissionOverrideKey(ctx: ExtensionContext): string {
@@ -3717,6 +3719,31 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // Bypass is for personal sessions only: a company session keeps Studio's rules.
   const bypassActive = (ctx: ExtensionContext) => !isCompanySession(ctx) && ctx.model?.provider !== "agent_watch_managed"
     && resolvePermissionProfile(loadProfileFromContext(ctx), policy, permissionOverrideFromContext(ctx)).mode === "bypass";
+  // Bypass runs the work without asking and stops at the handoff: a push, a
+  // PR or merge, a publish or deploy, a remote or cloud tool, an upload or an
+  // MCP tool that writes outside is asked about, as in every other mode.
+  const bypassHandoff = async (event: { toolName: string; toolCallId?: string; input?: unknown }, ctx: ExtensionContext): Promise<{ block: true; reason: string } | undefined> => {
+    const input = isPlainRecord(event.input) ? event.input : {};
+    const prepared = SHELL_TOOL_NAMES.has(event.toolName) ? null : prepareToolInputForPolicy(event.toolName, input, policy);
+    const shell = extractShellCommandInput(prepared?.proxyShellCarrier && prepared.proxyArgs ? prepared.proxyArgs : SHELL_TOOL_NAMES.has(event.toolName) ? input : {});
+    const command = shell.command ? normalizeShellCommandForPolicy(shell.command) : null;
+    let reason = command ? await handoffReason(command) : null;
+    if (!reason && !command && prepared && classifyExternalAction(event.toolName, prepared.input, policy).decision === "confirm") {
+      const action = await mcpWriteAction(prepared.proxyTool ?? event.toolName);
+      if (action) reason = `${prepared.proxyToolName ?? event.toolName} writes outside this machine (${action})`;
+    }
+    if (!reason) return undefined;
+    const preview = command ?? prepared?.confirmationSummary ?? event.toolName;
+    const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null,
+      action: { kind: "external-provider-action", preconditionClass: "runtime-only", treePrecondition: null, toolName: event.toolName, rawAction: { toolName: event.toolName, command, input },
+        commandPreview: command, parameterPreview: preview, targetPaths: [], targetSummaries: [reason], provider: command ? "shell-external" : String(prepared?.proxyToolName ?? event.toolName),
+        urlOrigin: null, requestedScope: "one-handoff", reason: `Bypass still asks before a handoff: ${reason}`, riskClass: "high",
+        allowConsequence: "Run this exact step once; the work leaves this machine.", denyConsequence: "The step does not run; the agent is told you declined." },
+      terminalConfirm: () => ctx.ui.confirm(`Bypass still asks before a handoff.\n\n${reason}\n\n${preview}\n\nAllow?`, "Piagent handoff confirmation"), unavailableFallback: approvalUnavailableFallback(ctx) });
+    if (!approval.allowed) return { block: true, reason: `User denied the handoff: ${reason}` };
+    if (!approval.consume()) return { block: true, reason: "Approval became stale before tool start; the action was blocked." };
+    return undefined;
+  };
   registerToolCallHook(pi, {
     extractLikelyPath: extractLikelyPathFromInput,
     redactText,
@@ -3778,10 +3805,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       return undefined;
     },
     authorize: async (event, ctx) => {
-    // Bypass: no Piagent gate asks or blocks, as with Codex's
-    // --dangerously-bypass-approvals-and-sandbox. Tool output is still
-    // redacted and the turn still gets its checkpoint; neither stops a command.
-    if (bypassActive(ctx)) return;
+    // Bypass: no Piagent gate asks or blocks the work. The handoff is still
+    // asked (bypassHandoff); tool output is still redacted and the turn still
+    // gets its checkpoint.
+    if (bypassActive(ctx)) return bypassHandoff(event, ctx);
     const preInput = isPlainRecord(event.input) ? event.input : {};
     const authorizationTargetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, preInput);
     if (authorizationTargetInspection.reason) {
@@ -3905,9 +3932,14 @@ export default function piagentGuard(pi: ExtensionAPI) {
       // migrations and anything sent outside this machine are still asked.
       const confirmationReasons = (execDecision.mode !== "off" && execDecision.decision === "prompt" ? [...execDecision.reasons] : [])
         .filter((reason) => permissionProfile.mode !== "trusted-full-access"
-          || !FULL_ACCESS_SKIPPED_PROMPTS.some((id) => reason.startsWith(`Prompt required by exec policy ${id}:`)));
-      const externalReason = findShellExternalConfirmationReason(execDecision.segments, externalActionPolicyConfig(policy));
-      if (externalReason) confirmationReasons.push(externalReason);
+          || ![...FULL_ACCESS_RUNS].some((id) => reason.startsWith(`Prompt required by exec policy ${id}:`)));
+      // The handoff (push, PR, publish, deploy, remote and cloud tools,
+      // uploads) is asked in every mode: runtime/policy/handoff-policy.mjs.
+      const handoff = await handoffReason(command);
+      const shellExternal = findShellExternalConfirmationReason(execDecision.segments, externalActionPolicyConfig(policy));
+      const handoffNote = handoff && !shellExternal && !confirmationReasons.includes(handoff) ? `Handoff requires confirmation: ${handoff}` : undefined;
+      const externalReason = shellExternal ?? (handoff ? handoffNote ?? handoff : undefined);
+      for (const reason of [shellExternal, handoffNote]) if (reason) confirmationReasons.push(reason);
       if (confirmationReasons.length > 0) {
         pendingHumanApproval = { prompt: `Command requires confirmation.\n\n${confirmationReasons.join("\n")}\n\nAllow?`, title: "Piagent exec policy confirmation",
           action: { kind: externalReason ? "external-provider-action" : "workspace-patch", preconditionClass: externalReason ? "runtime-only" : "workspace-tree", toolName: event.toolName, rawAction: { toolName: event.toolName, command, input: preparedInput.input },

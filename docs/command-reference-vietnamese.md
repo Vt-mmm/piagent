@@ -137,7 +137,7 @@ Các command này đến từ package `piagent-core`; tất cả chạy ngay và
 | `/piagent-update` | Kiểm tra bản Piagent mới ngay (Terminal tự hỏi mỗi giờ, giữa các lượt). | Hỏi "Cập nhật ngay / Để sau"; cập nhật xong nhắc mở lại `pi` hoặc `piagent studio`. Không gọi model. |
 | `/share`, `/bug` | Trong `piagent studio`: bị tắt, chỉ báo lý do. | Hai lệnh này đưa hội thoại và code ra ngoài công ty (GitHub Gist, báo cáo cho nhà phát triển Pi). Dùng `/export` để lưu file trên máy. |
 | `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking`, `/settings` | Trong `piagent studio`: chỉ báo "Harness của team quyết định" (Ctrl+L, Ctrl+P, Shift+Tab cũng vậy). | Model, mức suy luận và cài đặt do Harness trong Agent Studio quyết định; tài khoản là của team qua Agent Watch. `/changelog` hiện "Có gì mới" của Piagent. |
-| `/bypass [on\|off\|status]` | Chỉ trong `piagent studio`: bật/tắt Bypass cho cuộc trò chuyện công ty (giống công tắc trên dashboard). | Bypass: lệnh cần internet chạy luôn, vẫn hỏi việc bắt buộc (đẩy/gửi ra ngoài, migration, xoá không rõ đích, sudo). Footer hiện "Bypass". Không gọi model. |
+| `/bypass [on\|full\|off\|status]` | Chỉ trong `piagent studio`: chọn Bypass, Toàn quyền hoặc Hỏi trước cho cuộc trò chuyện công ty (giống công tắc trên dashboard). | Bypass: việc làm chạy luôn (internet, Docker, lệnh trên máy, migration), chỉ hỏi việc bàn giao (push, PR, publish, deploy, upload, ssh, MCP ghi ra ngoài) và lệnh đụng thông tin đăng nhập. Toàn quyền: hỏi thêm migration, xoá không rõ đích, sudo và từng lệnh trên máy. Footer hiện chế độ. Không gọi model. |
 
 `/piagent-inspector` không thêm bước bắt buộc nào. Panel bốn dòng tự hiện sát
 phía trên footer native từ lúc mở session và dùng working-tree status (bản ghi
@@ -506,7 +506,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-auto --full-access -p "<task>"` | Trusted automation style; không tắt protected paths/redaction/human gates. |
 | `/style`, `/style <tên>` | Chọn giao diện Terminal: `system`, `dark`, `light` của Pi và `piagent-ocean`, `piagent-paper`, `piagent-contrast`, `piagent-focus` của Piagent. Pi cá nhân lưu trong settings của Pi; Terminal công ty (`piagent studio`) lưu ở `~/.pi/piagent-terminal-style.json`. |
 | `pi` rồi `/permission full-access <task>` | Một lệnh trong Pi để bật full-access cho session và giao task. Alias `/full-access <task>` vẫn chạy. |
-| `piagent-auto --bypass`, `/permission bypass` | Bypass như Codex: không hỏi, không chặn gì (xoá, push, migration, gửi ra ngoài, file được bảo vệ đều chạy). Output vẫn che secret, `/undo` vẫn hoàn tác từng lượt. Company: `/bypass on` (Bypass), `/bypass full` (Toàn quyền), `/bypass off` (Hỏi trước); admin Studio tắt được Bypass trong Harness, khi đó cuộc trò chuyện chạy như Toàn quyền. |
+| `piagent-auto --bypass`, `/permission bypass` | Bypass: việc làm chạy luôn, không hỏi, không chặn (xoá, migration, file được bảo vệ, lệnh trên máy đều chạy); việc bàn giao vẫn hỏi (git push, tạo/merge PR, publish, deploy, ssh, tool cloud, upload, MCP ghi ra ngoài). Output vẫn che secret, `/undo` vẫn hoàn tác từng lượt. Company: `/bypass on` (Bypass), `/bypass full` (Toàn quyền), `/bypass off` (Hỏi trước); admin Studio tắt được Bypass trong Harness, khi đó cuộc trò chuyện chạy như Toàn quyền. |
 | `pi --list-models` | Xem model Pi thấy được theo credentials hiện tại. |
 | `piagent-install --with-mcp --with-subagents` | Cài global package + MCP + subagent baseline từ package bin. |
 | `piagent-setup <project> --profile auto` | Setup đầy đủ cho một project khi muốn preseed bằng bin. |

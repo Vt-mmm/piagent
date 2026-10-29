@@ -70,17 +70,36 @@ test('an MCP result reaches the agent as data; other tools are untouched', t => 
   assert.equal(pi.handlers.tool_result({ toolName: 'unknown', input: {}, content: [] }), undefined);
 });
 
-test('a server a repository defines runs only once someone on this machine approved it; the member\'s own servers run', t => {
+test('a server a repository defines runs only once someone on this machine approved it; the member\'s own servers run', async t => {
   const { dir } = home(t), project = temp(t);
   fs.writeFileSync(path.join(project, '.mcp.json'), JSON.stringify({ mcpServers: { planted: { command: 'node', args: ['evil.js'] } } }));
   mcpApprovalCache.delete(project);
   const pi = fakePi([]);
   memberMcpGuard(project, dir)(pi);
-  const blocked = pi.handlers.tool_call({ toolName: 'mcp', input: { server: 'planted', tool: 'x' } });
+  const blocked = await pi.handlers.tool_call({ toolName: 'mcp', input: { server: 'planted', tool: 'x' } });
   assert.equal(blocked.block, true);
   assert.match(blocked.reason, /^Blocked MCP server planted: this repository defines it and nobody on this machine has approved it\. Review it with `\/piagent-mcp get planted`/);
-  assert.equal(pi.handlers.tool_call({ toolName: 'mcp', input: { server: 'jira', tool: 'search' } }), undefined, 'a server the repository does not define is the member\'s');
-  assert.equal(pi.handlers.tool_call({ toolName: 'read', input: { path: 'a.txt' } }), undefined);
+  assert.equal(await pi.handlers.tool_call({ toolName: 'mcp', input: { server: 'jira', tool: 'search' } }), undefined, 'a server the repository does not define is the member\'s');
+  assert.equal(await pi.handlers.tool_call({ toolName: 'read', input: { path: 'a.txt' } }), undefined);
+});
+
+test('an MCP tool that writes outside is asked in every access mode; reads run; with nobody to ask it is refused', async t => {
+  const { dir } = home(t), project = temp(t);
+  mcpApprovalCache.delete(project);
+  const tools = [{ name: 'mcp', sourceInfo: { path: path.join(dir, 'index.js') } }, { name: 'github_create_pull_request', sourceInfo: { path: path.join(dir, 'index.js') } }];
+  const refused = fakePi(tools);
+  memberMcpGuard(project, dir)(refused);
+  assert.match((await refused.handlers.tool_call({ toolName: 'mcp', input: { server: 'github', tool: 'push_files', args: '{}' } })).reason, /writes outside \(push\) and no member can approve it/);
+  for (const permission of ['workspace-write', 'trusted-full-access', 'bypass']) {
+    const asked = [], owner = { permission, manifest: { harness: { configuration: { bypass_mode: true } } }, cwd: project, grant: {}, session: { sessionManager: { getSessionId: () => 's' } } };
+    const pi = fakePi(tools);
+    memberMcpGuard(project, dir, owner)(pi);
+    const ctx = { ui: { confirm: async (title, body) => { asked.push(body); return false; } } };
+    assert.equal(await pi.handlers.tool_call({ toolName: 'mcp', toolCallId: 'r', input: { server: 'github', tool: 'get_file_contents', args: '{}' } }, ctx), undefined, `${permission}: a read runs`);
+    const denied = await pi.handlers.tool_call({ toolName: 'github_create_pull_request', toolCallId: 'w', input: { title: 'x' } }, ctx);
+    assert.equal(denied?.block, true, `${permission}: a write is asked`);
+    assert.match(asked[0], /kể cả Bypass/);
+  }
 });
 
 test('Pi\'s loader adds the installed adapter beside the session\'s own extensions; a broken one is reported, not fatal', { skip: !fs.existsSync(sdkRoot) }, async t => {

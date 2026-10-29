@@ -1,4 +1,4 @@
-import { asksNothing } from './permission.mjs';
+import { asksOnlyHandoff } from './permission.mjs';
 import { approve } from './command-tools.mjs';
 
 // web_fetch is a request to any public https address: a page that tells the
@@ -6,7 +6,7 @@ import { approve } from './command-tools.mjs';
 // Documentation and package registries are read freely. Another host is asked
 // about once per conversation; an address there that carries a query or a
 // fragment (where data rides along) is asked about every time. Bypass asks
-// only about the latter. A helper cannot ask the member: it is told to hand
+// only about the latter: data sent out is a handoff. A helper cannot ask the member: it is told to hand
 // the address to the main agent.
 const TRUSTED = ['github.com', 'raw.githubusercontent.com', 'docs.github.com', 'npmjs.com', 'www.npmjs.com', 'registry.npmjs.org', 'pypi.org', 'docs.python.org',
   'developer.mozilla.org', 'nodejs.org', 'go.dev', 'pkg.go.dev', 'crates.io', 'docs.rs', 'doc.rust-lang.org', 'learn.microsoft.com', 'developer.apple.com',
@@ -21,7 +21,7 @@ export function fetchDecision(owner, role, raw) {
   if (trustedHost(host)) return null;
   const carries = Boolean(url.search || url.hash), known = owner.fetchHosts?.has(host);
   if (role !== 'main') return carries || !known ? 'refuse' : null;
-  if (asksNothing(owner)) return carries ? 'ask' : null;
+  if (asksOnlyHandoff(owner)) return carries ? 'ask' : null;
   return carries || !known ? 'ask' : null;
 }
 export async function guardFetch(owner, role, raw, id, signal, ctx) {

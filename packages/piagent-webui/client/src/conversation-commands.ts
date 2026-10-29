@@ -70,15 +70,15 @@ export function conversationCommands(context: ConversationCommandContext): Conve
       return on === null ? usage("Cách dùng: /fast on|off", "Usage: /fast on|off")
         : attempt(locale, () => actions.setFast(on), on ? ok("Đã bật Fast.", "Fast is on.") : ok("Đã tắt Fast.", "Fast is off."), "Chưa đổi được Fast", "Could not change Fast");
     });
-    add("bypass", "<on|full|off>", "Bypass (không hỏi gì), Toàn quyền (chỉ hỏi việc bắt buộc) hoặc Hỏi trước", "Bypass (asks nothing), Full access (asks only what must be asked) or Ask first", async (value) => {
+    add("bypass", "<on|full|off>", "Bypass (chỉ hỏi việc bàn giao), Toàn quyền (hỏi việc bàn giao và việc phá huỷ) hoặc Hỏi trước", "Bypass (asks only about the handoff), Full access (asks about the handoff and destructive steps) or Ask first", async (value) => {
       if (value === "off") return attempt(locale, () => actions.setPermission("workspace-write"), ok("Đã chuyển sang Hỏi trước.", "Switched to Ask first."), "Chưa đổi được quyền", "Access not changed");
       if (value === "full") return { confirm: { title: t("Bật Toàn quyền?", "Turn on Full access?"), confirmLabel: t("Bật Toàn quyền", "Turn on Full access"),
-        description: t("Lệnh cần internet hoặc Docker chạy không hỏi; push, deploy và lệnh trên máy vẫn hỏi.", "Commands that need the internet or Docker run without asking; pushes, deploys and commands on this machine still ask."),
+        description: t("Lệnh cần internet hoặc Docker chạy không hỏi; push, PR, publish, deploy, migration, xoá không rõ đích và lệnh trên máy vẫn hỏi.", "Commands that need the internet or Docker run without asking; pushes, pull requests, publish, deploys, migrations, unknown-target deletes and commands on this machine still ask."),
         run: () => attempt(locale, () => actions.setPermission("trusted-full-access"), ok("Đã bật Toàn quyền.", "Full access is on."), "Chưa đổi được quyền", "Access not changed") } };
       if (value !== "on") return usage("Cách dùng: /bypass on|full|off", "Usage: /bypass on|full|off");
       if (!context.bypass) return usage("Harness của team đã tắt Bypass (admin Studio). Dùng /bypass full cho Toàn quyền.", "The team's Harness has Bypass off (Studio administrator). Use /bypass full for Full access.");
       return { confirm: { title: t("Bật Bypass?", "Turn on Bypass?"), confirmLabel: t("Bật Bypass", "Turn on Bypass"),
-        description: t("Không hỏi gì nữa: internet, Docker, lệnh trên máy, push, deploy, migration đều chạy luôn. Lệnh thường vẫn trong sandbox; /undo vẫn dùng được.", "Nothing is asked any more: internet, Docker, commands on this machine, pushes, deploys and migrations all run. Plain commands stay in the sandbox; /undo still works."),
+        description: t("Việc làm chạy luôn (internet, Docker, lệnh trên máy, migration); việc bàn giao vẫn hỏi: push, PR, publish, deploy, upload, MCP ghi ra ngoài. Lệnh thường vẫn trong sandbox; /undo vẫn dùng được.", "The work runs (internet, Docker, commands on this machine, migrations); the handoff is still asked: pushes, pull requests, publish, deploys, uploads, MCP writes. Plain commands stay in the sandbox; /undo still works."),
         run: () => attempt(locale, () => actions.setPermission("bypass"), ok("Đã bật Bypass.", "Bypass is on."), "Chưa đổi được quyền", "Access not changed") } };
     });
   } else {

@@ -1,5 +1,5 @@
-import { excludedFindSelectorValue, findSelectorOption, SEARCH_COMMANDS, SEARCH_FILE_OPTIONS, SEARCH_GLOB_OPTIONS,
-  SEARCH_PATTERN_OPTIONS, searchSelectorIsExclusion, searchSelectorWithinToken } from "./shell-selector-policy.js";
+import { excludedFindSelectorValue, findSelectorOption, SEARCH_COMMANDS, SEARCH_FILE_OPTIONS, SEARCH_GLOB_OPTIONS, SEARCH_PATTERN_OPTIONS, searchSelectorIsExclusion, searchSelectorWithinToken } from "./shell-selector-policy.js";
+import { CONTROL_PREFIXES, gitSubcommandWords } from "./shell-command-words.js";
 
 const PATH_REDIRECT_OPERATORS = new Set(["<", ">", ">>", "1>", "1>>", "2>", "2>>", "&>", "&>>"]);
 const DATA_ONLY_COMMANDS = new Set(["echo", "printf"]);
@@ -35,7 +35,7 @@ const INLINE_CODE_FLAGS = new Map([
   ["perl", new Set(["-e", "-E"])],
   ["php", new Set(["-r"])]
 ]);
-const SIMPLE_WRAPPERS = new Set(["sudo", "nohup", "time", "nice", "ionice", "command"]);
+const SIMPLE_WRAPPERS = new Set(["sudo", "doas", "nohup", "time", "nice", "ionice", "command", "exec"]);
 
 function escapeRegex(value) {
   return value.replace(/[.+^${}()|[\]\\]/g, "\\$&");
@@ -703,13 +703,13 @@ function isLeadingRedirection(word) {
   return /^[0-9]*(?:>>?\|?|<>?|>&|<&)/.test(word);
 }
 
-function stripWrapper(words) {
+export function stripWrapper(words) {
   let current = [...words];
   let changed = true;
 
   while (changed && current.length > 0) {
     changed = false;
-    while (current.length > 0 && isAssignment(current[0])) {
+    while (current.length > 0 && (isAssignment(current[0]) || CONTROL_PREFIXES.has(current[0]))) {
       current = current.slice(1);
       changed = true;
     }
@@ -1229,7 +1229,7 @@ export function evaluateExecPolicyCore(command, options) {
   const confirmationPatternMatches = (pattern, words) => {
     const expected = shellWords(String(pattern ?? ""));
     if (expected.length === 0) return false;
-    const executableWords = stripWrapper(words);
+    const executableWords = gitSubcommandWords(stripWrapper(words));
     if (arrayStartsWith(executableWords, expected)) return true;
     if (expected.length !== 1) return false;
     const action = expected[0];
