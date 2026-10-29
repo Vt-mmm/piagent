@@ -29,6 +29,7 @@ export type ProjectProfile = {
   memory?: MemorySettings;
   contextIndex?: ContextIndexSettings;
   runtimePolicy?: RuntimePolicySettings;
+  autoDeny?: AutoDenyRule[];
   orchestration?: OrchestrationPolicySettings;
   techStack?: ProjectTechStackReference;
 };
@@ -460,7 +461,13 @@ export type CommandRule = {
   ignoreSearchArguments?: boolean;
   value: string | string[];
   reason: string;
+  // A forbid that also ends the agent's turn, so it does not retry.
+  terminate?: boolean;
 };
+
+// A project's own refusals (profile `autoDeny`): matched like an exec rule,
+// refused in every permission mode, Bypass included.
+export type AutoDenyRule = { pattern: string; match?: "contains" | "regex" | "prefix"; reason: string; terminate?: boolean };
 
 export type ExecPolicyConfig = {
   defaultMode?: "advisory" | "enforce";

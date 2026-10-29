@@ -5,19 +5,19 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import { decideApproval, readApproval, readSessionApproval } from "./api.ts";
 import { approvalConsequenceText, approvalKindText, approvalReasonText, approvalScopeText } from "./approval-text.ts";
 import { label } from "./view-model.ts";
-import { createApprovalDecision } from "./approval-command.ts";
+import { createApprovalDecision, sessionGrantable, type ApprovalAnswer } from "./approval-command.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
 type Props = { snapshot: PiagentWebUICanonicalSnapshotV1; refreshSnapshot?: () => Promise<PiagentWebUICanonicalSnapshotV1 | undefined> };
 type ListProps = { approvalRefs: string[]; sessionRef?: string; refreshSnapshot?: () => Promise<unknown> };
-export type LoadState = { request?: ApprovalRequest; error?: string; deciding?: "allow" | "deny" };
+export type LoadState = { request?: ApprovalRequest; error?: string; deciding?: ApprovalAnswer };
 
 export function ApprovalCard({ state, setState, refreshSnapshot, locale, asker }: { state: LoadState; setState(value: LoadState): void;
   refreshSnapshot?: () => Promise<unknown>; locale: UiLocale; asker?: string }) {
   const request = state.request;
   if (!request) return <article className="approval-card"><p>{state.error ?? localize(locale, "Đang tải yêu cầu phê duyệt…", "Loading approval request…")}</p></article>;
   const action = request.action, remaining = Math.max(0, Math.ceil((Date.parse(request.expiresAt) - Date.now()) / 1000));
-  const submit = async (answer: "allow" | "deny") => {
+  const submit = async (answer: ApprovalAnswer) => {
     setState({ request, deciding: answer });
     try { await decideApproval(createApprovalDecision(request, answer)); await refreshSnapshot?.(); }
     catch { setState({ request, error: localize(locale, "Yêu cầu đã hết hạn, thay đổi hoặc được trả lời ở terminal. Hãy tải trạng thái mới.", "The request expired, changed, or was answered in the terminal. Refresh status.") }); }
@@ -35,9 +35,11 @@ export function ApprovalCard({ state, setState, refreshSnapshot, locale, asker }
     {action.targetPaths.length > 0 && <div className="approval-targets"><strong>{localize(locale, "Đích tác động", "Targets")}</strong><ul>{action.targetPaths.map((item) => <li key={item}>{item === "." ? localize(locale, "Cả thư mục project", "The whole project folder") : item}</li>)}</ul></div>}
     <div className="approval-consequences"><p><strong>{localize(locale, "Nếu cho phép:", "If allowed:")}</strong> {approvalConsequenceText(action.consequences.allow, locale)}</p><p><strong>{localize(locale, "Nếu từ chối:", "If denied:")}</strong> {approvalConsequenceText(action.consequences.deny, locale)}</p></div>
     {state.error && <p className="form-error" role="alert">{state.error}</p>}
-    <footer><button type="button" className="secondary-action" disabled={Boolean(state.deciding)} onClick={() => void submit("deny")}>{localize(locale, "Từ chối", "Deny")}</button>
+    <footer><button type="button" className="secondary-action" disabled={Boolean(state.deciding)} title={localize(locale, "Từ chối và kết thúc lượt này, agent không thử lại", "Deny and end this turn so the agent does not retry")} onClick={() => void submit("stop")}>{localize(locale, "Từ chối và dừng", "Deny and stop")}</button>
+      <button type="button" className="secondary-action" disabled={Boolean(state.deciding)} onClick={() => void submit("deny")}>{localize(locale, "Từ chối", "Deny")}</button>
+      {sessionGrantable(request) && <button type="button" className="secondary-action" disabled={Boolean(state.deciding)} title={localize(locale, "Lệnh giống hệt sẽ chạy không hỏi lại cho tới hết session", "The same exact command runs without asking until the session ends")} onClick={() => void submit("session")}>{localize(locale, "Cho cả session", "Allow for session")}</button>}
       <button type="button" className="danger-action" disabled={Boolean(state.deciding)} onClick={() => void submit("allow")}>
-        {state.deciding === "allow" ? localize(locale, "Đang kiểm tra lại…", "Rechecking…") : localize(locale, "Cho phép đúng 1 lần", "Allow once")}</button></footer>
+        {state.deciding === "allow" || state.deciding === "session" ? localize(locale, "Đang kiểm tra lại…", "Rechecking…") : localize(locale, "Cho phép đúng 1 lần", "Allow once")}</button></footer>
   </article>;
 }
 

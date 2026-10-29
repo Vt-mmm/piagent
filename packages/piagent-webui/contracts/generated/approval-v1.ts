@@ -147,6 +147,14 @@ export interface ApprovalDecision {
   decisionSurface: "webui";
   executor: "pi-guard";
   directExecution: false;
+  /**
+   * Optional. once allows this exact action one time; session also allows the same exact action for the rest of the session. Only with allow.
+   */
+  scope?: "once" | "session";
+  /**
+   * Optional. true with deny also stops the current turn, so the agent does not retry.
+   */
+  stop?: boolean;
 }
 export interface ReceiptRevisions {
   runtimeRevision: string;

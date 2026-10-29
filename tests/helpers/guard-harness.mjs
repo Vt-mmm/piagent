@@ -13,6 +13,11 @@ export function provisionSyntaxParserRuntime(root) {
   const declared = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../../package.json"), "utf8")).dependencies["@babel/parser"];
   if (installed.version !== declared) throw new Error("fixture syntax parser must match the declared runtime pin");
   fs.cpSync(packageRoot, path.join(root, "node_modules/@babel/parser"), { recursive: true });
+  // The shell syntax tree reader (extensions/shell-ast.js) and its pin.
+  const shellRoot = path.resolve(path.dirname(createRequire(import.meta.url).resolve("@aliou/sh")), "..");
+  const shell = JSON.parse(fs.readFileSync(path.join(shellRoot, "package.json"), "utf8"));
+  if (shell.version !== JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../../package.json"), "utf8")).dependencies["@aliou/sh"]) throw new Error("fixture shell parser must match the declared runtime pin");
+  fs.cpSync(shellRoot, path.join(root, "node_modules/@aliou/sh"), { recursive: true });
 }
 
 export function writeModule(target, source) {

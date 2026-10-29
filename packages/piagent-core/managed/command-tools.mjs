@@ -73,14 +73,27 @@ export function stillAsks(self, reason) {
     : { en: `Full access still asks: ${reason}`, vi: `Full access vẫn hỏi: ${reason}` };
 }
 
-// One approval of the member (the dashboard card, else the Terminal).
+// One approval of the member (the dashboard card, else the Terminal). The
+// member may allow it once, allow the same exact action for the rest of the
+// conversation (never a handoff: its scope names it), deny it, or deny it and
+// stop the turn so the agent does not try again.
+const CHOICES = { once: 'Đồng ý một lần', session: 'Đồng ý cho cả cuộc trò chuyện (đúng lệnh này)', deny: 'Từ chối', stop: 'Từ chối và dừng lượt này' };
 export async function approve(self, id, signal, ctx, action, { title, body }) {
+  const grantable = !/handoff/.test(String(action.requestedScope ?? '')), key = `${action.toolName}\u0000${action.commandPreview ?? JSON.stringify(action.rawAction ?? {})}`;
+  if (grantable && self.sessionApprovals?.has(key)) return;
   const { piApprovalBroker } = await import('../runtime/inspection/approval-broker.ts');
+  const choices = ['once', ...(grantable ? ['session'] : []), 'deny', 'stop'];
   const decision = await piApprovalBroker.request({ cwd: self.cwd, rawSessionId: self.session.sessionManager.getSessionId(), toolCallId: id,
     action: { kind: 'external-provider-action', preconditionClass: 'runtime-only', targetPaths: [self.cwd], urlOrigin: null, ...action },
     terminalConfirm: () => ctx?.ui?.confirm?.(title, body) ?? Promise.resolve(false),
+    ...(ctx?.mode === 'tui' && ctx?.hasUI && typeof ctx.ui?.select === 'function' ? { terminalChoose: async () => {
+      const picked = await ctx.ui.select(`${title}\n\n${body}`, choices.map(choice => CHOICES[choice]));
+      return choices.find(choice => CHOICES[choice] === picked) ?? 'deny';
+    } } : {}),
     unavailableFallback: 'terminal-confirm', recheck: () => !signal?.aborted && Boolean(self.grant) });
+  if (!decision.allowed && decision.choice === 'stop') { try { ctx?.abort?.(); } catch { /* the denial below still stands */ } throw Error('managed-operation-denied-stop: bạn đã từ chối và dừng lượt này; không thử lại, chờ member.'); }
   if (!decision.allowed || !decision.consume() || signal?.aborted) throw Error('managed-operation-denied');
+  if (decision.choice === 'session' && grantable) (self.sessionApprovals ??= new Set()).add(key);
 }
 
 function commandTool(self, kind) {
@@ -94,9 +107,9 @@ function commandTool(self, kind) {
       if (notSimulator) throw Error(`managed-simulator-command: ${notSimulator}.`);
       const confirm = await spec.confirm(self, args.command);
       if (confirm !== null) {
-        const why = confirm === 'ask' ? null : stillAsks(self, confirm);
+        const why = confirm === 'ask' ? null : stillAsks(self, confirm), handoff = await handoffReason(args.command);
         await approve(self, id, signal, ctx, { toolName: spec.name, rawAction: { command: args.command }, commandPreview: String(args.command),
-          provider: spec.provider, requestedScope: spec.scope, reason: (why ? `${why.en}. ${args.reason}` : String(args.reason)).slice(0, 300), riskClass: spec.riskClass,
+          provider: spec.provider, requestedScope: handoff ? 'handoff-once' : spec.scope, reason: (why ? `${why.en}. ${args.reason}` : String(args.reason)).slice(0, 300), riskClass: spec.riskClass,
           allowConsequence: spec.allow, denyConsequence: 'The command does not run; the agent is told you declined.' },
         { title: spec.title, body: `${args.command}\n\nLý do: ${args.reason}${why ? `\n${why.vi}` : ''}\n\nĐồng ý: ${spec.allowText}\nTừ chối: lệnh không chạy, agent được báo bạn đã từ chối.` });
       }

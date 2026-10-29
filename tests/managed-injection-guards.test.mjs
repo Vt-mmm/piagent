@@ -85,3 +85,17 @@ test('untrusted text sits in a fence it cannot close, and the agent and helpers 
     assert.match(UNTRUSTED_RULE, words);
   assert.match(HELPER_UNTRUSTED_RULE, /never repeat secrets you saw/);
 });
+
+test('a company approval can be kept for the conversation (never a handoff) or denied with the turn stopped', async () => {
+  const self = member('workspace-write'), tool = commandTools(self).find(t => t.name === 'run_on_host');
+  const menus = [], tui = pick => ({ mode: 'tui', hasUI: true, abort: () => menus.push('aborted'), ui: { confirm: async () => { throw Error('yes/no used'); }, select: async (title, options) => { menus.push(options); return options.find(pick); } } });
+  const first = await tool.execute('s1', { command: 'echo kept', reason: 'x' }, undefined, undefined, tui(option => option.startsWith('Đồng ý cho cả')));
+  assert.equal(first.content[0].text, 'kept');
+  assert.deepEqual(menus[0], ['Đồng ý một lần', 'Đồng ý cho cả cuộc trò chuyện (đúng lệnh này)', 'Từ chối', 'Từ chối và dừng lượt này']);
+  const again = await tool.execute('s2', { command: 'echo kept', reason: 'x' }, undefined, undefined, never);
+  assert.equal(again.content[0].text, 'kept', 'the same command runs without asking again');
+  await assert.rejects(tool.execute('s3', { command: 'git push origin main', reason: 'x' }, undefined, undefined, tui(option => option === 'Từ chối')), /managed-operation-denied/);
+  assert.deepEqual(menus.at(-1), ['Đồng ý một lần', 'Từ chối', 'Từ chối và dừng lượt này'], 'a handoff has no conversation-wide choice');
+  await assert.rejects(tool.execute('s4', { command: 'echo other', reason: 'x' }, undefined, undefined, tui(option => option.startsWith('Từ chối và dừng'))), /managed-operation-denied-stop/);
+  assert.equal(menus.at(-1), 'aborted', 'the turn is stopped');
+});

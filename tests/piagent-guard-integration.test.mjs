@@ -2197,6 +2197,60 @@ non-secret metadata are safe alternatives.`;
     assert.notEqual((await callToolCall(toolCall, yes, "bash", { command: "git push origin feature" }))?.block, true, "a yes runs it");
   });
 
+  it("the terminal offers allow once, allow for the session, deny, and deny and stop; a handoff is never kept for the session", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+    const tui = (select) => { const ctx = createContext(cwd, { select }); ctx.mode = "tui"; ctx.hasUI = true; return ctx; };
+    const kept = tui(["Allow this exact action for the rest of the session"]);
+    await harness.handlers.get("session_start")({}, kept);
+    assert.notEqual((await callToolCall(toolCall, kept, "bash", { command: "npx prisma migrate deploy" }))?.block, true, "allowed for the session");
+    assert.equal(kept.selectCalls.length, 1);
+    assert.deepEqual(kept.selectCalls[0][1], ["Allow once", "Allow this exact action for the rest of the session", "Deny", "Deny and stop the turn"]);
+    assert.notEqual((await callToolCall(toolCall, kept, "bash", { command: "npx prisma migrate deploy" }))?.block, true, "the same command runs");
+    assert.equal(kept.selectCalls.length, 1, "and is not asked again");
+    const other = await callToolCall(toolCall, kept, "bash", { command: "npx prisma migrate reset" });
+    assert.equal(other?.block, true, "another command is asked (and the empty answer denies)");
+    assert.equal(kept.selectCalls.length, 2);
+
+    const handoff = tui(["Allow this exact action for the rest of the session"]);
+    await callToolCall(toolCall, handoff, "bash", { command: "ssh prod ls" });
+    assert.deepEqual(handoff.selectCalls[0][1], ["Allow once", "Deny", "Deny and stop the turn"], "a handoff has no session choice");
+
+    const stop = tui(["Deny and stop the turn"]);
+    const stopped = await callToolCall(toolCall, stop, "bash", { command: "npx prisma migrate deploy --force" });
+    assert.equal(stopped.block, true);
+    assert.equal(stopped.terminate, true, "deny and stop ends the turn");
+    assert.match(stopped.reason, /Do not retry/);
+  });
+
+  it("a project's autoDeny rules refuse in every mode, Bypass included, and terminate ends the turn", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.autoDeny = [{ pattern: "sleep ", reason: "do not wait with sleep; the process tool reports when it ends", terminate: true }, { pattern: "^npm run seed", match: "regex", reason: "seeding is done by hand" }];
+    for (const mode of ["workspace-write", "bypass"]) {
+      profile.permissionProfile = mode;
+      fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+      const harness = createPiHarness();
+      piagentGuard(harness.pi);
+      const ctx = createContext(cwd);
+      await harness.handlers.get("session_start")({}, ctx);
+      const toolCall = harness.handlers.get("tool_call");
+      const slept = await callToolCall(toolCall, ctx, "bash", { command: "sleep 30 && npm test" });
+      assert.equal(slept.block, true, `${mode}: refused`);
+      assert.equal(slept.terminate, true, `${mode}: the turn ends`);
+      assert.match(slept.reason, /do not wait with sleep/);
+      const seeded = await callToolCall(toolCall, ctx, "bash", { command: "npm run seed" });
+      assert.equal(seeded.block, true, `${mode}: refused`);
+      assert.equal(seeded.terminate, undefined, `${mode}: without terminate the turn goes on`);
+      assert.equal(ctx.confirmations.length, 0, `${mode}: nothing is asked`);
+    }
+  });
+
   it("workspace-write and full access ask before ssh, deploy tools and git -C push, which the plain patterns missed", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

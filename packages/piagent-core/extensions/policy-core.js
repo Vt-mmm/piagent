@@ -1186,7 +1186,7 @@ export function evaluateExecPolicyCore(command, options) {
 
     for (const rule of execPolicy.rules) {
       if (!commandRuleMatches(rule, text, words)) continue;
-      matches.push(`${rule.action}:${rule.id}`);
+      matches.push(`${rule.action}:${rule.id}`, ...(rule.action === "forbid" && rule.terminate ? [`terminate:${rule.id}`] : []));
       if (rule.action === "forbid") reasons.push(`Forbidden by exec policy ${rule.id}: ${rule.reason}`);
       if (rule.action === "prompt") reasons.push(`Prompt required by exec policy ${rule.id}: ${rule.reason}`);
     }

@@ -75,7 +75,7 @@ if (!version?.includes("-") && rootPackage.publishConfig?.tag !== undefined) fai
 if (rootPackage.repository?.url !== "git+https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
 if (corePackage.repository?.url !== rootPackage.repository.url) fail("core package repository URL does not match the root package");
 const runtimeDependencies = rootPackage.dependencies ?? {};
-if (JSON.stringify(runtimeDependencies) !== JSON.stringify({ "@babel/parser": "7.29.8", ws: "8.21.3" })) {
+if (JSON.stringify(runtimeDependencies) !== JSON.stringify({ "@aliou/sh": "0.3.4", "@babel/parser": "7.29.8", ws: "8.21.3" })) {
   fail("root package runtime dependencies must contain only the pinned syntax parser and local Gateway WebSocket transport");
 }
 if (JSON.stringify(packageLock.packages?.[""]?.dependencies) !== JSON.stringify(runtimeDependencies)) fail("package-lock runtime dependencies do not match package.json");

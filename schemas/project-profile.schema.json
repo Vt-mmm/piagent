@@ -550,6 +550,22 @@
       },
       "additionalProperties": false
     },
+    "autoDeny": {
+      "description": "Commands this project refuses in every permission mode, Bypass included. Each rule is matched like an exec-policy rule; terminate also ends the agent's turn so it does not retry.",
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "reason"],
+        "properties": {
+          "pattern": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "match": { "enum": ["contains", "regex", "prefix"] },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "terminate": { "type": "boolean" }
+        }
+      }
+    },
     "runtimePolicy": {
       "type": "object",
       "properties": {

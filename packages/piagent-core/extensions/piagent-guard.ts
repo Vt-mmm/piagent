@@ -86,9 +86,9 @@ import { currentWorkspaceRevisionDigest } from "./workspace-revision.js";
 import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
 import { hasDurableContextEvidence } from "./context-evidence.js";
-import { piApprovalBroker, type ApprovalActionDraft, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
+import { piApprovalBroker, type ApprovalActionDraft, type ApprovalChoice, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
-import { FULL_ACCESS_RUNS, handoffReason, mcpWriteAction } from "../runtime/policy/handoff-policy.mjs";
+import { FULL_ACCESS_RUNS, handoffReason, mcpWriteAction, treeExecFinding } from "../runtime/policy/handoff-policy.mjs";
 import { createWorkspaceWriteAuthorityBindings } from "../runtime/policy/workspace-write-authority.ts";
 import { registerWorkspaceMemberEdits } from "../runtime/session/workspace-member-edits.mjs";
 import {
@@ -207,6 +207,7 @@ import type {
   ResolvedPermissionProfile,
   ReviewLens,
   RuntimePolicySettings,
+  CommandRule,
   TaskContract,
   TechContextSnapshot,
   TechOption,
@@ -563,7 +564,7 @@ function evaluateExecPolicy(command: string, profile: ProjectProfile, policy: Ba
   segments: Array<{ command: string; words: string[]; matches: string[]; warnings: string[] }>;
 } {
   const runtime = resolveRuntimePolicy(profile);
-  const execPolicy = execPolicyConfig(policy);
+  const execPolicy = { ...execPolicyConfig(policy), rules: [...execPolicyConfig(policy).rules, ...autoDenyRules(profile)] };
   const mode = runtime.execPolicy === "off" ? "off" : runtime.execPolicy ?? execPolicy.defaultMode;
   return evaluateExecPolicyCore(command, { policy: { ...policy, execPolicy }, mode }) as {
     mode: RuntimePolicySettings["execPolicy"];
@@ -921,6 +922,36 @@ function approvalUnavailableFallback(ctx: Pick<ExtensionContext, "ui">): Approva
     return "terminal-confirm";
   }
 }
+
+// A project's own refusals (profile `autoDeny`) as exec-policy forbid rules.
+function autoDenyRules(profile: ProjectProfile): CommandRule[] {
+  return (Array.isArray(profile.autoDeny) ? profile.autoDeny : []).filter((rule) => typeof rule?.pattern === "string" && rule.pattern.trim())
+    .map((rule, index) => ({ id: `auto-deny-${index + 1}`, action: "forbid" as const, match: rule.match ?? "contains", value: rule.pattern,
+      reason: String(rule.reason ?? "Refused by this project's autoDeny rule"), terminate: rule.terminate === true }));
+}
+// The block for a refused command; a rule with terminate also ends the turn.
+function execRefusal(decision: { reasons: string[]; segments: Array<{ matches: string[] }> }): { block: true; reason: string; terminate?: boolean } {
+  const terminate = decision.segments.some((segment) => segment.matches.some((match) => match.startsWith("terminate:")));
+  return { block: true, reason: decision.reasons.join("; ") + (terminate ? " Do not retry; the turn ends here." : ""), ...(terminate ? { terminate: true } : {}) };
+}
+
+// The member's four answers in the terminal (Pi's TUI). Elsewhere the
+// terminal keeps its yes/no question and the dashboard card offers the four.
+const TERMINAL_CHOICES: Record<ApprovalChoice, string> = { once: "Allow once", session: "Allow this exact action for the rest of the session",
+  deny: "Deny", stop: "Deny and stop the turn" };
+function terminalChooser(ctx: ExtensionContext, title: string, prompt: string, grantable: boolean): (() => Promise<ApprovalChoice>) | undefined {
+  if (ctx.mode !== "tui" || !ctx.hasUI || typeof ctx.ui.select !== "function") return undefined;
+  const choices = (["once", ...(grantable ? ["session"] : []), "deny", "stop"] as ApprovalChoice[]);
+  return async () => {
+    const picked = await ctx.ui.select(`${title}\n\n${prompt}`, choices.map((choice) => TERMINAL_CHOICES[choice]));
+    return choices.find((choice) => TERMINAL_CHOICES[choice] === picked) ?? "deny";
+  };
+}
+
+// Actions the member allowed for the rest of a session: the same tool with
+// the same exact command or input. A handoff is never kept.
+const sessionGrants = new Map<string, Set<string>>();
+const grantKey = (toolName: string, command: string | null, input: unknown) => `${toolName}\u0000${command ?? JSON.stringify(input ?? {})}`;
 
 function evaluatePathLikeToolAccess(
   cwd: string,
@@ -3722,11 +3753,17 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // Bypass runs the work without asking and stops at the handoff: a push, a
   // PR or merge, a publish or deploy, a remote or cloud tool, an upload or an
   // MCP tool that writes outside is asked about, as in every other mode.
-  const bypassHandoff = async (event: { toolName: string; toolCallId?: string; input?: unknown }, ctx: ExtensionContext): Promise<{ block: true; reason: string } | undefined> => {
+  const bypassHandoff = async (event: { toolName: string; toolCallId?: string; input?: unknown }, ctx: ExtensionContext): Promise<{ block: true; reason: string; terminate?: boolean } | undefined> => {
     const input = isPlainRecord(event.input) ? event.input : {};
     const prepared = SHELL_TOOL_NAMES.has(event.toolName) ? null : prepareToolInputForPolicy(event.toolName, input, policy);
     const shell = extractShellCommandInput(prepared?.proxyShellCarrier && prepared.proxyArgs ? prepared.proxyArgs : SHELL_TOOL_NAMES.has(event.toolName) ? input : {});
     const command = shell.command ? normalizeShellCommandForPolicy(shell.command) : null;
+    // The project's autoDeny rules hold in Bypass too: they are its own refusals.
+    const projectRules = autoDenyRules(loadProfileFromContext(ctx));
+    if (command && projectRules.length) {
+      const refused = evaluateExecPolicyCore(command, { policy: { execPolicy: { defaultMode: "enforce", bannedPrefixSuggestions: [], rules: projectRules } }, mode: "enforce" });
+      if (refused.decision === "forbid") return execRefusal(refused);
+    }
     let reason = command ? await handoffReason(command) : null;
     if (!reason && !command && prepared && classifyExternalAction(event.toolName, prepared.input, policy).decision === "confirm") {
       const action = await mcpWriteAction(prepared.proxyTool ?? event.toolName);
@@ -3739,8 +3776,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
         commandPreview: command, parameterPreview: preview, targetPaths: [], targetSummaries: [reason], provider: command ? "shell-external" : String(prepared?.proxyToolName ?? event.toolName),
         urlOrigin: null, requestedScope: "one-handoff", reason: `Bypass still asks before a handoff: ${reason}`, riskClass: "high",
         allowConsequence: "Run this exact step once; the work leaves this machine.", denyConsequence: "The step does not run; the agent is told you declined." },
-      terminalConfirm: () => ctx.ui.confirm(`Bypass still asks before a handoff.\n\n${reason}\n\n${preview}\n\nAllow?`, "Piagent handoff confirmation"), unavailableFallback: approvalUnavailableFallback(ctx) });
-    if (!approval.allowed) return { block: true, reason: `User denied the handoff: ${reason}` };
+      terminalConfirm: () => ctx.ui.confirm(`Bypass still asks before a handoff.\n\n${reason}\n\n${preview}\n\nAllow?`, "Piagent handoff confirmation"),
+      terminalChoose: terminalChooser(ctx, "Piagent handoff confirmation", `Bypass still asks before a handoff.\n\n${reason}\n\n${preview}`, false), unavailableFallback: approvalUnavailableFallback(ctx) });
+    if (!approval.allowed) return approval.choice === "stop" ? { block: true, terminate: true, reason: `User denied the handoff and stopped the turn: ${reason}. Do not retry; wait for the member.` } : { block: true, reason: `User denied the handoff: ${reason}` };
     if (!approval.consume()) return { block: true, reason: "Approval became stale before tool start; the action was blocked." };
     return undefined;
   };
@@ -3899,9 +3937,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
           && !candidate.startsWith("../")
           && !candidate.startsWith(".pi/piagent-state/")
         ));
-      if (execDecision.mode !== "off" && execDecision.decision === "forbid") {
-        return { block: true, reason: execDecision.reasons.join("; ") };
-      }
+      if (execDecision.mode !== "off" && execDecision.decision === "forbid") return execRefusal(execDecision);
+      // The shell syntax tree reads what the scanner may miss: a command in a
+      // function, a case arm or an unquoted heredoc's $( … ).
+      const treeFinding = execDecision.mode !== "off" ? treeExecFinding(command) : null;
+      if (treeFinding?.decision === "forbid") return { block: true, reason: treeFinding.reason };
 
       const protectedHit = findProtectedPathInCommand(command, pathPolicy.shellProtectedPaths);
       if (protectedHit) {
@@ -3930,7 +3970,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
       // Full access skips the prompts for local, reversible steps; deletes,
       // migrations and anything sent outside this machine are still asked.
-      const confirmationReasons = (execDecision.mode !== "off" && execDecision.decision === "prompt" ? [...execDecision.reasons] : [])
+      const confirmationReasons = [...(execDecision.mode !== "off" && execDecision.decision === "prompt" ? execDecision.reasons : []), ...(treeFinding?.decision === "prompt" && !execDecision.reasons.includes(treeFinding.reason) ? [treeFinding.reason] : [])]
         .filter((reason) => permissionProfile.mode !== "trusted-full-access"
           || ![...FULL_ACCESS_RUNS].some((id) => reason.startsWith(`Prompt required by exec policy ${id}:`)));
       // The handoff (push, PR, publish, deploy, remote and cloud tools,
@@ -3944,7 +3984,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         pendingHumanApproval = { prompt: `Command requires confirmation.\n\n${confirmationReasons.join("\n")}\n\nAllow?`, title: "Piagent exec policy confirmation",
           action: { kind: externalReason ? "external-provider-action" : "workspace-patch", preconditionClass: externalReason ? "runtime-only" : "workspace-tree", toolName: event.toolName, rawAction: { toolName: event.toolName, command, input: preparedInput.input },
             commandPreview: command, parameterPreview: preparedInput.confirmationSummary ?? "Shell command", targetPaths: shellMutationTargets, targetSummaries: confirmationReasons, provider: externalReason ? "shell-external" : null, urlOrigin: null,
-            requestedScope: "one-shell-command", reason: confirmationReasons.join("; "), riskClass: shellProjectMutation ? "high" : "medium", allowConsequence: "Run this exact command once, after the guard checks the working tree again.", denyConsequence: "The command does not run; the agent is told you declined." } };
+            requestedScope: handoff ? "one-handoff" : "one-shell-command", reason: confirmationReasons.join("; "), riskClass: shellProjectMutation ? "high" : "medium", allowConsequence: "Run this exact command once, after the guard checks the working tree again.", denyConsequence: "The command does not run; the agent is told you declined." } };
       }
     }
 
@@ -3997,16 +4037,25 @@ export default function piagentGuard(pi: ExtensionAPI) {
         : classifiedExternalAction;
       if (externalAction.decision === "confirm") {
         const inputSummary = preparedInput.confirmationSummary ? `\ninput: ${preparedInput.confirmationSummary}` : "";
+        // A write to the system behind the tool is a handoff: approved one at a time.
+        const writesOut = Boolean(await mcpWriteAction(preparedInput.proxyTool ?? event.toolName));
         pendingHumanApproval = { prompt: `External provider action requires confirmation.\n\nprovider: ${externalAction.provider}\naction: ${externalAction.action}\ntool: ${event.toolName}${inputSummary}\n\nAllow?`, title: "Piagent external action confirmation",
           action: { kind: "external-provider-action", preconditionClass: "runtime-only", toolName: event.toolName, rawAction: { toolName: event.toolName, input: preparedInput.input, provider: externalAction.provider, action: externalAction.action },
             commandPreview: null, parameterPreview: preparedInput.confirmationSummary ?? String(externalAction.action), targetPaths: [], targetSummaries: [], provider: String(externalAction.provider),
-            urlOrigin: null, requestedScope: "one-external-action", reason: `External provider action ${String(externalAction.action)} requires confirmation`, riskClass: "high", allowConsequence: "Run this exact action once, after the guard checks its authority again.", denyConsequence: "The action does not run; nothing outside changes." } };
+            urlOrigin: null, requestedScope: writesOut ? "one-handoff" : "one-external-action", reason: `External provider action ${String(externalAction.action)} requires confirmation`, riskClass: "high", allowConsequence: "Run this exact action once, after the guard checks its authority again.", denyConsequence: "The action does not run; nothing outside changes." } };
       }
     }
 
+    const grants = sessionGrants.get(ctx.sessionManager.getSessionId()) ?? new Set<string>();
+    const grantable = Boolean(pendingHumanApproval) && !/handoff/.test(String(pendingHumanApproval!.action.requestedScope));
+    const grant = grantKey(event.toolName, typeof pendingHumanApproval?.action.commandPreview === "string" ? pendingHumanApproval.action.commandPreview : null, preparedInput.input);
+    if (pendingHumanApproval && grantable && grants.has(grant)) pendingHumanApproval = null;
     if (pendingHumanApproval) {
-      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null, action: { ...pendingHumanApproval.action, preconditionClass: "runtime-only", treePrecondition: null }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title), unavailableFallback: approvalUnavailableFallback(ctx) });
-      if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };
+      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null, action: { ...pendingHumanApproval.action, preconditionClass: "runtime-only", treePrecondition: null }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title),
+        terminalChoose: terminalChooser(ctx, pendingHumanApproval.title, pendingHumanApproval.prompt, grantable), unavailableFallback: approvalUnavailableFallback(ctx) });
+      if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}`,
+        ...(approval.choice === "stop" ? { terminate: true, reason: `User denied and stopped the turn: ${pendingHumanApproval.action.reason}. Do not retry; wait for the member.` } : {}) };
+      if (approval.choice === "session" && grantable) sessionGrants.set(ctx.sessionManager.getSessionId(), grants.add(grant));
       // A WebUI allow is provisional until the guard consumes it here. Without
       // this the decision request never got its receipt and the approval stayed
       // pending, filling the broker until it stopped accepting WebUI decisions.

@@ -71,7 +71,7 @@ export function memberMcpGuard(cwd, adapterDir, owner = null) {
       const name = called.server ? `${called.server} → ${called.tool}` : called.tool, args = JSON.stringify(event.input?.args ?? event.input ?? {}).slice(0, 600);
       try {
         await approve(owner, event.toolCallId, ctx?.signal, ctx, { toolName: event.toolName, rawAction: { tool: called.tool, server: called.server, input: event.input ?? {} }, commandPreview: name,
-          provider: called.server || 'mcp', requestedScope: 'mcp-write-once', reason: `The MCP tool ${name} writes outside this machine (${action}); every access mode asks before a handoff.`, riskClass: 'high',
+          provider: called.server || 'mcp', requestedScope: 'mcp-handoff-once', reason: `The MCP tool ${name} writes outside this machine (${action}); every access mode asks before a handoff.`, riskClass: 'high',
           allowConsequence: 'Run this exact MCP call once; it changes the system behind that server.', denyConsequence: 'The call does not run; the agent is told you declined.' },
         { title: 'Công cụ MCP ghi ra ngoài', body: `${name}\n${args}\n\nCông cụ này ${action} trên hệ thống của server MCP. Mọi chế độ truy cập, kể cả Bypass, đều hỏi trước việc bàn giao ra ngoài.\n\nĐồng ý: chạy đúng lệnh gọi này một lần.\nTừ chối: không chạy, agent được báo bạn đã từ chối.` });
       } catch { return { block: true, reason: `User denied MCP tool ${name}.` }; }

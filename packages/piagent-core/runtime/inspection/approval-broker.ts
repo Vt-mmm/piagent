@@ -40,8 +40,15 @@ type Binding = { cwd: string; rawSessionId: string; runtimeInstanceId: string; s
 type Pending = { request: Request; resolve(value: ApprovalGuardDecision): void; receipt: Receipt | null; timer: NodeJS.Timeout;
   finalWaiters: Array<(receipt: Receipt) => void>; recheck(): boolean };
 export type ApprovalBrokerEvent = { kind: "requested" | "resolved" | "expired" | "cancelled"; approvalRef: string; request?: Request; receipt?: Receipt };
-export type ApprovalGuardDecision = { allowed: boolean; brokered: boolean; receipt: Receipt | null;
+// What the member chose: allow this exact action once, allow the same exact
+// action for the rest of the session (offered only where the request allows
+// it, never for a handoff), deny it, or deny it and stop the turn so the
+// agent does not try again. A decision without a choice is once or deny.
+export type ApprovalChoice = "once" | "session" | "deny" | "stop";
+export type ApprovalGuardDecision = { allowed: boolean; brokered: boolean; receipt: Receipt | null; choice: ApprovalChoice;
   consume(): boolean; cancel(reasonCode?: string): void };
+const choiceOf = (allowed: boolean, value?: { scope?: unknown; stop?: unknown }): ApprovalChoice =>
+  allowed ? (value?.scope === "session" ? "session" : "once") : (value?.stop === true ? "stop" : "deny");
 export type ApprovalUnavailableFallback = "terminal-confirm" | "deny";
 
 function canonical(value: unknown): string {
@@ -54,6 +61,12 @@ function exactTimestamp(value: unknown): value is string {
   if (typeof value !== "string" || !TIMESTAMP.test(value)) return false;
   const parsed = Date.parse(value); return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
+// The member's answer in the terminal: their choice where the caller offers
+// the four, else yes or no.
+function terminalChoice(input: { terminalConfirm(): Promise<boolean>; terminalChoose?(): Promise<ApprovalChoice> }): () => Promise<ApprovalChoice> {
+  return input.terminalChoose ? () => input.terminalChoose!() : () => input.terminalConfirm().then((allow) => allow ? "once" as const : "deny" as const);
+}
+
 function exactKeys(value: unknown, keys: string[]): boolean {
   return Boolean(value && typeof value === "object" && !Array.isArray(value)
     && canonical(Object.keys(value as Record<string, unknown>).sort()) === canonical([...keys].sort()));
@@ -135,7 +148,7 @@ export class PiApprovalBroker {
   }
 
   async request(input: { cwd: string; rawSessionId: string; toolCallId: string; action: ApprovalActionDraft;
-    expectedTask?: { taskId: string; taskRunId: string } | null; terminalConfirm(): Promise<boolean>;
+    expectedTask?: { taskId: string; taskRunId: string } | null; terminalConfirm(): Promise<boolean>; terminalChoose?(): Promise<ApprovalChoice>;
     unavailableFallback?: ApprovalUnavailableFallback; recheck?(): boolean; ttlMs?: number }): Promise<ApprovalGuardDecision> {
     const binding = this.#bindings.get(key(input.cwd, input.rawSessionId));
     const authority = binding?.authority();
@@ -166,8 +179,8 @@ export class PiApprovalBroker {
       while (binding.requests.size > MAX_PENDING + MAX_RECENT) binding.requests.delete(binding.requests.keys().next().value as string);
     });
     this.#emit(binding, { kind: "requested", approvalRef, request: clone(request) });
-    void Promise.resolve().then(input.terminalConfirm).then(
-      (allow) => this.#settle(binding, approvalRef, allow ? "allow" : "deny", "terminal", ref("decision", binding.secret, [approvalRef, "terminal", now])),
+    void Promise.resolve().then(terminalChoice(input)).then(
+      (choice) => this.#settle(binding, approvalRef, choice === "once" || choice === "session" ? "allow" : "deny", "terminal", ref("decision", binding.secret, [approvalRef, "terminal", now]), choice),
       () => this.#settle(binding, approvalRef, "deny", "terminal", ref("decision", binding.secret, [approvalRef, "terminal-error", now]))
     );
     return result;
@@ -191,20 +204,21 @@ export class PiApprovalBroker {
     }
     if (Date.now() >= Date.parse(pending.request.expiresAt)) { this.#expire(binding, approvalRef); throw new Error("approval-expired"); }
     const final = new Promise<Receipt>((resolve) => pending.finalWaiters.push(resolve));
-    this.#settle(binding, approvalRef, decision.decision, "webui", decision.decisionId);
+    this.#settle(binding, approvalRef, decision.decision, "webui", decision.decisionId, choiceOf(decision.decision === "allow", decision));
     if (decision.decision === "deny") return clone(binding.recent.at(-1)!);
     return final;
   }
 
-  #terminalOnly(confirm: () => Promise<boolean>): Promise<ApprovalGuardDecision> {
-    return Promise.resolve().then(confirm).then((allowed) => ({ allowed, brokered: false, receipt: null,
-      consume: () => allowed, cancel: () => undefined }), () => ({ allowed: false, brokered: false, receipt: null,
-      consume: () => false, cancel: () => undefined }));
+  #terminalOnly(choose: () => Promise<ApprovalChoice>): Promise<ApprovalGuardDecision> {
+    return Promise.resolve().then(choose).then((choice) => {
+      const allowed = choice === "once" || choice === "session";
+      return { allowed, brokered: false, receipt: null, choice, consume: () => allowed, cancel: () => undefined };
+    }, () => ({ allowed: false, brokered: false, receipt: null, choice: "deny" as const, consume: () => false, cancel: () => undefined }));
   }
 
-  #unavailable(input: { terminalConfirm(): Promise<boolean>; unavailableFallback?: ApprovalUnavailableFallback }): Promise<ApprovalGuardDecision> {
-    if (input.unavailableFallback !== "deny") return this.#terminalOnly(input.terminalConfirm);
-    return Promise.resolve({ allowed: false, brokered: false, receipt: null, consume: () => false, cancel: () => undefined });
+  #unavailable(input: { terminalConfirm(): Promise<boolean>; terminalChoose?(): Promise<ApprovalChoice>; unavailableFallback?: ApprovalUnavailableFallback }): Promise<ApprovalGuardDecision> {
+    if (input.unavailableFallback !== "deny") return this.#terminalOnly(terminalChoice(input));
+    return Promise.resolve({ allowed: false, brokered: false, receipt: null, choice: "deny", consume: () => false, cancel: () => undefined });
   }
 
   #action(binding: Binding, draft: ApprovalActionDraft, cwd: string): Record<string, unknown> {
@@ -238,9 +252,12 @@ export class PiApprovalBroker {
   }
 
   #validDecision(value: unknown, request?: Request, receipt?: Receipt | null): boolean {
+    const optional = value && typeof value === "object" ? ["scope", "stop"].filter((name) => Object.hasOwn(value, name)) : [];
     if (!exactKeys(value, ["schemaVersion", "version", "recordType", "approvalRef", "decisionId", "decisionToken", "identity", "actionDigest",
-      "expectedRevisions", "decision", "reason", "decidedAt", "expiresAt", "decisionSurface", "executor", "directExecution"])) return false;
+      "expectedRevisions", "decision", "reason", "decidedAt", "expiresAt", "decisionSurface", "executor", "directExecution", ...optional])) return false;
     const item = value as any;
+    if (Object.hasOwn(item, "scope") && !(["once", "session"].includes(item.scope) && (item.scope === "once" || item.decision === "allow"))) return false;
+    if (Object.hasOwn(item, "stop") && !(typeof item.stop === "boolean" && (!item.stop || item.decision === "deny"))) return false;
     if (item.schemaVersion !== 1 || item.version !== "piagent-webui-approval-v1" || item.recordType !== "decision"
       || !REF.test(item.approvalRef) || !REF.test(item.decisionId) || typeof item.decisionToken !== "string" || item.decisionToken.length < 32
       || !["allow", "deny"].includes(item.decision) || !exactTimestamp(item.decidedAt) || !exactTimestamp(item.expiresAt)
@@ -258,7 +275,7 @@ export class PiApprovalBroker {
     return value === null || Boolean(REVISION.test(value.workspaceRevision) && (value.indexRevision === null || REVISION.test(value.indexRevision)) && DIGEST.test(value.preimageDigest));
   }
 
-  #settle(binding: Binding, approvalRef: string, decision: "allow" | "deny", surface: "webui" | "terminal", decisionId: string): void {
+  #settle(binding: Binding, approvalRef: string, decision: "allow" | "deny", surface: "webui" | "terminal", decisionId: string, choice: ApprovalChoice = decision === "allow" ? "once" : "deny"): void {
     const pending = binding.pending.get(approvalRef); if (!pending || pending.receipt) return;
     clearTimeout(pending.timer); const resolvedAt = new Date().toISOString();
     const postRevision = this.#nextRevision(binding, "resolved", [approvalRef, decision, surface]);
@@ -272,7 +289,7 @@ export class PiApprovalBroker {
       auditRef: ref("approval-audit", binding.secret, [approvalRef, resolvedAt, surface, decision]), executor: "pi-guard", directExecution: false };
     pending.receipt = receipt; binding.recent.push(receipt); binding.recent = binding.recent.slice(-MAX_RECENT);
     this.#emit(binding, { kind: "resolved", approvalRef, receipt: clone(receipt) });
-    const decisionResult: ApprovalGuardDecision = { allowed: decision === "allow", brokered: true, receipt: clone(receipt),
+    const decisionResult: ApprovalGuardDecision = { allowed: decision === "allow", brokered: true, receipt: clone(receipt), choice,
       consume: () => this.#consume(binding, receipt), cancel: (reason = "guard-cancelled") => this.#cancelPermit(binding, receipt, reason) };
     pending.resolve(decisionResult);
     if (decision === "deny") this.#finish(binding, pending, receipt);
@@ -323,7 +340,7 @@ export class PiApprovalBroker {
       deduplicated: false, auditRef: ref("approval-audit", binding.secret, [approvalRef, resolvedAt, surface]), executor: "pi-guard", directExecution: false };
     pending.receipt = receipt; binding.recent.push(receipt); binding.recent = binding.recent.slice(-MAX_RECENT);
     this.#emit(binding, { kind: state === "expired" ? "expired" : "cancelled", approvalRef, receipt: clone(receipt) });
-    pending.resolve({ allowed: false, brokered: true, receipt: clone(receipt), consume: () => false, cancel: () => undefined }); this.#finish(binding, pending, receipt);
+    pending.resolve({ allowed: false, brokered: true, receipt: clone(receipt), choice: "deny", consume: () => false, cancel: () => undefined }); this.#finish(binding, pending, receipt);
   }
 
   #finish(binding: Binding, pending: Pending, receipt: Receipt): void {

@@ -446,7 +446,9 @@
         "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
         "decisionSurface": { "const": "webui" },
         "executor": { "const": "pi-guard" },
-        "directExecution": { "const": false }
+        "directExecution": { "const": false },
+        "scope": { "description": "Optional. once allows this exact action one time; session also allows the same exact action for the rest of the session. Only with allow.", "enum": ["once", "session"] },
+        "stop": { "description": "Optional. true with deny also stops the current turn, so the agent does not retry.", "type": "boolean" }
       }
     },
     "receiptRevisions": {

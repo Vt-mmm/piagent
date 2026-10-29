@@ -169,3 +169,30 @@ test("approval targets inside the project are shown relative to it", async () =>
   assert.deepEqual(item.request.action.targetPaths, [".", "src/a.ts", "src/b.ts", "/etc/hosts"]);
   current.broker.cancelForOperation?.("/repo", "raw-session", null, "test-done");
 });
+
+test("the dashboard answers allow for the session or deny and stop; a mismatched choice is refused", async () => {
+  const session = setup(), one = await pending(session);
+  const scoped = decision(one.request, "allow", { scope: "session" });
+  assert.equal(validateFixture(registry, "approval-v1", scoped).valid, true, "the schema accepts the session scope");
+  const receipt = session.broker.decide("/repo", "raw-session", one.request.approvalRef, scoped);
+  const allowed = await one.promise;
+  assert.equal(allowed.allowed, true); assert.equal(allowed.choice, "session"); allowed.consume(); await receipt;
+
+  const stop = setup(), two = await pending(stop);
+  await assert.rejects(() => stop.broker.decide("/repo", "raw-session", two.request.approvalRef, decision(two.request, "allow", { stop: true })), /approval-decision-invalid/, "stop goes only with deny");
+  await assert.rejects(() => stop.broker.decide("/repo", "raw-session", two.request.approvalRef, decision(two.request, "deny", { scope: "session" })), /approval-decision-invalid/, "a session scope goes only with allow");
+  await stop.broker.decide("/repo", "raw-session", two.request.approvalRef, decision(two.request, "deny", { stop: true }));
+  const denied = await two.promise;
+  assert.equal(denied.allowed, false); assert.equal(denied.choice, "stop");
+
+  const plain = setup(), three = await pending(plain);
+  await plain.broker.decide("/repo", "raw-session", three.request.approvalRef, decision(three.request, "deny"));
+  assert.equal((await three.promise).choice, "deny", "a decision without a choice is a plain deny");
+});
+
+test("a terminal that offers the four answers is used instead of yes or no", async () => {
+  const current = setup();
+  const result = await current.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: "tool.choose", action: shellAction,
+    terminalConfirm: () => { throw Error("the yes/no question was used"); }, terminalChoose: async () => "stop", recheck: () => true, ttlMs: 30_000 });
+  assert.equal(result.allowed, false); assert.equal(result.choice, "stop");
+});
