@@ -1,15 +1,46 @@
 [
   {
-    "version": "1.46.3",
+    "version": "1.46.4",
     "date": "2026-10-29",
     "status": "stable",
     "title": {
-      "en": "A subagent request the member did not make runs one helper; piagent-update reads a commented models.json",
-      "vi": "Yêu cầu subagent member không đặt chạy một helper; piagent-update đọc được models.json có comment"
+      "en": "One subagent instead of a refused request; update reads a commented models.json",
+      "vi": "Một subagent thay vì bị chặn; bản cập nhật đọc được models.json có comment"
     },
     "summary": {
       "en": "Company sessions no longer loop on a refused subagent call, and the update no longer stops when the Pi model list file has comments.",
       "vi": "Session công ty không còn lặp lại lệnh gọi subagent bị chặn, và bản cập nhật không còn dừng khi file danh sách model của Pi có comment."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "An agent asking for 2–3 subagents the member did not ask for was refused, and some models retried until the member stopped the turn. One subagent now runs, and the agent is told why.",
+        "vi": "Agent xin 2–3 subagent mà member không yêu cầu từng bị chặn, và một số model gọi lại liên tục đến khi member phải dừng. Giờ một subagent chạy, và agent được báo lý do."
+      },
+      {
+        "kind": "fixed",
+        "en": "piagent-update failed when models.json had // comments, which Pi allows. It reads the file as Pi does and leaves a commented file unchanged.",
+        "vi": "piagent-update lỗi khi models.json có comment //, dù Pi cho phép. Giờ file được đọc như Pi đọc, và file có comment được giữ nguyên."
+      },
+      {
+        "kind": "improved",
+        "en": "A model-list setup problem no longer stops the whole install: it warns, names the file and gives the command to run again.",
+        "vi": "Lỗi khi cấu hình danh sách model không còn làm dừng cả bản cài: bản cài cảnh báo, nêu tên file và lệnh để chạy lại."
+      }
+    ]
+  },
+  {
+    "version": "1.46.3",
+    "date": "2026-10-29",
+    "status": "unpublished",
+    "title": {
+      "en": "One subagent instead of a refused request; update reads a commented models.json",
+      "vi": "Một subagent thay vì bị chặn; bản cập nhật đọc được models.json có comment"
+    },
+    "summary": {
+      "en": "Tagged but not published: a release title over the page limit failed the release check. Superseded by 1.46.4.",
+      "vi": "Đã tag nhưng chưa publish: tiêu đề bản phát hành dài quá giới hạn của trang nên kiểm tra release fail. Thay bằng 1.46.4."
     },
     "requires": null,
     "items": [

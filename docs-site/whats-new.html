@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.3" title="v1.46.3 docs · VI"><span class="dot"></span>v1.46.3</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.46.4" title="v1.46.4 docs · VI"><span class="dot"></span>v1.46.4</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,11 +108,23 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-46-3" data-release>
+<article class="release latest" id="v1-46-4" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-4">v1.46.4</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-4-title">Một subagent thay vì bị chặn; bản cập nhật đọc được models.json có comment</h3>
+    <p>Session công ty không còn lặp lại lệnh gọi subagent bị chặn, và bản cập nhật không còn dừng khi file danh sách model của Pi có comment.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lỗi khi cấu hình danh sách model không còn làm dừng cả bản cài: bản cài cảnh báo, nêu tên file và lệnh để chạy lại.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Agent xin 2–3 subagent mà member không yêu cầu từng bị chặn, và một số model gọi lại liên tục đến khi member phải dừng. Giờ một subagent chạy, và agent được báo lý do.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>piagent-update lỗi khi models.json có comment //, dù Pi cho phép. Giờ file được đọc như Pi đọc, và file có comment được giữ nguyên.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-3" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-3">v1.46.3</a><time class="release-date" datetime="2026-10-29">29/10/2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-46-3-title">Yêu cầu subagent member không đặt chạy một helper; piagent-update đọc được models.json có comment</h3>
-    <p>Session công ty không còn lặp lại lệnh gọi subagent bị chặn, và bản cập nhật không còn dừng khi file danh sách model của Pi có comment.</p>
+    <h3 data-toc-skip id="v1-46-3-title">Một subagent thay vì bị chặn; bản cập nhật đọc được models.json có comment <span class="tag">không phát hành</span></h3>
+    <p>Đã tag nhưng chưa publish: tiêu đề bản phát hành dài quá giới hạn của trang nên kiểm tra release fail. Thay bằng 1.46.4.</p>
     <ul class="release-items">
       <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lỗi khi cấu hình danh sách model không còn làm dừng cả bản cài: bản cài cảnh báo, nêu tên file và lệnh để chạy lại.</span></li>
       <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Agent xin 2–3 subagent mà member không yêu cầu từng bị chặn, và một số model gọi lại liên tục đến khi member phải dừng. Giờ một subagent chạy, và agent được báo lý do.</span></li>
@@ -407,28 +419,26 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-40-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-40-0">v1.40.0</a><time class="release-date" datetime="2026-10-24">24/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-40-0-title">Project local cũng được báo cho Studio</h3>
-    <p>Cuộc trò chuyện công ty trong thư mục không có remote báo project local cho Studio, mọi lượt chạy đều báo, và member thấy mọi loại cảnh báo project.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Thư mục không có remote đọc được được báo như project local, theo commit gốc của Git hoặc theo mã băm; đường dẫn không bao giờ rời khỏi máy.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Key local của project Git giống nhau trên mọi máy có cùng lịch sử, kể cả bản clone và checkout không có remote <code>origin</code>.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Mọi lượt chạy đều báo project, không chỉ lượt đầu của cuộc trò chuyện, nên Studio đếm được từng lần dùng và biết máy nào chưa bao giờ báo.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Member thấy một dòng cho mọi cảnh báo: project của team khác, ngoài danh sách của team, chưa đăng ký cho team, hoặc thư mục không đọc được.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thư mục chứa nhiều checkout báo từng checkout, tối đa sáu, và project local được gọi theo tên thư mục.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Ba cảnh báo bảo mật của dependency trong Pi host được chấp nhận tới 2026-11-07: từ chối dịch vụ và lỗi Pi không dùng tới, không lộ dữ liệu.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.40.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">60</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">61</span></summary>
+    <div class="archive-row" id="v1-40-0">
+      <div class="archive-head"><a class="release-version" href="#v1-40-0">v1.40.0</a> <span class="release-date">24/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Project local cũng được báo cho Studio</strong> — Cuộc trò chuyện công ty trong thư mục không có remote báo project local cho Studio, mọi lượt chạy đều báo, và member thấy mọi loại cảnh báo project.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Thư mục không có remote đọc được được báo như project local, theo commit gốc của Git hoặc theo mã băm; đường dẫn không bao giờ rời khỏi máy.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Key local của project Git giống nhau trên mọi máy có cùng lịch sử, kể cả bản clone và checkout không có remote <code>origin</code>.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Mọi lượt chạy đều báo project, không chỉ lượt đầu của cuộc trò chuyện, nên Studio đếm được từng lần dùng và biết máy nào chưa bao giờ báo.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Member thấy một dòng cho mọi cảnh báo: project của team khác, ngoài danh sách của team, chưa đăng ký cho team, hoặc thư mục không đọc được.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Thư mục chứa nhiều checkout báo từng checkout, tối đa sáu, và project local được gọi theo tên thư mục.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Ba cảnh báo bảo mật của dependency trong Pi host được chấp nhận tới 2026-11-07: từ chối dịch vụ và lỗi Pi không dùng tới, không lộ dữ liệu.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-39-0">
       <div class="archive-head"><a class="release-version" href="#v1-39-0">v1.39.0</a> <span class="release-date">23/10/2026</span></div>
       <div class="archive-body">

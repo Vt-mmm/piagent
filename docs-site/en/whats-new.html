@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.3" title="v1.46.3 docs · EN"><span class="dot"></span>v1.46.3</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.46.4" title="v1.46.4 docs · EN"><span class="dot"></span>v1.46.4</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,11 +108,23 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-46-3" data-release>
+<article class="release latest" id="v1-46-4" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-46-4">v1.46.4</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-46-4-title">One subagent instead of a refused request; update reads a commented models.json</h3>
+    <p>Company sessions no longer loop on a refused subagent call, and the update no longer stops when the Pi model list file has comments.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A model-list setup problem no longer stops the whole install: it warns, names the file and gives the command to run again.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An agent asking for 2–3 subagents the member did not ask for was refused, and some models retried until the member stopped the turn. One subagent now runs, and the agent is told why.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>piagent-update failed when models.json had // comments, which Pi allows. It reads the file as Pi does and leaves a commented file unchanged.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-46-3" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-46-3">v1.46.3</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-46-3-title">A subagent request the member did not make runs one helper; piagent-update reads a commented models.json</h3>
-    <p>Company sessions no longer loop on a refused subagent call, and the update no longer stops when the Pi model list file has comments.</p>
+    <h3 data-toc-skip id="v1-46-3-title">One subagent instead of a refused request; update reads a commented models.json <span class="tag">not published</span></h3>
+    <p>Tagged but not published: a release title over the page limit failed the release check. Superseded by 1.46.4.</p>
     <ul class="release-items">
       <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A model-list setup problem no longer stops the whole install: it warns, names the file and gives the command to run again.</span></li>
       <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An agent asking for 2–3 subagents the member did not ask for was refused, and some models retried until the member stopped the turn. One subagent now runs, and the agent is told why.</span></li>
@@ -407,28 +419,26 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-40-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-40-0">v1.40.0</a><time class="release-date" datetime="2026-10-24">Oct 24, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-40-0-title">Local projects are reported to Studio too</h3>
-    <p>Company conversations in folders without a remote report a local project to Studio, every run reports, and members see every kind of project warning.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>A folder without a readable remote is reported as a local project, by its Git root commit or by a hash; its path never leaves the computer.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>A Git project's local key is the same on every computer with that history, including clones and checkouts without an <code>origin</code> remote.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Every run reports its projects, not only a conversation's first, so Studio counts each use and knows which computers never report.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Members see a line for every warning: another team's project, one outside the team's list, an unregistered project or an unreadable folder.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A folder holding several checkouts reports each one, up to six, and a local project is named by its folder.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>Three dependency advisories in the Pi host are accepted until 2026-11-07: denial of service and a check bypass Pi does not use, no data exposure.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.40.0</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">60</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">61</span></summary>
+    <div class="archive-row" id="v1-40-0">
+      <div class="archive-head"><a class="release-version" href="#v1-40-0">v1.40.0</a> <span class="release-date">Oct 24, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Local projects are reported to Studio too</strong> — Company conversations in folders without a remote report a local project to Studio, every run reports, and members see every kind of project warning.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>A folder without a readable remote is reported as a local project, by its Git root commit or by a hash; its path never leaves the computer.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>A Git project's local key is the same on every computer with that history, including clones and checkouts without an <code>origin</code> remote.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Every run reports its projects, not only a conversation's first, so Studio counts each use and knows which computers never report.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Members see a line for every warning: another team's project, one outside the team's list, an unregistered project or an unreadable folder.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A folder holding several checkouts reports each one, up to six, and a local project is named by its folder.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>Three dependency advisories in the Pi host are accepted until 2026-11-07: denial of service and a check bypass Pi does not use, no data exposure.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-39-0">
       <div class="archive-head"><a class="release-version" href="#v1-39-0">v1.39.0</a> <span class="release-date">Oct 23, 2026</span></div>
       <div class="archive-body">
