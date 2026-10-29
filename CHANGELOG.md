@@ -4,6 +4,29 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.48.0 - 2026-10-30
+
+**Bypass stops at the handoff: every mode asks before work leaves the machine.** Pushes, pull requests, publishes and deploys are always approved by you, commands are checked against a full shell syntax tree, approvals gain session and stop answers, and the dashboard streams more smoothly.
+
+### Added
+
+- Approvals offer four answers: allow once, allow the same exact action for the session, deny, and deny and stop the turn. A handoff is always approved one at a time.
+- Projects can refuse commands with autoDeny in .pi/piagent-profile.json. The rules hold in every mode, Bypass included; terminate also ends the agent's turn.
+
+### Improved
+
+- Smoother dashboard: a streaming answer redraws only its last paragraph, off-screen turns skip layout, sidebar rows redraw only when they change, dropped links reconnect sooner.
+
+### Fixed
+
+- Approval cards, the dashboard, the terminal and the docs describe each access mode exactly as it behaves; personal sessions are no longer labelled as sandboxed.
+
+### Security
+
+- Every access mode asks before work leaves this machine: git push in any spelling, pull requests and merges, releases, publish, deploy, registry push, ssh and cloud tools, uploads.
+- Bypass runs the work without asking and stops at the handoff, in personal and company sessions alike, including run_on_host with your sign-in and MCP tools that write outside.
+- Commands are read by the policy scanner and a shell syntax tree: a push or a destructive delete inside if/then, a function, case, bash -c, eval or a heredoc is caught.
+
 ## v1.47.0 - 2026-10-29
 
 **Company sessions use your MCP servers and drive iOS and Android simulators.** Jira, GitHub and every MCP server you set up for Piagent now work in company sessions, and the agent builds, runs, screenshots and tests mobile apps on simulators itself.

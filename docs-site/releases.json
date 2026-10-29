@@ -1,5 +1,56 @@
 [
   {
+    "version": "1.48.0",
+    "date": "2026-10-30",
+    "status": "stable",
+    "title": {
+      "en": "Bypass stops at the handoff: every mode asks before work leaves the machine",
+      "vi": "Bypass dừng ở bước bàn giao: mọi chế độ hỏi trước khi việc rời khỏi máy"
+    },
+    "summary": {
+      "en": "Pushes, pull requests, publishes and deploys are always approved by you, commands are checked against a full shell syntax tree, approvals gain session and stop answers, and the dashboard streams more smoothly.",
+      "vi": "Push, pull request, publish và deploy luôn do bạn duyệt, lệnh được kiểm tra bằng cây cú pháp shell đầy đủ, thẻ duyệt có thêm lựa chọn cho cả session và dừng lượt, dashboard stream mượt hơn."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "security",
+        "en": "Every access mode asks before work leaves this machine: git push in any spelling, pull requests and merges, releases, publish, deploy, registry push, ssh and cloud tools, uploads.",
+        "vi": "Mọi chế độ truy cập đều hỏi trước khi việc rời khỏi máy: git push dù viết kiểu nào, pull request và merge, release, publish, deploy, push registry, ssh và tool cloud, upload."
+      },
+      {
+        "kind": "security",
+        "en": "Bypass runs the work without asking and stops at the handoff, in personal and company sessions alike, including run_on_host with your sign-in and MCP tools that write outside.",
+        "vi": "Bypass chạy việc không hỏi và dừng ở bước bàn giao, ở cả phiên cá nhân lẫn công ty, kể cả run_on_host dùng tài khoản của bạn và công cụ MCP ghi ra ngoài."
+      },
+      {
+        "kind": "security",
+        "en": "Commands are read by the policy scanner and a shell syntax tree: a push or a destructive delete inside if/then, a function, case, bash -c, eval or a heredoc is caught.",
+        "vi": "Lệnh được đọc bằng bộ quét của policy và cây cú pháp shell: push hay lệnh xoá nguy hiểm nằm trong if/then, function, case, bash -c, eval hay heredoc đều bị bắt."
+      },
+      {
+        "kind": "new",
+        "en": "Approvals offer four answers: allow once, allow the same exact action for the session, deny, and deny and stop the turn. A handoff is always approved one at a time.",
+        "vi": "Thẻ duyệt có bốn lựa chọn: cho phép một lần, cho lệnh giống hệt chạy cả session, từ chối, và từ chối rồi dừng lượt. Việc bàn giao luôn duyệt từng lần."
+      },
+      {
+        "kind": "new",
+        "en": "Projects can refuse commands with autoDeny in .pi/piagent-profile.json. The rules hold in every mode, Bypass included; terminate also ends the agent's turn.",
+        "vi": "Project có thể chặn hẳn lệnh bằng autoDeny trong .pi/piagent-profile.json. Luật áp dụng ở mọi chế độ, kể cả Bypass; terminate kết thúc luôn lượt của agent."
+      },
+      {
+        "kind": "improved",
+        "en": "Smoother dashboard: a streaming answer redraws only its last paragraph, off-screen turns skip layout, sidebar rows redraw only when they change, dropped links reconnect sooner.",
+        "vi": "Dashboard mượt hơn: câu trả lời đang stream chỉ vẽ lại đoạn cuối, lượt ngoài màn hình không tốn layout, sidebar chỉ vẽ dòng thay đổi, kết nối rớt được nối lại sớm hơn."
+      },
+      {
+        "kind": "fixed",
+        "en": "Approval cards, the dashboard, the terminal and the docs describe each access mode exactly as it behaves; personal sessions are no longer labelled as sandboxed.",
+        "vi": "Thẻ duyệt, dashboard, terminal và tài liệu mô tả đúng cách từng chế độ truy cập hoạt động; phiên cá nhân không còn bị ghi là chạy trong sandbox."
+      }
+    ]
+  },
+  {
     "version": "1.47.0",
     "date": "2026-10-29",
     "status": "stable",

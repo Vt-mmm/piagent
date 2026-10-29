@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.48.0`: Bypass dừng ở bước bàn giao: mọi chế độ hỏi trước khi push, tạo hoặc merge pull request, publish, deploy, chạy `ssh` hay tool cloud, upload, và trước công cụ MCP ghi ra ngoài; lệnh được kiểm tra thêm bằng cây cú pháp shell; thẻ duyệt có bốn lựa chọn (một lần, cả session, từ chối, từ chối và dừng lượt); `autoDeny` trong profile chặn lệnh ở mọi chế độ; dashboard stream mượt hơn.
 - `1.47.0`: phiên công ty dùng các MCP server dev đã cài cho Piagent (cùng login; server do repo khai báo vẫn cần duyệt), thêm preset `atlassian` cho Jira và Confluence Cloud; tool `run_on_simulator` cho agent tự boot simulator iOS/Android, build, cài, mở app, chạy XCUITest, chụp màn hình và đọc log.
 - `1.46.4`: agent xin nhiều subagent mà member không yêu cầu thì chạy một subagent thay vì bị chặn (một số model từng gọi lại liên tục đến khi member dừng); `piagent-update` đọc được `models.json` có comment như Pi, và lỗi cấu hình danh sách model không còn làm dừng cả bản cài.
 - `1.46.3`: (tag, chưa publish do tiêu đề bản phát hành dài quá giới hạn của trang) cùng nội dung 1.46.4.

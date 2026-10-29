@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.47.0" title="v1.47.0 docs · EN"><span class="dot"></span>v1.47.0</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.48.0" title="v1.48.0 docs · EN"><span class="dot"></span>v1.48.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,23 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-47-0" data-release>
+<article class="release latest" id="v1-48-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-48-0">v1.48.0</a><time class="release-date" datetime="2026-10-30">Oct 30, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-48-0-title">Bypass stops at the handoff: every mode asks before work leaves the machine</h3>
+    <p>Pushes, pull requests, publishes and deploys are always approved by you, commands are checked against a full shell syntax tree, approvals gain session and stop answers, and the dashboard streams more smoothly.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Approvals offer four answers: allow once, allow the same exact action for the session, deny, and deny and stop the turn. A handoff is always approved one at a time.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Projects can refuse commands with autoDeny in .pi/piagent-profile.json. The rules hold in every mode, Bypass included; terminate also ends the agent's turn.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Smoother dashboard: a streaming answer redraws only its last paragraph, off-screen turns skip layout, sidebar rows redraw only when they change, dropped links reconnect sooner.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Approval cards, the dashboard, the terminal and the docs describe each access mode exactly as it behaves; personal sessions are no longer labelled as sandboxed.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>Every access mode asks before work leaves this machine: git push in any spelling, pull requests and merges, releases, publish, deploy, registry push, ssh and cloud tools, uploads.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>Bypass runs the work without asking and stops at the handoff, in personal and company sessions alike, including run_on_host with your sign-in and MCP tools that write outside.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>Commands are read by the policy scanner and a shell syntax tree: a push or a destructive delete inside if/then, a function, case, bash -c, eval or a heredoc is caught.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-47-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-47-0">v1.47.0</a><time class="release-date" datetime="2026-10-29">Oct 29, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-47-0-title">Company sessions use your MCP servers and drive iOS and Android simulators</h3>
@@ -403,27 +419,26 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-42-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-42-0">v1.42.0</a><time class="release-date" datetime="2026-10-25">Oct 25, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-42-0-title">A redesigned dashboard and older messages that load without jumping</h3>
-    <p>The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Older messages load on their own as you near the top, and the message being read no longer moves when a page is added above it.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>All 13 colour themes now reach the diff, approval, question and document views; header, sidebar, composer and new chat page are redesigned.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A running turn shows one moving indicator at a time: the step's spinner, the streaming caret, or a thinking spinner.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>New website and README with an Update &amp; uninstall guide; release notes now come from one file that also writes <code>CHANGELOG.md</code>.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>History showed raw markdown for a moment and then reflowed; it now appears formatted from the first frame.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Loading many older pages silently dropped the newest messages; the window now holds 1,000 items and offers a way back to the newest.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">62</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">63</span></summary>
+    <div class="archive-row" id="v1-42-0">
+      <div class="archive-head"><a class="release-version" href="#v1-42-0">v1.42.0</a> <span class="release-date">Oct 25, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>A redesigned dashboard and older messages that load without jumping</strong> — The dashboard gets one design scale and every theme everywhere; older messages load as you scroll up and the message you are reading stays put.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Older messages load on their own as you near the top, and the message being read no longer moves when a page is added above it.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>All 13 colour themes now reach the diff, approval, question and document views; header, sidebar, composer and new chat page are redesigned.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A running turn shows one moving indicator at a time: the step's spinner, the streaming caret, or a thinking spinner.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>New website and README with an Update &amp; uninstall guide; release notes now come from one file that also writes <code>CHANGELOG.md</code>.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>History showed raw markdown for a moment and then reflowed; it now appears formatted from the first frame.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Loading many older pages silently dropped the newest messages; the window now holds 1,000 items and offers a way back to the newest.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-41-0">
       <div class="archive-head"><a class="release-version" href="#v1-41-0">v1.41.0</a> <span class="release-date">Oct 24, 2026</span></div>
       <div class="archive-body">
