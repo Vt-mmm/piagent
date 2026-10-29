@@ -18,7 +18,7 @@ import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import { attachmentDetail } from "./attachment-intake.ts";
 import { AttachmentImage, type ImageSource } from "./AttachmentImage.tsx";
 import { companyFailureCopy, failureContinuable, failureRole } from "./company-failure.tsx";
-import type { LiveActivity } from "./live-state-view-model.ts";
+import { streamingSplit, type LiveActivity } from "./live-state-view-model.ts";
 import { compactTokens, turnSeconds, turnTokensPerSecond, type TimelineFailure, type TimelineTurn } from "./timeline-view-model.ts";
 import { liveToolKind, ToolCard } from "./ToolCard.tsx";
 import { ProcessNote } from "./ProcessNote.tsx";
@@ -41,6 +41,15 @@ export function AssistantText({ children }: { children: string }) {
   return <Suspense fallback={<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.75 }}>{children}</Typography>}>
     <MarkdownMessage>{children}</MarkdownMessage>
   </Suspense>;
+}
+
+// The finished paragraphs of a streaming answer, rendered once: each frame
+// only the paragraph still being written is parsed again, so a long answer
+// costs the same per frame as a short one.
+const SettledText = memo(function SettledText({ text }: { text: string }) { return <AssistantText>{text}</AssistantText>; });
+function StreamingAnswer({ text }: { text: string }) {
+  const [settled, tail] = streamingSplit(text);
+  return <>{settled && <SettledText text={settled} />}{tail && <AssistantText>{tail}</AssistantText>}</>;
 }
 
 // Where a message's images come from: a just-staged one is still in this
@@ -189,7 +198,7 @@ export function LiveTurnView({ user, attachments, activities, assistant, running
       {activities.map((activity) => <ToolCard key={activity.toolCallRef} live locale={locale} waiting={activity.toolLabel === "capacity-wait"} tool={{ toolName: liveStepName(activity.toolLabel, locale), state: activity.state,
         summary: { kind: liveToolKind(activity.toolLabel), target: activity.fileLabel ?? null, detail: null } }} />)}
       {failure && <TurnFailure code={failure} locale={locale} />}
-      {assistant && <Box className={running ? "streaming-answer" : undefined}><AssistantText>{assistant}</AssistantText></Box>}
+      {assistant && <Box className={running ? "streaming-answer" : undefined}>{running ? <StreamingAnswer text={assistant} /> : <AssistantText>{assistant}</AssistantText>}</Box>}
       {running && status}
     </AgentBlock>
   </Stack>;

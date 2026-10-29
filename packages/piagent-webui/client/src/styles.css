@@ -814,9 +814,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 
 /* The caret at the end of an answer that is still streaming: the turn's only
    moving mark while text arrives. */
-.streaming-answer .markdown-message > :last-child::after { content: ""; display: inline-block; width: .5em; height: 1.05em; margin-left: 3px; vertical-align: -.15em; border-radius: 1px; background: var(--accent); animation: piagent-caret 1s steps(1) infinite; }
+.streaming-answer .markdown-message:last-child > :last-child::after { content: ""; display: inline-block; width: .5em; height: 1.05em; margin-left: 3px; vertical-align: -.15em; border-radius: 1px; background: var(--accent); animation: piagent-caret 1s steps(1) infinite; }
 @keyframes piagent-caret { 50% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .streaming-answer .markdown-message > :last-child::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .streaming-answer .markdown-message:last-child > :last-child::after { animation: none; } }
 
 /* Toasts sit bottom-right, above the status bar, where nothing else lives:
    at the top they covered the inspector's tabs and the panel's close button.
@@ -825,3 +825,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 @keyframes piagent-toast-in { from { opacity: 0; transform: translateY(8px); } }
 @media (max-width: 720px) { .attention-toasts { top: 60px; bottom: auto; } }
 @media (prefers-reduced-motion: reduce) { .attention-toast { animation: none; } }
+/* A turn off screen is not laid out or painted; its last size is kept so the
+   scroll position and the transcript's anchoring stay where they were. */
+[data-turn] { content-visibility: auto; contain-intrinsic-size: auto 640px; }

@@ -49,6 +49,8 @@ function settlementReason(settlement: GatewayTerminalSettlement["settlement"], v
   return "operation-settlement-unknown";
 }
 
+const MAX_REPLAY_EVENTS = 256;
+
 export class GatewayEventStore {
   readonly #maximumCount: number;
   readonly #maximumAgeMs: number;
@@ -172,7 +174,9 @@ export class GatewayEventStore {
     // Treat the next sequence as the retention boundary so a client one event
     // behind must resync instead of silently receiving an empty replay.
     const earliestSequence = this.#events[0]?.sequence ?? Math.min(Number.MAX_SAFE_INTEGER, this.#sequence + 1);
-    if (after !== null && (after > this.#sequence || after < Math.max(0, earliestSequence - 1))) {
+    // A client far behind reloads the snapshot (one request) instead of
+    // receiving hundreds of frames in a burst after it reconnects.
+    if (after !== null && (after > this.#sequence || after < Math.max(0, earliestSequence - 1) || this.#sequence - after > MAX_REPLAY_EVENTS)) {
       return { state: "resync-required", events: [], earliestSequence, currentSequence: this.#sequence };
     }
     return { state: "current", events: after === null ? [] : this.#events.filter((event) => event.sequence > after), earliestSequence,

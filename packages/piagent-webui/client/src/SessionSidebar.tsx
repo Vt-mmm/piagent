@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { BrandMark } from "./BrandMark.tsx";
 import AddRounded from "@mui/icons-material/AddRounded";
 import ArchiveRounded from "@mui/icons-material/ArchiveRounded";
@@ -75,8 +75,16 @@ const OUTCOME_SHORT: Record<string, [string, string]> = { clean: ["Đủ bước
   unreviewed: ["Chưa review", "Not reviewed"], blocking_open: ["Còn lỗi blocking", "Blocking open"], review_unavailable: ["Không review được", "Review unavailable"],
   interrupted: ["Bị dừng", "Stopped"], disputed: ["Cần bạn quyết", "Needs your call"] };
 
-function SessionItem({ session, live, selected, locale, onSelect, onAction, showProject = false, fresh = false }: { session: SessionRow; live?: LiveConversation; selected: boolean;
-  locale: UiLocale; onSelect(): void; onAction(action: SessionMenuAction): void; showProject?: boolean; fresh?: boolean }) {
+type SessionItemProps = { session: SessionRow; live?: LiveConversation; selected: boolean;
+  locale: UiLocale; onSelect(): void; onAction(action: SessionMenuAction): void; showProject?: boolean; fresh?: boolean };
+// A row renders again only when what it shows changes: a streaming answer in
+// another conversation changes its live record every frame, not its row.
+// Its handlers reach the sidebar's current ones (SessionSidebar keeps them).
+const rowUnchanged = (a: SessionItemProps, b: SessionItemProps) => a.session === b.session && a.selected === b.selected && a.locale === b.locale
+  && a.showProject === b.showProject && a.fresh === b.fresh && sessionActivity(a.session, a.live) === sessionActivity(b.session, b.live)
+  && sessionNeed(a.session, a.live) === sessionNeed(b.session, b.live);
+const SessionItem = memo(SessionItemView, rowUnchanged);
+function SessionItemView({ session, live, selected, locale, onSelect, onAction, showProject = false, fresh = false }: SessionItemProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const choose = (action: SessionMenuAction) => { setAnchor(null); onAction(action); };
   const company = session.modelLabel === "agent-watch-auto", activity = sessionActivity(session, live);
@@ -128,6 +136,7 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
   groups: ProjectGroup[]; count: number; selectedRef?: string; showArchived: boolean; archivedCount: number; settingsOpen: boolean;
   connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>; onNew(): void; onSelect(sessionRef: string): void;
   onAction(session: SessionRow, action: SessionMenuAction): void; onToggleArchived(): void; onSettings(): void }) {
+  const handlers = useRef({ onSelect, onAction }); handlers.current = { onSelect, onAction };
   // The status bar shows the Gateway on wide screens; the drawer shows it on narrow ones.
   const narrow = useMediaQuery((theme: import("@mui/material/styles").Theme) => theme.breakpoints.down("md"));
   // Many conversations stay readable: what runs or needs attention first, a
@@ -173,7 +182,7 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
       {active.length > 0 && <Box component="section" aria-label={localize(locale, "Đang chạy hoặc cần chú ý", "Running or needing attention")} sx={{ mt: .5 }}>
         <Typography component="div" variant="caption" color="text.secondary" sx={{ px: 2, py: .55, fontWeight: 600 }}>{localize(locale, "Đang chạy · cần chú ý", "Running · needs attention")}</Typography>
         {active.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]} showProject fresh={unseen.has(session.sessionRef)}
-          selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => onSelect(session.sessionRef)} onAction={(action) => onAction(session, action)} />)}
+          selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => handlers.current.onSelect(session.sessionRef)} onAction={(action) => handlers.current.onAction(session, action)} />)}
         <Divider sx={{ mx: 2, mt: .75 }} /></Box>}
       {visible.map((group) => { const holdsSelected = group.sessions.some((session) => session.sessionRef === selectedRef);
         const open = searching || holdsSelected || !collapsed.has(group.projectRef), all = searching || expanded.has(group.projectRef);
@@ -191,7 +200,7 @@ export function SessionSidebar({ locale, canCreate, query, onQuery, groups, coun
                   <GitBranchIcon sx={{ fontSize: "1.1em" }} />{localize(locale, `${group.gitRepositories.length} repo`, `${group.gitRepositories.length} repos`)}</Box> : null}</Typography>
             <Typography variant="caption" color="text.disabled">{group.sessions.length}</Typography></ButtonBase>
           {open && items.map((session) => <SessionItem key={session.sessionRef} session={session} live={live[session.sessionRef]} fresh={unseen.has(session.sessionRef)}
-            selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => onSelect(session.sessionRef)} onAction={(action) => onAction(session, action)} />)}
+            selected={selectedRef === session.sessionRef} locale={locale} onSelect={() => handlers.current.onSelect(session.sessionRef)} onAction={(action) => handlers.current.onAction(session, action)} />)}
           {open && !searching && group.sessions.length > PER_GROUP && <Button size="small" onClick={() => toggle(setExpanded, group.projectRef, false)}
             sx={{ ml: 1.5, mb: .25, fontSize: 12 }}>{all ? localize(locale, "Thu gọn", "Show less") : localize(locale, `Xem thêm ${group.sessions.length - PER_GROUP}`, `Show ${group.sessions.length - PER_GROUP} more`)}</Button>}
         </Box>; })}

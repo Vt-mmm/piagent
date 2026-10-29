@@ -13,7 +13,7 @@ import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAf
   type TerminalOperationActivity } from "./live-state-view-model.ts";
 import { GatewayCommandTransportError, gatewayCommandMayHaveEffect, requestUntilAnswered, sessionSendDisposition,
   type OperationObservation } from "./session-send-state.ts";
-import { conversationAfterObservedSend, observeSessionSendEffect } from "./session-send-observation.ts"; import { useFrameBatchedSetter } from "./frame-batched-state.ts";
+import { conversationAfterObservedSend, observeSessionSendEffect } from "./session-send-observation.ts"; import { sameJson, useFrameBatchedSetter } from "./frame-batched-state.ts";
 import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSOR_KEY, opaque, SEND_ADMISSION_WINDOW_MS,
   parseGatewayCursor, persistGatewayCursor, revisionStale, SessionSendRejectedError,
   type SessionHub, type SessionHubCreateOptions, type SessionHubSendAttachment,
@@ -46,7 +46,7 @@ export function useSessionHub(): SessionHub {
       const canonicalSequence = canonicalLiveStateSequence(liveState, value.gatewayInstanceRef);
       let canonicalApplied = false;
       if (refreshSequence >= refreshAppliedRef.current) {
-        refreshAppliedRef.current = refreshSequence; catalogRef.current = value; setCatalog(value);
+        refreshAppliedRef.current = refreshSequence; catalogRef.current = value; setCatalog((previous) => sameJson(previous, value) ? previous : value);
         const previousGateway = gatewayInstanceRef.current;
         if (previousGateway !== null && previousGateway !== value.gatewayInstanceRef) canonicalRefreshRequiredRef.current = true;
         gatewayInstanceRef.current = value.gatewayInstanceRef;
@@ -470,7 +470,7 @@ export function useSessionHub(): SessionHub {
           void requireCanonicalAndConnect();
           return;
         }
-        attempt += 1; reconnectTimer = window.setTimeout(connect, Math.min(5_000, 250 * 2 ** Math.min(attempt, 5)));
+        attempt += 1; reconnectTimer = window.setTimeout(connect, Math.min(5_000, 250 * 2 ** Math.min(attempt, 5)) * (0.5 + Math.random()));
       });
       socket.addEventListener("error", () => { /* close owns reconnect */ });
     };
@@ -480,7 +480,7 @@ export function useSessionHub(): SessionHub {
       if (stopped) return;
       if (value) { attempt = 0; connect(); return; }
       setConnection("reconnecting"); attempt += 1;
-      reconnectTimer = window.setTimeout(() => void requireCanonicalAndConnect(), Math.min(5_000, 250 * 2 ** Math.min(attempt, 5)));
+      reconnectTimer = window.setTimeout(() => void requireCanonicalAndConnect(), Math.min(5_000, 250 * 2 ** Math.min(attempt, 5)) * (0.5 + Math.random()));
     };
     void (async () => {
       const bootstrap = await bootstrapBrowserSession(); if (stopped) return;

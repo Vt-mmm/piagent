@@ -213,3 +213,13 @@ export function liveStateConfirmsAbort(projection: PiagentWebUICanonicalVolatile
   const operation = projection.operations.find((item) => item.sessionRef === sessionRef);
   return operation?.operationRef === operationRef && operation.abortable === true;
 }
+
+// A streaming answer as its finished paragraphs and the one still being
+// written: the first renders once, only the second each frame. Never cut
+// inside an open code fence, where the block would render as prose.
+export function streamingSplit(text: string): [string, string] {
+  let cut = text.lastIndexOf("\n\n");
+  const fences = (text.slice(0, cut < 0 ? 0 : cut).match(/^```/gm) ?? []).length;
+  if (fences % 2 === 1) cut = text.lastIndexOf("\n```", cut);
+  return cut > 0 ? [text.slice(0, cut).replace(/\n+$/, ""), text.slice(cut).replace(/^\n+/, "")] : ["", text];
+}

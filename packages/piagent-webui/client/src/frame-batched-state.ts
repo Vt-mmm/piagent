@@ -22,3 +22,10 @@ export function useFrameBatchedSetter<T>(set: Dispatch<SetStateAction<T>>) {
     return { now, later };
   }, [set]);
 }
+
+// Whether a refreshed value says nothing new: then the state keeps the object
+// it had, and nothing that reads it renders again.
+export function sameJson(previous: unknown, next: unknown): boolean {
+  if (previous === next) return true;
+  try { return previous !== undefined && JSON.stringify(previous) === JSON.stringify(next); } catch { return false; }
+}

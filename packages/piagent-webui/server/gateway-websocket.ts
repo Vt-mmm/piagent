@@ -160,7 +160,11 @@ export function attachGatewayWebSocket(options: {
         catch (error) { replay?.abort(); send(socket, errorResponse(request, options.protocol.events.stateVersion, error)); }
       }).catch(() => socket.close(1011, "gateway-failure")).finally(() => { queued--; });
     });
-    socket.once("close", () => { clearTimeout(timeout); unsubscribe?.(); terminalStream?.stop(); sockets.delete(socket); });
+    // A socket whose other end vanished (sleep, a dropped Wi-Fi) is noticed by
+    // a ping it does not answer, so the browser reconnects instead of waiting.
+    let alive = true; socket.on("pong", () => { alive = true; });
+    const liveness = setInterval(() => { if (!alive) { socket.terminate(); return; } alive = false; try { socket.ping(); } catch { socket.terminate(); } }, 20_000); liveness.unref();
+    socket.once("close", () => { clearTimeout(timeout); clearInterval(liveness); unsubscribe?.(); terminalStream?.stop(); sockets.delete(socket); });
     socket.once("error", () => socket.terminate());
   });
   return { close: async () => {
