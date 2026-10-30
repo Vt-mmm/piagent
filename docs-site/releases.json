@@ -1,5 +1,31 @@
 [
   {
+    "version": "1.48.5",
+    "date": "2026-10-31",
+    "status": "stable",
+    "title": {
+      "en": "A running task keeps its tools when Piagent is updated",
+      "vi": "Task đang chạy vẫn dùng được tool khi Piagent được cập nhật"
+    },
+    "summary": {
+      "en": "Updating Piagent while a company task runs no longer stops its tools: the task finishes on the release it started with, then the Terminal loads the new one.",
+      "vi": "Cập nhật Piagent khi task công ty đang chạy không còn làm hỏng tool: task chạy xong trên bản đã bắt đầu, rồi Terminal mới nạp bản mới."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A company task running across piagent-update no longer fails every tool with managed-runtime-changed: its sandbox runs a private, still verified copy of the release it started with.",
+        "vi": "Task công ty chạy trong lúc piagent-update không còn bị mọi tool báo managed-runtime-changed: sandbox chạy bản sao riêng, vẫn được kiểm tra, của đúng bản lúc bắt đầu."
+      },
+      {
+        "kind": "fixed",
+        "en": "A turn whose code could not be read is no longer reported as code changed unless a real edit happened.",
+        "vi": "Lượt không đọc được code không còn bị báo là đã đổi code, trừ khi thật sự có sửa file."
+      }
+    ]
+  },
+  {
     "version": "1.48.4",
     "date": "2026-10-30",
     "status": "stable",

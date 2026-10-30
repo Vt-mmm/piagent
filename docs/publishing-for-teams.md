@@ -42,6 +42,7 @@ pi install /path/to/piagent
 ## Versioning
 
 - `1.48.2`: Terminal nạp bản mới không cần đóng: `piagent reload`, và `piagent-update` tự yêu cầu, để mọi Terminal đang mở (`piagent`, `piagent studio`) nạp bản đã cài khi rảnh, giữ nguyên cuộc trò chuyện, task đang chạy xong trước; chỉ member được bỏ qua kiểm tra bắt buộc của team, trên thẻ duyệt, cho đúng code lúc đó.
+- `1.48.5`: Task công ty chạy trong lúc `piagent-update` không còn bị mọi tool báo `managed-runtime-changed`, vì sandbox chạy bản sao riêng của đúng bản lúc bắt đầu; lượt không đọc được code không còn bị báo là đã đổi code.
 - `1.48.4`: `/reload` trong `piagent studio` không còn làm hỏng cuộc trò chuyện; bản cập nhật yêu cầu trước `/reload` vẫn được nạp; Terminal chỉ nạp bản mới sau 10 giây rảnh liên tục và ô nhập trống, nên tin nhắn gõ ngay sau Esc không bị mất.
 - `1.48.3`: Agent gửi thẳng hình và file vào chat bằng `![tên](đường/dẫn)`; SVG mở ra hình, có nút xem mã và tải về; ảnh đính kèm là thumbnail lớn, bấm xem được; review chạy được trong thư mục chứa nhiều repo.
 - `1.48.1`: Dashboard trả lời nhanh hơn: cuộc trò chuyện mới dùng model và mức suy nghĩ đã chọn ở Terminal, tin nhắn đầu tiên luôn được gửi; Enter trong Terminal hiện tin nhắn ngay vì trạng thái repository được đọc ở nền và sự kiện phiên không còn ép ghi đĩa từng lần.

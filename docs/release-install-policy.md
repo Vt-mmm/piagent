@@ -155,7 +155,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0
-npm install -g --ignore-scripts @piagent/platform@1.48.4
+npm install -g --ignore-scripts @piagent/platform@1.48.5
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -181,7 +181,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.48.4
+pi install git:github.com/Vt-mmm/piagent@v1.48.5
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.

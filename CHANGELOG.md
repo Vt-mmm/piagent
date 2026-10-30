@@ -4,6 +4,15 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.48.5 - 2026-10-31
+
+**A running task keeps its tools when Piagent is updated.** Updating Piagent while a company task runs no longer stops its tools: the task finishes on the release it started with, then the Terminal loads the new one.
+
+### Fixed
+
+- A company task running across piagent-update no longer fails every tool with managed-runtime-changed: its sandbox runs a private, still verified copy of the release it started with.
+- A turn whose code could not be read is no longer reported as code changed unless a real edit happened.
+
 ## v1.48.4 - 2026-10-30
 
 **/reload keeps a company Terminal working; a new release never interrupts your next message.** Tools keep working after /reload in piagent studio, an update requested before /reload is still taken, and a Terminal waits for a quiet moment before it loads a new release.
