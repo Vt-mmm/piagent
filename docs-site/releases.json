@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.48.4",
+    "date": "2026-10-30",
+    "status": "stable",
+    "title": {
+      "en": "/reload keeps a company Terminal working; a new release never interrupts your next message",
+      "vi": "/reload không còn làm hỏng Terminal công ty; nạp bản mới không làm mất tin nhắn"
+    },
+    "summary": {
+      "en": "Tools keep working after /reload in piagent studio, an update requested before /reload is still taken, and a Terminal waits for a quiet moment before it loads a new release.",
+      "vi": "Tool vẫn chạy sau /reload trong piagent studio, bản cập nhật yêu cầu trước /reload vẫn được nạp, và Terminal chờ lúc rảnh hẳn mới nạp bản mới."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "/reload in piagent studio no longer breaks the conversation: tools stopped with a stale context error after it.",
+        "vi": "/reload trong piagent studio không còn làm hỏng cuộc trò chuyện: trước đây tool báo lỗi ctx cũ sau lệnh này."
+      },
+      {
+        "kind": "fixed",
+        "en": "A message typed right after stopping a run with Esc is no longer lost: a Terminal loads a new release only after 10 quiet seconds with an empty input.",
+        "vi": "Tin nhắn gõ ngay sau khi bấm Esc không còn bị mất: Terminal chỉ nạp bản mới sau 10 giây rảnh liên tục và ô nhập trống."
+      },
+      {
+        "kind": "fixed",
+        "en": "An update requested before /reload is still taken, and a request already taken does not reload the Terminal a second time.",
+        "vi": "Bản cập nhật yêu cầu trước /reload vẫn được nạp, và yêu cầu đã nạp không làm Terminal nạp lại lần nữa."
+      }
+    ]
+  },
+  {
     "version": "1.48.3",
     "date": "2026-10-30",
     "status": "stable",

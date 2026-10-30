@@ -4,6 +4,16 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.48.4 - 2026-10-30
+
+**/reload keeps a company Terminal working; a new release never interrupts your next message.** Tools keep working after /reload in piagent studio, an update requested before /reload is still taken, and a Terminal waits for a quiet moment before it loads a new release.
+
+### Fixed
+
+- /reload in piagent studio no longer breaks the conversation: tools stopped with a stale context error after it.
+- A message typed right after stopping a run with Esc is no longer lost: a Terminal loads a new release only after 10 quiet seconds with an empty input.
+- An update requested before /reload is still taken, and a request already taken does not reload the Terminal a second time.
+
 ## v1.48.3 - 2026-10-30
 
 **The agent sends pictures and files into the chat; reviews run across several repositories.** Answers show pictures and file cards in place, an SVG opens as a picture, attached images are large and open full size, and a folder of repositories gets its review.

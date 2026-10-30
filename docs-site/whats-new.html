@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.48.3" title="v1.48.3 docs · VI"><span class="dot"></span>v1.48.3</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.48.4" title="v1.48.4 docs · VI"><span class="dot"></span>v1.48.4</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-48-3" data-release>
+<article class="release latest" id="v1-48-4" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-48-4">v1.48.4</a><time class="release-date" datetime="2026-10-30">30/10/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-48-4-title">/reload không còn làm hỏng Terminal công ty; nạp bản mới không làm mất tin nhắn</h3>
+    <p>Tool vẫn chạy sau /reload trong piagent studio, bản cập nhật yêu cầu trước /reload vẫn được nạp, và Terminal chờ lúc rảnh hẳn mới nạp bản mới.</p>
+    <ul class="release-items">
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>/reload trong piagent studio không còn làm hỏng cuộc trò chuyện: trước đây tool báo lỗi ctx cũ sau lệnh này.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Tin nhắn gõ ngay sau khi bấm Esc không còn bị mất: Terminal chỉ nạp bản mới sau 10 giây rảnh liên tục và ô nhập trống.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Bản cập nhật yêu cầu trước /reload vẫn được nạp, và yêu cầu đã nạp không làm Terminal nạp lại lần nữa.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-48-3" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-48-3">v1.48.3</a><time class="release-date" datetime="2026-10-30">30/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-48-3-title">Agent gửi thẳng hình và file vào chat; review chạy được trong thư mục nhiều repo</h3>
@@ -410,24 +422,23 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-43-2" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-43-2">v1.43.2</a><time class="release-date" datetime="2026-10-26">26/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-43-2-title">Dev chọn workflow, harness hỗ trợ BE/FE theo project <span class="tag">không phát hành</span></h3>
-    <p>Đã tag nhưng chưa publish: wording prompt trùng chuỗi lệnh bị cấm trong test native session. Thay bằng 1.43.4.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">66</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">67</span></summary>
+    <div class="archive-row" id="v1-43-2">
+      <div class="archive-head"><a class="release-version" href="#v1-43-2">v1.43.2</a> <span class="release-date">26/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Dev chọn workflow, harness hỗ trợ BE/FE theo project</strong> <span class="tag">không phát hành</span> — Đã tag nhưng chưa publish: wording prompt trùng chuỗi lệnh bị cấm trong test native session. Thay bằng 1.43.4.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Tự nhận diện repo/package FE, BE trong thư mục hội thoại và gợi ý checks phù hợp, làm mới theo task.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Context workflow tùy chọn nhớ nguồn requirement, plan và tasks của công việc khi mở lại hội thoại, truyền chỉ đọc cho helper và hỗ trợ đổi hoặc xóa.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lifecycle là hướng dẫn theo workflow và điểm dừng Dev chọn, không ép file spec hoặc tự tạo gate release. Skill được chọn không cấp quyền hay bỏ qua kiểm chứng, review và duyệt deploy.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-43-1">
       <div class="archive-head"><a class="release-version" href="#v1-43-1">v1.43.1</a> <span class="release-date">26/10/2026</span></div>
       <div class="archive-body">
