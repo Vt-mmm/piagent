@@ -7,6 +7,14 @@
   </div>
   <p>Khởi động lại dashboard sau khi cập nhật để giao diện mới có hiệu lực.</p>
 
+  <h3 id="terminal-dang-mo">Terminal đang mở</h3>
+  <p>Không cần đóng Terminal. Sau khi cập nhật, mọi Terminal đang mở (<code>piagent</code> và <code>piagent studio</code>) tự nạp bản mới khi rảnh và giữ nguyên cuộc trò chuyện. Terminal đang chạy task thì chờ task xong rồi mới nạp; footer ghi rõ đang chờ. Terminal cá nhân nạp lại extension của Piagent; Terminal công ty mở lại trong chính cửa sổ đó, trên đúng cuộc trò chuyện. Muốn yêu cầu lại bất cứ lúc nào:</p>
+  <div class="command-card">
+    <header><span>Nạp bản đã cài vào mọi Terminal đang mở</span><button class="clip-btn" data-clip="piagent reload">Lấy lệnh</button></header>
+    <pre><code>piagent reload</code></pre>
+  </div>
+  <p>Bản mới chạy trên một bản Pi khác thì Terminal cá nhân báo cần mở lại <code>piagent</code>.</p>
+
   <h3 id="cap-nhat-lam-gi">Lệnh này làm gì, theo thứ tự</h3>
   <ol>
     <li>Xác định bản đích và bản Pi mà bản đó pin.</li>

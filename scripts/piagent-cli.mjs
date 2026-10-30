@@ -29,7 +29,8 @@ const scriptByCommand = {
   "piagent-dashboard": "scripts/piagent-dashboard.mjs",
   "piagent-pi-host": "scripts/pi-host.mjs",
   "piagent-skills": "scripts/skill-sources.mjs",
-  "piagent-restore-pi": "scripts/personal-pi-restore.mjs"
+  "piagent-restore-pi": "scripts/personal-pi-restore.mjs",
+  "piagent-reload": "scripts/terminal-reload.mjs"
 };
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -93,6 +94,7 @@ if (invokedAs === "piagent") {
     console.log("  dashboard   Open and manage the local session hub");
     console.log("  studio      Open the managed company agent imported by Agent Watch");
     console.log("  pi          Same as `piagent`: Pi on the release Piagent is qualified on, in Piagent's home");
+    console.log("  reload      Move every open Piagent Terminal to the installed release, without closing them");
     console.log("  restore-pi  Take an older Piagent install out of your own pi (~/.pi/agent)");
     console.log("  pi-host     Show or install the Pi host Piagent runs");
     console.log("  skills      Add, list or remove skill sources such as mattpocock/skills");
@@ -196,18 +198,48 @@ const runner = target.endsWith(".mjs") ? process.execPath : "bash";
 const runnerArgs = target.endsWith(".mjs")
   ? ["--disable-warning=ExperimentalWarning", "--import", pathToFileURL(path.join(sourceRoot, "scripts", "register-typescript-loader.mjs")).href, target]
   : [target];
-const child = spawn(runner, [...runnerArgs, ...forwardedArgs], {
-  cwd: process.cwd(),
-  env: script === "scripts/piagent-studio.mjs" ? { PATH: "/usr/bin:/bin", HOME: os.homedir(), TERM: process.env.TERM || "xterm-256color", LANG: "en_US.UTF-8" }
-    : { ...process.env, PI_CODING_AGENT_DIR: piagentHome(), ...(terminal ? { PIAGENT_ACTIVE: "1" } : {}) },
-  stdio: "inherit"
-});
+// The company Terminal can start again in place on a new release (`piagent
+// reload`, or after `piagent-update`): it writes the arguments that reopen its
+// conversation to this file and exits with RESTART_CODE; the files of the
+// installed release are run again with them, in the same terminal window.
+const RESTART_CODE = 75;
+const restartFile = script === "scripts/piagent-studio.mjs" ? path.join(os.homedir(), ".pi", "piagent-restart", `${process.pid}.json`) : null;
+function takeRestart() {
+  if (!restartFile) return null;
+  try {
+    const value = JSON.parse(fs.readFileSync(restartFile, "utf8"));
+    fs.rmSync(restartFile, { force: true });
+    return Array.isArray(value?.args) && value.args.every((arg) => typeof arg === "string") ? value.args : null;
+  } catch { return null; }
+}
 
-child.once("error", (error) => {
-  const code = error && typeof error === "object" && "code" in error ? ` (${error.code})` : "";
-  console.error(`Pi Agent command could not start ${runner}${code}. Ensure it is installed and available on PATH.`);
-  process.exit(1);
-});
+let child;
+function launch(args) {
+  child = spawn(runner, [...runnerArgs, ...args], {
+    cwd: process.cwd(),
+    env: script === "scripts/piagent-studio.mjs" ? { PATH: "/usr/bin:/bin", HOME: os.homedir(), TERM: process.env.TERM || "xterm-256color", LANG: "en_US.UTF-8", PIAGENT_RESTART_FILE: restartFile }
+      : { ...process.env, PI_CODING_AGENT_DIR: piagentHome(), ...(terminal ? { PIAGENT_ACTIVE: "1" } : {}) },
+    stdio: "inherit"
+  });
+
+  child.once("error", (error) => {
+    const code = error && typeof error === "object" && "code" in error ? ` (${error.code})` : "";
+    console.error(`Pi Agent command could not start ${runner}${code}. Ensure it is installed and available on PATH.`);
+    process.exit(1);
+  });
+
+  child.once("exit", (code, signal) => {
+    if (signal) {
+      process.removeAllListeners(signal);
+      process.kill(process.pid, signal);
+      return;
+    }
+    const again = code === RESTART_CODE ? takeRestart() : null;
+    if (again) { launch(again); return; }
+    process.exit(code ?? 1);
+  });
+}
+launch(forwardedArgs);
 
 // A command stopped from outside (a script, an editor, a timeout) stops its
 // child too, rather than leaving a company run going in the background. A
@@ -215,12 +247,3 @@ child.once("error", (error) => {
 // stays until the child has finished.
 for (const signal of ["SIGTERM", "SIGHUP"]) process.on(signal, () => { try { child.kill(signal); } catch { /* already gone */ } });
 process.on("SIGINT", () => {});
-
-child.once("exit", (code, signal) => {
-  if (signal) {
-    process.removeAllListeners(signal);
-    process.kill(process.pid, signal);
-    return;
-  }
-  process.exit(code ?? 1);
-});

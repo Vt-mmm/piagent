@@ -82,6 +82,8 @@ piagent-update --check             # chỉ kiểm tra
 piagent-update --version X.Y.Z     # đúng một bản, mới hơn hay cũ hơn
 ```
 
+Terminal đang mở (`piagent`, `piagent studio`) tự nạp bản mới khi rảnh và giữ nguyên cuộc trò chuyện; task đang chạy thì xong trước. `piagent reload` yêu cầu lại.
+
 Lệnh cài Pi host được pin trước, kiểm tra version trên đĩa rồi mới chạy installer; với `--project` nó migrate project và chạy doctor. Pin cho team, rollback và gỡ cài đặt: [Cập nhật và gỡ](https://piagent.io.vn/update) và [release and install policy](docs/release-install-policy.md).
 
 ```bash

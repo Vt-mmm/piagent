@@ -552,6 +552,16 @@ function main() {
     : `\nPASS: updated to v${targetHelper}.`);
   // A dashboard started before the update still serves the earlier release.
   if (!options.dryRun && helperNeedsChange) console.log("Open the dashboard with `piagent dashboard`: one still running an earlier release is restarted on the new one.");
+  // Open Terminals move to the new release when they are idle (a run in
+  // progress finishes first): the same request as `piagent reload`.
+  if (!options.dryRun && (helperNeedsChange || packageNeedsChange)) {
+    import("../packages/piagent-core/runtime/update/terminal-reload.mjs")
+      .then(({ requestTerminalReload }) => {
+        requestTerminalReload({ version: targetHelper, piHost: targetHost });
+        console.log("Open Terminals (piagent, piagent studio) load the new release when idle; a running task finishes first.");
+      })
+      .catch(() => console.log("Open Terminals keep the earlier release until reopened (`piagent reload` asks them again)."));
+  }
 }
 
 main();

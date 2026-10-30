@@ -7,6 +7,14 @@
   </div>
   <p>Restart the dashboard afterwards so the new interface takes effect.</p>
 
+  <h3 id="open-terminals">Open Terminals</h3>
+  <p>There is no need to close a Terminal. After an update, every open Terminal (<code>piagent</code> and <code>piagent studio</code>) loads the new release when it is idle and keeps its conversation. A Terminal running a task waits for it to finish, and its footer says so. The personal Terminal reloads Piagent's extensions; the company Terminal starts again in the same window, on the same conversation. To ask again at any time:</p>
+  <div class="command-card">
+    <header><span>Load the installed release in every open Terminal</span><button class="clip-btn" data-clip="piagent reload">Copy</button></header>
+    <pre><code>piagent reload</code></pre>
+  </div>
+  <p>When the new release runs on another Pi version, the personal Terminal says to reopen <code>piagent</code>.</p>
+
   <h3 id="what-it-does">What it does, in order</h3>
   <ol>
     <li>Resolves the target release and the Pi version it pins.</li>

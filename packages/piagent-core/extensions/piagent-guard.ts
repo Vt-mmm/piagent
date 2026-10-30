@@ -166,6 +166,7 @@ import { prefixCompletions, registerPiagentTool as registerToolDefinition, regis
 import { registerTaskEvidenceTools } from "../runtime/registration/task-evidence-tools.ts";
 import { registerAgentResources } from "../runtime/registration/agent-resources.ts";
 import { registerTerminalUpdateOffer } from "../runtime/update/terminal-update-offer.mjs";
+import { registerPersonalTerminalReload } from "../runtime/update/terminal-reload.mjs";
 import { registerStyleCommand } from "../runtime/terminal/terminal-style.mjs";
 import { userSkillFolders } from "../runtime/resources/agent-resources.mjs";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
@@ -4192,6 +4193,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
   registerAgentResources(pi);
   // A new release is asked about in the Terminal, as the dashboard does.
   registerTerminalUpdateOffer(pi, { installed: installedPlatformVersion(), packageRoot: PLATFORM_ROOT, restart: "pi" });
+  // `piagent reload` and a finished update reach this Terminal: it reloads when idle.
+  registerPersonalTerminalReload(pi, { installed: readJsonFile<{ version?: string }>(path.join(PLATFORM_ROOT, "package.json"))?.version });
   // The Terminal's look (/style): Pi keeps the pick in its own settings.
   registerStyleCommand(pi);
   registerSessionCommands(pi, { ...registrationDeps, ...contextCommandApi });

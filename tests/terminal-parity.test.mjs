@@ -71,7 +71,7 @@ test('the Terminal asks between turns, updates on "Cập nhật ngay" and keeps 
   const now = fakeUi(['Cập nhật ngay']);
   await commands.get('piagent-update').handler('', now.ctx);
   assert.deepEqual(runs, [{ packageRoot: '/pkg', version: '1.16.2', home: dir }]);
-  assert.match(now.notices.at(-1).message, /Đã cập nhật Piagent 1\.16\.1 → 1\.16\.2\. Thoát rồi mở lại `piagent studio`.*Mở Agent Watch\./);
+  assert.match(now.notices.at(-1).message, /Đã cập nhật Piagent 1\.16\.1 → 1\.16\.2\. Terminal này tự nạp bản mới khi rảnh.*mở lại `piagent studio`.*Mở Agent Watch\./);
   assert.equal(now.status.get('piagent-update'), undefined);
 });
 
@@ -227,8 +227,10 @@ test('the company InteractiveMode answers Pi\'s commands and keys itself and nev
 test('the methods the company InteractiveMode replaces exist in the pinned Pi', { skip: !fs.existsSync(sdkRoot) }, async () => {
   const { InteractiveMode } = await import(pathToFileURL(path.join(sdkRoot, 'dist/index.js')).href);
   const Mode = companyMode(InteractiveMode, { summary: () => ({}), whatsNew: () => '', components: {} });
-  const own = Object.getOwnPropertyNames(Mode.prototype).filter((name) => name !== 'constructor');
-  for (const name of [...own, 'showExtensionNotify', 'getMarkdownThemeWithSettings']) assert.equal(typeof InteractiveMode.prototype[name], 'function', name);
+  // stopForRestart is the company Terminal's own (a restart in place); it runs Pi's shutdown steps.
+  const own = Object.getOwnPropertyNames(Mode.prototype).filter((name) => !['constructor', 'stopForRestart'].includes(name));
+  for (const name of [...own, 'showExtensionNotify', 'getMarkdownThemeWithSettings', 'stop', 'shutdown']) assert.equal(typeof InteractiveMode.prototype[name], 'function', name);
+  assert.match(InteractiveMode.prototype.shutdown.toString(), /this\.stop\(\);[\s\S]*this\.runtimeHost\.dispose\(\)/, 'the shutdown steps stopForRestart repeats');
 });
 
 test('a question waiting for the member replaces "Working", and the plan is a checklist', { skip: !fs.existsSync(sdkRoot) }, async (t) => {

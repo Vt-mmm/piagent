@@ -245,7 +245,8 @@ describe("piagent guard integration", () => {
     for (const kept of ["piagent_tools", "piagent_context_engine", "piagent_document_read", "piagent_source_checkout", "piagent_memory_note"]) {
       assert.equal(harness.tools.has(kept), true, kept);
     }
-    assert.equal(harness.commands.size, 29);
+    assert.equal(harness.commands.size, 30);
+    assert.equal(harness.commands.has("piagent-reload"), true);
     assert.equal(harness.commands.has("bypass"), true);
     assert.equal(harness.commands.has("style"), true);
     assert.equal(harness.commands.has("undo"), true);
@@ -260,6 +261,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.tools.get("piagent_memory_search").executionMode, "parallel");
     assert.deepEqual([...harness.handlers.keys()].sort(), [
       "agent_settled",
+      "agent_start",
       "before_agent_start",
       "before_provider_request",
       "context",

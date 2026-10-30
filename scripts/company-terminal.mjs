@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import { registerTerminalUpdateOffer } from '../packages/piagent-core/runtime/update/terminal-update-offer.mjs';
+import { watchTerminalReload } from '../packages/piagent-core/runtime/update/terminal-reload.mjs';
 import { registerStyleCommand } from '../packages/piagent-core/runtime/terminal/terminal-style.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
@@ -258,6 +259,16 @@ export function companyMode(Base, { summary, whatsNew, components }) {
   const say = (mode, name, tone = 'warning') => mode.showExtensionNotify(companyCommandText(name, summary()), tone);
   return class CompanyInteractiveMode extends Base {
     async handleShareCommand() { say(this, 'share'); }
+    // Pi's own shutdown without its process.exit: the Terminal is restored and
+    // the session closed, then piagent-studio.mjs hands over to the new release.
+    async stopForRestart() {
+      if (this.isShuttingDown) return;
+      this.isShuttingDown = true;
+      this.themeController?.disableAutoSync?.();
+      await this.ui.terminal.drainInput(1000);
+      this.stop();
+      await this.runtimeHost.dispose();
+    }
     async handleBugCommand() { say(this, 'bug'); }
     suggestBugReport() {}
     crashReportInstructions() { return 'Lần sau mở lại: piagent studio, rồi /resume. Gửi admin của team giờ xảy ra lỗi.'; }
@@ -285,7 +296,7 @@ export function companyMode(Base, { summary, whatsNew, components }) {
   };
 }
 
-export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindingChanged = () => false }) {
+export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindingChanged = () => false, restartInPlace = null }) {
   const require = createRequire(path.join(sdkRoot, 'package.json'));
   let tui;
   const components = async () => (tui ??= await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href));
@@ -301,6 +312,15 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
 
     registerTerminalUpdateOffer(pi, { installed, packageRoot, restart: 'piagent studio',
       afterUpdate: () => bindingChanged() ? 'Bản mới đổi trình khởi chạy công ty: Agent Watch tự cập nhật cấu hình (cần Agent Watch đang chạy); piagent studio chờ việc này khi mở lại.' : null });
+
+    // `piagent reload` and a finished update: the company code is loaded once
+    // per process, so this Terminal starts again in place on the same
+    // conversation (piagent-studio.mjs), when idle. A Terminal opened by an
+    // older launcher cannot be started again for the member: it says so.
+    watchTerminalReload(pi, { apply: async (ctx, request) => {
+      if (!restartInPlace) { ctx.ui.notify(`Có Piagent ${request.version ?? 'mới'}: thoát rồi mở lại \`piagent studio\`, rồi /resume, để dùng bản mới.`, 'warning'); return; }
+      setTimeout(() => { void restartInPlace(); }, 0);
+    } });
 
     // The member's pick of look (/style); /settings is not offered here.
     registerStyleCommand(pi, { remember: true });

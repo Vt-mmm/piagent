@@ -134,7 +134,7 @@ Các command này đến từ package `piagent-core`; tất cả chạy ngay và
 | `/fast status\|on\|off` | Xem/bật/tắt Fast service tier cho session OpenAI Codex. | Chạy ngay, 0 model token; giữ nguyên model/thinking. Session trống mặc định tắt, environment override hoặc state đã lưu khi resume có thể được ưu tiên. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/piagent-mcp` | Xem/quản trị MCP trong Pi. | Menu MCP, không gọi model. |
-| `/piagent-update` | Kiểm tra bản Piagent mới ngay (Terminal tự hỏi mỗi giờ, giữa các lượt). | Hỏi "Cập nhật ngay / Để sau"; cập nhật xong nhắc mở lại `pi` hoặc `piagent studio`. Không gọi model. |
+| `/piagent-update` | Kiểm tra bản Piagent mới ngay (Terminal tự hỏi mỗi giờ, giữa các lượt). | Hỏi "Cập nhật ngay / Để sau"; cập nhật xong Terminal tự nạp bản mới khi rảnh, giữ nguyên cuộc trò chuyện. Không gọi model. |
 | `/share`, `/bug` | Trong `piagent studio`: bị tắt, chỉ báo lý do. | Hai lệnh này đưa hội thoại và code ra ngoài công ty (GitHub Gist, báo cáo cho nhà phát triển Pi). Dùng `/export` để lưu file trên máy. |
 | `/login`, `/logout`, `/model`, `/scoped-models`, `/thinking`, `/settings` | Trong `piagent studio`: chỉ báo "Harness của team quyết định" (Ctrl+L, Ctrl+P, Shift+Tab cũng vậy). | Model, mức suy luận và cài đặt do Harness trong Agent Studio quyết định; tài khoản là của team qua Agent Watch. `/changelog` hiện "Có gì mới" của Piagent. |
 | `/bypass [on\|full\|off\|status]` | Chỉ trong `piagent studio`: chọn Bypass, Toàn quyền hoặc Hỏi trước cho cuộc trò chuyện công ty (giống công tắc trên dashboard). | Bypass: việc làm chạy luôn (internet, Docker, lệnh trên máy, migration), chỉ hỏi việc bàn giao (push, PR, publish, deploy, upload, ssh, MCP ghi ra ngoài) và lệnh đụng thông tin đăng nhập. Toàn quyền: hỏi thêm migration, xoá không rõ đích, sudo và từng lệnh trên máy. Footer hiện chế độ. Không gọi model. |
@@ -485,6 +485,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent pi-host ensure` | Cài bản Pi pin vào `~/.piagent/pi-host/<version>` khi `pi` trên máy là bản mới hơn. `piagent-setup`, `piagent-install`, `piagent-update` tự làm bước này và không còn hạ cấp `pi` của member. |
 | `piagent skills add mattpocock/skills` | Thêm một repo skill trên GitHub (giữ ở đúng một commit trong `~/.piagent/skill-sources`). Skill dùng được dạng `/skill:<tên>` trong Pi cá nhân (sau `/reload`), Terminal công ty và dashboard. Repo có `.claude-plugin/plugin.json` chỉ nạp skill repo đó công bố. `--ref <branch|tag|commit>` để ghim bản khác. |
 | `piagent skills list` / `update [<owner/repo>]` / `remove <owner/repo>` | Xem skill từng nguồn thêm vào; lên commit mới nhất của ref; gỡ nguồn và xoá bản sao. |
+| `piagent reload` | Mọi Terminal đang mở (`piagent`, `piagent studio`) nạp bản Piagent đã cài khi rảnh, giữ nguyên cuộc trò chuyện; Terminal đang chạy task thì nạp khi task xong. `piagent-update` tự yêu cầu việc này sau khi cài. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
 | `piagent-update --version X.Y.Z` | Update tới đúng một release thay vì latest; dùng cho rollout theo lô hoặc rollback. |

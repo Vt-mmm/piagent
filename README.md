@@ -82,6 +82,8 @@ piagent-update --check             # only check
 piagent-update --version X.Y.Z     # a specific release, newer or older
 ```
 
+Open Terminals (`piagent`, `piagent studio`) load the new release when idle and keep their conversation; a running task finishes first. `piagent reload` asks them again.
+
 It installs the pinned Pi host first, verifies the version on disk, then runs the installer; with `--project` it also migrates the project and runs the doctor. Team pins, rollback and uninstall: [Update & uninstall](https://piagent.io.vn/en/update) and the [release and install policy](docs/release-install-policy.md).
 
 ```bash

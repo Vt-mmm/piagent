@@ -88,7 +88,7 @@ export function registerTerminalUpdateOffer(pi, { installed, packageRoot, restar
     if (!result.ok) { ctx.ui.notify(`Chưa cập nhật được Piagent. Chi tiết trong ${result.log}. Có thể chạy \`piagent-update\` trong terminal.`, "error"); return; }
     updated = version; status(undefined);
     const extra = afterUpdate();
-    ctx.ui.notify(`Đã cập nhật Piagent ${installed} → ${version}. Thoát rồi mở lại \`${restart}\` để dùng bản mới.${extra ? ` ${extra}` : ""}`, "info");
+    ctx.ui.notify(`Đã cập nhật Piagent ${installed} → ${version}. Terminal này tự nạp bản mới khi rảnh và giữ nguyên cuộc trò chuyện (hoặc thoát rồi mở lại \`${restart}\`).${extra ? ` ${extra}` : ""}`, "info");
   };
   const offer = async (ctx, { force = false } = {}) => {
     if (asking || updated || !ctx?.hasUI || ctx.ui?.[GATEWAY_UI] || !ctx.ui?.select) return;

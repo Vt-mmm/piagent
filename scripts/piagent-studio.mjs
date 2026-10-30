@@ -30,6 +30,11 @@ const home = os.homedir();
 // Read before the environment is cleared: a Herdr pane's socket for the
 // Terminal's reporter, and the PATH that finds the Windows browser from WSL.
 const herdr = herdrEnvironment(), ambientPath = process.env.PATH;
+// The launcher (piagent-cli.mjs) names a file for a restart in place: the
+// Terminal writes the arguments that reopen this conversation there and exits
+// with RESTART_CODE, and the launcher starts the installed release with them.
+const RESTART_CODE = 75, restartFile = /\/\.pi\/piagent-restart\/\d+\.json$/.test(process.env.PIAGENT_RESTART_FILE ?? '') ? process.env.PIAGENT_RESTART_FILE : null;
+let relaunch = null;
 // Joining Agent Watch takes a few seconds; keys typed before the Terminal draws are lost, so say so.
 if (!['--check', '--prompt', '--serve', '--doctor', '--web', '--rpc'].some((f) => flags.has(f)) && process.stderr.isTTY) process.stderr.write('Piagent công ty: đang kết nối Agent Watch, chờ ô nhập hiện ra rồi gõ…\n');
 // Do this before importing the SDK: it must not discover personal keys, Node
@@ -148,7 +153,8 @@ try {
   const { companyTerminalExtension, companyToolRenderers, companyInteractiveMode, harnessSummary } = await import('./company-terminal.mjs');
   const toolRenderers = await companyToolRenderers(config.sdk_root);
   const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  const terminal = companyTerminalExtension({ managed: () => current, packageRoot, sdkRoot: config.sdk_root,
+  const restart = { request: null };
+  const terminal = companyTerminalExtension({ managed: () => current, packageRoot, sdkRoot: config.sdk_root, restartInPlace: restartFile ? () => restart.request?.() : null,
     bindingChanged: () => { try { return digest(config.entrypoint) !== config.entrypoint_sha256; } catch { return true; } } });
   // Herdr shows the Terminal's state and reopens it after a restart; scripted runs have no pane to show.
   const reportToHerdr = herdr && !['--check', '--prompt', '--rpc'].some((f) => flags.has(f));
@@ -216,7 +222,15 @@ try {
       : write(typeof chunk === 'string' && chunk.includes('To resume this session:') ? `Mở lại cuộc trò chuyện này: piagent studio --project ${project}, rồi /resume\n` : chunk, ...rest);
     // /share, /bug, /login, /model, /thinking, /settings and /changelog: company-terminal.mjs.
     const CompanyMode = await companyInteractiveMode(api, { sdkRoot: config.sdk_root, packageRoot, summary: () => harnessSummary(current) });
-    await new CompanyMode(host, { verbose: false }).run();
+    const mode = new CompanyMode(host, { verbose: false });
+    const restarting = new Promise((resolve) => { restart.request = async () => {
+      if (relaunch) return;
+      const file = current?.session.sessionManager.getSessionFile?.(), saved = file && fs.existsSync(file) ? file : null;
+      const kept = []; for (let i = 0; i < args.length; i++) { if (args[i] === '--session') { i++; continue; } kept.push(args[i]); }
+      relaunch = [...kept, ...(saved ? ['--session', saved] : [])];
+      await mode.stopForRestart(); resolve();
+    }; });
+    await Promise.race([mode.run(), restarting]);
   }
   }
 } catch (error) {
@@ -229,3 +243,9 @@ try {
     : process.platform === 'linux' ? 'Trong Agent Watch cho Windows, chọn lại Kết nối Piagent trong WSL.' : 'Mở Agent Watch → Studio, nhập lại cấu hình cho Piagent, hoặc kiểm tra quyền Keychain.');
   process.stderr.write(`Agent Watch: ${code}. ${hint}\n`); process.exitCode = 1;
 } finally { await gateway?.close(); if (current) await current.dispose(); else await broker?.dispose(); hold?.release(); }
+if (relaunch && restartFile) {
+  fs.mkdirSync(path.dirname(restartFile), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(restartFile, JSON.stringify({ args: relaunch }), { mode: 0o600 });
+  process.stderr.write('Piagent công ty: đang mở lại với bản mới, giữ nguyên cuộc trò chuyện…\n');
+  process.exit(RESTART_CODE);
+}
