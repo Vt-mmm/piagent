@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.48.1",
+    "date": "2026-10-30",
+    "status": "stable",
+    "title": {
+      "en": "Faster first replies on the dashboard and an instant Enter in the Terminal",
+      "vi": "Dashboard trả lời nhanh hơn, Enter trong Terminal hiện tin nhắn ngay"
+    },
+    "summary": {
+      "en": "New dashboard conversations start on the model and thinking level you use in the Terminal, and sending a message no longer waits on repository checks or disk flushes.",
+      "vi": "Cuộc trò chuyện mới trên dashboard dùng đúng model và mức suy nghĩ bạn dùng ở Terminal, và gửi tin nhắn không còn phải chờ kiểm tra repository hay ghi đĩa."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A new dashboard conversation starts on the model and thinking level set in the Terminal, instead of always the highest reasoning model, so a short question gets a short wait.",
+        "vi": "Cuộc trò chuyện mới trên dashboard bắt đầu bằng model và mức suy nghĩ đã chọn ở Terminal, thay vì luôn dùng model suy nghĩ cao nhất, nên câu hỏi ngắn được trả lời nhanh."
+      },
+      {
+        "kind": "fixed",
+        "en": "The first message of a new dashboard conversation is always sent, including on models without a thinking mode; it no longer stays behind a \"session was created\" notice.",
+        "vi": "Tin nhắn đầu tiên của cuộc trò chuyện mới trên dashboard luôn được gửi, kể cả với model không có chế độ suy nghĩ; không còn kẹt ở thông báo \"Session đã được tạo\"."
+      },
+      {
+        "kind": "improved",
+        "en": "Pressing Enter shows your message right away: repository status is read in the background between turns, not while the message waits to appear.",
+        "vi": "Nhấn Enter là tin nhắn hiện ngay: trạng thái repository được đọc ở nền giữa các lượt, không còn chặn lúc tin nhắn chờ hiển thị."
+      },
+      {
+        "kind": "improved",
+        "en": "Live session events are written without a disk flush per event, which removes a pause before each message and each streamed update.",
+        "vi": "Sự kiện của phiên được ghi mà không ép ghi đĩa cho từng sự kiện, bỏ một nhịp chờ trước mỗi tin nhắn và mỗi đoạn stream."
+      }
+    ]
+  },
+  {
     "version": "1.48.0",
     "date": "2026-10-30",
     "status": "stable",

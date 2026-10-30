@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.48.1 - 2026-10-30
+
+**Faster first replies on the dashboard and an instant Enter in the Terminal.** New dashboard conversations start on the model and thinking level you use in the Terminal, and sending a message no longer waits on repository checks or disk flushes.
+
+### Improved
+
+- Pressing Enter shows your message right away: repository status is read in the background between turns, not while the message waits to appear.
+- Live session events are written without a disk flush per event, which removes a pause before each message and each streamed update.
+
+### Fixed
+
+- A new dashboard conversation starts on the model and thinking level set in the Terminal, instead of always the highest reasoning model, so a short question gets a short wait.
+- The first message of a new dashboard conversation is always sent, including on models without a thinking mode; it no longer stays behind a "session was created" notice.
+
 ## v1.48.0 - 2026-10-30
 
 **Bypass stops at the handoff: every mode asks before work leaves the machine.** Pushes, pull requests, publishes and deploys are always approved by you, commands are checked against a full shell syntax tree, approvals gain session and stop answers, and the dashboard streams more smoothly.

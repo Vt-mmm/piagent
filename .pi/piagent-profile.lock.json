@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:ce078fe119fad4366c91c26c42a6585e12f86f2e5b9dc81383287ffb6bffd5c2",
+    "packageDigest": "sha256:e6db18c9113da3682eba074fe6bef41f588f786c6e2cff7ad931d64f314bd529",
     "packageSource": "../",
-    "packageVersion": "1.48.0",
+    "packageVersion": "1.48.1",
     "runtimeFiles": [
       {
         "byteSize": 7106,
-        "digest": "sha256:ba28f6012e127f26b0e14367297381be2d6b545cd5c31bc8a671ca12410de69d",
+        "digest": "sha256:50410571b49511552bf13a9d29b0bf4dc85619450107ea0c6788330a6c02a835",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:731d245e211fa8cb53668ce8ddd5d8d672dd38da73536a3047563f97d55748c0",
+        "digest": "sha256:65240172736933b75064e160b26c64005f973dff60947c02f8ed79b4d0d6f3fd",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -168,8 +168,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 208902,
-        "digest": "sha256:d3ca8038bbccb8480974a8e6182a219b993114263c02b2a0c74a7d4f9aa55e32",
+        "byteSize": 209188,
+        "digest": "sha256:fa011fd3f723862e59529d828b9b9e3f3ca88d634f0ae57b28a42056faab05a5",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -988,8 +988,8 @@
         "path": "packages/piagent-core/extensions/path-suggestions.ts"
       },
       {
-        "byteSize": 208902,
-        "digest": "sha256:d3ca8038bbccb8480974a8e6182a219b993114263c02b2a0c74a7d4f9aa55e32",
+        "byteSize": 209188,
+        "digest": "sha256:fa011fd3f723862e59529d828b9b9e3f3ca88d634f0ae57b28a42056faab05a5",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -1634,7 +1634,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:731d245e211fa8cb53668ce8ddd5d8d672dd38da73536a3047563f97d55748c0",
+        "digest": "sha256:65240172736933b75064e160b26c64005f973dff60947c02f8ed79b4d0d6f3fd",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1963,8 +1963,8 @@
         "path": "packages/piagent-core/runtime/inspection/review-state-store.ts"
       },
       {
-        "byteSize": 19799,
-        "digest": "sha256:400b0996a02a8c68335e73fc2408dd22417230d0859f491c212edcb3e1cfb741",
+        "byteSize": 20063,
+        "digest": "sha256:0093d3e9b6fc0993401f6dd0681b6b3f21cd902782b71bef4f7b385578198768",
         "path": "packages/piagent-core/runtime/inspection/runtime-event-store.ts"
       },
       {
@@ -2658,8 +2658,8 @@
         "path": "packages/piagent-core/runtime/session/workspace-member-edits.mjs"
       },
       {
-        "byteSize": 3215,
-        "digest": "sha256:26bcb1f494b87094d3ee9bc5aa0310a5b73869021b0066866064c71bc607d28d",
+        "byteSize": 4927,
+        "digest": "sha256:61968a0b8c7706ee35d48335e01293a47284275274d4fc6da4f6777a80b242c3",
         "path": "packages/piagent-core/runtime/solver/runtime-features.ts"
       },
       {
@@ -2969,8 +2969,8 @@
       },
       {
         "byteSize": 134722,
-        "digest": "sha256:aa6120ca1c9aa5abdd26ece2a68ad4b32a2c17c3e1237ab6550a476e8d3a25d5",
-        "path": "packages/piagent-webui/dist/client/assets/App-WEGELa8g.js"
+        "digest": "sha256:dc2f1d4ee64a52648bf4b8489ed0a0e11280585a96de1c4f60f6c26b3ef2257b",
+        "path": "packages/piagent-webui/dist/client/assets/App-fZeIRoaD.js"
       },
       {
         "byteSize": 1752,
@@ -3028,24 +3028,24 @@
         "path": "packages/piagent-webui/dist/client/assets/dist-sNhoSseW.js"
       },
       {
-        "byteSize": 197002,
-        "digest": "sha256:579cbdcb86379bdde940120d41263f3d6e81f0bac21585e8133fb714b611f6ab",
-        "path": "packages/piagent-webui/dist/client/assets/GatewayApp-BebzSr3m.js"
+        "byteSize": 197021,
+        "digest": "sha256:b7bec0d0821e7ec56905b33bad4e2c57d33a40d3d090cd9417883491631cc4d9",
+        "path": "packages/piagent-webui/dist/client/assets/GatewayApp-CpC4lgYK.js"
       },
       {
-        "byteSize": 69667,
-        "digest": "sha256:9709751d6d9e69f3c7e38e9677a666c526af8823805c96ccd7bfccc700e74326",
-        "path": "packages/piagent-webui/dist/client/assets/index-BH0CdXS-.css"
+        "byteSize": 69597,
+        "digest": "sha256:ab13739920ee2e9fa6121e1c494980c20eed2e88ee82069dc4af9b3f31d9f593",
+        "path": "packages/piagent-webui/dist/client/assets/index-CjM70M7D.css"
       },
       {
         "byteSize": 200982,
-        "digest": "sha256:da601cdb8758a367206f1873241ae237c963208c9f68509fcb4bccdbb46cbdab",
-        "path": "packages/piagent-webui/dist/client/assets/index-FSikEhYo.js"
+        "digest": "sha256:be4988827930d574768a88c9ed71856c74e5b5742b47298759be58fc7d7a8f3b",
+        "path": "packages/piagent-webui/dist/client/assets/index-CNdhIouM.js"
       },
       {
         "byteSize": 4901,
-        "digest": "sha256:ad975296fe5e915844bc53f08bfd400497d7025f55ad163b81c47a87e5b928a5",
-        "path": "packages/piagent-webui/dist/client/assets/InspectionApp-DKzitBhg.js"
+        "digest": "sha256:d5303f6afaec19c182107b1cf364293b6734421858e358ba8f1da5d20be94a4e",
+        "path": "packages/piagent-webui/dist/client/assets/InspectionApp-pD-BqBXm.js"
       },
       {
         "byteSize": 1307,
@@ -3069,13 +3069,13 @@
       },
       {
         "byteSize": 1030,
-        "digest": "sha256:b71fe23f077eedb51dc59e2d920f8678be39e5d4f117b1d2966f585d014fd33f",
-        "path": "packages/piagent-webui/dist/client/assets/SessionAgentWorkspace-CCA5FmGS.js"
+        "digest": "sha256:96837515ec16e2426c9b3ffb87dae7d75df146468d26e0e285148fd7ea370d2b",
+        "path": "packages/piagent-webui/dist/client/assets/SessionAgentWorkspace-3tM7Q6HH.js"
       },
       {
         "byteSize": 4652,
-        "digest": "sha256:2fd3a2d1e39b982eebfb945e840482dadaadfe5cf950c94cc12ed04edac727bd",
-        "path": "packages/piagent-webui/dist/client/assets/SessionInspectorDrawer-B2Am6xPC.js"
+        "digest": "sha256:9e6a428843ce7c13e12b783a3af6d3968e3d49336409c19a3d37f3a822e76819",
+        "path": "packages/piagent-webui/dist/client/assets/SessionInspectorDrawer-BJ94aQ6y.js"
       },
       {
         "byteSize": 95256,
@@ -3099,8 +3099,8 @@
       },
       {
         "byteSize": 9358,
-        "digest": "sha256:6d6a262f0311164d8589212c6aea0264e60ec01c942c57e57f6dff77892ecd3a",
-        "path": "packages/piagent-webui/dist/client/assets/TerminalPanel-ldSOKiNR.js"
+        "digest": "sha256:cca217ac231824109836721f07799f886384b1c7aa088d5de8a917085c8a3fb8",
+        "path": "packages/piagent-webui/dist/client/assets/TerminalPanel-CtZyb0tj.js"
       },
       {
         "byteSize": 2853,
@@ -3144,13 +3144,13 @@
       },
       {
         "byteSize": 8873,
-        "digest": "sha256:4e1178eb196743c9ae5dd8d866568c0f7e7406b59bfdb9a2a43406d516361426",
-        "path": "packages/piagent-webui/dist/client/assets/WorkspaceCodeEditor-xTzEPxX9.js"
+        "digest": "sha256:045674c0df9eb0f9644ec4a46e4ddd2c2fce74ca615ad70f26e2743cb147584d",
+        "path": "packages/piagent-webui/dist/client/assets/WorkspaceCodeEditor-BS_ZrjPN.js"
       },
       {
         "byteSize": 32368,
-        "digest": "sha256:f290d708682d04c9d94711d533761d81411b640b0b6f75e35e5f91a12f39f7d6",
-        "path": "packages/piagent-webui/dist/client/assets/WorkspaceExplorer-w7DLUu89.js"
+        "digest": "sha256:168881d446013d80df2436e699293637028fa0294e1a67b6e1b178f79fd7b4d9",
+        "path": "packages/piagent-webui/dist/client/assets/WorkspaceExplorer-CkFBpcM7.js"
       },
       {
         "byteSize": 1485,
@@ -3159,7 +3159,7 @@
       },
       {
         "byteSize": 829,
-        "digest": "sha256:3d5a5abfa17ee989d845ea526c3a9ab4609ec8afdcc5c6343a28b785f53c5e63",
+        "digest": "sha256:db2fcaf0ccc7bb949b4b260f30c49dda1a4de8cee0eb49e73aa8b75280f8ccd8",
         "path": "packages/piagent-webui/dist/client/index.html"
       },
       {
@@ -3463,8 +3463,8 @@
         "path": "packages/piagent-webui/gateway/session-file-facts.ts"
       },
       {
-        "byteSize": 22219,
-        "digest": "sha256:07da6037c9bb4056e43ce6483960de8a1d40e5c7615867e84c6078b0d6223cc5",
+        "byteSize": 22914,
+        "digest": "sha256:780281f1ea6ffd2acde6f9d176c073dfc68c82ec06b4c4eb4c42a8b9a46d9952",
         "path": "packages/piagent-webui/gateway/session-inspection-registry.ts"
       },
       {
