@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.48.1" title="v1.48.1 docs · EN"><span class="dot"></span>v1.48.1</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.48.2" title="v1.48.2 docs · EN"><span class="dot"></span>v1.48.2</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new">Changelog</a>
@@ -114,6 +114,14 @@
   </div>
   <p>Restart the dashboard afterwards so the new interface takes effect.</p>
 
+  <h3 id="open-terminals">Open Terminals</h3>
+  <p>There is no need to close a Terminal. After an update, every open Terminal (<code>piagent</code> and <code>piagent studio</code>) loads the new release when it is idle and keeps its conversation. A Terminal running a task waits for it to finish, and its footer says so. The personal Terminal reloads Piagent's extensions; the company Terminal starts again in the same window, on the same conversation. To ask again at any time:</p>
+  <div class="command-card">
+    <header><span>Load the installed release in every open Terminal</span><button class="clip-btn" data-clip="piagent reload">Copy</button></header>
+    <pre><code>piagent reload</code></pre>
+  </div>
+  <p>When the new release runs on another Pi version, the personal Terminal says to reopen <code>piagent</code>.</p>
+
   <h3 id="what-it-does">What it does, in order</h3>
   <ol>
     <li>Resolves the target release and the Pi version it pins.</li>
@@ -145,9 +153,9 @@
   <h2 id="pin-for-a-team">Pin one release for a team</h2>
   <p>For a team rollout, install the exact Pi host and platform release, then run the installer in stable mode. The <code>--dry-run</code> step prints what would change.</p>
   <div class="command-card">
-    <header><span>Pinned install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0&#10;npm install -g --ignore-scripts @piagent/platform@1.48.1&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Copy</button></header>
+    <header><span>Pinned install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0&#10;npm install -g --ignore-scripts @piagent/platform@1.48.2&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Copy</button></header>
     <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.3.0
-npm install -g --ignore-scripts @piagent/platform@1.48.1
+npm install -g --ignore-scripts @piagent/platform@1.48.2
 piagent-install --stable --dry-run
 piagent-install --stable</code></pre>
   </div>

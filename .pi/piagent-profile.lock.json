@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:e6db18c9113da3682eba074fe6bef41f588f786c6e2cff7ad931d64f314bd529",
+    "packageDigest": "sha256:4d95f7038fcd569d204f21c6187a3cd520b8b48aec02ac77a71b5c584abe1e14",
     "packageSource": "../",
-    "packageVersion": "1.48.1",
+    "packageVersion": "1.48.2",
     "runtimeFiles": [
       {
         "byteSize": 7106,
-        "digest": "sha256:50410571b49511552bf13a9d29b0bf4dc85619450107ea0c6788330a6c02a835",
+        "digest": "sha256:0873587f3ff0dd83771ba383477e1a7bd1b96fa1b06d1f0c9ffa1207dd406c30",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:65240172736933b75064e160b26c64005f973dff60947c02f8ed79b4d0d6f3fd",
+        "digest": "sha256:b5faae73df2f7c52a74a29503f6dce8369f635886cbce3f47816e85599cbb67d",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -168,8 +168,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 209188,
-        "digest": "sha256:fa011fd3f723862e59529d828b9b9e3f3ca88d634f0ae57b28a42056faab05a5",
+        "byteSize": 209510,
+        "digest": "sha256:774f198a67da17ada4c61a9e3666e24fa8fd40e1a54bbaddc29fbf12c11e75d7",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -988,8 +988,8 @@
         "path": "packages/piagent-core/extensions/path-suggestions.ts"
       },
       {
-        "byteSize": 209188,
-        "digest": "sha256:fa011fd3f723862e59529d828b9b9e3f3ca88d634f0ae57b28a42056faab05a5",
+        "byteSize": 209510,
+        "digest": "sha256:774f198a67da17ada4c61a9e3666e24fa8fd40e1a54bbaddc29fbf12c11e75d7",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -1223,6 +1223,11 @@
         "path": "packages/piagent-core/managed/capabilities.mjs"
       },
       {
+        "byteSize": 3445,
+        "digest": "sha256:3f1594b8a86466fd163012687a9c8812c4dcf179cca6f9d4a7cb7fcfd13f8517",
+        "path": "packages/piagent-core/managed/check-waiver.mjs"
+      },
+      {
         "byteSize": 774,
         "digest": "sha256:1e35dc74161ba98602d53d47a603d368ae58ba7c554544402b886639c786fa29",
         "path": "packages/piagent-core/managed/checkpoint-git.mjs"
@@ -1238,8 +1243,8 @@
         "path": "packages/piagent-core/managed/client-agent.mjs"
       },
       {
-        "byteSize": 19997,
-        "digest": "sha256:8c29e269eb9da14ec8ed6346b28e4415da9ab15206ecf0a3932e5dc8790bcd6a",
+        "byteSize": 20026,
+        "digest": "sha256:d4066ae7fa84927965daf29f724dc4832c4e72aafa6fb521e85b4db462cb2825",
         "path": "packages/piagent-core/managed/command-tools.mjs"
       },
       {
@@ -1463,8 +1468,8 @@
         "path": "packages/piagent-core/managed/session-mutation-observations.mjs"
       },
       {
-        "byteSize": 42167,
-        "digest": "sha256:7593f42c7c008616d44fb56e26f0ec08411c7b7e8f7a95835cc3b7ebb76e0fe0",
+        "byteSize": 42294,
+        "digest": "sha256:a389eb7b88413813b1eff65fe50c28992b6c431b1c05b86bef1469ae6c09a1c7",
         "path": "packages/piagent-core/managed/session.mjs"
       },
       {
@@ -1568,8 +1573,8 @@
         "path": "packages/piagent-core/managed/workflow-context.mjs"
       },
       {
-        "byteSize": 45019,
-        "digest": "sha256:137ec6789c43e50a387bcd8e5d7096942a5139cb68677f19bc8fd5328d5f7a4f",
+        "byteSize": 45349,
+        "digest": "sha256:dc0f114e550168af008c768bec05e31f9faeeb53960eb2fd7603866756f195de",
         "path": "packages/piagent-core/managed/workflow.mjs"
       },
       {
@@ -1634,7 +1639,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:65240172736933b75064e160b26c64005f973dff60947c02f8ed79b4d0d6f3fd",
+        "digest": "sha256:b5faae73df2f7c52a74a29503f6dce8369f635886cbce3f47816e85599cbb67d",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -2743,8 +2748,13 @@
         "path": "packages/piagent-core/runtime/trajectory/trajectory-types.ts"
       },
       {
-        "byteSize": 6999,
-        "digest": "sha256:6f1e1b5abe979a06e0c9c4ac57168c1c00802fabebd24f492190b7d6165e7a70",
+        "byteSize": 5899,
+        "digest": "sha256:1c2f2aa0057e673d745a083d95745d542b2000bb9a092a7f08b11a31f9d7371c",
+        "path": "packages/piagent-core/runtime/update/terminal-reload.mjs"
+      },
+      {
+        "byteSize": 7071,
+        "digest": "sha256:bc30dac9b6058e437837b48b147fab87a5662abe0e274d3a96693ad081233ebb",
         "path": "packages/piagent-core/runtime/update/terminal-update-offer.mjs"
       },
       {
@@ -4003,8 +4013,8 @@
         "path": "scripts/capability-catalog.mjs"
       },
       {
-        "byteSize": 32383,
-        "digest": "sha256:cc18aa3c22da31b69ff85d1d5a357abda503023382b5d1f2692b7d16c61efef3",
+        "byteSize": 33555,
+        "digest": "sha256:311c23c0c5d74e44f3bf206edff11a6087fc6dd84a3b10aa3da433139b26c82c",
         "path": "scripts/company-terminal.mjs"
       },
       {
@@ -4103,8 +4113,8 @@
         "path": "scripts/pi-usage-history.mjs"
       },
       {
-        "byteSize": 11883,
-        "digest": "sha256:0a919d94636708c9cc483b9e133af7692071b315b4568be1636a0534d8fef417",
+        "byteSize": 13068,
+        "digest": "sha256:39f3ddd813d9e488265f63dc28b35411659de30436936f804d56ede643c64eff",
         "path": "scripts/piagent-cli.mjs"
       },
       {
@@ -4118,8 +4128,8 @@
         "path": "scripts/piagent-installations.mjs"
       },
       {
-        "byteSize": 19954,
-        "digest": "sha256:81f30b2d452e151e2b2b9287b9d6280a4d01ec9660d65e4ae3a18585a72a1745",
+        "byteSize": 21362,
+        "digest": "sha256:b1399e56296c4af86d881c326358478140b0a094aee2a3253d36ad7cd4c389e3",
         "path": "scripts/piagent-studio.mjs"
       },
       {
@@ -4153,6 +4163,11 @@
         "path": "scripts/team-doctor.sh"
       },
       {
+        "byteSize": 1183,
+        "digest": "sha256:b20131d57d6fb7dd31d099fdd49b3f95de930036eb895e3c9b2d8ebc850ab11b",
+        "path": "scripts/terminal-reload.mjs"
+      },
+      {
         "byteSize": 9216,
         "digest": "sha256:8d19ce87b0ad92842ca55d56b1384b944c71c8b125e4417ec13ee5e93a07ef67",
         "path": "scripts/typescript-loader.mjs"
@@ -4163,8 +4178,8 @@
         "path": "scripts/uninstall-global.sh"
       },
       {
-        "byteSize": 23887,
-        "digest": "sha256:6070737a3936f18fbb2110e79b8c20edb093b5103e6e1063de4c1fdc2f937734",
+        "byteSize": 24564,
+        "digest": "sha256:140ec6bd92d90d5fe3897b75413ba2bb5e24fb427470a8aff6b7027da7889bf5",
         "path": "scripts/update-global.mjs"
       },
       {

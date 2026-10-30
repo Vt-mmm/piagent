@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.48.1" title="v1.48.1 docs · EN"><span class="dot"></span>v1.48.1</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.48.2" title="v1.48.2 docs · EN"><span class="dot"></span>v1.48.2</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-48-1" data-release>
+<article class="release latest" id="v1-48-2" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-48-2">v1.48.2</a><time class="release-date" datetime="2026-10-30">Oct 30, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-48-2-title">Terminals load a new release without closing; only the member waives checks</h3>
+    <p>After an update every open Terminal moves to the new release when idle and keeps its conversation, and a team's required checks can be skipped only by the member, on a card.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>piagent reload: every open Terminal (piagent and piagent studio) loads the installed release when idle and keeps its conversation; piagent-update asks for it after installing.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Only the member can skip the checks a team requires: the agent asks on an approval card, once, for the code as it is then; later changes are checked again.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A Terminal running a task is never cut off: it loads the new release when the task finishes, and its footer says it is waiting.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A turn whose checks the member skipped says so in its status, apart from a turn where no check ran; a push still asks as in every mode.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-48-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-48-1">v1.48.1</a><time class="release-date" datetime="2026-10-30">Oct 30, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-48-1-title">Faster first replies on the dashboard and an instant Enter in the Terminal</h3>
@@ -407,24 +420,23 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-43-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-43-0">v1.43.0</a><time class="release-date" datetime="2026-10-26">Oct 26, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-43-0-title">Your workflow, with adaptive backend and frontend support <span class="tag">not published</span></h3>
-    <p>Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.4.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">64</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">65</span></summary>
+    <div class="archive-row" id="v1-43-0">
+      <div class="archive-head"><a class="release-version" href="#v1-43-0">v1.43.0</a> <span class="release-date">Oct 26, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Your workflow, with adaptive backend and frontend support</strong> <span class="tag">not published</span> — Tagged but not published: the documentation wording gate blocked the release. Superseded by 1.43.4.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-42-1">
       <div class="archive-head"><a class="release-version" href="#v1-42-1">v1.42.1</a> <span class="release-date">Oct 25, 2026</span></div>
       <div class="archive-body">

@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.48.2 - 2026-10-30
+
+**Terminals load a new release without closing; only the member waives checks.** After an update every open Terminal moves to the new release when idle and keeps its conversation, and a team's required checks can be skipped only by the member, on a card.
+
+### Added
+
+- piagent reload: every open Terminal (piagent and piagent studio) loads the installed release when idle and keeps its conversation; piagent-update asks for it after installing.
+- Only the member can skip the checks a team requires: the agent asks on an approval card, once, for the code as it is then; later changes are checked again.
+
+### Improved
+
+- A Terminal running a task is never cut off: it loads the new release when the task finishes, and its footer says it is waiting.
+- A turn whose checks the member skipped says so in its status, apart from a turn where no check ran; a push still asks as in every mode.
+
 ## v1.48.1 - 2026-10-30
 
 **Faster first replies on the dashboard and an instant Enter in the Terminal.** New dashboard conversations start on the model and thinking level you use in the Terminal, and sending a message no longer waits on repository checks or disk flushes.

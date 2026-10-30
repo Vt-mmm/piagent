@@ -49,18 +49,26 @@ function idle(ctx) {
 // process. Only Terminals with a UI take requests: scripted runs keep theirs.
 export function watchTerminalReload(pi, { apply, home, startedAt = Date.now(), pollMs = POLL_MS }) {
   let ctx = null, applied = false, waiting = false, timer = null;
+  // A ctx kept from an earlier session (replaced, reloaded) throws on any use:
+  // a check that meets one does nothing, and the next session_start brings a new one.
   const check = async () => {
-    if (applied || !ctx?.hasUI) return;
-    const request = readReloadRequest(home);
-    if (!request || request.at <= startedAt) return;
-    if (!idle(ctx)) {
-      if (!waiting) { waiting = true; ctx.ui?.setStatus?.(STATUS_KEY, `⟳ Nạp Piagent${request.version ? ` ${request.version}` : " mới"} khi xong lượt này`); }
-      return;
-    }
-    applied = true;
-    ctx.ui?.setStatus?.(STATUS_KEY, undefined);
+    let request;
+    try {
+      if (applied || !ctx?.hasUI) return;
+      request = readReloadRequest(home);
+      if (!request || request.at <= startedAt) return;
+      if (!idle(ctx)) {
+        if (!waiting) { waiting = true; ctx.ui?.setStatus?.(STATUS_KEY, `⟳ Nạp Piagent${request.version ? ` ${request.version}` : " mới"} khi xong lượt này`); }
+        return;
+      }
+      applied = true;
+      ctx.ui?.setStatus?.(STATUS_KEY, undefined);
+    } catch { return; }
     try { await apply(ctx, request); }
-    catch (error) { applied = false; ctx.ui?.notify?.(`Chưa nạp được Piagent mới: ${error instanceof Error ? error.message : String(error)}`, "warning"); }
+    catch (error) {
+      applied = false;
+      try { ctx.ui?.notify?.(`Chưa nạp được Piagent mới: ${error instanceof Error ? error.message : String(error)}`, "warning"); } catch { /* the session is gone */ }
+    }
   };
   const keep = (_event, next) => { ctx = next; };
   pi.on("session_start", (event, next) => {
@@ -70,7 +78,7 @@ export function watchTerminalReload(pi, { apply, home, startedAt = Date.now(), p
   pi.on("agent_start", keep);
   // The moment a run settles is the moment a waiting reload can happen.
   pi.on("agent_settled", (event, next) => { keep(event, next); setTimeout(() => { void check(); }, 300).unref?.(); });
-  pi.on("session_shutdown", () => { if (timer) clearInterval(timer); timer = null; });
+  pi.on("session_shutdown", () => { if (timer) clearInterval(timer); timer = null; ctx = null; });
   return { check };
 }
 
