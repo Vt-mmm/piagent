@@ -75,11 +75,11 @@ export function stillAsks(self, reason) {
 
 // One approval of the member (the dashboard card, else the Terminal). The
 // member may allow it once, allow the same exact action for the rest of the
-// conversation (never a handoff: its scope names it), deny it, or deny it and
+// conversation (never a handoff or a waiver of checks: its scope names it), deny it, or deny it and
 // stop the turn so the agent does not try again.
 const CHOICES = { once: 'Đồng ý một lần', session: 'Đồng ý cho cả cuộc trò chuyện (đúng lệnh này)', deny: 'Từ chối', stop: 'Từ chối và dừng lượt này' };
 export async function approve(self, id, signal, ctx, action, { title, body }) {
-  const grantable = !/handoff/.test(String(action.requestedScope ?? '')), key = `${action.toolName}\u0000${action.commandPreview ?? JSON.stringify(action.rawAction ?? {})}`;
+  const grantable = !/handoff|waiver/.test(String(action.requestedScope ?? '')), key = `${action.toolName}\u0000${action.commandPreview ?? JSON.stringify(action.rawAction ?? {})}`;
   if (grantable && self.sessionApprovals?.has(key)) return;
   const { piApprovalBroker } = await import('../runtime/inspection/approval-broker.ts');
   const choices = ['once', ...(grantable ? ['session'] : []), 'deny', 'stop'];

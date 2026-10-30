@@ -2761,7 +2761,8 @@ non-secret metadata are safe alternatives.`;
       revisions: { runtimeRevision: "runtime-rev.web", taskRevision: "task-rev.web", controlRevision: "control-rev.web" }, taskState: "active" }) });
     const resultPromise = harness.handlers.get("tool_call")({ toolName: "mcp__github__create_issue", toolCallId: "tool.web-approval",
       input: { owner: "org", repo: "repo", title: "Release note" } }, ctx);
-    await new Promise((resolve) => setImmediate(resolve));
+    // The guard reads the tool's action (a module it loads on first use) before it asks.
+    for (let tick = 0; tick < 200 && approvalBroker.projection(cwd, ctx.sessionManager.getSessionId()).summary.state !== "waiting"; tick += 1) await new Promise((resolve) => setTimeout(resolve, 10));
     const projection = approvalBroker.projection(cwd, ctx.sessionManager.getSessionId());
     assert.equal(projection.summary.state, "waiting");
     const request = approvalBroker.detail(cwd, ctx.sessionManager.getSessionId(), projection.summary.pending[0].approvalRef);

@@ -94,10 +94,14 @@ Absent: every step `suggest`, `max_fix_loops` 2. An unknown step value is read a
 
 `suggest` names the repository's checks (AGENTS.md `## Checks`, else what its manifests imply) and never adds a turn. `require` sends a code-changing turn back until a check passes on the final code, at most `max_fix_loops` times, and sends a claim the verify helper marked failed back once before the member decides.
 
+Only the member waives the checks. When the member asks to skip them, the agent calls `waive_checks` with the member's words and the member confirms on an approval card, one time, never for the rest of the conversation. The waiver holds for the code as it is at that moment: the turn is not sent back for checks, and its status reads "no check passed on the final code: the member waived the checks" (outcome `unverified`, `checksWaived` in the status details). Code changed after the waiver needs its checks again. A push still asks the member as in every mode.
+
 - Piagent: `managed-workflow` › required checks and review: the harness sends the agent back until the final patch is checked and clean
 - Piagent: `managed-workflow` › suggested steps never add a turn; a required check that never passes ends the turn as unverified
 - Piagent: `managed-workflow` › a check that fails with an error result is counted as failed, not as passed
 - Piagent: `managed-workflow` › a check that passed before the turn was cut off is still reported as passed
+- Piagent: `managed-check-waiver` › waive_checks asks the member every time and binds the waiver to the current code
+- Piagent: `managed-check-waiver` › the gate stops asking for checks on waived code and reports the waiver; changed code is asked again
 - Piagent: `managed-objections` › under a required verify a failed claim goes back to the agent, is checked again with its answer, and a lasting failure goes to the member
 - Piagent: `managed-objections` › under a suggested verify a failed claim stays the agent's to weigh: no extra turn
 

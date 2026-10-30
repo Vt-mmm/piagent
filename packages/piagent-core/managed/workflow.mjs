@@ -148,7 +148,7 @@ export function workflowPrompt(policy, checks) {
   if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with pending steps sends you back to the next one until every step is completed or deferred: if you cannot go on without the member, ask with ask_user. Mark a step deferred only when the member asked to leave it for later or it is no longer needed; never mark completed a step you did not do.' : ''}`);
   if (policy.verify !== 'off') {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
-    lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''}`);
+    lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''} Only the member may skip the checks: when they ask to, call waive_checks with their words; never skip them on your own.`);
   }
   // What each severity asks: blocking is fixed or argued, major decided, minor only listed.
   const severities = ' Blocking findings: fix them, or reject one with resolve_objection and the reviewer judges your reason; a disagreement that remains goes to the member. Major findings: fix them or reject them with resolve_objection; no new review follows. Minor findings are listed for the member and need nothing.';
@@ -350,7 +350,7 @@ export async function completionGate(managed, run, signal) {
       // The member declined the approval a check needed (a JDK, Docker, the
       // network): asking again would only repeat the same answer.
       if (policy.verify === 'require' && !run.verified && run.approvalDeclined && run.fixLoops > 0) verifyGaveUp = true;
-      if (policy.verify === 'require' && !run.verified && !run.docsOnly && !verifyGaveUp) {
+      if (policy.verify === 'require' && !run.verified && !run.docsOnly && !verifyGaveUp && run.waivedDigest !== digest) {
         run.fixLoops += 1;
         const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
         await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), request the approval that makes it run (run_with_network, run_with_docker, start_docker, run_on_host) or ask the member with ask_user, then run it; install or start nothing without that approval. If it fails for a reason unrelated to your change, say so plainly.`,
@@ -441,8 +441,8 @@ export async function completionGate(managed, run, signal) {
   if (!run.changed && !run.disputes.length && !ledgerOf(run).length) return;
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
-    ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
-  const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : 'no check passed on the final code',
+    ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(!run.verified && run.waivedDigest === digest ? { checksWaived: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
+  const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : run.waivedDigest === digest ? 'no check passed on the final code: the member waived the checks' : 'no check passed on the final code',
     run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
     run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
     run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null, ledgerWords(run)].filter(Boolean);

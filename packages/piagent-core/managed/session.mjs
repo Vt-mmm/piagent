@@ -29,7 +29,7 @@ import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, deleg
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
 import { restorePermission, recordBypass, permissionSetter } from './permission.mjs';
-import { commandTools, servicesPrompt } from './command-tools.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
+import { commandTools, servicesPrompt } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 export const HELPER_BEAT_MS = 60_000;
@@ -129,7 +129,7 @@ export class ManagedSession {
     if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles) + SPEC_PROMPT,
       parameters: delegateParameters(), // the brief and its structured fields (helper-settlement.mjs)
       execute: (_id, args, signal) => self.delegate(delegateArgs(self, args), signal) });
-    customTools.push(sessionPlanTool(self), ...(roles.length ? [resolveTool(self)] : [])); // the objection ledger's decisions (ledger.mjs)
+    customTools.push(sessionPlanTool(self), waiveChecksTool(self), ...(roles.length ? [resolveTool(self)] : [])); // the member's waiver of checks (check-waiver.mjs), the objection ledger's decisions (ledger.mjs)
     // The member decides what the request leaves open: numbered options, or their own words.
     customTools.push(workflowContextTool(() => self.session.sessionManager));
     customTools.push(askTool(self), ...memoryToolsFor(self, agentDir)); // team memory's tools, once Studio answered memory here (memory.mjs)

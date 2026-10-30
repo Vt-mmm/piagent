@@ -15,7 +15,8 @@ const SCOPES: Record<string, [string, string]> = { "one-shell-command": ["Đúng
   "network-command-once": ["Đúng một lệnh, có mạng", "This one command, with network"], "docker-command-once": ["Đúng một lệnh, có mạng và Docker", "This one command, with network and Docker"],
   "host-command-once": ["Đúng một lệnh, chạy trên máy bạn (ngoài sandbox)", "This one command, on your machine (outside the sandbox)"], "start-docker-once": ["Mở Docker trên máy", "Start Docker on this machine"], "one-external-action": ["Đúng một hành động", "This one action"],
   "one-handoff": ["Đúng một bước bàn giao ra ngoài", "This one handoff"], "handoff-once": ["Đúng một bước bàn giao ra ngoài", "This one handoff"],
-  "mcp-handoff-once": ["Đúng một lệnh gọi MCP ghi ra ngoài", "This one MCP call that writes outside"] };
+  "mcp-handoff-once": ["Đúng một lệnh gọi MCP ghi ra ngoài", "This one MCP call that writes outside"],
+  "checks-waiver-once": ["Bỏ qua kiểm tra cho đúng code hiện tại", "Skip the checks for the code as it is now"] };
 const CONSEQUENCES: Record<string, [string, string]> = {
   "Run this exact command once, after the guard checks the working tree again.": ["Chạy đúng lệnh này một lần, sau khi guard kiểm tra lại thư mục làm việc.", ""],
   "The command does not run; the agent is told you declined.": ["Lệnh không chạy; agent được báo là bạn đã từ chối.", ""],

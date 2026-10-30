@@ -4052,7 +4052,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
 
     const grants = sessionGrants.get(ctx.sessionManager.getSessionId()) ?? new Set<string>();
-    const grantable = Boolean(pendingHumanApproval) && !/handoff/.test(String(pendingHumanApproval!.action.requestedScope));
+    const grantable = Boolean(pendingHumanApproval) && !/handoff|waiver/.test(String(pendingHumanApproval!.action.requestedScope));
     const grant = grantKey(event.toolName, typeof pendingHumanApproval?.action.commandPreview === "string" ? pendingHumanApproval.action.commandPreview : null, preparedInput.input);
     if (pendingHumanApproval && grantable && grants.has(grant)) pendingHumanApproval = null;
     if (pendingHumanApproval) {
