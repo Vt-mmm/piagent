@@ -95,7 +95,7 @@ function runningPiVersion() {
   } catch { /* unknown */ }
   return null;
 }
-export function registerPersonalTerminalReload(pi, { installed, home }) {
+export function registerPersonalTerminalReload(pi, { installed, home = undefined }) {
   pi.registerCommand("piagent-reload", { description: "Nạp lại Piagent (bản vừa cập nhật) mà không đóng Terminal",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle();
