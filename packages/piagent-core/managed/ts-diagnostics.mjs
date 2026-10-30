@@ -21,7 +21,7 @@ export class TsDiagnostics {
     if (this.#child) return this.#child;
     if (this.#starts >= RESTARTS) { this.#off = true; return null; }
     this.#starts += 1;
-    const { child } = await this.boundary.spawnSandboxed([this.boundary.node, SERVER, this.boundary.cwd], randomUUID(), { stdin: 'pipe' });
+    const { child } = await this.boundary.spawnSandboxed([this.boundary.node, this.boundary.runtimeFile?.('ts-diagnostics-server.mjs') ?? SERVER, this.boundary.cwd], randomUUID(), { stdin: 'pipe' });
     child.stdout.on('data', chunk => {
       this.#buffer += chunk.toString('utf8');
       for (let at; (at = this.#buffer.indexOf('\n')) >= 0;) {

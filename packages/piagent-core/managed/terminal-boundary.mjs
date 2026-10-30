@@ -9,18 +9,19 @@ import { companyTerminalRuntime } from './terminal-runtime.mjs';
 import { terminalChannel } from './terminal-channel.mjs';
 import { SEATBELT_TERMINAL_RULES, seatbeltTerminal } from './terminal-seatbelt.mjs';
 
-const worker = fileURLToPath(new URL('./terminal-worker.mjs', import.meta.url));
+const installedWorker = fileURLToPath(new URL('./terminal-worker.mjs', import.meta.url));
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const inside = (file, root) => file === root || file.startsWith(root + path.sep);
 const dimensions = ({ cols, rows }) => Number.isInteger(cols) && cols >= 2 && cols <= 500 && Number.isInteger(rows) && rows >= 1 && rows <= 200;
 
 export class BoundaryTerminals {
-  #boundary; #runtime; #workerDigest; #entries = new Map(); #closed = false;
+  #boundary; #runtime; #worker; #workerDigest; #entries = new Map(); #closed = false;
   reasonCode = null;
   constructor(boundary) {
     this.#boundary = boundary;
     try {
       this.#runtime = companyTerminalRuntime();
+      const worker = this.#worker = boundary.runtimeFile?.('terminal-worker.mjs') ?? installedWorker; // the session's own copy (runtime-snapshot.mjs)
       if (inside(this.#runtime.root, boundary.cwd) || inside(worker, boundary.cwd)) throw Error('managed-terminal-runtime-overlap');
       this.#workerDigest = hash(worker);
     } catch (error) { this.reasonCode = /^managed-terminal-/.test(error.message) ? error.message : 'managed-terminal-runtime-invalid'; }
@@ -33,6 +34,7 @@ export class BoundaryTerminals {
     if (!dimensions(size)) throw Error('managed-terminal-invalid-size');
     if (this.#entries.size >= 4) throw Error('managed-terminal-limit');
     this.#runtime.assertCurrent();
+    const worker = this.#worker;
     if (hash(worker) !== this.#workerDigest) throw Error('managed-terminal-runtime-changed');
     for (const [file, digest] of boundary.pins) if (hash(file) !== digest) throw Error('managed-runtime-changed');
     const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-terminal-')));

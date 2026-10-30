@@ -3,7 +3,7 @@ import { SessionMutationObservations } from "./session-mutation-observations.mjs
 import { BoundaryTerminals } from './terminal-boundary.mjs';
 import { ToolFreshness } from './tool-freshness.mjs';
 import { BoundaryQueue } from './boundary-queue.mjs';
-import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs';
+import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs'; import { snapshotRuntime } from './runtime-snapshot.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -202,7 +202,7 @@ export class ManagedToolBoundary {
   get sourceControlRevision() { return this.#sourceRequests.revision; }
   source(request, binding) { return this.invoke("workspace", this.#sourceRequests.request(request, binding)); }
   #mutationObservations = new SessionMutationObservations();
-  mutationObservation(file) { return this.#mutationObservations.get(file); }
+  mutationObservation(file) { return this.#mutationObservations.get(file); } runtimeFile(name) { return path.join(this.runtimeRoot, name); }
   #children = new Set();
   #closed = false;
   // readOnly: the project cannot be written. commands: bash is offered all
@@ -214,16 +214,16 @@ export class ManagedToolBoundary {
     if (process.platform !== 'darwin' && !(this.linux && BWRAP)) throw new Error('managed-sandbox-unavailable');
     this.cwd = fs.realpathSync(cwd); this.sdkRoot = fs.realpathSync(sdkRoot);
     this.node = fs.realpathSync(node);
-    this.runtimeRoot = fs.realpathSync(path.dirname(workerPath));
+    this.sourceRoot = fs.realpathSync(path.dirname(workerPath)); this.runtimeRoot = snapshotRuntime(this.sourceRoot, { home: home ?? os.homedir() }); this.workerPath = this.runtimeFile('tool-worker.mjs'); // an update leaves a running session's workers alone
     this.workspacePins = workspaceWorkerPins(this.runtimeRoot);
     this.sdkPath = path.join(this.sdkRoot, 'dist/index.js');
     this.git = managedGit();
     if (JSON.parse(fs.readFileSync(path.join(this.sdkRoot, 'package.json'), 'utf8')).version !== PI_HOST_VERSION) throw new Error('managed-sdk-version-unqualified');
     const workerModules = ['review-snapshot-worker.mjs', 'tool-freshness.mjs', 'search-fallback.mjs', 'sandbox-diagnostic.mjs', 'ts-diagnostics-server.mjs', 'workspace-worker-pins.mjs'].map(name => path.join(this.runtimeRoot, name));
-    this.pins = new Map([this.node, this.git, workerPath, ...workerModules, this.sdkPath].map(file => [file, hash(file)]));
+    this.pins = new Map([this.node, this.git, this.workerPath, ...workerModules, this.sdkPath].map(file => [file, hash(file)]));
     const userHome = fs.realpathSync(home ?? os.homedir());
-    if ([userHome, '/', this.sdkRoot, this.runtimeRoot].includes(this.cwd)
-      || [this.sdkRoot,this.runtimeRoot,this.node,this.git,...['/opt/homebrew/bin/gh','/usr/local/bin/gh'].filter(p=>fs.existsSync(p)).map(p=>fs.realpathSync(p))].some(p=>inside(p,this.cwd))) throw new Error('managed-project-overlaps-runtime');
+    if ([userHome, '/', this.sdkRoot, this.runtimeRoot, this.sourceRoot].includes(this.cwd)
+      || [this.sdkRoot,this.runtimeRoot,this.sourceRoot,this.node,this.git,...['/opt/homebrew/bin/gh','/usr/local/bin/gh'].filter(p=>fs.existsSync(p)).map(p=>fs.realpathSync(p))].some(p=>inside(p,this.cwd))) throw new Error('managed-project-overlaps-runtime');
     this.temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piagent-tools-')));
     fs.chmodSync(this.temporary, 0o700);
     this.home = path.join(this.temporary, 'home'); fs.mkdirSync(this.home, { mode: 0o700 });
@@ -371,7 +371,7 @@ export class ManagedToolBoundary {
       guard?.();
       const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network, docker)]
         : ['/usr/bin/sandbox-exec', ['-p', docker ? this.dockerProfile : network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile]];
-      const child = spawn(sandbox, [...sandboxArgs, this.node, workerPath, this.sdkPath, this.cwd], {
+      const child = spawn(sandbox, [...sandboxArgs, this.node, this.workerPath, this.sdkPath, this.cwd], {
         cwd: this.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'],
         env: docker ? this.environment.docker : network ? this.environment.network : this.environment.offline,
       });

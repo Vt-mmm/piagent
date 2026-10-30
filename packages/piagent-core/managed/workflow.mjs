@@ -273,6 +273,7 @@ export class RunProcess {
     this.unplannedChange = true; this.planSkipped = true;
   }
   async afterTool(name, args, ok, digestOf) {
+    if (['write', 'edit'].includes(name) && ok) this.edited = true;
     if (name === 'bash' && isCheckCommand(args?.command, this.checks.commands)) {
       this.checksRun += 1; if (!ok) this.checksFailed += 1;
       this.lastCheck = { ok, digest: await digestOf(), mutations: this.mutations };
@@ -334,7 +335,7 @@ export async function completionGate(managed, run, signal) {
   let digest = null, interrupted = false, verifyGaveUp = false;
   for (let step = 0; step < 16; step += 1) {
     digest = await digestOf();
-    run.changed = run.startDigest !== null && digest !== null ? digest !== run.startDigest : run.mutations > 0;
+    run.changed = run.startDigest !== null && digest !== null ? digest !== run.startDigest : run.startDigest !== null ? run.edited === true : run.mutations > 0; // code that cannot be read now: only a real edit says it changed
     // A check that passed still counts when the turn was cut off after it.
     if (run.changed) run.verified = run.verifiedOn(digest);
     run.docsOnly = run.changed && onlyNonCode(managed.ownPaths);
