@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { gitEvidenceRootDetails, workingTreeHasChanges } from "../../extensions/workspace-evidence-roots.js";
@@ -8,17 +10,57 @@ import type { TaskFeatureInput } from "./task-features.ts";
 import type { SolverShadowEvaluation } from "./solver-shadow.ts";
 import { SolverShadowRuntime } from "./solver-shadow.ts";
 
-// Finding the repositories under a parent folder runs Git once per child and
-// blocks the terminal; they rarely change between two prompts.
-const ROOTS_TTL_MS = 30_000;
-const rootDetails = new Map<string, { at: number; details: ReturnType<typeof gitEvidenceRootDetails> }>();
-function gitShape(cwd: string): { gitReady: boolean; dirtyTree: boolean } {
-  let cached = rootDetails.get(cwd);
-  if (!cached || Date.now() - cached.at > ROOTS_TTL_MS) {
-    try { cached = { at: Date.now(), details: gitEvidenceRootDetails(cwd) }; } catch { return { gitReady: false, dirtyTree: true }; }
-    rootDetails.set(cwd, cached);
+type GitShape = { gitReady: boolean; dirtyTree: boolean };
+
+function readGitShape(cwd: string): GitShape {
+  try {
+    const details = gitEvidenceRootDetails(cwd);
+    return { gitReady: details.roots.length > 0, dirtyTree: workingTreeHasChanges(cwd, details) };
+  } catch { return { gitReady: false, dirtyTree: true }; }
+}
+
+// The Git shape runs `git rev-parse` (once per child repository in a parent
+// folder) and `git status`. Read synchronously on every prompt it held the
+// Terminal between Enter and the message showing, longer the larger the
+// repository. It is now read in a child process when the session starts and
+// after each run, and a prompt takes the last answer. Only a prompt with no
+// answer yet reads it inline, as before.
+const SHAPE_FRESH_MS = 5_000;
+const SHAPE_PROBE = `import(${JSON.stringify(new URL("../../extensions/workspace-evidence-roots.js", import.meta.url).href)}).then((git) => {
+  let shape; try { const details = git.gitEvidenceRootDetails(process.argv[1]);
+    shape = { gitReady: details.roots.length > 0, dirtyTree: git.workingTreeHasChanges(process.argv[1], details) };
+  } catch { shape = { gitReady: false, dirtyTree: true }; }
+  process.stdout.write(JSON.stringify(shape));
+});`;
+const shapes = new Map<string, { at: number; shape: GitShape }>();
+const probing = new Map<string, Promise<void>>();
+
+export function refreshGitShape(cwd: string): Promise<void> {
+  const running = probing.get(cwd);
+  if (running) return running;
+  const startedAt = Date.now();
+  const probe = new Promise<void>((resolve) => {
+    execFile(process.execPath, ["--input-type=module", "-e", SHAPE_PROBE, cwd], { timeout: 60_000, maxBuffer: 4096, windowsHide: true }, (error, stdout) => {
+      try {
+        const shape = JSON.parse(String(stdout)) as GitShape;
+        if (!error && typeof shape.gitReady === "boolean" && typeof shape.dirtyTree === "boolean") shapes.set(cwd, { at: startedAt, shape });
+      } catch { /* the next prompt reads it inline */ }
+      resolve();
+    });
+  }).finally(() => probing.delete(cwd));
+  probing.set(cwd, probe);
+  return probe;
+}
+
+function gitShape(cwd: string): GitShape {
+  const cached = shapes.get(cwd);
+  if (!cached) {
+    const shape = readGitShape(cwd);
+    shapes.set(cwd, { at: Date.now(), shape });
+    return shape;
   }
-  return { gitReady: cached.details.roots.length > 0, dirtyTree: workingTreeHasChanges(cwd, cached.details) };
+  if (Date.now() - cached.at > SHAPE_FRESH_MS) void refreshGitShape(cwd);
+  return cached.shape;
 }
 
 export function runtimeTaskFeatureInput(options: {

@@ -92,6 +92,30 @@ describe("Piagent local Session Hub Gateway", () => {
     assert.equal(JSON.stringify(projected).includes("abcdefghijklmnopqrstuvwxyz"), false);
   });
 
+  it("starts a new conversation on the model and thinking level the Terminal uses", async (t) => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-creation-defaults-"));
+    t.after(() => fs.rmSync(agentDir, { recursive: true, force: true }));
+    const snapshot = [
+      { provider: "openai-codex", id: "gpt-6-sol", name: "GPT-6 Sol", reasoning: true, thinkingLevelMap: { off: "none", minimal: null, high: "high" } },
+      { provider: "openai-codex", id: "gpt-5.3-codex-spark", name: "Spark", reasoning: true, thinkingLevelMap: { off: "none", minimal: "minimal", high: "high" } }
+    ];
+    const options = async () => new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_defaults", key: Buffer.alloc(32, 5), packageRoot: root, agentDir,
+      host: { SessionManager: { listAll: async () => [] } }, models: { getModel() {}, getAvailableSnapshot: () => snapshot } }).creationOptions();
+    const settings = (value) => fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify(value));
+    settings({ defaultProvider: "openai-codex", defaultModel: "gpt-5.3-codex-spark", defaultThinkingLevel: "minimal" });
+    let projected = await options();
+    assert.equal(projected.models.find((model) => model.modelRef === projected.defaultModelRef)?.modelId, "gpt-5.3-codex-spark");
+    assert.equal(projected.defaultThinkingLevel, "minimal");
+    // A level the model lacks, or a model this account cannot use, falls back to the Sol baseline.
+    settings({ defaultProvider: "openai-codex", defaultModel: "gpt-6-sol", defaultThinkingLevel: "minimal" });
+    projected = await options();
+    assert.equal(projected.defaultThinkingLevel, "high");
+    settings({ defaultProvider: "anthropic", defaultModel: "claude-opus-5-5", defaultThinkingLevel: "off" });
+    projected = await options();
+    assert.equal(projected.models.find((model) => model.modelRef === projected.defaultModelRef)?.modelId, "gpt-6-sol");
+    assert.equal(projected.defaultThinkingLevel, "off");
+  });
+
   it("reports a Codex-first web-search route without projecting credentials", async (t) => {
     const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-web-search-capability-"));
     t.after(() => fs.rmSync(agentDir, { recursive: true, force: true }));

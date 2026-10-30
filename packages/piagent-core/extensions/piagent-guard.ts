@@ -148,7 +148,7 @@ import { parentRoutingModeFromEnvironment, routingObjectiveFromEnvironment } fro
 import { ModelSelectionProvenanceTracker } from "../runtime/model/model-selection-provenance.ts";
 import type { TaskFeatures } from "../runtime/solver/solver-types.ts";
 import { planRetrievalRoute } from "../runtime/context/retrieval-route-policy.ts";
-import { evaluateRuntimeSolver } from "../runtime/solver/runtime-features.ts";
+import { evaluateRuntimeSolver, refreshGitShape } from "../runtime/solver/runtime-features.ts";
 import { SolverShadowRuntime, solverModeFromEnvironment } from "../runtime/solver/solver-shadow.ts";
 import { TrajectoryRuntime } from "../runtime/trajectory/trajectory-runtime.ts";
 import { parseApplyPatchTargets, registerApplyPatchTool } from "../runtime/tools/apply-patch-tool.ts";
@@ -3386,6 +3386,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
+  if (solverShadow) {
+    // The solver's Git shape is read ahead of the prompt (runtime-features.ts).
+    pi.on("session_start", (_event, ctx) => { void refreshGitShape(ctx.cwd); });
+    pi.on("agent_settled", (_event, ctx) => { void refreshGitShape(ctx.cwd); });
+  }
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
   const modelSelectionProvenance = new ModelSelectionProvenanceTracker();
   const serviceTierRuntime = new ServiceTierRuntime({ environmentValue: process.env.PIAGENT_FAST_MODE });

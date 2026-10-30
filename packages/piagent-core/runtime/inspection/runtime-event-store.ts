@@ -252,7 +252,11 @@ export class RuntimeEventStore {
     const flags = fs.constants.O_WRONLY | fs.constants.O_APPEND | (fs.constants.O_NOFOLLOW ?? 0)
       | (creating ? fs.constants.O_CREAT | fs.constants.O_EXCL : 0);
     const descriptor = fs.openSync(target, flags, 0o600);
-    try { fs.writeFileSync(descriptor, `${JSON.stringify(event)}\n`); fs.fsyncSync(descriptor); fs.fchmodSync(descriptor, 0o600); } finally { fs.closeSync(descriptor); }
+    // No fsync: it ran for every event, Terminal sessions included, and three of
+    // them sat between Enter and the message showing. A store belongs to one
+    // runtime instance, and one left damaged by a power cut only sends the
+    // dashboard back to a snapshot (resyncRequired).
+    try { fs.writeFileSync(descriptor, `${JSON.stringify(event)}\n`); fs.fchmodSync(descriptor, 0o600); } finally { fs.closeSync(descriptor); }
     segment.count += 1; this.events.push(event); this.eventById.set(event.eventId, event);
     if (candidate) this.emissionGuard.recordAccepted(candidate);
     try { this.enforceRetention(); } catch { this.corruptions.push("event-retention-failed"); }

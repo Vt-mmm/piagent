@@ -249,13 +249,18 @@ export class SessionInspectionRegistry {
         ...(provider === "agent_watch_managed" && value.managedFast === true ? { managedFast: true } : {}),
         ...(provider === "agent_watch_managed" && value.managedBypass === true ? { managedBypass: true } : {}) }];
     });
-    // Only offer a default present in the authenticated host catalog. Retain
-    // the previous Sol baseline for accounts that have not received GPT-6 yet.
+    // A new conversation starts where the Terminal does: the model and thinking
+    // level Pi keeps in settings.json (the last ones chosen with /model). Only
+    // a default present in the authenticated host catalog is offered; an account
+    // that set none gets the Sol baseline (GPT-5.6 before GPT-6 reached it).
     const managed = models.length === 1 && models[0].provider === 'agent_watch_managed';
-    const defaultModel = managed ? models[0] : ["gpt-6-sol", "gpt-5.6-sol"].map((id) => models.find((value) => value.provider === "openai-codex" && value.modelId === id)).find(Boolean);
+    const settings = this.#agentDir ? safeRead(() => JSON.parse(fs.readFileSync(path.join(this.#agentDir!, "settings.json"), "utf8")) as Record<string, unknown>, {}) : {};
+    const chosen = models.find((value) => value.provider === settings.defaultProvider && value.modelId === settings.defaultModel);
+    const defaultModel = managed ? models[0] : chosen ?? ["gpt-6-sol", "gpt-5.6-sol"].map((id) => models.find((value) => value.provider === "openai-codex" && value.modelId === id)).find(Boolean);
+    const chosenThinking = !managed && typeof settings.defaultThinkingLevel === "string" && defaultModel?.thinkingLevels.includes(settings.defaultThinkingLevel) ? settings.defaultThinkingLevel : null;
     return { schemaVersion: 1, version: "piagent-session-creation-options-v1", generatedAt: new Date().toISOString(),
       projects: [...projects.values()].slice(0, 200), models,
-      defaultModelRef: defaultModel?.modelRef ?? null, defaultThinkingLevel: defaultModel ? (defaultModel.thinkingLevels.includes("high") ? "high" : defaultModel.thinkingLevels[0] ?? null) : null,
+      defaultModelRef: defaultModel?.modelRef ?? null, defaultThinkingLevel: defaultModel ? chosenThinking ?? (defaultModel.thinkingLevels.includes("high") ? "high" : defaultModel.thinkingLevels[0] ?? null) : null,
       profiles: managed ? [] : profiles, workflows: [],
       runtimeActions: managed ? [] : WEBUI_RUNTIME_ACTIONS,
       webSearch: inspectWebSearchCapability({ agentDir: this.#agentDir, models: availableModels }),
