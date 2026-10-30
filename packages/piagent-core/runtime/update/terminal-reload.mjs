@@ -2,9 +2,9 @@
 //
 // `piagent reload` (and `piagent-update` once it installed a release) writes
 // one request file. Each Terminal started before that request takes it when it
-// is idle: no run going, nothing queued, nothing typed in the editor. A run in
-// progress is never cut: the footer says the reload waits, and it happens when
-// the run settles. How a Terminal reloads is its own: the personal Terminal
+// is idle: no run going, nothing queued, nothing typed in the editor, and quiet
+// for a moment. A run in progress is never cut: the footer says the reload
+// waits, and it happens once the run has settled. How a Terminal reloads is its own: the personal Terminal
 // runs Pi's /reload (Piagent's extensions are read again from disk), the
 // company Terminal starts again in place on the same conversation, since its
 // company code is loaded once per process.
@@ -14,7 +14,15 @@ import path from "node:path";
 
 const REQUEST_FILE = "piagent-reload.json";
 const POLL_MS = 2_000;
+// A member who stops a run with Esc usually types the next message right away:
+// a Terminal that starts again in that moment loses what they type.
+const QUIET_MS = 10_000;
 const STATUS_KEY = "piagent-reload";
+// Per process, not per extension runtime: /reload runs this module again, and a
+// request sent before it (the company Terminal's /reload loads no company code)
+// must still be taken, while one already taken must not reload twice.
+const APPLIED_AT = "PIAGENT_RELOAD_APPLIED_AT";
+const processStartedAt = () => Date.now() - process.uptime() * 1000;
 
 const requestPath = (home) => path.join(home ?? os.homedir(), ".pi", REQUEST_FILE);
 
@@ -47,8 +55,8 @@ function idle(ctx) {
 
 // `apply(ctx, request)` reloads this Terminal; it runs at most once per
 // process. Only Terminals with a UI take requests: scripted runs keep theirs.
-export function watchTerminalReload(pi, { apply, home, startedAt = Date.now(), pollMs = POLL_MS }) {
-  let ctx = null, applied = false, waiting = false, timer = null;
+export function watchTerminalReload(pi, { apply, home, startedAt = processStartedAt(), pollMs = POLL_MS, quietMs = QUIET_MS }) {
+  let ctx = null, applied = false, waiting = false, timer = null, busyAt = 0;
   // A ctx kept from an earlier session (replaced, reloaded) throws on any use:
   // a check that meets one does nothing, and the next session_start brings a new one.
   const check = async () => {
@@ -56,17 +64,19 @@ export function watchTerminalReload(pi, { apply, home, startedAt = Date.now(), p
     try {
       if (applied || !ctx?.hasUI) return;
       request = readReloadRequest(home);
-      if (!request || request.at <= startedAt) return;
-      if (!idle(ctx)) {
-        if (!waiting) { waiting = true; ctx.ui?.setStatus?.(STATUS_KEY, `⟳ Nạp Piagent${request.version ? ` ${request.version}` : " mới"} khi xong lượt này`); }
+      if (!request || request.at <= Math.max(startedAt, Number(process.env[APPLIED_AT]) || 0)) return;
+      const quiet = idle(ctx);
+      if (!quiet) busyAt = Date.now();
+      if (!quiet || Date.now() - busyAt < quietMs) {
+        if (!waiting) { waiting = true; ctx.ui?.setStatus?.(STATUS_KEY, `⟳ Nạp Piagent${request.version ? ` ${request.version}` : " mới"} khi rảnh`); }
         return;
       }
-      applied = true;
+      applied = true; process.env[APPLIED_AT] = String(request.at);
       ctx.ui?.setStatus?.(STATUS_KEY, undefined);
     } catch { return; }
     try { await apply(ctx, request); }
     catch (error) {
-      applied = false;
+      applied = false; delete process.env[APPLIED_AT];
       try { ctx.ui?.notify?.(`Chưa nạp được Piagent mới: ${error instanceof Error ? error.message : String(error)}`, "warning"); } catch { /* the session is gone */ }
     }
   };
@@ -75,9 +85,9 @@ export function watchTerminalReload(pi, { apply, home, startedAt = Date.now(), p
     keep(event, next);
     if (!timer) { timer = setInterval(() => { void check(); }, pollMs); timer.unref?.(); }
   });
-  pi.on("agent_start", keep);
-  // The moment a run settles is the moment a waiting reload can happen.
-  pi.on("agent_settled", (event, next) => { keep(event, next); setTimeout(() => { void check(); }, 300).unref?.(); });
+  pi.on("agent_start", (event, next) => { keep(event, next); busyAt = Date.now(); });
+  // The next check after the quiet time takes a request that waits.
+  pi.on("agent_settled", (event, next) => { keep(event, next); busyAt = Date.now(); });
   pi.on("session_shutdown", () => { if (timer) clearInterval(timer); timer = null; ctx = null; });
   return { check };
 }

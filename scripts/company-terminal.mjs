@@ -301,6 +301,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
   let tui;
   const components = async () => (tui ??= await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href));
   const installed = (() => { try { return JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')).version; } catch { return undefined; } })();
+  let stopHearing = null;
 
   return async (pi) => {
     const { Box, Text } = await components();
@@ -426,11 +427,12 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     });
     // How the member's message ended (finished, stopped with steps open,
     // failed, stopped), as the dashboard says it under the last answer.
-    let heard = null;
     pi.on('session_start', async (_event, ctx) => {
       const session = managed()?.session;
-      if (!session?.subscribe || heard === session) return;
-      heard = session;
+      if (!session?.subscribe) return;
+      // /reload runs this extension again on the same session: the listener of the
+      // runtime it replaces goes, or each event reaches a stale ctx and fails the run.
+      stopHearing?.();
       // The conversation can close while git answers (a client ends right after a turn): its ctx is then stale.
       const showBranch = async () => { try { const branch = await branchOf(managed()?.cwd ?? ctx.cwd); ctx.ui?.setStatus?.('agent-watch-branch', branch ? `⎇ ${branch}` : undefined); } catch { /* closed meanwhile */ } };
       ctx.ui?.setWorkingMessage?.(WORKING);
@@ -438,7 +440,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       // The checklist and the subagents working now stay above the input (setWidget).
       const showPlan = () => ctx.ui?.setWidget?.('agent-watch-plan', planWidget(currentPlan(session.sessionManager)));
       showPlan();
-      session.subscribe((event) => {
+      const hear = (event) => {
         if (event?.type === 'tool_execution_end' && event.toolName === 'update_plan' || event?.type === 'agent_end') showPlan();
         if (event?.type === 'managed_helper_state') ctx.ui?.setWidget?.('agent-watch-helpers', helperLines(event.helpers));
         if (event?.type === 'managed_helpers') ctx.ui?.setStatus?.('agent-watch-helpers', event.active ? `Subagent ${event.active}/${event.maximum}` : undefined);
@@ -448,7 +450,10 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
         const copy = turnEndCopy(end, LOCALE), stats = turnStats(session.messages);
         ctx.ui?.notify?.(`${copy.title}. ${copy.text.replace('Bấm Tiếp tục', 'Gửi "tiếp tục"').replace('bấm Tiếp tục', 'gửi "tiếp tục"')}${stats ? `\n${stats}` : ''}`, copy.tone === 'success' ? 'info' : copy.tone === 'error' ? 'error' : copy.tone === 'warning' ? 'warning' : 'info');
         void showBranch();
-      });
+      };
+      // A session closing (a restart in place, /reload) can still report while its ctx is already stale.
+      const unsubscribe = session.subscribe((event) => { try { hear(event); } catch { /* the Terminal has moved on */ } });
+      stopHearing = unsubscribe;
     });
     pi.registerMessageRenderer('agent-watch-review-status', (_message, _options, theme) =>
       box('Review đã cũ: code đổi sau khi review. Chỉ cần review lại khi đã sửa lỗi blocking.', theme, 'warning'));
