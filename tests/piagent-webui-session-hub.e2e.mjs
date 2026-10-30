@@ -2582,9 +2582,18 @@ test("a history longer than the window says the newest messages are hidden and b
     await page.evaluate(() => window.scrollTo(0, 2000));
     for (let load = 0; load < 14 && !await back.count(); load += 1) {
       const before = await page.locator("[data-turn]").count();
-      await page.evaluate(() => window.scrollTo(0, 300));
       // A full window keeps its size: the page that fills it drops the newest turns instead.
-      await expect.poll(async () => await back.count() > 0 || await page.locator("[data-turn]").count() !== before, { timeout: 10_000 }).toBe(true);
+      // Loading a page consumes the upward movement, so a reader who is still
+      // waiting moves up again; one scrollTo to where the page already is moves nothing.
+      await expect.poll(async () => {
+        if (await back.count() > 0 || await page.locator("[data-turn]").count() !== before) return true;
+        await page.evaluate(async () => {
+          const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+          window.scrollTo(0, 1200); await frame(); await frame();
+          window.scrollTo(0, 300); await frame();
+        });
+        return false;
+      }, { timeout: 10_000 }).toBe(true);
     }
     await expect(back).toBeAttached();
     // Each page is asked for once, even when the reader reaches the top again
