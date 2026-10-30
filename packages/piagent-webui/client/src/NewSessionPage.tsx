@@ -50,6 +50,22 @@ type MenuKind = "project" | "model" | "thinking" | "permission" | null;
 // is not connected the entry explains why and offers to connect.
 const COMPANY_PROVIDER = "agent_watch_managed";
 // Why a folder could not be added, in words the member can act on.
+// An image the member picked, drawn from its own bytes (the page's CSP allows
+// data: images, not blob:); any other file, its name and size.
+function FileThumbOrChip({ file, locale, onRemove }: { file: File; locale: UiLocale; onRemove?(): void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => { if (typeof reader.result === "string") setUrl(reader.result); };
+    reader.readAsDataURL(file);
+    return () => reader.abort();
+  }, [file]);
+  return url ? <ImageThumb url={url} name={file.name} detail={formatSize(file.size)} locale={locale} onRemove={onRemove} />
+    : <Chip size="small" variant="outlined" label={`${file.name} · ${formatSize(file.size)}`} onDelete={onRemove}
+      deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${file.name}`} role="button" />} />;
+}
+
 function importFailureText(code: string | null, status: number, locale: UiLocale): string {
   if (code === "native-project-picker-unavailable" || code === "project-import-picker-failed")
     return localize(locale, "Không mở được hộp chọn thư mục của máy. Thử lại; nếu vẫn lỗi, mở cuộc trò chuyện từ Terminal trong thư mục đó (pi hoặc piagent studio).",

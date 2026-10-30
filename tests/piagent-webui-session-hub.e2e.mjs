@@ -1981,6 +1981,17 @@ test("a file the agent links in its answer opens in the explorer: code at its li
   assert.deepEqual(errors, []);
 });
 
+test("an image picked on the new conversation page is a large thumbnail that opens", async ({ page }) => {
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+  await page.getByRole("button", { name: /Thêm file/ }).locator('input[type="file"]').setInputFiles({ name: "first.png", mimeType: "image/png", buffer: Buffer.from(HISTORY_PNG, "base64") });
+  const thumb = page.getByRole("button", { name: /(Xem ảnh|View image) first\.png/ });
+  await expect(thumb).toBeVisible();
+  await thumb.click();
+  await expect(page.getByRole("dialog").getByRole("img", { name: "first.png" })).toBeVisible();
+});
+
 test("the agent sends a picture and a file into the chat; an SVG opens as a picture; a staged image is large and opens", async ({ page }) => {
   fs.mkdirSync(path.join(mentionProject, "design"), { recursive: true });
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120"><rect width="200" height="120" fill="#BD4531"/><circle cx="100" cy="60" r="40" fill="#FFF0DC"/></svg>\n';
