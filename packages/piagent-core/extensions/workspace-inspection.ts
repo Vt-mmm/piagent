@@ -140,7 +140,10 @@ export function inspectWorkspaceFile(root: string, relative: string, options: Wo
 // An image the agent made or names, shown as a picture in the explorer (the
 // page takes data: images only). Protected files are never read.
 const IMAGE_MIMES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
-  webp: "image/webp", bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif" };
+  webp: "image/webp", bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif", svg: "image/svg+xml",
+  // Not drawn: their bytes are what "Tải về" on a file the agent handed over saves.
+  pdf: "application/pdf", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", zip: "application/zip" };
 const MAX_MEDIA_BYTES = 8 << 20;
 export function inspectWorkspaceMedia(root: string, relative: string, options: WorkspacePolicy) {
   validPath(relative);

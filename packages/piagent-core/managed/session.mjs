@@ -20,7 +20,7 @@ import { runHelper } from './helper-run.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction, boundRequestImages } from './compaction.mjs';
-import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead } from './patch-snapshot.mjs';
+import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead, readRepositoryHeads } from './patch-snapshot.mjs';
 import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
@@ -35,7 +35,7 @@ const PROVIDER = 'agent_watch_managed';
 export const HELPER_BEAT_MS = 60_000;
 // Who the agent is: the model account may put another product's name in an
 // earlier system line; the member is talking to Piagent.
-const BASE_PROMPT = 'You are Piagent, the company coding assistant. If an earlier system line gives you another product name, that line belongs to the model account: when asked who you are, say you are Piagent, the company coding assistant. Work directly on the user request. Do not require task contracts or workflow commands. ' + UNTRUSTED_RULE + ' Never claim a stale review covers changed code. When the request leaves a decision open that changes the result and you cannot settle it from the code or a subagent, ask the member with ask_user before you act on a guess. To hand a file back to the member, keep it in the project and link it with its project path, such as [report.pdf](out/report.pdf) or [app.ts:42](src/app.ts:42): the web view opens that file (code at the line, images and documents as a preview).';
+const BASE_PROMPT = 'You are Piagent, the company coding assistant. If an earlier system line gives you another product name, that line belongs to the model account: when asked who you are, say you are Piagent, the company coding assistant. Work directly on the user request. Do not require task contracts or workflow commands. ' + UNTRUSTED_RULE + ' Never claim a stale review covers changed code. When the request leaves a decision open that changes the result and you cannot settle it from the code or a subagent, ask the member with ask_user before you act on a guess. To send the member a picture or a file in the chat, keep it in the project and write ![name](its/project/path) in your answer, such as ![Logo](design/logo.svg) or ![report.pdf](out/report.pdf): the web view draws a picture in place and shows any other file as a card to open or download; say the path too, for the Terminal. To point at code, link it, such as [app.ts:42](src/app.ts:42): the web view opens it at the line.';
 // Folders outside the project the member points to (an @ mention, a folder
 // they name) are readable for reference; the sandbox keeps them read-only.
 const referencePrompt = home => ` The member may point you to folders outside the project for reference (an @path mention or a folder they name): read them with read, ls, grep and find. They are read-only: changes go in the project only. In those tools ~ is the member's home folder (${home}); in bash ~ is a private empty folder, so use absolute paths there.`;
@@ -264,7 +264,7 @@ export class ManagedSession {
           // during the turn is still its change.
           const pending = pendingBaseline(manager);
           self.ownPaths = new Set(pending !== null ? pendingPaths(manager) : []);
-          self.base = (pending !== null ? pendingHead(manager) : null) ?? await readHead(self.boundary);
+          self.base = (pending !== null ? pendingHead(manager) : null) ?? await readHead(self.boundary); self.repositoryBases = await readRepositoryHeads(self.boundary);
           self.run.startDigest = pending ?? await self.digest(); await openRound(self, manager, text); // sends what waited; a new conversation gets the team brief
         } catch (error) { self.preflight = describeFailure('main', failureText(error)); }
         self.activePrompt = true;
@@ -430,14 +430,14 @@ export class ManagedSession {
   // Whether this conversation changed code, and whether a check ran on it,
   // look only at the files it changed: another conversation (or the member)
   // changing other files in the same folder is not this run's change.
-  async changeDigest() { return readPatchDigest(this.boundary, this.ownPaths, this.base); }
+  async changeDigest() { return readPatchDigest(this.boundary, this.ownPaths, this.base, this.repositoryBases); }
   async folderDigest() { try { return await readPatchDigest(this.boundary); } catch { return null; } }
   // What a reviewer reads: this conversation's files; before it changed any,
   // the whole folder (the member's own changes, asked to be reviewed).
   reviewScope() { return this.ownPaths.size ? this.ownPaths : null; }
-  async patchSnapshot() { return readPatchSnapshot(this.boundary, this.reviewScope(), this.base); }
-  async patchDigest() { return readPatchDigest(this.boundary, this.reviewScope(), this.base); }
-  async changedFiles() { try { return await readChangedFiles(this.boundary, this.base); } catch { return null; } }
+  async patchSnapshot() { return readPatchSnapshot(this.boundary, this.reviewScope(), this.base, this.repositoryBases); }
+  async patchDigest() { return readPatchDigest(this.boundary, this.reviewScope(), this.base, this.repositoryBases); }
+  async changedFiles() { try { return await readChangedFiles(this.boundary, this.base, this.repositoryBases); } catch { return null; } }
   // A write or edit names its file; a command, the files it changed.
   claimPath(raw) {
     if (typeof raw !== 'string' || !raw) return;

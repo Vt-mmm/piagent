@@ -81,3 +81,52 @@ test('inside one repository the snapshot is unchanged', t => {
   assert.equal(value.repositories, undefined);
   assert.match(value.patch, /^diff --git a\/a\.js b\/a\.js$/m);
 });
+
+// One worker call as the boundary makes it, with its files in the temporary directory.
+function run(folder, mode, files = {}) {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'review-worker-tmp-'));
+  try {
+    const extra = Object.entries(files).map(([prefix, value]) => { const name = `${prefix}-${randomUUID()}.json`; fs.writeFileSync(path.join(temporary, name), JSON.stringify(value)); return name; });
+    const result = spawnSync(process.execPath, [worker, mode, ...extra], { cwd: folder, encoding: 'utf8', env: { ...process.env, TMPDIR: temporary } });
+    assert.equal(result.status, 0, result.stderr);
+    const [, , name] = result.stdout.trim().split(' ');
+    return JSON.parse(fs.readFileSync(path.join(temporary, name), 'utf8'));
+  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+}
+
+test('a command changing files in a folder of several repositories has them named, committed or not', t => {
+  const folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'review-multi-files-')));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  repository(folder, 'api', { 'a.js': 'one\n' });
+  repository(folder, 'group/web', { 'b.js': 'two\n', 'c.js': 'three\n' });
+  const bases = run(folder, 'heads');
+  assert.deepEqual(Object.keys(bases), ['api', 'group/web']);
+  assert.deepEqual(run(folder, 'files', { bases }), {});
+  fs.writeFileSync(path.join(folder, 'api/a.js'), 'one changed\n');
+  fs.writeFileSync(path.join(folder, 'group/web/new.js'), 'new\n');
+  fs.writeFileSync(path.join(folder, 'group/web/c.js'), 'three changed\n');
+  git(path.join(folder, 'group/web'), 'commit', '-qam', 'during the turn');
+  assert.deepEqual(Object.keys(run(folder, 'files', { bases })), ['api/a.js', 'group/web/c.js', 'group/web/new.js']);
+  const { patch } = run(folder, 'file', { scope: ['group/web/c.js'], bases });
+  assert.match(patch, /^\+three changed$/m);
+  // With no scope (a review the member asked for) every repository's changes.
+  const all = run(folder, 'file', { bases });
+  assert.deepEqual(all.repositories, ['api', 'group/web']);
+  assert.match(all.patch, /^\+one changed$/m);
+});
+
+test('a conversation with no change yet in a folder of repositories has a digest, so a read-only command is no change', t => {
+  const folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'review-multi-empty-')));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  repository(folder, 'api', { 'a.js': 'one\n' });
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'review-worker-tmp-')), name = `scope-${randomUUID()}.json`;
+  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(temporary, name), '[]');
+  const result = spawnSync(process.execPath, [worker, 'digest', name], { cwd: folder, encoding: 'utf8', env: { ...process.env, TMPDIR: temporary } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^[a-f0-9]{64} \d+$/);
+});
+
+test('a runtime replaced under a running conversation is named, not "failed"', () => {
+  assert.equal(reviewUnavailableReason('managed-runtime-changed'), 'runtime_changed');
+});

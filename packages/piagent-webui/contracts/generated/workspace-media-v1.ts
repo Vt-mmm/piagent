@@ -18,7 +18,21 @@ export interface PiagentWebUIWorkspaceMediaV1 {
   generatedAt: string;
   identity: Identity;
   path: string;
-  mime: "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/bmp" | "image/x-icon" | "image/avif" | null;
+  mime:
+    | "image/png"
+    | "image/jpeg"
+    | "image/gif"
+    | "image/webp"
+    | "image/bmp"
+    | "image/x-icon"
+    | "image/avif"
+    | "image/svg+xml"
+    | "application/pdf"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    | "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    | "application/zip"
+    | null;
   data: string | null;
   reasonCode: "protected" | "unsupported" | "oversized" | null;
 }

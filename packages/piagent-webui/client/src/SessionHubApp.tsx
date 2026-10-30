@@ -39,6 +39,7 @@ import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/genera
 import { readSessionConnections, readSessionCreationOptions, readSessionInspectionSnapshot, stageSessionAttachment,
   type SessionConnections } from "./api.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
+import { ImageThumb } from "./AttachmentImage.tsx";
 import { acceptAttribute, attachmentDetail, attachmentHint, discardAttachment, dragCarriesFiles, MAX_ATTACHMENTS,
   stageFiles } from "./attachment-intake.ts";
 import { stagedPreviewUrl } from "./image-preview-cache.ts";
@@ -338,13 +339,14 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
         </Box>}
         {attachments.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pb: .75 }}
           aria-label={localize(locale, "File sẽ gửi cùng tin nhắn", "Files to send with the message")}>
-          {attachments.map((item) => <Chip key={item.attachmentRef} size="small" variant="outlined"
-            color={item.kind === "document" ? "success" : "default"}
-            avatar={item.kind === "image" && stagedPreviewUrl(item.attachmentRef)
-              ? <Avatar variant="rounded" alt="" src={stagedPreviewUrl(item.attachmentRef)!} /> : undefined}
-            label={`${item.displayName} · ${attachmentDetail(item, locale)}`}
-            onDelete={submitting || sendUnconfirmed || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
-            deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
+          {attachments.map((item) => {
+            const remove = submitting || sendUnconfirmed || uploading ? undefined : () => void removeAttachment(item.attachmentRef);
+            const preview = item.kind === "image" ? stagedPreviewUrl(item.attachmentRef) : null;
+            return preview ? <ImageThumb key={item.attachmentRef} url={preview} name={item.displayName} detail={attachmentDetail(item, locale)} locale={locale} onRemove={remove} />
+              : <Chip key={item.attachmentRef} size="small" variant="outlined" color={item.kind === "document" ? "success" : "default"}
+                label={`${item.displayName} · ${attachmentDetail(item, locale)}`} onDelete={remove}
+                deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />;
+          })}
         </Stack>}
         {commandNotice && <Alert severity={commandNotice.tone} onClose={() => setCommandNotice(null)} sx={{ mb: .75, whiteSpace: "pre-line" }}>{commandNotice.text}</Alert>}
         <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft}

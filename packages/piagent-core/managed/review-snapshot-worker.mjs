@@ -27,12 +27,40 @@ function repositoryOf(file) {
   for (let dir = path.posix.dirname(file); dir !== '.'; dir = path.posix.dirname(dir)) if (fs.existsSync(path.join(dir, '.git'))) return dir;
   return null;
 }
+// The repositories below a folder that is none itself (clones side by side),
+// relative to the folder. A repository's own folders are not searched.
+const SEARCH_DEPTH = 3, MAX_REPOSITORIES = 64, NOT_SEARCHED = new Set(['node_modules', 'vendor', 'dist', 'build', 'target']);
+function childRepositories() {
+  const found = [];
+  const search = (dir, depth) => {
+    let entries; try { entries = fs.readdirSync(dir || '.', { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name < b.name ? -1 : 1)) {
+      if (!entry.isDirectory() || entry.name.startsWith('.') || NOT_SEARCHED.has(entry.name) || found.length >= MAX_REPOSITORIES) continue;
+      const child = dir ? `${dir}/${entry.name}` : entry.name;
+      if (fs.existsSync(path.join(child, '.git'))) found.push(child);
+      else if (depth < SEARCH_DEPTH) search(child, depth + 1);
+    }
+  };
+  search('', 1);
+  return found;
+}
+const repoGit = (repository, args) => git(['-C', repository, ...args]);
+const repoHead = repository => { try { return repoGit(repository, ['rev-parse', '--verify', '-q', 'HEAD^{commit}']).trim(); } catch { return ''; } };
 const mode = process.argv[2];
 // The arguments after the mode: a scope file, then the commit the patch starts
 // from (the turn's starting HEAD; commits made since are part of the change).
 // While HEAD has not moved, the patch is the plain one against HEAD.
 const head = () => { try { return git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']).trim(); } catch { return ''; } };
 if (mode === 'head') { process.stdout.write(head() || 'none'); process.exit(0); }
+// "heads": where each repository below the folder stands, so a commit made
+// during the turn stays part of its change, as `base` does in one repository.
+if (mode === 'heads') {
+  const heads = insideWorkTree() ? {} : Object.fromEntries(childRepositories().map(r => [r, repoHead(r)]).filter(([, sha]) => sha));
+  const name = `heads-${randomUUID()}.json`, data = Buffer.from(JSON.stringify(heads));
+  fs.writeFileSync(path.join(os.tmpdir(), name), data, { mode: 0o600, flag: 'wx' });
+  process.stdout.write(`${sha256(data)} ${data.length} ${name}`);
+  process.exit(0);
+}
 // "since <ref>": the commit a reference names, when HEAD descends from it (a
 // review of the commits made since); "branch-base": where this branch left
 // the default branch (or, on it, its upstream), when commits came since.
@@ -53,19 +81,29 @@ if (mode === 'branch-base') {
 }
 const extra = process.argv.slice(3), given = extra.find(a => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(a));
 const base = given && given !== head() ? given : 'HEAD';
+// `bases-….json` (from "heads"): the commit each repository below the folder
+// started the turn on; a repository not named is compared with its HEAD.
+const basesName = extra.find(a => a.startsWith('bases-'));
+if (basesName !== undefined && !/^bases-[0-9a-f-]{36}\.json$/.test(basesName)) throw Error('review-scope-invalid');
+const bases = basesName ? JSON.parse(fs.readFileSync(path.join(os.tmpdir(), basesName), 'utf8')) : {};
+const baseOf = repository => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(bases[repository] ?? '') ? bases[repository] : 'HEAD';
 // "files": what each changed or new file holds now (a hash, "deleted"), so
 // the runtime can tell which files one conversation's command changed.
 if (mode === 'files') {
-  const changed = git(['diff', '--name-only', '--no-renames', '--relative', '-z', base, '--', '.']).split('\0').filter(Boolean);
-  const fresh = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
-  if (changed.length + fresh.length > MAX_UNTRACKED * 4) throw Error('review-untracked-limit');
+  // In a folder of several repositories each one answers for its own files,
+  // named from the folder. Without this a command's changes there have no
+  // owner and a review of them cannot run (seen 2026-10-30: `not_git`).
+  const repositories = insideWorkTree() ? [] : childRepositories();
+  const listed = (run, from, prefix) => [...run(['diff', '--name-only', '--no-renames', '--relative', '-z', from, '--', '.']).split('\0'), ...run(['ls-files', '--others', '--exclude-standard', '-z']).split('\0')].filter(Boolean).map(name => prefix + name);
+  const all = repositories.length ? repositories.flatMap(r => { try { return listed(args => repoGit(r, args), baseOf(r), `${r}/`); } catch { return []; } }) : listed(git, base, '');
+  if (all.length > MAX_UNTRACKED * 4) throw Error('review-untracked-limit');
   const print = name => {
     let stat; try { stat = fs.lstatSync(name); } catch { return 'deleted'; }
     if (stat.isSymbolicLink()) return 'link:' + sha256(fs.readlinkSync(name));
     if (stat.isDirectory()) return 'dir:' + sha256(fs.readdirSync(name).sort().join('\0'));
     return stat.size > HASHED_FILE ? `size:${stat.size}:${stat.mtimeMs}` : sha256(fs.readFileSync(name)) + ':' + (stat.mode & 0o777);
   };
-  const files = Object.fromEntries([...new Set([...changed, ...fresh])].sort().map(name => [name, print(name)]));
+  const files = Object.fromEntries([...new Set(all)].sort().map(name => [name, print(name)]));
   const name = `files-${randomUUID()}.json`, data = Buffer.from(JSON.stringify(files));
   fs.writeFileSync(path.join(os.tmpdir(), name), data, { mode: 0o600, flag: 'wx' });
   process.stdout.write(`${sha256(data)} ${data.length} ${name}`);
@@ -73,20 +111,23 @@ if (mode === 'files') {
 }
 // A scope (a file the runtime wrote in this boundary's temporary directory):
 // only these paths, the ones this conversation changed, make the patch.
-const scopeName = extra.find(a => a !== given);
+const scopeName = extra.find(a => a !== given && a !== basesName);
 if (scopeName !== undefined && !/^scope-[0-9a-f-]{36}\.json$/.test(scopeName)) throw Error('review-scope-invalid');
 const scope = scopeName ? new Set(JSON.parse(fs.readFileSync(path.join(os.tmpdir(), scopeName), 'utf8'))) : null;
 if (scope && [...scope].some(p => typeof p !== 'string' || !p || path.isAbsolute(p) || p.split('/').includes('..'))) throw Error('review-scope-invalid');
 // A folder that is not a repository but holds several (clones side by side):
 // each changed path is diffed in the repository that holds it, against that
 // repository's HEAD, with its paths kept relative to the folder. A path no
-// repository holds is named, not read. With no scope there is nothing to
-// tell which repositories to read: the folder is not a Git repository.
+// repository holds is named, not read. With no scope, every repository's
+// changes make the patch; a conversation with no change yet has an empty one.
 const repositories = [], outside = [];
 let patch = '', paths;
-if (scope && scope.size && !insideWorkTree()) {
+const several = insideWorkTree() ? [] : childRepositories();
+if (scope && !scope.size && several.length) paths = [];
+else if ((scope ? scope.size : several.length) && !insideWorkTree()) {
   const groups = new Map();
-  for (const file of [...scope].sort()) {
+  if (!scope) for (const repository of several) groups.set(repository, ['.']);
+  for (const file of [...(scope ?? [])].sort()) {
     const repository = repositoryOf(file);
     if (repository === null) { outside.push(file); continue; }
     if (!groups.has(repository)) groups.set(repository, []);
@@ -95,9 +136,9 @@ if (scope && scope.size && !insideWorkTree()) {
   if (!groups.size) throw Error('managed-review-patch-unreadable: not a git repository');
   paths = [];
   for (const [repository, files] of groups) {
-    const spec = files.map(p => ':(literal)' + p), run = args => git(['-C', repository, ...args]);
+    const spec = files.map(p => p === '.' ? '.' : ':(literal)' + p), run = args => repoGit(repository, args);
     repositories.push(repository);
-    patch += run(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', `--src-prefix=a/${repository}/`, `--dst-prefix=b/${repository}/`, 'HEAD', '--', ...spec]);
+    patch += run(['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', `--src-prefix=a/${repository}/`, `--dst-prefix=b/${repository}/`, baseOf(repository), '--', ...spec]);
     paths.push(...run(['ls-files', '--others', '--exclude-standard', '-z', '--', ...spec]).split('\0').filter(Boolean).map(p => `${repository}/${p}`));
   }
   paths.sort();

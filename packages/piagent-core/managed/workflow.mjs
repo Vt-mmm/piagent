@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { reviewUnavailableReason } from './patch-snapshot.mjs';
-import { failureCode } from '../runtime/managed-failure.mjs';
+import { failureCode, unnamedFailureText } from '../runtime/managed-failure.mjs';
 import { TsDiagnostics } from './ts-diagnostics.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 import { discoverDeliveryContext } from './delivery-context.mjs';
@@ -367,8 +367,9 @@ export async function completionGate(managed, run, signal) {
         try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
         catch (error) {
           run.reviewUnavailable = !stopped(); run.reviewUnavailableReason = reviewUnavailableReason(error?.message); interrupted = stopped();
-          // Why the review could not run, as a code only (the report says "failed").
-          if (run.reviewUnavailable) try { session.sessionManager.appendCustomEntry('agent-watch-failure-detail', { role: 'review', code: failureCode(error?.message) }); } catch { /* the report still says it */ }
+          // Why the review could not run: its code, and the redacted words of a
+          // failure no code names (the report says only "failed").
+          if (run.reviewUnavailable) try { session.sessionManager.appendCustomEntry('agent-watch-failure-detail', { role: 'review', code: failureCode(error?.message), ...(unnamedFailureText(error?.message) ? { detail: unnamedFailureText(error?.message) } : {}) }); } catch { /* the report still says it */ }
           break;
         } finally { managed.reviewFocus = null; }
         continue;

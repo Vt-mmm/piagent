@@ -24,7 +24,8 @@ import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import { closableLabel } from "./tab-close.tsx";
 import { readWorkspaceFile } from "./workspace-api.ts";
-import { WorkspaceFilePreview } from "./WorkspaceFilePreview.tsx";
+import { previewKind, WorkspaceFilePreview } from "./WorkspaceFilePreview.tsx";
+import { saveWorkspaceFile } from "./workspace-api.ts";
 import { WorkspaceFileTree } from "./WorkspaceFileTree.tsx";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 const CodeEditor = lazy(() => import("./WorkspaceCodeEditor.tsx"));
@@ -64,6 +65,9 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
   const review = useWorkspaceReview(sessionRef, tabs, active);
   const revert = useWorkspaceRevert(sessionRef, file?.path, file?.digest ?? null, !!tab && !tabDirty(tab), review.diff);
   const lineReview = useWorkspaceComments(sessionRef, file?.path, tab?.draft ?? '', review.hunks);
+  // A text file that is really a picture (.svg) opens as the picture; its code is one click away.
+  const [sourceOf, setSourceOf] = useState<ReadonlySet<string>>(new Set());
+  const drawn = !!file && !file.binary && !file.oversized && previewKind(file.path) === "image" && !sourceOf.has(file.path);
   const conflictTab = tabs.find(tab => tab.file.path === editing.conflict?.path);
   const navigation = <Box component="nav" aria-label={localize(locale, "Tệp dự án", "Project files")} sx={{ width: navigationHost ? "100%" : { xs: 136, sm: 200 }, flexShrink: 0, overflow: "auto", borderRight: 1, borderColor: "divider" }}>
       {!navigationHost && <Tabs value={section} onChange={(_, value) => setSection(value)} aria-label={localize(locale, "Khám phá project", "Explore project")}>
@@ -89,7 +93,10 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
         {onHide && <IconButton size="small" aria-label={localize(locale, "Ẩn khung tệp", "Hide files panel")} title={localize(locale, "Ẩn khung tệp (tệp đang mở vẫn giữ)", "Hide files panel (open files are kept)")} onClick={onHide}><CloseIcon fontSize="small" /></IconButton>}
       </Stack>
       {loading && <CircularProgress size={20} />}
-      {file && <Stack direction="row" sx={{ flexShrink: 0, overflowX: "auto", "& .MuiButton-root": { whiteSpace: "nowrap", flexShrink: 0 } }}>{revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
+      {file && <Stack direction="row" sx={{ flexShrink: 0, overflowX: "auto", "& .MuiButton-root": { whiteSpace: "nowrap", flexShrink: 0 } }}>
+        {!file.binary && !file.oversized && previewKind(file.path) === "image" && <Button size="small" onClick={() => setSourceOf(current => { const next = new Set(current); if (next.has(file.path)) next.delete(file.path); else next.add(file.path); return next; })}>{drawn ? localize(locale, "Xem mã", "View code") : localize(locale, "Xem hình", "View picture")}</Button>}
+        <Button size="small" onClick={() => void saveWorkspaceFile(sessionRef, file.path)}>{localize(locale, "Tải về", "Download")}</Button>
+        {revert.hasPending && <Button onClick={revert.checkPending}>{localize(locale, "Kiểm tra hoàn tác", "Check revert")}</Button>}
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !tab || (!tabDirty(tab) && !tab.pending) || editing.saving} onClick={() => void editing.save(file.path)}>{localize(locale, "Lưu", "Save")}</Button>
         <Button size="small" onClick={() => editing.close(file.path)}>{localize(locale, "Đóng tệp", "Close file")}</Button>
         <Button size="small" disabled={!editing.authority?.writable || file.readOnly || !file.digest || editing.saving} onClick={() => { setRenamePath(file.path); setRenaming(file.path); }}>{localize(locale, "Đổi tên", "Rename")}</Button>
@@ -97,7 +104,7 @@ export default function WorkspaceExplorer({ sessionRef, target, navigationHost, 
           onClick={() => { if (window.confirm(localize(locale, `Xóa ${file.path}? Có thể khôi phục bằng Git nếu tệp đã commit.`, `Delete ${file.path}? Git can restore it if it was committed.`))) void editing.move(file.path); }}>{localize(locale, "Xóa", "Delete")}</Button>
         <Button size="small" onClick={() => { if (!tab || !tabDirty(tab) || window.confirm(localize(locale, "Bỏ thay đổi chưa lưu và tải lại?", "Discard unsaved changes and reload?"))) void editing.reload(file.path); }}>{localize(locale, "Tải lại", "Reload")}</Button>
       </Stack>}
-      {file?.binary || file?.oversized ? <WorkspaceFilePreview sessionRef={sessionRef} path={file.path} />
+      {file?.binary || file?.oversized || drawn ? <WorkspaceFilePreview sessionRef={sessionRef} path={file.path} />
         : file?.content !== null && file?.content !== undefined ? <Box sx={{ flex: 1, minHeight: 0 }}><Suspense fallback={<CircularProgress size={20} />}>
           <CodeEditor onComment={lineReview.open} hunks={review.hunks} onKeep={review.keep} onRevert={editing.authority?.writable ? ref => void revert.request(ref) : undefined} content={tab?.draft ?? file.content} path={file.path} line={tab?.line ?? 1} readOnly={!editing.authority?.writable || file.readOnly}
             onChange={value => editing.change(file.path, value)} onSave={() => void editing.save(file.path)} /></Suspense></Box>

@@ -13,6 +13,12 @@ async function projectPath(sessionRef: string, absolute: string): Promise<string
   const root = listing.roots.find(item => item.source === "project" && absolute.startsWith(`${item.path.replace(/\/+$/, "")}/`));
   return root ? absolute.slice(root.path.replace(/\/+$/, "").length + 1) : null;
 }
+// The project path a link names: itself, or an absolute path made relative.
+export async function resolveProjectPath(sessionRef: string, link: FileLink): Promise<string | null> {
+  return link.absolute ? projectPath(sessionRef, link.path) : link.path;
+}
+const Session = createContext<string | null>(null);
+export function useWorkspaceSession(): string | null { return useContext(Session); }
 const Navigation = createContext<((target: WorkspaceTarget | FileLink) => void) | null>(null);
 export function WorkspaceNavigationProvider({ sessionRef, onOpen, children }: { sessionRef?: string; onOpen(): void; children: ReactNode }) {
   const open = (target: WorkspaceTarget) => {
@@ -22,7 +28,7 @@ export function WorkspaceNavigationProvider({ sessionRef, onOpen, children }: { 
     if (!("absolute" in target) || !target.absolute) { open({ path: target.path, line: target.line }); return; }
     // Outside the project there is nothing the explorer may read: the path is shown as it is.
     void projectPath(sessionRef, target.path).then(relative => { if (relative) open({ path: relative, line: target.line }); }, () => undefined);
-  } : null}>{children}</Navigation.Provider>;
+  } : null}><Session.Provider value={sessionRef ?? null}>{children}</Session.Provider></Navigation.Provider>;
 }
 export function WorkspaceFileButton({ path, line, children }: { path: string; line?: number; children?: ReactNode }) {
   const open = useContext(Navigation), { locale } = useUiPreferences(), target = workspaceTarget(path, line);

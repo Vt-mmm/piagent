@@ -1,4 +1,5 @@
 import { fileLink, WorkspaceFileLink, WorkspaceMentions } from "./workspace-navigation.tsx";
+import { SentFile } from "./SentFile.tsx";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Link from "@mui/material/Link";
@@ -44,7 +45,8 @@ export function MarkdownMessage({ children }: { children: string }) {
         bgcolor: "action.hover", border: 1, borderColor: "divider", whiteSpace: "pre", "& code": { bgcolor: "transparent", p: 0 } }}>{value}</Box>,
       a: ({ href, children: value }) => href && fileLink(href) ? <WorkspaceFileLink link={fileLink(href)!}>{value}</WorkspaceFileLink> : href ? <Link href={href} target={href.startsWith("#") ? undefined : "_blank"}
         rel={href.startsWith("#") ? undefined : "noopener noreferrer"} underline="hover">{value}</Link> : <>{value}</>,
-      img: ({ alt }) => <Typography component="span" variant="caption" color="text.secondary">[{alt || "image"}]</Typography>,
+      img: ({ src, alt }) => typeof src === "string" && fileLink(src) ? <SentFile link={fileLink(src)!} alt={alt} />
+        : <Typography component="span" variant="caption" color="text.secondary">[{alt || "image"}]</Typography>,
       table: ({ children: value }) => <Box sx={{ my: 1.5, overflowX: "auto" }}><Box component="table" sx={{ width: "100%",
         borderCollapse: "collapse", fontSize: ".92rem", "th, td": { border: 1, borderColor: "divider", px: 1.2, py: .8, textAlign: "left" },
         th: { bgcolor: "action.hover", fontWeight: 650 } }}>{value}</Box></Box>,

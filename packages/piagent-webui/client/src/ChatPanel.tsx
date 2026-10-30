@@ -12,6 +12,8 @@ import { createAttachmentCommand, createAttachmentDiscardCommand, createChatComm
   createResumeAndContinueCommand, queueUpdatePayload } from "./chat-command.ts";
 import { sendChatCommand } from "./api.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
+import { ImageThumb } from "./AttachmentImage.tsx";
+import { stagedPreviewUrl } from "./image-preview-cache.ts";
 import { acceptAttribute, attachmentDetail, attachmentHint, dragCarriesFiles, discardAttachment, MAX_ATTACHMENTS,
   stageFiles } from "./attachment-intake.ts";
 
@@ -228,7 +230,7 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
       </section>}
       <footer className="chat-composer-preview">
         {attachments.length > 0 && <ul className="attachment-list" aria-label={localize(locale, "File sẽ gửi cùng message", "Files to send with the message")}>
-          {attachments.map((item) => <li key={item.attachmentRef} data-kind={item.kind}><span><strong>{item.displayName}</strong><small>{attachmentDetail(item, locale)}</small></span>
+          {attachments.map((item) => <li key={item.attachmentRef} data-kind={item.kind}>{item.kind === "image" && stagedPreviewUrl(item.attachmentRef) && <ImageThumb url={stagedPreviewUrl(item.attachmentRef)!} name={item.displayName} locale={locale} />}<span><strong>{item.displayName}</strong><small>{attachmentDetail(item, locale)}</small></span>
             <button type="button" disabled={sending || uploading} aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} onClick={() => void removeAttachment(item.attachmentRef)}>{localize(locale, "Bỏ", "Remove")}</button></li>)}
         </ul>}
         <textarea aria-label={localize(locale, "Nội dung chat", "Chat message")} placeholder={compoundAvailable ? localize(locale, "Nhập việc cần Pi làm ngay sau khi mở lại task…", "Enter work for Pi immediately after the task resumes…")

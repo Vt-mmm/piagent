@@ -11,16 +11,20 @@ const MAX_SNAPSHOT = 16 * 1024 * 1024;
 // `base`: the commit the patch starts from (the turn's starting HEAD), so a
 // commit made during the turn stays part of its change; none: HEAD.
 const BASE = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
-async function worker(boundary, mode, scope = null, base = null) {
-  let scopeName = null;
-  if (scope) {
-    scopeName = `scope-${randomUUID()}.json`;
-    fs.writeFileSync(path.join(boundary.temporary, scopeName), JSON.stringify([...scope]), { mode: 0o600, flag: 'wx' });
-  }
+// `bases`: in a folder of several repositories, where each started the turn.
+async function worker(boundary, mode, scope = null, base = null, bases = null) {
+  const written = [];
+  const write = (prefix, value) => {
+    const name = `${prefix}-${randomUUID()}.json`;
+    fs.writeFileSync(path.join(boundary.temporary, name), JSON.stringify(value), { mode: 0o600, flag: 'wx' });
+    written.push(name);
+  };
+  if (scope) write('scope', [...scope]);
+  if (bases && Object.keys(bases).length) write('bases', bases);
   let result;
-  const extra = [...(scopeName ? [scopeName] : []), ...(typeof base === 'string' && BASE.test(base) ? [base] : [])];
+  const extra = [...written, ...(typeof base === 'string' && BASE.test(base) ? [base] : [])];
   try { result = await invokeReviewSnapshot(boundary, mode, extra); }
-  finally { if (scopeName) fs.rmSync(path.join(boundary.temporary, scopeName), { force: true }); }
+  finally { for (const name of written) fs.rmSync(path.join(boundary.temporary, name), { force: true }); }
   const text = textContent(result).trim();
   if (result.details?.truncation?.truncated || text.includes('\n')) throw Error(/review-(patch|file|untracked)-limit/.exec(text)?.[0] ?? 'managed-review-patch-unreadable');
   const [digest, bytes, name] = text.split(' ');
@@ -30,7 +34,17 @@ async function worker(boundary, mode, scope = null, base = null) {
 
 // The digest of the patch a reviewer would see (diff against HEAD plus
 // untracked files): whether a review is still current. Nothing else moves.
-export async function readPatchDigest(boundary, scope = null, base = null) { return (await worker(boundary, 'digest', scope, base)).digest; }
+export async function readPatchDigest(boundary, scope = null, base = null, bases = null) { return (await worker(boundary, 'digest', scope, base, bases)).digest; }
+
+// Where each repository below a folder that is none itself stands now:
+// { repository: commit }; empty inside one repository.
+export async function readRepositoryHeads(boundary) {
+  try {
+    const { digest, bytes, name } = await worker(boundary, 'heads');
+    if (!/^heads-[0-9a-f-]{36}\.json$/.test(name ?? '')) return null;
+    return JSON.parse(readOnce(boundary, name, bytes, digest).toString('utf8'));
+  } catch { return null; }
+}
 
 // The commit HEAD names now, or null (no repository, no commit yet).
 export async function readHead(boundary) {
@@ -69,8 +83,8 @@ export function emptySnapshot(snapshot) {
 // it to the boundary's temporary directory and names it, with its digest, on
 // its output; the file is read once, must match that digest (a file changed
 // meanwhile never passes) and is removed.
-export async function readPatchSnapshot(boundary, scope = null, base = null) {
-  const { digest, bytes, name } = await worker(boundary, 'file', scope, base);
+export async function readPatchSnapshot(boundary, scope = null, base = null, bases = null) {
+  const { digest, bytes, name } = await worker(boundary, 'file', scope, base, bases);
   if (!/^review-[0-9a-f-]{36}\.json$/.test(name ?? '')) throw Error('managed-review-patch-unreadable');
   return { patch: readOnce(boundary, name, bytes, digest).toString('utf8'), digest };
 }
@@ -79,8 +93,8 @@ export async function readPatchSnapshot(boundary, scope = null, base = null) {
 // Compared before and after a command, it names the files that command
 // changed, so a conversation answers for its own changes, not for another
 // conversation's in the same folder.
-export async function readChangedFiles(boundary, base = null) {
-  const { digest, bytes, name } = await worker(boundary, 'files', null, base);
+export async function readChangedFiles(boundary, base = null, bases = null) {
+  const { digest, bytes, name } = await worker(boundary, 'files', null, base, bases);
   if (!/^files-[0-9a-f-]{36}\.json$/.test(name ?? '')) throw Error('managed-review-patch-unreadable');
   return new Map(Object.entries(JSON.parse(readOnce(boundary, name, bytes, digest).toString('utf8'))));
 }
@@ -106,6 +120,7 @@ export function reviewUnavailableReason(message) {
   if (/review-(patch|file|untracked)-limit|managed-review-patch-too-large/.test(text)) return 'too_large';
   if (/not a git repository|Could not access 'HEAD'|managed-review-patch-unreadable/i.test(text)) return 'not_git';
   if (/managed-helper-limit|helper_run_limit_reached/.test(text)) return 'limit';
+  if (/managed-runtime-changed/.test(text)) return 'runtime_changed';
   return 'failed';
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import CloseRounded from "@mui/icons-material/CloseRounded";
+import DownloadRounded from "@mui/icons-material/DownloadRounded";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import Dialog from "@mui/material/Dialog";
@@ -43,6 +44,35 @@ function usePreviewUrl(source: ImageSource | null): { url: string | null; failed
   return { url: state.key === key ? state.url : null, failed, fail: () => setState({ key, url: null, failed: true }) };
 }
 
+// An image at full size, with a way to save it.
+export function ImageLightbox({ open, onClose, url, name, locale }: { open: boolean; onClose(): void; url: string; name: string; locale: UiLocale }) {
+  return <Dialog open={open} onClose={onClose} maxWidth={false}
+    slotProps={{ paper: { sx: { bgcolor: "background.default", m: 1, maxWidth: "96vw", maxHeight: "94vh" } } }}>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, pl: 2, pr: .5, py: .5 }}>
+      <Typography variant="body2" noWrap sx={{ flex: 1, fontWeight: 600 }}>{name}</Typography>
+      <IconButton size="small" component="a" href={url} download={name} aria-label={localize(locale, "Tải về", "Download")} title={localize(locale, "Tải về", "Download")}><DownloadRounded fontSize="small" /></IconButton>
+      <IconButton size="small" aria-label={localize(locale, "Đóng", "Close")} onClick={onClose}><CloseRounded fontSize="small" /></IconButton>
+    </Box>
+    <Box component="img" src={url} alt={name}
+      sx={{ display: "block", minWidth: "min(480px, 90vw)", maxWidth: "96vw", maxHeight: "calc(94vh - 48px)", objectFit: "contain", mx: "auto" }} />
+  </Dialog>;
+}
+
+// A staged image before it is sent: large enough to read, opens full size.
+export function ImageThumb({ url, name, detail, locale, onRemove }: { url: string; name: string; detail?: string; locale: UiLocale; onRemove?(): void }) {
+  const [open, setOpen] = useState(false);
+  return <Box sx={{ position: "relative", width: 120 }}>
+    <ButtonBase onClick={() => setOpen(true)} aria-label={localize(locale, `Xem ảnh ${name}`, `View image ${name}`)} title={detail ? `${name} · ${detail}` : name}
+      sx={{ display: "block", width: 120, height: 90, borderRadius: 1, overflow: "hidden", border: 1, borderColor: "divider", bgcolor: "background.paper" }}>
+      <Box component="img" src={url} alt={name} sx={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+    </ButtonBase>
+    <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ mt: .25 }}>{name}</Typography>
+    {onRemove && <IconButton size="small" onClick={onRemove} aria-label={`${localize(locale, "Bỏ", "Remove")} ${name}`}
+      sx={{ position: "absolute", top: 2, right: 2, p: .25, bgcolor: "background.paper", "&:hover": { bgcolor: "background.paper" } }}><CloseRounded sx={{ fontSize: 16 }} /></IconButton>}
+    <ImageLightbox open={open} onClose={() => setOpen(false)} url={url} name={name} locale={locale} />
+  </Box>;
+}
+
 // The picture itself, in place of a card that only said "Image". Clicking it
 // opens it full size. Without a preview (an old host, an evicted cache, a type
 // the browser cannot draw) the card it replaces is shown instead.
@@ -57,14 +87,6 @@ export function AttachmentImage({ name, source, locale, fallback }: { name: stri
       <Box component="img" src={url} alt={name} onError={fail} loading="lazy"
         sx={{ display: "block", maxWidth: { xs: "100%", sm: 320 }, maxHeight: 220, objectFit: "contain" }} />
     </ButtonBase>
-    <Dialog open={open} onClose={() => setOpen(false)} maxWidth={false}
-      slotProps={{ paper: { sx: { bgcolor: "background.default", m: 1, maxWidth: "96vw", maxHeight: "94vh" } } }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, pl: 2, pr: .5, py: .5 }}>
-        <Typography variant="body2" noWrap sx={{ flex: 1, fontWeight: 600 }}>{name}</Typography>
-        <IconButton size="small" aria-label={localize(locale, "Đóng", "Close")} onClick={() => setOpen(false)}><CloseRounded fontSize="small" /></IconButton>
-      </Box>
-      <Box component="img" src={url} alt={name}
-        sx={{ display: "block", maxWidth: "96vw", maxHeight: "calc(94vh - 48px)", objectFit: "contain", mx: "auto" }} />
-    </Dialog>
+    <ImageLightbox open={open} onClose={() => setOpen(false)} url={url} name={name} locale={locale} />
   </>;
 }

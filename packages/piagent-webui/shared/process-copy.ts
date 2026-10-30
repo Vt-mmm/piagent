@@ -15,7 +15,8 @@ const SEVERITY: Record<string, [string, string]> = { blocking: ["blocking", "blo
 const KIND: Record<string, [string, string]> = { wrong_premise: ["sai giả định", "wrong premise"], conflicts_with_request: ["conflict với yêu cầu", "conflicts with the request"],
   ambiguous: ["chưa rõ ràng", "ambiguous"], out_of_scope: ["out of scope", "out of scope"] };
 const UNAVAILABLE: Record<string, [string, string]> = { too_large: ["patch quá lớn", "the patch is too large"], not_git: ["thư mục không phải git", "not a git repository"],
-  limit: ["subagent đã hết lượt gọi", "the subagent ran out of calls"], failed: ["subagent lỗi", "the subagent failed"] };
+  limit: ["subagent đã hết lượt gọi", "the subagent ran out of calls"], failed: ["subagent lỗi", "the subagent failed"],
+  runtime_changed: ["Piagent vừa được cập nhật, hãy mở lại cuộc trò chuyện", "Piagent was just updated; reopen the conversation"] };
 
 // How a code-changing turn ended against the Harness workflow, in a few words.
 export function outcomeText(process: ProcessCopyInput, locale: CopyLocale): string {

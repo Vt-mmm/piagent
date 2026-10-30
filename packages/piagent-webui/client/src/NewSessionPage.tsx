@@ -34,6 +34,7 @@ import Typography from "@mui/material/Typography";
 import type { PermissionMode, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import { companyReason } from "./CompanyReconnect.tsx";
 import { connectCompany, importProjectFolder, readCompanyStatus, readSessionCreationOptions, type CompanyStatus, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
+import { ImageThumb } from "./AttachmentImage.tsx";
 import { attachmentHint, declaredType, dragCarriesFiles, formatSize, MAX_ATTACHMENTS, refusedText, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
@@ -229,10 +230,8 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
           {mentions.menu}
           {files.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pt: .75 }}
             aria-label={localize(locale, "File sẽ gửi cùng tin nhắn đầu tiên", "Files for the first message")}>
-            {files.map((file) => <Chip key={`${file.name}:${file.size}:${file.lastModified}`} size="small" variant="outlined"
-              label={`${file.name} · ${formatSize(file.size)}`}
-              onDelete={busy ? undefined : () => { setFiles((current) => current.filter((item) => item !== file)); setFileError(null); }}
-              deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${file.name}`} role="button" />} />)}
+            {files.map((file) => <FileThumbOrChip key={`${file.name}:${file.size}:${file.lastModified}`} file={file} locale={locale}
+              onRemove={busy ? undefined : () => { setFiles((current) => current.filter((item) => item !== file)); setFileError(null); }} />)}
           </Stack>}
           <Collapse in={advancedOpen} id="piagent-new-session-options">
             <Box sx={{ mx: .35, mt: 1, px: 1.1, py: 1, borderRadius: 1, bgcolor: "action.hover" }}>

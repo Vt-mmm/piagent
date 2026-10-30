@@ -40,6 +40,12 @@
         "image/bmp",
         "image/x-icon",
         "image/avif",
+        "image/svg+xml",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/zip",
         null
       ]
     },

@@ -10,7 +10,7 @@ import { localize, useUiPreferences } from "./ui-preferences.tsx";
 // A file the editor cannot show as text, shown as what it is: an image as a
 // picture, a PDF or office document as the text the agent reads from it (the
 // document index the Documents panel uses). Anything else stays a notice.
-const IMAGES = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]);
+const IMAGES = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif", "svg"]);
 const DOCUMENTS = new Set(["pdf", "docx", "xlsx", "xlsm", "pptx", "odt", "ods", "odp", "rtf"]);
 type Preview = { state: "loading" } | { state: "image"; src: string } | { state: "document"; text: string; truncated: boolean } | { state: "none" };
 

@@ -92,7 +92,7 @@ const inspectionSnapshot = JSON.parse(fs.readFileSync(path.join(root, "evals/fix
 // no host tool, so the fixture claims exactly those.
 inspectionSnapshot.capabilities.capabilities.attachments = { status: "available", version: 1, reason: null,
   kinds: ["file", "document"],
-  mimeTypes: ["application/json", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  mimeTypes: ["image/png", "application/json", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/yaml", "text/csv", "text/markdown", "text/plain", "text/tab-separated-values"] };
 Object.assign(inspectionSnapshot.capabilities.limits, { maxRequestBodyBytes: 11_250_000, maxAttachmentCount: 4,
   maxAttachmentFileBytes: 8_388_608, maxAttachmentTotalBytes: 16_777_216 });
@@ -1978,6 +1978,57 @@ test("a file the agent links in its answer opens in the explorer: code at its li
   await expect(picture).toBeVisible();
   assert.match(await picture.getAttribute("src"), /^data:image\/png;base64,iVBOR/);
   await expect(page.getByRole("link", { name: "the site" })).toHaveAttribute("href", "https://piagent.io.vn");
+  assert.deepEqual(errors, []);
+});
+
+test("the agent sends a picture and a file into the chat; an SVG opens as a picture; a staged image is large and opens", async ({ page }) => {
+  fs.mkdirSync(path.join(mentionProject, "design"), { recursive: true });
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120"><rect width="200" height="120" fill="#BD4531"/><circle cx="100" cy="60" r="40" fill="#FFF0DC"/></svg>\n';
+  fs.writeFileSync(path.join(mentionProject, "design/agent.svg"), svg);
+  fs.writeFileSync(path.join(mentionProject, "design/brief.pdf"), "%PDF-1.4 sample");
+  answerFiles = "\n\nHere it is: ![Vector agent](design/agent.svg)\n\n![brief.pdf](design/brief.pdf)\n\nThe code: [agent.svg](design/agent.svg)";
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error" && /Content Security Policy/.test(message.text())) errors.push(message.text()); });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("navigation").getByText("Release preparation", { exact: true }).click();
+
+  const sent = page.getByRole("button", { name: /(Xem ảnh|View image) Vector agent/ });
+  await expect(sent).toBeVisible();
+  assert.match(await sent.locator("img").getAttribute("src"), /^data:image\/svg\+xml;base64,/);
+  assert.ok((await sent.locator("img").evaluate(image => image.naturalWidth)) > 0, "the SVG was drawn");
+  await sent.click();
+  const lightbox = page.getByRole("dialog");
+  await expect(lightbox.getByRole("img", { name: "Vector agent" })).toBeVisible();
+  await expect(lightbox.getByRole("link", { name: /Tải về|Download/ })).toHaveAttribute("download", "Vector agent");
+  await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/sent-file-lightbox.png") });
+  await lightbox.getByRole("button", { name: /Đóng|Close/ }).click();
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^(Tải về|Download)$/ }).first().click();
+  assert.equal((await download).suggestedFilename(), "brief.pdf");
+  await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/sent-file-chat.png") });
+
+  await page.getByRole("button", { name: "agent.svg", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "design/agent.svg", exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "design/agent.svg" })).toBeVisible();
+  await expect(page.locator(".cm-content")).toHaveCount(0);
+  await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/svg-opens-as-picture.png") });
+  await page.getByRole("button", { name: /Xem mã|View code/ }).click();
+  await expect(page.locator(".cm-content")).toContainText("<svg");
+  await page.getByRole("button", { name: /Xem hình|View picture/ }).click();
+  await expect(page.getByRole("img", { name: "design/agent.svg" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({ name: "screen.png", mimeType: "image/png", buffer: Buffer.from(HISTORY_PNG, "base64") });
+  const thumb = page.getByRole("button", { name: /(Xem ảnh|View image) screen\.png/ });
+  await expect(thumb).toBeVisible();
+  const box = await thumb.boundingBox();
+  assert.ok(box.width >= 100 && box.height >= 80, `thumbnail is ${box.width}x${box.height}`);
+  await page.screenshot({ path: path.join(root, ".tmp/playwright-webui/staged-thumbnail.png") });
+  await thumb.click();
+  await expect(page.getByRole("dialog").getByRole("img", { name: "screen.png" })).toBeVisible();
   assert.deepEqual(errors, []);
 });
 
