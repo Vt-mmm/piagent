@@ -4,6 +4,24 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.48.3 - 2026-10-30
+
+**The agent sends pictures and files into the chat; reviews run across several repositories.** Answers show pictures and file cards in place, an SVG opens as a picture, attached images are large and open full size, and a folder of repositories gets its review.
+
+### Added
+
+- The agent sends a picture or file into the chat with ![name](path): a picture is drawn in place and opens full size, any other file is a card to open or download.
+
+### Improved
+
+- An SVG opens as a picture with View code beside it, and every open file has Download.
+- An image attached to a message is a large thumbnail that opens full size, on the new conversation page too.
+
+### Fixed
+
+- Review no longer fails with not_git in a folder holding several repositories: changes made by commands, committed or not, are found in each repository.
+- A review stopped by an update under a running conversation says so and asks to reopen it; an unnamed failure keeps its redacted words in the local log.
+
 ## v1.48.2 - 2026-10-30
 
 **Terminals load a new release without closing; only the member waives checks.** After an update every open Terminal moves to the new release when idle and keeps its conversation, and a team's required checks can be skipped only by the member, on a card.

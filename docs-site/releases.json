@@ -1,5 +1,46 @@
 [
   {
+    "version": "1.48.3",
+    "date": "2026-10-30",
+    "status": "stable",
+    "title": {
+      "en": "The agent sends pictures and files into the chat; reviews run across several repositories",
+      "vi": "Agent gửi thẳng hình và file vào chat; review chạy được trong thư mục nhiều repo"
+    },
+    "summary": {
+      "en": "Answers show pictures and file cards in place, an SVG opens as a picture, attached images are large and open full size, and a folder of repositories gets its review.",
+      "vi": "Câu trả lời hiện hình và thẻ file ngay trong chat, SVG mở ra hình, ảnh đính kèm lớn và bấm xem được, thư mục chứa nhiều repo được review bình thường."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "new",
+        "en": "The agent sends a picture or file into the chat with ![name](path): a picture is drawn in place and opens full size, any other file is a card to open or download.",
+        "vi": "Agent gửi hình hoặc file vào chat bằng ![tên](đường/dẫn): hình hiện ngay và mở to được, file khác là thẻ để mở hoặc tải về."
+      },
+      {
+        "kind": "improved",
+        "en": "An SVG opens as a picture with View code beside it, and every open file has Download.",
+        "vi": "SVG mở ra hình, có nút Xem mã bên cạnh; mọi file đang mở đều có nút Tải về."
+      },
+      {
+        "kind": "improved",
+        "en": "An image attached to a message is a large thumbnail that opens full size, on the new conversation page too.",
+        "vi": "Ảnh đính kèm là thumbnail lớn, bấm để xem to, kể cả ở trang cuộc trò chuyện mới."
+      },
+      {
+        "kind": "fixed",
+        "en": "Review no longer fails with not_git in a folder holding several repositories: changes made by commands, committed or not, are found in each repository.",
+        "vi": "Review không còn lỗi not_git trong thư mục chứa nhiều repo: thay đổi do lệnh tạo ra, đã commit hay chưa, được nhận đúng theo từng repo."
+      },
+      {
+        "kind": "fixed",
+        "en": "A review stopped by an update under a running conversation says so and asks to reopen it; an unnamed failure keeps its redacted words in the local log.",
+        "vi": "Review dừng vì Piagent được cập nhật giữa cuộc trò chuyện sẽ nói rõ và nhắc mở lại; lỗi chưa có mã giữ nội dung đã che trong log máy."
+      }
+    ]
+  },
+  {
     "version": "1.48.2",
     "date": "2026-10-30",
     "status": "stable",
