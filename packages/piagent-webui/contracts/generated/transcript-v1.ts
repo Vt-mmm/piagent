@@ -601,6 +601,7 @@ export interface HarnessProcess {
   maxRounds?: number;
   idle?: number;
   planSkipped?: true;
+  partOnly?: true;
   verifyPolicy?: "off" | "suggest" | "require";
   reviewPolicy?: "off" | "suggest" | "require";
   reviewUnavailable?: "too_large" | "not_git" | "limit" | "failed";

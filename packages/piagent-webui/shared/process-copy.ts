@@ -4,7 +4,7 @@ import { failureRoleText, type CopyLocale, type FailureRole } from "./company-co
 
 export type ProcessCopyInput = {
   phase?: string; outcome?: string; loop?: number; maxLoops?: number; verified?: boolean; reviewed?: boolean; blockingOpen?: number;
-  planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: boolean; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; role?: FailureRole;
+  planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: boolean; partOnly?: boolean; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; role?: FailureRole;
   disputes?: number; unchanged?: boolean;
   findings?: Array<{ severity: string; file?: string; line?: number | null; issue: string }>;
   claims?: Array<{ claim: string }>; issues?: Array<{ kind: string; detail: string }>;
@@ -26,7 +26,8 @@ export function outcomeText(process: ProcessCopyInput, locale: CopyLocale): stri
   if (process.outcome === "disputed") parts.push((process.disputes ?? 1) > 1 ? pick(locale, `${process.disputes} conflict giữa main agent và subagent, bạn quyết định`, `${process.disputes} disagreements between the main agent and a subagent; your call`)
     : pick(locale, "Main agent và subagent conflict, bạn quyết định", "The main agent and a subagent disagree; your call"));
   if (process.unchanged) return parts.join(" · ") || pick(locale, "Không đổi code", "No code changed");
-  if (process.verified) parts.push(pick(locale, "Check đã pass trên code cuối", "A check passed on the final code"));
+  if (process.verified) parts.push(process.partOnly ? pick(locale, "Chỉ một phần test pass trên code cuối", "Only part of the test suite passed on the final code")
+    : pick(locale, "Check đã pass trên code cuối", "A check passed on the final code"));
   else if (process.verifyPolicy !== "off") parts.push(pick(locale, "Chưa có check pass trên code cuối", "No check passed on the final code"));
   if (process.reviewed) parts.push(process.blockingOpen ? pick(locale, `Còn ${process.blockingOpen} lỗi blocking chưa fix`, `${process.blockingOpen} blocking issue(s) still open`)
     : pick(locale, "Review không có lỗi blocking", "Review found no blocking issue"));

@@ -210,6 +210,7 @@
         "maxRounds": { "type": "integer", "minimum": 1, "maximum": 30 },
         "idle": { "type": "integer", "minimum": 1, "maximum": 2 },
         "planSkipped": { "const": true },
+        "partOnly": { "const": true },
         "verifyPolicy": { "enum": ["off", "suggest", "require"] },
         "reviewPolicy": { "enum": ["off", "suggest", "require"] },
         "reviewUnavailable": { "enum": ["too_large", "not_git", "limit", "failed"] },

@@ -97,6 +97,7 @@ test('a partial pass the member keeps ends the turn and the status says only par
   assert.equal(ui.asked.length, 1);
   assert.equal(run.outcome, 'clean');
   assert.match(self.notes.at(-1).content, /only part of the test suite passed on the final code/);
+  assert.equal(self.notes.at(-1).details.partOnly, true);
 });
 
 test('choosing the whole suite after a partial pass sends the agent to run it', async () => {

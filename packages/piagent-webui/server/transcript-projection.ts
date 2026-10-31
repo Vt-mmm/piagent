@@ -39,7 +39,7 @@ type TranscriptItem = { messageRef: string; parentMessageRef: string | null; rol
 type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
 type HarnessIssue = { kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope"; detail: string };
 type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue" | "undo"; outcome?: string; loop?: number; maxLoops?: number;
-  verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
+  verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: true; partOnly?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
   findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[];
   undo?: { result: "done" | "refused" | "busy" | "none" | "failed"; restored: number; removed: number; files: string[]; more?: boolean } };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
@@ -237,6 +237,7 @@ function harnessProcess(details: any): HarnessProcess | null {
   if (upTo(details.maxRounds, 1, 30)) out.maxRounds = details.maxRounds;
   if (upTo(details.idle, 1, 2)) out.idle = details.idle;
   if (details.planSkipped === true) out.planSkipped = true;
+  if (details.partOnly === true) out.partOnly = true;
   if (POLICY_MODES.includes(details.policy?.verify)) out.verifyPolicy = details.policy.verify;
   if (POLICY_MODES.includes(details.policy?.review)) out.reviewPolicy = details.policy.review;
   if (["too_large", "not_git", "limit", "failed"].includes(details.reviewUnavailable)) out.reviewUnavailable = details.reviewUnavailable;
