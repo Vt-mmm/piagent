@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { beforeCheckOrPush } from './check-questions.mjs';
 import { asksOnlyHandoff, broadAccess, effectivePermission, networkConfirmation } from './permission.mjs';
 import { handoffReason } from '../runtime/policy/handoff-policy.mjs';
 import { engineAlive, engineLauncher } from './container-engine.mjs';
@@ -105,6 +106,7 @@ function commandTool(self, kind) {
       if (memberOnly) throw Error(MEMBER_ONLY(memberOnly));
       const notSimulator = kind === 'simulator' ? simulatorCommandReason(args.command, self.cwd) : null;
       if (notSimulator) throw Error(`managed-simulator-command: ${notSimulator}.`);
+      if (kind !== 'simulator') await beforeCheckOrPush(self, args.command, ctx, signal); // how much to test, before the command's own approval
       const confirm = await spec.confirm(self, args.command);
       if (confirm !== null) {
         const why = confirm === 'ask' ? null : stillAsks(self, confirm), handoff = await handoffReason(args.command);

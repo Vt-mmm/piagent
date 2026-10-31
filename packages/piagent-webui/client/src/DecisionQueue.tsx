@@ -9,9 +9,9 @@ import { localize, useUiPreferences } from "./ui-preferences.tsx";
 // agents' questions and the approvals they asked for, the main agent's first
 // (orderDecisions). The steps above the card say how many are left and let
 // the member pick another one; answering one brings up the next.
-export function DecisionQueue({ sessionRef, waiting, approvalRefs }: { sessionRef: string; waiting: boolean; approvalRefs: string[] }) {
+export function DecisionQueue({ sessionRef, waiting, running, approvalRefs }: { sessionRef: string; waiting: boolean; running: boolean; approvalRefs: string[] }) {
   const { locale } = useUiPreferences();
-  const questions = usePendingQuestions(sessionRef, waiting);
+  const questions = usePendingQuestions(sessionRef, waiting, running);
   const approvals = useApprovalRequests(approvalRefs, sessionRef, locale);
   const [chosen, setChosen] = useState<string | null>(null);
   // An approval not read yet sorts by when it was listed: after the questions of its agent.

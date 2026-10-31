@@ -262,6 +262,6 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     {stillRunning && live && <AgentBlock><RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} /></AgentBlock>}
     {/* Last, right above the composer: opening a conversation that waits on
         the member lands on its question, however long the running turn. */}
-    <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
+    <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} running={!!live && !live.complete} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />
   </Stack></CheckpointTimeline>;
 }

@@ -105,7 +105,9 @@ test('Full access runs network commands without asking but still asks before git
   await page.getByRole('menuitem',{name:/Toàn quyền|Full access/}).click();
   await page.getByRole('button',{name:/^Dùng toàn quyền$|^Use full access$/}).click();
   await page.getByPlaceholder(/Nhắn cho Piagent|Message Piagent/).fill('Install left-pad and push');await page.getByRole('button',{name:/^Gửi$|^Send$/}).click();
-  // The download ran without asking; the push waits for the member.
+  // The download ran without asking; the push first asks how much to test, then waits for the member's approval.
+  await expect(page.locator('.question-card').getByText(/Sắp push code/)).toBeVisible({timeout:20000});
+  await page.locator('.question-card').focus();await page.keyboard.press('2');await page.keyboard.press('Enter');
   try{await expect(page.getByText(/Full access still asks/).first()).toBeVisible({timeout:20000});}
   catch(error){console.log('bypass diagnostics',JSON.stringify({requests:requests.length,body:(await page.locator('body').innerText()).slice(0,2000)}));throw error;}
   assert.equal(requests.length,2,'the download ran without an approval');

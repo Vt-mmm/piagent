@@ -5,6 +5,7 @@ import { failureCode, unnamedFailureText } from '../runtime/managed-failure.mjs'
 import { TsDiagnostics } from './ts-diagnostics.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 import { discoverDeliveryContext } from './delivery-context.mjs';
+import { askCheckScope, asksFullChecks, beforeCheckOrPush, checkScope } from './check-questions.mjs';
 import { LANE_LIMITS, patchStats, changeLane, lanePolicy } from './risk-lanes.mjs';
 import { briefCounts, decisionsText, ledgerGuard, ledgerOf, ledgerWords, reviewFocus, saveLedger, setStatus, settleLedger } from './ledger.mjs';
 
@@ -148,7 +149,7 @@ export function workflowPrompt(policy, checks) {
   if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with pending steps sends you back to the next one until every step is completed or deferred: if you cannot go on without the member, ask with ask_user. Mark a step deferred only when the member asked to leave it for later or it is no longer needed; never mark completed a step you did not do.' : ''}`);
   if (policy.verify !== 'off') {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
-    lines.push(`- Verify: after changing code, run the repository checks that cover the change and fix failures before you finish. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''} Only the member may skip the checks: when they ask to, call waive_checks with their words; never skip them on your own.`);
+    lines.push(`- Verify: after changing code, run the tests that cover the change (one file, a filter, one package) and fix failures before you finish; after a failure rerun the part that failed. Do not choose the whole test suite yourself: it can take long, so the harness asks the member before a full run and before a push. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''} Only the member may skip the checks: when they ask to, call waive_checks with their words; never skip them on your own.`);
   }
   // What each severity asks: blocking is fixed or argued, major decided, minor only listed.
   const severities = ' Blocking findings: fix them, or reject one with resolve_objection and the reviewer judges your reason; a disagreement that remains goes to the member. Major findings: fix them or reject them with resolve_objection; no new review follows. Minor findings are listed for the member and need nothing.';
@@ -251,6 +252,8 @@ export class RunProcess {
       // its answer and see whether the code moved).
       ledger: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false, mainReviews: 0, minorFindings: 0,
       sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, decideAsked: false,
+      // How much of the suite the member wants run (check-questions.mjs).
+      scopeChoice: null, scopeWords: null, fullAsked: asksFullChecks(request), pushAllowedOn: undefined,
       // The patch's risk lane (workflow.lanes) and the main agent's own web lookups.
       lane: null, laneStats: null, laneDigest: null, webLookups: 0 });
   }
@@ -275,17 +278,25 @@ export class RunProcess {
   async afterTool(name, args, ok, digestOf) {
     if (['write', 'edit'].includes(name) && ok) this.edited = true;
     if (name === 'bash' && isCheckCommand(args?.command, this.checks.commands)) {
+      const scope = checkScope(args.command, this.checks.commands), digest = await digestOf(), last = this.lastCheck;
       this.checksRun += 1; if (!ok) this.checksFailed += 1;
-      this.lastCheck = { ok, digest: await digestOf(), mutations: this.mutations };
+      // A lint after a partial test run does not make it the whole suite.
+      this.lastCheck = { ok, digest, mutations: this.mutations, scope: scope ?? (last?.scope === 'partial' && last.digest === digest ? 'partial' : 'other') };
+      // The member's "run it all" covers one run; after a fix they are asked again.
+      if (scope === 'suite' && this.scopeChoice === 'full') this.scopeChoice = null;
     // A command may change files, so it counts. Without a git repository to
     // compare the code against, one that only reads does not: counting every
     // command reported code changes in turns that only read and checked.
     } else if (['write', 'edit'].includes(name) && ok || name === 'bash' && (this.startDigest !== null || !isReadOnlyCommand(args?.command))) this.mutations += 1;
   }
-  verifiedOn(digest) {
+  passedOn(digest) {
     const c = this.lastCheck;
     return !!c?.ok && (digest !== null && c.digest !== null ? c.digest === digest : c.mutations === this.mutations);
   }
+  partOnlyOn(digest) { return this.passedOn(digest) && this.lastCheck.scope === 'partial'; }
+  suitePassedOn(digest) { return this.passedOn(digest) && this.lastCheck.scope === 'suite'; }
+  // A partial run counts unless the member wants the whole suite.
+  verifiedOn(digest) { return this.passedOn(digest) && !(this.partOnlyOn(digest) && (this.fullAsked || this.scopeChoice === 'full')); }
   // Version 2 (a broker advertising "process-v2") adds whether code was
   // changed without the required plan and how many calls named no tool.
   // Version 3 adds helper objections, those the agent answered and the
@@ -351,10 +362,26 @@ export async function completionGate(managed, run, signal) {
       // The member declined the approval a check needed (a JDK, Docker, the
       // network): asking again would only repeat the same answer.
       if (policy.verify === 'require' && !run.verified && run.approvalDeclined && run.fixLoops > 0) verifyGaveUp = true;
-      if (policy.verify === 'require' && !run.verified && !run.docsOnly && !verifyGaveUp && run.waivedDigest !== digest) {
+      // "Do not run" covered the code it was given for; new code is asked about again.
+      if (run.scopeChoice === 'skip' && run.waivedDigest !== digest) run.scopeChoice = null;
+      // How much to test is the member's call; asked once, not while a check is failing.
+      if (policy.verify === 'require' && !run.docsOnly && !verifyGaveUp && run.waivedDigest !== digest && !run.scopeChoice && !run.fullAsked && run.lastCheck?.ok !== false && (!run.verified || run.partOnlyOn(digest))) {
+        const answer = await askCheckScope(managed, { partPassed: run.partOnlyOn(digest), signal });
+        if (stopped()) { interrupted = true; break; }
+        if (answer) {
+          run.scopeChoice = answer.choice; run.scopeWords = answer.words ?? null;
+          if (answer.choice === 'skip') run.waivedDigest = digest; // the same record as waive_checks: this exact code, reported unverified
+          run.verified = run.verifiedOn(digest);
+        }
+      }
+      if (policy.verify === 'require' && (!run.verified || run.scopeWords) && !run.docsOnly && !verifyGaveUp && run.waivedDigest !== digest) {
         run.fixLoops += 1;
         const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
-        await send(`Harness process check: code changed in this turn, but no check has passed on the current code. Run the checks that cover your change (${list}) and fix what fails. If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), request the approval that makes it run (run_with_network, run_with_docker, start_docker, run_on_host) or ask the member with ask_user, then run it; install or start nothing without that approval. If it fails for a reason unrelated to your change, say so plainly.`,
+        const words = run.scopeWords; run.scopeWords = null;
+        const ask = words ? `The member answered about testing: "${String(words).slice(0, 500)}". Follow that and fix what fails.`
+          : run.scopeChoice === 'partial' ? 'Run only the tests that cover your change (one file, a filter, one package), not the whole suite, and fix what fails.'
+            : `Run the checks that cover your change (${list}) and fix what fails.${run.fullAsked || run.scopeChoice === 'full' ? ' The member wants the whole suite: a partial run does not count.' : ''}`;
+        await send(`Harness process check: code changed in this turn, but no check has passed on the current code. ${ask} If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), request the approval that makes it run (run_with_network, run_with_docker, start_docker, run_on_host) or ask the member with ask_user, then run it; install or start nothing without that approval. If it fails for a reason unrelated to your change, say so plainly.`,
           { phase: 'verify', loop: run.fixLoops, maxLoops: policy.maxFixLoops, lastCheckFailed: run.lastCheck?.ok === false });
         continue;
       }
@@ -363,7 +390,7 @@ export async function completionGate(managed, run, signal) {
         const answer = run.sentAt !== null ? answerSince(run.sentAt) + decisionsText(run, 'review') : '';
         // After a fix the reviewer checks its blocking findings and the files changed since.
         const focus = run.sentAt !== null ? await reviewFocus(managed) : null, previous = (review?.findings ?? []).filter(f => f.severity === 'blocking').map((f, i) => `${i + 1}. ${findingText(f)}`).join('\n');
-        const brief = `Review the current patch against the member's request.\n\nChecks: ${run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.${answer ? `\n\nThe main agent's answer to your previous blocking findings (the code changed after it):\n${answer}` : ''}${focus ? `\n\nSince your last review only these files changed: ${focus.files.join(', ')}. Judge whether each previous blocking finding is fixed (repeat it when it is not) and review the changes in these files; the rest of the patch was reviewed and has not changed.${previous ? `\nYour previous blocking findings:\n${previous}` : ''}` : ''}`;
+        const brief = `Review the current patch against the member's request.\n\nChecks: ${run.partOnlyOn(digest) ? 'only part of the test suite passed on this code' : run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.${answer ? `\n\nThe main agent's answer to your previous blocking findings (the code changed after it):\n${answer}` : ''}${focus ? `\n\nSince your last review only these files changed: ${focus.files.join(', ')}. Judge whether each previous blocking finding is fixed (repeat it when it is not) and review the changes in these files; the rest of the patch was reviewed and has not changed.${previous ? `\nYour previous blocking findings:\n${previous}` : ''}` : ''}`;
         managed.reviewFocus = focus;
         try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
         catch (error) {
@@ -444,7 +471,7 @@ export async function completionGate(managed, run, signal) {
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
     ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(!run.verified && run.waivedDigest === digest ? { checksWaived: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
-  const words = [...(run.changed ? [run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : run.waivedDigest === digest ? 'no check passed on the final code: the member waived the checks' : 'no check passed on the final code',
+  const words = [...(run.changed ? [run.partOnlyOn(digest) && run.verified ? 'only part of the test suite passed on the final code' : run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : run.waivedDigest === digest ? 'no check passed on the final code: the member waived the checks' : 'no check passed on the final code',
     run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
     run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
     run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null, ledgerWords(run)].filter(Boolean);
@@ -465,6 +492,7 @@ export function processEditTools(session, tools) {
       session.run?.beforeEdit(tool.name, plan, session.mainAnswers);
       // An open premise objection is resolved before files change (ledger.mjs).
       if (tool.name !== 'bash' || !isReadOnlyCommand(args[1]?.command)) ledgerGuard(session.run, session.mainAnswers);
+      if (tool.name === 'bash') await beforeCheckOrPush(session, args[1]?.command, args[4], args[2]);
       // While a required plan is missing, a command that changes files
       // counts as an edit: the code is compared after each command.
       const watch = tool.name === 'bash' && !!session.run?.planMissing(plan) && !session.run.unplannedChange && session.run.startDigest !== null;

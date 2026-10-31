@@ -103,8 +103,9 @@ export function QuestionCard({ sessionRef, pending, locale, onDone }: { sessionR
 
 // The questions waiting in a conversation. `waiting`: the running turn
 // shows the agent's question step; the questions are read then, and once when
-// the conversation opens (a question asked before this page loaded).
-export function usePendingQuestions(sessionRef: string, waiting: boolean) {
+// the conversation opens (a question asked before this page loaded). `running`:
+// the harness itself may ask, with no step to show, so a running turn is looked at too.
+export function usePendingQuestions(sessionRef: string, waiting: boolean, running = false) {
   const [pending, setPending] = useState<PendingQuestion[]>([]), [tick, setTick] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -115,10 +116,10 @@ export function usePendingQuestions(sessionRef: string, waiting: boolean) {
   // while the step runs and nothing is shown yet. A shown question is looked
   // at too, as it may be answered in another tab or withdrawn meanwhile.
   useEffect(() => {
-    if (!waiting && !pending.length) return;
-    const timer = setInterval(() => setTick((n) => n + 1), pending.length ? 4000 : 1500);
+    if (!waiting && !running && !pending.length) return;
+    const timer = setInterval(() => setTick((n) => n + 1), waiting && !pending.length ? 1500 : 4000);
     return () => clearInterval(timer);
-  }, [waiting, pending.length]);
+  }, [waiting, running, pending.length]);
   const done = (questionRef: string) => setPending((all) => all.filter((value) => value.questionRef !== questionRef));
   return { pending, done };
 }
