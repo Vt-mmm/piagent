@@ -64,6 +64,14 @@
       "decided": "2026-10-28",
       "until": "2026-11-07",
       "reason": "Denial of service from an unhandled exception in the decompress interceptor; no data exposure. Pinned by the Pi host as above; fixed in undici 8.12.2."
+    },
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "node": "node_modules/minimatch",
+      "decided": "2026-10-31",
+      "until": "2026-11-07",
+      "reason": "Denial of service through globparts amplification; no data exposure. minimatch 10.2.6 is an exact dependency of Pi 1.3.0 and 1.4.0; fixed in minimatch 11.0.1, a major version the Pi host does not take yet."
     }
   ]
 }

@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.49.0",
+    "date": "2026-10-31",
+    "status": "stable",
+    "title": {
+      "en": "You choose how much to test",
+      "vi": "Bạn chọn chạy bao nhiêu test"
+    },
+    "summary": {
+      "en": "The company Harness no longer pushes a whole test suite after a small change: it asks you to run the related part, all of it or nothing.",
+      "vi": "Harness công ty không còn ép chạy cả bộ test sau một thay đổi nhỏ: bạn chọn chạy phần liên quan, toàn bộ hay không chạy."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "improved",
+        "en": "The Harness asks how much to test at the end of a change, before a whole test suite and before a push, on the dashboard card or in the Terminal.",
+        "vi": "Harness hỏi chạy bao nhiêu test ở cuối thay đổi, trước khi chạy cả bộ test và trước khi push, trên thẻ ở dashboard hoặc trong Terminal."
+      },
+      {
+        "kind": "improved",
+        "en": "Bypass runs the tests that cover the change without asking and still asks before a push. With no screen to ask on, nothing is asked.",
+        "vi": "Bypass tự chạy test liên quan, không hỏi, nhưng vẫn hỏi trước push. Khi không có màn hình để hỏi thì không hỏi gì."
+      },
+      {
+        "kind": "fixed",
+        "en": "When only part of the tests ran, the turn says so instead of saying a check passed.",
+        "vi": "Khi chỉ chạy một phần test, lượt ghi rõ điều đó thay vì báo check đã pass."
+      }
+    ]
+  },
+  {
     "version": "1.48.5",
     "date": "2026-10-31",
     "status": "stable",

@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.48.5" title="v1.48.5 docs · EN"><span class="dot"></span>v1.48.5</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.49.0" title="v1.49.0 docs · EN"><span class="dot"></span>v1.49.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,19 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-48-5" data-release>
+<article class="release latest" id="v1-49-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-49-0">v1.49.0</a><time class="release-date" datetime="2026-10-31">Oct 31, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-49-0-title">You choose how much to test</h3>
+    <p>The company Harness no longer pushes a whole test suite after a small change: it asks you to run the related part, all of it or nothing.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The Harness asks how much to test at the end of a change, before a whole test suite and before a push, on the dashboard card or in the Terminal.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Bypass runs the tests that cover the change without asking and still asks before a push. With no screen to ask on, nothing is asked.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>When only part of the tests ran, the turn says so instead of saying a check passed.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-48-5" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-48-5">v1.48.5</a><time class="release-date" datetime="2026-10-31">Oct 31, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-48-5-title">A running task keeps its tools when Piagent is updated</h3>
@@ -407,26 +419,25 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-43-4" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-43-4">v1.43.4</a><time class="release-date" datetime="2026-10-26">Oct 26, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-43-4-title">Your workflow, with adaptive backend and frontend support</h3>
-    <p>Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>History loading rechecks the current scroll position and responds to upward scrolling, preventing stale observer events from loading extra pages or leaving history stuck.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Review runs in a folder holding several repositories: each changed file is reviewed in its own repository, and a file outside any repository is named as not reviewed.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">68</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">69</span></summary>
+    <div class="archive-row" id="v1-43-4">
+      <div class="archive-head"><a class="release-version" href="#v1-43-4">v1.43.4</a> <span class="release-date">Oct 26, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Your workflow, with adaptive backend and frontend support</strong> — Company conversations discover project surfaces and reuse the member’s skills, plans and requirement sources without imposing another methodology. Existing safety and approval boundaries stay in place.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Bounded discovery maps frontend/backend packages and repositories inside the conversation folder and suggests relevant local checks, refreshed each task.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>Optional workflow context remembers task-specific canonical requirement, plan and task references across reopening, shares them read-only with helpers, and supports switching or clearing.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Lifecycle guidance adapts to the chosen workflow and stopping point, without mandatory spec files or automatic release gates. Skills never grant access or waive verification, review or deployment approval.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>History loading rechecks the current scroll position and responds to upward scrolling, preventing stale observer events from loading extra pages or leaving history stuck.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Review runs in a folder holding several repositories: each changed file is reviewed in its own repository, and a file outside any repository is named as not reviewed.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-43-3">
       <div class="archive-head"><a class="release-version" href="#v1-43-3">v1.43.3</a> <span class="release-date">Oct 26, 2026</span></div>
       <div class="archive-body">

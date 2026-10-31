@@ -4,6 +4,19 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.49.0 - 2026-10-31
+
+**You choose how much to test.** The company Harness no longer pushes a whole test suite after a small change: it asks you to run the related part, all of it or nothing.
+
+### Improved
+
+- The Harness asks how much to test at the end of a change, before a whole test suite and before a push, on the dashboard card or in the Terminal.
+- Bypass runs the tests that cover the change without asking and still asks before a push. With no screen to ask on, nothing is asked.
+
+### Fixed
+
+- When only part of the tests ran, the turn says so instead of saying a check passed.
+
 ## v1.48.5 - 2026-10-31
 
 **A running task keeps its tools when Piagent is updated.** Updating Piagent while a company task runs no longer stops its tools: the task finishes on the release it started with, then the Terminal loads the new one.
