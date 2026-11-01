@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { memberQuestions } from './member-questions.mjs';
 import { effectivePermission } from './permission.mjs';
-import { knownFast, markCheckStart, missingSuites, pushQuestion, pushRepositories, reviewBeforePush } from './check-evidence.mjs';
+import { digestsOnce, knownFast, markCheckStart, missingSuites, pushQuestion, pushRepositories, reviewBeforePush } from './check-evidence.mjs';
 
 // How much to test is the member's decision: a one-line fix should not cost a
 // thirty-minute suite. The harness asks at the end of a change, before a whole
@@ -127,12 +127,13 @@ async function holdOrLet(self, run, command, ctx, signal) {
   const surface = surfaceOf(self, ctx);
   if (!surface) return;
   if (push) {
-    await reviewBeforePush(self, run, signal);
+    const digestOf = digestsOnce(self);
+    await reviewBeforePush(self, digestOf, run, signal);
     if (run.policy?.verify === 'off') return;
-    const now = await self.digest(), repositories = pushRepositories(self, command), single = !repositories.length || repositories[0] === '.';
-    const missing = await missingSuites(self, run, repositories.length ? repositories : ['.']);
+    const now = await digestOf('.'), repositories = pushRepositories(self, command), single = !repositories.length || repositories[0] === '.';
+    const missing = await missingSuites(digestOf, run, repositories.length ? repositories : ['.']);
     if ((single ? run.suitePassedOn(now) : false) || !missing.length || (run.pushAllowedOn !== undefined && run.pushAllowedOn === now)) return;
-    const picked = await ask(surface, await pushQuestion(self, run, repositories, missing), [PUSH_FULL, PUSH_NOW], signal);
+    const picked = await ask(surface, await pushQuestion(self, digestOf, run, repositories, missing), [PUSH_FULL, PUSH_NOW], signal);
     if (picked === PUSH_NOW) { run.pushAllowedOn = now; return; }
     if (picked?.other) throw Error(WORDS_REASON(picked.other));
     if (picked !== PUSH_FULL) throw Error(STOPPED_REASON);

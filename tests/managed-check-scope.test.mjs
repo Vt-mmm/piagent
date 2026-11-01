@@ -339,3 +339,10 @@ test('findings of a later review are put to the agent too, by their ids', async 
   assert.deepEqual(sent.map(s => s.details.ids), [['o1'], ['o3']]);
   assert.match(ledgerWords({ ledger: [run.ledger[1]] }), /1 left without a decision \(o3\)/);
 });
+
+test('one push question reads the code once: each read starts a sandboxed worker', async () => {
+  const ui = terminal(NOW_PUSH), run = newRun(), self = managedOf(run, ui), ctx = { hasUI: true, ui }, digest = self.digest; let reads = 0;
+  self.digest = async () => { reads += 1; return digest.call(self); };
+  await beforeCheckOrPush(self, 'git push', ctx);
+  assert.equal(ui.asked.length, 1); assert.equal(reads, 1);
+});

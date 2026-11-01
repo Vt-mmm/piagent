@@ -42,6 +42,11 @@ async function repositoryDigest(self, repository) {
   const scope = new Set([...(self.ownPaths ?? [])].filter(file => String(file).startsWith(`${repository}/`)));
   try { return await (self.scopedDigest ?? (paths => readPatchDigest(self.boundary, paths, self.base, self.repositoryBases)))(scope); } catch { return null; }
 }
+// Reading a digest starts a sandboxed worker: one question reads each once.
+export function digestsOnce(self) {
+  const known = new Map();
+  return repository => { if (!known.has(repository)) known.set(repository, repositoryDigest(self, repository)); return known.get(repository); };
+}
 const entryOf = (run, repository) => { const passes = run.passes ??= new Map(); if (!passes.has(repository)) passes.set(repository, { suite: null, parts: [] }); return passes.get(repository); };
 
 // One test command ended. `part` names its test step, for how long that step takes.
@@ -67,24 +72,24 @@ export function knownFast(self, command, part) {
 }
 
 // The repositories whose whole suite has not passed on their current code.
-export async function missingSuites(self, run, repositories) {
+export async function missingSuites(digestOf, run, repositories) {
   const missing = [];
   for (const repository of repositories) {
-    const digest = await repositoryDigest(self, repository), pass = run.passes?.get(repository)?.suite;
+    const digest = await digestOf(repository), pass = run.passes?.get(repository)?.suite;
     if (!(pass && digest !== null && pass.digest === digest)) missing.push(repository);
   }
   return missing;
 }
 const minutes = ms => Math.max(1, Math.round(ms / 60_000));
 // The member decides from this: what ran, what did not, what changed, how long the rest takes.
-export async function pushQuestion(self, run, repositories, missing) {
+export async function pushQuestion(self, digestOf, run, repositories, missing) {
   const name = repository => repository === '.' ? 'repo này' : repository;
   const lines = [`Sắp push${repositories.length && repositories[0] !== '.' ? ` ${repositories.join(', ')}` : ' code'} nhưng toàn bộ test chưa pass trên code này.`];
   const passed = repositories.filter(repository => !missing.includes(repository));
   if (passed.length) lines.push(`Đã pass toàn bộ: ${passed.map(name).join(', ')}.`);
   const partly = [], none = [];
   for (const repository of missing) {
-    const digest = await repositoryDigest(self, repository), count = (run.passes?.get(repository)?.parts ?? []).filter(p => digest !== null && p.digest === digest).length;
+    const digest = await digestOf(repository), count = (run.passes?.get(repository)?.parts ?? []).filter(p => digest !== null && p.digest === digest).length;
     if (count) partly.push(`${name(repository)} (${count} lệnh)`); else none.push(name(repository));
   }
   if (partly.length) lines.push(`Mới pass một phần: ${partly.join(', ')}.`);
@@ -107,9 +112,9 @@ export function relevantChecks(self, commands) {
 
 // Before a push under a required review: a finding is cheap now and costs a release
 // after. The patch the turn's end would review is the same, so it is reviewed once.
-export async function reviewBeforePush(self, run, signal) {
+export async function reviewBeforePush(self, digestOf, run, signal) {
   if (!self.delegate || !self.patchDigest || run.reviewSettled) return;
-  const code = await self.digest();
+  const code = await digestOf('.');
   if (run.startDigest === null || code === null || code === run.startDigest) return;
   let policy = run.policy;
   if (policy.lanes) { let stats = null; try { stats = patchStats(await self.patchSnapshot?.()); } catch { /* unreadable: standard */ } policy = lanePolicy(policy, changeLane(stats, run)); }

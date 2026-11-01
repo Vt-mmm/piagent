@@ -123,7 +123,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:29ad52a8ad711649e5774f690c0948f5f23de9023d12212495848be730e2165f",
+    "packageDigest": "sha256:44f655d440e2a0ac58aa4ea06ff41531f3b01fea18eba56af9d9244a9841e0aa",
     "packageSource": "../",
     "packageVersion": "1.50.0",
     "runtimeFiles": [
@@ -1228,13 +1228,13 @@
         "path": "packages/piagent-core/managed/capabilities.mjs"
       },
       {
-        "byteSize": 8366,
-        "digest": "sha256:71aaf8b95bdab73fda9b6c1944c4cf41189b15221cdc27d294799e26ec8cbaeb",
+        "byteSize": 8649,
+        "digest": "sha256:f699156f60ac0a2bf7e8cddae96e63ab4a02943f0f6e8af85cb264ca27e7011f",
         "path": "packages/piagent-core/managed/check-evidence.mjs"
       },
       {
-        "byteSize": 11606,
-        "digest": "sha256:2d5e14448a7165bdc8ce9428181d4b51b12ffacc0546309cada4317abd5ba777",
+        "byteSize": 11683,
+        "digest": "sha256:c3efa2258c49b86a783ad444c6772301186ec7ec904d0f11f0da44613b62a9f0",
         "path": "packages/piagent-core/managed/check-questions.mjs"
       },
       {
