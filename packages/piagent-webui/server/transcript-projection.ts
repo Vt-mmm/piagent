@@ -12,7 +12,7 @@ import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE, webUiMessageCorrelationEntry,
 import { terminalDeliveryPairs, type TerminalDeliveryPair, type TerminalDeliveryReceipt } from "./terminal-delivery-receipt.ts";
 import { parseFailure } from "../../piagent-core/runtime/managed-failure.mjs";
 import { DOCUMENT_MIMES } from "../../piagent-core/runtime/input/attachment-types.ts";
-import { modelLabel, summarizeToolCall, toolResultPreview, turnUsage, type ToolChange, type ToolResult, type ToolSummary,
+import { helperRun, type HelperRun, modelLabel, summarizeToolCall, toolResultPreview, turnUsage, type ToolChange, type ToolResult, type ToolSummary,
   type TurnUsage } from "./tool-call-summary.ts";
 
 const MAX_ENTRIES = 50_000;
@@ -35,10 +35,10 @@ type TranscriptItem = { messageRef: string; parentMessageRef: string | null; rol
   agentOperationId: string | null; messageRequestId?: string; turnIndex: number | null; content: TranscriptContent;
   attachments?: TranscriptAttachment[];
   toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown";
-    summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess; turnEnd?: TurnEnd };
+    summary?: ToolSummary; change?: ToolChange; result?: ToolResult }>; usage?: TurnUsage; model?: string; process?: HarnessProcess; helperRun?: HelperRun; turnEnd?: TurnEnd };
 type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; line: number | null; issue: string };
 type HarnessIssue = { kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope"; detail: string };
-type HarnessProcess = { phase: "plan" | "verify" | "review" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue" | "undo"; outcome?: string; loop?: number; maxLoops?: number;
+type HarnessProcess = { phase: "plan" | "verify" | "review" | "reviewing" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue" | "undo"; outcome?: string; loop?: number; maxLoops?: number;
   verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: true; partOnly?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
   findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[];
   undo?: { result: "done" | "refused" | "busy" | "none" | "failed"; restored: number; removed: number; files: string[]; more?: boolean } };
@@ -216,7 +216,7 @@ const PROCESS_OUTCOMES = ["no_change", "interrupted", "disputed", "blocking_open
 // A helper's objection to its brief, a failed claim, a disagreement handed to the member.
 // "continue": the harness sent the agent back to a checklist with open steps.
 // "undo": the member's /undo put the last turn's files back (checkpoints.mjs).
-const PROCESS_PHASES = ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"];
+const PROCESS_PHASES = ["plan", "verify", "review", "reviewing", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"];
 const ISSUE_KINDS = ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"], HELPER_ROLES = ["scout", "research", "verify", "review"];
 const POLICY_MODES = ["off", "suggest", "require"];
 function harnessProcess(details: any): HarnessProcess | null {
@@ -321,6 +321,13 @@ function correlatedTranscriptItems(entries: unknown[], identity: TranscriptIdent
       const turnEnd = turnEndOf(entry.data);
       const projected = turnEnd && item({ ...entry, type: "message", message: { role: "custom", content: "" } }, identity, true);
       if (projected) values.push({ entry, item: { ...projected, turnEnd, ...(turn ? { agentOperationId: turn.operationRef, messageRequestId: turn.messageRequestId } : {}) },
+        cursor: opaque("transcript", [identity.sessionRef, entry.id]) });
+      continue;
+    }
+    if (entry?.type === "custom" && ["agent-watch-helper-steps", "agent-watch-review-start"].includes(entry.customType)) {
+      const run = entry.customType === "agent-watch-helper-steps" ? helperRun(entry.data) : null;
+      const projected = (run || entry.customType === "agent-watch-review-start") && item({ ...entry, type: "message", message: { role: "custom", content: "" } }, identity, true);
+      if (projected) values.push({ entry, item: { ...projected, ...(run ? { helperRun: run } : { process: { phase: "reviewing" as const } }), ...(turn ? { agentOperationId: turn.operationRef, messageRequestId: turn.messageRequestId } : {}) },
         cursor: opaque("transcript", [identity.sessionRef, entry.id]) });
       continue;
     }

@@ -185,3 +185,16 @@ export function modelLabel(message: any): string | null {
   const model = typeof message?.model === "string" ? message.model.replace(/[^A-Za-z0-9._:@/-]/g, "").slice(0, 120) : "";
   return model || null;
 }
+
+// What a company subagent called ("agent-watch-helper-steps"), for Activity.
+export type HelperRun = { agent: string; startedAt: string; endedAt: string; total: number; steps: Array<{ toolName: string; target: string | null; at: string }> };
+export function helperRun(data: any): HelperRun | null {
+  const iso = (value: unknown) => typeof value === "string" && Number.isFinite(Date.parse(value));
+  if (typeof data?.agent !== "string" || !/^[a-z][a-z0-9_#-]{0,31}$/.test(data.agent) || !iso(data.startedAt) || !iso(data.endedAt) || !Array.isArray(data.steps)) return null;
+  const steps = data.steps.filter((step: any) => typeof step?.tool === "string" && iso(step.at)).slice(-200).map((step: any) => {
+    const { summary } = summarizeToolCall(step.tool, step.args ?? {});
+    const target = String(redactSensitiveText(String(summary.target ?? summary.detail ?? "")).text ?? "").replace(/[\u0000-\u001F\u007F]+/g, " ").trim().slice(0, 400);
+    return { toolName: String(step.tool).replace(/[^\w.:-]+/g, "_").slice(0, 160), target: target || null, at: step.at };
+  });
+  return { agent: data.agent, startedAt: data.startedAt, endedAt: data.endedAt, total: Number.isInteger(data.total) && data.total >= 0 ? Math.min(data.total, 1_000_000) : steps.length, steps };
+}

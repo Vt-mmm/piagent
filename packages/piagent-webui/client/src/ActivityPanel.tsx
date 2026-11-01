@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { Activity, PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import { readLogPreview, readSessionLogPreview, type LogPreview } from "./api.ts";
+import { AgentActivityLog } from "./AgentActivityLog.tsx";
 import { activityResult, activityTime, mergeActivityRows } from "./activity-view-model.ts";
 import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
 import { tone } from "./view-model.ts";
@@ -45,7 +46,10 @@ export function ActivityPanel({ snapshot, sessionRef, terminalActivities = [], l
     <div className="activity-list">
       {activities.map((activity) => <ActivityRow key={activity.activityRef} activity={activity} preview={previews[activity.activityRef]}
         onPreview={activity.logRef ? () => toggle(activity) : undefined} locale={locale} />)}
-      {activities.length === 0 && <div className="activity-empty">{localize(locale,
+      {sessionRef && <AgentActivityLog sessionRef={sessionRef} running={Boolean(liveActivities)} live={liveActivities} locale={locale} empty={activities.length === 0 ? localize(locale,
+        "Chưa có tool, command hoặc kết quả lượt chạy nào trong timeline hiện tại.",
+        "No tools, commands, or operation outcomes in the current timeline.") : undefined} />}
+      {activities.length === 0 && !sessionRef && <div className="activity-empty">{localize(locale,
         "Chưa có tool, command hoặc kết quả lượt chạy nào trong timeline hiện tại.",
         "No tools, commands, or operation outcomes in the current timeline.")}</div>}
     </div>

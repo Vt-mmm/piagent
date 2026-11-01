@@ -152,12 +152,27 @@
         }
       ]
     },
+    "helperRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "startedAt", "endedAt", "total", "steps"],
+      "properties": {
+        "agent": { "type": "string", "maxLength": 32, "pattern": "^[a-z][a-z0-9_#-]{0,31}$" },
+        "startedAt": { "type": "string", "maxLength": 40, "format": "date-time" },
+        "endedAt": { "type": "string", "maxLength": 40, "format": "date-time" },
+        "total": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "steps": { "type": "array", "maxItems": 200, "items": { "type": "object", "additionalProperties": false, "required": ["toolName", "target", "at"], "properties": {
+          "toolName": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "target": { "type": ["string", "null"], "maxLength": 400 },
+          "at": { "type": "string", "maxLength": 40, "format": "date-time" } } } }
+      }
+    },
     "harnessProcess": {
       "type": "object",
       "additionalProperties": false,
       "required": ["phase"],
       "properties": {
-        "phase": { "enum": ["plan", "verify", "review", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"] },
+        "phase": { "enum": ["plan", "verify", "review", "reviewing", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"] },
         "undo": {
           "type": "object",
           "additionalProperties": false,
@@ -348,6 +363,7 @@
         "model": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9._:@/-]{1,120}$" },
         "failure": { "$ref": "#/$defs/companyFailure" },
         "process": { "$ref": "#/$defs/harnessProcess" },
+        "helperRun": { "$ref": "#/$defs/helperRun" },
         "turnEnd": { "$ref": "#/$defs/turnEnd" },
         "toolCalls": {
           "type": "array",

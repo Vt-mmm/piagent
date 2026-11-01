@@ -58,6 +58,7 @@ export type TranscriptItem = {
   model?: string;
   failure?: CompanyFailure;
   process?: HarnessProcess;
+  helperRun?: HelperRun;
   turnEnd?: TurnEnd;
   /**
    * @maxItems 64
@@ -117,6 +118,7 @@ export interface HarnessProcess {
     | "plan"
     | "verify"
     | "review"
+    | "reviewing"
     | "final"
     | "objection"
     | "answer"
@@ -960,6 +962,20 @@ export interface HarnessProcess {
           issue: string;
         }
       ];
+}
+export interface HelperRun {
+  agent: string;
+  startedAt: string;
+  endedAt: string;
+  total: number;
+  /**
+   * @maxItems 200
+   */
+  steps: {
+    toolName: string;
+    target: string | null;
+    at: string;
+  }[];
 }
 export interface TurnEnd {
   state: "done" | "midway" | "failed" | "cancelled";

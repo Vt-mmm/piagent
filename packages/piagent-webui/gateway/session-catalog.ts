@@ -131,8 +131,8 @@ function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undef
     needsAttention: metadata?.archived ? false : ownership?.needsAttention ?? false,
     ...(gitBranch ? { gitBranch } : {}),
     ...(gitRepositories.length ? { gitRepositories } : {}),
-    ...(sessionOptions?.managedHelpers ? {managedHelpers:{...sessionOptions.managedHelpers,
-      active: ownership?.liveState === 'idle' ? 0 : ownership?.liveState === 'running' || ownership?.liveState === 'waiting-approval' ? sessionOptions.managedHelpers.active : null}} : {}),
+    ...(sessionOptions?.managedHelpers ? {managedHelpers:ownership?.liveState === 'running' || ownership?.liveState === 'waiting-approval' ? sessionOptions.managedHelpers
+      : {active: ownership?.liveState === 'idle' ? 0 : null, maximum: sessionOptions.managedHelpers.maximum}} : {}),
     ...(sessionOptions?.managedThinkingLevels ? {managedThinkingLevels:sessionOptions.managedThinkingLevels} : {}),
     ...(sessionOptions?.managedPermission ? {managedPermission:sessionOptions.managedPermission} : {}),
     ...(sessionOptions?.managedFast ? {managedFast:sessionOptions.managedFast} : {}),

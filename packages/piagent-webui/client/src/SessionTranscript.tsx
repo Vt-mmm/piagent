@@ -15,7 +15,7 @@ import { DecisionQueue } from "./DecisionQueue.tsx";
 import { waitingQuestion } from "./attention-view-model.ts";
 import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
-import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
+import { liveProgressStatus, type LiveConversation, type RunningHelpers } from "./live-state-view-model.ts";
 import { liveTokensPerSecond, timelineTurns } from "./timeline-view-model.ts";
 import { AgentBlock, LIVE_FAILURES, LiveTurnView, preloadMarkdown, TimelineTurnView } from "./TimelineTurn.tsx";
 import { durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
@@ -34,13 +34,13 @@ function useLiveRate(text: string): number | null {
   return rate;
 }
 
-function RunningStatus({ live, locale, onOpenActivity }: { live: LiveConversation; locale: UiLocale; onOpenActivity?: () => void }) {
+function RunningStatus({ live, locale, helpers, onOpenActivity }: { live: LiveConversation; locale: UiLocale; helpers?: RunningHelpers; onOpenActivity?: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 10_000); return () => window.clearInterval(timer); }, []);
-  const status = liveProgressStatus(live, locale, now), rate = useLiveRate(live.assistant ?? "");
+  const status = liveProgressStatus(live, locale, now, helpers), rate = useLiveRate(live.assistant ?? "");
   // One moving indicator per turn: a running step carries its own spinner and
   // streaming text its caret, so this line only spins while the agent thinks.
-  const busyElsewhere = live.activities.some((activity) => activity.state === "running") || Boolean(live.assistant);
+  const busyElsewhere = live.activities.some((activity) => activity.state === "running" && !activity.agent) || Boolean(live.assistant);
   return <Stack direction="row" spacing={1.25} role="status" aria-live="polite" sx={{ alignItems: "center", color: "text.secondary", py: .5, minHeight: 36 }}>
     <Box sx={{ width: 18, display: "grid", placeItems: "center", flexShrink: 0 }}>{busyElsewhere
       ? <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "primary.main", opacity: .7 }} />
@@ -144,8 +144,8 @@ function TranscriptSkeleton({ turns = 2, label }: { turns?: number; label: strin
 // sends "tiếp tục" for the last turn when it failed or has no answer.
 // `reload` (a counter) reads the history again in place: what is shown stays
 // until the new page arrives, so the page never collapses and scrolls.
-export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity, onContinue, reload = 0 }: { sessionRef: string; sessionRevision: string;
-  live?: LiveConversation; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void; onContinue?: () => void; reload?: number }) {
+export function SessionTranscript({ sessionRef, sessionRevision, live, helpers, approvals, locale, onOpenActivity, onContinue, reload = 0 }: { sessionRef: string; sessionRevision: string;
+  live?: LiveConversation; helpers?: RunningHelpers; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void; onContinue?: () => void; reload?: number }) {
   const [transcript, setTranscript] = useState<PiagentWebUIBoundedTranscriptProjectionV1>();
   const [loading, setLoading] = useState(true), [loadingOlder, setLoadingOlder] = useState(false);
   const [latestLoad, setLatestLoad] = useState(0), [trimmedNewest, setTrimmedNewest] = useState(false);
@@ -256,10 +256,10 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
     {trimmedNewest && <Box sx={{ textAlign: "center" }}><Button size="small" variant="outlined" onClick={() => { follow(); setLatestLoad((value) => value + 1); }}>
       {localize(locale, "Tin mới hơn đã ẩn · về tin mới nhất", "Newer messages are hidden · back to the newest")}</Button></Box>}
     {liveVisible && live && <LiveTurnView user={live.user && !liveUserDuplicated ? live.user : null} attachments={live.attachments}
-      activities={live.activities} assistant={live.error ? null : liveAnswer} running={!live.complete && !live.error}
+      activities={live.activities.filter((activity) => !activity.agent)} assistant={live.error ? null : liveAnswer} running={!live.complete && !live.error}
       failure={live.complete && live.error && LIVE_FAILURES.has(live.error) ? live.error : null} locale={locale}
-      status={<RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} />} />}
-    {stillRunning && live && <AgentBlock><RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} /></AgentBlock>}
+      status={<RunningStatus live={live} locale={locale} helpers={helpers} onOpenActivity={onOpenActivity} />} />}
+    {stillRunning && live && <AgentBlock><RunningStatus live={live} locale={locale} helpers={helpers} onOpenActivity={onOpenActivity} /></AgentBlock>}
     {/* Last, right above the composer: opening a conversation that waits on
         the member lands on its question, however long the running turn. */}
     <DecisionQueue sessionRef={sessionRef} waiting={waitingQuestion(live)} running={!!live && !live.complete} approvalRefs={approvals?.pending.map((item) => item.approvalRef) ?? []} />

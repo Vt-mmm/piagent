@@ -1,4 +1,5 @@
 import type { Activity } from "../../contracts/generated/snapshot-v1.ts";
+import type { TranscriptItem } from "../../contracts/generated/transcript-v1.ts";
 import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
 
 export function liveActivityRow(activity: LiveActivity, locale: "vi" | "en" = "vi"): Activity {
@@ -7,7 +8,7 @@ export function liveActivityRow(activity: LiveActivity, locale: "vi" | "en" = "v
     : state === "failed" ? (locale === "vi" ? "thất bại" : "failed") : (locale === "vi" ? "hoàn tất" : "completed");
   const startedAt = activity.startedAt ?? activity.finishedAt ?? "";
   return { activityRef: `live.${activity.toolCallRef}`, kind: ["bash", "shell", "exec"].includes(activity.toolLabel) ? "command" : "tool",
-    state, label: `${activity.toolLabel} ${suffix}`, preview: locale === "vi" ? "Cập nhật trực tiếp từ Gateway" : "Live update from the Gateway",
+    state, label: `${activity.agent ? `${activity.agent} · ` : ""}${activity.toolLabel} ${suffix}`, preview: activity.detail ?? activity.fileLabel ?? (locale === "vi" ? "Cập nhật trực tiếp từ Gateway" : "Live update from the Gateway"),
     toolCallId: activity.toolCallRef, toolName: activity.toolLabel, commandDigest: null, logRef: null, exitCode: null,
     exitCodeExact: false, startedAt, finishedAt: state === "running" ? null : activity.finishedAt ?? startedAt };
 }
@@ -64,4 +65,39 @@ export function activityTime(activity: Activity, locale: "vi" | "en" = "vi"): st
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60), rest = seconds % 60;
   return `${minutes}m ${rest}s`;
+}
+
+export type LogStep = { key: string; toolName: string; target: string | null; state: "running" | "completed" | "failed"; at: string };
+export type LogGroup = { agent: string; steps: LogStep[]; total: number };
+
+// Who did what, newest first: the main agent's calls from its transcript, each
+// subagent's from its saved run, plus the steps of the turn still running.
+export function activityLogGroups(items: readonly TranscriptItem[], live: readonly LiveActivity[] = []): LogGroup[] {
+  const groups = new Map<string, LogGroup>([["main", { agent: "main", steps: [], total: 0 }]]);
+  const group = (agent: string) => { const found = groups.get(agent); if (found) return found; const made = { agent, steps: [], total: 0 }; groups.set(agent, made); return made; };
+  for (const item of items) {
+    if (item.helperRun) {
+      const target = group(item.helperRun.agent);
+      target.total += item.helperRun.total;
+      target.steps.push(...item.helperRun.steps.map((step, index) => ({ key: `${item.messageRef}:${index}`, toolName: step.toolName, target: step.target, state: "completed" as const, at: step.at })));
+      continue;
+    }
+    if (item.role !== "assistant") continue;
+    const main = group("main");
+    for (const tool of item.toolCalls) {
+      main.total += 1;
+      main.steps.push({ key: `${item.messageRef}:${tool.toolCallRef}`, toolName: tool.toolName, target: tool.summary?.target ?? tool.summary?.detail ?? null,
+        state: tool.state === "failed" || tool.result?.isError ? "failed" : "completed", at: item.recordedAt });
+    }
+  }
+  // The main agent's finished live steps reach it through the transcript; a
+  // running subagent's are nowhere else until it ends.
+  for (const activity of live) {
+    if (!activity.agent || activity.state === "running") continue;
+    const target = group(activity.agent);
+    target.total += 1;
+    target.steps.push({ key: activity.toolCallRef, toolName: activity.toolLabel, target: activity.detail ?? null, state: activity.state, at: activity.startedAt ?? "" });
+  }
+  for (const value of groups.values()) value.steps.sort((a, b) => b.at.localeCompare(a.at));
+  return [...groups.values()].filter((value) => value.steps.length > 0);
 }

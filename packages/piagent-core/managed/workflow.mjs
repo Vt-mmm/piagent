@@ -314,6 +314,9 @@ export async function completionGate(managed, run, signal) {
         const focus = run.sentAt !== null ? await reviewFocus(managed) : null, previous = (review?.findings ?? []).filter(f => f.severity === 'blocking').map((f, i) => `${i + 1}. ${findingText(f)}`).join('\n');
         const brief = `Review the current patch against the member's request.\n\nChecks: ${run.partOnlyOn(digest) ? 'only part of the test suite passed on this code' : run.verified ? 'a repository check passed on this code' : 'no check has passed on this code'}.${answer ? `\n\nThe main agent's answer to your previous blocking findings (the code changed after it):\n${answer}` : ''}${focus ? `\n\nSince your last review only these files changed: ${focus.files.join(', ')}. Judge whether each previous blocking finding is fixed (repeat it when it is not) and review the changes in these files; the rest of the patch was reviewed and has not changed.${previous ? `\nYour previous blocking findings:\n${previous}` : ''}` : ''}`;
         managed.reviewFocus = focus;
+        // The answer so far is not the result yet: the dashboard marks it so.
+        // An entry, not a message: the model has nothing to do with it.
+        session.sessionManager.appendCustomEntry('agent-watch-review-start', {});
         try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
         catch (error) {
           run.reviewUnavailable = !stopped(); run.reviewUnavailableReason = reviewUnavailableReason(error?.message); interrupted = stopped();

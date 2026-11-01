@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { hasVisibleText } from "../shared/text-visibility.ts";
+import { summarizeToolCall } from "../server/tool-call-summary.ts";
 import type { TerminalDeliveryReceipt } from "../server/terminal-delivery-receipt.ts";
 import { effectiveStopReason } from "../server/message-stop-reason.ts";
 import { GatewayEventStore, type GatewayTaskStatus } from "./gateway-events.ts";
@@ -106,6 +107,7 @@ export function safeToolFileLabel(toolName: unknown, args: unknown): string | nu
   }
   return null;
 }
+const HELPER_KEY = /^[a-z][a-z0-9_#-]{0,31}$/;
 function ref(prefix: string): string { return `${prefix}_${randomBytes(18).toString("base64url")}`; }
 function messageText(message: any): string {
   if (typeof message?.content === "string") return message.content;
@@ -165,6 +167,7 @@ export class GatewaySessionStream {
   #settleListeners: Array<() => void> = [];
   readonly #toolRefs = new Map<string, string>();
   readonly #toolLabels = new Map<string, string>();
+  readonly #helperSteps = new Map<string, { step: string; toolCallRef: string; payload: Record<string, unknown> }>();
   readonly #toolFileLabels = new Map<string, string | null>();
   readonly #lifecycle: SessionOperationLifecycle;
   readonly #commitTerminalDeliveryReceipt: ((message: unknown) => TerminalDeliveryReceipt | undefined) | undefined;
@@ -220,6 +223,7 @@ export class GatewaySessionStream {
     // A company subagent started or ended while the main agent was quiet: its
     // count in the catalog row ("Subagent 1/2") changed, and no agent event says so.
     if (event?.type === "managed_helpers") this.#events.publish("catalog.changed", { reasonCode: "managed-helpers-changed" });
+    if (event?.type === "managed_helper_state" && Array.isArray(event.helpers)) this.#helperState(event.helpers);
     const wasStarted = this.#lifecycle.started, wasSettled = this.#lifecycle.hostSettled;
     // Summarising the older part of a long conversation can take a minute,
     // right before the model is asked or after it answered: shown as a step
@@ -310,7 +314,31 @@ export class GatewaySessionStream {
       toolCallRef, toolLabel: "capacity-wait", fileLabel: null, isError: failed, reasonCode: failed ? "capacity-wait-expired" : null });
   }
 
+  // What a company subagent calls: one Activity row per step, named after the
+  // subagent. A helper reports only its starts, so the next step ends the last.
+  // A helper ending after the turn settled must not reopen it in the browser.
+  #helperState(helpers: any[]): void {
+    if (this.#lifecycle.hostSettled) return;
+    const current = new Map(helpers.filter((helper) => typeof helper?.key === "string" && HELPER_KEY.test(helper.key)).map((helper) => [helper.key as string, helper]));
+    for (const [key, shown] of this.#helperSteps) {
+      if (current.get(key)?.step === shown.step) continue;
+      this.#events.publish("tool.completed", { ...shown.payload, isError: false, reasonCode: null });
+      this.#helperSteps.delete(key);
+    }
+    for (const [key, helper] of current) {
+      if (this.#helperSteps.has(key) || typeof helper.tool !== "string") continue;
+      const { summary } = summarizeToolCall(helper.tool, helper.args ?? {});
+      const detail = redactSensitiveText(String(summary.target ?? summary.detail ?? "")).text.replace(/[\u0000-\u001F\u007F]+/g, " ").trim().slice(0, 400);
+      const toolCallRef = ref("tool"), payload = { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
+        toolLabel: safeTool(helper.tool), fileLabel: null, agent: key, ...(detail ? { detail } : {}) };
+      this.#helperSteps.set(key, { step: helper.step, toolCallRef, payload });
+      this.#events.publish("tool.started", { ...payload, isError: null, reasonCode: null });
+    }
+  }
+
   #settleActiveTools(reasonCode: string): void {
+    for (const shown of this.#helperSteps.values()) this.#events.publish("tool.completed", { ...shown.payload, isError: false, reasonCode: null });
+    this.#helperSteps.clear();
     for (const [toolCallId, toolCallRef] of this.#toolRefs) {
       this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
         toolLabel: this.#toolLabels.get(toolCallId) ?? "tool", fileLabel: this.#toolFileLabels.get(toolCallId) ?? null,

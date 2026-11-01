@@ -44,6 +44,11 @@ export type SessionRow = {
   managedHelpers?: {
     active: number | null;
     maximum: number;
+    /**
+     * @maxItems 4
+     */
+    roles?: [] | [string] | [string, string] | [string, string, string] | [string, string, string, string];
+    since?: string;
   };
   /**
    * @maxItems 7

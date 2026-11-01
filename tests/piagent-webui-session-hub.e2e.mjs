@@ -1354,7 +1354,7 @@ test("offers Fast on the new chat page only where the Harness allows it, and sho
     await fast.click();
     const on = page.getByRole("button", { name: /^Fast: bật/ });
     await expect(on).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByText("token tính vào quota gấp 2,5 lần", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("tính vào quota gấp 2,5 lần", { exact: false }).first()).toBeVisible();
     await page.getByPlaceholder("Nhắn cho Piagent…").fill("Rà soát module thanh toán");
     if (FAST_SCREENSHOTS) await page.screenshot({ path: path.join(FAST_SCREENSHOTS, "fast-new-chat.png") });
     await page.getByRole("button", { name: "Gửi", exact: true }).click();
@@ -2751,6 +2751,109 @@ test("shows a sent image as a picture that opens full size, not a card that says
     await dialog.getByRole("button", { name: "Đóng" }).click();
     await expect(dialog).toBeHidden();
   } finally { historyImage = false; }
+});
+
+test("names the end-of-turn review and lets the member write the next message meanwhile", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  const sessionRef = "session_release_prep", sessionRevision = "revision_session_release_prep", row = catalog.sessions.find((item) => item.sessionRef === sessionRef);
+  const saved = row.managedHelpers, settle = (operationRef, settlement) => protocol.events.publish("operation.settled", { sessionRef, operationRef,
+    messageRef: `message_${operationRef}`, sessionRevision, settlement, reasonCode: settlement === "completed" ? null : "operation-aborted" });
+  protocol.events.publish("runtime.changed", { sessionRef, sessionRevision, liveState: "running", operationRef: "operation_review_quiet", reasonCode: null });
+  try {
+    row.liveState = "running";
+    row.managedHelpers = { active: 1, maximum: 4, roles: ["review"], since: new Date(Date.now() - 18 * 60_000).toISOString() };
+    catalog.catalogRevision = "revision_catalog_review_running";
+    protocol.events.publish("catalog.changed", { catalogRevision: catalog.catalogRevision });
+    await expect(page.getByText("Piagent đang nhờ reviewer độc lập kiểm tra lại thay đổi…")).toBeVisible();
+    await expect(page.getByText(/Đã chạy 18 phút · Câu trả lời trên có thể còn được bổ sung/)).toBeVisible();
+    await page.getByRole("button", { name: "Xem Activity" }).click();
+    await expect(page.getByText("subagent review đang chạy")).toBeVisible();
+    await expect(page.locator(".running-count").filter({ visible: true })).toHaveText("1 đang chạy");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".running-count").filter({ visible: true })).toHaveCount(0);
+
+    const composer = page.getByPlaceholder("Nhắn cho Piagent…"), before = sessionSendAttempts;
+    await expect(composer).toBeEnabled();
+    await composer.fill("The next task");
+    await composer.press("Enter");
+    await expect(page.getByText("Tin sẽ gửi khi lượt này xong · sửa nội dung để hủy")).toBeVisible();
+    assert.equal(sessionSendAttempts, before);
+    settle("operation_review_quiet", "completed");
+    await expect.poll(() => sessionSendAttempts).toBe(before + 1);
+    assert.equal(lastSendPayload.message, "The next task");
+    await expect(composer).toHaveValue("");
+
+    // A turn that did not finish keeps the message for the member to decide.
+    await expect(composer).toBeEnabled();
+    protocol.events.publish("runtime.changed", { sessionRef, sessionRevision, liveState: "running", operationRef: "operation_review_stopped", reasonCode: null });
+    await expect(page.getByText(/Enter để gửi khi lượt này xong/)).toBeVisible();
+    await composer.fill("Only after a clean end");
+    await composer.press("Enter");
+    settle("operation_review_stopped", "aborted");
+    await expect(page.getByText(/Lượt vừa rồi không xong nên tin chưa gửi/)).toBeVisible();
+    await expect(composer).toHaveValue("Only after a clean end");
+    assert.equal(sessionSendAttempts, before + 1);
+  } finally {
+    row.managedHelpers = saved; row.liveState = "idle";
+    settle("operation_review_quiet", "completed");
+  }
+});
+
+test("separates the answer before the review from the final result and lists every agent's calls", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(/\/api\/.*\/transcript/, async (route) => {
+    const response = await route.fetch(), body = await response.json();
+    const [sample] = body.items, at = (minute) => `2026-10-31T16:${String(minute).padStart(2, "0")}:00.000Z`;
+    const item = (ref, role, minute, extra) => ({ ...sample, messageRef: ref, role, recordedAt: at(minute), toolCalls: [], usage: undefined, process: undefined, content: { ...sample.content, text: "" }, ...extra });
+    const text = (value) => ({ ...sample.content, text: value });
+    body.items = [item("message_rounds_user", "user", 0, { content: text("Do the task") }),
+      item("message_rounds_tool", "assistant", 10, { toolCalls: [{ toolCallRef: "tool_rounds_1", toolName: "bash", state: "completed", summary: { kind: "command", target: "go test ./...", detail: null } }] }),
+      item("message_rounds_first", "assistant", 29, { content: text("Everything is done, I think") }),
+      item("message_rounds_reviewing", "custom", 30, { process: { phase: "reviewing" } }),
+      item("message_rounds_helper", "custom", 49, { helperRun: { agent: "review", startedAt: at(30), endedAt: at(49), total: 2, steps: [{ toolName: "read", target: "vea.sh", at: at(31) }, { toolName: "grep", target: "backup", at: at(32) }] } }),
+      item("message_rounds_blocking", "custom", 49, { process: { phase: "review", loop: 1, maxLoops: 3 } }),
+      item("message_rounds_second", "assistant", 53, { content: text("Fixed what the reviewer found") }),
+      item("message_rounds_final", "custom", 54, { process: { phase: "final", outcome: "clean", verified: true, reviewed: true, blockingOpen: 0 } })];
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  await expect(page.getByText("Kết quả cuối · đã qua review")).toBeVisible();
+  await expect(page.getByText("Fixed what the reviewer found")).toBeVisible();
+  const draft = page.locator("details").filter({ hasText: "Bản trước review · chưa phải kết quả cuối" });
+  await expect(draft).toBeVisible();
+  await expect(page.getByText("Everything is done, I think")).toBeHidden();
+  await page.screenshot({ path: process.env.PIAGENT_SHOT_DIR ? `${process.env.PIAGENT_SHOT_DIR}/rounds.png` : "/dev/null", type: "png" });
+  await draft.locator("summary").click();
+  await expect(page.getByText("Everything is done, I think")).toBeVisible();
+
+  await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
+  await page.getByRole("tab", { name: /Activity/ }).click();
+  const group = (name) => page.locator(".agent-activity-group").filter({ hasText: name });
+  await expect(group("Main agent")).toContainText("go test ./...");
+  await expect(group("Subagent review")).toContainText("2 lần gọi");
+  await expect(group("Subagent review")).toBeVisible();
+  await group("Subagent review").locator("summary").click();
+  await expect(group("Subagent review")).toContainText("vea.sh");
+  await page.screenshot({ path: process.env.PIAGENT_SHOT_DIR ? `${process.env.PIAGENT_SHOT_DIR}/activity.png` : "/dev/null", type: "png" });
+  await page.unroute(/\/api\/.*\/transcript/);
+  await page.keyboard.press("Escape");
+
+  // A running subagent's calls arrive live, and stay out of the chat.
+  const sessionRef = "session_release_prep", sessionRevision = "revision_session_release_prep", operationRef = "operation_rounds_live", row = catalog.sessions.find((item) => item.sessionRef === sessionRef);
+  const saved = row.managedHelpers;
+  protocol.events.publish("runtime.changed", { sessionRef, sessionRevision, liveState: "running", operationRef, reasonCode: null });
+  try {
+    row.liveState = "running"; row.managedHelpers = { active: 1, maximum: 4, roles: ["review"], since: new Date().toISOString() };
+    catalog.catalogRevision = "revision_catalog_rounds_live"; protocol.events.publish("catalog.changed", { catalogRevision: catalog.catalogRevision });
+    protocol.events.publish("tool.started", { sessionRef, operationRef, toolCallRef: "tool_rounds_live", toolLabel: "read", fileLabel: null, agent: "review", detail: "internal/center/vea.sh", isError: null, reasonCode: null });
+    await expect(page.getByText(/review: read internal\/center\/vea\.sh/)).toBeVisible();
+  } finally {
+    row.managedHelpers = saved; row.liveState = "idle";
+    protocol.events.publish("operation.settled", { sessionRef, operationRef, messageRef: "message_rounds_live", sessionRevision, settlement: "completed", reasonCode: null });
+  }
 });
 
 test("shows the agent's edits while it runs, so a run going wrong can be reviewed and stopped", async ({ page }) => {

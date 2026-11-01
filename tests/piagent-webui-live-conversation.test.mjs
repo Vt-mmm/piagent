@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { helperActivities } from "../packages/piagent-webui/client/src/live-state-view-model.ts";
 import { describe, it } from "node:test";
 
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
@@ -25,6 +26,17 @@ describe("Piagent WebUI live conversation settlement", () => {
       Date.parse("2026-08-24T14:00:12.000Z")), {
       label: "Piagent is analyzing the request…", detail: "Updated 2m ago"
     });
+  });
+
+  it("names a quiet helper step and lists it as running", () => {
+    const live = { ...running(), assistant: "Xong rồi anh.", lastEventAt: "2026-10-31T16:29:32.000Z", activities: [] };
+    const helpers = { active: 1, roles: ["review"], since: "2026-10-31T16:29:36.000Z" };
+    assert.deepEqual(liveProgressStatus(live, "en", Date.parse("2026-10-31T16:47:40.000Z"), helpers), {
+      label: "Piagent is having an independent reviewer check the change…",
+      detail: "Running for 18m · The answer above may still change" });
+    assert.equal(liveProgressStatus(live, "vi", Date.parse("2026-10-31T16:29:40.000Z"), { active: 0 }).label, "Piagent đang phân tích yêu cầu…");
+    assert.deepEqual(helperActivities(helpers).map((row) => [row.toolLabel, row.state, row.startedAt]), [["subagent review", "running", helpers.since]]);
+    assert.deepEqual(helperActivities({ active: 0 }), []);
   });
 
   it("names the summary of a long conversation while it runs", () => {

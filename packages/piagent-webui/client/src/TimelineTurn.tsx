@@ -154,6 +154,8 @@ export function TurnFooter({ turn, locale }: { turn: TimelineTurn; locale: UiLoc
 export const TimelineTurnView = memo(function TimelineTurnView({ turn, sessionRef, locale, onContinue }: { turn: TimelineTurn; sessionRef?: string;
   locale: UiLocale; onContinue?: () => void }) {
   const unanswered = Boolean(onContinue) && !turn.answer && !turn.failure && !turn.end;
+  const reviewing = turn.reviewing && !turn.end;
+  const lastDraft = [...turn.steps].reverse().find((step) => step.kind === "note" && step.draft);
   const agent = turn.steps.length > 0 || turn.answer || turn.failure || unanswered || turn.process || turn.end;
   return <Stack spacing={1.5}>
     <UserBubble text={turn.user.content.text} attachments={turn.user.attachments ?? []} note={contentNote(turn.user, locale)} locale={locale}
@@ -163,15 +165,21 @@ export const TimelineTurnView = memo(function TimelineTurnView({ turn, sessionRe
         : step.kind === "process" ? <ProcessNote key={step.key} process={step.process} locale={locale} />
         : <Box key={step.key} sx={{ color: "text.secondary", fontSize: ".875rem", "& .MuiTypography-root": { fontSize: "inherit" },
           ...(step.draft ? { borderLeft: 2, borderColor: "divider", pl: 1.5 } : {}) }}>
-          {step.draft && <Typography variant="caption" component="div" color="text.disabled" sx={{ mb: .5, fontWeight: 600 }}>
-            {localize(locale, "Trả lời giữa chừng · harness yêu cầu làm tiếp", "Interim answer · the harness asked for more")}</Typography>}
-          <AssistantText>{step.text}</AssistantText></Box>)}
+          {step.draft ? <details open={!turn.answer && step === lastDraft}>
+            <summary style={{ cursor: "pointer" }}><Typography variant="caption" component="span" color="text.disabled" sx={{ fontWeight: 600 }}>
+              {step.beforeReview ? localize(locale, "Bản trước review · chưa phải kết quả cuối", "Before review · not the final result")
+                : localize(locale, "Trả lời giữa chừng · harness yêu cầu làm tiếp", "Interim answer · the harness asked for more")}</Typography></summary>
+            <AssistantText>{step.text}</AssistantText></details> : <AssistantText>{step.text}</AssistantText>}</Box>)}
       {turn.failure && <TurnFailure code={turn.failure} detail={turn.failureDetail} locale={locale} onContinue={onContinue} />}
       {unanswered && <Alert severity="info" variant="outlined" sx={{ alignSelf: "stretch" }}
         action={<Button color="inherit" size="small" onClick={onContinue}>{localize(locale, "Tiếp tục", "Continue")}</Button>}>
         {localize(locale, "Lượt này chưa có câu trả lời: nó đã bị dừng, hoặc ứng dụng hay máy tắt khi đang chạy. Các bước đã làm vẫn được giữ; bấm Tiếp tục để làm tiếp.",
           "This turn has no answer: it was stopped, or the app or the machine went down while it ran. Its steps are kept; press Continue to go on.")}</Alert>}
-      {turn.answer && <Box><AssistantText>{turn.answer}</AssistantText></Box>}
+      {turn.answer && <Box>
+        {(reviewing || lastDraft) && <Typography variant="caption" component="div" color="text.disabled" sx={{ mb: .5, fontWeight: 600 }}>
+          {reviewing ? localize(locale, "Bản nháp · reviewer đang kiểm tra, kết quả có thể còn thay đổi", "Draft · the reviewer is checking it, the result may still change")
+            : turn.process?.reviewed ? localize(locale, "Kết quả cuối · đã qua review", "Final result · reviewed") : localize(locale, "Kết quả cuối", "Final result")}</Typography>}
+        <AssistantText>{turn.answer}</AssistantText></Box>}
       {turn.process && <ProcessNote process={turn.process} locale={locale} />}
       {turn.end && <TurnEndNote end={turn.end} locale={locale} onContinue={turn.failure ? undefined : onContinue} />}
       {turn.requests > 0 && <TurnFooter turn={turn} locale={locale} />}

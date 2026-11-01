@@ -197,3 +197,26 @@ test("an agent the harness sent back twice that says the same again shows that a
   assert.equal(turn.steps.filter((step) => step.kind === "process").length, 2, "the harness rounds stay");
   assert.equal(turn.answer.trim(), report);
 });
+
+// A review's start and what its helper called are entries for the dashboard
+// only: a valid transcript, with a command's secret hidden.
+test("the review's start and its helper's calls reach the timeline and Activity", () => {
+  const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
+  const custom = (id, customType, data) => ({ id, type: "custom", timestamp: at(), customType, data });
+  const value = projectTranscript({ identity, revision, eventCursor: "cursor.steps", generatedAt: "2026-10-01T09:04:00.000Z", entries: [
+    message("u1", "user", "Do it"), message("a1", "assistant", [{ type: "text", text: "Done, I think" }], { stopReason: "stop" }),
+    custom("r1", "agent-watch-review-start", {}),
+    custom("h1", "agent-watch-helper-steps", { agent: "review", job: "Review", startedAt: "2026-10-01T09:01:00.000Z", endedAt: "2026-10-01T09:02:00.000Z", total: 2, steps: [
+      { tool: "read", args: { path: "src/a.go" }, at: "2026-10-01T09:01:10.000Z" }, { tool: "bash", args: { command: `curl -H ${secret} x` }, at: "2026-10-01T09:01:20.000Z" }] }),
+    custom("h2", "agent-watch-helper-steps", { agent: "Not A Role", startedAt: "x", endedAt: "y", steps: [] }),
+  ] });
+  const validation = validateFixture(registry, "transcript-v1", value);
+  assert.equal(validation.valid, true, validation.errors);
+  assert.equal(JSON.stringify(value).includes(secret), false);
+  const run = value.items.find((item) => item.helperRun).helperRun;
+  assert.deepEqual([run.agent, run.total, run.steps.map((step) => step.toolName)], ["review", 2, ["read", "bash"]]);
+  assert.equal(value.items.filter((item) => item.helperRun).length, 1);
+  const turn = timelineTurns(value.items)[0];
+  assert.equal(turn.reviewing, true);
+  assert.equal(turn.answer, "Done, I think");
+});

@@ -30,6 +30,13 @@ export function managedProjection(context: any, entries: any[]) {
   // Helpers the Harness enables (up to four); a conversation recorded before
   // that was known says two.
   const maximum = Number.isInteger(counter?.maximum) && counter.maximum >= 0 && counter.maximum <= 4 ? counter.maximum : 2;
+  const active = Number.isInteger(counter?.active) && counter.active >= 0 && counter.active <= maximum ? counter.active : 0;
+  // Which helpers run and since when, so a long quiet step (the end-of-turn
+  // review) is named instead of looking like a stuck turn.
+  const isCounter = (e: any) => e.type === 'custom' && e.customType === 'agent-watch-helpers';
+  const idleAt = lastIndex(e => isCounter(e) && !e.data?.active);
+  const since = active > 0 ? entries.slice(idleAt + 1).find(isCounter)?.timestamp : null;
+  const roles = active > 0 && Array.isArray(counter?.roles) ? counter.roles.filter((role: any) => typeof role === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(role)).slice(0, 4) : [];
   // The member's access choice; Bypass only while the Harness allows it, else
   // it applies as Full access (permission.mjs).
   const chosen = last('agent-watch-permission')?.mode, bypassAllowed = last('agent-watch-bypass')?.allowed === true;
@@ -42,7 +49,7 @@ export function managedProjection(context: any, entries: any[]) {
   const projectWarnings = Array.isArray(project?.warnings) ? project.warnings.filter((w: any) => kinds.includes(w?.kind) && typeof w.repo === 'string' && w.repo.trim())
     .slice(0, 6).map((w: any) => ({ repo: w.repo.trim().slice(0, 200), kind: w.kind, ...(typeof w.name === 'string' && w.name.trim() ? { name: w.name.trim().slice(0, 80) } : {}) })) : [];
   const projectWarning = projectWarnings.length ? { warnings: projectWarnings, ...(typeof project.team === 'string' && project.team.trim() ? { team: project.team.trim().slice(0, 80) } : {}) } : null;
-  return {modelLabel:'agent-watch-auto', managedPermission: permission, ...(bypassAllowed ? {managedBypass: true as const} : {}), ...(fast?.allowed === true ? {managedFast: fast.enabled === true ? 'on' as const : 'off' as const} : {}), managedHelpers:{active:Number.isInteger(counter?.active) && counter.active>=0 && counter.active<=maximum ? counter.active : 0, maximum},
+  return {modelLabel:'agent-watch-auto', managedPermission: permission, ...(bypassAllowed ? {managedBypass: true as const} : {}), ...(fast?.allowed === true ? {managedFast: fast.enabled === true ? 'on' as const : 'off' as const} : {}), managedHelpers:{active, maximum, ...(roles.length ? {roles} : {}), ...(typeof since === 'string' ? {since} : {})},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),
     ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {}), ...(turnEnd ? {managedTurnEnd:turnEnd} : {}), ...(review ? {managedReview:review} : {}), ...(projectWarning ? {managedProjectWarning:projectWarning} : {})};
 }

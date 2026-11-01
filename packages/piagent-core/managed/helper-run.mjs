@@ -201,7 +201,7 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     for (const session of sessions) session.dispose(); await boundary?.dispose();
     await settleHelper(managed, renew.lease, report); // with the role's current token, before it closes
     await closeRole(managed, key);
-    for (const who of watched) helperState(managed, who, null);
+    for (const who of watched) { helperState(managed, who, null); saveHelperSteps(managed, who); }
   }
 }
 
@@ -216,11 +216,28 @@ export function helperState(managed, key, state) {
 // latest tool step, told to listeners as it changes (company-terminal.mjs).
 function watchHelper(managed, key, session, task, title) {
   const job = String(title || task.split('\n').find(line => line.trim()) || '').trim().slice(0, 120);
+  const logs = managed.helperLogs ??= new Map();
+  const log = logs.get(key) ?? { job, startedAt: new Date().toISOString(), total: 0, steps: [] }; logs.set(key, log);
   helperState(managed, key, { job, step: 'đọc brief' });
   session.subscribe?.(event => {
     if (event?.type !== 'tool_execution_start') return;
-    helperState(managed, key, { job, step: stepText(event.toolName, event.args) });
+    const args = stepArgs(event.args);
+    log.total += 1; log.steps.push({ tool: String(event.toolName), args, at: new Date().toISOString() }); log.steps.splice(0, log.steps.length - HELPER_STEPS_KEPT);
+    helperState(managed, key, { job, step: stepText(event.toolName, event.args), tool: String(event.toolName), args });
   });
+}
+// A helper's session lives in memory: what it called is kept here so the
+// dashboard's Activity can still show it once the helper has ended.
+const HELPER_STEPS_KEPT = 200;
+function saveHelperSteps(managed, key) {
+  const log = managed.helperLogs?.get(key); if (!log) return;
+  managed.helperLogs.delete(key);
+  managed.session?.sessionManager?.appendCustomEntry?.('agent-watch-helper-steps', { agent: key, ...log, endedAt: new Date().toISOString() });
+}
+function stepArgs(args = {}) {
+  const out = {};
+  for (const name of ['path', 'pattern', 'command', 'query', 'url']) if (typeof args?.[name] === 'string') out[name] = args[name].slice(0, 300);
+  return out;
 }
 const STEP = { read: 'đọc', grep: 'tìm', find: 'tìm file', ls: 'xem thư mục', bash: 'chạy', web_search: 'tìm trên web', web_fetch: 'đọc trang', memory_search: 'tra team memory', memory_ask: 'hỏi team memory' };
 export function stepText(tool, args = {}) {

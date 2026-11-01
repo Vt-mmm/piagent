@@ -482,10 +482,10 @@ export class ManagedSession {
   publishHelpers() {
     // One of each enabled helper role can run at a time.
     const maximum = helperRoles(this.manifest).length;
-    this.session.sessionManager.appendCustomEntry('agent-watch-helpers', {active:this.helpers.size,maximum});
+    this.session.sessionManager.appendCustomEntry('agent-watch-helpers', {active:this.helpers.size,maximum,roles:[...this.helpers.keys()]});
     // A helper runs while the main agent is quiet: listeners (the WebUI's
     // "1/4 running") are told, since no agent event would say so.
-    this.notify({ type: 'managed_helpers', active: this.helpers.size, maximum });
+    this.notify({ type: 'managed_helpers', active: this.helpers.size, maximum, roles: [...this.helpers.keys()] });
   }
   notify(event) {
     for (const listener of [...this.listeners]) { try { listener(event); } catch { /* a listener's failure is its own */ } }

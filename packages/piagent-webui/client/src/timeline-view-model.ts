@@ -8,7 +8,7 @@ export type TimelineTool = TranscriptItem["toolCalls"][number];
 export type TimelineProcess = NonNullable<TranscriptItem["process"]>;
 // `draft`: an answer the harness sent back (run checks, fix findings); the
 // turn went on after it, so it is not the final answer.
-export type TimelineStep = { kind: "tool"; key: string; tool: TimelineTool } | { kind: "note"; key: string; text: string; draft?: true }
+export type TimelineStep = { kind: "tool"; key: string; tool: TimelineTool } | { kind: "note"; key: string; text: string; draft?: true; beforeReview?: true }
   | { kind: "process"; key: string; process: TimelineProcess };
 export type TimelineFailure = NonNullable<TranscriptItem["failure"]>;
 export type TimelineTurnEnd = NonNullable<TranscriptItem["turnEnd"]>;
@@ -17,6 +17,8 @@ export type TimelineTurn = {
   requests: number; tokens: number; model: string | null; startedAt: string | null; endedAt: string | null;
   // How the turn ended against the Harness workflow (shown after the answer).
   process: TimelineProcess | null;
+  // The independent reviewer checks the patch now: the answer is not final yet.
+  reviewing: boolean;
   // How the member's message ended: done, stopped with checklist steps open,
   // failed or stopped by the member (company conversations).
   end: TimelineTurnEnd | null;
@@ -26,7 +28,7 @@ export type TimelineTurn = {
 };
 
 function turnFor(user: TranscriptItem, key: string): TimelineTurn {
-  return { key, user, steps: [], answer: null, failure: null, failureDetail: null, requests: 0, tokens: 0, model: null, process: null, end: null,
+  return { key, user, steps: [], answer: null, failure: null, failureDetail: null, requests: 0, tokens: 0, model: null, process: null, reviewing: false, end: null,
     startedAt: user.recordedAt, endedAt: null, outputTokens: 0, generationMs: 0 };
 }
 
@@ -42,7 +44,7 @@ export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] 
     if (item.role === "user") { current = turnFor(item, item.messageRef); turns.push(current); continue; }
     // A page may begin inside a turn: nothing is shown before its user
     // message is on the page ("Load older messages" brings it in).
-    if (!current) continue;
+    if (!current || item.helperRun) continue;
     // Results are shown on their tool call; the item itself carries nothing.
     if (item.role === "tool-result") continue;
     current.endedAt = item.recordedAt;
@@ -57,8 +59,13 @@ export function timelineTurns(items: readonly TranscriptItem[]): TimelineTurn[] 
         if (current.answer) { current.steps.push({ kind: "note", key: `${item.messageRef}:round-answer`, text: current.answer, draft: true }); current.answer = null; }
         current.steps.push({ kind: "process", key: `${item.messageRef}:round`, process: current.process }); current.process = null;
       }
-      if (item.process.phase === "final") { current.process = item.process; continue; }
-      if (current.answer && !QUIET_PHASES.has(item.process.phase)) { current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer, draft: true }); current.answer = null; }
+      if (item.process.phase === "reviewing") { current.reviewing = true; continue; }
+      if (item.process.phase === "final") { current.process = item.process; current.reviewing = false; continue; }
+      if (current.answer && !QUIET_PHASES.has(item.process.phase)) {
+        const beforeReview = current.reviewing || item.process.phase === "review";
+        current.steps.push({ kind: "note", key: `${item.messageRef}:answer`, text: current.answer, draft: true, ...(beforeReview ? { beforeReview: true as const } : {}) });
+        current.answer = null; current.reviewing = false;
+      }
       current.steps.push({ kind: "process", key: item.messageRef, process: item.process }); continue;
     }
     if (item.role === "assistant" && item.usage?.outputTokens && at > requestedAt) {

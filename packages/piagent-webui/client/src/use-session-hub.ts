@@ -6,7 +6,7 @@ import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
 import { readSessionCatalog, readSessionLiveState } from "./api.ts";
 import { coalescedRefresh } from "./coalesced-refresh.ts";
 import { bootstrapBrowserSession, browserSessionLost } from "./bootstrap.ts";
-import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
+import { withLiveActivity, applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
   appendAssistantDelta, liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, conversationAfterRejectedSend, pendingUserConversation, terminalOperationActivity,
   type LiveActivity, type LiveConversation,
@@ -391,10 +391,9 @@ export function useSessionHub(): SessionHub {
               operationRef: payload.operationRef ?? null, abortable: true, complete: false, error: null, runtimeRecovery: null };
             const state: LiveActivity["state"] = frame.kind === "tool.started" ? "running" : payload.isError === true ? "failed" : "completed";
             const previousActivity = existing.activities.find((item) => item.toolCallRef === payload.toolCallRef);
-            const activities = [...existing.activities.filter((item) => item.toolCallRef !== payload.toolCallRef),
-              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel,
-                fileLabel: typeof payload.fileLabel === "string" ? payload.fileLabel : previousActivity?.fileLabel ?? null, state, reasonCode: payload.reasonCode ?? null,
-                startedAt: previousActivity?.startedAt ?? eventAt, finishedAt: state === "running" ? null : eventAt }].slice(-16);
+            const activities = withLiveActivity(existing.activities, { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, ...(typeof payload.agent === "string" ? { agent: payload.agent } : {}), ...(typeof payload.detail === "string" ? { detail: payload.detail } : {}),
+              fileLabel: typeof payload.fileLabel === "string" ? payload.fileLabel : previousActivity?.fileLabel ?? null, state, reasonCode: payload.reasonCode ?? null,
+              startedAt: previousActivity?.startedAt ?? eventAt, finishedAt: state === "running" ? null : eventAt });
             const runtimeRecovery = payload.reasonCode === "runtime-restart-required" ? "required" : existing.runtimeRecovery;
             return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef,
               messageRequestId: eventMessageRequestId ?? existing.messageRequestId,

@@ -70,7 +70,7 @@ import { CommandPalette, useDashboardShortcuts } from "./CommandPalette.tsx";
 import { dashboardCommands } from "./dashboard-commands.tsx";
 import { updateInProgress, useUpdates } from "./update-state.tsx";
 import type { ConnectionState } from "./use-inspection.ts";
-import type { LiveConversation, TerminalOperationActivity } from "./live-state-view-model.ts";
+import { helperActivities, type LiveConversation, type TerminalOperationActivity } from "./live-state-view-model.ts";
 import { companyFailureCopy } from "./company-failure.tsx";
 import type { SessionSendResult } from "./use-session-hub.ts";
 import { launchProjectRef } from "./bootstrap.ts";
@@ -105,8 +105,8 @@ function WorkStatus({ session, live, locale }: { session: SessionRow; live?: Liv
 
 type KeptComposer = { attachments: Attachment[]; messageRequestId: string; sendUnconfirmed: boolean };
 
-function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector, commandActions }: { session: SessionRow;
-  snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
+function Conversation({ session, snapshot, locale, live, canSend, canCompose, canRestart, send, abort, restart, onInspector, commandActions }: { session: SessionRow;
+  snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean; canCompose: boolean;
   commandActions: Omit<ConversationCommandContext["actions"], "stop">;
   send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<SessionSendResult>;
   abort(): Promise<unknown>; restart(): Promise<unknown>; canRestart: boolean; onInspector(value: SessionWorkspaceId): void }) {
@@ -252,6 +252,16 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     }
     finally { sendingNow.current = false; setSubmitting(false); }
   };
+  // A message written while the turn runs waits for its end. A turn that failed
+  // or was stopped changes what the member would say: the draft stays for them.
+  const [queued, setQueued] = useState(false);
+  useEffect(() => {
+    if (!queued || !canSend) return;
+    setQueued(false);
+    if (live?.error || (live?.settlement && live.settlement !== "completed")) setSendNotice({ tone: "warning", text: localize(locale,
+      "Lượt vừa rồi không xong nên tin chưa gửi. Nội dung vẫn còn; Enter để gửi.", "The last turn did not finish, so your message was not sent. It is kept; press Enter to send.") });
+    else void submit();
+  }, [queued, canSend]);
   useEffect(() => {
     if (!sendUnconfirmed || live?.messageRequestId !== messageRequestId || live.delivery !== "admitted") return;
     setDraft(""); setAttachments([]); setAttachError(null); setSendNotice(null); setSendUnconfirmed(false);
@@ -285,7 +295,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
       display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
       {!canSend && session.modelLabel === "agent-watch-auto" && <CompanyReconnect key={session.sessionRef} locale={locale} onConnected={() => setTranscriptLoad((value) => value + 1)} />}
       <Box sx={{ width: "100%" }}><SessionTranscript key={session.sessionRef} reload={transcriptLoad} sessionRef={session.sessionRef} sessionRevision={session.sessionRevision}
-        live={live} approvals={snapshot?.approvals} locale={locale} onOpenActivity={() => onInspector("activity")}
+        live={live} helpers={session.managedHelpers ?? undefined} approvals={snapshot?.approvals} locale={locale} onOpenActivity={() => onInspector("activity")}
         onContinue={canSend && !submitting && !sendUnconfirmed && session.liveState !== "running" && (!live || live.complete) ? () => void continueTask() : undefined} /></Box>
     </Box>
     <Box sx={{ position: "sticky", bottom: "var(--piagent-status-bar, 0px)", px: { xs: 1.5, sm: 2.5 }, pb: 2.5,
@@ -349,10 +359,10 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
           })}
         </Stack>}
         {commandNotice && <Alert severity={commandNotice.tone} onClose={() => setCommandNotice(null)} sx={{ mb: .75, whiteSpace: "pre-line" }}>{commandNotice.text}</Alert>}
-        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft}
+        <TextField fullWidth multiline minRows={2} disabled={!canCompose || submitting || sendUnconfirmed} value={draft}
           inputRef={mentions.inputRef} {...mentions.inputProps}
-          onChange={(event) => { setDraft(event.target.value); setSendNotice(null); mentions.track(event); }}
-          onKeyDown={(event) => { if (mentions.onKeyDown(event)) return; if (sendsOnEnter(event)) { event.preventDefault(); void submit(); } }}
+          onChange={(event) => { setDraft(event.target.value); setSendNotice(null); setQueued(false); mentions.track(event); }}
+          onKeyDown={(event) => { if (mentions.onKeyDown(event)) return; if (sendsOnEnter(event)) { event.preventDefault(); if (canSend) void submit(); else if (canCompose && draft.trim()) setQueued(true); } }}
           onPaste={(event) => {
             // Only a clipboard actually carrying files is intercepted, so pasting
             // text — including text copied out of a document — still types.
@@ -396,8 +406,9 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
               : sendNotice ? "warning.main" : "text.disabled"} noWrap={!sendNotice}
               sx={{ display: { xs: attachError || sendNotice || uploading ? "block" : "none", sm: "block" } }}>
               {sendNotice?.text ?? attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
+                : queued ? localize(locale, "Tin sẽ gửi khi lượt này xong · sửa nội dung để hủy", "Sends when this turn ends · edit it to cancel")
                 : live && !live.complete
-                  ? localize(locale, "Esc để dừng · gửi việc tiếp khi lượt này xong", "Esc to stop · send the next task when this turn ends")
+                  ? localize(locale, "Esc để dừng · Enter để gửi khi lượt này xong", "Esc to stop · Enter to send when this turn ends")
                   : canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
                   : localize(locale, "Session hiện chỉ đọc", "Session is currently read only"))}</Typography>
           </Stack>
@@ -511,6 +522,12 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const currentInspectionState = inspectionStateSessionRef.current === selectedSessionRef
     ? inspectionState : selectedSessionRef ? "loading" : "idle";
   const selectedLive = selected ? live[selected.sessionRef] : undefined;
+  // The member may write while their own turn runs; a turn running in another
+  // process leaves the composer closed.
+  const ownTurnRuns = Boolean(selectedLive && !selectedLive.complete);
+  const canCompose = connection === "connected" && Boolean(selected) && (selected?.composerAvailable || ownTurnRuns)
+    && capabilities?.capabilities.sessionActions.send.status === "available"
+    && !["required", "restarting", "failed"].includes(String(selectedLive?.runtimeRecovery));
   // Opened for one project (Agent Watch's WebUI button): start a new
   // conversation there; choosing another conversation ends that preference.
   const [launchProject, setLaunchProject] = useState<string | null>(null), launchHandled = useRef(false);
@@ -733,9 +750,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
             commandActions={{ setModel: (modelRef) => setModel(selected, modelRef), setThinking: (level) => setThinking(selected, level), setFast: (on) => setFast(selected, on),
               setPermission: (value) => setPermission(selected, value), rename: (title) => rename(selected, title), fork: () => fork(selected, null), pin: (on) => pin(selected, on),
               archive: () => archive(selected), newChat: () => { setCreateError(null); setView("new"); }, openChanges: () => openInspector("source"), openSettings: () => openSettings("general") }}
-            canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"
-              && (!selectedLive || selectedLive.complete)
-              && !["required", "restarting", "failed"].includes(String(live[selected.sessionRef]?.runtimeRecovery))}
+            canSend={canCompose && !ownTurnRuns && selected.composerAvailable} canCompose={canCompose}
             canRestart={connection === "connected" && capabilities?.capabilities.sessionActions.release.status === "available"
               && capabilities?.capabilities.sessionActions.acquire.status === "available"}
             send={(message, attachment) => send(selected, message, attachment)} abort={() => abort(selected).catch((error) => setNotice({
@@ -751,7 +766,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       sx={{ display: { xs: "block", lg: "none" }, "& .MuiDrawer-paper": { width: `min(${PANEL_WIDTH}px, 88vw)` } }}>{workspacePanel}</Drawer>}
     {inspectorUsed.current && <Suspense fallback={null}><SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={currentInspection} state={currentInspectionState} sessionRef={selectedSessionRef}
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
-      liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
+      liveActivities={ownTurnRuns && selectedLive ? [...selectedLive.activities, ...(selectedLive.activities.some((item) => item.agent && item.state === "running") ? [] : helperActivities(selected?.managedHelpers))] : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection}
       findings={selected?.managedReview?.findings} onSendComments={selected && selected.composerAvailable
         ? (text) => { appendToComposer(selected.sessionRef, text); setInspectorOpen(false); } : undefined} /></Suspense>}

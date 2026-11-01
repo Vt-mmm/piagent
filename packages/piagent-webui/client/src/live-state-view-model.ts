@@ -2,7 +2,9 @@ import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import type { PiagentWebUICanonicalVolatileSessionOperationStateV1 } from "../../contracts/generated/session-live-state-v1.ts";
 
 export type LiveActivity = { toolCallRef: string; toolLabel: string; fileLabel?: string | null; state: "running" | "completed" | "failed";
-  reasonCode?: string | null; startedAt?: string; finishedAt?: string | null };
+  reasonCode?: string | null; startedAt?: string; finishedAt?: string | null;
+  // A company subagent's step (its key) and what it calls; absent for the main agent.
+  agent?: string; detail?: string };
 export type OperationSettlement = "completed" | "blocked" | "aborted" | "error" | "unknown";
 export type UserMessageDelivery = "submitting" | "admitted" | "unconfirmed";
 // `assistantMessageRef` is the model message the streamed text last came from:
@@ -190,9 +192,50 @@ export function safeLiveFileLabel(value: unknown): string | null {
   return basename;
 }
 
-export function liveProgressStatus(live: LiveConversation, locale: "vi" | "en" = "vi", now = Date.now()): {
+// The main agent's steps and a subagent's are capped apart: a review reads
+// hundreds of files and must not push the main agent's steps out.
+export function withLiveActivity(activities: readonly LiveActivity[], next: LiveActivity): LiveActivity[] {
+  const all = [...activities.filter((item) => item.toolCallRef !== next.toolCallRef), next];
+  const main = all.filter((item) => !item.agent).slice(-16), helpers = all.filter((item) => item.agent).slice(-200);
+  return [...helpers, ...main];
+}
+
+export type RunningHelpers = { active: number | null; roles?: readonly string[]; since?: string };
+
+function helperPhase(roles: readonly string[] | undefined, locale: "vi" | "en"): string {
+  if (roles?.includes("review")) return locale === "vi" ? "nhờ reviewer độc lập kiểm tra lại thay đổi" : "having an independent reviewer check the change";
+  if (roles?.includes("verify")) return locale === "vi" ? "nhờ agent hỗ trợ kiểm chứng kết quả" : "having a helper verify the results";
+  return liveToolPhase("subagent", locale);
+}
+
+function elapsed(ms: number, locale: "vi" | "en"): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return locale === "vi" ? "Vừa bắt đầu" : "Just started";
+  return locale === "vi" ? `Đã chạy ${minutes} phút` : `Running for ${minutes}m`;
+}
+
+// Helpers work while the main agent is quiet, so the Activity panel has no tool
+// of the turn to show: each helper is its own running row.
+export function helperActivities(helpers: RunningHelpers | undefined): LiveActivity[] {
+  if (!helpers?.active) return [];
+  const roles = helpers.roles?.length ? helpers.roles : ["helper"];
+  return roles.map((role) => ({ toolCallRef: `helper-${role}`, toolLabel: `subagent ${role}`, state: "running" as const, startedAt: helpers.since }));
+}
+
+export function liveProgressStatus(live: LiveConversation, locale: "vi" | "en" = "vi", now = Date.now(), helpers?: RunningHelpers): {
   label: string; detail: string } {
-  const running = [...live.activities].reverse().find((activity) => activity.state === "running");
+  const running = [...live.activities].reverse().find((activity) => activity.state === "running" && !activity.agent);
+  // The agent's last message may read as the final answer: this step can still
+  // send it back to work, and silence here does not mean the turn is stuck.
+  if (!running && helpers?.active) {
+    const since = Date.parse(helpers.since ?? "");
+    const age = Number.isFinite(since) ? elapsed(now - since, locale) : (locale === "vi" ? "Đang chạy" : "Running");
+    const pending = live.assistant || helpers.roles?.includes("review")
+      ? (locale === "vi" ? " · Câu trả lời trên có thể còn được bổ sung" : " · The answer above may still change") : "";
+    const step = [...live.activities].reverse().find((activity) => activity.agent && activity.state === "running");
+    const now_ = step ? ` · ${step.agent}: ${step.toolLabel}${step.detail ? ` ${step.detail}` : ""}` : "";
+    return { label: locale === "vi" ? `Piagent đang ${helperPhase(helpers.roles, locale)}…` : `Piagent is ${helperPhase(helpers.roles, locale)}…`, detail: `${age}${pending}${now_}` };
+  }
   const phase = running ? liveToolPhase(running.toolLabel, locale) : live.activities.length
     ? (locale === "vi" ? "tổng hợp bước tiếp theo" : "preparing the next step")
     : (locale === "vi" ? "phân tích yêu cầu" : "analyzing the request");

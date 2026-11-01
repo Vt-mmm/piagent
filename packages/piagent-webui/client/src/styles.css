@@ -379,6 +379,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .panel-heading > div:last-child { display: flex; align-items: center; gap: 14px; color: var(--quiet); font-size: 11px; }
 .running-count { color: var(--blue); }
 .activity-list { display: grid; }
+.agent-activity-group > summary { cursor: pointer; padding: 10px 16px; color: var(--muted); }
+.agent-activity-group > summary strong { color: var(--text, inherit); }
 .activity-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) 150px; align-items: start; gap: 14px; padding: 15px 18px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
 .activity-row:last-child { border-bottom: 0; }
 .activity-state { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 10%, transparent); }
