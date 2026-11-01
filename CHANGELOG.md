@@ -4,6 +4,23 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.50.0 - 2026-11-01
+
+**A push is judged repository by repository and reviewed first.** From feedback on a real three-repository task: the company Harness knows what passed where, says it before a push, and reviews the code before it leaves.
+
+### Improved
+
+- A required review now runs before a push. A finding holds that push until it is fixed or rejected, so it no longer costs an extra release.
+- Before a push the question says which repositories passed in full, which only in part, how many files changed and how long the last full run took.
+- The checks the Harness names are those of the repositories that changed. Bypass no longer sends a quick suite another way, and tests may write .env files in their own temporary folder.
+
+### Fixed
+
+- A whole-suite pass counts per repository: a later small run no longer erases it, and a pass in one repository no longer clears a push of another.
+- An approval card nobody answered now says it expired instead of reading as a refusal. A push card waits up to 30 minutes instead of 5.
+- Findings of a later review in the same turn reach the agent, and the status names any objection left without a decision by its id.
+- Test scope reads go test -p as parallelism, not a package, and a shell function or loop that picks its files as a part of the suite.
+
 ## v1.49.1 - 2026-11-01
 
 **A running turn says what it waits for.** The status and Activity show what the main agent and each subagent are doing, answers before a review are marked, and Fast follows each model.

@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.49.1" title="v1.49.1 docs · VI"><span class="dot"></span>v1.49.1</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.50.0" title="v1.50.0 docs · VI"><span class="dot"></span>v1.50.0</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,23 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-49-1" data-release>
+<article class="release latest" id="v1-50-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-50-0">v1.50.0</a><time class="release-date" datetime="2026-11-01">01/11/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-50-0-title">Push được xét theo từng repo và review trước</h3>
+    <p>Từ góp ý trên một task ba repo thật: Harness công ty biết phần nào đã pass ở đâu, ghi rõ trước khi push và review code trước khi code rời máy.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Review bắt buộc giờ chạy trước push. Ý kiến review giữ push lại tới khi được sửa hoặc bác bỏ, nên không còn tốn thêm một bản phát hành.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Câu hỏi trước push ghi rõ repo nào đã pass toàn bộ, repo nào mới pass một phần, đổi bao nhiêu file và lần chạy toàn bộ gần nhất mất bao lâu.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Harness chỉ nêu check của repo có thay đổi. Bypass không còn bắt đi đường vòng với bộ test chạy nhanh, và test được ghi file .env trong thư mục tạm của chính nó.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Kết quả chạy toàn bộ tính theo từng repo: lần chạy nhỏ sau không xóa nó, và pass ở repo này không còn mở khóa push của repo khác.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Thẻ duyệt không ai trả lời giờ báo là hết hạn, không còn giống bị từ chối. Thẻ push chờ tối đa 30 phút thay vì 5 phút.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Ý kiến của lần review sau trong cùng lượt nay đến được agent, và dòng trạng thái ghi mã của ý kiến chưa có quyết định.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Phạm vi test hiểu go test -p là số package chạy song song, không phải tên package, và hiểu hàm shell hoặc vòng lặp tự chọn file là chạy một phần.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-49-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-49-1">v1.49.1</a><time class="release-date" datetime="2026-11-01">01/11/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-49-1-title">Lượt chạy nói rõ đang chờ gì</h3>
@@ -410,23 +426,22 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-43-6" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-43-6">v1.43.6</a><time class="release-date" datetime="2026-10-27">27/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-43-6-title">Xem thay đổi của agent ngay khi đang chạy</h3>
-    <p>Thay đổi và Review cập nhật theo lượt đang chạy, thấy sai thì dừng sớm được, và lượt còn chạy không còn trông như đã xong.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Panel Workspace liệt kê file thay đổi và mở được Review khi agent đang chạy, tự làm mới vài giây một lần; Review cũng cập nhật theo.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Câu trả lời bị harness trả lại để chạy check được ghi là giữa chừng, và lượt vẫn hiện đang chạy kèm nút Dừng cho tới khi check xong.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">70</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">71</span></summary>
+    <div class="archive-row" id="v1-43-6">
+      <div class="archive-head"><a class="release-version" href="#v1-43-6">v1.43.6</a> <span class="release-date">27/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Xem thay đổi của agent ngay khi đang chạy</strong> — Thay đổi và Review cập nhật theo lượt đang chạy, thấy sai thì dừng sớm được, và lượt còn chạy không còn trông như đã xong.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Panel Workspace liệt kê file thay đổi và mở được Review khi agent đang chạy, tự làm mới vài giây một lần; Review cũng cập nhật theo.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Câu trả lời bị harness trả lại để chạy check được ghi là giữa chừng, và lượt vẫn hiện đang chạy kèm nút Dừng cho tới khi check xong.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-43-5">
       <div class="archive-head"><a class="release-version" href="#v1-43-5">v1.43.5</a> <span class="release-date">27/10/2026</span></div>
       <div class="archive-body">

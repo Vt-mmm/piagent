@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.49.1" title="v1.49.1 docs · EN"><span class="dot"></span>v1.49.1</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.50.0" title="v1.50.0 docs · EN"><span class="dot"></span>v1.50.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,23 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-49-1" data-release>
+<article class="release latest" id="v1-50-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-50-0">v1.50.0</a><time class="release-date" datetime="2026-11-01">Nov 1, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-50-0-title">A push is judged repository by repository and reviewed first</h3>
+    <p>From feedback on a real three-repository task: the company Harness knows what passed where, says it before a push, and reviews the code before it leaves.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A required review now runs before a push. A finding holds that push until it is fixed or rejected, so it no longer costs an extra release.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Before a push the question says which repositories passed in full, which only in part, how many files changed and how long the last full run took.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The checks the Harness names are those of the repositories that changed. Bypass no longer sends a quick suite another way, and tests may write .env files in their own temporary folder.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A whole-suite pass counts per repository: a later small run no longer erases it, and a pass in one repository no longer clears a push of another.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An approval card nobody answered now says it expired instead of reading as a refusal. A push card waits up to 30 minutes instead of 5.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Findings of a later review in the same turn reach the agent, and the status names any objection left without a decision by its id.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Test scope reads go test -p as parallelism, not a package, and a shell function or loop that picks its files as a part of the suite.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-49-1" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-49-1">v1.49.1</a><time class="release-date" datetime="2026-11-01">Nov 1, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-49-1-title">A running turn says what it waits for</h3>
@@ -410,23 +426,22 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-43-6" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-43-6">v1.43.6</a><time class="release-date" datetime="2026-10-27">Oct 27, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-43-6-title">Watch the agent's edits while it runs</h3>
-    <p>Changes and Review follow a running turn, so a run going wrong can be caught and stopped early, and a turn still running never looks finished.</p>
-    <ul class="release-items">
-      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The Workspace panel lists changed files and opens Review while the agent runs, refreshing every few seconds; Review follows the run too.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An answer the harness sends back to run checks is marked as interim, and the turn keeps showing that it runs, with Stop, until the checks finish.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">70</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">71</span></summary>
+    <div class="archive-row" id="v1-43-6">
+      <div class="archive-head"><a class="release-version" href="#v1-43-6">v1.43.6</a> <span class="release-date">Oct 27, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Watch the agent's edits while it runs</strong> — Changes and Review follow a running turn, so a run going wrong can be caught and stopped early, and a turn still running never looks finished.</p>
+        <ul class="release-items">
+        <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>The Workspace panel lists changed files and opens Review while the agent runs, refreshing every few seconds; Review follows the run too.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>An answer the harness sends back to run checks is marked as interim, and the turn keeps showing that it runs, with Stop, until the checks finish.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-43-5">
       <div class="archive-head"><a class="release-version" href="#v1-43-5">v1.43.5</a> <span class="release-date">Oct 27, 2026</span></div>
       <div class="archive-body">
