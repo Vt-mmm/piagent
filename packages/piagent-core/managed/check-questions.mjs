@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { memberQuestions } from './member-questions.mjs';
 import { effectivePermission } from './permission.mjs';
+import { knownFast, markCheckStart, missingSuites, pushQuestion, pushRepositories, reviewBeforePush } from './check-evidence.mjs';
 
 // How much to test is the member's decision: a one-line fix should not cost a
 // thirty-minute suite. The harness asks at the end of a change, before a whole
@@ -15,19 +16,26 @@ const FILTERED = /(?:^|\s)(?:-k|-t|--grep|--testNamePattern|--test-name-pattern|
 const TEST_RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test(:\S+)?(?=\s|$)|\bnode\s+--test\b|\b(vitest|jest|mocha|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest)\b|\b(go|cargo|swift|dotnet|deno)\s+test\b|\bmake\s+test\b|\bxcodebuild\b.*\btest\b|\b(gradle|gradlew|mvn|mvnw)\b.*\b(test|verify)\b/;
 // Test commands start a command: `npm install -D vitest` or `rm jest.config.ts` only name one.
 const TEST_START = new RegExp(`^(?:${TEST_RUNNER.source})`);
-const LAUNCHER = /^(?:\w+=\S*\s+|time\s+|nohup\s+|timeout\s+\S+\s+|npx\s+(?:-\S+\s+)*|bunx\s+|pnpm\s+(?:exec|dlx)\s+|uv\s+run\s+|poetry\s+run\s+|yarn\s+(?=jest|vitest|mocha|playwright)|node_modules\/\.bin\/|\.\/)+/;
-const partsOf = bare => bare.split(/\s*(?:\|\|?|&&|;)\s*/).map(part => part.replace(/\s\d*>.*$/, '').trim());
+// A function body, a group or a loop body opens a part as well.
+const LAUNCHER = /^(?:[\w-]+\s*\(\)\s*\{?\s*|\{\s+|\(\s*|(?:do|then|else)\s+|\w+=\S*\s+|time\s+|nohup\s+|timeout\s+\S+\s+|npx\s+(?:-\S+\s+)*|bunx\s+|pnpm\s+(?:exec|dlx)\s+|uv\s+run\s+|poetry\s+run\s+|yarn\s+(?=jest|vitest|mocha|playwright)|node_modules\/\.bin\/|\.\/)+/;
+const partsOf = bare => bare.split(/\s*(?:\|\|?|&&|;)\s*/).map(part => part.replace(/\s\d*>.*$/, '').replace(/[\s)}]+$/, '').trim());
 const NOT_TESTS = /\b(lint|typecheck|type-check|tsc|eslint|biome|ruff|mypy|pyright|vet|clippy|format|build)\b/;
 const TARGET_FLAG = /^(-p|--package|-w|--workspace|--tests)$|^(-Dtest=|-only-testing:|--workspace=|--package=)/;
+// `go test -p 4` sets how many packages run at once; for cargo -p names a package.
+const GO_TEST = /^go\s+test\b/;
 const VALUE_FLAG = /^(-c|--config|--reporter|--project|--workers|--timeout|--rootDir|--root|-f|--file|-o|--output)$/;
 // A file or folder named on the command line; a flag's own value names none.
-const targetsPart = args => args.some((a, i) => {
+const targetsPart = (args, go = false) => args.some((a, i) => {
+  // A variable: a function's arguments, a loop's file, $(go list …). The caller chose them, so this is not the whole command.
+  if (a.startsWith('$')) return true;
+  if (go && a === '-p') return false;
   if (TARGET_FLAG.test(a)) return true;
+  if (go && args[i - 1] === '-p') return false;
   if (a.startsWith('-') || VALUE_FLAG.test(args[i - 1] ?? '') || a.includes('*') || a.endsWith('...')) return false;
   return a.includes('/') || /\.(test|spec)\.\w+$|_test\.\w+$|^test_\w+\.\w+$/.test(a);
 });
 // What a command runs, without the text it merely quotes (a commit message, an echo).
-const unquoted = text => text.replace(/"[^"]*"|'[^']*'/g, '""');
+const unquoted = text => text.replace(/"[^"]*"|'[^']*'/g, quoted => quoted.startsWith('"$') ? '$' : '""');
 export function checkScope(command, declared = []) {
   const text = String(command ?? '').replace(/\s+/g, ' ').trim();
   if (!text || /^(echo|printf|grep|rg|cat|sed|awk|head|tail|less|git|ls|find)\b/.test(text) || VERSION_ONLY.test(text) || /--collect-only/.test(text)) return null;
@@ -36,11 +44,16 @@ export function checkScope(command, declared = []) {
     const own = part.replace(LAUNCHER, ''), runner = own.match(TEST_START);
     if (!runner) continue;
     if (FILTERED.test(own)) return 'partial';
-    return !declared.includes(text) && targetsPart(own.slice(runner[0].length).split(' ').filter(Boolean)) ? 'partial' : 'suite';
+    return !declared.includes(text) && targetsPart(own.slice(runner[0].length).split(' ').filter(Boolean), GO_TEST.test(own)) ? 'partial' : 'suite';
   }
   // A script the repository declares: it cannot be narrowed from here.
   const named = declared.find(d => partsOf(bare).some(part => part.startsWith(unquoted(d))));
   return named && !NOT_TESTS.test(named) ? 'suite' : null;
+}
+// The test step of a command, without what surrounds it: the same step costs the same.
+export function suitePart(command) {
+  for (const part of partsOf(unquoted(String(command ?? '').replace(/\s+/g, ' ').trim()))) { const own = part.replace(LAUNCHER, ''); if (TEST_START.test(own)) return own; }
+  return String(command ?? '').trim();
 }
 // The member's own words asking for the whole suite: nothing to ask them then.
 const RUN_ALL = String.raw`(?:full|all(?:\s+the)?|whole(?:\s+the)?|entire(?:\s+the)?|the\s+(?:full|whole|entire))`;
@@ -94,18 +107,19 @@ export async function askCheckScope(self, { partPassed = false, signal } = {}) {
 
 const PARTIAL_REASON = 'managed-check-scope: the member chose to run only the tests that cover the change. Run one file, a filter or one package, not the whole suite. If this project has no way to run part of it, say so and repeat the command: the member is asked.';
 const BYPASS_REASON = 'managed-check-scope: run the tests that cover the change (one file, a filter, one package). A whole-suite run needs the member to ask for it, or their answer before a push. If this project has no way to run part of it, say so and repeat the command.';
-const PUSH_REASON = 'managed-check-scope: the member wants the whole suite before this push. Run it, fix what fails, then push.';
+const PUSH_REASON = missing => `managed-check-scope: the member wants the whole suite before this push${missing.length && missing[0] !== '.' ? ` (still needed in: ${missing.join(', ')})` : ''}. Run it, fix what fails, then push.`;
 const STOPPED_REASON = 'managed-check-scope: the member did not answer whether to push now. Do not push; say so and let them decide.';
 const WORDS_REASON = words => `managed-check-scope: this command did not run. The member answered about testing: "${String(words).slice(0, 500)}". Follow that.`;
 
 // Before a whole suite or a push: returns to let it run, throws to send the agent another way.
 export async function beforeCheckOrPush(self, command, ctx, signal) {
   const run = self.run;
-  if (!run || run.policy?.verify === 'off') return;
+  if (!run || (run.policy?.verify === 'off' && !isGitPush(command))) return;
   // Calls sent together wait for one answer: the next one sees it.
   const turn = (run.scopeQuestion ?? Promise.resolve()).then(() => holdOrLet(self, run, command, ctx, signal));
   run.scopeQuestion = turn.catch(() => {});
-  return turn;
+  await turn;
+  markCheckStart(run, command);
 }
 async function holdOrLet(self, run, command, ctx, signal) {
   const push = isGitPush(command);
@@ -113,18 +127,21 @@ async function holdOrLet(self, run, command, ctx, signal) {
   const surface = surfaceOf(self, ctx);
   if (!surface) return;
   if (push) {
-    const now = await self.digest();
-    if (run.suitePassedOn(now) || (run.pushAllowedOn !== undefined && run.pushAllowedOn === now)) return;
-    const picked = await ask(surface, 'Sắp push code nhưng toàn bộ test chưa pass trên code này. Làm gì?', [PUSH_FULL, PUSH_NOW], signal);
+    await reviewBeforePush(self, run, signal);
+    if (run.policy?.verify === 'off') return;
+    const now = await self.digest(), repositories = pushRepositories(self, command), single = !repositories.length || repositories[0] === '.';
+    const missing = await missingSuites(self, run, repositories.length ? repositories : ['.']);
+    if ((single ? run.suitePassedOn(now) : false) || !missing.length || (run.pushAllowedOn !== undefined && run.pushAllowedOn === now)) return;
+    const picked = await ask(surface, await pushQuestion(self, run, repositories, missing), [PUSH_FULL, PUSH_NOW], signal);
     if (picked === PUSH_NOW) { run.pushAllowedOn = now; return; }
     if (picked?.other) throw Error(WORDS_REASON(picked.other));
     if (picked !== PUSH_FULL) throw Error(STOPPED_REASON);
-    run.scopeChoice = 'full';
-    throw Error(PUSH_REASON);
+    run.scopeChoice = 'full'; run.fullFor = new Set(missing);
+    throw Error(PUSH_REASON(missing));
   }
   // Sent another way once; the same command again means the part did not do: the member decides (Bypass: it runs).
   const held = run.scopeHeld ??= new Set(), again = held.has(command); held.add(command);
-  if (effectivePermission(self) === 'bypass') { if (again) return; throw Error(BYPASS_REASON); }
+  if (effectivePermission(self) === 'bypass') { if (again || knownFast(self, command, suitePart(command))) return; throw Error(BYPASS_REASON); }
   if (run.scopeChoice === 'partial' && !again) throw Error(PARTIAL_REASON);
   const picked = await ask(surface, `Agent muốn chạy toàn bộ test: ${String(command).slice(0, 160)}`, [PART, FULL], signal);
   if (picked === FULL) { run.scopeChoice = 'full'; return; }

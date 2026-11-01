@@ -55,7 +55,7 @@ export class CheckLessons {
  // shape it becomes a failure lesson for the team memory.
  #toolError(call,event,output) {
   if(!COMMAND_TOOLS.has(call.tool)||call.check||this.lessons.length>=MAX_LESSONS)return;
-  if(/managed[-_](?:tool[-_]cancelled|operation[-_]denied|helper[-_]cancelled)|Command aborted|Command timed out/i.test(output))return;
+  if(/managed[-_](?:tool[-_]cancelled|operation[-_](?:denied|expired|cancelled)|helper[-_]cancelled)|Command aborted|Command timed out/i.test(output))return;
   const line=output.split('\n').find(l=>ERROR_LINE.test(l));
   if(!line)return;
   const command=commandShape(call.command);
@@ -85,7 +85,7 @@ export class CheckLessons {
   const output=textOf(event.result), c=call.check;
   const exitFailed=event.isError || (event.result?.details?.exitCode !== undefined && event.result.details.exitCode!==0);
   if(exitFailed || (c.piped && failedOutput(output))) {
-   if(/managed[-_](?:tool[-_]cancelled|operation[-_]denied|helper[-_]cancelled)|Command aborted|Command timed out/i.test(output))return;
+   if(/managed[-_](?:tool[-_]cancelled|operation[-_](?:denied|expired|cancelled)|helper[-_]cancelled)|Command aborted|Command timed out/i.test(output))return;
    this.failed++;this.last='failed';
    const diagnostic=output.split('\n').find(l=>/error|fail|exception|not found|EADDRINUSE/i.test(l)) ?? 'Check exited unsuccessfully';
    if(this.failures.size>=20)this.failures.delete(this.failures.keys().next().value);

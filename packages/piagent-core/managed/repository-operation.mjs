@@ -1,4 +1,5 @@
 import { broadAccess } from './permission.mjs';
+import { approvalRefusal } from './approval-refusal.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -121,7 +122,7 @@ export function fetchOriginTool(self) {
           reason:`Fetch origin branches from ${plan.repository}`,riskClass:'low',allowConsequence:'Download origin branches once; keep the current branch and working files unchanged.',denyConsequence:'No network request or credential read.'},
         terminalConfirm:()=>ctx?.ui?.confirm?.('Tải nhánh từ origin',`Tải các nhánh của ${plan.repository} về ${plan.cwd} một lần.\n\nĐồng ý: chỉ tải nhánh; nhánh hiện tại và file đang làm không đổi.\nTừ chối: không gửi request mạng, không đọc thông tin đăng nhập.`)??Promise.resolve(false),
         unavailableFallback:'terminal-confirm',recheck:()=>!signal?.aborted&&Boolean(self.grant)});
-      if(!decision.allowed||!decision.consume()||signal?.aborted)throw Error('managed-operation-denied');
+      if(!decision.allowed||!decision.consume()||signal?.aborted)throw approvalRefusal(decision);
       return executeRepositoryFetch(self.boundary,plan,signal);
     }};
 }

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { beforeCheckOrPush } from './check-questions.mjs';
+import { approvalRefusal } from './approval-refusal.mjs';
 import { asksOnlyHandoff, broadAccess, effectivePermission, networkConfirmation } from './permission.mjs';
 import { handoffReason } from '../runtime/policy/handoff-policy.mjs';
 import { engineAlive, engineLauncher } from './container-engine.mjs';
@@ -38,7 +39,7 @@ const KINDS = {
   },
   host: {
     name: 'run_on_host', label: 'Run on this machine', scope: 'host-command-once', provider: 'host', riskClass: 'high',
-    description: 'Run one shell command on the member\'s machine, outside the sandbox, as the member, after they approve that exact command (only Bypass runs it without asking, and even there a push, PR, publish, deploy or a command that reaches credentials is asked). Use it when the sandbox blocks what the task needs and no other tool covers it: install a runtime or tool the project needs (brew install openjdk@21, brew install node@22, sdk install java…), git pull with the member\'s sign-in, git push only when the member asked for it, a private registry, a file outside the project. It has the member\'s files, Keychain and sign-ins, so ask only for what the task needs and say why in reason. No input can be typed: commands that need the member\'s password (sudo, a .pkg installer) or an interactive sign-in are refused; ask the member with ask_user for those.',
+    description: 'Run one shell command on the member\'s machine, outside the sandbox, as the member, in their login shell (zsh on macOS: an unquoted $var is not split into words, unlike bash), after they approve that exact command (only Bypass runs it without asking, and even there a push, PR, publish, deploy or a command that reaches credentials is asked). Use it when the sandbox blocks what the task needs and no other tool covers it: install a runtime or tool the project needs (brew install openjdk@21, brew install node@22, sdk install java…), git pull with the member\'s sign-in, git push only when the member asked for it, a private registry, a file outside the project. It has the member\'s files, Keychain and sign-ins, so ask only for what the task needs and say why in reason. No input can be typed: commands that need the member\'s password (sudo, a .pkg installer) or an interactive sign-in are refused; ask the member with ask_user for those.',
     allow: 'Run this exact command once on this machine, outside the sandbox, as you: it can read and change your files and use your sign-ins.',
     title: 'Chạy lệnh trên máy (ngoài sandbox)', allowText: 'chạy đúng lệnh này một lần trên máy bạn, ngoài sandbox, bằng quyền của bạn: lệnh đọc/sửa được file và dùng được tài khoản đã đăng nhập trên máy.',
     // Full access does not cover it: the member approves each command (with
@@ -78,6 +79,7 @@ export function stillAsks(self, reason) {
 // member may allow it once, allow the same exact action for the rest of the
 // conversation (never a handoff or a waiver of checks: its scope names it), deny it, or deny it and
 // stop the turn so the agent does not try again.
+const HANDOFF_APPROVAL_MS = 30 * 60_000;
 const CHOICES = { once: 'Đồng ý một lần', session: 'Đồng ý cho cả cuộc trò chuyện (đúng lệnh này)', deny: 'Từ chối', stop: 'Từ chối và dừng lượt này' };
 export async function approve(self, id, signal, ctx, action, { title, body }) {
   const grantable = !/handoff|waiver/.test(String(action.requestedScope ?? '')), key = `${action.toolName}\u0000${action.commandPreview ?? JSON.stringify(action.rawAction ?? {})}`;
@@ -91,9 +93,11 @@ export async function approve(self, id, signal, ctx, action, { title, body }) {
       const picked = await ctx.ui.select(`${title}\n\n${body}`, choices.map(choice => CHOICES[choice]));
       return choices.find(choice => CHOICES[choice] === picked) ?? 'deny';
     } } : {}),
+    // A push waits longer than other cards: the member may be away while a suite ran.
+    ...(/handoff/.test(String(action.requestedScope ?? '')) ? { ttlMs: HANDOFF_APPROVAL_MS } : {}),
     unavailableFallback: 'terminal-confirm', recheck: () => !signal?.aborted && Boolean(self.grant) });
   if (!decision.allowed && decision.choice === 'stop') { try { ctx?.abort?.(); } catch { /* the denial below still stands */ } throw Error('managed-operation-denied-stop: bạn đã từ chối và dừng lượt này; không thử lại, chờ member.'); }
-  if (!decision.allowed || !decision.consume() || signal?.aborted) throw Error('managed-operation-denied');
+  if (!decision.allowed || !decision.consume() || signal?.aborted) throw approvalRefusal(decision);
   if (decision.choice === 'session' && grantable) (self.sessionApprovals ??= new Set()).add(key);
 }
 
@@ -126,7 +130,7 @@ function commandTool(self, kind) {
       } finally {
         // What the command installed (a JDK, Node) is there for the next one.
         if (kind === 'host') self.boundary.refreshEnvironment();
-        await self.claimChanges(before); await self.run?.afterTool('bash', args, ok, () => self.digest()); await self.refreshReview();
+        await self.claimChanges(before); await self.run?.afterTool('bash', args, ok, () => self.digest(), self); await self.refreshReview();
       }
     } };
 }

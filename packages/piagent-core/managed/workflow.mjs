@@ -4,7 +4,8 @@ import { TsDiagnostics } from './ts-diagnostics.mjs';
 import { checkpointsOf } from './checkpoints.mjs';
 import { declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, nonCodePath, onlyNonCode } from './repository-checks.mjs';
 export { declaredChecks, detectedChecks, repositoryChecks, isCheckCommand, isReadOnlyCommand, nonCodePath, onlyNonCode };
-import { askCheckScope, asksFullChecks, beforeCheckOrPush, checkScope } from './check-questions.mjs';
+import { askCheckScope, asksFullChecks, beforeCheckOrPush, checkScope, suitePart } from './check-questions.mjs';
+import { recordCheck, relevantChecks } from './check-evidence.mjs';
 import { LANE_LIMITS, patchStats, changeLane, lanePolicy } from './risk-lanes.mjs';
 import { briefCounts, decisionsText, ledgerGuard, ledgerOf, ledgerWords, reviewFocus, saveLedger, setStatus, settleLedger } from './ledger.mjs';
 
@@ -81,7 +82,7 @@ export function workflowPrompt(policy, checks) {
     const L = LANE_LIMITS;
     lines.push(`- Size: the process follows the size of your change. A small change (at most ${L.tinyFiles} files and ${L.tinyLines} changed lines, no migration, auth, security, CI, dependency or AGENTS.md file) ends after its checks, without a review: do not ask for one. A risky change (a complex request, one of those files, more than ${L.riskyFiles} files or ${L.riskyLines} lines) must pass the checks${policy.review !== 'off' ? ' and the harness review' : ''} even where they are only suggested.`);
   }
-  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\n${process.platform === 'darwin' ? 'End-to-end and UI checks run in bash with the project\'s Playwright (@playwright/test; add it with npm when the project lacks it) and the browsers installed on this Mac, against a server the test or start_process starts; while a local proxy listens they need run_with_network. When Playwright\'s browsers are missing, ask with run_on_host to run `npx playwright install chromium`.' : 'End-to-end tests that start a local server and a browser run through run_with_network, which the user approves.'} If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), do not stop there: request the approval that makes it run (run_with_network, run_with_docker, start_docker, or run_on_host to install what is missing) or ask the member with ask_user; never install or start anything without that approval.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.${process.platform === 'darwin' ? ' A dev server, watcher or local service you need across turns runs with start_process (read it with process_output, stop it with stop_process).' : ''}` : '';
+  return lines.length ? `\n\nProcess for code changes (company Harness):\n${lines.join('\n')}\n${process.platform === 'darwin' ? 'A bash command stops after 10 minutes unless you pass timeout in seconds, at most 1800: a long suite needs that, not another tool. End-to-end and UI checks run in bash with the project\'s Playwright (@playwright/test; add it with npm when the project lacks it) and the browsers installed on this Mac, against a server the test or start_process starts; while a local proxy listens they need run_with_network. When Playwright\'s browsers are missing, ask with run_on_host to run `npx playwright install chromium`.' : 'End-to-end tests that start a local server and a browser run through run_with_network, which the user approves.'} If a check cannot run because the machine lacks something (a runtime such as a JDK, Docker, a database or another service, the network), do not stop there: request the approval that makes it run (run_with_network, run_with_docker, start_docker, or run_on_host to install what is missing) or ask the member with ask_user; never install or start anything without that approval.\nA command stops after 10 minutes and anything left running in the background stops when the turn ends: run the checks that cover your change first and a long suite in parts, not in the background.${process.platform === 'darwin' ? ' A dev server, watcher or local service you need across turns runs with start_process (read it with process_output, stop it with stop_process).' : ''}` : '';
 }
 
 // Every helper checks the brief it was given: it may object with evidence, it
@@ -173,7 +174,7 @@ export class RunProcess {
       // asked for, and where the harness last sent the agent back (to read
       // its answer and see whether the code moved).
       ledger: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false, mainReviews: 0, minorFindings: 0,
-      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false, decideAsked: false,
+      sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false,
       // How much of the suite the member wants run (check-questions.mjs).
       scopeChoice: null, scopeWords: null, fullAsked: asksFullChecks(request), pushAllowedOn: undefined,
       // The patch's risk lane (workflow.lanes) and the main agent's own web lookups.
@@ -197,15 +198,17 @@ export class RunProcess {
   changedWithoutPlan() {
     this.unplannedChange = true; this.planSkipped = true;
   }
-  async afterTool(name, args, ok, digestOf) {
+  // `owner`: the conversation the command ran in, for what passed in which repository.
+  async afterTool(name, args, ok, digestOf, owner = null) {
     if (['write', 'edit'].includes(name) && ok) this.edited = true;
     if (name === 'bash' && isCheckCommand(args?.command, this.checks.commands)) {
       const scope = checkScope(args.command, this.checks.commands), digest = await digestOf(), last = this.lastCheck;
       this.checksRun += 1; if (!ok) this.checksFailed += 1;
       // A lint after a partial test run does not make it the whole suite.
       this.lastCheck = { ok, digest, mutations: this.mutations, scope: scope ?? (last?.scope === 'partial' && last.digest === digest ? 'partial' : 'other') };
-      // The member's "run it all" covers one run; after a fix they are asked again.
-      if (scope === 'suite' && this.scopeChoice === 'full') this.scopeChoice = null;
+      await recordCheck(this, owner, args.command, scope, ok, suitePart(args.command));
+      // The member's "run it all" covers one run in each repository a push needs; after a failure they are asked again.
+      if (scope === 'suite' && this.scopeChoice === 'full' && (!ok || !this.fullFor?.size)) { this.scopeChoice = null; this.fullFor = null; }
     // A command may change files, so it counts. Without a git repository to
     // compare the code against, one that only reads does not: counting every
     // command reported code changes in turns that only read and checked.
@@ -298,7 +301,7 @@ export async function completionGate(managed, run, signal) {
       }
       if (policy.verify === 'require' && (!run.verified || run.scopeWords) && !run.docsOnly && !verifyGaveUp && run.waivedDigest !== digest) {
         run.fixLoops += 1;
-        const list = run.checks.commands.length ? run.checks.commands.map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
+        const list = run.checks.commands.length ? relevantChecks(managed, run.checks.commands).map(c => '`' + c + '`').join(', ') : 'the tests, type check or build that cover the change';
         const words = run.scopeWords; run.scopeWords = null;
         const ask = words ? `The member answered about testing: "${String(words).slice(0, 500)}". Follow that and fix what fails.`
           : run.scopeChoice === 'partial' ? 'Run only the tests that cover your change (one file, a filter, one package), not the whole suite, and fix what fails.'
@@ -446,7 +449,7 @@ export function processEditTools(session, tools) {
         }
         return result;
       }
-      finally { await session.run?.afterTool(tool.name, args[1], ok, () => session.digest()); await session.refreshReview(); }
+      finally { await session.run?.afterTool(tool.name, args[1], ok, () => session.digest(), session); await session.refreshReview(); }
     } };
   });
 }

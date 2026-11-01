@@ -112,7 +112,7 @@ ${proxyPort && !network ? `(allow mach-lookup (global-name "com.apple.trustd.age
 (allow network-outbound (literal ${literal(docker)}))` : ''}` : loopback ? '(allow network-outbound (remote ip "localhost:*"))' : proxyPort ? `(allow network-outbound (remote ip "localhost:${Number(proxyPort)}"))` : ''}
 ${denied.map(root => `(deny file-read* file-write* (require-all (subpath ${literal(root)})${skills.filter(dir => inside(dir, root) && dir !== root).map(dir => ` (require-not (subpath ${literal(dir)}))`).join('')}))`).join('\n')}
 (deny file-read* file-read-metadata file-write* (require-all (require-any (regex #"(^|/)(\\.env([./]|$)|credentials([./]|$)|\\.npmrc$|\\.netrc$)") (regex #"/\\.[^/]+/auth\\.json$") ${projectRoots.map(root => `(literal ${literal(path.join(root, 'auth.json'))})`).join(' ')})
-  (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))
+  (require-not (regex #"(^|/)\\.env\\.(example|sample|template|dist|defaults)$"))))  (allow file-read* file-read-metadata file-write* (require-all (subpath ${literal(temporary)}) (regex #"/\\.env([.][^/]*)?$")))
 `;
 }
 // Toolchains from the pinned node/git and Homebrew, compilers and SDK; the

@@ -120,7 +120,7 @@ export function rejudgeBrief(item) {
 // One step of the completion gate (true: the gate goes round again). A
 // rejected premise objection goes back to its helper, which withdraws it or
 // keeps it for the member; then the items the main agent never decided are
-// put to it once, with no new review.
+// put to it once each, with no new review: a later review's findings are new items.
 export async function settleLedger(managed, run, { note, send, signal }) {
   const rejected = toRejudge(run)[0];
   if (rejected) {
@@ -133,9 +133,9 @@ export async function settleLedger(managed, run, { note, send, signal }) {
     await note(`Harness: the ${rejected.role} subagent keeps its objection; the member decides.\n${itemText(rejected)}`, { phase: 'dispute', role: rejected.role, id: rejected.id });
     return true;
   }
-  const pending = undecided(run);
-  if (!pending.length || run.decideAsked) return false;
-  run.decideAsked = true;
+  const asked = run.decidedAsked ??= new Set(), pending = undecided(run).filter(item => !asked.has(item.id));
+  if (!pending.length) return false;
+  for (const item of pending) asked.add(item.id);
   await send(decideText(pending), { phase: 'answer', ids: pending.map(i => i.id), issues: pending.slice(0, 10).map(i => ({ kind: i.kind, detail: i.detail })) });
   return true;
 }
@@ -151,7 +151,7 @@ export function ledgerWords(run) {
   const items = ledgerOf(run), count = s => items.filter(i => i.status === s).length, words = [];
   if (!items.length && !run.minorFindings) return null;
   for (const [status, label] of [['accepted', 'accepted'], ['rejected', 'rejected'], ['withdrawn', 'withdrawn by the helper'], ['cleared', 'cleared by a later check'], ['disputed', 'for the member'], ['open', 'left without a decision'], ['noted', 'noted']])
-    if (count(status)) words.push(`${count(status)} ${label}`);
+    if (count(status)) words.push(`${count(status)} ${label}${status === 'open' ? ` (${items.filter(i => i.status === 'open').map(i => i.id).join(', ')})` : ''}`);
   if (run.minorFindings) words.push(`${run.minorFindings} minor finding(s) listed`);
   return `objections: ${words.join(', ')}`;
 }

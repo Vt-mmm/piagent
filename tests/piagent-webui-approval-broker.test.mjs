@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { approvalRefusal } from "../packages/piagent-core/managed/approval-refusal.mjs";
 import test from "node:test";
 
 import { PiApprovalBroker } from "../packages/piagent-core/runtime/inspection/approval-broker.ts";
@@ -195,4 +196,23 @@ test("a terminal that offers the four answers is used instead of yes or no", asy
   const result = await current.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: "tool.choose", action: shellAction,
     terminalConfirm: () => { throw Error("the yes/no question was used"); }, terminalChoose: async () => "stop", recheck: () => true, ttlMs: 30_000 });
   assert.equal(result.allowed, false); assert.equal(result.choice, "stop");
+});
+
+test("a card nobody answers says it expired, and a handoff card may wait up to 30 minutes", async () => {
+  const current = setup();
+  const started = Date.now();
+  const long = current.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: "tool.long", action: shellAction, terminalConfirm: () => current.terminal.promise, recheck: () => true, ttlMs: 60 * 60_000 });
+  await new Promise((resolve) => setImmediate(resolve));
+  const projection = current.broker.projection("/repo", "raw-session");
+  const request = current.broker.detail("/repo", "raw-session", projection.summary.pending[0].approvalRef);
+  const span = Date.parse(request.expiresAt) - started;
+  assert.ok(span > 29 * 60_000 && span <= 30 * 60_000 + 1000, String(span));
+  current.broker.decide("/repo", "raw-session", request.approvalRef, decision(request, "deny"));
+  const denied = await long;
+  assert.equal(approvalRefusal(denied).message.startsWith("managed-operation-denied: the member refused"), true);
+  const quick = setup(), awake = setInterval(() => {}, 200);
+  const short = await quick.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: "tool.short", action: shellAction, terminalConfirm: () => quick.terminal.promise, recheck: () => true, ttlMs: 5_000 });
+  clearInterval(awake);
+  assert.equal(short.allowed, false); assert.equal(short.receipt.state, "expired");
+  assert.match(approvalRefusal(short).message, /^managed-operation-expired/);
 });

@@ -15,7 +15,7 @@ const INPUT_CHARS = 500, ERROR_HEAD = 1000, ERROR_TAIL = 2000;
 // One request carries at most BATCH failures; KEEP wait for the next one.
 const BATCH = 20, KEEP = 100, ATTEMPTS = 3;
 // The member stopped the tool or declined to approve it: not a failure.
-const NOT_FAILURES = new Set(['managed_tool_cancelled', 'managed_helper_cancelled', 'managed_operation_denied']);
+const NOT_FAILURES = new Set(['managed_tool_cancelled', 'managed_helper_cancelled', 'managed_operation_denied', 'managed_operation_expired', 'managed_operation_cancelled']);
 
 const text = result => typeof result === 'string' ? result
   : Array.isArray(result?.content) ? result.content.filter(part => part?.type === 'text').map(part => part.text ?? '').join('\n') : '';

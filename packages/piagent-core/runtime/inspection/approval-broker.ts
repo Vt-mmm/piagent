@@ -8,7 +8,7 @@ const PUBLIC_REF = /^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$/;
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-const MAX_PENDING = 32, MAX_RECENT = 64, DEFAULT_TTL_MS = 5 * 60_000;
+const MAX_PENDING = 32, MAX_RECENT = 64, DEFAULT_TTL_MS = 5 * 60_000, MAX_TTL_MS = 30 * 60_000;
 
 type Identity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string; taskRunId: string;
   agentOperationId: string; toolCallId: string };
@@ -161,7 +161,7 @@ export class PiApprovalBroker {
     if (!binding || !authority || authority.taskState !== "active" || input.expectedTask && (authority.identity.taskId !== input.expectedTask.taskId || authority.identity.taskRunId !== input.expectedTask.taskRunId)
       || !REF.test(authority.identity.agentOperationId)
       || !toolCallId || binding.pending.size >= MAX_PENDING) return this.#unavailable(input);
-    const now = Date.now(), requestedAt = new Date(now).toISOString(), expiresAt = new Date(now + Math.min(Math.max(input.ttlMs ?? DEFAULT_TTL_MS, 5_000), DEFAULT_TTL_MS)).toISOString();
+    const now = Date.now(), requestedAt = new Date(now).toISOString(), expiresAt = new Date(now + Math.min(Math.max(input.ttlMs ?? DEFAULT_TTL_MS, 5_000), MAX_TTL_MS)).toISOString();
     const approvalRef = ref("approval", binding.secret, [toolCallId, now, randomUUID()]);
     const decisionToken = randomBytes(32).toString("base64url");
     const nextRevision = this.#nextRevision(binding, "requested", approvalRef);

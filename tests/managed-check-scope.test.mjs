@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { asksFullChecks, askCheckScope, beforeCheckOrPush, checkScope, isGitPush } from '../packages/piagent-core/managed/check-questions.mjs';
+import { asksFullChecks, askCheckScope, beforeCheckOrPush, checkScope, isGitPush, suitePart } from '../packages/piagent-core/managed/check-questions.mjs';
+import { relevantChecks } from '../packages/piagent-core/managed/check-evidence.mjs';
+import { approvalRefusal } from '../packages/piagent-core/managed/approval-refusal.mjs';
+import { ledgerWords, settleLedger } from '../packages/piagent-core/managed/ledger.mjs';
 import { memberQuestions } from '../packages/piagent-core/managed/member-questions.mjs';
 import { RunProcess, completionGate, workflowPrompt } from '../packages/piagent-core/managed/workflow.mjs';
 
@@ -200,4 +203,139 @@ test('the dashboard card answers too, and the member\'s own words go to the agen
 
 test('the prompt tells the agent not to pick the whole suite itself', () => {
   assert.match(workflowPrompt(REQUIRE, { commands: ['npm test'] }), /Do not choose the whole test suite yourself/);
+});
+
+// What the feedback on a real three-repository task found.
+test('the scope of a command: flags and functions are read as what they are', () => {
+  assert.equal(checkScope('go test -p 1 ./...'), 'suite'); // -p is parallelism for go, a package for cargo
+  assert.equal(checkScope('cargo test -p core'), 'partial');
+  assert.equal(checkScope('go test -p 1 ./internal/cart'), 'partial');
+  for (const c of ['run() { bash reset.sh; npx playwright test "$@" --reporter=line; }; run e2e/a.spec.ts e2e/b.spec.ts', 'run() { npx playwright test $1; }; run e2e/a.spec.ts', 'for f in e2e/a.spec.ts; do npx playwright test $f; done', 'go test -count=1 $(go list ./... | grep -v x)']) assert.equal(checkScope(c), 'partial', c);
+  for (const c of ['(npm run typecheck; npm test 2>&1 | tail -8)', 'npm test && git add a && git commit -m "x"', 'X="$Y" npm test']) assert.equal(checkScope(c), 'suite', c);
+  assert.equal(suitePart('cd a && npm run typecheck && npm test 2>&1 | tail -5'), 'npm test');
+});
+
+function repositories(ui, permission) {
+  const run = newRun(), self = managedOf(run, ui, permission), code = { fe: 'f1', be: 'b1' };
+  self.cwd = '/work'; self.repositoryBases = { fe: 'h1', be: 'h2', other: 'h3' }; self.ownPaths = new Set(['fe/a.ts', 'be/b.go']);
+  self.scopedDigest = async scope => [...scope].some(file => file.startsWith('fe/')) ? code.fe : code.be;
+  return { run, self, code, passed: (command, ok = true) => run.afterTool('bash', { command }, ok, () => self.digest(), self) };
+}
+const FULL_PUSH = 'Chạy toàn bộ rồi mới push', NOW_PUSH = 'Push luôn, không chạy thêm';
+
+test('a push is judged repository by repository; a later small run does not erase a whole-suite pass', async () => {
+  const ui = terminal(FULL_PUSH), { self, passed } = repositories(ui), ctx = { hasUI: true, ui };
+  await passed('cd /work/be && go test -p 1 ./...');
+  await passed('cd /work/be && go test ./internal/one');
+  await passed('cd /work/fe && npx playwright test e2e/a.spec.ts');
+  await assert.rejects(beforeCheckOrPush(self, 'git -C /work/fe push origin x && git -C /work/be push origin x', ctx), /still needed in: fe/);
+  const asked = ui.asked[0].title;
+  assert.match(asked, /Sắp push fe, be/); assert.match(asked, /Đã pass toàn bộ: be/); assert.match(asked, /Mới pass một phần: fe \(1 lệnh\)/); assert.match(asked, /đổi 2 file/);
+  await passed('cd /work/fe && npm test');
+  await beforeCheckOrPush(self, 'git -C /work/fe push origin x && git -C /work/be push origin x', ctx); // no second question
+  assert.equal(ui.asked.length, 1);
+});
+
+test('a green suite in one repository does not clear a push of another; changing a repository takes its pass away', async () => {
+  const ui = terminal(NOW_PUSH, NOW_PUSH), { self, code, passed } = repositories(ui), ctx = { hasUI: true, ui };
+  await passed('cd /work/fe && npm test');
+  await beforeCheckOrPush(self, 'git -C /work/fe push', ctx); assert.equal(ui.asked.length, 0);
+  await beforeCheckOrPush(self, 'git -C /work/be push', ctx); assert.equal(ui.asked.length, 1);
+  code.fe = 'f2';
+  self.run.pushAllowedOn = undefined;
+  await beforeCheckOrPush(self, 'git -C /work/fe push', ctx); assert.equal(ui.asked.length, 2);
+});
+
+test('a push whose target is a variable covers the repositories this conversation changed', async () => {
+  const ui = terminal(FULL_PUSH), { self, passed } = repositories(ui), ctx = { hasUI: true, ui };
+  await passed('cd /work/fe && npm test');
+  await assert.rejects(beforeCheckOrPush(self, 'p() { git -C "$1" push origin "$2"; }; p fe x; p be y', ctx), /still needed in: be/);
+});
+
+test('"run it all" stays until every repository the push needs has run; a failure asks again', async () => {
+  const ui = terminal(FULL_PUSH), { run, self, passed } = repositories(ui), ctx = { hasUI: true, ui };
+  await assert.rejects(beforeCheckOrPush(self, 'git -C /work/fe push && git -C /work/be push', ctx), /fe, be/);
+  await passed('cd /work/fe && npm test');
+  assert.equal(run.scopeChoice, 'full');
+  await passed('cd /work/be && go test ./...');
+  assert.equal(run.scopeChoice, null);
+  run.scopeChoice = 'full'; run.fullFor = new Set(['be']);
+  await passed('cd /work/be && go test ./...', false);
+  assert.equal(run.scopeChoice, null);
+});
+
+test('Bypass lets through a whole suite it has seen pass quickly; a slow one still takes the detour', async () => {
+  const ui = terminal(), run = newRun(), self = managedOf(run, ui, 'bypass'), ctx = { hasUI: true, ui };
+  self.manifest.harness.configuration.bypass_mode = true;
+  const bounce = command => assert.rejects(beforeCheckOrPush(self, command, ctx), /run the tests that cover/);
+  await bounce('npm test');
+  await beforeCheckOrPush(self, 'npm test', ctx); // the same command again runs
+  await run.afterTool('bash', { command: 'npm test' }, true, () => self.digest(), self);
+  await beforeCheckOrPush(self, 'npm test 2>&1 | tail -5', ctx); // quick: no detour, whatever surrounds it
+  self.checkTimes.set(`.\u0000npm test`, 9 * 60_000);
+  await bounce('npm test | tail -1');
+});
+
+test('the checks named are those of the repositories that changed', () => {
+  const all = ["cd 'agent-studio' && go test ./...", "cd 'fe' && npm test", "cd 'fe/web' && npm run test:e2e", 'make lint'];
+  assert.deepEqual(relevantChecks({ ownPaths: new Set(['fe/a.ts']) }, all), all.slice(1));
+  assert.deepEqual(relevantChecks({ ownPaths: new Set() }, all), all);
+  assert.deepEqual(relevantChecks({ ownPaths: new Set(['docs/a.md']) }, all.slice(0, 2)), all.slice(0, 2));
+});
+
+test('a required review runs before the push, and what it finds holds the push until it is decided', async () => {
+  const ui = terminal(NOW_PUSH), run = newRun('fix', { ...REQUIRE, review: 'require' }), self = managedOf(run, ui), ctx = { hasUI: true, ui };
+  run.startDigest = START; let reviews = 0, finding = true;
+  self.patchDigest = async () => 'p'.repeat(64);
+  self.delegate = async (ask, _signal, options) => {
+    reviews += 1; assert.equal(ask.role, 'review'); assert.equal(options.harness, true);
+    self.review = { patchDigest: 'p'.repeat(64), stale: false, blocking: 0 };
+    if (finding) run.ledger.push({ id: 'o1', source: 'review', role: 'review', kind: 'major', status: 'open', detail: 'drafts leak', required: false });
+  };
+  await assert.rejects(beforeCheckOrPush(self, 'git push', ctx), /managed-review-before-push[\s\S]*o1[\s\S]*drafts leak/);
+  assert.equal(ui.asked.length, 0); // nothing asked about tests yet
+  assert.equal(reviews, 1);
+  run.ledger[0].status = 'accepted'; finding = false;
+  await beforeCheckOrPush(self, 'git push', ctx);
+  assert.equal(reviews, 1); // the same patch is not reviewed twice
+  assert.equal(ui.asked.length, 1);
+});
+
+test('a review that cannot run does not hold a push; no change or no required review costs no review', async () => {
+  for (const [policy, start, delegate, expected] of [
+    [{ ...REQUIRE, review: 'require' }, START, async () => { throw Error('managed-helper-unavailable'); }, 1],
+    [{ ...REQUIRE, review: 'suggest' }, START, async () => {}, 0],
+    [{ ...REQUIRE, review: 'require' }, CODE, async () => {}, 0]]) {
+    const ui = terminal(NOW_PUSH), run = newRun('fix', policy), self = managedOf(run, ui), ctx = { hasUI: true, ui };
+    run.startDigest = start; let calls = 0; self.patchDigest = async () => 'p'.repeat(64);
+    self.delegate = async (...args) => { calls += 1; return delegate(...args); };
+    await beforeCheckOrPush(self, 'git push', ctx);
+    assert.equal(calls, expected);
+  }
+});
+
+test('with verify off a push is still reviewed, and asks nothing about tests', async () => {
+  const ui = terminal(), run = newRun('fix', { ...REQUIRE, verify: 'off', review: 'require' }), self = managedOf(run, ui), ctx = { hasUI: true, ui };
+  run.startDigest = START; let calls = 0; self.patchDigest = async () => 'p'.repeat(64); self.delegate = async () => { calls += 1; };
+  await beforeCheckOrPush(self, 'git push', ctx);
+  assert.equal(calls, 1); assert.equal(ui.asked.length, 0);
+});
+
+test('an approval that ran out of time says so; a refusal is a refusal', () => {
+  assert.match(approvalRefusal({ receipt: { state: 'expired', decision: null } }).message, /^managed-operation-expired: .*Nobody refused/);
+  assert.match(approvalRefusal({ receipt: { state: 'cancelled', decision: null } }).message, /^managed-operation-cancelled/);
+  assert.match(approvalRefusal({ receipt: { state: 'resolved', decision: 'deny' } }).message, /^managed-operation-denied: the member refused/);
+  assert.match(approvalRefusal({ receipt: null }).message, /^managed-operation-denied: the command was not approved/);
+});
+
+test('findings of a later review are put to the agent too, by their ids', async () => {
+  const run = newRun('fix'); const sent = [], io = { note: async () => {}, send: async (text, details) => { sent.push({ text, details }); }, signal: undefined }, managed = { run };
+  run.ledger.push({ id: 'o1', source: 'review', role: 'review', kind: 'major', status: 'open', detail: 'first', required: false });
+  assert.equal(await settleLedger(managed, run, io), true);
+  assert.equal(await settleLedger(managed, run, io), false); // asked once
+  run.ledger[0].status = 'accepted';
+  run.ledger.push({ id: 'o3', source: 'review', role: 'review', kind: 'major', status: 'open', detail: 'later', required: false });
+  assert.equal(await settleLedger(managed, run, io), true);
+  assert.deepEqual(sent.map(s => s.details.ids), [['o1'], ['o3']]);
+  assert.match(ledgerWords({ ledger: [run.ledger[1]] }), /1 left without a decision \(o3\)/);
 });

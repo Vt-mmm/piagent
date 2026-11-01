@@ -4,6 +4,7 @@
 // refusal, starts once more: Studio then gives the new helper the next model
 // of its role that serves (an auto role's list).
 import { fenced, HELPER_UNTRUSTED_RULE } from './untrusted.mjs';
+import { relevantChecks } from './check-evidence.mjs';
 import { jobTitle } from './call-purpose.mjs';
 import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { managedResourceLoader } from './resource-loader.mjs';
@@ -144,7 +145,7 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     (managed.jobTitles ??= new WeakMap()).set(runtime, jobTitle(task, title));
     const setup = HELPER_SETUP[role], memory = helperMemoryTools(managed, () => grant, renew);
     boundary = new ManagedToolBoundary({ cwd: managed.cwd, sdkRoot: managed.sdk, protectedRoots: managed.protectedRoots, readOnly: true, commands: setup.commands });
-    const checks = role === 'verify' ? `\n\nRepository checks: ${managed.checks.commands.length ? managed.checks.commands.map(c => '`' + c + '`').join(', ') : 'none declared or detected; choose the tests, type check or build that cover the claims'}.${managed.run?.fullAsked || managed.run?.scopeChoice === 'full' ? '' : ' Run only the tests that cover the claims: the member decides about a whole-suite run.'}` : '';
+    const checks = role === 'verify' ? `\n\nRepository checks: ${managed.checks.commands.length ? relevantChecks(managed, managed.checks.commands).map(c => '`' + c + '`').join(', ') : 'none declared or detected; choose the tests, type check or build that cover the claims'}.${managed.run?.fullAsked || managed.run?.scopeChoice === 'full' ? '' : ' Run only the tests that cover the claims: the member decides about a whole-suite run.'}` : '';
     // One helper session answers the brief (with one part of the patch for a
     // review in parts); its reply and tokens. A helper runs at its role's
     // level from Studio (fixed by the Harness, or its main agent's).

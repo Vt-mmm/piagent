@@ -87,7 +87,7 @@ export function countedCheck(managed, tool) {
     try { const result = await tool.execute(...args); ok = !result?.isError; return result; }
     finally {
       const after = counted && before !== null ? await folder() : null;
-      if (after !== null && after === before) await managed.run.afterTool('bash', args[1], ok, () => managed.digest());
+      if (after !== null && after === before) await managed.run.afterTool('bash', args[1], ok, () => managed.digest(), managed);
     }
   } };
 }

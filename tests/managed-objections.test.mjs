@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
+import { memberQuestions } from '../packages/piagent-core/managed/member-questions.mjs';
 import { briefIssues, RunProcess } from '../packages/piagent-core/managed/workflow.mjs';
 import { memberRequest, anchorText, beforeDelegate, relayObjection, recordVerdicts } from '../packages/piagent-core/managed/objections.mjs';
 import { addItems, checkRef, evidenceRef, ledgerGuard, ledgerWords, recordFindings, resolveTool, reviewFocus } from '../packages/piagent-core/managed/ledger.mjs';
@@ -106,7 +107,7 @@ test('the main agent records each decision; a premise objection refuses edits an
     addItems(managed, 'brief', 'research', [{ kind: 'conflicts_with_request', detail: 'the member asked for Go', evidence: 'the member says "in Go"' }]);
     for (const answer of [3, 4]) assert.throws(() => ledgerGuard(run, answer), /managed-objection-open: resolve o3/);
     assert.doesNotThrow(() => ledgerGuard(run, 5)); assert.equal(run.ledgerSkipped, true);
-    assert.equal(ledgerWords(run), 'objections: 1 accepted, 1 rejected, 1 left without a decision');
+    assert.equal(ledgerWords(run), 'objections: 1 accepted, 1 rejected, 1 left without a decision (o3)');
     // The second objection of a helper goes to the member, and the helper is refused until then.
     run.disputes.push({ source: 'scout', brief: true });
     assert.throws(() => beforeDelegate(run, 'scout', false), /^Error: managed-helper-disputed: the scout subagent objected to your briefs twice/);
@@ -319,7 +320,7 @@ const REJECT = { tool: 'resolve_objection', input: { id: 'o1', decision: 'reject
 const ACCEPT = { tool: 'resolve_objection', input: { id: 'o1', decision: 'accepted', checked: 'find . -name billing.js: nothing', change: 'asked about cart.js instead' } };
 test('an objection the agent does not decide is put to it once; a decision or its absence is on the record', { skip: !supported, timeout: 120000 }, async () => {
   for (const [last, expected] of [[ACCEPT, { phases: ['objection', 'answer', 'final'], answered: 1, words: 'objections: 1 accepted' }],
-    ['The scout was right: there is no billing.js.', { phases: ['objection', 'answer', 'final'], answered: 0, words: 'objections: 1 left without a decision' }]]) {
+    ['The scout was right: there is no billing.js.', { phases: ['objection', 'answer', 'final'], answered: 0, words: 'objections: 1 left without a decision (o1)' }]]) {
     const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where billing.js computes the discount.' } }, 'The discount is in cart.js.', last, 'Done.'], scout: [OBJECTION] });
     try {
       await s.managed.session.prompt('Where is the discount computed?');
@@ -526,5 +527,28 @@ test('with helper slots in Studio and Agent Watch, each helper the member asked 
     assert.deepEqual(states.find(list => list.length === 3).map(h => [h.role, h.slot, h.job]).sort(), [['research', 1, 'Search each source for the release date.'], ['research', 2, 'Search each source for the release date.'], ['research', 3, 'Search each source for the release date.']]);
     assert.deepEqual(states.at(-1), [], 'none left once they ended');
     assert.match(delegateResults(s.managed)[0], /### Research helper 3 of 3/);
+  } finally { await s.close(); }
+});
+
+test('in a real session a push is reviewed first: the finding reaches the agent before the code leaves', { skip: !supported, timeout: 180000 }, async () => {
+  const MAJOR = 'One issue.\n' + json({ findings: [{ severity: 'major', file: 'a.txt', line: 1, issue: 'drafts leak across users', evidence: 'line 1' }], brief_issues: [], summary: 'one major' });
+  const s = await session({ plan: 'off', verify: 'off', review: 'require', max_fix_loops: 2 }, ['review'], { main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'bash', input: { command: 'git push origin main' } },
+    { tool: 'resolve_objection', input: { id: 'o1', decision: 'rejected', checked: 'a.txt is a plain data file', reason: 'no users here' } }, 'Done.', 'Still done.'], review: [MAJOR, CLEAN] });
+  const unbind = memberQuestions.bindSurface(s.managed.session.sessionManager.getSessionId(), () => {});
+  try {
+    await s.managed.session.prompt('Make a.txt say fixed');
+    const refused = JSON.stringify(s.server.requests.filter(r => r.role === 'main')[2].body);
+    assert.match(refused, /managed-review-before-push/); assert.match(refused, /drafts leak across users/);
+    assert.equal(s.server.requests.filter(r => r.role === 'review').length >= 1, true);
+  } finally { unbind(); await s.close(); }
+});
+
+test('the sandbox lets a test write a .env file in its own temporary folder, and still not in the project', { skip: !supported || process.platform !== 'darwin', timeout: 120000 }, async () => {
+  const s = await session({ plan: 'off', verify: 'off', review: 'off', max_fix_loops: 0 }, [], { main: ['Done.'] });
+  try {
+    const run = command => s.managed.boundary.invoke('bash', { command }).then(r => r.content.map(p => p.text).join(''), e => `REFUSED ${e.message}`);
+    assert.match(await run('mkdir -p "$TMPDIR/t/x" && echo A=1 > "$TMPDIR/t/x/.env" && echo B=1 > "$TMPDIR/t/x/.env.local" && cat "$TMPDIR/t/x/.env" "$TMPDIR/t/x/.env.local"'), /A=1\s+B=1/);
+    assert.match(await run('echo A=1 > .env.feedback-test; echo code=$?'), /code=1|not permitted/);
+    assert.match(await run('echo token > "$TMPDIR/credentials"; echo code=$?'), /code=1|not permitted/);
   } finally { await s.close(); }
 });
