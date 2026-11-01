@@ -29,7 +29,7 @@ test('fast mode exists only where the Harness allows it, and starts off', () => 
   assert.equal(open.fast, false); assert.equal(fastState(open), null); assert.equal(row(n.entries), undefined); assert.equal(restoreFast(n), false);
 });
 
-test('only the main agent\'s call on a model that serves fast mode asks for the priority tier', async () => {
+test('a call of any agent on a model that serves fast mode asks for the priority tier', async () => {
   const on = {manifest: manifest(true), fast: true}, codex = {provider: 'codex', native: 'gpt-6-astra'};
   const body = {model: 'gpt', input: 'x'};
   assert.deepEqual(await fastPayload(on, codex)(body, {}), {model: 'gpt', input: 'x', service_tier: 'priority'});

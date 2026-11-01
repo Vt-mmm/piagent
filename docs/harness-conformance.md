@@ -141,12 +141,12 @@ On unless set to `false` (Agent Studio does not offer this setting yet). The con
 
 ### `fast_mode`
 
-Off unless the Harness allows it. Only the main agent's calls on a model that serves the priority tier ask for it; a refusal puts the conversation back to standard speed.
+Off unless the Harness allows it. Calls of the main agent and of subagents on a model that serves the priority tier ask for it; other models run at standard speed, and a refusal puts that model back to standard speed.
 
 - Studio: `TestFastModeNeedsTheHarnessAndIsChargedAtItsWeight`
 - Piagent: `managed-fast-mode` › fast mode exists only where the Harness allows it, and starts off
-- Piagent: `managed-fast-mode` › only the main agent's call on a model that serves fast mode asks for the priority tier
-- Piagent: `managed-fast-mode` › a refused fast request puts the conversation back to standard speed
+- Piagent: `managed-fast-mode` › a call of any agent on a model that serves fast mode asks for the priority tier
+- Piagent: `managed-fast-mode` › a refused fast request puts that model back to standard speed, the others keep it
 
 ## Behaviour the Harness implies
 
