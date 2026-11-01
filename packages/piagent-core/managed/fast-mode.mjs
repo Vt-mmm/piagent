@@ -1,10 +1,12 @@
 // Fast mode of a company conversation. The member turns it on per
 // conversation, and only where the team's Harness in Studio allows it
 // (harness.configuration.fast_mode); a conversation starts with it off. While
-// on, the main agent's calls ask a Codex model for the priority service tier:
-// the same model and thinking level, answered faster, and charged to the
-// key's quota at a higher rate (Studio decides the rate and refuses the tier
-// for a run whose Harness does not allow it). Subagents run as usual.
+// on, every call of the conversation, the main agent's and its subagents', asks
+// for the priority service tier where its model serves it: the same model and
+// thinking level, answered faster, and charged to the key's quota at a higher
+// rate (Studio decides the rate and refuses the tier for a run whose Harness
+// does not allow it). A model that does not serve it runs at standard speed,
+// so a Claude main agent with Codex subagents still gets it on the subagents.
 const ENTRY = 'agent-watch-fast';
 export const NOTICE = 'agent-watch-fast-notice';
 export const FAST_SERVICE_TIER = 'priority';
@@ -27,7 +29,7 @@ export function fastSetter(owner, manager) {
   return enabled => {
     if (enabled && !fastAllowed(owner.manifest)) throw Error('managed-fast-unavailable');
     if (Boolean(enabled) === Boolean(owner.fast)) return false;
-    owner.fast = Boolean(enabled); manager.appendCustomEntry(ENTRY, { enabled: owner.fast, allowed: fastAllowed(owner.manifest), at: new Date().toISOString() });
+    owner.fast = Boolean(enabled); owner.fastDeclined?.clear(); manager.appendCustomEntry(ENTRY, { enabled: owner.fast, allowed: fastAllowed(owner.manifest), at: new Date().toISOString() });
     return true;
   };
 }
@@ -44,21 +46,22 @@ export const fastServed = route => route?.provider === 'codex' && CODEX_FAST.has
 // Studio's refusal of the tier (the Harness or the model list changed), or
 // the provider's of a request carrying it: asked again once without it.
 export const fastRefusal = code => code === 'policy_denied' || code === 'upstream_request_rejected';
-// A fast request was refused before the model did any work: the conversation
-// goes back to standard speed and says so, instead of failing the turn.
-export function declineFast(owner, code) {
-  owner.fast = false;
+// A fast request was refused before the model did any work: that model goes
+// back to standard speed and the others keep fast mode. Only the main agent's
+// model says so; turning Fast off and on asks again.
+export function declineFast(owner, code, role = 'main', route = null) {
+  (owner.fastDeclined ??= new Set()).add(route?.native ?? '');
+  if (role !== 'main') return;
   try {
-    recordFast(owner, owner.session.sessionManager);
     void owner.session.sendCustomMessage?.({ customType: NOTICE, display: true, details: { code },
-      content: `Fast mode was refused for this request [${code}]: this conversation continues at standard speed. Turn Fast on again to retry.` }, { triggerTurn: false })?.catch?.(() => {});
+      content: `Fast mode was refused for this model [${code}]: its calls continue at standard speed. Turn Fast off and on again to retry.` }, { triggerTurn: false })?.catch?.(() => {});
   } catch { /* the request goes on at standard speed either way */ }
 }
-// The payload hook of one request: the main agent's call on a model that
-// serves fast mode carries the tier while fast mode is on and still allowed
-// (the Harness may have turned it off since the member turned it on).
-export function fastPayload(owner, role, route, onPayload) {
-  if (role !== 'main' || !owner.fast || !fastAllowed(owner.manifest) || !fastServed(route)) return onPayload;
+// The payload hook of one request: a call on a model that serves fast mode
+// carries the tier while fast mode is on and still allowed (the Harness may
+// have turned it off since the member turned it on).
+export function fastPayload(owner, route, onPayload) {
+  if (!owner.fast || !fastAllowed(owner.manifest) || !fastServed(route) || owner.fastDeclined?.has(route.native)) return onPayload;
   return async (payload, model) => {
     const next = (onPayload ? await onPayload(payload, model) : undefined) ?? payload;
     return next && typeof next === 'object' && !Array.isArray(next) ? { ...next, service_tier: FAST_SERVICE_TIER } : next;

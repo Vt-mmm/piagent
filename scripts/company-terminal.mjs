@@ -376,8 +376,8 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
         showFast(ctx);
         ctx.ui.notify(session.managedFastState() === 'on'
           ? session.managedFastServed?.() === false
-            ? 'Fast đang bật nhưng model hiện tại của main agent không hỗ trợ Fast (chỉ các model GPT qua Codex): các lượt vẫn chạy tốc độ thường, quota tính như thường.'
-            : 'Fast đang bật: main agent trả lời nhanh hơn trên model GPT, token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.'
+            ? 'Fast đang bật: model của main agent không hỗ trợ Fast nên main agent chạy tốc độ thường; subagent trên model GPT (Codex) vẫn chạy Fast, token của các lượt đó tính vào quota gấp 2,5 lần.'
+            : 'Fast đang bật: main agent và subagent chạy nhanh hơn trên model GPT, model khác giữ tốc độ thường; token chạy Fast tính vào quota gấp 2,5 lần.'
           : 'Fast đang tắt: các lượt chạy tốc độ thường.', 'info');
       } });
 

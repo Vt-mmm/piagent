@@ -92,7 +92,7 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
             // same company account and prompt cache; a helper names its role.
             const conversation = role === 'main' ? conversationSession(owner) : null;
             // Fast mode, where the member turned it on and the model serves it (fast-mode.mjs).
-            const onPayload = fastPayload(owner, role, route, options?.onPayload), fast = onPayload !== options?.onPayload;
+            const onPayload = fastPayload(owner, route, options?.onPayload), fast = onPayload !== options?.onPayload;
             // Studio's id for this request, from its answer's headers: a
             // stream that ends here without an answer is ended there too.
             let studioRequest = null;
@@ -118,7 +118,7 @@ export function wrapRoleStreams(owner, runtime, role, { provider, verifyGrant })
               out.end(told(result)); return;
             }
             // Refused with the fast tier: asked again at standard speed.
-            if (fast && fastRefusal(failureCode(refusal.errorMessage))) { letGo(); declineFast(owner, failureCode(refusal.errorMessage)); continue; }
+            if (fast && fastRefusal(failureCode(refusal.errorMessage))) { letGo(); declineFast(owner, failureCode(refusal.errorMessage), role, route); continue; }
             refused = String(refusal.errorMessage ?? '');
             // A lapsed or replaced grant: the next ask renews it, not this share.
             const stale = share; letGo();

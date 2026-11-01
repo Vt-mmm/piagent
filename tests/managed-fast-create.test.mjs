@@ -38,7 +38,7 @@ function fixture(t, allowed) {
     },
     async send(sessionRef, payload) {
       // What the first run's main-agent request will carry, decided now.
-      const body = await fastPayload(owner, 'main', {provider: 'codex', native: 'gpt-6-sol'})?.({input: payload.message}, {});
+      const body = await fastPayload(owner, {provider: 'codex', native: 'gpt-6-sol'})?.({input: payload.message}, {});
       steps.push(`send:fast=${owner.fast}:tier=${body?.service_tier ?? 'none'}`);
       return {resultCode: 'started', operationRef: 'operation_fast_01'};
     }

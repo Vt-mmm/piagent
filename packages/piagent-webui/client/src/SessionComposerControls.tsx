@@ -45,8 +45,8 @@ function Stat({ name, value }: { name: string; value: string }) {
 // conversation's header. On, it is amber so the member sees it at a glance.
 export const fastLabel = (on: boolean, locale: UiLocale) => on ? localize(locale, "Fast: bật", "Fast: on") : localize(locale, "Fast: tắt", "Fast: off");
 export const fastHint = (locale: UiLocale) => localize(locale,
-  "Fast: main agent trả lời nhanh hơn trên model GPT (Codex); token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
-  "Fast: the main agent answers faster on GPT (Codex) models; its tokens count 2.5 times toward the quota. Model and thinking level are unchanged.");
+  "Fast: main agent và subagent chạy nhanh hơn trên model GPT (Codex), model khác giữ tốc độ thường; token chạy Fast tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
+  "Fast: the main agent and subagents run faster on GPT (Codex) models, other models keep standard speed; tokens run with Fast count 2.5 times toward the quota. Model and thinking level are unchanged.");
 export const fastOnSx = { borderColor: "warning.main", color: "warning.main", fontWeight: 650,
   bgcolor: (theme: Theme) => alpha(theme.palette.warning.main, .14), "&:hover": { bgcolor: (theme: Theme) => alpha(theme.palette.warning.main, .22), color: "warning.main" } };
 
@@ -120,8 +120,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
     try {
       await onSetFast(!fastOn);
       setPermissionNotice({ tone: "success", text: fastOn ? localize(locale, "Đã tắt Fast. Các lượt sau chạy tốc độ thường.", "Fast is off. The next calls run at standard speed.")
-        : localize(locale, "Đã bật Fast: main agent trả lời nhanh hơn trên model GPT, token tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
-          "Fast is on: the main agent answers faster on GPT models, and its tokens count 2.5 times toward the quota. Model and thinking level are unchanged.") });
+        : localize(locale, "Đã bật Fast: main agent và subagent chạy nhanh hơn trên model GPT, model khác giữ tốc độ thường; token chạy Fast tính vào quota gấp 2,5 lần. Model và mức suy luận không đổi.",
+          "Fast is on: the main agent and subagents run faster on GPT models, other models keep standard speed; tokens run with Fast count 2.5 times toward the quota. Model and thinking level are unchanged.") });
     } catch (error) {
       const refused = error instanceof Error && /managed-fast-unavailable|unavailable/.test(error.message);
       setPermissionNotice({ tone: "error", text: refused ? localize(locale, "Harness của team không cho phép Fast.", "The team's Harness does not allow Fast.")
