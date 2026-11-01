@@ -1,5 +1,51 @@
 [
   {
+    "version": "1.49.1",
+    "date": "2026-11-01",
+    "status": "stable",
+    "title": {
+      "en": "A running turn says what it waits for",
+      "vi": "Lượt chạy nói rõ đang chờ gì"
+    },
+    "summary": {
+      "en": "The status and Activity show what the main agent and each subagent are doing, answers before a review are marked, and Fast follows each model.",
+      "vi": "Trạng thái và Activity cho thấy main agent và từng subagent đang làm gì, câu trả lời trước review được đánh dấu, và Fast áp dụng theo từng model."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A long end-of-turn review no longer looks stuck: the status names the reviewer and how long it has run, with the step it is on.",
+        "vi": "Review cuối lượt chạy lâu không còn trông như bị treo: dòng trạng thái nói reviewer đang chạy, đã bao lâu và đang làm bước nào."
+      },
+      {
+        "kind": "improved",
+        "en": "Activity lists every call by agent: the main agent and each subagent, with tool, target and time, live and after the turn.",
+        "vi": "Activity liệt kê mọi lời gọi theo từng agent: main agent và mỗi subagent, gồm tool, đối tượng và giờ gọi, cả khi đang chạy lẫn sau khi xong."
+      },
+      {
+        "kind": "improved",
+        "en": "An answer written before the review is marked a draft and folded once a later one exists; the last one says it is the final result.",
+        "vi": "Câu trả lời viết trước review được đánh dấu bản nháp và thu gọn khi có câu mới hơn; câu cuối ghi rõ là kết quả cuối."
+      },
+      {
+        "kind": "improved",
+        "en": "You can write while a turn runs: Enter sends the message when it ends. A turn that fails or is stopped keeps the message for you.",
+        "vi": "Soạn được tin trong lúc lượt đang chạy: Enter sẽ gửi khi lượt xong. Lượt lỗi hoặc bị dừng thì tin vẫn được giữ để bạn quyết định."
+      },
+      {
+        "kind": "improved",
+        "en": "Fast follows each model, subagents too: a Claude main agent with Codex subagents runs them fast. Tokens run fast count 2.5 times toward the quota.",
+        "vi": "Fast áp dụng theo từng model, cả subagent: main agent Claude với subagent Codex thì subagent chạy Fast. Token chạy Fast tính vào quota gấp 2,5 lần."
+      },
+      {
+        "kind": "fixed",
+        "en": "A model that refuses Fast goes back to standard speed alone; the rest of the conversation keeps Fast.",
+        "vi": "Model từ chối Fast chỉ riêng nó về tốc độ thường; phần còn lại của cuộc trò chuyện vẫn giữ Fast."
+      }
+    ]
+  },
+  {
     "version": "1.49.0",
     "date": "2026-10-31",
     "status": "stable",

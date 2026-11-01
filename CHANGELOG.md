@@ -4,6 +4,22 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.49.1 - 2026-11-01
+
+**A running turn says what it waits for.** The status and Activity show what the main agent and each subagent are doing, answers before a review are marked, and Fast follows each model.
+
+### Improved
+
+- Activity lists every call by agent: the main agent and each subagent, with tool, target and time, live and after the turn.
+- An answer written before the review is marked a draft and folded once a later one exists; the last one says it is the final result.
+- You can write while a turn runs: Enter sends the message when it ends. A turn that fails or is stopped keeps the message for you.
+- Fast follows each model, subagents too: a Claude main agent with Codex subagents runs them fast. Tokens run fast count 2.5 times toward the quota.
+
+### Fixed
+
+- A long end-of-turn review no longer looks stuck: the status names the reviewer and how long it has run, with the step it is on.
+- A model that refuses Fast goes back to standard speed alone; the rest of the conversation keeps Fast.
+
 ## v1.49.0 - 2026-10-31
 
 **You choose how much to test.** The company Harness no longer pushes a whole test suite after a small change: it asks you to run the related part, all of it or nothing.

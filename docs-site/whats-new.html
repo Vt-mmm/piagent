@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.49.0" title="v1.49.0 docs · VI"><span class="dot"></span>v1.49.0</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.49.1" title="v1.49.1 docs · VI"><span class="dot"></span>v1.49.1</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,22 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-49-0" data-release>
+<article class="release latest" id="v1-49-1" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-49-1">v1.49.1</a><time class="release-date" datetime="2026-11-01">01/11/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-49-1-title">Lượt chạy nói rõ đang chờ gì</h3>
+    <p>Trạng thái và Activity cho thấy main agent và từng subagent đang làm gì, câu trả lời trước review được đánh dấu, và Fast áp dụng theo từng model.</p>
+    <ul class="release-items">
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Activity liệt kê mọi lời gọi theo từng agent: main agent và mỗi subagent, gồm tool, đối tượng và giờ gọi, cả khi đang chạy lẫn sau khi xong.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Câu trả lời viết trước review được đánh dấu bản nháp và thu gọn khi có câu mới hơn; câu cuối ghi rõ là kết quả cuối.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Soạn được tin trong lúc lượt đang chạy: Enter sẽ gửi khi lượt xong. Lượt lỗi hoặc bị dừng thì tin vẫn được giữ để bạn quyết định.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Fast áp dụng theo từng model, cả subagent: main agent Claude với subagent Codex thì subagent chạy Fast. Token chạy Fast tính vào quota gấp 2,5 lần.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Review cuối lượt chạy lâu không còn trông như bị treo: dòng trạng thái nói reviewer đang chạy, đã bao lâu và đang làm bước nào.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Model từ chối Fast chỉ riêng nó về tốc độ thường; phần còn lại của cuộc trò chuyện vẫn giữ Fast.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-49-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-49-0">v1.49.0</a><time class="release-date" datetime="2026-10-31">31/10/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-49-0-title">Bạn chọn chạy bao nhiêu test</h3>
@@ -406,25 +421,24 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-43-5" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-43-5">v1.43.5</a><time class="release-date" datetime="2026-10-27">27/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-43-5-title">Xem trước ảnh và đính kèm file văn phòng</h3>
-    <p>Ảnh đã gửi hiện thành hình, bảng tính và slide đính kèm trực tiếp được, task chụp nhiều screenshot không còn dừng vì giới hạn dung lượng request của Studio.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Ảnh đính kèm và ảnh đã gửi hiện thành hình trong hội thoại, bấm để xem cỡ lớn; chip trong khung soạn có ảnh thu nhỏ.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Đính kèm được .xlsx, .xlsm, .pptx, .odt, .ods, .odp, .rtf: bảng tính thành các dòng cách nhau bằng tab, slide theo thứ tự kèm ghi chú, không cần cài converter.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Task công ty chụp nhiều screenshot không còn lỗi request_too_large: mỗi request chỉ gửi lại ảnh mới nhất trong 2 MiB, ảnh cũ hơn thành một dòng ghi chú.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Câu trả lời đang stream của lượt có dùng tool xuống đoạn theo từng message của model, không còn dính các câu thành một khối.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">69</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">70</span></summary>
+    <div class="archive-row" id="v1-43-5">
+      <div class="archive-head"><a class="release-version" href="#v1-43-5">v1.43.5</a> <span class="release-date">27/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Xem trước ảnh và đính kèm file văn phòng</strong> — Ảnh đã gửi hiện thành hình, bảng tính và slide đính kèm trực tiếp được, task chụp nhiều screenshot không còn dừng vì giới hạn dung lượng request của Studio.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Ảnh đính kèm và ảnh đã gửi hiện thành hình trong hội thoại, bấm để xem cỡ lớn; chip trong khung soạn có ảnh thu nhỏ.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Đính kèm được .xlsx, .xlsm, .pptx, .odt, .ods, .odp, .rtf: bảng tính thành các dòng cách nhau bằng tab, slide theo thứ tự kèm ghi chú, không cần cài converter.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Task công ty chụp nhiều screenshot không còn lỗi request_too_large: mỗi request chỉ gửi lại ảnh mới nhất trong 2 MiB, ảnh cũ hơn thành một dòng ghi chú.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Câu trả lời đang stream của lượt có dùng tool xuống đoạn theo từng message của model, không còn dính các câu thành một khối.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-43-4">
       <div class="archive-head"><a class="release-version" href="#v1-43-4">v1.43.4</a> <span class="release-date">26/10/2026</span></div>
       <div class="archive-body">
