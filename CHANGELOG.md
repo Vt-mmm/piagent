@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.51.0 - 2026-11-02
+
+**Follow every session from outside it.** With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar.
+
+### Added
+
+- piagent sessions lists every open session as processing, paused, failed, done or idle, company conversations included. Add --watch to keep it refreshed.
+- piagent sessions --setup-herdr shows the state on each space and agent of the Herdr sidebar.
+
+### Fixed
+
+- Herdr sees piagent again: since Piagent moved to its own home, every pane read as unknown and the agents list stayed empty.
+- A company Terminal no longer reads idle in Herdr between the rounds of one message, and a question that waits for you reads as blocked.
+
 ## v1.50.0 - 2026-11-01
 
 **A push is judged repository by repository and reviewed first.** From feedback on a real three-repository task: the company Harness knows what passed where, says it before a push, and reviews the code before it leaves.

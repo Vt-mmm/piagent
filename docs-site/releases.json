@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.51.0",
+    "date": "2026-11-02",
+    "status": "stable",
+    "title": {
+      "en": "Follow every session from outside it",
+      "vi": "Theo dõi mọi session từ bên ngoài"
+    },
+    "summary": {
+      "en": "With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar.",
+      "vi": "Khi mở nhiều session, bạn biết session nào đang chạy, tạm dừng hay bị lỗi mà không cần mở từng cái, từ terminal bất kỳ và ngay trên sidebar Herdr."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "new",
+        "en": "piagent sessions lists every open session as processing, paused, failed, done or idle, company conversations included. Add --watch to keep it refreshed.",
+        "vi": "piagent sessions liệt kê mọi session đang mở: processing, paused, failed, done hoặc idle, gồm cả cuộc trò chuyện công ty. Thêm --watch để tự làm mới."
+      },
+      {
+        "kind": "new",
+        "en": "piagent sessions --setup-herdr shows the state on each space and agent of the Herdr sidebar.",
+        "vi": "piagent sessions --setup-herdr hiện trạng thái ngay trên từng space và agent ở sidebar Herdr."
+      },
+      {
+        "kind": "fixed",
+        "en": "Herdr sees piagent again: since Piagent moved to its own home, every pane read as unknown and the agents list stayed empty.",
+        "vi": "Herdr lại thấy piagent: từ khi Piagent có home riêng, mọi pane đều là unknown và danh sách agent trống."
+      },
+      {
+        "kind": "fixed",
+        "en": "A company Terminal no longer reads idle in Herdr between the rounds of one message, and a question that waits for you reads as blocked.",
+        "vi": "Terminal công ty không còn báo idle trên Herdr giữa các vòng của một tin nhắn, và câu hỏi đang chờ bạn được báo là blocked."
+      }
+    ]
+  },
+  {
     "version": "1.50.0",
     "date": "2026-11-01",
     "status": "stable",

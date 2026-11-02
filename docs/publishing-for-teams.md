@@ -42,6 +42,7 @@ pi install /path/to/piagent
 ## Versioning
 
 - `1.48.2`: Terminal nạp bản mới không cần đóng: `piagent reload`, và `piagent-update` tự yêu cầu, để mọi Terminal đang mở (`piagent`, `piagent studio`) nạp bản đã cài khi rảnh, giữ nguyên cuộc trò chuyện, task đang chạy xong trước; chỉ member được bỏ qua kiểm tra bắt buộc của team, trên thẻ duyệt, cho đúng code lúc đó.
+- `1.51.0`: `piagent sessions` cho biết mọi session đang chạy, tạm dừng hay bị lỗi, gồm cả phiên công ty; Herdr lại thấy `piagent` và hiện trạng thái trên từng space sau `piagent sessions --setup-herdr`.
 - `1.50.0`: Harness công ty xét push theo từng repo: lần test nhỏ sau không xóa kết quả chạy toàn bộ, câu hỏi trước push ghi rõ đã chạy gì, review chạy trước push, thẻ duyệt hết hạn không còn bị báo là từ chối.
 - `1.49.1`: Lượt chạy nói rõ đang chờ gì: reviewer đang chạy hiện trên dòng trạng thái, Activity liệt kê lời gọi của main agent và từng subagent, soạn được tin trong lúc chạy; câu trả lời trước review được đánh dấu bản nháp, câu cuối ghi kết quả cuối. Fast áp dụng theo từng model, cả cho subagent.
 - `1.49.0`: Harness công ty không còn tự ép chạy toàn bộ test: thành viên chọn chạy phần liên quan, toàn bộ hay không chạy, được hỏi ở cuối thay đổi, trước khi chạy cả bộ test và trước khi push; Bypass tự chạy phần liên quan nhưng vẫn hỏi trước push.
