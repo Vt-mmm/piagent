@@ -111,13 +111,16 @@
 <article class="release latest" id="v1-51-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-51-0">v1.51.0</a><time class="release-date" datetime="2026-11-02">Nov 2, 2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-51-0-title">Follow every session from outside it</h3>
-    <p>With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar.</p>
+    <h3 data-toc-skip id="v1-51-0-title">Follow every session from outside it, and a new Always bypass access</h3>
+    <p>With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar. Always bypass, a new access you choose yourself, removes the sandbox and asks only about commits, pushes and removing a critical path.</p>
     <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>Always bypass: no sandbox for the agent and its helpers; network, MCP, files and deploys run unasked. Only commit, push, gh pr merge and rm on a critical path are asked. It warns you once.</span></li>
       <li data-kind="new"><span class="kind kind-new">New</span><span>piagent sessions lists every open session as processing, paused, failed, done or idle, company conversations included. Add --watch to keep it refreshed.</span></li>
       <li data-kind="new"><span class="kind kind-new">New</span><span>piagent sessions --setup-herdr shows the state on each space and agent of the Herdr sidebar.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>A removal of a critical path unanswered for two minutes does not run and the agent carries on; after three, they are refused until your next message.</span></li>
       <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Herdr sees piagent again: since Piagent moved to its own home, every pane read as unknown and the agents list stayed empty.</span></li>
       <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>A company Terminal no longer reads idle in Herdr between the rounds of one message, and a question that waits for you reads as blocked.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Security</span><span>Always bypass gives no protection against prompt injection: a page or file that misleads the agent can send secrets out unasked. Turn it on only where you accept that.</span></li>
     </ul>
   </div>
 </article>

@@ -6,17 +6,26 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 
 ## v1.51.0 - 2026-11-02
 
-**Follow every session from outside it.** With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar.
+**Follow every session from outside it, and a new Always bypass access.** With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar. Always bypass, a new access you choose yourself, removes the sandbox and asks only about commits, pushes and removing a critical path.
 
 ### Added
 
+- Always bypass: no sandbox for the agent and its helpers; network, MCP, files and deploys run unasked. Only commit, push, gh pr merge and rm on a critical path are asked. It warns you once.
 - piagent sessions lists every open session as processing, paused, failed, done or idle, company conversations included. Add --watch to keep it refreshed.
 - piagent sessions --setup-herdr shows the state on each space and agent of the Herdr sidebar.
+
+### Improved
+
+- A removal of a critical path unanswered for two minutes does not run and the agent carries on; after three, they are refused until your next message.
 
 ### Fixed
 
 - Herdr sees piagent again: since Piagent moved to its own home, every pane read as unknown and the agents list stayed empty.
 - A company Terminal no longer reads idle in Herdr between the rounds of one message, and a question that waits for you reads as blocked.
+
+### Security
+
+- Always bypass gives no protection against prompt injection: a page or file that misleads the agent can send secrets out unasked. Turn it on only where you accept that.
 
 ## v1.50.0 - 2026-11-01
 

@@ -111,13 +111,16 @@
 <article class="release latest" id="v1-51-0" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-51-0">v1.51.0</a><time class="release-date" datetime="2026-11-02">02/11/2026</time></div>
   <div class="release-body">
-    <h3 data-toc-skip id="v1-51-0-title">Theo dõi mọi session từ bên ngoài</h3>
-    <p>Khi mở nhiều session, bạn biết session nào đang chạy, tạm dừng hay bị lỗi mà không cần mở từng cái, từ terminal bất kỳ và ngay trên sidebar Herdr.</p>
+    <h3 data-toc-skip id="v1-51-0-title">Theo dõi mọi session từ bên ngoài, thêm quyền Always bypass</h3>
+    <p>Khi mở nhiều session, bạn biết session nào đang chạy, tạm dừng hay bị lỗi mà không cần mở từng cái, từ terminal bất kỳ và ngay trên sidebar Herdr. Always bypass, quyền mới do bạn tự chọn, bỏ sandbox và chỉ hỏi khi commit, push và xoá đường dẫn quan trọng.</p>
     <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Always bypass: agent và helper không còn sandbox; internet, MCP, file và deploy chạy không hỏi. Chỉ hỏi commit, push, gh pr merge và rm đường dẫn quan trọng. Chỉ cảnh báo một lần.</span></li>
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>piagent sessions liệt kê mọi session đang mở: processing, paused, failed, done hoặc idle, gồm cả cuộc trò chuyện công ty. Thêm --watch để tự làm mới.</span></li>
       <li data-kind="new"><span class="kind kind-new">Mới</span><span>piagent sessions --setup-herdr hiện trạng thái ngay trên từng space và agent ở sidebar Herdr.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Lệnh xoá đường dẫn quan trọng không được trả lời trong 2 phút sẽ không chạy và agent làm tiếp; sau 3 lần, các lệnh này bị từ chối đến khi bạn nhắn tiếp.</span></li>
       <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Herdr lại thấy piagent: từ khi Piagent có home riêng, mọi pane đều là unknown và danh sách agent trống.</span></li>
       <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Terminal công ty không còn báo idle trên Herdr giữa các vòng của một tin nhắn, và câu hỏi đang chờ bạn được báo là blocked.</span></li>
+      <li data-kind="security"><span class="kind kind-security">Bảo mật</span><span>Always bypass không chống được prompt injection: trang web hay file lừa được agent thì secret có thể bị gửi ra ngoài mà không hỏi. Chỉ bật khi bạn chấp nhận điều đó.</span></li>
     </ul>
   </div>
 </article>
