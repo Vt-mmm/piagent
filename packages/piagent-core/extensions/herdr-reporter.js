@@ -48,9 +48,9 @@ const safeArgv = argv => argv && argv.every(part => typeof part === 'string' && 
 // working while a turn runs, blocked while the conversation waits for the
 // member (Pi's blocking dialogs, or `herdr:blocked` events), idle otherwise.
 // Reports go out one at a time, the newest state winning.
-export function herdrReporterExtension(herdr, { source, resume, send = sendHerdrRequest }) {
+export function herdrReporterExtension(herdr, { source, resume, managed = null, send = sendHerdrRequest }) {
   return (pi) => {
-    let seq = Date.now() * 1000, active = false, blocked = 0, label, last, resumeArgv, queued, sending = false;
+    let unsubscribe, seq = Date.now() * 1000, active = false, blocked = 0, label, last, resumeArgv, queued, sending = false;
     const desired = () => blocked > 0 ? { state: 'blocked', message: label } : { state: active ? 'working' : 'idle', message: undefined };
     const drain = async () => {
       if (sending) return;
@@ -85,12 +85,17 @@ export function herdrReporterExtension(herdr, { source, resume, send = sendHerdr
     pi.on('ui_prompt_start', event => wait({ active: true, label: event?.title?.slice(0, 80) }));
     pi.on('ui_prompt_end', () => wait({ active: false }));
     // /new, /resume and /fork start another session: Herdr follows it.
-    pi.on('session_start', async (_event, ctx) => { follow(ctx); active = ctx?.isIdle?.() === false; publish(true); });
+    pi.on('session_start', async (_event, ctx) => {
+      follow(ctx); active = ctx?.isIdle?.() === false || !!managed?.()?.activePrompt; publish(true);
+      // One company message is many rounds: it is idle when the turn itself ends.
+      unsubscribe?.();
+      unsubscribe = managed?.()?.session?.subscribe?.(event => { if (event?.type === 'agent_settled' && !managed()?.activePrompt) { active = false; publish(); } });
+    });
     pi.on('agent_start', (_event, ctx) => { const changed = follow(ctx); active = true; publish(changed); });
-    pi.on('agent_settled', (_event, ctx) => { if (ctx?.isIdle?.() !== true) return; active = false; publish(); });
+    pi.on('agent_settled', (_event, ctx) => { if (ctx?.isIdle?.() !== true || managed?.()?.activePrompt) return; active = false; publish(); });
   };
 }
 
-export function companyHerdrExtension(herdr, { send } = {}) {
-  return herdrReporterExtension(herdr, { source: COMPANY_SOURCE, resume: herdrResumeArgv, ...(send ? { send } : {}) });
+export function companyHerdrExtension(herdr, { send, managed } = {}) {
+  return herdrReporterExtension(herdr, { source: COMPANY_SOURCE, resume: herdrResumeArgv, managed, ...(send ? { send } : {}) });
 }

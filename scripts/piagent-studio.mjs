@@ -168,7 +168,7 @@ try {
     // A conversation that enrolled again (key or harness changed) holds the live broker.
     if (current) { broker = current.broker; await current.session.abort(); await Promise.allSettled([...current.helpers.values()]); await broker.request('close'); current.session.dispose(); await current.boundary.dispose(); }
     current = await ManagedSession.create({ sdkRoot: config.sdk_root, cwd, origin: config.origin, broker, agentDir, sessionManager,
-      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal, ...(scripted ? [] : [sessionStatusExtension({ herdr })]), ...(reportToHerdr ? [companyHerdrExtension(herdr)] : [])] });
+      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal, ...(scripted ? [] : [sessionStatusExtension({ herdr, managed: () => current })]), ...(reportToHerdr ? [companyHerdrExtension(herdr, { managed: () => current })] : [])] });
     // The plan is drawn as a checklist here; Pi keeps this definition object.
     for (const [name, draw] of Object.entries(toolRenderers)) Object.assign(current.session.getToolDefinition(name) ?? {}, draw);
     return { session: current.session, extensionsResult: current.extensionsResult, services: current.services, diagnostics: [] };

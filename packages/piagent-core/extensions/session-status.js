@@ -88,15 +88,24 @@ export function spaceSummary(rows) {
   }).join(" ");
 }
 
+// How a company message ended (managed/continuation.mjs). A checklist left
+// open waits for the member to say what comes next.
+export function companyTurnEnd(end, text) {
+  if (end?.state === "failed") return ["failed", clip(`${end.role} agent: ${end.code}`, 160)];
+  if (end?.state === "cancelled") return ["paused", "Stopped by the member"];
+  if (end?.state === "midway") return ["paused", clip(String(text || "The checklist is not finished"), 160)];
+  return ["done", undefined];
+}
+
 // Only one session of a process is current: a company Terminal that enrolled
 // again replaces its session without always ending the old one.
 let currentInstance = null;
 
-export function sessionStatusExtension({ agentDir = piagentAgentDir(), herdr = null, send = sendHerdrRequest, now = Date.now, pid = process.pid, heartbeatMs = HEARTBEAT_MS } = {}) {
+export function sessionStatusExtension({ agentDir = piagentAgentDir(), herdr = null, send = sendHerdrRequest, now = Date.now, pid = process.pid, heartbeatMs = HEARTBEAT_MS, managed = null } = {}) {
   return (pi) => {
     const instance = {}, file = path.join(sessionStatusDir(agentDir), `${pid}.json`);
     const space = herdr ? herdr.pane.split(":")[0] : null;
-    let started = false, state = "idle", message, since = new Date(now()).toISOString(), cwd, sessionId, prompts = 0, failure = null, settled = "idle", timer, sequence = now() * 1000;
+    let started = false, state = "idle", message, since = new Date(now()).toISOString(), cwd, sessionId, prompts = 0, failure = null, settled = "idle", settledNote, unsubscribe, timer, sequence = now() * 1000;
 
     const current = () => started && currentInstance === instance;
     const nextSeq = () => { sequence = Math.max(sequence + 1, now() * 1000); return sequence; };
@@ -137,7 +146,7 @@ export function sessionStatusExtension({ agentDir = piagentAgentDir(), herdr = n
       try { sessionId = ctx?.sessionManager?.getSessionId?.() ?? sessionId; } catch { /* keep the last one */ }
     };
     // A dialog asks while a turn runs or between turns: the state under it comes back.
-    const underPrompt = () => { if (failure) return ["failed", failure]; return [settled, settled === "paused" ? "Stopped by the member" : undefined]; };
+    const settle = (next, note) => { settled = next; settledNote = note; if (!prompts) set(next, note); };
 
     pi.on("session_start", async (_event, ctx) => {
       currentInstance = instance; started = true; follow(ctx);
@@ -145,32 +154,36 @@ export function sessionStatusExtension({ agentDir = piagentAgentDir(), herdr = n
       if (herdr) for (const row of readJsonFiles(sessionStatusDir(agentDir))) {
         if (row.value.pane === herdr.pane && row.value.pid !== pid && !liveRow(row.value, now())?.alive) fs.rmSync(row.file, { force: true });
       }
-      failure = null; prompts = 0;
-      settled = ctx?.isIdle?.() === false ? "processing" : "idle";
+      failure = null; prompts = 0; settledNote = undefined;
+      settled = ctx?.isIdle?.() === false || managed?.()?.activePrompt ? "processing" : "idle";
+      // One company message is many rounds; only the turn's own end counts.
+      unsubscribe?.();
+      unsubscribe = managed?.()?.session?.subscribe?.(event => {
+        if (!current()) return;
+        if (event?.type === "managed_provider_retry") settle("processing", `Retrying ${event.attempt}/${event.of}: ${event.code}`);
+        if (event?.type === "managed_turn_end") settle(...companyTurnEnd(event.end, event.text));
+      });
       state = settled; message = undefined; since = new Date(now()).toISOString();
       write(); await report().catch(() => {});
       clearInterval(timer);
       timer = setInterval(() => { if (!current()) { clearInterval(timer); return; } write(); void report().catch(() => {}); }, heartbeatMs);
       timer.unref?.();
     });
-    pi.on("agent_start", (_event, ctx) => { follow(ctx); failure = null; settled = "processing"; if (!prompts) set("processing"); });
+    pi.on("agent_start", (_event, ctx) => { follow(ctx); failure = null; if (settled !== "processing" || !managed?.()?.activePrompt) settle("processing"); });
     pi.on("agent_end", (event) => { failure = failureOf(event?.messages); });
     pi.on("agent_settled", (event, ctx) => {
-      if (ctx?.isIdle?.() !== true) return;
-      settled = event?.aborted ? "paused" : failure ? "failed" : "done";
-      if (prompts) return;
-      const [next, note] = underPrompt();
-      set(next, note);
+      if (ctx?.isIdle?.() !== true || managed?.()?.activePrompt) return;
+      if (event?.aborted) settle("paused", "Stopped by the member");
+      else if (failure) settle("failed", failure);
+      else settle("done");
     });
     pi.on("ui_prompt_start", (event) => { prompts += 1; set("paused", clip(String(event?.title || "Waiting for your answer"), 80)); });
     pi.on("ui_prompt_end", () => {
       prompts = Math.max(0, prompts - 1);
-      if (prompts) return;
-      const [next, note] = settled === "processing" ? ["processing", undefined] : underPrompt();
-      set(next, note);
+      if (!prompts) set(settled, settledNote);
     });
     pi.on("session_shutdown", async () => {
-      clearInterval(timer);
+      clearInterval(timer); unsubscribe?.(); unsubscribe = undefined;
       if (currentInstance !== instance) return;
       started = false;
       try { fs.rmSync(file, { force: true }); } catch { /* a later reader prunes it */ }

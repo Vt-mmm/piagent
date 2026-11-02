@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { failureOf, gatewayRow, liveRow, onlyInTerminal, readSessions, sessionStatusDir, sessionStatusExtension, spaceSummary } from '../packages/piagent-core/extensions/session-status.js';
+import { failureOf, gatewayRow, liveRow, onlyInTerminal, readSessions, sessionStatusDir, sessionStatusExtension, spaceSummary, companyTurnEnd } from '../packages/piagent-core/extensions/session-status.js';
 
 // A developer runs many Piagent sessions and follows them from outside: which
 // one is processing, which waits for them, which failed.
@@ -201,4 +201,11 @@ test('piagent sessions lists them and --setup-herdr leaves a member\'s own rows 
   fs.writeFileSync(config, '[ui.sidebar.spaces]\nrows = [["workspace"]]\n');
   assert.equal(cli('--setup-herdr').status, 1);
   assert.equal(fs.readFileSync(config, 'utf8'), '[ui.sidebar.spaces]\nrows = [["workspace"]]\n');
+});
+
+test('how a company message ended reads the same way', () => {
+  assert.deepEqual(companyTurnEnd({ state: 'failed', role: 'main', code: 'quota' }), ['failed', 'main agent: quota']);
+  assert.deepEqual(companyTurnEnd({ state: 'cancelled' }), ['paused', 'Stopped by the member']);
+  assert.deepEqual(companyTurnEnd({ state: 'midway' }, 'Turn ended with 2 of 3 steps open'), ['paused', 'Turn ended with 2 of 3 steps open']);
+  assert.deepEqual(companyTurnEnd({ state: 'done' }), ['done', undefined]);
 });
