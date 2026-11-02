@@ -1113,7 +1113,7 @@ test("keeps many conversations readable: running first, filter by kind, folding 
   try {
     await page.goto(server.issueLaunchUrl());
     const sidebar = page.getByRole("complementary").or(page.locator("nav")).first();
-    await expect(page.getByRole("button", { name: "Công ty · 8" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Công ty · 8", exact: true })).toBeVisible();
     const running = page.getByRole("region", { name: "Đang chạy hoặc cần chú ý" });
     await expect(running.getByText("Kịch bản 1")).toBeVisible(); await expect(running.getByText("harness-edge-cases", { exact: false })).toBeVisible();
     const group = page.getByRole("region", { name: "harness-edge-cases" });
@@ -1126,7 +1126,7 @@ test("keeps many conversations readable: running first, filter by kind, folding 
     await page.reload(); await expect(page.getByRole("region", { name: "harness-edge-cases" }).getByText(/^Kịch bản \d$/)).toHaveCount(0);
     await page.getByRole("region", { name: "harness-edge-cases" }).getByRole("button", { name: /harness-edge-cases/ }).click();
     // Company only: personal conversations leave the list.
-    await page.getByRole("button", { name: "Công ty · 8" }).click();
+    await page.getByRole("button", { name: "Công ty · 8", exact: true }).click();
     await expect(page.getByText("Review source changes", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: /^Cá nhân/ }).click(); await expect(page.getByRole("region", { name: "harness-edge-cases" })).toHaveCount(0);
     await page.getByRole("button", { name: "Tất cả" }).click();
