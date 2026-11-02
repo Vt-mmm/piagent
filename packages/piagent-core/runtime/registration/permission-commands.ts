@@ -49,7 +49,7 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
   function emitCurrentPermissionStatus(ctx: ExtensionContext): void {
     const profile = loadProfileFromContext(ctx);
     const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
-    ctx.ui.notify(`Piagent permission profile: ${permissionProfile.mode}`, ["trusted-full-access", "bypass"].includes(permissionProfile.mode) ? "warning" : "info");
+    ctx.ui.notify(`Piagent permission profile: ${permissionProfile.mode}`, ["trusted-full-access", "bypass", "always-bypass"].includes(permissionProfile.mode) ? "warning" : "info");
     emitPermissionStatus(ctx, permissionProfile);
   }
 
@@ -58,7 +58,7 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
     const profile = loadProfileFromContext(ctx);
     const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
     const isActive = permissionProfile.mode === mode && !permissionProfile.warning;
-    const level = !isActive || mode === "trusted-full-access" || mode === "bypass" ? "warning" : "info";
+    const level = !isActive || mode === "trusted-full-access" || mode === "bypass" || mode === "always-bypass" ? "warning" : "info";
     const message = isActive
       ? `Piagent permission profile set to ${mode} for this session.`
       : `Requested ${mode}, but active profile is ${permissionProfile.mode}.`;
@@ -66,6 +66,9 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
     if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
     if (permissionProfile.mode === "trusted-full-access") {
       ctx.ui.notify("Trusted full access is active; protected paths, secret redaction, and destructive and handoff confirmations remain enforced.", "warning");
+    }
+    if (permissionProfile.mode === "always-bypass") {
+      ctx.ui.notify("Warning: Always bypass is active, by your decision. Network, MCP, files, deploys and credentials run without asking; only committing and pushing code and removing a critical path (rm -rf ~) are asked. The project's autoDeny rules, output redaction and /undo remain.", "warning");
     }
     if (permissionProfile.mode === "bypass") {
       ctx.ui.notify("Bypass is active: the work is not asked about or blocked in this personal session (deletes and protected paths included). The handoff (push, PR, publish, deploy, remote tools, MCP writes) is still asked; output redaction and /undo checkpoints remain. Company sessions keep their own rules.", "warning");
@@ -78,6 +81,7 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
     if (["read", "readonly", "read-only", "ro"].includes(action)) return "read-only";
     if (["write", "workspace", "workspace-write", "ww"].includes(action)) return "workspace-write";
     if (["full", "full-access", "trusted", "trusted-full-access"].includes(action)) return "trusted-full-access";
+    if (["always-bypass", "always"].includes(action)) return "always-bypass";
     if (["bypass", "yolo", "dangerously-bypass"].includes(action)) return "bypass";
     return undefined;
   }
@@ -90,7 +94,8 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
         { value: "read-only", label: "Read-only", description: "Scout/review without writes" },
         { value: "workspace-write", label: "Workspace write", description: "Normal governed implementation mode" },
         { value: "full-access", label: "Full access", description: "Trusted local full access; guardrails still apply" },
-        { value: "bypass", label: "Bypass", description: "Nothing asked or blocked (personal sessions only); redaction and /undo remain" },
+        { value: "bypass", label: "Bypass", description: "The work is not asked or blocked (personal sessions only); the handoff is still asked" },
+        { value: "always-bypass", label: "Always bypass", description: "Warning: nothing asked except commit, push and rm on a critical path" },
         { value: "help", label: "Help", description: "Show typed forms" }
       ], "status");
       if (chosen && chosen !== "help") {
@@ -104,7 +109,8 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
         "read: /permission read-only",
         "write: /permission workspace-write",
         "full: /permission full-access",
-        "bypass: /permission bypass (personal; nothing asked or blocked)",
+        "bypass: /permission bypass (personal; the handoff is still asked)",
+        "always: /permission always-bypass (only commit, push and rm on a critical path are asked)",
         "legacy: /piagent-permission"
       ].join("\n"));
       return;
@@ -120,7 +126,8 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
         "read: /permission read-only",
         "write: /permission workspace-write",
         "full: /permission full-access",
-        "bypass: /permission bypass (personal; nothing asked or blocked)",
+        "bypass: /permission bypass (personal; the handoff is still asked)",
+        "always: /permission always-bypass (only commit, push and rm on a critical path are asked)",
         "legacy: /piagent-permission"
       ].join("\n"));
       return;
@@ -181,6 +188,7 @@ export function registerPermissionCommands(pi: ExtensionAPI, deps: Record<string
   registerPermissionProfileCommand("workspace-write", "workspace-write", "Switch this session to workspace-write permission profile");
   registerPermissionProfileCommand("full-access", "trusted-full-access", "Switch this session to trusted full-access permission profile");
   registerPermissionProfileCommand("trusted-full-access", "trusted-full-access", "Alias for /full-access");
-  registerPermissionProfileCommand("bypass", "bypass", "Switch this personal session to bypass: nothing asked or blocked");
+  registerPermissionProfileCommand("bypass", "bypass", "Switch this personal session to bypass: the handoff is still asked");
+  registerPermissionProfileCommand("always-bypass", "always-bypass", "Switch this session to always bypass: only commit, push and rm on a critical path are asked");
 
 }

@@ -129,6 +129,9 @@ test('/bypass switches the conversation between ask first, Full access and Bypas
   assert.match(ui.notices.at(-1).message, /tắt Bypass/);
   await commands.get('bypass').handler('status', ui.ctx);
   assert.equal(ui.status.get('agent-watch-permission'), 'Toàn quyền', 'a Bypass the administrator switched off applies as Full access');
+  await commands.get('bypass').handler('always', ui.ctx);
+  assert.equal(managed.permission, 'always-bypass', 'no Harness switch governs it');
+  assert.equal(ui.status.get('agent-watch-permission'), 'Always bypass');
   await commands.get('bypass').handler('off', ui.ctx);
   assert.equal(managed.permission, 'workspace-write');
   assert.equal(ui.status.get('agent-watch-permission'), undefined);

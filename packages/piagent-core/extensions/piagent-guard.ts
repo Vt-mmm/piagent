@@ -89,7 +89,8 @@ import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-stat
 import { hasDurableContextEvidence } from "./context-evidence.js";
 import { piApprovalBroker, type ApprovalActionDraft, type ApprovalChoice, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
-import { FULL_ACCESS_RUNS, handoffReason, mcpWriteAction, treeExecFinding } from "../runtime/policy/handoff-policy.mjs";
+import { REMOVAL_EXPIRED, REMOVAL_TTL_MS, criticalRemovalReason, noteRemovalExpired, removalsHeld } from "../runtime/policy/critical-removal.mjs";
+import { FULL_ACCESS_RUNS, codeHandoffReason, handoffReason, mcpWriteAction, treeExecFinding } from "../runtime/policy/handoff-policy.mjs";
 import { createWorkspaceWriteAuthorityBindings } from "../runtime/policy/workspace-write-authority.ts";
 import { registerWorkspaceMemberEdits } from "../runtime/session/workspace-member-edits.mjs";
 import {
@@ -344,6 +345,8 @@ const PERMISSION_PROFILE_ALIASES: Record<string, PermissionProfileMode> = {
   "trusted_full_access": "trusted-full-access",
   "danger-full-access": "trusted-full-access",
   "danger_full_access": "trusted-full-access",
+  "always-bypass": "always-bypass",
+  "always_bypass": "always-bypass",
   bypass: "bypass",
   yolo: "bypass",
   "dangerously-bypass": "bypass",
@@ -1161,6 +1164,7 @@ function runtimeEquivalentForPermissionProfile(mode: PermissionProfileMode): str
   // checks are the boundary.
   if (mode === "read-only") return "like sandbox_mode=read-only, enforced by Piagent policy (no OS sandbox)";
   if (mode === "trusted-full-access") return "like sandbox_mode=danger-full-access; protected paths, destructive steps and the handoff (push, PR, publish, deploy, remote tools) are still asked";
+  if (mode === "always-bypass") return "like sandbox_mode=danger-full-access + approval_policy=never except committing and pushing code and removing a critical path; the project's autoDeny rules, output redaction and turn checkpoints remain";
   if (mode === "bypass") return "like sandbox_mode=danger-full-access + approval_policy=never for the work; the handoff (push, PR, publish, deploy, remote tools, MCP writes) is still asked, and output redaction and turn checkpoints remain";
   return "like sandbox_mode=workspace-write + approval_policy=on-request, enforced by Piagent policy (no OS sandbox)";
 }
@@ -1240,7 +1244,7 @@ function isPiagentTool(toolName: string): boolean {
 }
 
 // Full access or more: the profile does not narrow reads or the tool registry.
-const broadAccess = (mode: PermissionProfileMode) => mode === "trusted-full-access" || mode === "bypass";
+const broadAccess = (mode: PermissionProfileMode) => mode === "trusted-full-access" || mode === "bypass" || mode === "always-bypass";
 
 function evaluatePermissionProfileToolAccess(
   toolName: string,
@@ -3756,8 +3760,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
 
   // Bypass is for personal sessions only: a company session keeps Studio's rules.
-  const bypassActive = (ctx: ExtensionContext) => !isCompanySession(ctx) && ctx.model?.provider !== "agent_watch_managed"
-    && resolvePermissionProfile(loadProfileFromContext(ctx), policy, permissionOverrideFromContext(ctx)).mode === "bypass";
+  const bypassMode = (ctx: ExtensionContext) => !isCompanySession(ctx) && ctx.model?.provider !== "agent_watch_managed"
+    ? resolvePermissionProfile(loadProfileFromContext(ctx), policy, permissionOverrideFromContext(ctx)).mode : null;
+  const bypassActive = (ctx: ExtensionContext) => ["bypass", "always-bypass"].includes(String(bypassMode(ctx)));
   // Bypass runs the work without asking and stops at the handoff: a push, a
   // PR or merge, a publish or deploy, a remote or cloud tool, an upload or an
   // MCP tool that writes outside is asked about, as in every other mode.
@@ -3772,8 +3777,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const refused = evaluateExecPolicyCore(command, { policy: { execPolicy: { defaultMode: "enforce", bannedPrefixSuggestions: [], rules: projectRules } }, mode: "enforce" });
       if (refused.decision === "forbid") return execRefusal(refused);
     }
-    let reason = command ? await handoffReason(command) : null;
-    if (!reason && !command && prepared && classifyExternalAction(event.toolName, prepared.input, policy).decision === "confirm") {
+    const always = bypassMode(ctx) === "always-bypass", modeName = always ? "Always bypass" : "Bypass";
+    const removal = always && command ? criticalRemovalReason(command, { cwd: ctx.cwd, home: os.homedir() }) : null;
+    let reason = !command ? null : always ? removal ?? codeHandoffReason(command) : await handoffReason(command);
+    if (removal && removalsHeld(ctx.sessionManager.getSessionId(), ctx.sessionManager)) return { block: true, reason: `${removal}. ${REMOVAL_EXPIRED}` };
+    if (!always && !reason && !command && prepared && classifyExternalAction(event.toolName, prepared.input, policy).decision === "confirm") {
       const action = await mcpWriteAction(prepared.proxyTool ?? event.toolName);
       if (action) reason = `${prepared.proxyToolName ?? event.toolName} writes outside this machine (${action})`;
     }
@@ -3782,10 +3790,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null,
       action: { kind: "external-provider-action", preconditionClass: "runtime-only", treePrecondition: null, toolName: event.toolName, rawAction: { toolName: event.toolName, command, input },
         commandPreview: command, parameterPreview: preview, targetPaths: [], targetSummaries: [reason], provider: command ? "shell-external" : String(prepared?.proxyToolName ?? event.toolName),
-        urlOrigin: null, requestedScope: "one-handoff", reason: `Bypass still asks before a handoff: ${reason}`, riskClass: "high",
+        urlOrigin: null, requestedScope: "one-handoff", reason: `${modeName} still asks before a handoff: ${reason}`, riskClass: "high",
         allowConsequence: "Run this exact step once; the work leaves this machine.", denyConsequence: "The step does not run; the agent is told you declined." },
-      terminalConfirm: () => ctx.ui.confirm(`Bypass still asks before a handoff.\n\n${reason}\n\n${preview}\n\nAllow?`, "Piagent handoff confirmation"),
-      terminalChoose: terminalChooser(ctx, "Piagent handoff confirmation", `Bypass still asks before a handoff.\n\n${reason}\n\n${preview}`, false), unavailableFallback: approvalUnavailableFallback(ctx) });
+      terminalConfirm: () => ctx.ui.confirm(`${modeName} still asks before a handoff.\n\n${reason}\n\n${preview}\n\nAllow?`, "Piagent handoff confirmation"),
+      terminalChoose: terminalChooser(ctx, "Piagent handoff confirmation", `${modeName} still asks before a handoff.\n\n${reason}\n\n${preview}`, false), unavailableFallback: approvalUnavailableFallback(ctx), ...(removal ? { ttlMs: REMOVAL_TTL_MS } : {}) });
+    if (removal && approval.receipt?.state === "expired") { noteRemovalExpired(ctx.sessionManager.getSessionId(), ctx.sessionManager); return { block: true, reason: `${removal}. ${REMOVAL_EXPIRED}` }; }
     if (!approval.allowed) return approval.choice === "stop" ? { block: true, terminate: true, reason: `User denied the handoff and stopped the turn: ${reason}. Do not retry; wait for the member.` } : { block: true, reason: `User denied the handoff: ${reason}` };
     if (!approval.consume()) return { block: true, reason: "Approval became stale before tool start; the action was blocked." };
     return undefined;

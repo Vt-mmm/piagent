@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { memberQuestions } from './member-questions.mjs';
-import { effectivePermission } from './permission.mjs';
+import { alwaysBypass, effectivePermission } from './permission.mjs';
 import { digestsOnce, knownFast, markCheckStart, missingSuites, pushQuestion, pushRepositories, reviewBeforePush } from './check-evidence.mjs';
 
 // How much to test is the member's decision: a one-line fix should not cost a
@@ -97,7 +97,7 @@ async function ask(surface, question, labels, signal) {
 export async function askCheckScope(self, { partPassed = false, signal } = {}) {
   const surface = surfaceOf(self);
   if (!surface) return null;
-  if (effectivePermission(self) === 'bypass') return { choice: 'partial' };
+  if (['bypass', 'always-bypass'].includes(effectivePermission(self))) return { choice: 'partial' };
   const part = partPassed ? KEEP : PART;
   const picked = await ask(surface, partPassed ? 'Code đã đổi, phần test liên quan đã pass. Có chạy toàn bộ test không?' : 'Code đã đổi, chưa chạy test. Chạy phần nào?', [part, FULL, NONE], signal);
   if (signal?.aborted) return null;
@@ -114,7 +114,7 @@ const WORDS_REASON = words => `managed-check-scope: this command did not run. Th
 // Before a whole suite or a push: returns to let it run, throws to send the agent another way.
 export async function beforeCheckOrPush(self, command, ctx, signal) {
   const run = self.run;
-  if (!run || (run.policy?.verify === 'off' && !isGitPush(command))) return;
+  if (!run || alwaysBypass(self) || (run.policy?.verify === 'off' && !isGitPush(command))) return;
   // Calls sent together wait for one answer: the next one sees it.
   const turn = (run.scopeQuestion ?? Promise.resolve()).then(() => holdOrLet(self, run, command, ctx, signal));
   run.scopeQuestion = turn.catch(() => {});

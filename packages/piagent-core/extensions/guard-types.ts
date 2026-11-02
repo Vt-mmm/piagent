@@ -326,7 +326,10 @@ export type ResolvedOrchestrationPolicy = {
 // "bypass": personal sessions only; no Piagent gate asks or blocks the work. The
 // handoff (runtime/policy/handoff-policy.mjs) is still asked; output redaction
 // and turn checkpoints still run.
-export type PermissionProfileMode = "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
+// "always-bypass": only committing and pushing code and an rm on a critical path
+// are asked (critical-removal.mjs);
+// the project's autoDeny rules, output redaction and turn checkpoints remain.
+export type PermissionProfileMode = "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass";
 
 export type PermissionProfilesConfig = {
   defaultMode?: PermissionProfileMode;

@@ -69,6 +69,8 @@ The final category is outside the containment capability of the Piagent guard. I
 
 `bypass` removes every question and block on the work itself (protected paths, destructive confirmation, the policy gates). It keeps secret redaction, the turn checkpoints and the handoff confirmation: a push, pull request, merge, release, publish, deploy, registry push, remote shell, cloud or cluster tool, upload, or MCP write is asked about in every mode (`runtime/policy/handoff-policy.mjs`). Personal sessions run on the host with no OS sandbox in every mode; company sessions run plain commands in the sandbox.
 
+`always-bypass` removes almost all the rest, as the member's decision after a warning: company sessions lose the OS sandbox and the repository MCP approval gate, helpers included, and only `git commit`, `git push`, `gh pr merge` and an `rm` or `rmdir` on a critical path are asked. Deploys, uploads and credentials run unasked and no Harness switch governs it. It gives no protection against prompt injection: a web page or file that misleads the agent can send secrets out unasked, and these checks read the command text, so a script that pushes or deletes is not seen. The project's `autoDeny` rules, secret redaction in output and turn checkpoints remain.
+
 ## Outbound network from a session
 
 A Pi session makes one outbound request of its own: at most once every 24 hours it leaves a detached `npm view @piagent/platform version` behind to learn whether a newer release exists. This is the only network traffic the guard originates.

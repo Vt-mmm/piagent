@@ -319,6 +319,9 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     if (permissionProfile.mode === "trusted-full-access") {
       ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
     }
+    if (permissionProfile.mode === "always-bypass") {
+      ctx.ui.notify("Warning: Piagent always bypass is active, by your decision. Only committing and pushing code and removing a critical path (rm -rf ~) are asked; deploys, MCP, network and credentials run. The project's autoDeny rules, output redaction and /undo checkpoints remain.", "warning");
+    }
     if (permissionProfile.mode === "bypass") {
       ctx.ui.notify("Piagent bypass is active: the work runs without confirmation, protected-path or policy gates in this personal session. The handoff (push, PR, publish, deploy, remote tools, MCP writes) is still asked; output redaction and /undo checkpoints remain.", "warning");
     }

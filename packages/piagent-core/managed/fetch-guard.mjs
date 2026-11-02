@@ -1,4 +1,4 @@
-import { asksOnlyHandoff } from './permission.mjs';
+import { alwaysBypass, asksOnlyHandoff } from './permission.mjs';
 import { approve } from './command-tools.mjs';
 
 // web_fetch is a request to any public https address: a page that tells the
@@ -16,6 +16,7 @@ export const trustedHost = host => TRUSTED.includes(String(host).toLowerCase().r
 
 // null: fetch it; 'ask': the member approves first; 'refuse': a helper's fetch the member would have to approve.
 export function fetchDecision(owner, role, raw) {
+  if (alwaysBypass(owner)) return null;
   let url; try { url = new URL(raw); } catch { return null; } // web_fetch refuses it on its own
   const host = url.hostname.toLowerCase();
   if (trustedHost(host)) return null;

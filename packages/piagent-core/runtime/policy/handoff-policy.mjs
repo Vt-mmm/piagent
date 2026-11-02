@@ -1,9 +1,9 @@
-// What every permission mode still asks about, Bypass included (owner,
-// 2026-10-29: "Bypass bypasses the work and stops at the handoff").
+// What every permission mode but Always bypass still asks about, Bypass
+// included (owner, 2026-10-29: "Bypass bypasses the work and stops at the handoff").
 //
 // handoffReason: the work leaves this machine. A push, a pull request or a
 // merge, a release, a package publish, a deploy, a registry push or login, a
-// remote shell, a cloud or cluster tool, an upload. Asked in every mode, in
+// remote shell, a cloud or cluster tool, an upload. Asked in these modes, in
 // personal and company sessions alike.
 // mustConfirm: the handoff plus what is destructive or irreversible here:
 // database migrations, deletes whose target is only known at run time,
@@ -50,7 +50,7 @@ function treeFindings(command) {
 // `bash -c`, substitutions and compound statements included).
 export const commandSegments = command => [...parse(command).segments, ...(astCommands(command) ?? []).map(({ words }) => ({ command: words.join(' '), words }))];
 
-function executable(words) {
+export function executable(words) {
   let current = stripWrapper(words);
   for (;;) {
     if (RUNNERS.has(current[0]) || (['pnpm', 'yarn'].includes(current[0]) && current[1] === 'dlx')) {
@@ -88,6 +88,25 @@ function segmentHandoff(words) {
   if (['npm', 'pnpm', 'yarn', 'bun'].includes(name) && (sub[0] === 'publish' || (sub[0] === 'npm' && sub[1] === 'publish'))) return `${name} publish uploads a package`;
   const publisher = PUBLISHERS.find(entry => entry[0] === name.replace(/^\.\//, '') && entry.slice(1).every((word, index) => sub[index] === word));
   if (publisher) return `${publisher.join(' ')} uploads a package`;
+  return null;
+}
+
+// What Always bypass still asks (owner, 2026-11-02): committing and pushing
+// code, and a merge, which pushes it on the server. The reason, or null.
+function segmentCode(words) {
+  const [name, ...args] = executable(words), sub = positional(args);
+  if (name === 'gh') return sub[0] === 'pr' && sub[1] === 'merge' ? 'gh pr merge pushes code' : null;
+  if (name !== 'git') return null;
+  if (words.some((word, index) => (word === '-c' && /^alias\./i.test(words[index + 1] ?? '')) || /^-calias\./i.test(word))) return 'git runs an alias defined in the command';
+  if (sub[0] === 'commit') return 'git commit records code';
+  if (sub[0] === 'push' || (['subtree', 'lfs'].includes(sub[0]) && sub[1] === 'push')) return 'git push sends code to a remote';
+  return null;
+}
+export function codeHandoffReason(command) {
+  for (const segment of [...parse(command).segments, ...treeFindings(command)]) {
+    const reason = segmentCode(segment.words);
+    if (reason) return reason;
+  }
   return null;
 }
 

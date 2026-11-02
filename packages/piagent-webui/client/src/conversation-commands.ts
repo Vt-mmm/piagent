@@ -3,9 +3,10 @@
 // sent to the model (/undo excepted: the company runtime answers it).
 // Plain TypeScript (the root type check has no JSX): the locale helper is repeated here.
 import type { UiLocale } from "./locale-preference.ts";
+import { acceptAlwaysBypass, alwaysBypassAccepted } from "./view-model.ts";
 const localize = (locale: UiLocale, vi: string, en: string) => locale === "vi" ? vi : en;
 
-export type Permission = "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
+export type Permission = "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass";
 export type CommandNotice = { tone: "success" | "info" | "warning" | "error"; text: string };
 export type CommandResult = CommandNotice | { send: true }
   | { confirm: { title: string; description: string; confirmLabel: string; run(): Promise<CommandNotice> } };
@@ -42,6 +43,7 @@ async function attempt(locale: UiLocale, work: () => Promise<unknown>, done: Com
 export function conversationCommands(context: ConversationCommandContext): ConversationCommand[] {
   const { locale, actions } = context, t = (vi: string, en: string) => localize(locale, vi, en);
   const ok = (vi: string, en: string): CommandNotice => ({ tone: "success", text: t(vi, en) });
+  const turnOnAlways = () => { acceptAlwaysBypass(); return attempt(locale, () => actions.setPermission("always-bypass"), ok("Đã bật Always bypass.", "Always bypass is on."), "Chưa đổi được quyền", "Access not changed"); };
   const usage = (vi: string, en: string): CommandNotice => ({ tone: "warning", text: t(vi, en) });
   const commands: ConversationCommand[] = [];
   const add = (name: string, argumentHint: string | null, vi: string, en: string, run: ConversationCommand["run"]) => commands.push({ name, argumentHint, description: t(vi, en), run });
@@ -70,12 +72,15 @@ export function conversationCommands(context: ConversationCommandContext): Conve
       return on === null ? usage("Cách dùng: /fast on|off", "Usage: /fast on|off")
         : attempt(locale, () => actions.setFast(on), on ? ok("Đã bật Fast.", "Fast is on.") : ok("Đã tắt Fast.", "Fast is off."), "Chưa đổi được Fast", "Could not change Fast");
     });
-    add("bypass", "<on|full|off>", "Bypass (chỉ hỏi việc bàn giao), Toàn quyền (hỏi việc bàn giao và việc phá huỷ) hoặc Hỏi trước", "Bypass (asks only about the handoff), Full access (asks about the handoff and destructive steps) or Ask first", async (value) => {
+    add("bypass", "<always|on|full|off>", "Always bypass (không sandbox, chỉ hỏi commit và push), Bypass (chỉ hỏi việc bàn giao), Toàn quyền (hỏi việc bàn giao và việc phá huỷ) hoặc Hỏi trước", "Always bypass (no sandbox, asks only about commit and push), Bypass (asks only about the handoff), Full access (asks about the handoff and destructive steps) or Ask first", async (value) => {
       if (value === "off") return attempt(locale, () => actions.setPermission("workspace-write"), ok("Đã chuyển sang Hỏi trước.", "Switched to Ask first."), "Chưa đổi được quyền", "Access not changed");
+      if (value === "always") return alwaysBypassAccepted() ? turnOnAlways() : { confirm: { title: t("Bật Always bypass?", "Turn on Always bypass?"), confirmLabel: t("Bật Always bypass", "Turn on Always bypass"),
+        description: t("Cảnh báo, quyền này do bạn quyết định. Không sandbox: mọi lệnh chạy thẳng trên máy, gồm cả internet, MCP, deploy và thông tin đăng nhập; chỉ hỏi khi commit, push code và xoá đường dẫn quan trọng. Output vẫn che secret, /undo vẫn dùng được.", "Warning: this access is your decision. No sandbox: every command runs directly on this machine, the internet, MCP, deploys and credentials included; only committing and pushing code and removing a critical path are asked. Output is still redacted and /undo still works."),
+        run: turnOnAlways } };
       if (value === "full") return { confirm: { title: t("Bật Toàn quyền?", "Turn on Full access?"), confirmLabel: t("Bật Toàn quyền", "Turn on Full access"),
         description: t("Lệnh cần internet hoặc Docker chạy không hỏi; push, PR, publish, deploy, migration, xoá không rõ đích và lệnh trên máy vẫn hỏi.", "Commands that need the internet or Docker run without asking; pushes, pull requests, publish, deploys, migrations, unknown-target deletes and commands on this machine still ask."),
         run: () => attempt(locale, () => actions.setPermission("trusted-full-access"), ok("Đã bật Toàn quyền.", "Full access is on."), "Chưa đổi được quyền", "Access not changed") } };
-      if (value !== "on") return usage("Cách dùng: /bypass on|full|off", "Usage: /bypass on|full|off");
+      if (value !== "on") return usage("Cách dùng: /bypass always|on|full|off", "Usage: /bypass always|on|full|off");
       if (!context.bypass) return usage("Harness của team đã tắt Bypass (admin Studio). Dùng /bypass full cho Toàn quyền.", "The team's Harness has Bypass off (Studio administrator). Use /bypass full for Full access.");
       return { confirm: { title: t("Bật Bypass?", "Turn on Bypass?"), confirmLabel: t("Bật Bypass", "Turn on Bypass"),
         description: t("Việc làm chạy luôn (internet, Docker, lệnh trên máy, migration); việc bàn giao vẫn hỏi: push, PR, publish, deploy, upload, MCP ghi ra ngoài. Lệnh thường vẫn trong sandbox; /undo vẫn dùng được.", "The work runs (internet, Docker, commands on this machine, migrations); the handoff is still asked: pushes, pull requests, publish, deploys, uploads, MCP writes. Plain commands stay in the sandbox; /undo still works."),
@@ -89,13 +94,16 @@ export function conversationCommands(context: ConversationCommandContext): Conve
       if (matches.length !== 1) return usage(`Cách dùng: /model <tên>. Có: ${models.map((m) => m.label).slice(0, 12).join(", ") || "—"}`, `Usage: /model <name>. Available: ${models.map((m) => m.label).slice(0, 12).join(", ") || "—"}`);
       return attempt(locale, () => actions.setModel(matches[0].modelRef), ok(`Đã đổi model sang ${matches[0].label}.`, `The model is now ${matches[0].label}.`), "Chưa đổi được model", "Could not change the model");
     });
-    add("permission", "<read-only|ask|full|bypass>", "Đổi quyền của cuộc trò chuyện", "Change the conversation's access", async (value) => {
-      const mode: Permission | null = value === "read-only" ? "read-only" : value === "ask" ? "workspace-write" : value === "full" ? "trusted-full-access" : value === "bypass" ? "bypass" : null;
-      if (!mode) return usage("Cách dùng: /permission read-only|ask|full|bypass", "Usage: /permission read-only|ask|full|bypass");
+    add("permission", "<read-only|ask|full|bypass|always-bypass>", "Đổi quyền của cuộc trò chuyện", "Change the conversation's access", async (value) => {
+      const mode: Permission | null = value === "read-only" ? "read-only" : value === "ask" ? "workspace-write" : value === "full" ? "trusted-full-access" : value === "bypass" ? "bypass" : value === "always-bypass" ? "always-bypass" : null;
+      if (!mode) return usage("Cách dùng: /permission read-only|ask|full|bypass|always-bypass", "Usage: /permission read-only|ask|full|bypass|always-bypass");
       const apply = () => attempt(locale, () => actions.setPermission(mode), ok(`Đã đổi quyền sang ${value}.`, `Access is now ${value}.`), "Chưa đổi được quyền", "Access not changed");
+      if (mode === "always-bypass") return alwaysBypassAccepted() ? turnOnAlways() : { confirm: { title: t("Bật Always bypass?", "Turn on Always bypass?"), confirmLabel: t("Bật Always bypass", "Turn on Always bypass"),
+        description: t("Cảnh báo, quyền này do bạn quyết định. Không sandbox: mọi lệnh chạy thẳng trên máy, gồm cả internet, MCP, deploy và thông tin đăng nhập; chỉ hỏi khi commit, push code và xoá đường dẫn quan trọng. Output vẫn che secret, /undo vẫn dùng được.", "Warning: this access is your decision. No sandbox: every command runs directly on this machine, the internet, MCP, deploys and credentials included; only committing and pushing code and removing a critical path are asked. Output is still redacted and /undo still works."),
+        run: turnOnAlways } };
       if (mode === "bypass") return { confirm: { title: t("Bật Bypass?", "Turn on Bypass?"), confirmLabel: t("Bật Bypass", "Turn on Bypass"),
-        description: t("Không hỏi, không chặn gì trong cuộc trò chuyện này (xoá, push, file được bảo vệ đều chạy luôn). Output vẫn che secret, /undo vẫn hoàn tác được.",
-          "Nothing is asked or blocked in this conversation (deletes, pushes and protected files all run). Output is still redacted and /undo still works."), run: apply } };
+        description: t("Việc làm không bị hỏi hay chặn (xoá, file được bảo vệ đều chạy luôn); việc bàn giao như push, publish, deploy vẫn hỏi. Output vẫn che secret, /undo vẫn hoàn tác được.",
+          "The work is not asked about or blocked (deletes and protected files run); the handoff, such as pushes, publish and deploys, is still asked. Output is still redacted and /undo still works."), run: apply } };
       return mode !== "trusted-full-access" ? apply() : { confirm: { title: t("Bật toàn quyền?", "Enable full access?"), confirmLabel: t("Bật toàn quyền", "Enable full access"),
         description: t("Session được đọc, sửa file và chạy command trong phạm vi runtime; xoá hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "The session may read and edit files and run commands within the runtime; destructive actions and external transfers still ask."), run: apply } };
     });

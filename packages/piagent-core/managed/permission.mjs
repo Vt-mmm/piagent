@@ -7,9 +7,15 @@
 // tools, uploads), where the team's Harness allows it
 // (harness.configuration.bypass_mode, an administrator's switch in Studio).
 // The sandbox itself stays: bypass removes questions, not the boundary.
-import { handoffReason, mustConfirm } from '../runtime/policy/handoff-policy.mjs';
+// "always-bypass" (owner, 2026-11-02) removes both, as the member's own decision
+// after a warning; no Harness switch governs it. Only committing and pushing
+// code and an rm on a critical path are asked (critical-removal.mjs); the
+// project's autoDeny rules hold; what needs the member's password stays theirs.
+import os from 'node:os';
+import { criticalRemovalReason } from '../runtime/policy/critical-removal.mjs';
+import { codeHandoffReason, handoffReason, mustConfirm } from '../runtime/policy/handoff-policy.mjs';
 
-export const PERMISSIONS = ['workspace-write', 'trusted-full-access', 'bypass'];
+export const PERMISSIONS = ['workspace-write', 'trusted-full-access', 'bypass', 'always-bypass'];
 const ENTRY = 'agent-watch-permission';
 
 // Only an explicit yes from Studio: an Agent Watch that does not carry the
@@ -41,11 +47,13 @@ export function recordBypass(owner, manager) {
 // Whether this conversation skips the questions Full access still asks
 // (everything but the handoff).
 export const asksOnlyHandoff = owner => effectivePermission(owner) === 'bypass';
-export const broadAccess = owner => ['trusted-full-access', 'bypass'].includes(effectivePermission(owner));
+export const alwaysBypass = owner => effectivePermission(owner) === 'always-bypass';
+export const broadAccess = owner => ['trusted-full-access', 'bypass', 'always-bypass'].includes(effectivePermission(owner));
 // Why a command that leaves the sandbox must be asked about: the reason, or
 // 'ask' in Ask first, or null to run it. Every mode asks about the handoff.
 export const networkConfirmation = async (owner, command) => {
   const mode = effectivePermission(owner);
+  if (mode === 'always-bypass') return criticalRemovalReason(command, { cwd: owner.cwd ?? process.cwd(), home: owner.boundary?.userHome ?? os.homedir() }) ?? codeHandoffReason(command);
   if (mode === 'bypass') return handoffReason(command);
   if (mode === 'trusted-full-access') return mustConfirm(command);
   return 'ask';

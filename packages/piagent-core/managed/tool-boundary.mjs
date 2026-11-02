@@ -21,7 +21,7 @@ import { proxyEnvironment } from './package-proxy.mjs';
 import { startBoundaryPackageProxy } from './boundary-package-proxy.mjs';
 import { SourceRevertRequests } from './source-revert-requests.mjs';
 import { BWRAP, bubblewrapArgs, credentialFiles, referenceFolders } from './linux-sandbox.mjs';
-import { agentWatchDataDirectory } from './store.mjs';
+import { agentWatchDataDirectory } from './store.mjs'; import { spawnOnHost } from './host-command.mjs';
 const TOOL_NAMES = Object.freeze(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
 const MAX_WIRE_BYTES = 12 * 1024 * 1024;
 const workerPath = fileURLToPath(new URL('./tool-worker.mjs', import.meta.url));
@@ -369,9 +369,9 @@ export class ManagedToolBoundary {
     if (Buffer.byteLength(message) > MAX_WIRE_BYTES) throw new Error('managed-tool-input-too-large');
     return await new Promise((resolve, reject) => {
       guard?.();
-      const [sandbox, sandboxArgs] = this.linux ? [BWRAP, this.bubblewrap(network, docker)]
+      const [sandbox, sandboxArgs] = this.unsandboxed?.() ? [null, []] : this.linux ? [BWRAP, this.bubblewrap(network, docker)]
         : ['/usr/bin/sandbox-exec', ['-p', docker ? this.dockerProfile : network ? this.networkProfile : isolated ? this.isolatedProfile : this.profile]];
-      const child = spawn(sandbox, [...sandboxArgs, this.node, this.workerPath, this.sdkPath, this.cwd], {
+      const child = spawn(sandbox ?? this.node, [...sandboxArgs, ...(sandbox ? [this.node] : []), this.workerPath, this.sdkPath, this.cwd], {
         cwd: this.cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'],
         env: docker ? this.environment.docker : network ? this.environment.network : this.environment.offline,
       });
@@ -455,7 +455,7 @@ export class ManagedToolBoundary {
   // A process the agent keeps running across turns (background-process.mjs):
   // the plain command sandbox and environment, marked as this conversation's
   // background process instead of the turn's, so stopStrays leaves it.
-  async spawnBackground(command, key) { return this.spawnSandboxed(['/bin/bash', '-c', command], key); }
+  async spawnBackground(command, key) { return this.unsandboxed?.() ? { child: spawnOnHost(command, this.cwd, this.userHome), isolated: false } : this.spawnSandboxed(['/bin/bash', '-c', command], key); }
   // `argv` in the plain command sandbox; stdin 'pipe' for a process that
   // answers requests (ts-diagnostics.mjs).
   async spawnSandboxed(argv, key, { stdin = 'ignore' } = {}) {

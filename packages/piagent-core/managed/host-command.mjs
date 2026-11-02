@@ -51,16 +51,20 @@ const TAIL = 50 * 1024;
 const tail = text => text.length > TAIL ? `[… ${text.length - TAIL} characters before …]\n${text.slice(-TAIL)}` : text;
 const shell = () => process.platform === 'darwin' ? '/bin/zsh' : fs.existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh';
 
+export function spawnOnHost(command, cwd, userHome = os.homedir(), spawnImpl = spawn) {
+  const login = shell(), user = os.userInfo().username;
+  return spawnImpl(login, ['-lc', command], { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { HOME: userHome, USER: user, LOGNAME: user, SHELL: login, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'en_US.UTF-8', TERM: 'dumb',
+      GIT_TERMINAL_PROMPT: '0', NONINTERACTIVE: '1', HOMEBREW_NO_ENV_HINTS: '1', DEBIAN_FRONTEND: 'noninteractive' } });
+}
+
 // Runs one command as the member, in a login shell (Homebrew, SDKMAN… on
 // PATH as in their Terminal). Nothing of Piagent's own environment (Studio
 // tokens) is passed; no input, so a prompt ends the command instead of hanging.
 export function runHostCommand({ command, cwd, userHome = os.homedir(), timeout = 600, signal, onUpdate, spawnImpl = spawn }) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(Error('Command aborted'));
-    const login = shell(), user = os.userInfo().username;
-    const child = spawnImpl(login, ['-lc', command], { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { HOME: userHome, USER: user, LOGNAME: user, SHELL: login, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'en_US.UTF-8', TERM: 'dumb',
-        GIT_TERMINAL_PROMPT: '0', NONINTERACTIVE: '1', HOMEBREW_NO_ENV_HINTS: '1', DEBIAN_FRONTEND: 'noninteractive' } });
+    const child = spawnOnHost(command, cwd, userHome, spawnImpl);
     let output = '', ended = null, last = 0;
     const kill = why => { ended ??= why; try { process.kill(-child.pid, 'SIGTERM'); } catch {} setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, 2000).unref(); };
     const seconds = Math.min(Math.max(Number(timeout) || 600, 1), 1800);

@@ -94,7 +94,8 @@
       "read-only",
       "workspace-write",
       "trusted-full-access",
-      "bypass"
+      "bypass",
+      "always-bypass"
     ]
   },
   "execPolicy": {

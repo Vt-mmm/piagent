@@ -95,7 +95,7 @@ export type SessionRow = {
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
       ];
-  managedPermission?: "workspace-write" | "trusted-full-access" | "bypass";
+  managedPermission?: "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass";
   managedBypass?: true;
   managedProjectWarning?: {
     team?: string;

@@ -31,7 +31,7 @@ export function fallbackBasePolicy(
     defaultRequiredContext: ["AGENTS.md", "README.md"],
     permissionProfiles: {
       defaultMode: "workspace-write",
-      allowedModes: ["read-only", "workspace-write", "trusted-full-access", "bypass"]
+      allowedModes: ["read-only", "workspace-write", "trusted-full-access", "bypass", "always-bypass"]
     },
     execPolicy: {
       defaultMode: "enforce",

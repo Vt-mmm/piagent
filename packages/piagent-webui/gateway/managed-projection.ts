@@ -40,7 +40,7 @@ export function managedProjection(context: any, entries: any[]) {
   // The member's access choice; Bypass only while the Harness allows it, else
   // it applies as Full access (permission.mjs).
   const chosen = last('agent-watch-permission')?.mode, bypassAllowed = last('agent-watch-bypass')?.allowed === true;
-  const permission = chosen === 'bypass' ? (bypassAllowed ? 'bypass' : 'trusted-full-access') : chosen === 'trusted-full-access' ? 'trusted-full-access' : 'workspace-write';
+  const permission = chosen === 'always-bypass' ? 'always-bypass' : chosen === 'bypass' ? (bypassAllowed ? 'bypass' : 'trusted-full-access') : chosen === 'trusted-full-access' ? 'trusted-full-access' : 'workspace-write';
   // Fast mode, only where the conversation's Harness allows it (fast-mode.mjs).
   const fast = last('agent-watch-fast');
   // Projects Studio says do not belong to the key's team (workspace-report.mjs);

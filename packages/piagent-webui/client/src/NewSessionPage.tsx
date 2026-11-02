@@ -1,4 +1,4 @@
-import { companyAccessLabel, companyBypassDetail, companyFullAccessDetail, personalBypassDetail, fastHint, fastLabel, fastOnSx } from "./SessionComposerControls.tsx";
+import { alwaysBypassDetail, companyAccessLabel, companyBypassDetail, companyFullAccessDetail, personalBypassDetail, fastHint, fastLabel, fastOnSx } from "./SessionComposerControls.tsx";
 import { BrandMark } from "./BrandMark.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sendsOnEnter } from "./enter-key.ts";
@@ -38,7 +38,7 @@ import { ImageThumb } from "./AttachmentImage.tsx";
 import { attachmentHint, declaredType, dragCarriesFiles, formatSize, MAX_ATTACHMENTS, refusedText, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
-import { label } from "./view-model.ts";
+import { acceptAlwaysBypass, alwaysBypassAccepted, label } from "./view-model.ts";
 import { useComposerSuggestions } from "./ComposerSuggestions.tsx";
 import { NEW_CHAT_DRAFT, readComposerMemory, readDraft, writeComposerMemory, writeDraft } from "./composer-drafts.ts";
 import { localize, type UiLocale, useUiPreferences } from "./ui-preferences.tsx";
@@ -100,7 +100,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [permissionMode, setPermissionMode] = useState<PermissionMode | null>(null), [message, setMessageText] = useState(() => readDraft(NEW_CHAT_DRAFT));
   // Kept when the member opens a conversation and comes back (composer-drafts.ts).
   const setMessage = (value: string) => { setMessageText(value); writeDraft(NEW_CHAT_DRAFT, value); };
-  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | null>(null);
+  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | "always-bypass" | null>(null);
   const [files, setFiles] = useState<readonly File[]>(() => readComposerMemory<readonly File[]>(NEW_CHAT_DRAFT) ?? []), [fileError, setFileError] = useState<string | null>(null);
   useEffect(() => { writeComposerMemory(NEW_CHAT_DRAFT, files.length ? files : null); }, [files]);
   const [dragging, setDragging] = useState(false);
@@ -349,7 +349,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
         <ListItemText primary={label(value, locale)} /></MenuItem>)}
     </Menu>
     <Menu anchorEl={anchor} open={menu === "permission"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 310 } } }}>
-      {managed || company ? [<MenuItem key="ask" selected={permissionMode !== "trusted-full-access" && permissionMode !== "bypass"} onClick={() => { setPermissionMode(null); closeMenu(); }}>
+      {managed || company ? [<MenuItem key="ask" selected={permissionMode !== "trusted-full-access" && permissionMode !== "bypass" && permissionMode !== "always-bypass"} onClick={() => { setPermissionMode(null); closeMenu(); }}>
           <ListItemIcon><SecurityRounded /></ListItemIcon><ListItemText primary={companyAccessLabel(null, locale)}
             secondary={localize(locale, "Hỏi trước mỗi lệnh cần internet", "Asks before each command that needs the internet")} /></MenuItem>,
         <MenuItem key="full" selected={permissionMode === "trusted-full-access"} onClick={() => { closeMenu(); setPendingPermission("trusted-full-access"); }}>
@@ -357,17 +357,20 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
             secondary={localize(locale, "Chỉ hỏi việc bắt buộc phải xác nhận", "Asks only what must be confirmed")} /></MenuItem>,
         ...(model?.managedBypass ? [<MenuItem key="bypass" selected={permissionMode === "bypass"} onClick={() => { closeMenu(); setPendingPermission("bypass"); }}>
           <ListItemIcon><SecurityRounded color="error" /></ListItemIcon><ListItemText primary="Bypass"
-            secondary={localize(locale, "Không hỏi gì; admin Studio có thể tắt", "Asks nothing; a Studio administrator can turn it off")} /></MenuItem>] : [])] : <>
+            secondary={localize(locale, "Chỉ hỏi việc bàn giao; admin Studio có thể tắt", "Asks only about the handoff; a Studio administrator can turn it off")} /></MenuItem>] : []),
+        <MenuItem key="always-bypass" selected={permissionMode === "always-bypass"} onClick={() => { closeMenu(); if (alwaysBypassAccepted()) setPermissionMode("always-bypass"); else setPendingPermission("always-bypass"); }}>
+          <ListItemIcon><SecurityRounded color="error" /></ListItemIcon><ListItemText primary="Always bypass"
+            secondary={localize(locale, "Cảnh báo: không sandbox, chỉ hỏi commit, push và rm đường dẫn quan trọng", "Warning: no sandbox, asks only about commit, push and rm on a critical path")} /></MenuItem>] : <>
       <MenuItem selected={permissionMode === null} onClick={() => { setPermissionMode(null); closeMenu(); }}><ListItemIcon><SecurityRounded /></ListItemIcon>
         <ListItemText primary={localize(locale, "Theo profile project", "Project profile default")} /></MenuItem>
-      {(["read-only", "workspace-write", "trusted-full-access", "bypass"] as const).map((value) => <MenuItem key={value} selected={permissionMode === value}
-        onClick={() => { closeMenu(); if (value === "trusted-full-access" || value === "bypass") setPendingPermission(value); else setPermissionMode(value); }}>
-        <ListItemIcon><SecurityRounded color={value === "bypass" ? "error" : value === "trusted-full-access" ? "warning" : undefined} /></ListItemIcon><ListItemText primary={label(value, locale)} /></MenuItem>)}</>}
+      {(["read-only", "workspace-write", "trusted-full-access", "bypass", "always-bypass"] as const).map((value) => <MenuItem key={value} selected={permissionMode === value}
+        onClick={() => { closeMenu(); if (value === "always-bypass" && alwaysBypassAccepted()) setPermissionMode(value); else if (value === "trusted-full-access" || value === "bypass" || value === "always-bypass") setPendingPermission(value); else setPermissionMode(value); }}>
+        <ListItemIcon><SecurityRounded color={value === "bypass" || value === "always-bypass" ? "error" : value === "trusted-full-access" ? "warning" : undefined} /></ListItemIcon><ListItemText primary={label(value, locale)} /></MenuItem>)}</>}
     </Menu>
-    <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "bypass" ? localize(locale, "Tạo cuộc trò chuyện với Bypass?", "Create with Bypass?") : localize(locale, "Tạo session với toàn quyền?", "Create with full access?")}
-      description={pendingPermission === "bypass" ? (managed || company ? companyBypassDetail(locale) : personalBypassDetail(locale)) : managed || company ? companyFullAccessDetail(locale) : localize(locale, "Session mới được phép đọc, sửa file và chạy command trong runtime. Xóa dữ liệu và gửi ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "always-bypass" ? localize(locale, "Tạo cuộc trò chuyện với Always bypass?", "Create with Always bypass?") : pendingPermission === "bypass" ? localize(locale, "Tạo cuộc trò chuyện với Bypass?", "Create with Bypass?") : localize(locale, "Tạo session với toàn quyền?", "Create with full access?")}
+      description={pendingPermission === "always-bypass" ? alwaysBypassDetail(locale) : pendingPermission === "bypass" ? (managed || company ? companyBypassDetail(locale) : personalBypassDetail(locale)) : managed || company ? companyFullAccessDetail(locale) : localize(locale, "Session mới được phép đọc, sửa file và chạy command trong runtime. Xóa dữ liệu và gửi ra ngoài vẫn cần xác nhận riêng.",
         "The new session may read and edit files and run commands. Deletion and external transfer still require separate approval.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "bypass" ? localize(locale, "Dùng Bypass", "Use Bypass") : localize(locale, "Dùng toàn quyền", "Use full access")}
-      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode) setPermissionMode(mode); }} />
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "always-bypass" ? localize(locale, "Dùng Always bypass", "Use Always bypass") : pendingPermission === "bypass" ? localize(locale, "Dùng Bypass", "Use Bypass") : localize(locale, "Dùng toàn quyền", "Use full access")}
+      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode === "always-bypass") acceptAlwaysBypass(); if (mode) setPermissionMode(mode); }} />
   </Box>;
 }

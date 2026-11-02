@@ -14,7 +14,7 @@ const statusLabelsVi: Record<string, string> = {
   off: "Tắt", minimal: "Tối thiểu", low: "Thấp", medium: "Trung bình", high: "Cao", xhigh: "Rất cao", max: "Tối đa",
   orphaned: "Mất owner", cancelled: "Đã hủy", succeeded: "Thành công", "stale-result": "Kết quả đến muộn",
   accepted: "Đã nhận", rejected: "Không nhận", "not-recorded": "Chưa có kết quả", parent: "Task cha", helper: "Helper",
-  "read-only": "Chỉ đọc", "workspace-write": "Ghi trong project", "trusted-full-access": "Toàn quyền", bypass: "Bypass", "single-writer": "Một writer", retriever: "Retriever", scout: "Scout", planner: "Planner",
+  "read-only": "Chỉ đọc", "workspace-write": "Ghi trong project", "trusted-full-access": "Toàn quyền", bypass: "Bypass", "always-bypass": "Always bypass", "single-writer": "Một writer", retriever: "Retriever", scout: "Scout", planner: "Planner",
   worker: "Worker", reviewer: "Reviewer", oracle: "Oracle", researcher: "Researcher", ready: "Sẵn sàng",
   missing: "Chưa có bằng chứng", interrupted: "Bị gián đoạn", stopped: "Đã dừng", aborted: "Đã hủy do lỗi",
   incomplete: "Chưa có kết luận", passed: "Đạt", "not-applicable": "Không áp dụng", smoke: "Smoke",
@@ -54,7 +54,7 @@ const statusLabelsEn: Record<string, string> = {
   off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Maximum",
   orphaned: "Owner missing", cancelled: "Cancelled", succeeded: "Succeeded", "stale-result": "Stale result",
   accepted: "Accepted", rejected: "Rejected", "not-recorded": "Not recorded", parent: "Parent task", helper: "Helper",
-  "read-only": "Read only", "workspace-write": "Workspace write", "trusted-full-access": "Full access", bypass: "Bypass", "single-writer": "Single writer", retriever: "Retriever", scout: "Scout", planner: "Planner",
+  "read-only": "Read only", "workspace-write": "Workspace write", "trusted-full-access": "Full access", bypass: "Bypass", "always-bypass": "Always bypass", "single-writer": "Single writer", retriever: "Retriever", scout: "Scout", planner: "Planner",
   worker: "Worker", reviewer: "Reviewer", oracle: "Oracle", researcher: "Researcher", ready: "Ready",
   missing: "Evidence missing", interrupted: "Interrupted", stopped: "Stopped", aborted: "Aborted",
   incomplete: "Incomplete", passed: "Passed", "not-applicable": "Not applicable", smoke: "Smoke",
@@ -133,3 +133,8 @@ export function taskProgress(snapshot: PiagentWebUICanonicalSnapshotV1, locale: 
     text: locale === "vi" ? `${task.progress.completed}/${task.progress.total} tiêu chí` : `${task.progress.completed}/${task.progress.total} criteria`
   } : { completed: 0, total: 0, percent: 0, text: locale === "vi" ? "Chưa có task đang chạy" : "No active task" };
 }
+
+// Always bypass warns once on this browser, then the member's decision stands.
+const ALWAYS_BYPASS_ACCEPTED = "piagent.alwaysBypass.accepted";
+export function alwaysBypassAccepted(): boolean { try { return window.localStorage.getItem(ALWAYS_BYPASS_ACCEPTED) === "1"; } catch { return false; } }
+export function acceptAlwaysBypass(): void { try { window.localStorage.setItem(ALWAYS_BYPASS_ACCEPTED, "1"); } catch { /* it warns again */ } }

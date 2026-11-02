@@ -1,4 +1,4 @@
-import { companyBypassDetail, companyFullAccessDetail, personalBypassDetail } from "./SessionComposerControls.tsx";
+import { alwaysBypassDetail, companyBypassDetail, companyFullAccessDetail, personalBypassDetail } from "./SessionComposerControls.tsx";
 import { THEME_PRESETS } from "./theme-presets.ts";
 import { useEffect, useMemo, useState } from "react";
 import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
@@ -29,7 +29,7 @@ import { ProviderAccounts } from "./ProviderAccounts.tsx";
 import { McpConnectionActions, mcpConnectionSubtitle } from "./McpConnectionActions.tsx";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
-import { label } from "./view-model.ts";
+import { acceptAlwaysBypass, alwaysBypassAccepted, label } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 import { RuntimeControlsPanel } from "./RuntimeControlsPanel.tsx";
 
@@ -192,49 +192,51 @@ function ConnectionSettings({ value, loading, sessionRef, onChanged }: { value?:
 }
 
 function PermissionSettings({ snapshot, session, onSetPermission }: { snapshot?: PiagentWebUICanonicalSnapshotV1; session?: SessionRow;
-  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown> }) {
+  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass"): Promise<unknown> }) {
   const { locale } = useUiPreferences();
   const permission = snapshot?.session.permissionProfile as { state?: string; value?: string | null } | undefined;
   const [value, setValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
-  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | null>(null);
+  const [pendingPermission, setPendingPermission] = useState<"trusted-full-access" | "bypass" | "always-bypass" | null>(null);
   // A company conversation's choice is on its row (Ask first, Full access or Bypass).
   useEffect(() => { setValue(session?.managedPermission ?? (permission?.state === "known" ? permission.value ?? null : null)); },
     [session?.sessionRef, session?.managedPermission, permission?.state, permission?.value]);
-  const apply = async (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
+  const apply = async (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass") => {
     if (!onSetPermission) return;
     setBusy(true); setError(null);
     try { await onSetPermission(mode); setValue(mode); }
     catch { setError(localize(locale, "Chưa thể đổi quyền lúc này", "Could not change access right now")); }
     finally { setBusy(false); }
   };
-  const change = (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass") => {
-    if (mode === "trusted-full-access" || mode === "bypass") { setPendingPermission(mode); return; }
+  const change = (mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass") => {
+    if (mode === "always-bypass" && alwaysBypassAccepted()) { void apply(mode); return; }
+    if (mode === "trusted-full-access" || mode === "bypass" || mode === "always-bypass") { setPendingPermission(mode); return; }
     void apply(mode);
   };
   const choices = [
     { mode: "read-only" as const, detail: localize(locale, "Chỉ xem session, task và source; không thay đổi project.", "Inspect the session, task, and source without changing the project.") },
     { mode: "workspace-write" as const, detail: localize(locale, "Đọc, sửa file và chạy command trong project; thao tác nhạy cảm vẫn cần xác nhận.", "Read and edit project files and run commands; sensitive actions still require confirmation.") },
     { mode: "trusted-full-access" as const, detail: session?.managed ? companyFullAccessDetail(locale) : localize(locale, "Quyền rộng hơn trong runtime; xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.", "Broader runtime access; deleting or sending data externally still requires separate confirmation.") },
-    ...(!session?.managed || session.managedBypass ? [{ mode: "bypass" as const, detail: session?.managed ? companyBypassDetail(locale) : personalBypassDetail(locale) }] : [])
+    ...(!session?.managed || session.managedBypass ? [{ mode: "bypass" as const, detail: session?.managed ? companyBypassDetail(locale) : personalBypassDetail(locale) }] : []),
+    { mode: "always-bypass" as const, detail: alwaysBypassDetail(locale) }
   ];
   return <><Title>{localize(locale, "Quyền truy cập", "Access")}</Title><Typography variant="h2" sx={{ mb: .5 }}>
     {localize(locale, "Hồ sơ quyền", "Permission profile")}</Typography><Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
       {localize(locale, "Áp dụng cho session hiện tại.", "Applies to the current session.")}</Typography>
     <Paper variant="outlined" sx={{ borderRadius: 1, overflow: "hidden" }}>{choices.map((choice, index) => <Box key={choice.mode}>
-      <SettingRow icon={<SecurityRounded color={choice.mode === "bypass" ? "error" : choice.mode === "trusted-full-access" ? "warning" : "primary"} />}
+      <SettingRow icon={<SecurityRounded color={choice.mode === "bypass" || choice.mode === "always-bypass" ? "error" : choice.mode === "trusted-full-access" ? "warning" : "primary"} />}
         title={label(choice.mode, locale)} detail={choice.detail}
         action={<Button size="small" variant={value === choice.mode ? "contained" : "outlined"}
-          color={choice.mode === "bypass" ? "error" : choice.mode === "trusted-full-access" ? "warning" : "primary"}
+          color={choice.mode === "bypass" || choice.mode === "always-bypass" ? "error" : choice.mode === "trusted-full-access" ? "warning" : "primary"}
           aria-pressed={value === choice.mode} disabled={busy || !session || !onSetPermission || session.liveState === "running"}
           onClick={() => change(choice.mode)}>{label(choice.mode, locale)}</Button>} />
       {index < choices.length - 1 && <Divider />}</Box>)}</Paper>
     {error && <Typography role="status" color="error" variant="caption" sx={{ mt: 1 }}>{error}</Typography>}
-    <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
-      description={pendingPermission === "bypass" ? (session?.managed ? companyBypassDetail(locale) : personalBypassDetail(locale)) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
+    <ActionConfirmationDialog open={pendingPermission !== null} title={pendingPermission === "always-bypass" ? localize(locale, "Bật Always bypass?", "Turn on Always bypass?") : pendingPermission === "bypass" ? localize(locale, "Bật Bypass?", "Turn on Bypass?") : localize(locale, "Bật toàn quyền?", "Enable full access?")}
+      description={pendingPermission === "always-bypass" ? alwaysBypassDetail(locale) : pendingPermission === "bypass" ? (session?.managed ? companyBypassDetail(locale) : personalBypassDetail(locale)) : localize(locale, "Session này sẽ được phép đọc, sửa file và chạy command trong phạm vi runtime. Các thao tác xóa hoặc gửi dữ liệu ra ngoài vẫn cần xác nhận riêng.",
         "This session will be allowed to read and edit files and run commands within the runtime. Destructive actions and external data transfers still require separate confirmation.")}
-      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
-      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode) void apply(mode); }} />
+      cancelLabel={localize(locale, "Hủy", "Cancel")} confirmLabel={pendingPermission === "always-bypass" ? localize(locale, "Bật Always bypass", "Turn on Always bypass") : pendingPermission === "bypass" ? localize(locale, "Bật Bypass", "Turn on Bypass") : localize(locale, "Bật toàn quyền", "Enable full access")}
+      onCancel={() => setPendingPermission(null)} onConfirm={() => { const mode = pendingPermission; setPendingPermission(null); if (mode === "always-bypass") acceptAlwaysBypass(); if (mode) void apply(mode); }} />
   </>;
 }
 
@@ -267,7 +269,7 @@ export function SettingsPage({ section, onSection, onBack, session, snapshot, ca
   onSection(value: SettingsSection): void; onBack(): void; session?: SessionRow; snapshot?: PiagentWebUICanonicalSnapshotV1;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: string; onSetModel?(modelRef: string): Promise<unknown>;
   onSetThinking?(thinking: string): Promise<unknown>;
-  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown>;
+  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass"): Promise<unknown>;
   onRuntimeChanged?(): Promise<void> | void }) {
   const { locale } = useUiPreferences();
   const [options, setOptions] = useState<SessionCreationOptions>(), [auth, setAuth] = useState<ProviderAuthCatalog>();

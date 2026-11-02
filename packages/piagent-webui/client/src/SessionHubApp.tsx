@@ -445,7 +445,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   abort(session: SessionRow): Promise<unknown>;
     restart(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;
-    setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<unknown>;
+    setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass"): Promise<unknown>;
     setFast(session: SessionRow, fast: boolean): Promise<unknown>;
     rename(session: SessionRow, title: string): Promise<Receipt>; pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
     archive(session: SessionRow): Promise<Receipt>; unarchive(session: SessionRow): Promise<Receipt>;

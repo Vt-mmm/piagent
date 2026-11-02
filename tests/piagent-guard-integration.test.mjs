@@ -245,7 +245,7 @@ describe("piagent guard integration", () => {
     for (const kept of ["piagent_tools", "piagent_context_engine", "piagent_document_read", "piagent_source_checkout", "piagent_memory_note"]) {
       assert.equal(harness.tools.has(kept), true, kept);
     }
-    assert.equal(harness.commands.size, 30);
+    assert.equal(harness.commands.size, 31);
     assert.equal(harness.commands.has("piagent-reload"), true);
     assert.equal(harness.commands.has("bypass"), true);
     assert.equal(harness.commands.has("style"), true);
@@ -2197,6 +2197,32 @@ non-secret metadata are safe alternatives.`;
     assert.match(ctx.confirmations[0].message, /Bypass still asks before a handoff/);
     const yes = createContext(cwd, { confirm: true });
     assert.notEqual((await callToolCall(toolCall, yes, "bash", { command: "git push origin feature" }))?.block, true, "a yes runs it");
+  });
+
+  it("always bypass asks only about commit, push and rm on a critical path; the project's autoDeny rules still hold", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.permissionProfile = "always-bypass";
+    profile.mcpCapabilities = [];
+    profile.autoDeny = [{ pattern: "terraform destroy" }];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const toolCall = harness.handlers.get("tool_call");
+    for (const [tool, input] of [["bash", { command: "npx vercel deploy --prod" }], ["bash", { command: "cat ~/.ssh/id_rsa" }], ["bash", { command: "ssh prod ls" }],
+      ["mcp", { server: "github", tool: "create_pull_request", args: "{\"title\":\"x\"}" }]])
+      assert.notEqual((await callToolCall(toolCall, ctx, tool, input))?.block, true, `${tool} ${JSON.stringify(input)} runs`);
+    assert.equal(ctx.confirmations.length, 0, "nothing was asked");
+    for (const command of ["git push --force origin main", "git commit -m x", "gh pr merge 3", "rm -rf ~", "rm -rf ."]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, `${command} is asked and a no blocks it`);
+    }
+    assert.match(ctx.confirmations[0].message, /Always bypass still asks/);
+    assert.equal((await callToolCall(toolCall, ctx, "bash", { command: "terraform destroy -auto-approve" }))?.block, true, "autoDeny still refuses");
   });
 
   it("the terminal offers allow once, allow for the session, deny, and deny and stop; a handoff is never kept for the session", async () => {

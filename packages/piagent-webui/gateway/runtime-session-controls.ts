@@ -14,7 +14,7 @@ type RuntimeCommandOutput = {
 };
 
 export async function executePermissionCommand(session: any,
-  permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass"): Promise<void> {
+  permissionMode: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass"): Promise<void> {
   // A company conversation: "Ask first" or "Bypass" (no read-only mode); the
   // runtime keeps the choice in the conversation and reads it at each command,
   // so it may change while a turn runs (the supervisor lets it).

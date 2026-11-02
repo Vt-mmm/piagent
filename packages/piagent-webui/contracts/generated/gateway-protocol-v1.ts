@@ -87,7 +87,7 @@ export type CommandRequest = RequestBase & {
             placeRef: string;
             modelRef: string | null;
             thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-            permissionMode?: "read-only" | "workspace-write" | "trusted-full-access" | "bypass";
+            permissionMode?: "read-only" | "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass";
             /**
              * Start a company conversation with Fast mode on, before its first message runs. Refused when the team's Harness does not allow Fast mode.
              */
@@ -298,7 +298,7 @@ export type SessionRow = {
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
         "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
       ];
-  managedPermission?: "workspace-write" | "trusted-full-access" | "bypass";
+  managedPermission?: "workspace-write" | "trusted-full-access" | "bypass" | "always-bypass";
   managedBypass?: true;
   managedProjectWarning?: {
     team?: string;

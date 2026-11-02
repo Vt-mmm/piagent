@@ -28,8 +28,8 @@ import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut,
 import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
-import { restorePermission, recordBypass, permissionSetter } from './permission.mjs';
-import { commandTools, servicesPrompt } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
+import { alwaysBypass, restorePermission, recordBypass, permissionSetter } from './permission.mjs';
+import { commandTools, hostBash, servicesPrompt, unsandboxedBash } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
 export const HELPER_BEAT_MS = 60_000;
@@ -113,7 +113,7 @@ export class ManagedSession {
     const preview = { model_id: candidate.id, provider: candidate.owned_by, provider_model_id: candidate.provider_model_id };
     const model = self.installModel(self.modelRuntime, preview);
     self.wrapStreams(self.modelRuntime, 'main');
-    const customTools = processEditTools(self, self.boundary.tools(api));
+    const customTools = processEditTools(self, unsandboxedBash(self, self.boundary.tools(api)));
     customTools.push(fetchOriginTool(self));
     // With a research helper the web is its work (pages read on its cheaper model), beyond the Harness's few quick lookups.
     if (!helperRoles(manifest).includes('research')) customTools.push(...self.webTools(self.modelRuntime, 'main'));
@@ -170,7 +170,7 @@ export class ManagedSession {
     self.session.managedExecution = true;
     self.turnRetry = enableCompanyTurnRetry(self.session, settings, self.studioLink);
     // The member's access for this conversation: Ask first, Full access or Bypass (permission.mjs).
-    self.permission = restorePermission(manager); recordBypass(self, manager); self.session.managedSetPermission = permissionSetter(self, manager);
+    self.permission = restorePermission(manager); recordBypass(self, manager); self.session.managedSetPermission = permissionSetter(self, manager); self.boundary.unsandboxed = () => alwaysBypass(self);
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
     self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null where the Harness does not allow it
     self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };
@@ -323,7 +323,7 @@ export class ManagedSession {
     // Native ! commands use the same worker boundary as model bash calls.
     self.session.executeBash = async command => {
       try {
-        const result = await self.boundary.invoke('bash', { command });
+        const result = alwaysBypass(self) ? await hostBash(self, { command }) : await self.boundary.invoke('bash', { command });
         return { output: textContent(result), exitCode: 0, cancelled: false, truncated: false };
       } finally { await self.refreshReview(); }
     };

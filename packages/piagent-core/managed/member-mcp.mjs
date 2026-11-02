@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { evaluateMcpApproval } from '../runtime/mcp-repository-gate.mjs';
+import { alwaysBypass } from './permission.mjs';
 import { mcpWriteAction } from '../runtime/policy/handoff-policy.mjs';
 import { userToolchains } from './toolchain.mjs';
 import { fenced } from './untrusted.mjs';
@@ -62,6 +63,7 @@ export function memberMcpGuard(cwd, adapterDir, owner = null) {
     const fromAdapter = name => { const source = pi.getAllTools().find(tool => tool.name === name)?.sourceInfo?.path; return !!source && (source === adapterDir || inside(source, adapterDir)); };
     pi.on('tool_call', async (event, ctx) => {
       const decision = evaluateMcpApproval(cwd, event.toolName, event.input ?? {});
+      if (owner && alwaysBypass(owner)) return undefined;
       if (decision.block) return { block: true, reason: decision.reason };
       const called = mcpToolCalled(event.toolName, event.input, fromAdapter);
       const action = called && await mcpWriteAction(called.tool);
