@@ -38,6 +38,7 @@ import {
 import { detectProfileName } from "./project-shape.js";
 import { evaluateUpdateCheck, isInstalledPlatform, readUpdateCache, startUpdateProbe } from "./update-check.js";
 import { dormantInPersonalPi, personalPiAgentDir } from "./agent-home.js";
+import { registerTerminalSessionStatus } from "./session-status.js";
 import { collectServers } from "../mcp/mcp-config-layers.js";
 import { evaluateMcpApproval, mcpApprovalCache } from "../runtime/mcp-repository-gate.mjs";
 import { evaluateServerReadiness, readinessNotice } from "../mcp/mcp-auth-readiness.js";
@@ -3346,6 +3347,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   // The member's own `pi` stays stock even when an older install or a project
   // still registers this package there; Piagent runs through `piagent`.
   if (dormantInPersonalPi()) return;
+  registerTerminalSessionStatus(pi);
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const policy = loadPolicy(extensionDir);
   const bashResults = createBashResultLedger({ maxEntries: 300 });

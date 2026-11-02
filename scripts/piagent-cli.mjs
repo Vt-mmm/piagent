@@ -30,7 +30,8 @@ const scriptByCommand = {
   "piagent-pi-host": "scripts/pi-host.mjs",
   "piagent-skills": "scripts/skill-sources.mjs",
   "piagent-restore-pi": "scripts/personal-pi-restore.mjs",
-  "piagent-reload": "scripts/terminal-reload.mjs"
+  "piagent-reload": "scripts/terminal-reload.mjs",
+  "piagent-sessions": "scripts/piagent-sessions.mjs"
 };
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -92,6 +93,7 @@ if (invokedAs === "piagent") {
     console.log("");
     console.log("Commands:");
     console.log("  dashboard   Open and manage the local session hub");
+    console.log("  sessions    List every open session: processing, paused, failed, done");
     console.log("  studio      Open the managed company agent imported by Agent Watch");
     console.log("  pi          Same as `piagent`: Pi on the release Piagent is qualified on, in Piagent's home");
     console.log("  reload      Move every open Piagent Terminal to the installed release, without closing them");

@@ -4,7 +4,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { companyHerdrExtension, herdrEnvironment, herdrResumeArgv, sendHerdrRequest } from '../packages/piagent-core/managed/herdr-reporter.mjs';
+import { companyHerdrExtension, herdrEnvironment, herdrResumeArgv, sendHerdrRequest } from '../packages/piagent-core/extensions/herdr-reporter.js';
 import { companySessionFile } from '../packages/piagent-core/managed/store.mjs';
 
 // A member runs `piagent studio` in a Herdr pane (Windows: Herdr inside WSL).
@@ -59,6 +59,17 @@ test('state and the conversation reach Herdr over its socket', { skip: process.p
     assert.equal(received.at(-1).params.resume_argv.at(-1), path.join(dir, 'sessions/b.jsonl'));
     assert.ok(received.every((r, i) => i === 0 || r.params.seq > received[i - 1].params.seq), 'reports are ordered');
   } finally { server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a blocking dialog of Pi reads as blocked, with a short label', async () => {
+  const handlers = {}, sent = [];
+  companyHerdrExtension({ socket: '/s', pane: 'w1:p2' }, { send: async (_socket, request) => { sent.push(request.params); } })({ on: (name, handler) => { handlers[name] = handler; } });
+  const flush = () => new Promise(resolve => setTimeout(resolve, 5));
+  await handlers.session_start({}, { cwd: '/a', isIdle: () => true }); await flush();
+  handlers.ui_prompt_start({ title: 'x'.repeat(300) }); await flush();
+  assert.deepEqual([sent.at(-1).state, sent.at(-1).message.length], ['blocked', 80]);
+  handlers.ui_prompt_end({}); await flush();
+  assert.equal(sent.at(-1).state, 'idle');
 });
 
 test('a Herdr that is gone costs the conversation nothing', async () => {

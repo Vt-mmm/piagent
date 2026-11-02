@@ -486,6 +486,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent skills add mattpocock/skills` | Thêm một repo skill trên GitHub (giữ ở đúng một commit trong `~/.piagent/skill-sources`). Skill dùng được dạng `/skill:<tên>` trong Pi cá nhân (sau `/reload`), Terminal công ty và dashboard. Repo có `.claude-plugin/plugin.json` chỉ nạp skill repo đó công bố. `--ref <branch|tag|commit>` để ghim bản khác. |
 | `piagent skills list` / `update [<owner/repo>]` / `remove <owner/repo>` | Xem skill từng nguồn thêm vào; lên commit mới nhất của ref; gỡ nguồn và xoá bản sao. |
 | `piagent reload` | Mọi Terminal đang mở (`piagent`, `piagent studio`) nạp bản Piagent đã cài khi rảnh, giữ nguyên cuộc trò chuyện; Terminal đang chạy task thì nạp khi task xong. `piagent-update` tự yêu cầu việc này sau khi cài. |
+| `piagent sessions [--watch] [--json] [--setup-herdr]` | Mọi session đang mở và trạng thái của chúng: `processing`, `paused`, `failed`, `done`, `idle`. `--setup-herdr` hiện trạng thái ngay trên sidebar của Herdr. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
 | `piagent-update --version X.Y.Z` | Update tới đúng một release thay vì latest; dùng cho rollout theo lô hoặc rollback. |

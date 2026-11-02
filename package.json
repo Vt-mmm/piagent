@@ -72,6 +72,7 @@
   "bin": {
     "piagent": "scripts/piagent-cli.mjs",
     "piagent-dashboard": "scripts/piagent-cli.mjs",
+    "piagent-sessions": "scripts/piagent-cli.mjs",
     "piagent-setup": "scripts/piagent-cli.mjs",
     "piagent-install": "scripts/piagent-cli.mjs",
     "piagent-update": "scripts/piagent-cli.mjs",

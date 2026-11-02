@@ -78,6 +78,36 @@ Khi server Herdr khởi động lại (hay WSL bị tắt rồi mở lại), Her
 
 Cuộc trò chuyện cá nhân (`pi`) thì Herdr tự mở lại bằng tích hợp của nó.
 
+## Theo dõi nhiều session
+
+`piagent` và `piagent studio` tự báo trạng thái, không cần vào từng space:
+
+| Trạng thái | Nghĩa |
+|---|---|
+| `processing` | Task đang chạy |
+| `paused` | Đang chờ bạn: câu hỏi, xin duyệt, hoặc đã bấm Esc |
+| `failed` | Task kết thúc vì lỗi, hoặc Terminal chết giữa task |
+| `done` | Task đã xong |
+| `idle` | Chưa bắt đầu task nào |
+
+Xem từ terminal bất kỳ, trong hay ngoài Herdr:
+
+```bash
+piagent sessions
+piagent sessions --watch
+piagent sessions --json
+```
+
+Hiện trạng thái ngay trên từng space và từng agent ở sidebar của Herdr (chỉ cần chạy một lần):
+
+```bash
+piagent sessions --setup-herdr
+```
+
+Lệnh này thêm hai dòng `rows` vào config của Herdr và giữ bản cũ ở `config.toml.before-piagent-sessions`. Config đã tự đặt `rows` thì không bị đổi; lệnh in ra hai token `$piagent_sessions` và `$piagent_status` để bạn tự thêm.
+
+Một session trong space hiện chữ (`✖ failed`), nhiều session hiện số đếm (`✖1 ⏸1 ▶2 ✓1`).
+
 ## Rule
 
 - Herdr là orchestrator terminal/session, không phải security boundary.

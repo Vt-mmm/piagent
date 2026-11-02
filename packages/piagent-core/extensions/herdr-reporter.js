@@ -7,7 +7,7 @@ import net from 'node:net';
 // the company Terminal's own reporter: the same socket requests (newline JSON,
 // pane.report_agent), with the command that reopens this conversation in
 // `piagent studio` instead of personal Pi.
-const SOURCE = 'custom:piagent-studio', AGENT = 'piagent';
+const COMPANY_SOURCE = 'custom:piagent-studio', AGENT = 'piagent';
 
 // What a Herdr pane gives its processes, read before the environment is
 // cleared; null outside Herdr. Nothing else of it reaches the conversation.
@@ -21,7 +21,7 @@ export function herdrEnvironment(environment = process.env) {
 // control characters (its POSIX quoting), so such a path is not offered.
 export function herdrResumeArgv(cwd, sessionFile) {
   const argv = ['piagent', 'studio', '--project', cwd, ...(sessionFile ? ['--session', sessionFile] : [])];
-  return argv.every(part => typeof part === 'string' && part && !part.includes("'") && !/\p{Cc}/u.test(part)) ? argv : null;
+  return safeArgv(argv);
 }
 
 // One request, delivered when Herdr answers; a second, longer try when the
@@ -42,10 +42,13 @@ export async function sendHerdrRequest(socketPath, request) {
   if (!await sendOnce(socketPath, request, 500)) await sendOnce(socketPath, request, 1500);
 }
 
+// Herdr refuses a resume command with an apostrophe or control characters.
+const safeArgv = argv => argv && argv.every(part => typeof part === 'string' && part && !part.includes("'") && !/\p{Cc}/u.test(part)) ? argv : null;
+
 // working while a turn runs, blocked while the conversation waits for the
-// member (Pi's `herdr:blocked` events), idle otherwise. Reports go out one at a
-// time, the newest state winning.
-export function companyHerdrExtension(herdr, { send = sendHerdrRequest } = {}) {
+// member (Pi's blocking dialogs, or `herdr:blocked` events), idle otherwise.
+// Reports go out one at a time, the newest state winning.
+export function herdrReporterExtension(herdr, { source, resume, send = sendHerdrRequest }) {
   return (pi) => {
     let seq = Date.now() * 1000, active = false, blocked = 0, label, last, resumeArgv, queued, sending = false;
     const desired = () => blocked > 0 ? { state: 'blocked', message: label } : { state: active ? 'working' : 'idle', message: undefined };
@@ -55,8 +58,8 @@ export function companyHerdrExtension(herdr, { send = sendHerdrRequest } = {}) {
       try {
         while (queued) {
           const next = queued; queued = undefined;
-          await send(herdr.socket, { id: `${SOURCE}:${next.seq}`, method: 'pane.report_agent',
-            params: { pane_id: herdr.pane, source: SOURCE, agent: AGENT, state: next.state, message: next.message, seq: next.seq, ...(resumeArgv ? { resume_argv: resumeArgv } : {}) } });
+          await send(herdr.socket, { id: `${source}:${next.seq}`, method: 'pane.report_agent',
+            params: { pane_id: herdr.pane, source, agent: AGENT, state: next.state, message: next.message, seq: next.seq, ...(resumeArgv ? { resume_argv: resumeArgv } : {}) } });
         }
       } finally { sending = false; if (queued) void drain(); }
     };
@@ -68,18 +71,26 @@ export function companyHerdrExtension(herdr, { send = sendHerdrRequest } = {}) {
     const follow = ctx => {
       let file;
       try { file = ctx?.sessionManager?.getSessionFile?.(); } catch { file = undefined; }
-      const argv = herdrResumeArgv(ctx?.cwd, typeof file === 'string' && file ? file : undefined);
+      const argv = safeArgv(resume(ctx?.cwd, typeof file === 'string' && file ? file : undefined));
       const changed = JSON.stringify(argv) !== JSON.stringify(resumeArgv);
       resumeArgv = argv ?? undefined;
       return changed;
     };
-    pi.events?.on?.('herdr:blocked', data => {
+    const wait = data => {
       if (data?.active) { blocked += 1; label = data.label; } else { blocked = Math.max(0, blocked - 1); if (!blocked) label = undefined; }
       publish();
-    });
+    };
+    pi.events?.on?.('herdr:blocked', wait);
+    // A long list as a title is not a label Herdr can show.
+    pi.on('ui_prompt_start', event => wait({ active: true, label: event?.title?.slice(0, 80) }));
+    pi.on('ui_prompt_end', () => wait({ active: false }));
     // /new, /resume and /fork start another session: Herdr follows it.
     pi.on('session_start', async (_event, ctx) => { follow(ctx); active = ctx?.isIdle?.() === false; publish(true); });
     pi.on('agent_start', (_event, ctx) => { const changed = follow(ctx); active = true; publish(changed); });
     pi.on('agent_settled', (_event, ctx) => { if (ctx?.isIdle?.() !== true) return; active = false; publish(); });
   };
+}
+
+export function companyHerdrExtension(herdr, { send } = {}) {
+  return herdrReporterExtension(herdr, { source: COMPANY_SOURCE, resume: herdrResumeArgv, ...(send ? { send } : {}) });
 }

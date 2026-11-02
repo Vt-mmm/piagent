@@ -7,7 +7,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ManagedBrokerClient } from '../packages/piagent-core/managed/broker-client.mjs';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { agentWatchDataDirectory, companySessionFile, interopEnvironment, resolveStore, storedSlot } from '../packages/piagent-core/managed/store.mjs';
-import { companyHerdrExtension, herdrEnvironment } from '../packages/piagent-core/managed/herdr-reporter.mjs';
+import { companyHerdrExtension, herdrEnvironment } from '../packages/piagent-core/extensions/herdr-reporter.js';
+import { sessionStatusExtension } from '../packages/piagent-core/extensions/session-status.js';
 import { browserCommand } from '../packages/piagent-core/runtime/host/browser-opener.mjs';
 import { agentWatchRunning, awaitRebind, bindingMismatch, brokerUpdatedAfterBinding, installedAfterBinding } from '../packages/piagent-core/managed/binding-wait.mjs';
 
@@ -157,7 +158,8 @@ try {
   const terminal = companyTerminalExtension({ managed: () => current, packageRoot, sdkRoot: config.sdk_root, restartInPlace: restartFile ? () => restart.request?.() : null,
     bindingChanged: () => { try { return digest(config.entrypoint) !== config.entrypoint_sha256; } catch { return true; } } });
   // Herdr shows the Terminal's state and reopens it after a restart; scripted runs have no pane to show.
-  const reportToHerdr = herdr && !['--check', '--prompt', '--rpc'].some((f) => flags.has(f));
+  const scripted = ['--check', '--prompt', '--rpc'].some((f) => flags.has(f));
+  const reportToHerdr = herdr && !scripted;
   const factory = async ({ cwd, sessionManager }) => {
     let next;
     try { next = holdManagedSession(agentDir, sessionManager.getSessionFile()); }
@@ -166,7 +168,7 @@ try {
     // A conversation that enrolled again (key or harness changed) holds the live broker.
     if (current) { broker = current.broker; await current.session.abort(); await Promise.allSettled([...current.helpers.values()]); await broker.request('close'); current.session.dispose(); await current.boundary.dispose(); }
     current = await ManagedSession.create({ sdkRoot: config.sdk_root, cwd, origin: config.origin, broker, agentDir, sessionManager,
-      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal, ...(reportToHerdr ? [companyHerdrExtension(herdr)] : [])] });
+      protectedRoots: [configPath, agentDir], renewBroker: newBroker, bindingRevision, terminalExtensions: [terminal, ...(scripted ? [] : [sessionStatusExtension({ herdr })]), ...(reportToHerdr ? [companyHerdrExtension(herdr)] : [])] });
     // The plan is drawn as a checklist here; Pi keeps this definition object.
     for (const [name, draw] of Object.entries(toolRenderers)) Object.assign(current.session.getToolDefinition(name) ?? {}, draw);
     return { session: current.session, extensionsResult: current.extensionsResult, services: current.services, diagnostics: [] };
