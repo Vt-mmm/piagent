@@ -14,6 +14,13 @@ const MOUNTED = [/^\/Volumes\/[^/]+(\/[^/]+)?$/, /^\/System\/Volumes(\/[^/]+){0,
 const DYNAMIC = /\$(?:\(…\)|[A-Za-z_@*#?!\d]\w*)/;
 const onlyDynamic = /^\$(?:\(…\)|[A-Za-z_@*#?!\d]\w*)$/;
 
+// On Windows the checks below see one spelling of a path: `D:\\a\\B`, `d:/a/b` and
+// Git Bash's `/d/a/b` are all `/d:/a/b`.
+function comparable(value) {
+  if (process.platform !== 'win32') return value;
+  return value.replace(/\\/g, '/').toLowerCase().replace(/^\/?([a-z]):?(?=\/|$)/, (_, drive) => `/${drive}:`);
+}
+
 // `{/,}` is `/` by the time it runs.
 function expanded(word) {
   const brace = /^(.*?)\{([^{}]*,[^{}]*)\}(.*)$/.exec(word);
@@ -35,7 +42,7 @@ function isCritical(target, cwd, home) {
 }
 
 // Why this one target needs the member, or null.
-function targetReason(raw, { cwd, home, recursive, guarded, printers, singleQuotedScript, afterCd }) {
+function targetReason(raw, { cwd, project, home, recursive, guarded, printers, singleQuotedScript, afterCd }) {
   const DANGER = text => `Dangerous rm operation on critical path: ${text}`;
   if (/^\\+$/.test(raw)) return DANGER(raw);
   let word = raw.replace(/^~(?=\/|$)/, home).replace(/\$\{?HOME\}?(?=\/|$)/, home).replace(/\$\{?PWD\}?(?=\/|$)/, cwd);
@@ -50,20 +57,21 @@ function targetReason(raw, { cwd, home, recursive, guarded, printers, singleQuot
     if (/^\$[^/]+\/[^/]+$/.test(word) && TOP_LEVEL.has(word.split('/')[1]) && !guarded.has(name)) return DANGER(`${raw} (/${word.split('/')[1]} when the variable is empty)`);
     const before = word.slice(0, dynamic.index);
     // A trailing substitution: the path that remains when it expands empty.
-    if (word.slice(dynamic.index) === dynamic[0] && before.startsWith('/') && isCritical(path.posix.resolve(before), cwd, home)) return DANGER(raw);
+    if (word.slice(dynamic.index) === dynamic[0] && before.startsWith('/') && isCritical(path.posix.resolve(comparable(before)), cwd, home)) return DANGER(raw);
     return null;
   }
   const glob = /\/?\*\/?$/.test(word) || word === '*';
   if (glob && (/\*\/(\*\/?)?$/.test(word) || (afterCd && !word.startsWith('/')))) return `Dangerous rm operation: ${raw} cannot be checked before the command runs`;
   const literal = word.replace(/\/?\*$/, '') || (word.startsWith('/') ? '/' : '.');
-  const resolved = path.posix.resolve(cwd, literal);
-  if (isCritical(resolved, cwd, home)) return DANGER(raw);
+  const resolved = path.posix.resolve(cwd, comparable(literal));
+  if (isCritical(resolved, cwd, home) || isCritical(resolved, project, home)) return DANGER(raw);
   if ((recursive || glob) && MOUNTED.some(rule => rule.test(resolved))) return `Dangerous rm operation on mounted drive path: ${raw}`;
   return null;
 }
 
 // Why this command must be asked about in Always bypass, or null.
-export function criticalRemovalReason(command, { cwd, home }) {
+export function criticalRemovalReason(command, options) {
+  const cwd = comparable(options.cwd), home = comparable(options.home);
   const text = String(command), commands = astCommands(text);
   if (commands === null) return /\b(rm|rmdir)\b/.test(text) ? 'Dangerous rm operation not ruled out: the shell may read this command differently than it was parsed' : null;
   const guarded = new Set([...text.matchAll(/\$\{([A-Za-z_]\w*):\?/g)].map(match => match[1]));
@@ -74,13 +82,13 @@ export function criticalRemovalReason(command, { cwd, home }) {
     const [name, ...args] = executable(words), program = String(name ?? '').split('/').pop();
     if (program === 'cd') {
       afterCd = true;
-      if (args[0] && !DYNAMIC.test(args[0])) base = path.posix.resolve(base, args[0].replace(/^~(?=\/|$)/, home));
+      if (args[0] && !DYNAMIC.test(args[0])) base = path.posix.resolve(base, comparable(args[0].replace(/^~(?=\/|$)/, home)));
       continue;
     }
     if (program !== 'rm' && program !== 'rmdir') continue;
     const { targets, recursive } = parseTargets(args);
     for (const target of targets.flatMap(expanded)) {
-      const reason = targetReason(target, { cwd: base, home, recursive, guarded, printers, singleQuotedScript, afterCd });
+      const reason = targetReason(target, { cwd: base, project: cwd, home, recursive, guarded, printers, singleQuotedScript, afterCd });
       if (reason) return reason;
     }
   }

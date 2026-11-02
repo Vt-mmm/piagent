@@ -124,3 +124,21 @@ test('the file tools reach outside the project only while the mode is on', { ski
     assert.equal(fs.readFileSync(outside, 'utf8'), 'x');
   } finally { await boundary.dispose(); }
 });
+
+test('a Windows path is compared as one spelling, so rm in the project or home is still asked',()=>{
+ const platform=Object.getOwnPropertyDescriptor(process,'platform');Object.defineProperty(process,'platform',{value:'win32'});
+ try{
+  const options={cwd:'D:\\a\\Project',home:'C:\\Users\\me'};
+  for(const command of ['rm -rf .','rm -rf ./','rm -rf *','rm -rf ~','rm -rf D:/a/project','rm -rf /d/a/project','rm -rf D:/a','rm -rf D:/','rm -rf /c/users/me','rm -rf "C:\\Users\\me"','cd D:/a && rm -rf project'])
+   assert.match(criticalRemovalReason(command,options)??'',/Dangerous rm/,command);
+  for(const command of ['rm -rf build','rm -rf ./build','rm -rf D:/a/project/build','rm -f ~/notes.txt'])
+   assert.equal(criticalRemovalReason(command,options),null,command);
+ }finally{Object.defineProperty(process,'platform',platform);}
+});
+
+test('stepping out of the project does not hide removing it',()=>{
+ const options={cwd:'/work/project',home:'/Users/me'};
+ assert.match(criticalRemovalReason('cd .. && rm -rf project',options)??'',/Dangerous rm/);
+ assert.match(criticalRemovalReason('cd /work && rm -rf project',options)??'',/Dangerous rm/);
+ assert.equal(criticalRemovalReason('cd .. && rm -rf other',options),null);
+});
