@@ -4,6 +4,14 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.51.1 - 2026-11-03
+
+**A task left running overnight no longer waits for an answer until morning.** In company mode the harness asked how much to test, or whether to push, and waited for you with no limit. A question nobody answers now goes away after ten minutes and the cheap answer goes on.
+
+### Fixed
+
+- A test or push question left unanswered for ten minutes is taken back: only the tests that cover the change run, and nothing is pushed. A task no longer stands still overnight.
+
 ## v1.51.0 - 2026-11-02
 
 **Follow every session from outside it, and a new Always bypass access.** With many sessions open, you see which one is processing, paused or failed without opening it, from any terminal and on the Herdr sidebar. Always bypass, a new access you choose yourself, removes the sandbox and asks only about commits, pushes and removing a critical path.

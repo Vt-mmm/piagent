@@ -1,5 +1,26 @@
 [
   {
+    "version": "1.51.1",
+    "date": "2026-11-03",
+    "status": "stable",
+    "title": {
+      "en": "A task left running overnight no longer waits for an answer until morning",
+      "vi": "Task để chạy qua đêm không còn đứng chờ câu trả lời tới sáng"
+    },
+    "summary": {
+      "en": "In company mode the harness asked how much to test, or whether to push, and waited for you with no limit. A question nobody answers now goes away after ten minutes and the cheap answer goes on.",
+      "vi": "Ở chế độ công ty, harness hỏi chạy test phần nào hay có push không, rồi chờ bạn mãi. Giờ câu hỏi không ai trả lời trong mười phút sẽ tự rút và lựa chọn an toàn được dùng."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A test or push question left unanswered for ten minutes is taken back: only the tests that cover the change run, and nothing is pushed. A task no longer stands still overnight.",
+        "vi": "Câu hỏi về test hay push không ai trả lời trong mười phút sẽ tự rút: chỉ chạy test liên quan tới thay đổi, không push gì. Task không còn đứng yên cả đêm."
+      }
+    ]
+  },
+  {
     "version": "1.51.0",
     "date": "2026-11-02",
     "status": "stable",
