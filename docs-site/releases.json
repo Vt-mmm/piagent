@@ -1,5 +1,31 @@
 [
   {
+    "version": "1.51.2",
+    "date": "2026-11-03",
+    "status": "stable",
+    "title": {
+      "en": "Running only the tests that cover a change works in every test tool",
+      "vi": "Chạy riêng phần test liên quan dùng được với mọi công cụ test"
+    },
+    "summary": {
+      "en": "When you chose to run only the related tests, the harness took many single-test commands for the whole suite and refused them. It now reads one file, filter or module the same way in each tool.",
+      "vi": "Khi bạn chọn chỉ chạy phần test liên quan, harness hiểu nhầm nhiều lệnh chạy một test là chạy toàn bộ rồi chặn lại. Giờ lệnh chạy một file, một bộ lọc hay một module được đọc đúng ở từng công cụ."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "Maven -Dtest and -Dit.test before the goal, Gradle --tests and :module:test, node --import tsx --test, flutter, cargo test NAME and others now count as part of the suite.",
+        "vi": "Maven -Dtest và -Dit.test đặt trước goal, Gradle --tests và :module:test, node --import tsx --test, flutter, cargo test TÊN và các lệnh khác giờ được tính là một phần."
+      },
+      {
+        "kind": "fixed",
+        "en": "Commands that only compile or list tests (test-compile, -DskipTests, --listTests) no longer count as a test run, and a line that also runs the whole suite still asks.",
+        "vi": "Lệnh chỉ biên dịch hay liệt kê test (test-compile, -DskipTests, --listTests) không còn bị tính là chạy test; dòng lệnh có kèm chạy toàn bộ vẫn được hỏi."
+      }
+    ]
+  },
+  {
     "version": "1.51.1",
     "date": "2026-11-03",
     "status": "stable",

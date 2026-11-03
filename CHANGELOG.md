@@ -4,6 +4,15 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.51.2 - 2026-11-03
+
+**Running only the tests that cover a change works in every test tool.** When you chose to run only the related tests, the harness took many single-test commands for the whole suite and refused them. It now reads one file, filter or module the same way in each tool.
+
+### Fixed
+
+- Maven -Dtest and -Dit.test before the goal, Gradle --tests and :module:test, node --import tsx --test, flutter, cargo test NAME and others now count as part of the suite.
+- Commands that only compile or list tests (test-compile, -DskipTests, --listTests) no longer count as a test run, and a line that also runs the whole suite still asks.
+
 ## v1.51.1 - 2026-11-03
 
 **A task left running overnight no longer waits for an answer until morning.** In company mode the harness asked how much to test, or whether to push, and waited for you with no limit. A question nobody answers now goes away after ten minutes and the cheap answer goes on.
