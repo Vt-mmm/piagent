@@ -32,6 +32,18 @@ test('checkScope tells a whole suite from a part of it', () => {
   assert.equal(checkScope('node --test tests/a.test.mjs', ['node --test tests/a.test.mjs']), 'suite');
 });
 
+test('Maven and Gradle flags before the goal still name a part: commands members ran', () => {
+  for (const c of [
+    './mvnw -Dtest=LedgerFoundationMigrationIT test', './mvnw -q -Dtest=HubListingReadServiceIT test', './mvnw -Dtest=Ledger*Test test',
+    './mvnw -DskipUnitTests=true -Dit.test=LedgerFoundationMigrationIT,LedgerSeedDriftMigrationIT verify',
+    './mvnw verify -DskipUnitTests=true -Dit.test=LedgerFoundationMigrationIT', './mvnw -Dtest=LedgerFoundationMigrationIT surefire:test',
+    './mvnw -Dit.test=HubListingReadServiceIT -DskipUnitTests=true integration-test failsafe:verify', 'mvn -pl ledger verify',
+    'cd ~/v-nexus-backend && ./mvnw -DskipUnitTests=true -Dit.test=HubListingReadServiceIT verify', 'set -o pipefail; ./mvnw -Dit.test=A verify 2>&1 | tail -70',
+    './gradlew --tests CartTest test', './gradlew :cart:test --tests CartTest']) assert.equal(checkScope(c), 'partial', c);
+  for (const c of ['./mvnw verify', './mvnw -q test', 'mvn -DskipUnitTests=true verify', './mvnw clean verify', './gradlew :cart:test']) assert.equal(checkScope(c), 'suite', c);
+  for (const c of ['./mvnw -q -DskipTests test-compile', 'mvn -DskipTests package', './gradlew compileTestJava']) assert.equal(checkScope(c), null, c);
+});
+
 test('checkScope and isGitPush read what runs, not what it quotes, writes to or pipes into', () => {
   for (const c of ['npm test > /tmp/o.txt', 'npm test 2>/tmp/e', 'npm test 2>&1 | sort -k 2', 'jest --config tests/jest.config.js', 'playwright test --config e2e/pw.config.ts', 'go test -coverprofile=/tmp/c ./...']) assert.equal(checkScope(c), 'suite', c);
   assert.equal(checkScope('jest src/cart'), 'partial');

@@ -17,14 +17,18 @@ export const UNANSWERED_MS = 10 * 60_000;
 // package), 'suite' (the whole test command) or null when it runs no tests.
 const VERSION_ONLY = /(?:^|\s)(?:--version|-V|--help)(?:\s|$)/;
 const FILTERED = /(?:^|\s)(?:-k|-t|--grep|--testNamePattern|--test-name-pattern|--filter|--only|--testPathPattern)(?:[\s=]|$)|\bgo\s+test\b.*\s-run[\s=]|\bpytest\b.*\s::|\.only\b/;
-const TEST_RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test(:\S+)?(?=\s|$)|\bnode\s+--test\b|\b(vitest|jest|mocha|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest)\b|\b(go|cargo|swift|dotnet|deno)\s+test\b|\bmake\s+test\b|\bxcodebuild\b.*\btest\b|\b(gradle|gradlew|mvn|mvnw)\b.*\b(test|verify)\b/;
+const TEST_RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test(:\S+)?(?=\s|$)|\bnode\s+--test\b|\b(vitest|jest|mocha|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest)\b|\b(go|cargo|swift|dotnet|deno)\s+test\b|\bmake\s+test\b|\bxcodebuild\b.*\btest\b|\b(gradle|gradlew|mvn|mvnw)\b(?:\s+\S+)*?\s+(?:\S+:)?(?:test|verify|integration-test)(?=\s|$)/;
+// Maven and Gradle take their flags before the goal as often as after it
+// (`./mvnw -Dtest=CartTest test`), and a goal is a whole word: `test-compile`
+// and `-Dit.test=` are not the `test` goal.
+const BUILD_TOOL = /^(?:gradle|gradlew|mvn|mvnw)\b/;
 // Test commands start a command: `npm install -D vitest` or `rm jest.config.ts` only name one.
 const TEST_START = new RegExp(`^(?:${TEST_RUNNER.source})`);
 // A function body, a group or a loop body opens a part as well.
 const LAUNCHER = /^(?:[\w-]+\s*\(\)\s*\{?\s*|\{\s+|\(\s*|(?:do|then|else)\s+|\w+=\S*\s+|time\s+|nohup\s+|timeout\s+\S+\s+|npx\s+(?:-\S+\s+)*|bunx\s+|pnpm\s+(?:exec|dlx)\s+|uv\s+run\s+|poetry\s+run\s+|yarn\s+(?=jest|vitest|mocha|playwright)|node_modules\/\.bin\/|\.\/)+/;
 const partsOf = bare => bare.split(/\s*(?:\|\|?|&&|;)\s*/).map(part => part.replace(/\s\d*>.*$/, '').replace(/[\s)}]+$/, '').trim());
 const NOT_TESTS = /\b(lint|typecheck|type-check|tsc|eslint|biome|ruff|mypy|pyright|vet|clippy|format|build)\b/;
-const TARGET_FLAG = /^(-p|--package|-w|--workspace|--tests)$|^(-Dtest=|-only-testing:|--workspace=|--package=)/;
+const TARGET_FLAG = /^(-p|--package|-w|--workspace|--tests|-pl|--projects)$|^(-Dtest=|-Dit\.test=|-only-testing:|--workspace=|--package=|--projects=)/;
 // `go test -p 4` sets how many packages run at once; for cargo -p names a package.
 const GO_TEST = /^go\s+test\b/;
 const VALUE_FLAG = /^(-c|--config|--reporter|--project|--workers|--timeout|--rootDir|--root|-f|--file|-o|--output)$/;
@@ -48,7 +52,8 @@ export function checkScope(command, declared = []) {
     const own = part.replace(LAUNCHER, ''), runner = own.match(TEST_START);
     if (!runner) continue;
     if (FILTERED.test(own)) return 'partial';
-    return !declared.includes(text) && targetsPart(own.slice(runner[0].length).split(' ').filter(Boolean), GO_TEST.test(own)) ? 'partial' : 'suite';
+    const args = BUILD_TOOL.test(own) ? own.split(' ').slice(1) : own.slice(runner[0].length).split(' ');
+    return !declared.includes(text) && targetsPart(args.filter(Boolean), GO_TEST.test(own)) ? 'partial' : 'suite';
   }
   // A script the repository declares: it cannot be narrowed from here.
   const named = declared.find(d => partsOf(bare).some(part => part.startsWith(unquoted(d))));
