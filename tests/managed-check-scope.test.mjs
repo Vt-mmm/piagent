@@ -32,16 +32,41 @@ test('checkScope tells a whole suite from a part of it', () => {
   assert.equal(checkScope('node --test tests/a.test.mjs', ['node --test tests/a.test.mjs']), 'suite');
 });
 
-test('Maven and Gradle flags before the goal still name a part: commands members ran', () => {
-  for (const c of [
-    './mvnw -Dtest=LedgerFoundationMigrationIT test', './mvnw -q -Dtest=HubListingReadServiceIT test', './mvnw -Dtest=Ledger*Test test',
-    './mvnw -DskipUnitTests=true -Dit.test=LedgerFoundationMigrationIT,LedgerSeedDriftMigrationIT verify',
-    './mvnw verify -DskipUnitTests=true -Dit.test=LedgerFoundationMigrationIT', './mvnw -Dtest=LedgerFoundationMigrationIT surefire:test',
-    './mvnw -Dit.test=HubListingReadServiceIT -DskipUnitTests=true integration-test failsafe:verify', 'mvn -pl ledger verify',
+// One table across tools: a member who chose "only the related part" must be able
+// to run one file, one filter or one module in each of them, and a whole run still asks.
+const SCOPES = {
+  // JS: npm/pnpm/yarn/bun scripts
+  'JS: npm/pnpm/yarn/bun scripts': { partial: ['npm test -- tests/cart.test.mjs', 'npm test -- -t "adds item"', 'npm run test -- --grep cart', 'pnpm test src/cart.test.ts', 'yarn test cart', 'bun test src/cart.test.ts', 'bun test -t total', 'pnpm --filter web test', 'pnpm -F web test', 'npm test -w packages/web', 'npm test --workspace=web', 'yarn workspace web test'], suite: ['npm test', 'npm run test', 'npm t', 'pnpm test', 'yarn test', 'bun test', 'npm run test:unit', 'npm run test:e2e', 'pnpm -r test', 'npm test -- --coverage', 'npm test -- --runInBand', 'CI=1 npm test'], none: [] },
+  // jest / vitest / mocha / node / playwright
+  'jest / vitest / mocha / node / playwright': { partial: ['npx jest src/cart.test.ts', 'npx jest cart', 'npx jest -t "adds item"', 'npx jest --testPathPattern cart', 'npx jest --findRelatedTests src/cart.ts', 'npx jest --onlyChanged', 'npx jest --changedSince main', 'npx jest --selectProjects api', 'npx vitest run src/cart.spec.ts', 'npx vitest run cart', 'npx vitest run -t total', 'npx vitest related src/cart.ts --run', 'npx vitest --project api run', 'npx vitest run --changed', 'npx mocha test/cart.spec.js', 'npx mocha --grep cart', 'npx mocha -g cart', 'node --test tests/cart.test.mjs', 'node --test --test-name-pattern=cart', 'npx playwright test e2e/cart.spec.ts', 'npx playwright test cart', 'npx playwright test -g "checkout"', 'npx playwright test --grep @smoke', 'npx playwright test --project chromium', 'npx playwright test e2e/cart.spec.ts:42', 'npx cypress run --spec cypress/e2e/cart.cy.ts'], suite: ['npx jest', 'npx jest --maxWorkers 2', 'npx jest -w 2', 'npx jest --ci --coverage', 'npx vitest', 'npx vitest run', 'vitest run --reporter verbose', 'npx mocha', 'npx mocha --timeout 5000', 'node --test', 'node --test tests/*.test.mjs', 'node --test --test-concurrency=4 tests/', 'npx playwright test', 'npx playwright test --workers 2', 'npx cypress run'], none: [] },
+  // Python
+  'Python': { partial: ['pytest tests/unit', 'pytest tests/test_cart.py', 'pytest tests/test_cart.py::test_total', 'pytest -k "cart and not slow"', 'pytest -m smoke', 'pytest --lf', 'python3 -m pytest tests/test_cart.py', 'python -m pytest -k cart', 'uv run pytest tests/test_cart.py', 'python -m unittest tests.test_cart', 'python -m unittest tests.test_cart.CartTest.test_total', 'python -m unittest discover -s tests -p "test_cart*.py"', 'python manage.py test shop.tests.test_cart', 'tox -e py311 -- tests/test_cart.py'], suite: ['pytest', 'pytest -q', 'pytest tests', 'pytest tests/', 'pytest -n 4', 'pytest -x --maxfail 1', 'pytest -q --tb=short', 'pytest -n auto', 'python -m pytest', 'poetry run pytest', 'python -m unittest', 'python -m unittest discover', 'python manage.py test', 'tox'], none: [] },
+  // Go
+  'Go': { partial: ['go test ./internal/cart', 'go test ./internal/cart/...', 'go test -run TestTotal ./...', 'go test -run=TestTotal ./internal/cart', 'go test .', 'go test'], suite: ['go test ./...', 'go test -count=1 ./...', 'go test -p 4 ./...', 'go test -race -timeout 60s ./...'], none: [] },
+  // Rust
+  'Rust': { partial: ['cargo test total', 'cargo test cart::tests::total', 'cargo test -p cart', 'cargo test --package cart', 'cargo test --test cart_it', 'cargo test --lib', 'cargo test total -- --nocapture', 'cargo nextest run -E "test(total)"'], suite: ['cargo test', 'cargo test --workspace', 'cargo test -- --nocapture', 'cargo test --release', 'cargo test -j 4', 'cargo nextest run'], none: [] },
+  // JVM
+  'JVM': { partial: ['mvn test -Dtest=CartTest', './mvnw -Dtest=CartTest test', './mvnw -Dtest=CartTest#total test', './mvnw -Dtest="Cart*Test" test', './mvnw -Dit.test=CartIT verify', './mvnw -Dtest=X -Dit.test=Y verify', 'mvn -pl cart test', 'mvn -pl :cart -am verify', 'mvn --projects cart verify', 'mvn -f cart/pom.xml test', 'mvn -Dgroups=fast test', './gradlew test --tests CartTest', './gradlew test --tests "*.CartTest.total"', './gradlew :cart:test', './gradlew -p cart test', './gradlew :app:integrationTest --tests CartIT', './gradlew testDebugUnitTest --tests CartTest'], suite: ['mvn test', 'mvn verify', './mvnw clean verify', './mvnw -q test', './mvnw -T 4 verify', 'mvn -B verify', './gradlew test', 'gradle test', './gradlew check', './gradlew test --max-workers 2', './gradlew integrationTest', './gradlew connectedAndroidTest', './gradlew testDebugUnitTest'], none: ['./mvnw -q -DskipTests test-compile', 'mvn -DskipTests package', 'mvn -DskipTests install', './gradlew build', './gradlew compileTestJava'] },
+  // .NET, Swift, Xcode
+  '.NET, Swift, Xcode': { partial: ['dotnet test --filter FullyQualifiedName~Cart', 'dotnet test tests/Cart.Tests', 'dotnet test tests/Cart.Tests/Cart.Tests.csproj', 'swift test --filter CartTests', 'swift test --filter CartTests/testTotal', 'xcodebuild test -scheme App -only-testing:AppTests/CartTests', 'xcodebuild test -scheme App -only-testing AppTests/CartTests', 'xcodebuild test-without-building -scheme App -only-testing:AppTests'], suite: ['dotnet test', 'dotnet test -c Release', 'dotnet test --no-build', 'swift test', 'swift test --parallel', 'xcodebuild test -scheme App -destination "platform=iOS Simulator,name=iPhone 16"'], none: ['xcodebuild build -scheme App'] },
+  // Ruby, PHP, Elixir, Dart, Deno, make
+  'Ruby, PHP, Elixir, Dart, Deno, make': { partial: ['bundle exec rspec spec/cart_spec.rb', 'rspec spec/cart_spec.rb:42', 'rspec --tag focus', 'rspec -e "adds item"', 'bin/rails test test/models/cart_test.rb', 'bin/rails test test/models/cart_test.rb:12', './vendor/bin/phpunit --filter CartTest', 'phpunit tests/CartTest.php', 'php artisan test --filter=CartTest', './vendor/bin/pest --filter cart', 'mix test test/cart_test.exs', 'mix test test/cart_test.exs:12', 'mix test --only focus', 'flutter test test/cart_test.dart', 'flutter test --name total', 'dart test -n total', 'deno test src/cart_test.ts', 'deno test --filter total', 'make test TEST=./internal/cart'], suite: ['bundle exec rspec', 'rspec', 'bin/rails test', 'vendor/bin/phpunit', 'php artisan test', 'mix test', 'flutter test', 'dart test', 'deno test', 'deno test -A', 'make test', 'make test-unit'], none: [] },
+  // Monorepo runners
+  'Monorepo runners': { partial: ['npx nx test web', 'npx nx affected -t test', 'npx turbo run test --filter=web', 'npx lerna run test --scope web'], suite: ['npx nx run-many -t test', 'npx turbo run test'], none: [] },
+  // Not tests
+  'Not tests': { partial: [], suite: [], none: ['npm run lint', 'tsc --noEmit', './mvnw -q compile', 'go build ./...', 'go vet ./...', 'cargo build', 'cargo clippy', 'pip install pytest', 'npm install -D vitest', 'git status', 'cat test/cart.test.ts', 'ls tests', 'npm test --version', 'pytest --collect-only', './mvnw dependency:tree', './gradlew dependencies', 'dotnet build', 'echo "npm test"'] },
+};
+for (const [tools, { partial, suite, none }] of Object.entries(SCOPES)) test(`checkScope reads ${tools} commands`, () => {
+  for (const c of partial) assert.equal(checkScope(c), 'partial', c);
+  for (const c of suite) assert.equal(checkScope(c), 'suite', c);
+  for (const c of none) assert.equal(checkScope(c), null, c);
+});
+
+test('commands members ran with a Maven filter before the goal are a part (2026-11-03 refusals)', () => {
+  for (const c of ['./mvnw -DskipUnitTests=true -Dit.test=LedgerFoundationMigrationIT,LedgerSeedDriftMigrationIT verify', './mvnw -Dtest=LedgerFoundationMigrationIT surefire:test',
     'cd ~/v-nexus-backend && ./mvnw -DskipUnitTests=true -Dit.test=HubListingReadServiceIT verify', 'set -o pipefail; ./mvnw -Dit.test=A verify 2>&1 | tail -70',
-    './gradlew --tests CartTest test', './gradlew :cart:test --tests CartTest']) assert.equal(checkScope(c), 'partial', c);
-  for (const c of ['./mvnw verify', './mvnw -q test', 'mvn -DskipUnitTests=true verify', './mvnw clean verify', './gradlew :cart:test']) assert.equal(checkScope(c), 'suite', c);
-  for (const c of ['./mvnw -q -DskipTests test-compile', 'mvn -DskipTests package', './gradlew compileTestJava']) assert.equal(checkScope(c), null, c);
+    './mvnw -Dtest=X test > target/x.log 2>&1; code=$?; tail -n 55 target/x.log; exit $code']) assert.equal(checkScope(c), 'partial', c);
+  assert.equal(suitePart('cd api && ./mvnw -Dtest=X test 2>&1 | tail -5'), 'mvnw -Dtest=X test');
 });
 
 test('checkScope and isGitPush read what runs, not what it quotes, writes to or pipes into', () => {

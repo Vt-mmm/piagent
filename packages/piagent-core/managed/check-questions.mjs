@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { memberQuestions } from './member-questions.mjs';
 import { alwaysBypass, effectivePermission } from './permission.mjs';
+import { checkScope, suitePart, unquoted } from './test-scope.mjs';
 import { digestsOnce, knownFast, markCheckStart, missingSuites, pushQuestion, pushRepositories, reviewBeforePush } from './check-evidence.mjs';
 
 // How much to test is the member's decision: a one-line fix should not cost a
@@ -12,58 +13,8 @@ import { digestsOnce, knownFast, markCheckStart, missingSuites, pushQuestion, pu
 // overnight) is taken back and the cheap answer goes on: only the tests that
 // cover the change, and no push. Before this a turn waited until morning.
 export const UNANSWERED_MS = 10 * 60_000;
+export { checkScope, suitePart };
 
-// How much of the suite a test command covers: 'partial' (a filter, one file, one
-// package), 'suite' (the whole test command) or null when it runs no tests.
-const VERSION_ONLY = /(?:^|\s)(?:--version|-V|--help)(?:\s|$)/;
-const FILTERED = /(?:^|\s)(?:-k|-t|--grep|--testNamePattern|--test-name-pattern|--filter|--only|--testPathPattern)(?:[\s=]|$)|\bgo\s+test\b.*\s-run[\s=]|\bpytest\b.*\s::|\.only\b/;
-const TEST_RUNNER = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test(:\S+)?(?=\s|$)|\bnode\s+--test\b|\b(vitest|jest|mocha|pytest|rspec|phpunit)\b|\bplaywright\s+test\b|\bpython3?\s+-m\s+(pytest|unittest)\b|\b(go|cargo|swift|dotnet|deno)\s+test\b|\bmake\s+test\b|\bxcodebuild\b.*\btest\b|\b(gradle|gradlew|mvn|mvnw)\b(?:\s+\S+)*?\s+(?:\S+:)?(?:test|verify|integration-test)(?=\s|$)/;
-// Maven and Gradle take their flags before the goal as often as after it
-// (`./mvnw -Dtest=CartTest test`), and a goal is a whole word: `test-compile`
-// and `-Dit.test=` are not the `test` goal.
-const BUILD_TOOL = /^(?:gradle|gradlew|mvn|mvnw)\b/;
-// Test commands start a command: `npm install -D vitest` or `rm jest.config.ts` only name one.
-const TEST_START = new RegExp(`^(?:${TEST_RUNNER.source})`);
-// A function body, a group or a loop body opens a part as well.
-const LAUNCHER = /^(?:[\w-]+\s*\(\)\s*\{?\s*|\{\s+|\(\s*|(?:do|then|else)\s+|\w+=\S*\s+|time\s+|nohup\s+|timeout\s+\S+\s+|npx\s+(?:-\S+\s+)*|bunx\s+|pnpm\s+(?:exec|dlx)\s+|uv\s+run\s+|poetry\s+run\s+|yarn\s+(?=jest|vitest|mocha|playwright)|node_modules\/\.bin\/|\.\/)+/;
-const partsOf = bare => bare.split(/\s*(?:\|\|?|&&|;)\s*/).map(part => part.replace(/\s\d*>.*$/, '').replace(/[\s)}]+$/, '').trim());
-const NOT_TESTS = /\b(lint|typecheck|type-check|tsc|eslint|biome|ruff|mypy|pyright|vet|clippy|format|build)\b/;
-const TARGET_FLAG = /^(-p|--package|-w|--workspace|--tests|-pl|--projects)$|^(-Dtest=|-Dit\.test=|-only-testing:|--workspace=|--package=|--projects=)/;
-// `go test -p 4` sets how many packages run at once; for cargo -p names a package.
-const GO_TEST = /^go\s+test\b/;
-const VALUE_FLAG = /^(-c|--config|--reporter|--project|--workers|--timeout|--rootDir|--root|-f|--file|-o|--output)$/;
-// A file or folder named on the command line; a flag's own value names none.
-const targetsPart = (args, go = false) => args.some((a, i) => {
-  // A variable: a function's arguments, a loop's file, $(go list …). The caller chose them, so this is not the whole command.
-  if (a.startsWith('$')) return true;
-  if (go && a === '-p') return false;
-  if (TARGET_FLAG.test(a)) return true;
-  if (go && args[i - 1] === '-p') return false;
-  if (a.startsWith('-') || VALUE_FLAG.test(args[i - 1] ?? '') || a.includes('*') || a.endsWith('...')) return false;
-  return a.includes('/') || /\.(test|spec)\.\w+$|_test\.\w+$|^test_\w+\.\w+$/.test(a);
-});
-// What a command runs, without the text it merely quotes (a commit message, an echo).
-const unquoted = text => text.replace(/"[^"]*"|'[^']*'/g, quoted => quoted.startsWith('"$') ? '$' : '""');
-export function checkScope(command, declared = []) {
-  const text = String(command ?? '').replace(/\s+/g, ' ').trim();
-  if (!text || /^(echo|printf|grep|rg|cat|sed|awk|head|tail|less|git|ls|find)\b/.test(text) || VERSION_ONLY.test(text) || /--collect-only/.test(text)) return null;
-  const bare = unquoted(text);
-  for (const part of partsOf(bare)) {
-    const own = part.replace(LAUNCHER, ''), runner = own.match(TEST_START);
-    if (!runner) continue;
-    if (FILTERED.test(own)) return 'partial';
-    const args = BUILD_TOOL.test(own) ? own.split(' ').slice(1) : own.slice(runner[0].length).split(' ');
-    return !declared.includes(text) && targetsPart(args.filter(Boolean), GO_TEST.test(own)) ? 'partial' : 'suite';
-  }
-  // A script the repository declares: it cannot be narrowed from here.
-  const named = declared.find(d => partsOf(bare).some(part => part.startsWith(unquoted(d))));
-  return named && !NOT_TESTS.test(named) ? 'suite' : null;
-}
-// The test step of a command, without what surrounds it: the same step costs the same.
-export function suitePart(command) {
-  for (const part of partsOf(unquoted(String(command ?? '').replace(/\s+/g, ' ').trim()))) { const own = part.replace(LAUNCHER, ''); if (TEST_START.test(own)) return own; }
-  return String(command ?? '').trim();
-}
 // The member's own words asking for the whole suite: nothing to ask them then.
 const RUN_ALL = String.raw`(?:full|all(?:\s+the)?|whole(?:\s+the)?|entire(?:\s+the)?|the\s+(?:full|whole|entire))`;
 const FULL_WORDS = new RegExp([
