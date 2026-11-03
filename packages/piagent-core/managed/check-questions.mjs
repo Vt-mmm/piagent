@@ -8,6 +8,10 @@ import { digestsOnce, knownFast, markCheckStart, missingSuites, pushQuestion, pu
 // suite and before a push, on the dashboard card or in the Terminal. Bypass skips
 // the questions about the work (it runs the tests that cover the change) but not
 // the one before a push. With no screen nobody can answer: nothing is asked.
+// A question nobody answers in UNANSWERED_MS (the member left the task running
+// overnight) is taken back and the cheap answer goes on: only the tests that
+// cover the change, and no push. Before this a turn waited until morning.
+export const UNANSWERED_MS = 10 * 60_000;
 
 // How much of the suite a test command covers: 'partial' (a filter, one file, one
 // package), 'suite' (the whole test command) or null when it runs no tests.
@@ -82,14 +86,20 @@ function surfaceOf(self, ctx) {
   const runner = self.session?.extensionRunner, ui = ctx ? ctx.hasUI && ctx.ui : runner?.hasUI?.() && runner.getUIContext?.();
   return ui?.select && !ui[GATEWAY_UI] ? { ui } : null;
 }
-// The label picked, { other } for the member's own words, undefined for no answer (Esc, stopped).
-async function ask(surface, question, labels, signal) {
-  if (surface.ui) return surface.ui.select(question, labels, { signal });
-  const questions = [{ header: 'Test', question, options: labels.map(label => ({ label, description: '' })), multiSelect: false }];
-  const answer = await memberQuestions.ask({ sessionId: surface.sessionId, toolCallId: `check-scope-${randomUUID()}`, questions, signal }).catch(() => null);
-  if (!answer || answer.skipped) return undefined;
-  const { selected, other } = answer.answers[0];
-  return other ? { other } : labels[selected[0]];
+// The label picked, { other } for the member's own words, undefined for no
+// answer (Esc, stopped, or nobody answered in time).
+async function ask(surface, question, labels, signal, waitMs = UNANSWERED_MS) {
+  // A plain timer, not AbortSignal.timeout: the wait itself keeps the process up.
+  const expired = new AbortController(), timer = setTimeout(() => expired.abort(), waitMs);
+  const until = signal ? AbortSignal.any([signal, expired.signal]) : expired.signal;
+  try {
+    if (surface.ui) return await surface.ui.select(question, labels, { signal: until });
+    const questions = [{ header: 'Test', question, options: labels.map(label => ({ label, description: '' })), multiSelect: false }];
+    const answer = await memberQuestions.ask({ sessionId: surface.sessionId, toolCallId: `check-scope-${randomUUID()}`, questions, signal: until }).catch(() => null);
+    if (!answer || answer.skipped) return undefined;
+    const { selected, other } = answer.answers[0];
+    return other ? { other } : labels[selected[0]];
+  } finally { clearTimeout(timer); }
 }
 
 // At the end of a change: { choice: 'partial' | 'full' | 'skip', words? }, or null
@@ -99,7 +109,7 @@ export async function askCheckScope(self, { partPassed = false, signal } = {}) {
   if (!surface) return null;
   if (['bypass', 'always-bypass'].includes(effectivePermission(self))) return { choice: 'partial' };
   const part = partPassed ? KEEP : PART;
-  const picked = await ask(surface, partPassed ? 'Code đã đổi, phần test liên quan đã pass. Có chạy toàn bộ test không?' : 'Code đã đổi, chưa chạy test. Chạy phần nào?', [part, FULL, NONE], signal);
+  const picked = await ask(surface, partPassed ? 'Code đã đổi, phần test liên quan đã pass. Có chạy toàn bộ test không?' : 'Code đã đổi, chưa chạy test. Chạy phần nào?', [part, FULL, NONE], signal, self.unansweredMs);
   if (signal?.aborted) return null;
   if (picked?.other) return { choice: 'partial', words: picked.other };
   return { choice: picked === FULL ? 'full' : picked === NONE ? 'skip' : 'partial' };
@@ -133,7 +143,7 @@ async function holdOrLet(self, run, command, ctx, signal) {
     const now = await digestOf('.'), repositories = pushRepositories(self, command), single = !repositories.length || repositories[0] === '.';
     const missing = await missingSuites(digestOf, run, repositories.length ? repositories : ['.']);
     if ((single ? run.suitePassedOn(now) : false) || !missing.length || (run.pushAllowedOn !== undefined && run.pushAllowedOn === now)) return;
-    const picked = await ask(surface, await pushQuestion(self, digestOf, run, repositories, missing), [PUSH_FULL, PUSH_NOW], signal);
+    const picked = await ask(surface, await pushQuestion(self, digestOf, run, repositories, missing), [PUSH_FULL, PUSH_NOW], signal, self.unansweredMs);
     if (picked === PUSH_NOW) { run.pushAllowedOn = now; return; }
     if (picked?.other) throw Error(WORDS_REASON(picked.other));
     if (picked !== PUSH_FULL) throw Error(STOPPED_REASON);
@@ -144,7 +154,7 @@ async function holdOrLet(self, run, command, ctx, signal) {
   const held = run.scopeHeld ??= new Set(), again = held.has(command); held.add(command);
   if (effectivePermission(self) === 'bypass') { if (again || knownFast(self, command, suitePart(command))) return; throw Error(BYPASS_REASON); }
   if (run.scopeChoice === 'partial' && !again) throw Error(PARTIAL_REASON);
-  const picked = await ask(surface, `Agent muốn chạy toàn bộ test: ${String(command).slice(0, 160)}`, [PART, FULL], signal);
+  const picked = await ask(surface, `Agent muốn chạy toàn bộ test: ${String(command).slice(0, 160)}`, [PART, FULL], signal, self.unansweredMs);
   if (picked === FULL) { run.scopeChoice = 'full'; return; }
   run.scopeChoice = 'partial';
   throw Error(picked?.other ? WORDS_REASON(picked.other) : PARTIAL_REASON);

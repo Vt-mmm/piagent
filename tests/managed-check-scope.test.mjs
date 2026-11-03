@@ -57,6 +57,26 @@ test('stopping during the question ends the turn: no new model turn', async () =
   assert.equal(run.fixLoops, 0); assert.equal(run.outcome, 'interrupted');
 });
 
+test('a question nobody answers is taken back: the turn goes on with the part, and no push', async () => {
+  // A screen that never answers: only its signal ends the wait (the member is asleep).
+  const asleep = () => { const asked = []; return { asked, select: (title, items, { signal }) => { asked.push({ title }); return new Promise(r => signal.addEventListener('abort', () => r(undefined))); } }; };
+  const ui = asleep(), run = newRun(), self = managedOf(run, ui); self.unansweredMs = 20;
+  await completionGate(self, run, undefined);
+  assert.equal(ui.asked.length, 1);
+  assert.equal(run.scopeChoice, 'partial');
+  assert.notEqual(run.outcome, 'interrupted');
+  assert.ok(self.notes.some(n => n.triggerTurn), 'the agent is sent on to run the part');
+  const pusher = asleep(), held = managedOf(newRun(), pusher); held.unansweredMs = 20;
+  await assert.rejects(beforeCheckOrPush(held, 'git push', { hasUI: true, ui: pusher }), /did not answer/);
+  const card = managedOf(newRun(), null), sessionId = card.session.sessionManager.getSessionId();
+  const unbind = memberQuestions.bindSurface(sessionId, () => {});
+  try {
+    card.unansweredMs = 20;
+    assert.deepEqual(await askCheckScope(card), { choice: 'partial' });
+    assert.equal(memberQuestions.pending(sessionId).length, 0, 'the card is taken back');
+  } finally { unbind(); }
+});
+
 test('calls sent together get one question', async () => {
   let answer; const asked = [], ui = { select: (title) => { asked.push(title); return new Promise(r => { answer = r; }); } };
   const self = managedOf(newRun(), ui), ctx = { hasUI: true, ui };
