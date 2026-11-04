@@ -9,14 +9,14 @@ import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
 import { memberQuestions } from '../packages/piagent-core/managed/member-questions.mjs';
 import { briefIssues, RunProcess } from '../packages/piagent-core/managed/workflow.mjs';
-import { memberRequest, anchorText, beforeDelegate, relayObjection, recordVerdicts } from '../packages/piagent-core/managed/objections.mjs';
+import { memberRequest, anchorText, beforeDelegate, relayObjection } from '../packages/piagent-core/managed/objections.mjs';
 import { addItems, checkRef, evidenceRef, ledgerGuard, ledgerWords, recordFindings, resolveTool, reviewFocus } from '../packages/piagent-core/managed/ledger.mjs';
 import { focusParts } from '../packages/piagent-core/managed/patch-snapshot.mjs';
 import { copyNote, fanOut, mergeCopies, namedCount } from '../packages/piagent-core/managed/copies.mjs';
 import { baseRole, slotArgs } from '../packages/piagent-core/managed/grant-share.mjs';
 import { stepText } from '../packages/piagent-core/managed/helper-run.mjs';
 import { helperLines, planWidget } from '../scripts/company-terminal.mjs';
-import { reviewFindings, verifyVerdicts } from '../packages/piagent-core/managed/workflow.mjs';
+import { reviewFindings } from '../packages/piagent-core/managed/workflow.mjs';
 import { HELPER_SETUP, helperPrompt } from '../packages/piagent-core/managed/helper-roles.mjs';
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
@@ -49,7 +49,7 @@ test('objections are read from the helper answer; the member request reaches bac
   assert.match(anchorText({ getEntries: () => entries.slice(0, 1) }, true), /\(the harness wrote the brief below from it\)[\s\S]*Brief from the harness:\n$/);
   assert.equal(anchorText({ getEntries: () => [] }, false), '');
   // Every helper checks its brief and ends with brief_issues; the main agent is told it must answer.
-  for (const role of ['scout', 'research', 'verify', 'review']) {
+  for (const role of ['scout', 'research', 'advisor', 'general', 'review']) {
     assert.match(HELPER_SETUP[role].prompt, /Check the brief against the request/, role);
     assert.match(HELPER_SETUP[role].prompt, /"brief_issues":\[/, role);
   }
@@ -93,14 +93,14 @@ test('the main agent records each decision; a premise objection refuses edits an
     beforeDelegate(run, 'scout', false);
     assert.deepEqual([run.ledger[0].status, run.ledger[0].resolution.change], ['accepted', 'a new brief'], 'a new brief answers an objection that is not required');
     addItems(managed, 'brief', 'scout', [{ kind: 'wrong_premise', detail: 'billing.js does not exist', evidence: 'src/cart.js:3' }]);
-    assert.throws(() => beforeDelegate(run, 'scout', false), /^Error: managed-objection-open: the scout subagent objected to your brief; record your decision with resolve_objection[\s\S]*o2 \[wrong_premise\] scout: billing\.js does not exist/);
+    assert.throws(() => beforeDelegate(run, 'scout', false), /^Error: managed-objection-open: the explore subagent objected to your brief; record your decision with resolve_objection[\s\S]*o2 \[wrong_premise\] explore: billing\.js does not exist/);
     assert.throws(() => ledgerGuard(run, 1), /^Error: managed-objection-open: resolve o2 with resolve_objection before changing files/);
     assert.throws(() => ledgerGuard(run, 1), /managed-objection-open/, 'calls of one answer count once');
     await assert.rejects(tool.execute('t', { id: 'o9', decision: 'accepted', checked: 'x', change: 'y' }), /managed-objection-unknown: no objection o9 in this message; the open ones are o2/);
     await assert.rejects(tool.execute('t', { id: 'o2', decision: 'accepted', checked: 'read src/cart.js:3' }), /managed-objection-invalid: an accepted objection names what you changed/);
     await assert.rejects(tool.execute('t', { id: 'o2', decision: 'rejected', checked: 'read src/cart.js:3' }), /managed-objection-invalid: a rejected objection says why/);
     const result = await tool.execute('t', { id: 'o2', decision: 'rejected', checked: 'grep billing: src/billing/index.js:1', reason: 'billing.js is src/billing/index.js' });
-    assert.equal(result.content[0].text, 'Recorded: o2 rejected. The scout subagent judges your reason before the turn ends.');
+    assert.equal(result.content[0].text, 'Recorded: o2 rejected. The explore subagent judges your reason before the turn ends.');
     await assert.rejects(tool.execute('t', { id: 'o2', decision: 'accepted', checked: 'x', change: 'y' }), /managed-objection-settled: o2 is already rejected/);
     assert.doesNotThrow(() => ledgerGuard(run, 2)); assert.doesNotThrow(() => beforeDelegate(run, 'scout', false));
     // A model that cannot decide is not stuck: after three refused answers its edits go through.
@@ -110,7 +110,7 @@ test('the main agent records each decision; a premise objection refuses edits an
     assert.equal(ledgerWords(run), 'objections: 1 accepted, 1 rejected, 1 left without a decision (o3)');
     // The second objection of a helper goes to the member, and the helper is refused until then.
     run.disputes.push({ source: 'scout', brief: true });
-    assert.throws(() => beforeDelegate(run, 'scout', false), /^Error: managed-helper-disputed: the scout subagent objected to your briefs twice/);
+    assert.throws(() => beforeDelegate(run, 'scout', false), /^Error: managed-helper-disputed: the explore subagent objected to your briefs twice/);
     assert.doesNotThrow(() => beforeDelegate(run, 'scout', true), 'the harness itself is never refused');
     assert.equal(parseFailure('managed-helper-disputed: x').kind, 'tool');
     assert.equal(parseFailure('managed-objection-open: x').kind, 'tool');
@@ -136,7 +136,7 @@ test('the main agent asks for a review once; under a required review the harness
   assert.equal(run.mainReviews, 2);
 });
 
-test('review findings and failed claims are ledger items: a repeated finding keeps its item, minor ones are only counted', async () => {
+test('review findings are ledger items: a repeated finding keeps its item, minor ones are only counted', async () => {
   const cwd = fixture();
   try {
     const run = newRun({ verify: 'require' }), managed = { run, cwd };
@@ -155,16 +155,6 @@ test('review findings and failed claims are ledger items: a repeated finding kee
     recordFindings(managed, []);
     assert.deepEqual(run.ledger.map(i => [i.id, i.status]), [['o1', 'withdrawn'], ['o2', 'cleared'], ['o3', 'open']]);
     managed.reviewFocus = null;
-    run.ledger.length = 0;
-    // Failed claims: required under a required verify; a later check that passes clears them.
-    const details = {}, fail = '```json\n' + JSON.stringify({ verdicts: [{ claim: 'total() is unchanged', status: 'fail', evidence: 'src/cart.js:1' }] }) + '\n```';
-    recordVerdicts(managed, fail, false, details);
-    assert.deepEqual([run.ledger[0].source, run.ledger[0].required, run.ledger[0].status], ['verify', true, 'open']);
-    recordVerdicts(managed, fail.replace('"fail"', '"pass"'), true, details);
-    assert.equal(run.ledger[0].status, 'cleared');
-    const suggested = newRun({ verify: 'suggest' });
-    recordVerdicts({ run: suggested, cwd }, fail, false, {});
-    assert.deepEqual([suggested.ledger[0].required, suggested.ledger[0].status], [false, 'noted']);
   } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
 });
 
@@ -197,11 +187,11 @@ test('several helpers of a role run only when the member asks for that many, up 
   assert.deepEqual(fanOut(manager('phân tích repo này'), 'research', { copies: 2 }, false), { dropped: 2 }, 'copies without the member\'s words');
   assert.deepEqual(fanOut(manager('dùng 5 scout'), 'scout', { copies: 9 }, false), { dropped: 9 }, 'an unasked count above the limit is still one helper');
   assert.equal(fanOut(asked, 'review', { copies: 1, member_words: 'dùng 3 subagent review' }, false), null, 'one helper is a plain call');
-  assert.throws(() => fanOut(manager('dùng 5 scout'), 'scout', { copies: 5, member_words: 'dùng 5 scout' }, false), /^Error: managed-copies-invalid: ask for 2 to 3 scout helpers/);
+  assert.throws(() => fanOut(manager('dùng 5 scout'), 'scout', { copies: 5, member_words: 'dùng 5 scout' }, false), /^Error: managed-copies-invalid: ask for 2 to 3 explore helpers/);
   assert.throws(() => fanOut(asked, 'review', { copies: 2, member_words: 'dùng 3 subagent review' }, true), /managed-copies-invalid: the harness runs one helper per call/);
   const split = fanOut(manager('cho 2 scout: một bên client, một bên server'), 'scout', { split: ['the client', 'the server'], member_words: 'cho 2 scout' }, false);
   assert.deepEqual(split, { n: 2, split: ['the client', 'the server'] });
-  assert.match(copyNote('scout', 1, split), /you are scout helper 2 of 2\. Your share of the work: the server\. The others cover the rest\./);
+  assert.match(copyNote('scout', 1, split), /you are explore helper 2 of 2\. Your share of the work: the server\. The others cover the rest\./);
   assert.match(copyNote('review', 0, { n: 3, split: null }), /you are review helper 1 of 3\. The others have the same brief/);
   assert.equal(parseFailure('managed-copies-invalid: x').kind, 'tool');
   // Under a required review, reviewers the member asked for still run.
@@ -221,19 +211,16 @@ test('a helper key names its slot to the broker; the terminal panel lists the ch
     ['Plan · 1/3 bước xong', '  ☑ Search', '  ☐ Compare  ← đang làm', '  ☐ Report']);
 });
 
-test('the answers of several helpers merge: every finding, failed claim and objection any of them reports stands', () => {
+test('the answers of several helpers merge: every finding and objection any of them reports stands', () => {
   const block = value => '```json\n' + JSON.stringify(value) + '\n```';
   const issue = { kind: 'ambiguous', detail: 'which total?', evidence: '' };
   const one = { reply: 'First.\n' + block({ findings: [{ severity: 'major', file: 'a.js', line: 2, issue: 'no test', evidence: '' }], brief_issues: [issue], summary: 'one major' }), usage: 10 };
   const two = { reply: 'Second.\n' + block({ findings: [{ severity: 'blocking', file: 'a.js', line: 1, issue: 'crash on null', evidence: 'a.js:1' }, { severity: 'major', file: 'a.js', line: 2, issue: 'no test', evidence: '' }], brief_issues: [issue], summary: 'one blocking' }), usage: 5 };
-  const merged = mergeCopies('review', 'Review', [one, two, { reply: 'No JSON here.', usage: 1 }], { findingsOf: reviewFindings, issuesOf: briefIssues, verdictsOf: verifyVerdicts });
+  const merged = mergeCopies('review', 'Review', [one, two, { reply: 'No JSON here.', usage: 1 }], { findingsOf: reviewFindings, issuesOf: briefIssues });
   assert.deepEqual([merged.usage, merged.blocking, merged.parsed, merged.findings.map(f => f.severity)], [16, 1, false, ['blocking', 'major']]);
   assert.match(merged.reply, /^### Review helper 1 of 3\nFirst\.\n\n### Review helper 2 of 3\nSecond\.\n\n### Review helper 3 of 3\nNo JSON here\./);
   assert.deepEqual(briefIssues(merged.reply), [issue]);
   assert.equal(reviewFindings(merged.reply).length, 2);
-  const verify = mergeCopies('verify', 'Verify', [{ reply: block({ verdicts: [{ claim: 'c', status: 'pass', evidence: 'x' }] }), usage: 1 }, { reply: block({ verdicts: [{ claim: 'c', status: 'fail', evidence: 'y' }] }), usage: 1 }], { findingsOf: reviewFindings, issuesOf: briefIssues, verdictsOf: verifyVerdicts });
-  assert.deepEqual(verifyVerdicts(verify.reply).map(v => v.status), ['pass', 'fail']);
-  assert.equal('findings' in verify, false);
 });
 
 test('an objection to a brief the harness wrote (its review, its re-check) only restates the request and is not relayed', async () => {
@@ -321,16 +308,16 @@ const ACCEPT = { tool: 'resolve_objection', input: { id: 'o1', decision: 'accept
 test('an objection the agent does not decide is put to it once; a decision or its absence is on the record', { skip: !supported, timeout: 120000 }, async () => {
   for (const [last, expected] of [[ACCEPT, { phases: ['objection', 'answer', 'final'], answered: 1, words: 'objections: 1 accepted' }],
     ['The scout was right: there is no billing.js.', { phases: ['objection', 'answer', 'final'], answered: 0, words: 'objections: 1 left without a decision (o1)' }]]) {
-    const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where billing.js computes the discount.' } }, 'The discount is in cart.js.', last, 'Done.'], scout: [OBJECTION] });
+    const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'explore', task: 'Find where billing.js computes the discount.' } }, 'The discount is in cart.js.', last, 'Done.'], scout: [OBJECTION] });
     try {
       await s.managed.session.prompt('Where is the discount computed?');
       const scout = s.server.requests.find(r => r.role === 'scout');
       assert.match(JSON.stringify(scout.body.messages), /The member's request, verbatim \(the main agent wrote the brief below from it\):\\n<<<\\nWhere is the discount computed\?\\n>>>/);
       assert.match(JSON.stringify(scout.body.messages), /Brief from the main agent:\\nFind where billing\.js computes the discount\./);
-      assert.match(delegateResults(s.managed)[0], /\[Harness\] The scout subagent objected to your brief:\no1 \[wrong_premise\] scout: billing\.js does not exist \(evidence: find \. -name billing\.js: nothing\)\nCheck each at the place its evidence names, then record your decision with resolve_objection/);
+      assert.match(delegateResults(s.managed)[0], /\[Harness\] The explore subagent objected to your brief:\no1 \[wrong_premise\] explore: billing\.js does not exist \(evidence: find \. -name billing\.js: nothing\)\nCheck each at the place its evidence names, then record your decision with resolve_objection/);
       assert.deepEqual(notes(s.managed).map(n => n.details.phase), expected.phases);
       assert.deepEqual(notes(s.managed)[0].details, { phase: 'objection', role: 'scout', by: 'main', issues: [{ kind: 'wrong_premise', detail: 'billing.js does not exist' }], ids: ['o1'] });
-      assert.match(notes(s.managed)[1].content, /^Harness: 1 objection\(s\) have no decision yet:\n- o1 \[wrong_premise\] scout: billing\.js does not exist[\s\S]*record your decision with resolve_objection/);
+      assert.match(notes(s.managed)[1].content, /^Harness: 1 objection\(s\) have no decision yet:\n- o1 \[wrong_premise\] explore: billing\.js does not exist[\s\S]*record your decision with resolve_objection/);
       assert.equal(notes(s.managed).at(-1).content, `Process status for this turn: no code changed; ${expected.words}.`);
       const report = reports(s.agent).at(-1);
       assert.deepEqual([report.version, report.outcome, report.objections, report.objections_answered, report.disputes], [3, 'no_change', 1, expected.answered, 0]);
@@ -342,15 +329,15 @@ test('an objection the agent does not decide is put to it once; a decision or it
 });
 
 test('a premise objection refuses file changes and a new brief until it is decided; then the corrected brief goes through', { skip: !supported, timeout: 120000 }, async () => {
-  const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where billing.js computes the discount.' } },
-    { tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'delegate', input: { role: 'scout', task: 'Find where cart.js computes the discount.' } }, ACCEPT,
-    { tool: 'delegate', input: { role: 'scout', task: 'Find where cart.js computes the discount and every caller.' } }, 'The discount is computed in cart.js:3.'],
+  const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'explore', task: 'Find where billing.js computes the discount.' } },
+    { tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'delegate', input: { role: 'explore', task: 'Find where cart.js computes the discount.' } }, ACCEPT,
+    { tool: 'delegate', input: { role: 'explore', task: 'Find where cart.js computes the discount and every caller.' } }, 'The discount is computed in cart.js:3.'],
   scout: [OBJECTION, 'cart.js:3 computes it; called from checkout.js:12.\n' + json({ brief_issues: [] })] });
   try {
     await s.managed.session.prompt('Where is the discount computed?');
     const results = s.managed.session.messages.filter(m => m.role === 'toolResult').map(m => m.content.map(p => p.text).join('\n'));
     assert.match(results[1], /managed-objection-open: resolve o1 with resolve_objection before changing files/);
-    assert.match(results[2], /managed-objection-open: the scout subagent objected to your brief; record your decision with resolve_objection before you brief it again/);
+    assert.match(results[2], /managed-objection-open: the explore subagent objected to your brief; record your decision with resolve_objection before you brief it again/);
     assert.equal(results[3], 'Recorded: o1 accepted.');
     assert.equal(fs.readFileSync(path.join(s.root, 'a.txt'), 'utf8'), 'start\n');
     assert.equal(s.server.requests.filter(r => r.role === 'scout').length, 2);
@@ -363,7 +350,7 @@ test('a premise objection refuses file changes and a new brief until it is decid
 test('a rejected premise objection goes back to the helper, which withdraws it or keeps it for the member', { skip: !supported, timeout: 180000 }, async () => {
   for (const [verdict, expected] of [['Your reason holds: src/billing/index.js computes it.\n' + json({ brief_issues: [] }), { phases: ['objection', 'rejudge', 'final'], outcome: 'no_change', status: 'withdrawn', disputes: 0 }],
     [OBJECTION, { phases: ['objection', 'rejudge', 'dispute', 'final'], outcome: 'disputed', status: 'disputed', disputes: 1 }]]) {
-    const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where billing.js computes the discount.' } }, REJECT, 'The discount is in src/billing/index.js.'], scout: [OBJECTION, verdict] });
+    const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'explore', task: 'Find where billing.js computes the discount.' } }, REJECT, 'The discount is in src/billing/index.js.'], scout: [OBJECTION, verdict] });
     try {
       await s.managed.session.prompt('Where is the discount computed?');
       assert.deepEqual(notes(s.managed).map(n => n.details.phase), expected.phases);
@@ -381,15 +368,15 @@ test('a rejected premise objection goes back to the helper, which withdraws it o
 
 test('a second objection from the same helper stops the exchange: the member decides and the helper is refused until then', { skip: !supported, timeout: 120000 }, async () => {
   for (const features of [['process', 'process-v2', 'process-v3'], ['process', 'process-v2']]) {
-    const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where billing.js computes the discount.' } }, ACCEPT,
-      { tool: 'delegate', input: { role: 'scout', task: 'Look again in billing.js, it must be there.' } },
-      { tool: 'delegate', input: { role: 'scout', task: 'Third try at billing.js.' } }, 'The scout and I disagree about billing.js; please decide.'],
+    const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'explore', task: 'Find where billing.js computes the discount.' } }, ACCEPT,
+      { tool: 'delegate', input: { role: 'explore', task: 'Look again in billing.js, it must be there.' } },
+      { tool: 'delegate', input: { role: 'explore', task: 'Third try at billing.js.' } }, 'The explore helper and I disagree about billing.js; please decide.'],
     scout: [OBJECTION, OBJECTION] }, features);
     try {
       await s.managed.session.prompt('Where is the discount computed?');
       const results = delegateResults(s.managed);
       assert.match(results[1], /This is its second objection for this message, so the harness ends the exchange/);
-      assert.match(results[2], /managed-helper-disputed: the scout subagent objected to your briefs twice/);
+      assert.match(results[2], /managed-helper-disputed: the explore subagent objected to your briefs twice/);
       assert.equal(s.server.requests.filter(r => r.role === 'scout').length, 2);
       assert.deepEqual(notes(s.managed).map(n => n.details.phase), ['objection', 'dispute', 'final']);
       const final = notes(s.managed).at(-1);
@@ -449,52 +436,25 @@ test('after a fix the reviewer also reads the answer the agent gave with it', { 
 
 const FAIL = 'The check fails.\n' + json({ verdicts: [{ claim: 'a.txt says fixed', status: 'fail', evidence: 'cat a.txt: broken' }], brief_issues: [], summary: 'failed' });
 const PASS = 'Confirmed.\n' + json({ verdicts: [{ claim: 'a.txt says fixed', status: 'pass', evidence: 'sh check.sh: exit 0' }], brief_issues: [], summary: 'passed' });
-test('under a required verify a failed claim goes back to the agent, is checked again with its answer, and a lasting failure goes to the member', { skip: !supported, timeout: 180000 }, async () => {
-  for (const [recheck, expected] of [[PASS, { phases: ['claims', 'rejudge', 'final'], outcome: 'clean' }], [FAIL, { phases: ['claims', 'rejudge', 'dispute', 'final'], outcome: 'disputed' }]]) {
-    const s = await session({ plan: 'off', verify: 'require', review: 'off', max_fix_loops: 2 }, ['verify'], { main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'bash', input: { command: 'sh check.sh' } },
-      { tool: 'delegate', input: { role: 'verify', task: 'Confirm a.txt says fixed.' } }, 'Done and verified.', 'The verdict is wrong: a.txt says fixed, the check passed above.'], verify: [FAIL, recheck] });
-    try {
-      await s.managed.session.prompt('Make a.txt say fixed');
-      assert.deepEqual(notes(s.managed).map(n => n.details.phase), expected.phases);
-      assert.deepEqual(notes(s.managed)[0].details.claims, [{ claim: 'a.txt says fixed' }]);
-      const checks = s.server.requests.filter(r => r.role === 'verify');
-      assert.equal(checks.length, 2);
-      assert.match(JSON.stringify(checks[1].body.messages), /Brief from the harness:\\nCheck these claims again on the current code[\s\S]*The main agent's answer:\\nThe verdict is wrong/);
-      assert.equal(notes(s.managed).at(-1).details.outcome, expected.outcome);
-      assert.equal(reports(s.agent).at(-1).outcome, expected.outcome);
-    } finally { await s.close(); }
-  }
-});
-
-test('under a suggested verify a failed claim stays the agent\'s to weigh: no extra turn', { skip: !supported, timeout: 120000 }, async () => {
-  const s = await session({ plan: 'off', verify: 'suggest', review: 'off', max_fix_loops: 2 }, ['verify'], { main: [{ tool: 'write', input: { path: 'a.txt', content: 'fixed\n' } }, { tool: 'bash', input: { command: 'sh check.sh' } },
-    { tool: 'delegate', input: { role: 'verify', task: 'Confirm a.txt says fixed.' } }, 'Done.'], verify: [FAIL] });
-  try {
-    await s.managed.session.prompt('Make a.txt say fixed');
-    assert.deepEqual(notes(s.managed).map(n => n.details.phase), ['final']);
-    assert.equal(s.server.requests.filter(r => r.role === 'main').length, 4);
-  } finally { await s.close(); }
-});
-
 test('helpers the member asks for run side by side on one brief; without the member asking only one runs', { skip: !supported, timeout: 180000 }, async () => {
   const answers = ['cart.js:3 computes it.', 'checkout.js:12 calls it.', 'No other caller.'].map(text => text + '\n' + json({ brief_issues: [] }));
-  const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where the discount is computed.', copies: 3, member_words: 'dùng 3 scout' } }, 'Three scouts agree: cart.js:3.'], scout: [...answers] });
+  const s = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'explore', task: 'Find where the discount is computed.', copies: 3, member_words: 'dùng 3 scout' } }, 'Three scouts agree: cart.js:3.'], scout: [...answers] });
   try {
     await s.managed.session.prompt('Anh muốn dùng 3 scout tìm chỗ tính discount.');
     const asks = s.server.requests.filter(r => r.role === 'scout');
     assert.equal(asks.length, 3);
-    for (const i of [1, 2, 3]) assert.ok(asks.some(r => JSON.stringify(r.body.messages).includes(`you are scout helper ${i} of 3. The others have the same brief`)), `copy ${i}`);
+    for (const i of [1, 2, 3]) assert.ok(asks.some(r => JSON.stringify(r.body.messages).includes(`you are explore helper ${i} of 3. The others have the same brief`)), `copy ${i}`);
     const result = delegateResults(s.managed)[0];
-    for (const i of [1, 2, 3]) assert.match(result, new RegExp(`### Scout helper ${i} of 3`));
+    for (const i of [1, 2, 3]) assert.match(result, new RegExp(`### Explore helper ${i} of 3`));
     assert.match(result, /cart\.js:3 computes it\.[\s\S]*checkout\.js:12 calls it\.|checkout\.js:12 calls it\.[\s\S]*cart\.js:3 computes it\./);
     const receipt = s.managed.session.messages.find(m => m.customType === 'agent-watch-helper-receipt');
     assert.match(receipt.content, / · 3 helpers · /);
     assert.equal(s.agent.closes.filter(c => c.role === 'scout').length, 1, 'the copies share the role\'s grant');
   } finally { await s.close(); }
-  const plain = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Find where the discount is computed.', copies: 3, member_words: 'tìm chỗ tính discount' } }, 'One scout: cart.js:3.'], scout: [answers[0]] });
+  const plain = await session(OFF, ['scout'], { main: [{ tool: 'delegate', input: { role: 'explore', task: 'Find where the discount is computed.', copies: 3, member_words: 'tìm chỗ tính discount' } }, 'One scout: cart.js:3.'], scout: [answers[0]] });
   try {
     await plain.managed.session.prompt('Tìm chỗ tính discount.');
-    assert.match(delegateResults(plain.managed)[0], /^One scout helper ran, not 3: the member's own words did not ask for 3 scout helpers\./);
+    assert.match(delegateResults(plain.managed)[0], /^One explore helper ran, not 3: the member's own words did not ask for 3 explore helpers\./);
     assert.equal(plain.server.requests.filter(r => r.role === 'scout').length, 1, 'one helper ran instead of a refusal');
   } finally { await plain.close(); }
 });
@@ -512,7 +472,7 @@ test('reviewers the member asks for run even under a required review; their fres
 
 test('with helper slots in Studio and Agent Watch, each helper the member asked for holds a grant of its own and the terminal shows what each does', { skip: !supported, timeout: 180000 }, async () => {
   const answers = ['Source A: 12 results.', 'Source B: 4 results.', 'Source C: none.'].map(text => text + '\n' + json({ brief_issues: [] }));
-  const s = await session(OFF, ['research'], { main: [{ tool: 'delegate', input: { role: 'research', task: 'Search each source for the release date.', split: ['source A', 'source B', 'source C'], member_words: 'điều phối 3 subagent' } }, 'Done.'], research: [...answers] },
+  const s = await session(OFF, ['research'], { main: [{ tool: 'delegate', input: { role: 'scout', task: 'Search each source for the release date.', split: ['source A', 'source B', 'source C'], member_words: 'điều phối 3 subagent' } }, 'Done.'], research: [...answers] },
     ['process', 'process-v2', 'process-v3', 'helper-slots']);
   const states = [];
   s.managed.session.subscribe(event => { if (event?.type === 'managed_helper_state') states.push(event.helpers); });
@@ -522,11 +482,11 @@ test('with helper slots in Studio and Agent Watch, each helper the member asked 
     assert.deepEqual(children.map(c => c.slot ?? 1).sort(), [1, 2, 3]);
     assert.deepEqual(s.agent.closes.filter(c => c.role === 'research').map(c => c.slot ?? 1).sort(), [1, 2, 3], 'each slot closes its own grant');
     assert.equal(new Set(['research', 'research#2', 'research#3'].map(k => s.agent.roles[k])).size, 3);
-    for (const [i, share] of ['source A', 'source B', 'source C'].entries()) assert.ok(s.server.requests.some(r => r.role === 'research' && JSON.stringify(r.body.messages).includes(`you are research helper ${i + 1} of 3. Your share of the work: ${share}.`)), share);
+    for (const [i, share] of ['source A', 'source B', 'source C'].entries()) assert.ok(s.server.requests.some(r => r.role === 'research' && JSON.stringify(r.body.messages).includes(`you are scout helper ${i + 1} of 3. Your share of the work: ${share}.`)), share);
     assert.ok(states.some(list => list.length === 3), 'three helpers were seen at once');
     assert.deepEqual(states.find(list => list.length === 3).map(h => [h.role, h.slot, h.job]).sort(), [['research', 1, 'Search each source for the release date.'], ['research', 2, 'Search each source for the release date.'], ['research', 3, 'Search each source for the release date.']]);
     assert.deepEqual(states.at(-1), [], 'none left once they ended');
-    assert.match(delegateResults(s.managed)[0], /### Research helper 3 of 3/);
+    assert.match(delegateResults(s.managed)[0], /### Scout helper 3 of 3/);
   } finally { await s.close(); }
 });
 

@@ -92,7 +92,7 @@ test('a helper refused for its account\'s usage starts once more on the next mod
   const agent = broker(authorityOf(), [MODELS.flash, MODELS.sonnet]);
   const server = await studio((req, res) => req.headers['x-session-id'] === agent.roles.research && req.url.endsWith('/chat/completions') && refuse(429, 'upstream_rate_limited')(req, res));
   await withMain(agent, server, async managed => {
-    const result = await managed.delegate({ role: 'research', task: 'Find the docs' });
+    const result = await managed.delegate({ role: 'scout', task: 'Find the docs' });
     assert.match(text(result), /Next model answer/);
     assert.deepEqual(agent.calls.filter(call => /:research$/.test(call)), ['child:research', 'close:research', 'child:research', 'close:research']);
     assert.deepEqual(server.requests.filter(r => r.session === agent.roles.research).map(r => r.path.split('/').at(-1)), ['completions', 'messages']);
@@ -107,10 +107,10 @@ test('a helper starts again once, and only for a failure another model may not h
   let code = 'upstream_rate_limited';
   const server = await studio((req, res) => req.headers['x-session-id'] === agent.roles.research && refuse(429, code)(req, res));
   await withMain(agent, server, async managed => {
-    await assert.rejects(managed.delegate({ role: 'research', task: 'Find the docs' }), /^Error: managed-helper-failed: Agent Watch research subagent: .+ \[upstream_rate_limited\]/);
+    await assert.rejects(managed.delegate({ role: 'scout', task: 'Find the docs' }), /^Error: managed-helper-failed: Agent Watch research subagent: .+ \[upstream_rate_limited\]/);
     assert.equal(agent.calls.filter(call => call === 'child:research').length, 2);
     code = 'token_quota_exhausted';
-    await assert.rejects(managed.delegate({ role: 'research', task: 'Again' }), /\[token_quota_exhausted\]/);
+    await assert.rejects(managed.delegate({ role: 'scout', task: 'Again' }), /\[token_quota_exhausted\]/);
     assert.equal(agent.calls.filter(call => call === 'child:research').length, 3, 'not started again');
   });
 });
@@ -124,7 +124,7 @@ test('a helper waiting on a resting account moves to the next model', { skip: !s
   await withMain(agent, server, async managed => {
     managed.helperSwitchMs = 0;
     const waits = []; managed.session.subscribe(event => { if (event.type === 'managed_capacity_wait' && event.role === 'research') waits.push([event.state, event.outcome ?? null]); });
-    const result = await managed.delegate({ role: 'research', task: 'Find the docs' });
+    const result = await managed.delegate({ role: 'scout', task: 'Find the docs' });
     assert.match(text(result), /Next model answer/);
     assert.deepEqual(waits, [['start', null], ['end', 'switched']]);
     assert.equal(agent.calls.filter(call => call === 'child:research').length, 2);
@@ -137,7 +137,7 @@ test('a helper whose account went away starts once more on the next model', { sk
   const agent = broker(authorityOf(), [MODELS.flash, MODELS.sonnet]);
   const server = await studio((req, res) => req.headers['x-session-id'] === agent.roles.research && req.url.endsWith('/chat/completions') && refuse(409, 'session_account_unavailable_start_new_session')(req, res));
   await withMain(agent, server, async managed => {
-    const result = await managed.delegate({ role: 'research', task: 'Find the docs' });
+    const result = await managed.delegate({ role: 'scout', task: 'Find the docs' });
     assert.match(text(result), /Next model answer/);
     assert.equal(agent.calls.filter(call => call === 'child:research').length, 2);
   });

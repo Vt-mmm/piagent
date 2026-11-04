@@ -39,19 +39,21 @@ Unset follows the member's thinking level; a value fixes it (`off` turns thinkin
 - Studio: `TestManagedNativeEffortHistory`
 - Piagent: `managed-failures` › each role runs at the level Studio grants it, whatever the member picked
 
-### `scout`, `research`, `verify`, `review`
+### `scout`, `research`, `advisor`, `general`, `review`
 
-A helper exists only when the Harness enables its role. The prompt and the `delegate` tool describe only enabled helpers. Helpers read the project and cannot change files or delegate. In one conversation one helper of each role runs at a time, and each role runs at most 8 times per member message (Studio's `MaxHelperCalls`). Studio also bounds a member's active helpers across conversations (`MaxActiveHelpers`, 24).
+A helper exists only when the Harness enables its role. The main agent calls them explore (the `scout` role), scout (the `research` role), advisor, general and review; main does small changes, integration and the repository checks itself. The prompt and the `delegate` tool describe only enabled helpers. Helpers read the project and cannot delegate. Only general changes files, and never the project's: it works in its own clone of the repository (own `.git`, no remote, objects borrowed read-only), one at a time, and its commits come back as a private ref `refs/general/<id>` that main merges itself (`general-clone.mjs`). Its isolation is proven under the macOS sandbox only; on Linux general refuses to start. Studio does not issue the `advisor` and `general` roles yet; until it does they are offered only to a Harness that lists them. In one conversation one helper of each role runs at a time, and each role runs at most 8 times per member message (Studio's `MaxHelperCalls`). Studio also bounds a member's active helpers across conversations (`MaxActiveHelpers`, 24).
 
 - Studio: `TestScoutAndVerifyRunAsHelpers`
 - Studio: `TestManagedHelpersAggregateAcrossDevicesAndRoots`
 - Studio: `TestHelperRoleRunsAgainWithinItsRun`
 - Piagent: `managed-failures` › a subagent that fails tells the main agent why
 - Piagent: `managed-harness-conformance` › a helper role already running in the conversation is not started twice
-- Piagent: `managed-helper-roles` › the helpers offered are the ones the Harness enables, in Harness order
-- Piagent: `managed-helper-roles` › the prompt and the delegate tool describe only enabled helpers; research takes the web, and code reading too without a scout
-- Piagent: `managed-helper-roles` › a scout or verify failure names its role, and a helper the Harness lacks is a tool failure
-- Piagent: `managed-helpers` › scout and verify helpers run with their own tools and only when the Harness enables them
+- Piagent: `managed-helper-roles` › the helpers offered are the ones the Harness enables, in Harness order, under their working names
+- Piagent: `managed-helper-roles` › the prompt and the delegate tool describe only enabled helpers, by working name; only general changes files
+- Piagent: `managed-helper-roles` › an explore or general failure names its Harness role, and a helper the Harness lacks is a tool failure
+- Piagent: `managed-helpers` › explore and advisor helpers run with their own tools and only when the Harness enables them
+- Piagent: `managed-general-clone` › a writer in the clone commits there; the project is unreachable and its refs are untouched
+- Piagent: `managed-six-role-journey` › a small change stays with main; a large one goes to general in its own clone and main integrates, checks and reviews it
 - Piagent: `managed-failures` › a helper the harness adds while the member works is offered in the same conversation
 
 ### `helper.mode`
@@ -92,7 +94,7 @@ Absent: every step `suggest`, `max_fix_loops` 2. An unknown step value is read a
 
 ### `workflow.verify`
 
-`suggest` names the repository's checks (AGENTS.md `## Checks`, else what its manifests imply) and never adds a turn. `require` sends a code-changing turn back until a check passes on the final code, at most `max_fix_loops` times, and sends a claim the verify helper marked failed back once before the member decides.
+`suggest` names the repository's checks (AGENTS.md `## Checks`, else what its manifests imply) and never adds a turn. `require` sends a code-changing turn back until a check passes on the final code, at most `max_fix_loops` times.
 
 Only the member waives the checks. When the member asks to skip them, the agent calls `waive_checks` with the member's words and the member confirms on an approval card, one time, never for the rest of the conversation. The waiver holds for the code as it is at that moment: the turn is not sent back for checks, and its status reads "no check passed on the final code: the member waived the checks" (outcome `unverified`, `checksWaived` in the status details). Code changed after the waiver needs its checks again. A push still asks the member as in every mode.
 
@@ -102,8 +104,6 @@ Only the member waives the checks. When the member asks to skip them, the agent 
 - Piagent: `managed-workflow` › a check that passed before the turn was cut off is still reported as passed
 - Piagent: `managed-check-waiver` › waive_checks asks the member every time and binds the waiver to the current code
 - Piagent: `managed-check-waiver` › the gate stops asking for checks on waived code and reports the waiver; changed code is asked again
-- Piagent: `managed-objections` › under a required verify a failed claim goes back to the agent, is checked again with its answer, and a lasting failure goes to the member
-- Piagent: `managed-objections` › under a suggested verify a failed claim stays the agent's to weigh: no extra turn
 
 ### `workflow.review`
 
@@ -135,7 +135,7 @@ On unless set to `false` (Agent Studio does not offer this setting yet). The con
 
 ### `workflow.main_web_lookups`
 
-0 to 5; anything else is read as 0 (Agent Studio does not offer this setting yet). With a research helper, the main agent keeps that many web_search or web_fetch calls per member message for a quick fact; the rest of the web work goes to the research helper.
+0 to 5; anything else is read as 0 (Agent Studio does not offer this setting yet). With a scout helper (the `research` role), the main agent keeps that many web_search or web_fetch calls per member message for a quick fact; the rest of the web work goes to the scout helper.
 
 - Piagent: `managed-helper-roles` › with a research helper the main agent may keep a few quick web lookups per message
 
@@ -152,11 +152,11 @@ Off unless the Harness allows it. Calls of the main agent and of subagents on a 
 
 ### `objections`
 
-A helper may object to its brief with evidence; it never decides. Objections, review findings and failed verify claims are items of one ledger: the main agent records a decision on each with `resolve_objection` (accepted with what it changed, or rejected with what it checked and why). An objection that the brief rests on a wrong premise or conflicts with the request, with evidence pointing at a place that exists, refuses file changes and a new brief to that helper until it is decided; a rejected one goes back to the helper, which withdraws it or keeps it for the member. An item never decided is put to the agent once. The same helper objecting a second time goes to the member. The run's ledger is kept as one session entry.
+A helper may object to its brief with evidence; it never decides. Objections and review findings are items of one ledger: the main agent records a decision on each with `resolve_objection` (accepted with what it changed, or rejected with what it checked and why). An objection that the brief rests on a wrong premise or conflicts with the request, with evidence pointing at a place that exists, refuses file changes and a new brief to that helper until it is decided; a rejected one goes back to the helper, which withdraws it or keeps it for the member. An item never decided is put to the agent once. The same helper objecting a second time goes to the member. The run's ledger is kept as one session entry.
 
 - Piagent: `managed-objections` › evidence names a place the harness can find; a premise objection with evidence is required
 - Piagent: `managed-objections` › the main agent records each decision; a premise objection refuses edits and briefs until it is decided
-- Piagent: `managed-objections` › review findings and failed claims are ledger items: a repeated finding keeps its item, minor ones are only counted
+- Piagent: `managed-objections` › review findings are ledger items: a repeated finding keeps its item, minor ones are only counted
 - Piagent: `managed-objections` › an objection the agent does not decide is put to it once; a decision or its absence is on the record
 - Piagent: `managed-objections` › a premise objection refuses file changes and a new brief until it is decided; then the corrected brief goes through
 - Piagent: `managed-objections` › a rejected premise objection goes back to the helper, which withdraws it or keeps it for the member
@@ -167,7 +167,7 @@ A helper may object to its brief with evidence; it never decides. Objections, re
 One helper per role works on a brief. Only when the member asks for several helpers of one role does one delegate call run 2 or 3 of them side by side: the same brief for independent answers, or a share of the work each. The call quotes the member's own words, which must name the number; the harness never adds helpers. With a Studio and an Agent Watch that hold helper slots (broker feature `helper-slots`), each copy holds a grant of its own (slot 2 or 3 beside the role's first) and runs in parallel; otherwise the copies share the role's grant and Studio takes their requests in turn. Each copy counts against the role's calls for the message; their answers merge, and any finding, failed claim or objection one of them reports stands. Reviewers the member asked for run under a required review too, and a fresh review from them is the final one.
 
 - Piagent: `managed-objections` › several helpers of a role run only when the member asks for that many, up to 3
-- Piagent: `managed-objections` › the answers of several helpers merge: every finding, failed claim and objection any of them reports stands
+- Piagent: `managed-objections` › the answers of several helpers merge: every finding and objection any of them reports stands
 - Piagent: `managed-objections` › helpers the member asks for run side by side on one brief; without the member asking only one runs
 - Piagent: `managed-objections` › reviewers the member asks for run even under a required review; their fresh review is the final one
 - Piagent: `managed-objections` › with helper slots in Studio and Agent Watch, each helper the member asked for holds a grant of its own and the terminal shows what each does

@@ -186,7 +186,7 @@
           }
         },
         "outcome": { "enum": ["no_change", "interrupted", "disputed", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"] },
-        "role": { "enum": ["scout", "research", "verify", "review"] },
+        "role": { "enum": ["scout", "research", "advisor", "general", "verify", "review"] },
         "by": { "enum": ["main", "harness"] },
         "disputes": { "type": "integer", "minimum": 1, "maximum": 1000 },
         "unchanged": { "const": true },
@@ -257,7 +257,7 @@
         "planDeferred": { "type": "integer", "minimum": 1, "maximum": 30 },
         "rounds": { "type": "integer", "minimum": 0, "maximum": 30 },
         "reason": { "enum": ["idle", "limit", "policy"] },
-        "role": { "enum": ["main", "scout", "research", "verify", "review"] },
+        "role": { "enum": ["main", "scout", "research", "advisor", "general", "verify", "review"] },
         "code": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }
       }
     },
@@ -266,7 +266,7 @@
       "additionalProperties": false,
       "required": ["role", "reasonCode", "code", "requestRef", "local"],
       "properties": {
-        "role": { "enum": ["main", "scout", "research", "verify", "review"] },
+        "role": { "enum": ["main", "scout", "research", "advisor", "general", "verify", "review"] },
         "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
         "code": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_:.-]{0,79}$" },
         "requestRef": { "anyOf": [{ "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }, { "type": "null" }] },
