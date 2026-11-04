@@ -5,8 +5,8 @@ import { briefIssues } from './workflow.mjs';
 
 // The objection ledger: what a helper holds against the main agent's work in
 // one run (one member message), and what the main agent decided about it.
-// A helper's objection to its brief, a review finding and a failed verify
-// claim are one kind of item: open until the main agent resolves it with
+// A helper's objection to its brief and a review finding are one kind
+// of item: open until the main agent resolves it with
 // resolve_objection (accepted with what it changed, or rejected with what it
 // checked and why), and a rejection of a required item goes back to the
 // helper once; a disagreement that remains goes to the member. The run's
@@ -51,7 +51,7 @@ const open = run => ledgerOf(run).filter(i => i.status === 'open');
 export const blockingItems = run => open(run).filter(i => i.required && i.source === 'brief');
 
 // Adds items from one helper answer. `source`: brief (an objection to the
-// brief), review (blocking and major findings) or verify (failed claims).
+// brief), review (blocking and major findings) 
 export function addItems(managed, source, role, list, { required } = {}) {
   const run = managed.run;
   if (!run || !list?.length) return [];
@@ -76,7 +76,7 @@ export function saveLedger(managed) {
 // checked. An accepted item names what changed; a rejected one says why.
 export function resolveTool(owner) {
   return { name: 'resolve_objection', label: 'Objection',
-    description: 'Record your decision on an objection a helper raised (its id, such as o1): a brief objection, a review finding or a failed verify claim. Check it first at the place its evidence names. accepted: you agree; say what you changed (a corrected brief, the plan, the code). rejected: say what you checked (file:line, a command and its result) and why the objection does not hold; a rejected required objection goes back to the helper, and a disagreement that remains goes to the member.',
+    description: 'Record your decision on an objection a helper raised (its id, such as o1): a brief objection or a review finding. Check it first at the place its evidence names. accepted: you agree; say what you changed (a corrected brief, the plan, the code). rejected: say what you checked (file:line, a command and its result) and why the objection does not hold; a rejected required objection goes back to the helper, and a disagreement that remains goes to the member.',
     parameters: { type: 'object', properties: { id: { type: 'string', maxLength: 10 }, decision: { type: 'string', enum: DECISIONS }, checked: { type: 'string', minLength: 1, maxLength: 300 },
       change: { type: 'string', maxLength: 300 }, reason: { type: 'string', maxLength: 500 } }, required: ['id', 'decision', 'checked'], additionalProperties: false },
     execute: async (_id, args) => {

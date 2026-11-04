@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { cacheDirectory } from './language-environment.mjs';
 
 // The general helper changes files, so it never works in the member's
 // project. It works in its own clone: a separate repository with its own
@@ -47,10 +48,12 @@ export async function cloneProject(managed) {
   } catch (error) { fs.rmSync(dir, { recursive: true, force: true }); throw Error(`managed-general-clone-failed: ${String(error?.message).slice(0, 200)}`); }
   const token = randomUUID(); // the proof, in the folder and in the session's record, that this runtime made it
   fs.writeFileSync(path.join(dir, OWNER), token, { mode: 0o600 });
-  return { id, base, dirty, token, objects, root: dir, dir: fs.realpathSync(path.join(dir, 'work')) };
+  const real = fs.realpathSync(path.join(dir, 'work'));
+  return { id, base, dirty, token, objects, cache: cacheDirectory(managed.boundary.userHome, real), root: dir, dir: real };
 }
 
-export function discardClone(clone) { fs.rmSync(clone.root, { recursive: true, force: true }); }
+// The clone's folder, and the package cache the sandbox keyed to it (no later run shares it).
+export function discardClone(clone) { fs.rmSync(clone.root, { recursive: true, force: true }); fs.rmSync(clone.cache, { recursive: true, force: true }); }
 
 // Bring the clone's commits into the project as refs/general/<id> and
 // discard the clone. Returns what the main agent needs to merge them.

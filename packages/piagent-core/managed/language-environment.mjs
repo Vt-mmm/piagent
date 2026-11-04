@@ -121,10 +121,14 @@ function linkGradleDistributions(source, target) {
   }
 }
 
+// The per-project package cache a sandboxed command may write.
+export function cacheDirectory(userHome, repositoryTop) {
+  const root = process.platform === 'linux' ? path.join(process.env.XDG_CACHE_HOME || path.join(userHome, '.cache'), 'piagent/sandbox') : path.join(userHome, 'Library/Caches/Piagent/sandbox');
+  return path.join(root, createHash('sha256').update(repositoryTop).digest('hex').slice(0, 24));
+}
 export function languageEnvironment({ userHome, repositoryTop, home }) {
   const linux = process.platform === 'linux';
-  const root = linux ? path.join(process.env.XDG_CACHE_HOME || path.join(userHome, '.cache'), 'piagent/sandbox') : path.join(userHome, 'Library/Caches/Piagent/sandbox');
-  const cache = path.join(root, createHash('sha256').update(repositoryTop).digest('hex').slice(0, 24));
+  const cache = cacheDirectory(userHome, repositoryTop), root = path.dirname(cache);
   fs.mkdirSync(cache, { recursive: true, mode: 0o700 });
   fs.chmodSync(cache, 0o700);
   const now = new Date(); try { fs.utimesSync(cache, now, now); } catch { /* best effort */ }

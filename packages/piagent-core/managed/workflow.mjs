@@ -154,7 +154,7 @@ export class RunProcess {
       reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, unplannedChange: false,
       unknownTools: 0, changed: false, verified: false, docsOnly: false, approvalDeclined: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
       // The objection ledger (ledger.mjs), disagreements handed to the
-      // member, the claims verify marked failed, the reviews the main agent
+      // member, the reviews the main agent
       // asked for, and where the harness last sent the agent back (to read
       // its answer and see whether the code moved).
       ledger: [], disputes: [], mainReviews: 0, minorFindings: 0,
