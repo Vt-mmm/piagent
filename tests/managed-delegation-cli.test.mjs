@@ -29,7 +29,7 @@ test('production CLI executes both delegated roles from a native tool response w
   }else{
    emit({type:'message_start',message:{id:'msg_'+role,type:'message',role:'assistant',model:body.model,content:[],stop_reason:null,stop_sequence:null,usage:{input_tokens:12,output_tokens:0}}});
    const delegate=role==='main'&&requests.filter(r=>r.role==='main').length===1;
-   if(delegate){for(const [index,child]of ['research','review'].entries()){
+   if(delegate){for(const [index,child]of ['scout','review'].entries()){
     emit({type:'content_block_start',index,content_block:{type:'tool_use',id:'toolu_'+child,name:'delegate',input:{}}});emit({type:'content_block_delta',index,delta:{type:'input_json_delta',partial_json:JSON.stringify({role:child,task:'Reply briefly without tools'})}});emit({type:'content_block_stop',index});
    }}else{emit({type:'content_block_start',index:0,content_block:{type:'text',text:''}});emit({type:'content_block_delta',index:0,delta:{type:'text_delta',text:role==='main'?'DELEGATION_OK':'REVIEW_OK'}});emit({type:'content_block_stop',index:0});}
    emit({type:'message_delta',delta:{stop_reason:delegate?'tool_use':'end_turn',stop_sequence:null},usage:{output_tokens:3}});emit({type:'message_stop'});

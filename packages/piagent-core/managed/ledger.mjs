@@ -1,3 +1,4 @@
+import { callName } from './helper-roles.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { briefIssues } from './workflow.mjs';
@@ -64,7 +65,7 @@ export function addItems(managed, source, role, list, { required } = {}) {
   }
   return added;
 }
-export const itemText = i => `${i.id} [${i.source === 'brief' ? i.kind : i.source === 'review' ? i.kind : 'failed claim'}] ${i.role}: ${i.detail}${i.evidence ? ` (evidence: ${i.evidence}${i.place === 'missing' ? '; the harness found no such place' : ''})` : ''}`;
+export const itemText = i => `${i.id} [${i.source === 'brief' ? i.kind : i.source === 'review' ? i.kind : 'failed claim'}] ${callName(i.role)}: ${i.detail}${i.evidence ? ` (evidence: ${i.evidence}${i.place === 'missing' ? '; the harness found no such place' : ''})` : ''}`;
 export const setStatus = (item, status, extra = {}) => Object.assign(item, { status, ...extra });
 export function saveLedger(managed) {
   const items = ledgerOf(managed.run);
@@ -87,7 +88,7 @@ export function resolveTool(owner) {
       if (args.decision === 'rejected' && !clip(args.reason, 500)) throw Error('managed-objection-invalid: a rejected objection says why it does not hold.');
       const resolution = { decision: args.decision, checked: clip(args.checked, 300), ...(args.change ? { change: clip(args.change, 300) } : {}), ...(args.reason ? { reason: clip(args.reason, 500) } : {}) };
       setStatus(item, args.decision, { resolution });
-      const back = args.decision === 'rejected' && item.required ? ` The ${item.role} subagent judges your reason before the turn ends.` : '';
+      const back = args.decision === 'rejected' && item.required ? ` The ${callName(item.role)} subagent judges your reason before the turn ends.` : '';
       return { content: [{ type: 'text', text: `Recorded: ${item.id} ${args.decision}.${back}` }], details: { id: item.id, decision: args.decision } };
     } };
 }
@@ -125,12 +126,12 @@ export async function settleLedger(managed, run, { note, send, signal }) {
   const rejected = toRejudge(run)[0];
   if (rejected) {
     rejected.rejudged = true; let reply;
-    await note(`Harness: the ${rejected.role} subagent judges the main agent's reason for rejecting ${rejected.id}.`, { phase: 'rejudge', role: rejected.role, id: rejected.id });
-    try { reply = (await managed.delegate({ role: rejected.role, task: rejudgeBrief(rejected) }, signal, { harness: true })).content.map(p => p.text).join('\n'); }
+    await note(`Harness: the ${callName(rejected.role)} subagent judges the main agent's reason for rejecting ${rejected.id}.`, { phase: 'rejudge', role: rejected.role, id: rejected.id });
+    try { reply = (await managed.delegate({ role: callName(rejected.role), task: rejudgeBrief(rejected) }, signal, { harness: true })).content.map(p => p.text).join('\n'); }
     catch { return true; }
     if (!briefIssues(reply)?.length) { setStatus(rejected, 'withdrawn'); return true; }
     setStatus(rejected, 'disputed'); run.disputes.push({ source: rejected.role, brief: true });
-    await note(`Harness: the ${rejected.role} subagent keeps its objection; the member decides.\n${itemText(rejected)}`, { phase: 'dispute', role: rejected.role, id: rejected.id });
+    await note(`Harness: the ${callName(rejected.role)} subagent keeps its objection; the member decides.\n${itemText(rejected)}`, { phase: 'dispute', role: rejected.role, id: rejected.id });
     return true;
   }
   const asked = run.decidedAsked ??= new Set(), pending = undecided(run).filter(item => !asked.has(item.id));
@@ -142,7 +143,7 @@ export async function settleLedger(managed, run, { note, send, signal }) {
 
 // What the main agent still has to decide before the turn ends: required
 // items, review findings above minor, brief objections it never answered.
-export const undecided = run => open(run).filter(i => i.required || i.source !== 'verify');
+export const undecided = run => open(run);
 export function decideText(items) {
   return `Harness: ${items.length} objection(s) have no decision yet:\n${items.map(i => '- ' + itemText(i)).join('\n')}\nCheck each at the place its evidence names, then record your decision with resolve_objection: accepted with what you changed, or rejected with what you checked and why. Minor review findings need nothing; no new review follows.`;
 }

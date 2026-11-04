@@ -1,4 +1,5 @@
-import { briefIssues, currentPlan, planText, verifyVerdicts } from './workflow.mjs';
+import { callName } from './helper-roles.mjs';
+import { briefIssues, currentPlan, planText } from './workflow.mjs';
 import { addItems, itemText, ledgerOf, setStatus } from './ledger.mjs';
 export { resolveTool } from './ledger.mjs';
 
@@ -42,10 +43,10 @@ export function anchorText(manager, harness) {
 // reviews the final patch), else once, and again only after blocking findings.
 export function beforeDelegate(run, role, harness, { since = null, review = null, changed = false, asked = false } = {}) {
   if (!run || harness) return;
-  if (run.disputes.some(d => d.source === role && d.brief)) throw Error(`managed-helper-disputed: the ${role} subagent objected to your briefs twice for this message, so the member decides. Tell them what it objects to and what you decided; do not delegate to it again before their next message.`);
+  if (run.disputes.some(d => d.source === role && d.brief)) throw Error(`managed-helper-disputed: the ${callName(role)} subagent objected to your briefs twice for this message, so the member decides. Tell them what it objects to and what you decided; do not delegate to it again before their next message.`);
   const mine = ledgerOf(run).filter(i => i.source === 'brief' && i.role === role && i.status === 'open');
   const blocked = mine.filter(i => i.required);
-  if (blocked.length) throw Error(`managed-objection-open: the ${role} subagent objected to your brief; record your decision with resolve_objection before you brief it again.\n${blocked.map(itemText).join('\n')}`);
+  if (blocked.length) throw Error(`managed-objection-open: the ${callName(role)} subagent objected to your brief; record your decision with resolve_objection before you brief it again.\n${blocked.map(itemText).join('\n')}`);
   // Reviewers the member asked for (copies.mjs) run at their word.
   if (role === 'review' && !since && changed && !asked) {
     if (run.policy.review === 'require') throw Error('managed-review-by-harness: the harness reviews the final patch when you finish; do not ask for a review yourself. Finish the change and its checks.');
@@ -67,29 +68,11 @@ export async function relayObjection(managed, role, reply, harness) {
   const second = ledgerOf(run).some(i => i.source === 'brief' && i.role === role), items = addItems(managed, 'brief', role, issues), list = items.map(itemText).join('\n');
   if (second) { run.disputes.push({ source: role, brief: true }); for (const item of items) setStatus(item, 'disputed'); }
   await managed.session.sendCustomMessage({ customType: 'agent-watch-process', display: true,
-    content: second ? `Harness: the ${role} subagent objected to a brief a second time for this message; the exchange stops and the member decides.\n${list}`
-      : `Harness: the ${role} subagent objected to the brief the main agent gave it:\n${list}`,
+    content: second ? `Harness: the ${callName(role)} subagent objected to a brief a second time for this message; the exchange stops and the member decides.\n${list}`
+      : `Harness: the ${callName(role)} subagent objected to the brief the main agent gave it:\n${list}`,
     details: { phase: second ? 'dispute' : 'objection', role, by: 'main', issues: issues.map(({ kind, detail }) => ({ kind, detail })), ids: items.map(i => i.id) } }, { triggerTurn: false });
-  if (second) return `\n\n[Harness] The ${role} subagent objected to your brief again. This is its second objection for this message, so the harness ends the exchange: do not delegate to it again before the member's next message. Tell the member plainly what it objects to and what you decided, and let them decide.`;
+  if (second) return `\n\n[Harness] The ${callName(role)} subagent objected to your brief again. This is its second objection for this message, so the harness ends the exchange: do not delegate to it again before the member's next message. Tell the member plainly what it objects to and what you decided, and let them decide.`;
   const blocking = items.filter(i => i.required);
-  return `\n\n[Harness] The ${role} subagent objected to your brief:\n${list}\nCheck each at the place its evidence names, then record your decision with resolve_objection (accepted with what you changed, or rejected with what you checked and why).${blocking.length ? ` Until you do, file changes are refused: ${blocking.map(i => i.id).join(', ')} say${blocking.length === 1 ? 's' : ''} the brief rests on a wrong premise or conflicts with the request.` : ''} A rejected objection goes back to the helper; a second objection from it for this message goes to the member.`;
+  return `\n\n[Harness] The ${callName(role)} subagent objected to your brief:\n${list}\nCheck each at the place its evidence names, then record your decision with resolve_objection (accepted with what you changed, or rejected with what you checked and why).${blocking.length ? ` Until you do, file changes are refused: ${blocking.map(i => i.id).join(', ')} say${blocking.length === 1 ? 's' : ''} the brief rests on a wrong premise or conflicts with the request.` : ''} A rejected objection goes back to the helper; a second objection from it for this message goes to the member.`;
 }
 
-// Verify's verdicts, counted for the receipt; its failed claims go into the
-// ledger (required under a required verify, noted otherwise). Under a
-// required verify the failed claims are the run's to settle; once the agent
-// has been sent back with them, only the harness's own re-check replaces
-// them, and a claim it no longer fails is cleared.
-export function recordVerdicts(managed, reply, harness, details) {
-  const run = managed.run, found = verifyVerdicts(reply);
-  details.verdicts = found ? Object.fromEntries(['pass', 'fail', 'unverifiable'].map(s => [s, found.filter(v => v.status === s).length])) : null;
-  if (run && found && (harness || !run.claimsAsked)) {
-    run.verifyFails = found.filter(v => v.status === 'fail');
-    const failed = new Set(run.verifyFails.map(v => v.claim)), required = run.policy.verify === 'require';
-    for (const item of ledgerOf(run)) if (item.source === 'verify' && ['open', 'rejected', 'noted'].includes(item.status) && !failed.has(item.detail)) setStatus(item, 'cleared');
-    const known = new Set(ledgerOf(run).filter(i => i.source === 'verify' && i.status !== 'cleared').map(i => i.detail));
-    const added = addItems(managed, 'verify', 'verify', run.verifyFails.filter(v => !known.has(v.claim)).map(v => ({ kind: 'fail', detail: v.claim, evidence: v.evidence })), { required });
-    if (!required) for (const item of added) setStatus(item, 'noted');
-  }
-  return found ? ' · ' + Object.entries(details.verdicts).filter(([, n]) => n).map(([s, n]) => `${n} ${s}`).join(', ') : '';
-}

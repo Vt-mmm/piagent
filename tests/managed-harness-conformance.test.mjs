@@ -14,7 +14,7 @@ const page = fs.readFileSync(path.join(root, 'docs/harness-conformance.md'), 'ut
 
 // The Harness settings, as agent-studio/internal/runs/profile.go defines
 // Configuration, Role and Workflow. A setting added there needs a section.
-const SETTINGS = ['main.mode', 'main.model_ids', 'main.effort', 'scout`, `research`, `verify`, `review', 'helper.mode', 'helper.effort',
+const SETTINGS = ['main.mode', 'main.model_ids', 'main.effort', 'scout`, `research`, `advisor`, `general`, `review', 'helper.mode', 'helper.effort',
   'workflow', 'workflow.plan', 'workflow.verify', 'workflow.review', 'workflow.max_fix_loops', 'fast_mode'];
 
 function sections() {

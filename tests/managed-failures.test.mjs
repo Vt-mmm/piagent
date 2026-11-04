@@ -132,7 +132,7 @@ test('Studio\'s reason for a refused run or subagent reaches the member, not jus
   fs.writeFileSync(executable, `#!${process.execPath}
 const lines = require('node:readline').createInterface({ input: process.stdin });
 lines.on('line', line => { const { id, role } = JSON.parse(line);
-  const answer = role === 'scout' ? { id, error: 'identityChanged', studio_code: 'harness_profile_unavailable' } : role === 'verify' ? { id, error: 'identityChanged', studio_code: 'Not a code!' } : { id, error: 'serverUnavailable', studio_code: 'harness_route_unavailable' };
+  const answer = role === 'scout' ? { id, error: 'identityChanged', studio_code: 'harness_profile_unavailable' } : role === 'advisor' ? { id, error: 'identityChanged', studio_code: 'Not a code!' } : { id, error: 'serverUnavailable', studio_code: 'harness_route_unavailable' };
   process.stdout.write(JSON.stringify(answer) + '\\n'); });
 `, { mode: 0o700 });
   const client = new ManagedBrokerClient({ executable, profileID: 'a'.repeat(64) });
@@ -143,9 +143,9 @@ lines.on('line', line => { const { id, role } = JSON.parse(line);
     const unavailable = await client.request('child', { role: 'research' }).catch(error => error);
     assert.equal(unavailable.message, 'managed-broker:serverUnavailable');
     assert.deepEqual(parseFailure(describeFailure('research', failureText(unavailable))), { role: 'research', code: 'harness_route_unavailable', kind: 'provider-limit', requestId: null, local: false });
-    const malformed = await client.request('child', { role: 'verify' }).catch(error => error);
+    const malformed = await client.request('child', { role: 'advisor' }).catch(error => error);
     assert.equal(malformed.studioCode, undefined);
-    assert.match(describeFailure('verify', failureText(malformed)), /\[managed-broker:identityChanged\]$/);
+    assert.match(describeFailure('advisor', failureText(malformed)), /\[managed-broker:identityChanged\]$/);
   } finally { client.dispose().catch(() => {}); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -499,15 +499,15 @@ test('a helper the harness adds while the member works is offered in the same co
   const server = await studio(), authority = authorityOf();
   let revision = 'r1', current = broker(authority, { main: 'sol', knows: ['sol'] });
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: current, renewBroker: () => current, bindingRevision: () => revision });
-  const offered = request => ['research', 'verify'].filter(role => JSON.stringify(request.body).includes(`delegate role \\"${role}\\"`));
+  const offered = request => ['scout', 'advisor'].filter(role => JSON.stringify(request.body).includes(`delegate role \\"${role}\\"`));
   try {
     await managed.session.prompt('first');
-    revision = 'r2'; current = broker(authority, { main: 'sol', knows: ['sol'], helpers: ['research', 'verify'], revision });
+    revision = 'r2'; current = broker(authority, { main: 'sol', knows: ['sol'], helpers: ['research', 'advisor'], revision });
     await managed.session.prompt('second');
-    assert.deepEqual(server.requests.map(offered), [['research'], ['research', 'verify']]);
+    assert.deepEqual(server.requests.map(offered), [['scout'], ['scout', 'advisor']]);
     // The tool schema fixed when the conversation opened accepts the new helper.
     const delegate = server.requests[1].body.tools.find(t => t.name === 'delegate');
-    assert.ok(delegate.parameters.properties.role.enum.includes('verify'));
+    assert.ok(delegate.parameters.properties.role.enum.includes('advisor'));
     assert.deepEqual(managed.session.messages.filter(message => message.role === 'assistant').map(message => message.stopReason), ['stop', 'stop']);
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
@@ -658,14 +658,14 @@ test('a subagent that fails tells the main agent why', { skip: !supported, timeo
   let prompt;
   try {
     prompt = managed.session.prompt('Research this'); await running;
-    await assert.rejects(managed.delegate({ role: 'research', task: 'Find the docs' }),
+    await assert.rejects(managed.delegate({ role: 'scout', task: 'Find the docs' }),
       new RegExp(`^Error: managed-helper-failed: Agent Watch research subagent: this key's token quota is used up \\[token_quota_exhausted\\] \\(request ${REQUEST}\\)$`));
     assert.equal(managed.helpers.size, 0);
     // A helper can be called again in the same message (a second review after a fix), up to Studio's limit of 8.
-    for (let call = 2; call <= 8; call++) await assert.rejects(managed.delegate({ role: 'research', task: 'Try again' }), /^Error: managed-helper-failed: .*\[token_quota_exhausted\]/);
+    for (let call = 2; call <= 8; call++) await assert.rejects(managed.delegate({ role: 'scout', task: 'Try again' }), /^Error: managed-helper-failed: .*\[token_quota_exhausted\]/);
     const children = agent.calls.filter(call => call === 'child').length;
     assert.equal(children, 8);
-    await assert.rejects(managed.delegate({ role: 'research', task: 'Once more' }), /^Error: managed-helper-limit: the research subagent already ran 8 times for this user message/);
+    await assert.rejects(managed.delegate({ role: 'scout', task: 'Once more' }), /^Error: managed-helper-limit: the scout subagent already ran 8 times for this user message/);
     assert.equal(agent.calls.filter(call => call === 'child').length, children, 'the ninth is not requested from Studio');
     assert.equal(parseFailure('managed-helper-limit: the review subagent already ran 8 times').kind, 'tool');
     assert.equal(parseFailure('managed-helper-used: the review subagent already ran').kind, 'tool', 'older transcripts');
@@ -694,7 +694,7 @@ test('each role runs at the level Studio grants it, whatever the member picked',
     prompt = managed.session.prompt('Research this'); await running;
     assert.deepEqual(agent.efforts, ['medium'], 'the member\'s level is what the run is asked for');
     assert.equal(managed.session.thinkingLevel, 'high');
-    await managed.delegate({ role: 'research', task: 'Find the docs' });
+    await managed.delegate({ role: 'scout', task: 'Find the docs' });
     assert.deepEqual(efforts, { main: 'high', research: 'low' });
   } finally { release(); await prompt?.catch(() => {}); await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
@@ -779,19 +779,19 @@ test('only a passing failure after admission is asked again by the turn retry, b
 });
 
 // A helper that works longer than the dashboard's watchdog allows a quiet turn
-// (a verify running a long suite while the main agent waits) keeps the turn
+// (a general helper running a long suite while the main agent waits) keeps the turn
 // alive: a beat while it runs, none after it ends.
 test('a running helper beats so the turn is not stopped as idle', async () => {
   const { ManagedSession } = await import('../packages/piagent-core/managed/session.mjs');
   const events = [];
-  const owner = { grant: { run_id: 'r' }, manifest: { harness: { configuration: { verify: { model_ids: ['m'] } } } }, helperCalls: new Map(), helpers: new Map(), run: null,
+  const owner = { grant: { run_id: 'r' }, manifest: { harness: { configuration: { advisor: { model_ids: ['m'] } } } }, helperCalls: new Map(), helpers: new Map(), run: null,
     helperBeatMs: 40, notify: event => events.push(event), publishHelpers() {},
     runHelper: () => new Promise(resolve => setTimeout(() => resolve({ content: [{ type: 'text', text: 'pass' }] }), 230)) };
-  const result = await ManagedSession.prototype.delegate.call(owner, { role: 'verify', task: 'Run the suite' });
+  const result = await ManagedSession.prototype.delegate.call(owner, { role: 'advisor', task: 'Run the suite' });
   assert.equal(result.content[0].text, 'pass');
   const beats = events.filter(event => event.type === 'managed_helper_progress');
   assert.ok(beats.length >= 3, `beats while it ran: ${beats.length}`);
-  assert.deepEqual(beats[0], { type: 'managed_helper_progress', role: 'verify' });
+  assert.deepEqual(beats[0], { type: 'managed_helper_progress', role: 'advisor' });
   await new Promise(resolve => setTimeout(resolve, 120));
   assert.equal(events.filter(event => event.type === 'managed_helper_progress').length, beats.length, 'no beat after it ended');
 });

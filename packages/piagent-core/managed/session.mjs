@@ -16,7 +16,7 @@ import { describeFailure, failureCode, failureText } from '../runtime/managed-fa
 import { enableCompanyTurnRetry, wrapRoleStreams, conversationSession } from './request-stream.mjs'; import { StudioLink, closeRun } from './studio-link.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
 import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
-import { runHelper } from './helper-run.mjs';
+import { runHelper } from './helper-run.mjs'; import { sweepGeneral } from './general-clone.mjs';
 import { askTool } from './member-questions.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction, boundRequestImages } from './compaction.mjs';
@@ -25,7 +25,7 @@ import { memberTurn } from './continuation.mjs';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
 import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut, withDroppedNote } from './copies.mjs'; import { withMemberMcp } from './member-mcp.mjs';
-import { HELPER_CALLS, HELPER_ROLES, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
+import { HELPER_CALLS, HELPER_ROLES, ROLE_NAMES, callName, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
 import { alwaysBypass, restorePermission, recordBypass, permissionSetter } from './permission.mjs';
@@ -463,14 +463,17 @@ export class ManagedSession {
       content: 'Review is stale: code changed after review. Ask for another review only after fixing blocking findings; under a required review the harness reviews the final patch.', details: this.review }, { triggerTurn: false });
   }
   // `harness`: the completion gate asks, not the main agent (its brief, its turn).
-  async delegate({ role, task, title, since, ...more }, signal, { harness = false } = {}) {
+  async delegate({ role: name, task, title, since, ...more }, signal, { harness = false } = {}) {
+    const role = ROLE_NAMES[name]; // the helper's working name -> its Harness role
     if (!this.grant || !HELPER_ROLES.includes(role) || typeof task !== 'string' || !task.trim() || task.length > 12000 || this.helpers.has(role)) throw Error('managed-helper-unavailable');
     const enabled = helperRoles(this.manifest);
-    if (!enabled.includes(role)) throw Error(`managed-helper-not-configured: the company Harness has no ${role} subagent${enabled.length ? `; use ${enabled.join(', ')}` : ''}.`);
+    if (!enabled.includes(role)) throw Error(`managed-helper-not-configured: the company Harness has no ${name} subagent${enabled.length ? `; use ${enabled.map(callName).join(', ')}` : ''}.`);
+    if (role === 'general' && (more.copies || more.split)) throw Error('managed-general-single: the general helper runs one at a time, each in its own clone; call it again for the next piece of work after merging the first.');
+    if (role === 'general') this.orphans = sweepGeneral(this);
     // Studio lets each helper role run HELPER_CALLS times per run (one user
     // message), each helper the member asked for counted (copies.mjs). Say so at once.
     const asked = fanOut(this.session?.sessionManager, role, more, harness), fan = asked?.dropped ? null : asked;
-    if ((this.helperCalls.get(role) ?? 0) + (fan?.n ?? 1) > HELPER_CALLS) throw Error(`managed-helper-limit: the ${role} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
+    if ((this.helperCalls.get(role) ?? 0) + (fan?.n ?? 1) > HELPER_CALLS) throw Error(`managed-helper-limit: the ${name} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
     beforeDelegate(this.run, role, harness, { since, review: this.review, changed: (this.ownPaths?.size ?? 0) > 0, asked: !!fan });
     const job = this.runHelper(role, task, signal, harness, title, role === 'review' && typeof since === 'string' && since.trim() ? since.trim() : null, fan); this.helpers.set(role, job); this.publishHelpers();
     // While a helper works (a verify running a long suite) the main agent is
@@ -495,6 +498,7 @@ export class ManagedSession {
     if (this.disposed) return;
     this.disposed = true;
     await this.session?.abort(); await Promise.allSettled([...this.helpers.values()]);
+    for (const root of this.liveClones ?? []) fs.rmSync(root, { recursive: true, force: true });
     this.session?.dispose(); await this.boundary?.dispose(); await this.broker.dispose();
   }
 }

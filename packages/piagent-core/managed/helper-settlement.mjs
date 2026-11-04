@@ -1,14 +1,14 @@
 // How a helper's attempt ended (Agent Studio 0.34+, POST /v1/managed/settle):
 // one report per attempt, sent with the helper's own run token before its
 // role closes. succeeded: the helper did its job and answered in the form its
-// role needs (verify's verdicts, review's findings); failed: it could not
+// role needs (review's findings); failed: it could not
 // (an error); cancelled: the member or the main agent stopped it;
 // unverifiable: it answered without what its role needs, or its review went
 // stale. Studio reads a helper role that closed without a report as
 // unverifiable: absence is never success or failure.
 import { CLIENT_AGENT } from './client-agent.mjs';
 import { hasCapability } from './studio-capabilities.mjs';
-import { HELPER_ROLES } from './helper-roles.mjs';
+import { ROLE_NAMES } from './helper-roles.mjs';
 
 // The task as the main agent gives it: five optional fields beside the brief.
 export const SPEC_FIELDS = Object.freeze({
@@ -20,7 +20,7 @@ export const SPEC_FIELDS = Object.freeze({
 });
 const field = description => ({ type: 'string', maxLength: 1000, description });
 export function delegateParameters() {
-  return { type: 'object', properties: { role: { type: 'string', enum: HELPER_ROLES },
+  return { type: 'object', properties: { role: { type: 'string', enum: Object.keys(ROLE_NAMES) },
     title: { type: 'string', maxLength: 120, description: 'One line naming the job, for the company logs (for example "Find where login tokens are stored").' },
     task: { type: 'string', minLength: 1, maxLength: 12000 },
     ...Object.fromEntries(Object.entries(SPEC_FIELDS).map(([name, description]) => [name, field(description)])),
@@ -37,7 +37,7 @@ export const SPEC_PROMPT = ' Give a helper target and acceptance at least (also 
 // brief; the main agent's task follows. The spec is kept for the settlement.
 export function delegateArgs(self, args) {
   const spec = Object.fromEntries(Object.keys(SPEC_FIELDS).map(k => [k, typeof args?.[k] === 'string' ? args[k].trim().slice(0, 1000) : '']).filter(([, v]) => v));
-  (self.helperSpecs ??= new Map()).set(args?.role, spec);
+  (self.helperSpecs ??= new Map()).set(ROLE_NAMES[args?.role], spec);
   if (!Object.keys(spec).length) return args;
   const head = Object.entries(spec).map(([k, v]) => `${k[0].toUpperCase()}${k.slice(1)}: ${v}`).join('\n');
   return { ...args, task: `${head}\n\n${args.task}`.slice(0, 12000) };
@@ -58,18 +58,14 @@ export function answeredSettlement(role, reply, details = {}, spec = {}) {
   const summary = clip(typeof parsed?.summary === 'string' && parsed.summary.trim() ? parsed.summary : prose || `${role} answered.`, 600);
   const evidence = [], files = new Set();
   let outcome = 'succeeded';
-  if (role === 'verify') {
-    const verdicts = Array.isArray(parsed?.verdicts) ? parsed.verdicts : null;
-    if (!verdicts) outcome = 'unverifiable';
-    for (const v of verdicts ?? []) evidence.push(clip(`${v?.status ?? '?'}: ${v?.claim ?? ''} — ${v?.evidence ?? ''}`, 300));
-  } else if (role === 'review') {
+  if (role === 'review') {
     if (details.stale) outcome = 'unverifiable';
     else if (details.parsed === false) outcome = 'unverifiable';
     for (const f of details.findings ?? []) { evidence.push(clip(`${f.severity} ${f.file ?? ''}:${f.line ?? ''} ${f.issue ?? ''}`, 300)); if (f.file) files.add(String(f.file)); }
   }
   for (const m of String(reply).matchAll(FILE_LINE)) {
     files.add(m[1].replace(/^\.\//, ''));
-    if (role !== 'verify' && role !== 'review' && evidence.length < 8) evidence.push(clip(`${m[1]}:${m[2]}`, 300));
+    if (role !== 'review' && evidence.length < 8) evidence.push(clip(`${m[1]}:${m[2]}`, 300));
   }
   return { outcome, summary: details.stale ? 'The patch changed during review; this review is stale.' : summary,
     evidence: [...new Set(evidence.filter(Boolean))].slice(0, 8), files: [...files].filter(f => f.length <= 300).slice(0, 50), ...(Object.keys(spec ?? {}).length ? { spec } : {}) };

@@ -208,7 +208,7 @@ export class ManagedToolBoundary {
   // readOnly: the project cannot be written. commands: bash is offered all
   // the same (a helper that runs checks); it writes only to its temporary
   // directory, and has no network.
-  constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, commands = false, node = process.execPath, identity, userHome: home, searchTools = true, skills: skillFolders = [], proxyPorts }) {
+  constructor({ cwd, sdkRoot, protectedRoots = [], readOnly = false, commands = false, node = process.execPath, identity, userHome: home, searchTools = true, skills: skillFolders = [], readRoots = [], proxyPorts }) {
     // macOS: Seatbelt. Linux, and Windows through WSL2: bubblewrap (linux-sandbox.mjs).
     this.linux = process.platform === 'linux';
     if (process.platform !== 'darwin' && !(this.linux && BWRAP)) throw new Error('managed-sandbox-unavailable');
@@ -249,6 +249,9 @@ export class ManagedToolBoundary {
     const skills = [...new Set(skillFolders.flatMap(dir => { try { return [fs.realpathSync(dir)]; } catch { return []; } }))]
       .filter(dir => dir !== '/' && !/[\x00-\x1f\x7f]/.test(dir) && !narrowed.some(root => inside(root, dir)) && !inside(userHome, dir)
         && (!inside(dir, userHome) || agentFolders.some(root => inside(dir, root)) || !path.relative(userHome, dir).startsWith('.')));
+    // readRoots: folders the caller opens for reading only, named by the runtime
+    // (the general helper's borrowed git objects); no write, no command can open one.
+    skills.push(...readRoots.map(dir => fs.realpathSync(dir)).filter(dir => dir !== '/' && !narrowed.some(root => inside(root, dir))));
     this.userHome = userHome;
     // Only for commands the user approved (run_with_network); credentials stay
     // denied, and so do reference folders: what a command with network can

@@ -107,7 +107,7 @@ export interface AttachmentSummary {
   truncated: boolean;
 }
 export interface CompanyFailure {
-  role: "main" | "scout" | "research" | "verify" | "review";
+  role: "main" | "scout" | "research" | "advisor" | "general" | "verify" | "review";
   reasonCode: string;
   code: string;
   requestRef: string | null;
@@ -152,7 +152,7 @@ export interface HarnessProcess {
     | "review_unavailable"
     | "unreviewed"
     | "clean";
-  role?: "scout" | "research" | "verify" | "review";
+  role?: "scout" | "research" | "advisor" | "general" | "verify" | "review";
   by?: "main" | "harness";
   disputes?: number;
   unchanged?: true;
@@ -984,7 +984,7 @@ export interface TurnEnd {
   planDeferred?: number;
   rounds: number;
   reason?: "idle" | "limit" | "policy";
-  role?: "main" | "scout" | "research" | "verify" | "review";
+  role?: "main" | "scout" | "research" | "advisor" | "general" | "verify" | "review";
   code?: string;
 }
 export interface ToolCall {

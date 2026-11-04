@@ -40,7 +40,7 @@ type HarnessFinding = { severity: "blocking" | "major" | "minor"; file: string; 
 type HarnessIssue = { kind: "wrong_premise" | "conflicts_with_request" | "ambiguous" | "out_of_scope"; detail: string };
 type HarnessProcess = { phase: "plan" | "verify" | "review" | "reviewing" | "final" | "objection" | "answer" | "claims" | "rejudge" | "dispute" | "continue" | "undo"; outcome?: string; loop?: number; maxLoops?: number;
   verified?: boolean; reviewed?: boolean; blockingOpen?: number; planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: true; partOnly?: true; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string;
-  findings?: HarnessFinding[]; role?: "scout" | "research" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[];
+  findings?: HarnessFinding[]; role?: "scout" | "research" | "advisor" | "general" | "verify" | "review"; by?: "main" | "harness"; disputes?: number; unchanged?: true; issues?: HarnessIssue[]; claims?: { claim: string }[];
   undo?: { result: "done" | "refused" | "busy" | "none" | "failed"; restored: number; removed: number; files: string[]; more?: boolean } };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
   revision: TranscriptRevision; eventCursor: string; state: "ready" | "unavailable"; items: TranscriptItem[];
@@ -149,7 +149,7 @@ function typedSkillCall(text: string): string {
 }
 // A company request fails with Studio's (or Agent Watch's) own code: who
 // failed, which kind of failure, and Studio's request id. Text is never shown.
-export type CompanyFailure = { role: "main" | "scout" | "research" | "verify" | "review"; reasonCode: string; code: string; requestRef: string | null; local: boolean };
+export type CompanyFailure = { role: "main" | "scout" | "research" | "advisor" | "general" | "verify" | "review"; reasonCode: string; code: string; requestRef: string | null; local: boolean };
 export function companyFailure(text: unknown): CompanyFailure | null {
   const parsed = parseFailure(text);
   if (!parsed || !/^[A-Za-z0-9][A-Za-z0-9_:.-]{0,79}$/.test(parsed.code)) return null;
@@ -217,7 +217,7 @@ const PROCESS_OUTCOMES = ["no_change", "interrupted", "disputed", "blocking_open
 // "continue": the harness sent the agent back to a checklist with open steps.
 // "undo": the member's /undo put the last turn's files back (checkpoints.mjs).
 const PROCESS_PHASES = ["plan", "verify", "review", "reviewing", "final", "objection", "answer", "claims", "rejudge", "dispute", "continue", "undo"];
-const ISSUE_KINDS = ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"], HELPER_ROLES = ["scout", "research", "verify", "review"];
+const ISSUE_KINDS = ["wrong_premise", "conflicts_with_request", "ambiguous", "out_of_scope"], HELPER_ROLES = ["scout", "research", "advisor", "general", "verify", "review"];
 const POLICY_MODES = ["off", "suggest", "require"];
 function harnessProcess(details: any): HarnessProcess | null {
   if (!PROCESS_PHASES.includes(details?.phase)) return null;

@@ -4,16 +4,10 @@ import { answeredSettlement, failedSettlement, settleHelper, delegateArgs, deleg
 import { closeRole } from '../packages/piagent-core/managed/helper-run.mjs';
 
 // How a helper's attempt ended: succeeded only with what its role needs,
-// unverifiable without it (or for a stale review), failed on an error,
+// unverifiable without it (or for an unparsed or stale review), failed on an error,
 // cancelled when stopped; sent once with the attempt's own token, only to a
 // Studio that lists managed.settle.v1.
 test('outcome rules per role', () => {
-  const verify = answeredSettlement('verify', 'Checked.\n```json\n{"verdicts":[{"claim":"tests pass","status":"pass","evidence":"npm test: 12 passing"},{"claim":"docs","status":"fail","evidence":"README.md:3 says otherwise"}],"brief_issues":[],"summary":"One claim fails."}\n```');
-  assert.equal(verify.outcome, 'succeeded', 'a failed claim is a verify that did its job');
-  assert.equal(verify.summary, 'One claim fails.');
-  assert.deepEqual(verify.evidence, ['pass: tests pass — npm test: 12 passing', 'fail: docs — README.md:3 says otherwise']);
-  assert.deepEqual(verify.files, ['README.md']);
-  assert.equal(answeredSettlement('verify', 'I looked around and it seems fine.').outcome, 'unverifiable', 'no verdicts');
   const review = answeredSettlement('review', 'Review.', { parsed: true, findings: [{ severity: 'blocking', file: 'src/a.ts', line: 4, issue: 'drops the error' }] });
   assert.equal(review.outcome, 'succeeded'); assert.deepEqual(review.files, ['src/a.ts']); assert.match(review.evidence[0], /^blocking src\/a\.ts:4 drops the error/);
   assert.equal(answeredSettlement('review', 'x', { parsed: false }).outcome, 'unverifiable');
@@ -89,9 +83,9 @@ test('the delegate tool takes the five task fields and puts them at the head of 
   assert.deepEqual(params.required, ['role', 'task']);
   for (const f of ['target', 'change', 'constraints', 'ownership', 'acceptance']) assert.equal(params.properties[f].maxLength, 1000, f);
   const self = {};
-  const args = delegateArgs(self, { role: 'scout', task: 'Find where tokens are stored.', target: ' src/auth ', acceptance: 'file:line facts', ownership: '' });
+  const args = delegateArgs(self, { role: 'explore', task: 'Find where tokens are stored.', target: ' src/auth ', acceptance: 'file:line facts', ownership: '' });
   assert.equal(args.task, 'Target: src/auth\nAcceptance: file:line facts\n\nFind where tokens are stored.');
   assert.deepEqual(self.helperSpecs.get('scout'), { target: 'src/auth', acceptance: 'file:line facts' });
-  const plain = { role: 'verify', task: 'Check it.' };
+  const plain = { role: 'advisor', task: 'Check it.' };
   assert.equal(delegateArgs(self, plain), plain, 'no fields: the brief is unchanged');
 });
