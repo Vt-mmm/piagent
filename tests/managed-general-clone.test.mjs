@@ -20,7 +20,7 @@ function projectFixture() {
   git('init', '-q', '-b', 'main'); fs.writeFileSync(path.join(project, 'a.txt'), 'one\n');
   git('add', '.'); git('-c', 'user.name=F', '-c', 'user.email=f@example.test', 'commit', '-qm', 'base');
   const snapshot = () => ({ refs: git('for-each-ref'), head: git('rev-parse', 'HEAD'), status: git('status', '--porcelain'), file: fs.readFileSync(path.join(project, 'a.txt'), 'utf8') });
-  return { root, project, git, snapshot, managed: { cwd: project, boundary: { git: '/usr/bin/git' } } };
+  return { root, project, git, snapshot, managed: { cwd: project, boundary: { git: '/usr/bin/git', userHome: os.homedir() } } };
 }
 const writerOn = clone => new ManagedToolBoundary({ cwd: clone.dir, sdkRoot, readOnly: false, commands: true, identity, readRoots: [clone.objects] });
 
@@ -53,7 +53,7 @@ test('a writer in the clone commits there; the project is unreachable and its re
     assert.equal(f.git('rev-parse', 'HEAD'), before.head); assert.equal(f.git('rev-parse', 'refs/heads/main'), before.head);
     assert.deepEqual(f.git('for-each-ref', '--format=%(refname)').split('\n').sort(), ['refs/general/' + clone.id, 'refs/heads/main'].sort());
     assert.match(takeBackText(clone, back), /dirty\.txt/);
-    assert.ok(!fs.existsSync(clone.root), 'the clone is gone once its commits are back');
+    assert.ok(!fs.existsSync(clone.root) && !fs.existsSync(clone.cache), 'the clone and its package cache are gone once its commits are back');
   } finally { await writer.dispose(); fs.rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -82,7 +82,7 @@ test('a clone the helper tampered with is refused and removed; its config starts
 
 test('a project that is not a repository with a commit gets no clone', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'general-nogit-')));
-  try { await assert.rejects(cloneProject({ cwd: root, boundary: { git: '/usr/bin/git' } }), /managed-general-needs-git/); assert.deepEqual(fs.readdirSync(root), []); }
+  try { await assert.rejects(cloneProject({ cwd: root, boundary: { git: '/usr/bin/git', userHome: os.homedir() } }), /managed-general-needs-git/); assert.deepEqual(fs.readdirSync(root), []); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

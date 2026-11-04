@@ -476,7 +476,7 @@ export class ManagedSession {
     if ((this.helperCalls.get(role) ?? 0) + (fan?.n ?? 1) > HELPER_CALLS) throw Error(`managed-helper-limit: the ${name} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
     beforeDelegate(this.run, role, harness, { since, review: this.review, changed: (this.ownPaths?.size ?? 0) > 0, asked: !!fan });
     const job = this.runHelper(role, task, signal, harness, title, role === 'review' && typeof since === 'string' && since.trim() ? since.trim() : null, fan); this.helpers.set(role, job); this.publishHelpers();
-    // While a helper works (a verify running a long suite) the main agent is
+    // While a helper works (a general helper running a long suite) the main agent is
     // quiet: a beat each minute tells the dashboard's watchdog, which stops a
     // turn after 15 minutes without an event, that the turn is working.
     const beat = setInterval(() => this.notify({ type: 'managed_helper_progress', role }), this.helperBeatMs ?? HELPER_BEAT_MS); beat.unref?.();
