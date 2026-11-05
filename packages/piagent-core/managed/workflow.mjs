@@ -119,22 +119,6 @@ export function reviewFindings(text) {
   }
   return null;
 }
-// The verify helper re-checks a result on its own: claims against the code and
-// primary sources, the repository's checks on the current code.
-export const VERIFY_PROMPT = `You verify a result for the company coding assistant, independently of whoever produced it. For each claim or requirement in the brief: read the code it is about, run the repository checks that cover it with bash, and confirm external facts against primary sources (official documentation, the project's own repository) with web_search and web_fetch. Commands run offline and the project is read-only for them: a check that must write into the project or reach the network fails for that reason. Report such a claim as unverifiable and say why; do not work around the sandbox. Never mark a claim pass without evidence you saw. ${BRIEF_CHECK} End your answer with one JSON object in a \`\`\`json block: {"verdicts":[{"claim":"what was checked","status":"pass|fail|unverifiable","evidence":"file:line, the command and its result, or the source URL"}],${BRIEF_ISSUES_JSON},"summary":"one sentence"}. Use an empty brief_issues list when the brief is sound. You cannot change files or delegate.`;
-// The verifier's verdicts from its answer; null when it gave no valid JSON.
-export function verifyVerdicts(text) {
-  const blocks = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map(m => m[1]);
-  for (const raw of blocks.reverse()) {
-    try {
-      const value = JSON.parse(raw);
-      if (!Array.isArray(value?.verdicts)) continue;
-      return value.verdicts.filter(v => ['pass', 'fail', 'unverifiable'].includes(v?.status) && typeof v.claim === 'string' && v.claim.trim()).slice(0, 40)
-        .map(v => ({ status: v.status, claim: clip(v.claim, 500), evidence: clip(v.evidence, 500) }));
-    } catch { /* not this block */ }
-  }
-  return null;
-}
 const where = f => f.file ? ` ${f.file}${f.line ? ':' + f.line : ''}` : '';
 export const findingText = f => `[${f.severity}]${where(f)} — ${f.issue}${f.evidence ? `\n   Evidence: ${f.evidence}` : ''}`;
 
@@ -170,10 +154,10 @@ export class RunProcess {
       reviews: 0, blocking: 0, blockingOpen: 0, fixLoops: 0, planUpdated: false, planRefusals: new Set(), planSkipped: false, unplannedChange: false,
       unknownTools: 0, changed: false, verified: false, docsOnly: false, approvalDeclined: false, reviewed: false, reviewUnavailable: false, outcome: null, legacyOutcome: null,
       // The objection ledger (ledger.mjs), disagreements handed to the
-      // member, the claims verify marked failed, the reviews the main agent
+      // member, the reviews the main agent
       // asked for, and where the harness last sent the agent back (to read
       // its answer and see whether the code moved).
-      ledger: [], disputes: [], verifyFails: [], claimsAsked: false, claimsAt: null, claimsRechecked: false, claimsDone: false, mainReviews: 0, minorFindings: 0,
+      ledger: [], disputes: [], mainReviews: 0, minorFindings: 0,
       sentAt: null, sentDigest: null, rejudged: false, reviewSettled: false,
       // How much of the suite the member wants run (check-questions.mjs).
       scopeChoice: null, scopeWords: null, fullAsked: asksFullChecks(request), pushAllowedOn: undefined,
@@ -355,27 +339,6 @@ export async function completionGate(managed, run, signal) {
           continue;
         }
       }
-    }
-    // Claims the verify subagent marked failed, under a required verify: back
-    // to the agent once, then checked again with its answer; still failing,
-    // the member decides.
-    if (policy.verify === 'require' && run.verifyFails.length && !run.claimsDone) {
-      const fails = run.verifyFails, list = fails.map((v, i) => `${i + 1}. ${v.claim}${v.evidence ? `\n   Evidence: ${v.evidence}` : ''}`).join('\n'), claims = fails.slice(0, 10).map(v => ({ claim: v.claim }));
-      if (!run.claimsAsked) {
-        run.claimsAsked = true; run.claimsAt = session.messages.length;
-        await send(`Harness: the verify subagent marked ${fails.length} claim(s) as failed:\n${list}\nFix the cause, or reject a verdict with resolve_objection (what you checked and why). The verify subagent then checks these claims again with your answer.`, { phase: 'claims', claims });
-        continue;
-      }
-      if (!run.claimsRechecked) {
-        run.claimsRechecked = true;
-        await note("Harness: the verify subagent checks the failed claims again with the main agent's answer.", { phase: 'rejudge', role: 'verify' });
-        try { await managed.delegate({ role: 'verify', task: `Check these claims again on the current code; they were marked failed before:\n${list}\n\nThe main agent's answer:\n${answerSince(run.claimsAt) || '(no answer)'}${decisionsText(run, 'verify')}\n\nA claim passes only on evidence you see yourself. It stays failed when it does not hold and the result the member asked for depends on it. When the answer shows the claim is not part of what the member asked and the result does not depend on it, mark it unverifiable and say why.` }, signal, { harness: true }); }
-        catch { if (stopped()) { interrupted = run.changed; break; } }
-        continue;
-      }
-      run.claimsDone = true; run.disputes.push({ source: 'verify' });
-      for (const item of ledgerOf(run)) if (item.source === 'verify' && ['open', 'accepted', 'rejected'].includes(item.status)) setStatus(item, 'disputed');
-      await note(`Harness: the main agent and the verify subagent still disagree after two rounds; the member decides.\n${list}`, { phase: 'dispute', role: 'verify', claims });
     }
     // Plan "require": a checklist left with open steps is the next round's
     // (continuation.mjs), after this run's checks and review.

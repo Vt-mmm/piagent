@@ -113,7 +113,7 @@ const CODES = {
   // Studio is stopped or restarting behind it, or the way to it failed.
   'studio-gateway-unavailable': ['unreachable', "Studio's gateway answered that Studio is not reachable"],
 };
-const ROLES = { main: 'main agent', scout: 'scout subagent', research: 'research subagent', verify: 'verify subagent', review: 'review subagent' };
+const ROLES = { main: 'main agent', scout: 'scout subagent', research: 'research subagent', advisor: 'advisor subagent', general: 'general subagent', review: 'review subagent' };
 const REQUEST = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/;
 const PROVIDER_SERVER_ERROR = /^(?:Error Code )?(?:server_error|api_error|internal_error|internal_server_error|overloaded_error|undefined):|An error occurred while processing your request|"type"\s*:\s*"(?:api_error|overloaded_error)"|\bOverloaded\b/i;
 const NETWORK = /fetch failed|econnrefused|econnreset|enotfound|ehostunreach|etimedout|socket hang up|network|connection error|terminated|timed? ?out|aborted due to timeout/i;
@@ -203,8 +203,8 @@ export function parseFailure(raw) {
   const text = String(raw ?? '');
   if (!text.trim()) return null;
   const code = failureCode(text);
-  const role = /^Agent Watch (main agent|(?:scout|research|verify|review) subagent): /.exec(text)?.[1]?.split(' ')[0]
-    ?? /(scout|research|verify|review) subagent/.exec(text)?.[1] ?? 'main';
+  const role = /^Agent Watch (main agent|(?:scout|research|advisor|general|review) subagent): /.exec(text)?.[1]?.split(' ')[0]
+    ?? /(scout|research|advisor|general|review) subagent/.exec(text)?.[1] ?? 'main';
   const request = failureIsLocal(code) ? null : REQUEST.exec(text)?.[1] ?? null;
   return { role, code, kind: failureKind(code), requestId: request, local: failureIsLocal(code) };
 }

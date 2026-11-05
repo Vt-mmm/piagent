@@ -108,7 +108,6 @@ test('outside git only commands that only read leave the code unchanged', async 
 // a check the final code passed.
 test('a check that fails with an error result is counted as failed, not as passed', async () => {
   const { processEditTools } = await import('../packages/piagent-core/managed/workflow.mjs');
-  const { countedCheck } = await import('../packages/piagent-core/managed/helper-roles.mjs');
   const policy = { plan: 'off', verify: 'require', review: 'off', maxFixLoops: 1 };
   const run = new RunProcess(policy, { request: 'x', complex: false, checks: { commands: ['npm test'] } });
   const session = { run, mainAnswers: 0, checks: run.checks, session: { sessionManager: { getEntries: () => [] } }, digest: async () => 'd'.repeat(64), refreshReview: async () => {} };
@@ -116,9 +115,6 @@ test('a check that fails with an error result is counted as failed, not as passe
   const [bash] = processEditTools(session, [{ name: 'bash', execute: async () => outcome }]);
   assert.equal(await bash.execute('c1', { command: 'npm test' }), outcome);
   assert.equal(run.checksFailed, 1); assert.equal(run.verifiedOn('d'.repeat(64)), false);
-  // A helper's check (verify runs the repository checks) is counted the same way.
-  await countedCheck(session, { name: 'bash', execute: async () => outcome }).execute('c2', { command: 'npm test' });
-  assert.equal(run.checksRun, 2); assert.equal(run.checksFailed, 2);
   const [passing] = processEditTools(session, [{ name: 'bash', execute: async () => ({ content: [{ type: 'text', text: 'ok' }] }) }]);
   await passing.execute('c3', { command: 'npm test' });
   assert.equal(run.verifiedOn('d'.repeat(64)), true);

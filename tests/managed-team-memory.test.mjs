@@ -322,7 +322,7 @@ test('a helper reads team memory with its own run token, and only reads', { skip
     const prompt = managed.session.prompt('Start');
     // While the main round runs, its research helper reads the team memory.
     while (!managed.grant) await new Promise(r => setTimeout(r, 20));
-    const answer = await managed.delegate({ role: 'research', task: 'What does the team memory say about money?' });
+    const answer = await managed.delegate({ role: 'scout', task: 'What does the team memory say about money?' });
     await prompt;
     assert.ok(helperTools[0].includes('memory_search'), helperTools[0].join(','));
     assert.ok(!helperTools[0].includes('memory_page'));

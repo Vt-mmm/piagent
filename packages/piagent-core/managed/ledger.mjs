@@ -1,11 +1,12 @@
+import { callName } from './helper-roles.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { briefIssues } from './workflow.mjs';
 
 // The objection ledger: what a helper holds against the main agent's work in
 // one run (one member message), and what the main agent decided about it.
-// A helper's objection to its brief, a review finding and a failed verify
-// claim are one kind of item: open until the main agent resolves it with
+// A helper's objection to its brief and a review finding are one kind
+// of item: open until the main agent resolves it with
 // resolve_objection (accepted with what it changed, or rejected with what it
 // checked and why), and a rejection of a required item goes back to the
 // helper once; a disagreement that remains goes to the member. The run's
@@ -50,7 +51,7 @@ const open = run => ledgerOf(run).filter(i => i.status === 'open');
 export const blockingItems = run => open(run).filter(i => i.required && i.source === 'brief');
 
 // Adds items from one helper answer. `source`: brief (an objection to the
-// brief), review (blocking and major findings) or verify (failed claims).
+// brief), review (blocking and major findings) 
 export function addItems(managed, source, role, list, { required } = {}) {
   const run = managed.run;
   if (!run || !list?.length) return [];
@@ -64,7 +65,7 @@ export function addItems(managed, source, role, list, { required } = {}) {
   }
   return added;
 }
-export const itemText = i => `${i.id} [${i.source === 'brief' ? i.kind : i.source === 'review' ? i.kind : 'failed claim'}] ${i.role}: ${i.detail}${i.evidence ? ` (evidence: ${i.evidence}${i.place === 'missing' ? '; the harness found no such place' : ''})` : ''}`;
+export const itemText = i => `${i.id} [${i.source === 'brief' ? i.kind : i.source === 'review' ? i.kind : 'failed claim'}] ${callName(i.role)}: ${i.detail}${i.evidence ? ` (evidence: ${i.evidence}${i.place === 'missing' ? '; the harness found no such place' : ''})` : ''}`;
 export const setStatus = (item, status, extra = {}) => Object.assign(item, { status, ...extra });
 export function saveLedger(managed) {
   const items = ledgerOf(managed.run);
@@ -75,7 +76,7 @@ export function saveLedger(managed) {
 // checked. An accepted item names what changed; a rejected one says why.
 export function resolveTool(owner) {
   return { name: 'resolve_objection', label: 'Objection',
-    description: 'Record your decision on an objection a helper raised (its id, such as o1): a brief objection, a review finding or a failed verify claim. Check it first at the place its evidence names. accepted: you agree; say what you changed (a corrected brief, the plan, the code). rejected: say what you checked (file:line, a command and its result) and why the objection does not hold; a rejected required objection goes back to the helper, and a disagreement that remains goes to the member.',
+    description: 'Record your decision on an objection a helper raised (its id, such as o1): a brief objection or a review finding. Check it first at the place its evidence names. accepted: you agree; say what you changed (a corrected brief, the plan, the code). rejected: say what you checked (file:line, a command and its result) and why the objection does not hold; a rejected required objection goes back to the helper, and a disagreement that remains goes to the member.',
     parameters: { type: 'object', properties: { id: { type: 'string', maxLength: 10 }, decision: { type: 'string', enum: DECISIONS }, checked: { type: 'string', minLength: 1, maxLength: 300 },
       change: { type: 'string', maxLength: 300 }, reason: { type: 'string', maxLength: 500 } }, required: ['id', 'decision', 'checked'], additionalProperties: false },
     execute: async (_id, args) => {
@@ -87,7 +88,7 @@ export function resolveTool(owner) {
       if (args.decision === 'rejected' && !clip(args.reason, 500)) throw Error('managed-objection-invalid: a rejected objection says why it does not hold.');
       const resolution = { decision: args.decision, checked: clip(args.checked, 300), ...(args.change ? { change: clip(args.change, 300) } : {}), ...(args.reason ? { reason: clip(args.reason, 500) } : {}) };
       setStatus(item, args.decision, { resolution });
-      const back = args.decision === 'rejected' && item.required ? ` The ${item.role} subagent judges your reason before the turn ends.` : '';
+      const back = args.decision === 'rejected' && item.required ? ` The ${callName(item.role)} subagent judges your reason before the turn ends.` : '';
       return { content: [{ type: 'text', text: `Recorded: ${item.id} ${args.decision}.${back}` }], details: { id: item.id, decision: args.decision } };
     } };
 }
@@ -125,12 +126,12 @@ export async function settleLedger(managed, run, { note, send, signal }) {
   const rejected = toRejudge(run)[0];
   if (rejected) {
     rejected.rejudged = true; let reply;
-    await note(`Harness: the ${rejected.role} subagent judges the main agent's reason for rejecting ${rejected.id}.`, { phase: 'rejudge', role: rejected.role, id: rejected.id });
-    try { reply = (await managed.delegate({ role: rejected.role, task: rejudgeBrief(rejected) }, signal, { harness: true })).content.map(p => p.text).join('\n'); }
+    await note(`Harness: the ${callName(rejected.role)} subagent judges the main agent's reason for rejecting ${rejected.id}.`, { phase: 'rejudge', role: rejected.role, id: rejected.id });
+    try { reply = (await managed.delegate({ role: callName(rejected.role), task: rejudgeBrief(rejected) }, signal, { harness: true })).content.map(p => p.text).join('\n'); }
     catch { return true; }
     if (!briefIssues(reply)?.length) { setStatus(rejected, 'withdrawn'); return true; }
     setStatus(rejected, 'disputed'); run.disputes.push({ source: rejected.role, brief: true });
-    await note(`Harness: the ${rejected.role} subagent keeps its objection; the member decides.\n${itemText(rejected)}`, { phase: 'dispute', role: rejected.role, id: rejected.id });
+    await note(`Harness: the ${callName(rejected.role)} subagent keeps its objection; the member decides.\n${itemText(rejected)}`, { phase: 'dispute', role: rejected.role, id: rejected.id });
     return true;
   }
   const asked = run.decidedAsked ??= new Set(), pending = undecided(run).filter(item => !asked.has(item.id));
@@ -142,7 +143,7 @@ export async function settleLedger(managed, run, { note, send, signal }) {
 
 // What the main agent still has to decide before the turn ends: required
 // items, review findings above minor, brief objections it never answered.
-export const undecided = run => open(run).filter(i => i.required || i.source !== 'verify');
+export const undecided = run => open(run);
 export function decideText(items) {
   return `Harness: ${items.length} objection(s) have no decision yet:\n${items.map(i => '- ' + itemText(i)).join('\n')}\nCheck each at the place its evidence names, then record your decision with resolve_objection: accepted with what you changed, or rejected with what you checked and why. Minor review findings need nothing; no new review follows.`;
 }

@@ -4,19 +4,19 @@
 // refusal, starts once more: Studio then gives the new helper the next model
 // of its role that serves (an auto role's list).
 import { fenced, HELPER_UNTRUSTED_RULE } from './untrusted.mjs';
-import { relevantChecks } from './check-evidence.mjs';
 import { jobTitle } from './call-purpose.mjs';
 import { ManagedToolBoundary } from './tool-boundary.mjs';
 import { managedResourceLoader } from './resource-loader.mjs';
 import { shareGrant, releaseGrant, slotArgs, baseRole } from './grant-share.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { reviewParts, focusParts, mergeReviews, REVIEW_PARALLEL, emptySnapshot, readBranchBase, readPatchDigest, readPatchSnapshot, resolveReviewBase } from './patch-snapshot.mjs';
-import { reviewFindings, briefIssues, verifyVerdicts } from './workflow.mjs';
+import { reviewFindings, briefIssues } from './workflow.mjs';
 import { currentWorkflow, helperWorkflowPrompt } from './workflow-context.mjs';
-import { anchorText, relayObjection, recordVerdicts } from './objections.mjs';
+import { anchorText, relayObjection } from './objections.mjs';
 import { recordFindings } from './ledger.mjs';
 import { copyNote, mergeCopies } from './copies.mjs';
-import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, countedCheck } from './helper-roles.mjs';
+import { HELPER_CALLS, HELPER_SETUP, READ_TOOLS, WRITE_TOOLS } from './helper-roles.mjs';
+import { cloneProject, discardClone, takeBack, takeBackText, sweepText, recordGeneral } from './general-clone.mjs';
 import { trackToolFailures } from './tool-failures.mjs';
 import { helperMemoryTools, renewer } from './memory.mjs';
 import { answeredSettlement, failedSettlement, settleHelper, OUTCOME_WORDS } from './helper-settlement.mjs';
@@ -88,7 +88,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     let results;
     try { results = await Promise.all(Array.from({ length: fan.n }, (_, i) => answerUnder(managed, i ? `${role}#${i + 1}` : role, task, both, harness, snapshot, parts, opts, [copyNote(role, i, fan)]).catch(error => { stop.abort(); throw error; }))); }
     catch (error) { throw signal?.aborted ? Error('managed-helper-cancelled') : error; }
-    const merged = mergeCopies(role, setup.label, results, { findingsOf: reviewFindings, issuesOf: briefIssues, verdictsOf: verifyVerdicts });
+    const merged = mergeCopies(role, setup.label, results, { findingsOf: reviewFindings, issuesOf: briefIssues });
     result = { ...results[0], reply: merged.reply, usage: merged.usage, review: merged.findings ? merged : null, stale: results.some(r => r.stale), report: null };
   }
   const { reply, usage, review, stale, from, grant } = result;
@@ -104,10 +104,9 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     if (!from) { managed.review = details; if (!stale) { recordFindings(managed, findings); managed.reviewFiles = await managed.changedFiles?.(); } }
     managed.session.sessionManager.appendCustomEntry('agent-watch-review', details);
   }
-  const verdicts = role === 'verify' ? recordVerdicts(managed, reply, harness, details) : '';
   const report = result.report ?? answeredSettlement(role, reply, details, managed.helperSpecs?.get(role) ?? {}); details.outcome = report.outcome;
   await managed.session.sendCustomMessage({ customType: 'agent-watch-helper-receipt', display: true,
-    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${verdicts}${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
+    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
   // An objection to the brief comes with the answer; a stale review has none to act on.
   const objection = stale ? '' : await relayObjection(managed, role, reply, harness);
   const ending = `Outcome: ${report.outcome}${report.outcome === 'unverifiable' ? ` (${report.summary})` : ''}.\n\n`;
@@ -137,7 +136,7 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     try { verifyGrant(grant, managed.manifest, key); }
     catch (error) { try { await managed.broker.request('close', slotArgs(key)); } catch { /* closes with the run */ } throw error; }
   } catch (error) { throw Error(`managed-helper-failed: ${describeFailure(role, failureText(error))}`); }
-  let boundary, report = null;
+  let boundary, report = null, clone = null, liveRoot = null;
   const sessions = new Set(), watched = new Set(), spec = managed.helperSpecs?.get(role) ?? {};
   const renew = renewer(managed, key, g => verifyGrant(g, managed.manifest, key));
   try {
@@ -146,20 +145,24 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     // Studio's logs name the job by its title (the brief's first line without one).
     (managed.jobTitles ??= new WeakMap()).set(runtime, jobTitle(task, title));
     const setup = HELPER_SETUP[role], memory = helperMemoryTools(managed, () => grant, renew);
-    boundary = new ManagedToolBoundary({ cwd: managed.cwd, sdkRoot: managed.sdk, protectedRoots: managed.protectedRoots, readOnly: true, commands: setup.commands }); boundary.unsandboxed = () => alwaysBypass(managed);
-    const checks = role === 'verify' ? `\n\nRepository checks: ${managed.checks.commands.length ? relevantChecks(managed, managed.checks.commands).map(c => '`' + c + '`').join(', ') : 'none declared or detected; choose the tests, type check or build that cover the claims'}.${managed.run?.fullAsked || managed.run?.scopeChoice === 'full' ? '' : ' Run only the tests that cover the claims: the member decides about a whole-suite run.'}` : '';
+    // General writes, but only in its own clone of the project (general-clone.mjs); the others read the project.
+    if (setup.writes) { clone = await cloneProject(managed); (managed.liveClones ??= new Set()).add(liveRoot = clone.root); recordGeneral(managed, clone, 'running'); }
+    const cwd = clone?.dir ?? managed.cwd;
+    boundary = new ManagedToolBoundary({ cwd, sdkRoot: managed.sdk, protectedRoots: managed.protectedRoots, readOnly: !setup.writes, commands: setup.commands, ...(clone ? { identity: managed.boundary.setup.identity, readRoots: [clone.objects] } : {}) });
+    // Always bypass would run a command on the host, outside the clone.
+    if (!setup.writes) boundary.unsandboxed = () => alwaysBypass(managed);
     // One helper session answers the brief (with one part of the patch for a
     // review in parts); its reply and tokens. A helper runs at its role's
     // level from Studio (fixed by the Harness, or its main agent's).
     const ask = async (extra, note = '', who = key) => {
-      const { session } = await managed.api.createAgentSession({ cwd: managed.cwd, model, modelRuntime: runtime, thinkingLevel: grant.effort || 'off',
+      const { session } = await managed.api.createAgentSession({ cwd, model, modelRuntime: runtime, thinkingLevel: grant.effort || 'off',
         settingsManager: managed.api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' }),
-        sessionManager: managed.api.SessionManager.inMemory(managed.cwd), noTools: 'builtin', tools: [...READ_TOOLS, ...(setup.commands ? ['bash'] : []), ...(setup.web ? ['web_search', 'web_fetch'] : []), ...memory.map(tool => tool.name)],
-        customTools: [...unsandboxedBash(managed, boundary.tools(managed.api)).filter(tool => READ_TOOLS.includes(tool.name) || setup.commands && tool.name === 'bash').map(tool => countedCheck(managed, tool)),
+        sessionManager: managed.api.SessionManager.inMemory(cwd), noTools: 'builtin', tools: [...(setup.writes ? WRITE_TOOLS : READ_TOOLS), ...(setup.web ? ['web_search', 'web_fetch'] : []), ...memory.map(tool => tool.name)],
+        customTools: [...(setup.writes ? boundary.tools(managed.api).filter(tool => WRITE_TOOLS.includes(tool.name)) : unsandboxedBash(managed, boundary.tools(managed.api)).filter(tool => READ_TOOLS.includes(tool.name))),
           ...(setup.web ? managed.webTools(runtime, key) : []), ...memory], resourceLoader: managedResourceLoader(managed.api, { systemPrompt: setup.prompt + HELPER_UNTRUSTED_RULE }) });
       sessions.add(session); trackToolFailures(managed, session, role); watched.add(who); watchHelper(managed, who, session, task, title);
       const abort = () => void session.abort(); signal?.addEventListener('abort', abort, { once: true });
-      try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + note + helperWorkflowPrompt(currentWorkflow(managed.session.sessionManager)) + checks + extra, { expandPromptTemplates: false }); }
+      try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + note + helperWorkflowPrompt(currentWorkflow(managed.session.sessionManager)) + extra, { expandPromptTemplates: false }); }
       finally { signal?.removeEventListener('abort', abort); }
       const messages = session.messages.filter(m => m.role === 'assistant');
       // The main agent (and the member) learn why a helper failed, not just that it did.
@@ -191,9 +194,10 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
       let answers;
       try { answers = await Promise.all(notes.map((note, i) => once(note, i ? `${role}#${i + 1}` : key))); }
       catch (error) { for (const session of sessions) void session.abort(); throw error; }
-      const merged = mergeCopies(role, setup.label, answers, { findingsOf: reviewFindings, issuesOf: briefIssues, verdictsOf: verifyVerdicts });
+      const merged = mergeCopies(role, setup.label, answers, { findingsOf: reviewFindings, issuesOf: briefIssues });
       ({ reply, usage } = merged); review = merged.findings ? merged : null;
     }
+    if (clone) { const back = await takeBack(managed, clone); recordGeneral(managed, clone, 'returned', back); reply += takeBackText(clone, back) + sweepText(managed.orphans ?? { removed: [], unproven: [] }); managed.orphans = null; clone = null; }
     const from = snapshot?.from ?? null;
     const stale = snapshot ? (await (from ? readPatchDigest(managed.boundary, null, from.base) : managed.patchDigest())) !== snapshot.digest : false;
     const findings = snapshot ? (review ? review.findings : reviewFindings(reply)) : null;
@@ -201,6 +205,8 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     return { reply, usage, review, stale, from, grant, report };
   } catch (error) { report = failedSettlement(role, error, signal, spec); throw error; }
   finally {
+    if (clone) { discardClone(clone); recordGeneral(managed, clone, 'discarded'); }
+    managed.liveClones?.delete(liveRoot);
     for (const session of sessions) session.dispose(); await boundary?.dispose();
     await settleHelper(managed, renew.lease, report); // with the role's current token, before it closes
     await closeRole(managed, key);
