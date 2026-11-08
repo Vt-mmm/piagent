@@ -1,4 +1,4 @@
-import { callName } from './helper-roles.mjs';
+import { callName } from './role-names.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { briefIssues } from './workflow.mjs';
