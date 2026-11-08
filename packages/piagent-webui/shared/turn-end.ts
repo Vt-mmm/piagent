@@ -7,7 +7,7 @@ import { failureRoleText, type CopyLocale, type FailureRole } from "./company-co
 export type TurnEndState = "done" | "midway" | "failed" | "cancelled";
 export type TurnEnd = { state: TurnEndState; planSteps: number; planDone: number; planDeferred?: number; rounds: number;
   reason?: "idle" | "limit" | "policy"; role?: FailureRole; code?: string };
-const ROLES: FailureRole[] = ["main", "scout", "research", "verify", "review"];
+const ROLES: FailureRole[] = ["main", "scout", "research", "advisor", "general", "verify", "review"];
 // The harness gives up after this many rounds in a row without progress, and
 // runs at most this many (packages/piagent-core/managed/continuation.mjs).
 export const IDLE_ROUNDS = 2, MAX_ROUNDS = 30;

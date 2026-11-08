@@ -11,9 +11,8 @@ export const HELPER_CALLS = 8;
 // review judges the patch. general is the only one that changes files, and
 // only in its own clone of the project (general-clone.mjs). Main does small
 // changes, integration and the repository checks itself.
-export const ROLE_NAMES = Object.freeze({ explore: 'scout', scout: 'research', advisor: 'advisor', general: 'general', review: 'review' });
-export const HELPER_ROLES = Object.freeze(Object.values(ROLE_NAMES));
-export const callName = role => Object.keys(ROLE_NAMES).find(name => ROLE_NAMES[name] === role) ?? role;
+import { ROLE_NAMES, HELPER_ROLES, callName } from './role-names.mjs';
+export { ROLE_NAMES, HELPER_ROLES, callName };
 export const helperRoles = manifest => HELPER_ROLES.filter(role => manifest?.harness?.configuration?.[role]);
 const WIDE_READING = 'when understanding the task needs more reading than a few batches of files, such as a flow across many modules of an unfamiliar codebase';
 const NETWORK_COMMANDS = 'run_with_network only when a command itself needs the internet or starts a local server or browser, such as end-to-end tests (the user approves each one)';

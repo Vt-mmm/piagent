@@ -4,9 +4,7 @@ import { BoundaryTerminals } from './terminal-boundary.mjs';
 import { ToolFreshness } from './tool-freshness.mjs';
 import { BoundaryQueue } from './boundary-queue.mjs';
 import { workspaceWorkerPins, verifyWorkspaceWorker } from './workspace-worker-pins.mjs'; import { snapshotRuntime } from './runtime-snapshot.mjs';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import net from 'node:net';
 import { StringDecoder } from 'node:string_decoder';
@@ -249,8 +247,7 @@ export class ManagedToolBoundary {
     const skills = [...new Set(skillFolders.flatMap(dir => { try { return [fs.realpathSync(dir)]; } catch { return []; } }))]
       .filter(dir => dir !== '/' && !/[\x00-\x1f\x7f]/.test(dir) && !narrowed.some(root => inside(root, dir)) && !inside(userHome, dir)
         && (!inside(dir, userHome) || agentFolders.some(root => inside(dir, root)) || !path.relative(userHome, dir).startsWith('.')));
-    // readRoots: folders the caller opens for reading only, named by the runtime
-    // (the general helper's borrowed git objects); no write, no command can open one.
+    // readRoots: folders the runtime opens for reading only (the general helper's borrowed git objects).
     skills.push(...readRoots.map(dir => fs.realpathSync(dir)).filter(dir => dir !== '/' && !narrowed.some(root => inside(root, dir))));
     this.userHome = userHome;
     // Only for commands the user approved (run_with_network); credentials stay

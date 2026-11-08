@@ -14,14 +14,11 @@ import { nativeManagedModel, isVendor, piProvider, studioAPI, studioPath } from 
 import { fetchOriginTool } from './repository-operation.mjs';
 import { describeFailure, failureCode, failureText } from '../runtime/managed-failure.mjs';
 import { enableCompanyTurnRetry, wrapRoleStreams, conversationSession } from './request-stream.mjs'; import { StudioLink, closeRun } from './studio-link.mjs';
-import { trackToolFailures } from './tool-failures.mjs';
-import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
-import { runHelper } from './helper-run.mjs'; import { sweepGeneral } from './general-clone.mjs';
-import { askTool } from './member-questions.mjs';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { trackToolFailures } from './tool-failures.mjs'; import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
+import { runHelper } from './helper-run.mjs'; import { sweepGeneral } from './general-clone.mjs'; import { askTool } from './member-questions.mjs';
 import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction, boundRequestImages } from './compaction.mjs';
 import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead, readRepositoryHeads } from './patch-snapshot.mjs';
-import { memberTurn } from './continuation.mjs';
+import { memberTurn } from './continuation.mjs'; import { setTimeout as sleep } from 'node:timers/promises';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
 import { workflowContextTool, workflowContextExtension } from './workflow-context.mjs';
 import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut, withDroppedNote } from './copies.mjs'; import { withMemberMcp } from './member-mcp.mjs';
@@ -476,9 +473,8 @@ export class ManagedSession {
     if ((this.helperCalls.get(role) ?? 0) + (fan?.n ?? 1) > HELPER_CALLS) throw Error(`managed-helper-limit: the ${name} subagent already ran ${HELPER_CALLS} times for this user message. Go on with what it returned, or use it again after the next user message.`);
     beforeDelegate(this.run, role, harness, { since, review: this.review, changed: (this.ownPaths?.size ?? 0) > 0, asked: !!fan });
     const job = this.runHelper(role, task, signal, harness, title, role === 'review' && typeof since === 'string' && since.trim() ? since.trim() : null, fan); this.helpers.set(role, job); this.publishHelpers();
-    // While a helper works (a general helper running a long suite) the main agent is
-    // quiet: a beat each minute tells the dashboard's watchdog, which stops a
-    // turn after 15 minutes without an event, that the turn is working.
+    // While a helper works (a general helper running a long suite) the main agent is quiet: a beat each
+    // minute tells the dashboard's watchdog (it stops a turn after 15 silent minutes) that the turn is working.
     const beat = setInterval(() => this.notify({ type: 'managed_helper_progress', role }), this.helperBeatMs ?? HELPER_BEAT_MS); beat.unref?.();
     try { return withDroppedNote(await job, role, asked); } finally { clearInterval(beat); this.helpers.delete(role); this.publishHelpers(); }
   }

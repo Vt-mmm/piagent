@@ -95,10 +95,12 @@ export function companyFailureText(reason: string, code: string | null, locale: 
 }
 
 // Who failed: a harness role, never a model name.
-export type FailureRole = "main" | "scout" | "research" | "verify" | "review";
+export type FailureRole = "main" | "scout" | "research" | "advisor" | "general" | "verify" | "review";
 export function failureRoleText(role: FailureRole, locale: CopyLocale): string {
   return role === "main" ? "Main agent" : role === "scout" ? pick(locale, ["Subagent scout", "Scout subagent"])
     : role === "research" ? pick(locale, ["Subagent research", "Research subagent"])
+    : role === "advisor" ? pick(locale, ["Subagent advisor", "Advisor subagent"])
+    : role === "general" ? pick(locale, ["Subagent general", "General subagent"])
     : role === "verify" ? pick(locale, ["Subagent verify", "Verify subagent"])
     : pick(locale, ["Subagent review", "Review subagent"]);
 }

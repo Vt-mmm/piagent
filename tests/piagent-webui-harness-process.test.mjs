@@ -220,3 +220,16 @@ test("the review's start and its helper's calls reach the timeline and Activity"
   assert.equal(turn.reviewing, true);
   assert.equal(turn.answer, "Done, I think");
 });
+
+// Advisor and general are helpers of their own: a failure names them, not review.
+test("a failure of the advisor or general helper names that helper", async () => {
+  const { failureRoleText } = await import("../packages/piagent-webui/shared/company-copy.ts");
+  const { turnEndOf, turnEndCopy } = await import("../packages/piagent-webui/shared/turn-end.ts");
+  assert.equal(failureRoleText("advisor", "en"), "Advisor subagent"); assert.equal(failureRoleText("general", "vi"), "Subagent general");
+  assert.equal(failureRoleText("review", "en"), "Review subagent");
+  for (const role of ["advisor", "general"]) {
+    const end = turnEndOf({ state: "failed", planSteps: 1, planDone: 0, rounds: 0, role });
+    assert.equal(end.role, role, "kept, not turned into the main agent");
+    assert.match(turnEndCopy(end, "en").title, new RegExp(`${role[0].toUpperCase()}${role.slice(1)} subagent`));
+  }
+});
