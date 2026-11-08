@@ -82,7 +82,9 @@ test('a clone the helper tampered with is refused and removed; its config starts
 
 test('a project that is not a repository with a commit gets no clone', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'general-nogit-')));
-  try { await assert.rejects(cloneProject({ cwd: root, boundary: { git: '/usr/bin/git', userHome: os.homedir() } }), /managed-general-needs-git/); assert.deepEqual(fs.readdirSync(root), []); }
+  // Off macOS the platform gate refuses first; either way nothing is cloned.
+  const refusal = process.platform === 'darwin' ? /managed-general-needs-git/ : /managed-general-unavailable/;
+  try { await assert.rejects(cloneProject({ cwd: root, boundary: { git: '/usr/bin/git', userHome: os.homedir() } }), refusal); assert.deepEqual(fs.readdirSync(root), []); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
