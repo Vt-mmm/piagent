@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.51.2" title="v1.51.2 docs · EN"><span class="dot"></span>v1.51.2</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.52.0" title="v1.52.0 docs · EN"><span class="dot"></span>v1.52.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,21 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-51-2" data-release>
+<article class="release latest" id="v1-52-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-52-0">v1.52.0</a><time class="release-date" datetime="2026-11-08">Nov 8, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-52-0-title">Company helpers get an advisor and a general helper that works in its own clone</h3>
+    <p>The company Harness declares every helper, and the main agent now calls them by working names: explore, scout, advisor, general and review. General changes code only in its own clone and hands back a git ref to merge.</p>
+    <ul class="release-items">
+      <li data-kind="breaking"><span class="kind kind-breaking">Breaking</span><span>Helpers are called explore, scout, advisor, general and review; the old names research and verify are gone, and the verify helper is removed.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>advisor gives a second opinion before a hard decision: a recommendation, the options it rejected and the risks.</span></li>
+      <li data-kind="new"><span class="kind kind-new">New</span><span>general takes large work on macOS: it edits, runs checks and commits in its own clone, never your files, and returns refs/general/&lt;id&gt;.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>The WebUI names an advisor or general failure correctly instead of calling it a review failure.</span></li>
+    </ul>
+    <p class="release-requires"><strong>Requires:</strong> Agent Studio 0.51.0 and Agent Watch 0.15.20 (Windows 0.1.19) for the advisor and general helpers</p>
+  </div>
+</article>
+<article class="release" id="v1-51-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-51-2">v1.51.2</a><time class="release-date" datetime="2026-11-03">Nov 3, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-51-2-title">Running only the tests that cover a change works in every test tool</h3>
@@ -408,25 +422,24 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-44-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-44-0">v1.44.0</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-44-0-title">Your own Pi stays, pick a Terminal style, add skill repositories <span class="tag">not published</span></h3>
-    <p>Tagged but not published: new undici advisories in the Pi host stopped the runtime audit. Superseded by 1.44.1.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">New</span><span>/style picks the Terminal's look: Pi's system, dark and light, or Piagent's ocean, paper, contrast and focus. The company Terminal remembers the pick.</span></li>
-      <li data-kind="new"><span class="kind kind-new">New</span><span>piagent skills add mattpocock/skills adds a GitHub skill repository at one commit; its skills work as /skill:name in Pi, the company Terminal and the dashboard.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Setup, install and update no longer replace a member's newer pi (such as 1.4.0) with the pinned 1.3.0: Piagent keeps its own copy in ~/.piagent/pi-host for company sessions, the dashboard and piagent pi.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>piagent-uninstall --with-host removes Piagent's private Pi and leaves a member's own newer pi in place.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">74</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">75</span></summary>
+    <div class="archive-row" id="v1-44-0">
+      <div class="archive-head"><a class="release-version" href="#v1-44-0">v1.44.0</a> <span class="release-date">Oct 28, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Your own Pi stays, pick a Terminal style, add skill repositories</strong> <span class="tag">not published</span> — Tagged but not published: new undici advisories in the Pi host stopped the runtime audit. Superseded by 1.44.1.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">New</span><span>/style picks the Terminal's look: Pi's system, dark and light, or Piagent's ocean, paper, contrast and focus. The company Terminal remembers the pick.</span></li>
+        <li data-kind="new"><span class="kind kind-new">New</span><span>piagent skills add mattpocock/skills adds a GitHub skill repository at one commit; its skills work as /skill:name in Pi, the company Terminal and the dashboard.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Setup, install and update no longer replace a member's newer pi (such as 1.4.0) with the pinned 1.3.0: Piagent keeps its own copy in ~/.piagent/pi-host for company sessions, the dashboard and piagent pi.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>piagent-uninstall --with-host removes Piagent's private Pi and leaves a member's own newer pi in place.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-43-9">
       <div class="archive-head"><a class="release-version" href="#v1-43-9">v1.43.9</a> <span class="release-date">Oct 27, 2026</span></div>
       <div class="archive-body">

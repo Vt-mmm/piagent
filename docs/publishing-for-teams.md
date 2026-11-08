@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.52.0`: Harness công ty khai báo mọi helper; agent chính gọi bằng tên công việc explore, scout, advisor, general, review. Thêm advisor (ý kiến thứ hai) và general (làm trong clone riêng, trả về `refs/general/<id>`, chỉ macOS); bỏ helper verify. Cần Agent Studio schema 91 và Agent Watch mới.
 - `1.51.2`: Khi member chọn chỉ chạy phần test liên quan, lệnh chạy một file, một bộ lọc hay một module được đọc đúng ở mọi công cụ test (Maven `-Dtest`/`-Dit.test` trước goal, Gradle, `node --import tsx --test`, Flutter, cargo…); lệnh chỉ biên dịch hay liệt kê test không còn bị tính là chạy test.
 - `1.51.1`: Câu hỏi của harness công ty về test hay push không ai trả lời trong mười phút sẽ tự rút: chỉ chạy test liên quan, không push, task để qua đêm không còn đứng chờ tới sáng.
 - `1.48.2`: Terminal nạp bản mới không cần đóng: `piagent reload`, và `piagent-update` tự yêu cầu, để mọi Terminal đang mở (`piagent`, `piagent studio`) nạp bản đã cài khi rảnh, giữ nguyên cuộc trò chuyện, task đang chạy xong trước; chỉ member được bỏ qua kiểm tra bắt buộc của team, trên thẻ duyệt, cho đúng code lúc đó.

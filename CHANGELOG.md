@@ -4,6 +4,25 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.52.0 - 2026-11-08
+
+**Company helpers get an advisor and a general helper that works in its own clone.** The company Harness declares every helper, and the main agent now calls them by working names: explore, scout, advisor, general and review. General changes code only in its own clone and hands back a git ref to merge.
+
+### Breaking changes
+
+- Helpers are called explore, scout, advisor, general and review; the old names research and verify are gone, and the verify helper is removed.
+
+### Added
+
+- advisor gives a second opinion before a hard decision: a recommendation, the options it rejected and the risks.
+- general takes large work on macOS: it edits, runs checks and commits in its own clone, never your files, and returns refs/general/<id>.
+
+### Fixed
+
+- The WebUI names an advisor or general failure correctly instead of calling it a review failure.
+
+Requires: Agent Studio 0.51.0 and Agent Watch 0.15.20 (Windows 0.1.19) for the advisor and general helpers.
+
 ## v1.51.2 - 2026-11-03
 
 **Running only the tests that cover a change works in every test tool.** When you chose to run only the related tests, the harness took many single-test commands for the whole suite and refused them. It now reads one file, filter or module the same way in each tool.

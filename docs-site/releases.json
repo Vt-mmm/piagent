@@ -1,5 +1,44 @@
 [
   {
+    "version": "1.52.0",
+    "date": "2026-11-08",
+    "status": "stable",
+    "title": {
+      "en": "Company helpers get an advisor and a general helper that works in its own clone",
+      "vi": "Helper công ty có thêm advisor và general làm việc trong bản clone riêng"
+    },
+    "summary": {
+      "en": "The company Harness declares every helper, and the main agent now calls them by working names: explore, scout, advisor, general and review. General changes code only in its own clone and hands back a git ref to merge.",
+      "vi": "Harness công ty khai báo mọi helper, và agent chính gọi chúng bằng tên công việc: explore, scout, advisor, general và review. General chỉ sửa code trong bản clone riêng và trả về một git ref để merge."
+    },
+    "requires": {
+      "en": "Agent Studio 0.51.0 and Agent Watch 0.15.20 (Windows 0.1.19) for the advisor and general helpers",
+      "vi": "Agent Studio 0.51.0 và Agent Watch 0.15.20 (Windows 0.1.19) để dùng helper advisor và general"
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "advisor gives a second opinion before a hard decision: a recommendation, the options it rejected and the risks.",
+        "vi": "advisor cho ý kiến thứ hai trước quyết định khó: khuyến nghị, các phương án đã loại và rủi ro."
+      },
+      {
+        "kind": "new",
+        "en": "general takes large work on macOS: it edits, runs checks and commits in its own clone, never your files, and returns refs/general/<id>.",
+        "vi": "general nhận việc lớn trên macOS: sửa, chạy check và commit trong clone riêng, không đụng file của bạn, rồi trả về refs/general/<id>."
+      },
+      {
+        "kind": "breaking",
+        "en": "Helpers are called explore, scout, advisor, general and review; the old names research and verify are gone, and the verify helper is removed.",
+        "vi": "Helper được gọi là explore, scout, advisor, general và review; tên cũ research và verify không còn, helper verify bị bỏ."
+      },
+      {
+        "kind": "fixed",
+        "en": "The WebUI names an advisor or general failure correctly instead of calling it a review failure.",
+        "vi": "WebUI ghi đúng lỗi của advisor hay general thay vì gọi là lỗi của review."
+      }
+    ]
+  },
+  {
     "version": "1.51.2",
     "date": "2026-11-03",
     "status": "stable",
