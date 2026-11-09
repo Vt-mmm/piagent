@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:f4c9eef74acfc997b13c64c565d152e4d5a5ef00a4c475cc0a45129fb10340ee",
+    "packageDigest": "sha256:191d3b3580860fd50256fcc521ff553719b18d250c149bbc086f61e752c0cfd1",
     "packageSource": "workspace",
-    "packageVersion": "1.52.0",
+    "packageVersion": "1.52.1",
     "runtimeFiles": [
       {
         "byteSize": 7157,
-        "digest": "sha256:0a82cc630ffcb9f14ce13d113aece396ee1af1c17bd5d46aa360ef89ef622315",
+        "digest": "sha256:d7f7e9c9858b92d55f24a2df431723219d9db72927c6cc388b36388455039e10",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:12d9ce317b74083116aee6b874046affc1219772a937401a3b62eafca4582ff0",
+        "digest": "sha256:2cf6794d8656d72ae2f2249974cfbc7be6d2663e23cf10fefb18d425b9b75cb7",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1684,7 +1684,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:12d9ce317b74083116aee6b874046affc1219772a937401a3b62eafca4582ff0",
+        "digest": "sha256:2cf6794d8656d72ae2f2249974cfbc7be6d2663e23cf10fefb18d425b9b75cb7",
         "path": "packages/piagent-core/package.json"
       },
       {
