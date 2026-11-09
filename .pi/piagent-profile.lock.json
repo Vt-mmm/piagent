@@ -124,7 +124,7 @@
   "core": {
     "apiVersion": 1,
     "packageDigest": "sha256:191d3b3580860fd50256fcc521ff553719b18d250c149bbc086f61e752c0cfd1",
-    "packageSource": "workspace",
+    "packageSource": "../",
     "packageVersion": "1.52.1",
     "runtimeFiles": [
       {
