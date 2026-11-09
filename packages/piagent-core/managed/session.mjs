@@ -465,7 +465,6 @@ export class ManagedSession {
     if (!this.grant || !HELPER_ROLES.includes(role) || typeof task !== 'string' || !task.trim() || task.length > 12000 || this.helpers.has(role)) throw Error('managed-helper-unavailable');
     const enabled = helperRoles(this.manifest);
     if (!enabled.includes(role)) throw Error(`managed-helper-not-configured: the company Harness has no ${name} subagent${enabled.length ? `; use ${enabled.map(callName).join(', ')}` : ''}.`);
-    if (role === 'general' && (more.copies || more.split)) throw Error('managed-general-single: the general helper runs one at a time, each in its own clone; call it again for the next piece of work after merging the first.');
     if (role === 'general') this.orphans = sweepGeneral(this);
     // Studio lets each helper role run HELPER_CALLS times per run (one user
     // message), each helper the member asked for counted (copies.mjs). Say so at once.

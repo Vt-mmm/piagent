@@ -12,7 +12,7 @@ import { briefIssues, RunProcess } from '../packages/piagent-core/managed/workfl
 import { memberRequest, anchorText, beforeDelegate, relayObjection } from '../packages/piagent-core/managed/objections.mjs';
 import { addItems, checkRef, evidenceRef, ledgerGuard, ledgerWords, recordFindings, resolveTool, reviewFocus } from '../packages/piagent-core/managed/ledger.mjs';
 import { focusParts } from '../packages/piagent-core/managed/patch-snapshot.mjs';
-import { copyNote, fanOut, mergeCopies, namedCount } from '../packages/piagent-core/managed/copies.mjs';
+import { copyNote, fanOut, mergeCopies, namedCount, withDroppedNote } from '../packages/piagent-core/managed/copies.mjs';
 import { baseRole, slotArgs } from '../packages/piagent-core/managed/grant-share.mjs';
 import { stepText } from '../packages/piagent-core/managed/helper-run.mjs';
 import { helperLines, planWidget } from '../scripts/company-terminal.mjs';
@@ -187,6 +187,12 @@ test('several helpers of a role run only when the member asks for that many, up 
   assert.deepEqual(fanOut(manager('phân tích repo này'), 'research', { copies: 2 }, false), { dropped: 2 }, 'copies without the member\'s words');
   assert.deepEqual(fanOut(manager('dùng 5 scout'), 'scout', { copies: 9 }, false), { dropped: 9 }, 'an unasked count above the limit is still one helper');
   assert.equal(fanOut(asked, 'review', { copies: 1, member_words: 'dùng 3 subagent review' }, false), null, 'one helper is a plain call');
+  // general runs in one clone at a time: even when the member asked for several, one runs and main is told to merge and call again.
+  const general = fanOut(manager('dùng 3 general sửa 3 module'), 'general', { split: ['a', 'b', 'c'], member_words: 'dùng 3 general' }, false);
+  assert.deepEqual(general, { dropped: 3, single: true });
+  assert.deepEqual(fanOut(manager('làm đi'), 'general', { copies: 2 }, false), { dropped: 2, single: true });
+  const noted = withDroppedNote({ content: [{ type: 'text', text: 'ref' }] }, 'general', general).content[0].text;
+  assert.match(noted, /^One general helper ran, not 3: general works one at a time, each in its own clone\. Merge the ref it returned, then call general again/);
   assert.throws(() => fanOut(manager('dùng 5 scout'), 'scout', { copies: 5, member_words: 'dùng 5 scout' }, false), /^Error: managed-copies-invalid: ask for 2 to 3 explore helpers/);
   assert.throws(() => fanOut(asked, 'review', { copies: 2, member_words: 'dùng 3 subagent review' }, true), /managed-copies-invalid: the harness runs one helper per call/);
   const split = fanOut(manager('cho 2 scout: một bên client, một bên server'), 'scout', { split: ['the client', 'the server'], member_words: 'cho 2 scout' }, false);

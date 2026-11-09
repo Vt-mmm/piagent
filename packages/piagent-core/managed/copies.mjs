@@ -28,6 +28,9 @@ export function fanOut(manager, role, args, harness) {
   const split = Array.isArray(args?.split) ? args.split.map(s => typeof s === 'string' ? s.trim().slice(0, 500) : '').filter(Boolean) : [];
   const n = split.length || (Number.isInteger(args?.copies) ? args.copies : 1);
   if (n <= 1) return null;
+  // general works in one clone at a time: run one and say so, never refuse (a
+  // refusal sent agents round 15 retries in a few minutes, 2026-11-09).
+  if (role === 'general') return { dropped: n, single: true };
   if (harness) throw Error('managed-copies-invalid: the harness runs one helper per call.');
   const words = normal(args?.member_words);
   if (words.length < 3 || !memberRequest(memberMessages(manager)).some(text => normal(text).includes(words)) || namedCount(words) < n || !HELPER_WORDS.test(words)) return { dropped: n };
@@ -39,7 +42,9 @@ export function fanOut(manager, role, args, harness) {
 export function withDroppedNote(result, role, asked) {
   const n = asked?.dropped, first = result?.content?.[0];
   if (!n || first?.type !== 'text') return result;
-  const note = `One ${callName(role)} helper ran, not ${n}: the member's own words did not ask for ${n} ${callName(role)} helpers. Go on with this answer; run several only when the member asks for that many.\n\n`;
+  const note = asked.single
+    ? `One general helper ran, not ${n}: general works one at a time, each in its own clone. Merge the ref it returned, then call general again (without copies or split) for the next share of the work.\n\n`
+    : `One ${callName(role)} helper ran, not ${n}: the member's own words did not ask for ${n} ${callName(role)} helpers. Go on with this answer; run several only when the member asks for that many.\n\n`;
   return { ...result, content: [{ ...first, text: note + first.text }, ...result.content.slice(1)] };
 }
 // What one copy reads under its brief.

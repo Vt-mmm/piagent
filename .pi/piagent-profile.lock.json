@@ -123,8 +123,8 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:704751afbe5a83c1462ad3d8ea4391c7687643842dadccc68743916f10abe2da",
-    "packageSource": "../",
+    "packageDigest": "sha256:f4c9eef74acfc997b13c64c565d152e4d5a5ef00a4c475cc0a45129fb10340ee",
+    "packageSource": "workspace",
     "packageVersion": "1.52.0",
     "runtimeFiles": [
       {
@@ -1293,8 +1293,8 @@
         "path": "packages/piagent-core/managed/continuation.mjs"
       },
       {
-        "byteSize": 5587,
-        "digest": "sha256:604e3e912e9d26f5752e0b43dba07e103910d14cde3c6cc195c1cd3c54692810",
+        "byteSize": 6028,
+        "digest": "sha256:cb166367e582f8a68a1cfae9f9fb65d4963d292225473fbf9faec5ff7b14e6d8",
         "path": "packages/piagent-core/managed/copies.mjs"
       },
       {
@@ -1348,8 +1348,8 @@
         "path": "packages/piagent-core/managed/helper-run.mjs"
       },
       {
-        "byteSize": 7583,
-        "digest": "sha256:d8980010d06b4e06e1afbe48c6212ef192fc181e28d60d4cd95abae6574637fa",
+        "byteSize": 7622,
+        "digest": "sha256:f79767fada89c515a50879762195bde9d9107b004844ab63491d15ff390b10e1",
         "path": "packages/piagent-core/managed/helper-settlement.mjs"
       },
       {
@@ -1508,8 +1508,8 @@
         "path": "packages/piagent-core/managed/session-mutation-observations.mjs"
       },
       {
-        "byteSize": 43437,
-        "digest": "sha256:caa1df66d3f4286585d4283d408ad9ebab3872b3c857c0f8dae2ce650439fe6f",
+        "byteSize": 43210,
+        "digest": "sha256:efc667cd4992c20321de918ce63962f9f4b0e8f379f75375bb7481e8fa61141e",
         "path": "packages/piagent-core/managed/session.mjs"
       },
       {
