@@ -4,7 +4,7 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
-## v1.52.1 - 2026-11-09
+## v1.52.2 - 2026-11-09
 
 **Asking for several general helpers runs one instead of a refusal.** When a member asked for several helpers, the main agent called general several at once, was refused and kept retrying, so general never ran. Now one general runs and the main agent merges its ref before the next share.
 
@@ -13,6 +13,14 @@ This file is generated from `docs-site/releases.json` by `node scripts/build-doc
 - A delegate call asking for several general helpers runs one, says why, and asks the main agent to merge its ref and call general again.
 
 Requires: Agent Studio 0.51.0 and Agent Watch 0.15.20 (Windows 0.1.19) for the advisor and general helpers.
+
+## v1.52.1 - 2026-11-09 (not published)
+
+**Asking for several general helpers runs one instead of a refusal.** Tagged but not published: the capability lock recorded the wrong package source and failed the release check. Superseded by 1.52.2.
+
+### Fixed
+
+- A delegate call asking for several general helpers runs one, says why, and asks the main agent to merge its ref and call general again.
 
 ## v1.52.0 - 2026-11-08
 

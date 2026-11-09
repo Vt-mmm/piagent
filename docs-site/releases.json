@@ -1,6 +1,6 @@
 [
   {
-    "version": "1.52.1",
+    "version": "1.52.2",
     "date": "2026-11-09",
     "status": "stable",
     "title": {
@@ -15,6 +15,27 @@
       "en": "Agent Studio 0.51.0 and Agent Watch 0.15.20 (Windows 0.1.19) for the advisor and general helpers",
       "vi": "Agent Studio 0.51.0 và Agent Watch 0.15.20 (Windows 0.1.19) để dùng helper advisor và general"
     },
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A delegate call asking for several general helpers runs one, says why, and asks the main agent to merge its ref and call general again.",
+        "vi": "Lệnh gọi xin nhiều helper general chạy một, nói rõ lý do và bảo agent chính merge ref rồi gọi general tiếp."
+      }
+    ]
+  },
+  {
+    "version": "1.52.1",
+    "date": "2026-11-09",
+    "status": "unpublished",
+    "title": {
+      "en": "Asking for several general helpers runs one instead of a refusal",
+      "vi": "Xin nhiều helper general thì chạy một, không còn bị từ chối"
+    },
+    "summary": {
+      "en": "Tagged but not published: the capability lock recorded the wrong package source and failed the release check. Superseded by 1.52.2.",
+      "vi": "Đã tag nhưng chưa publish: capability lock ghi sai nguồn package nên kiểm tra release fail. Thay bằng 1.52.2."
+    },
+    "requires": null,
     "items": [
       {
         "kind": "fixed",

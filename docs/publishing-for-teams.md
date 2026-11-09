@@ -41,7 +41,8 @@ pi install /path/to/piagent
 
 ## Versioning
 
-- `1.52.1`: xin nhiều helper general thì chạy một và báo agent chính merge ref rồi gọi tiếp, không còn bị từ chối rồi gọi lại mãi.
+- `1.52.2`: xin nhiều helper general thì chạy một và báo agent chính merge ref rồi gọi tiếp, không còn bị từ chối rồi gọi lại mãi.
+- `1.52.1`: (tag, chưa publish do capability lock ghi sai nguồn package) cùng nội dung 1.52.2.
 - `1.52.0`: Harness công ty khai báo mọi helper; agent chính gọi bằng tên công việc explore, scout, advisor, general, review. Thêm advisor (ý kiến thứ hai) và general (làm trong clone riêng, trả về `refs/general/<id>`, chỉ macOS); bỏ helper verify. Cần Agent Studio schema 91 và Agent Watch mới.
 - `1.51.2`: Khi member chọn chỉ chạy phần test liên quan, lệnh chạy một file, một bộ lọc hay một module được đọc đúng ở mọi công cụ test (Maven `-Dtest`/`-Dit.test` trước goal, Gradle, `node --import tsx --test`, Flutter, cargo…); lệnh chỉ biên dịch hay liệt kê test không còn bị tính là chạy test.
 - `1.51.1`: Câu hỏi của harness công ty về test hay push không ai trả lời trong mười phút sẽ tự rút: chỉ chạy test liên quan, không push, task để qua đêm không còn đứng chờ tới sáng.
