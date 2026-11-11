@@ -248,7 +248,7 @@ export function companyBypassDetail(locale: UiLocale) {
 }
 // Always bypass, in any conversation: the member's decision, after this warning.
 export function alwaysBypassDetail(locale: UiLocale) {
-  return localize(locale, "Cảnh báo, quyền này do bạn quyết định. Không còn sandbox: mọi lệnh chạy thẳng trên máy bằng quyền của bạn, gồm cả internet, MCP, deploy, xoá và đọc thông tin đăng nhập, không hỏi. Chỉ hỏi khi commit, push code và khi xoá đường dẫn quan trọng (như rm -rf ~). Agent có thể gửi secret ra ngoài hay xoá file khác mà bạn không được hỏi, kể cả khi bị một trang web hay file lừa. Output vẫn che secret và /undo vẫn hoàn tác được file trong project.",
+  return localize(locale, "Cảnh báo, quyền này do bạn quyết định. Không còn sandbox: mọi lệnh chạy thẳng trên máy bằng quyền của bạn, gồm cả internet, MCP, deploy, xoá và đọc thông tin đăng nhập, không hỏi. Chỉ hỏi khi commit, push code và khi xoá đường dẫn quan trọng (như rm -rf ~); khi plan còn bước chưa làm, commit và push được để tới cuối, hỏi một lần. Agent có thể gửi secret ra ngoài hay xoá file khác mà bạn không được hỏi, kể cả khi bị một trang web hay file lừa. Output vẫn che secret và /undo vẫn hoàn tác được file trong project.",
     "Warning: this access is your decision. No sandbox: every command runs directly on this machine as you, the internet, MCP, deploys, deletes and credentials included, without asking. Only committing and pushing code and removing a critical path (such as rm -rf ~) are asked. The agent can send secrets out or delete other files unasked, even when a web page or file tricks it. Output is still redacted and /undo still reverts project files.");
 }
 export function companyFullAccessDetail(locale: UiLocale) {

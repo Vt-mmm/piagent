@@ -44,7 +44,7 @@ The dashboard composer takes the Terminal's `/` commands. Typing `/` lists them 
 | `/thinking <level>` | Thinking level, from the levels this conversation offers |
 | `/model <name>` | Model, by name or ref (personal conversations) |
 | `/permission read-only\|ask\|full` | Access (personal; `full` asks for confirmation) |
-| `/bypass always\|on\|full\|off`, `/fast [on\|off]`, `/undo` | Company conversations: Always bypass (`always`: a warning and the member's decision; no sandbox, only commit, push and rm on a critical path are asked), Bypass (`on`, asks for confirmation), Full access (`full`), Ask first (`off`); Fast where the Harness allows it; undo the last turn |
+| `/bypass always\|on\|full\|off`, `/commit-ask on\|off`, `/fast [on\|off]`, `/undo` | Company conversations: Always bypass (`always`: a warning and the member's decision; no sandbox, only commit, push and rm on a critical path are asked; commit, push and merge wait for the end of the checklist and are asked once; `/commit-ask off` commits unasked), Bypass (`on`, asks for confirmation), Full access (`full`), Ask first (`off`); Fast where the Harness allows it; undo the last turn |
 | `/changes`, `/settings`, `/help` | Source Changes, Settings, this list |
 
 Shortcuts: ⌘K command palette, ⌘⇧O new chat, ⌘, Settings, ⌘/ opens the `/` commands in the composer, Esc stops the running turn.
