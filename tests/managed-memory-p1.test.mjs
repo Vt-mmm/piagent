@@ -187,3 +187,40 @@ test('a round queued for protocol 3 is sent without the new fields when Studio s
   assert.deepEqual(Object.keys(retain).sort(), ['conversation_id', 'event_id', 'occurred_at', 'repo_key', 'source_key_id', 'text']);
   assert.equal(scopeID(scope()) !== null, true);
 });
+
+test('a folder of many repositories files a round only where it belongs, never under the first few by name', async t => {
+  const root = temp(t);
+  for (const [dir, remote] of [['agent-studio', 'https://github.com/acme/agent-studio'], ['agentwatch', 'https://github.com/acme/agentwatch'],
+    ['enterpriseai-be', 'https://github.com/acme/enterpriseai-be.git'], ['vector-center', 'https://github.com/acme/vector-center.git']]) repo(path.join(root, dir), remote);
+  const s = studio(), stateDir = temp(t);
+  const memory = new TeamMemory({ origin: 'http://studio.test', cwd: root, stateDir, conversationId: 'conversation-many', scope, fetchImpl: s.fetchImpl });
+  await memory.beforeRound(grant, 'start', false); await memory.background;
+  const retained = async (text, files = [], tool = null) => {
+    s.calls.length = 0;
+    const messages = round(text);
+    if (tool) messages.splice(1, 0, { role: 'toolResult', content: [{ type: 'text', text: tool }] });
+    await memory.afterRound(grant, messages, files, { id: randomUUID(), at: new Date().toISOString(), scope: scope() });
+    return s.calls.filter(c => c.op === 'retain').map(c => c.body.repo_key);
+  };
+  // Nothing to go by: written nowhere (before: agent-studio, agentwatch, enterpriseai-be).
+  assert.deepEqual(await retained('Should the advisor be asked first?'), []);
+  // A folder listing in tool output names every repository; it is not a reason.
+  assert.deepEqual(await retained('What does this folder hold?', [], 'agent-studio agentwatch enterpriseai-be vector-center'), []);
+  // Named the way people write it.
+  assert.deepEqual(await retained('Is the Vector Center update safe?'), ['github.com/acme/vector-center']);
+  // The next round that names none stays with the repository the conversation works in.
+  assert.deepEqual(await retained('And the rollback?'), ['github.com/acme/vector-center']);
+  // Changed files win.
+  assert.deepEqual(await retained('Fix it', ['agentwatch/src/a.swift']), ['github.com/acme/agentwatch']);
+  assert.deepEqual(await retained('Anything else?'), ['github.com/acme/agentwatch']);
+  // Tools: a question that names none goes where the conversation works; a fresh one is asked to name it.
+  assert.equal(await memory.search(grant, 'rollback'), 'HIT github.com/acme/agentwatch');
+  const fresh = new TeamMemory({ origin: 'http://studio.test', cwd: root, stateDir: temp(t), conversationId: 'conversation-many-2', scope, fetchImpl: s.fetchImpl });
+  await fresh.beforeRound(grant, 'start', false); await fresh.background;
+  s.calls.length = 0;
+  assert.match(await fresh.search(grant, 'hindsight memory engine'), /names none of them; pass repository \(one of: agent-studio, agentwatch, enterpriseai-be, vector-center\)/);
+  assert.match(await fresh.ask(grant, 'why?'), /pass repository/);
+  assert.equal(s.calls.filter(c => c.op === 'search' || c.op === 'ask').length, 0, 'nothing is sent to a guessed repository');
+  assert.equal(await fresh.search(grant, 'rollback', undefined, 'vector-center'), 'HIT github.com/acme/vector-center');
+  assert.equal(await fresh.search(grant, 'and the backup?'), 'HIT github.com/acme/vector-center');
+});
