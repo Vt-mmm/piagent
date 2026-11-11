@@ -25,7 +25,7 @@ import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut,
 import { HELPER_CALLS, HELPER_ROLES, ROLE_NAMES, callName, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
-import { alwaysBypass, restorePermission, recordBypass, permissionSetter } from './permission.mjs';
+import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs';
 import { commandTools, hostBash, servicesPrompt, unsandboxedBash } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
@@ -168,6 +168,7 @@ export class ManagedSession {
     self.turnRetry = enableCompanyTurnRetry(self.session, settings, self.studioLink);
     // The member's access for this conversation: Ask first, Full access or Bypass (permission.mjs).
     self.permission = restorePermission(manager); recordBypass(self, manager); self.session.managedSetPermission = permissionSetter(self, manager); self.boundary.unsandboxed = () => alwaysBypass(self);
+    self.commitAsk = restoreCommitAsk(manager); self.session.managedSetCommitAsk = commitAskSetter(self, manager); self.session.managedCommitAsk = () => self.commitAsk !== false;
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
     self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null where the Harness does not allow it
     self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };

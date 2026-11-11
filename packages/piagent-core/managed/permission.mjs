@@ -48,12 +48,22 @@ export function recordBypass(owner, manager) {
 // (everything but the handoff).
 export const asksOnlyHandoff = owner => effectivePermission(owner) === 'bypass';
 export const alwaysBypass = owner => effectivePermission(owner) === 'always-bypass';
+// Always bypass asks before a commit until the member turns that off for this
+// conversation (/commit-ask off, owner 2026-11-11); a push, a merge and an rm on
+// a critical path are asked still, and the other modes never read it.
+const COMMIT_ASK = 'agent-watch-commit-ask';
+export const restoreCommitAsk = manager => manager.getEntries().filter(e => e.type === 'custom' && e.customType === COMMIT_ASK).at(-1)?.data?.ask !== false;
+export const commitAskSetter = (owner, manager) => ask => {
+  if ((owner.commitAsk !== false) === (ask !== false)) return false;
+  manager.appendCustomEntry(COMMIT_ASK, { ask: ask !== false, at: new Date().toISOString() }); owner.commitAsk = ask !== false; return true;
+};
+export const asksCommit = owner => owner.commitAsk !== false;
 export const broadAccess = owner => ['trusted-full-access', 'bypass', 'always-bypass'].includes(effectivePermission(owner));
 // Why a command that leaves the sandbox must be asked about: the reason, or
 // 'ask' in Ask first, or null to run it. Every mode asks about the handoff.
 export const networkConfirmation = async (owner, command) => {
   const mode = effectivePermission(owner);
-  if (mode === 'always-bypass') return criticalRemovalReason(command, { cwd: owner.cwd ?? process.cwd(), home: owner.boundary?.userHome ?? os.homedir() }) ?? codeHandoffReason(command);
+  if (mode === 'always-bypass') return criticalRemovalReason(command, { cwd: owner.cwd ?? process.cwd(), home: owner.boundary?.userHome ?? os.homedir() }) ?? codeHandoffReason(command, { commit: asksCommit(owner) });
   if (mode === 'bypass') return handoffReason(command);
   if (mode === 'trusted-full-access') return mustConfirm(command);
   return 'ask';

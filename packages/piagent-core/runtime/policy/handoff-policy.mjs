@@ -92,19 +92,21 @@ function segmentHandoff(words) {
 }
 
 // What Always bypass still asks (owner, 2026-11-02): committing and pushing
-// code, and a merge, which pushes it on the server. The reason, or null.
-function segmentCode(words) {
+// code, and a merge, which pushes it on the server. The reason, or null. A
+// member may stop the commit question for their conversation (commit: false,
+// owner 2026-11-11); a push and a merge are asked still.
+function segmentCode(words, commit = true) {
   const [name, ...args] = executable(words), sub = positional(args);
   if (name === 'gh') return sub[0] === 'pr' && sub[1] === 'merge' ? 'gh pr merge pushes code' : null;
   if (name !== 'git') return null;
   if (words.some((word, index) => (word === '-c' && /^alias\./i.test(words[index + 1] ?? '')) || /^-calias\./i.test(word))) return 'git runs an alias defined in the command';
-  if (sub[0] === 'commit') return 'git commit records code';
+  if (sub[0] === 'commit') return commit ? 'git commit records code' : null;
   if (sub[0] === 'push' || (['subtree', 'lfs'].includes(sub[0]) && sub[1] === 'push')) return 'git push sends code to a remote';
   return null;
 }
-export function codeHandoffReason(command) {
+export function codeHandoffReason(command, { commit = true } = {}) {
   for (const segment of [...parse(command).segments, ...treeFindings(command)]) {
-    const reason = segmentCode(segment.words);
+    const reason = segmentCode(segment.words, commit);
     if (reason) return reason;
   }
   return null;
