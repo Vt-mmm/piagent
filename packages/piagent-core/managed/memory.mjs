@@ -11,6 +11,7 @@ import { CLIENT_AGENT } from './client-agent.mjs'; import { knownCapabilities, r
 import { redactedText } from '../runtime/managed-failure.mjs';
 import { git, repoKey, repositoryAt, findRepositories, topDirs, eventFor, commitChanges } from './memory-repos.mjs';
 import { PAGE_NAMES, renewer, memoryTools } from './memory-tools.mjs';
+import { aboutRepos, pickRepo, unnamedText, workedRepos } from './memory-repo-choice.mjs';
 
 export { git, repoKey, repositoryAt, findRepositories, PAGE_NAMES, renewer, memoryTools };
 
@@ -174,40 +175,6 @@ export class TeamMemory {
     if (this.speaks >= PROTOCOL) { const context = await this.#context(repo, signal).catch(() => ({})); if (Object.keys(context).length) body.context = context; }
     return body;
   }
-  // The repositories a question or a round is about, when the folder holds
-  // several: those it names (by folder or repository name, "Vector Center"
-  // as well as "vector-center"), else all of them when they are few (a front
-  // and a back end). In a folder of many, the one this conversation worked
-  // in last, else none: taking the first few by name filed rounds and
-  // searches under repositories they were not about.
-  #about(text, max = MAX_ROUND_REPOS) {
-    const repos = this.repos ?? [];
-    if (repos.length <= 1) return repos;
-    const named = this.#named(text);
-    if (named.length) return named.slice(0, max);
-    if (repos.length <= max) return repos;
-    const last = repos.find(r => r.key === this.recent.at(-1));
-    return last ? [last] : [];
-  }
-  #named(text) {
-    const words = s => ` ${String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
-    const t = words(text);
-    return (this.repos ?? []).filter(r => [r.name, r.key.split('/').at(-1)].some(n => n && words(n).trim() && t.includes(words(n))));
-  }
-  #worked(repos) {
-    for (const r of repos) { this.recent = this.recent.filter(k => k !== r.key); this.recent.push(r.key); }
-  }
-  // A folder of many repositories and a question that names none of them.
-  #unnamed() {
-    return `This folder holds several repositories and the question names none of them; pass repository (one of: ${this.repos.map(r => r.name || r.key).join(', ')}).`;
-  }
-  #pick(repository) {
-    const repos = this.repos ?? [];
-    if (!repository) return null;
-    const want = String(repository).toLowerCase().replace(/\/+$/, '');
-    return repos.find(r => r.name.toLowerCase() === want || r.key === want || r.key.split('/').at(-1) === want) ?? null;
-  }
-
   // A folder memory cannot use is told to Studio once, so its admins can see
   // it; only where Studio has answered memory on this Mac (a member of a team
   // without memory sends nothing it does not need).
@@ -283,7 +250,7 @@ export class TeamMemory {
   }
 
   // The repositories a round goes to: those its changed files are in, else
-  // else those #about finds (named, worked in, or all when few), at most
+  // else those aboutRepos finds (named, worked in, or all when few), at most
   // three. None: the round is not written anywhere rather than guessed.
   #targets(changedFiles, messages) {
     const repos = this.repos ?? [];
@@ -292,7 +259,7 @@ export class TeamMemory {
     if (touched.length) return touched.slice(0, MAX_ROUND_REPOS);
     // Named in what the member and the agent wrote, not in tool output (a
     // folder listing names every repository).
-    return this.#about(messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => textOf(m.content)).join('\n'));
+    return aboutRepos(this.repos, this.recent, messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => textOf(m.content)).join('\n'), MAX_ROUND_REPOS);
   }
 
   // Persist before sending. The same event ID and source identity survive
@@ -303,7 +270,7 @@ export class TeamMemory {
     if (!grant || !this.active || !this.retain || !(await this.repositories()).length) return;
     const targets = this.#targets(changedFiles ?? [], messages);
     this.lastTargets = targets;
-    this.#worked(targets);
+    this.recent = workedRepos(this.recent, targets);
     if (!targets.length) return;
     const deadline = signal ? AbortSignal.any([signal, AbortSignal.timeout(WRITE_MS)]) : AbortSignal.timeout(WRITE_MS);
     const several = (this.repos ?? []).length > 1;
@@ -393,11 +360,11 @@ export class TeamMemory {
 
   async search(grant, query, renew, repository) {
     if (!grant || !(await this.repositories()).length) return this.#none();
-    const picked = repository ? this.#pick(repository) : null;
+    const picked = repository ? pickRepo(this.repos, repository) : null;
     if (repository && !picked && this.repos.length > 1) return this.#none(repository);
-    const repos = picked ? [picked] : this.#about(query);
-    if (!repos.length) return this.#unnamed();
-    if (picked) this.#worked(repos);
+    const repos = picked ? [picked] : aboutRepos(this.repos, this.recent, query, MAX_ROUND_REPOS);
+    if (!repos.length) return unnamedText(this.repos);
+    if (picked) this.recent = workedRepos(this.recent, repos);
     this.count(renew?.role && renew.role !== 'main' ? 'helper_search_calls' : 'search_calls');
     return this.#each(repos, async r => {
       try { const answer = await this.#post(grant, 'search', await this.#body(r, { query }), TOOL_MS, renew ?? this.renew); this.serves.add(r.key, answer?.serve_id); return answer?.text ?? 'Team memory is off for this team.'; }
@@ -406,7 +373,7 @@ export class TeamMemory {
   }
   async page(grant, name, renew, repository) {
     if (!grant || !(await this.repositories()).length) return this.#none();
-    const picked = repository ? this.#pick(repository) : this.repos[0];
+    const picked = repository ? pickRepo(this.repos, repository) : this.repos[0];
     if (!picked) return this.#none(repository);
     this.count('page_calls');
     try {
@@ -417,11 +384,11 @@ export class TeamMemory {
   // memory_ask: one synthesized answer with its sources (Studio protocol 3).
   async ask(grant, question, renew, repository) {
     if (!grant || !(await this.repositories()).length) return this.#none();
-    const picked = repository ? this.#pick(repository) : null;
+    const picked = repository ? pickRepo(this.repos, repository) : null;
     if (repository && !picked && this.repos.length > 1) return this.#none(repository);
-    const repos = picked ? [picked] : this.#about(question, 2);
-    if (!repos.length) return this.#unnamed();
-    if (picked) this.#worked(repos);
+    const repos = picked ? [picked] : aboutRepos(this.repos, this.recent, question, 2);
+    if (!repos.length) return unnamedText(this.repos);
+    if (picked) this.recent = workedRepos(this.recent, repos);
     this.count(renew?.role && renew.role !== 'main' ? 'helper_ask_calls' : 'ask_calls');
     return this.#each(repos, async r => {
       try {
