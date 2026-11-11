@@ -18,7 +18,7 @@ export const renewer = (owner, role, verify) => {
   renew.lease = lease; renew.role = role; return renew;
 };
 export function memoryTools(self, { pages = true, ask = false, grant = () => self.grant, renew } = {}) {
-  const repository = { type: 'string', maxLength: 200, description: 'Only in a folder that holds several repositories: the repository\'s folder name. Leave it out to use the ones the question is about.' };
+  const repository = { type: 'string', maxLength: 200, description: 'Only in a folder that holds several repositories: the repository\'s folder name. Leave it out to use the ones the question names; in a folder of many, the one this conversation works in.' };
   const tools = [{ name: 'memory_search', label: 'Team memory',
     description: 'Search the team memory of this repository: the team rules, decisions and conventions from the team\'s earlier conversations and commits, and its knowledge pages. Use it before asking the member something the team may already have settled. Team rules always apply and override recalled notes. Notes are a record of the past: check them against the code; "claim, unverified" means an agent said it worked without a passing check, "stale" that its files changed since.',
     parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 2000 }, repository }, required: ['query'], additionalProperties: false },
