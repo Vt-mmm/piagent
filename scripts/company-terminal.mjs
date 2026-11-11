@@ -16,6 +16,7 @@ import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs'
 import { bypassAllowed, effectivePermission } from '../packages/piagent-core/managed/permission.mjs';
 import { memoryOn } from '../packages/piagent-core/managed/memory.mjs';
 import { currentPlan, unfinished } from '../packages/piagent-core/managed/workflow.mjs';
+import { fitPrompt, planPanelLines, promptRows } from './company-terminal-fit.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
 import { turnEndCopy, turnEndOf } from '../packages/piagent-webui/shared/turn-end.ts';
@@ -150,9 +151,10 @@ export function planLines(plan) {
 }
 
 // The panel above the input while a turn works: the checklist while a step
-// is open, and each subagent running now with its job and latest step.
+// is open (at most 6 lines, so a question under it keeps its answers on
+// screen), and each subagent running now with its job and latest step.
 export function planWidget(plan) {
-  return unfinished(plan) ? planLines(plan.plan) : undefined;
+  return unfinished(plan) ? planPanelLines(plan.plan) : undefined;
 }
 export function helperLines(helpers) {
   const list = Array.isArray(helpers) ? helpers.filter((h) => typeof h?.role === 'string') : [];
@@ -243,9 +245,9 @@ export async function companyToolRenderers(sdkRoot) {
 // for either, so the few it must not run are answered here.
 export async function companyInteractiveMode(api, { sdkRoot, packageRoot, summary = () => ({}) }) {
   const require = createRequire(path.join(sdkRoot, 'package.json'));
-  const { Markdown, Spacer } = await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href);
+  const { Markdown, Spacer, visibleWidth } = await import(pathToFileURL(require.resolve('@earendil-works/pi-tui')).href);
   const changelog = () => { try { return fs.readFileSync(path.join(packageRoot, 'CHANGELOG.md'), 'utf8'); } catch { return ''; } };
-  return companyMode(api.InteractiveMode, { summary, whatsNew: () => whatsNewMarkdown(changelog()), components: { Markdown, Spacer, DynamicBorder: api.DynamicBorder } });
+  return companyMode(api.InteractiveMode, { summary, whatsNew: () => whatsNewMarkdown(changelog()), components: { Markdown, Spacer, DynamicBorder: api.DynamicBorder, visibleWidth } });
 }
 // Pi's own warnings, as the company Terminal says them: the crash notice
 // without /bug, and no model id ("Could not restore model p/id").
@@ -259,6 +261,15 @@ export function companyWarning(message) {
 export function companyMode(Base, { summary, whatsNew, components }) {
   const say = (mode, name, tone = 'warning') => mode.showExtensionNotify(companyCommandText(name, summary()), tone);
   return class CompanyInteractiveMode extends Base {
+    // Every question and approval takes the input's place with its whole text
+    // as the title: cut to the window, its answers stay on screen.
+    showExtensionSelector(title, options, opts, blocked) {
+      const terminal = this.ui?.terminal, text = String(title ?? '');
+      const fitted = terminal?.rows > 0 && terminal?.columns > 0
+        ? fitPrompt(text, { rows: promptRows(terminal.rows, options?.length ?? 2), width: terminal.columns - 2, measure: components.visibleWidth ?? ((s) => s.length) })
+        : text;
+      return super.showExtensionSelector(fitted, options, opts, blocked ?? { kind: 'question', message: text });
+    }
     async handleShareCommand() { say(this, 'share'); }
     // Pi's own shutdown without its process.exit: the Terminal is restored and
     // the session closed, then piagent-studio.mjs hands over to the new release.
