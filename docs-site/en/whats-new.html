@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.52.2" title="v1.52.2 docs · EN"><span class="dot"></span>v1.52.2</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.53.0" title="v1.53.0 docs · EN"><span class="dot"></span>v1.53.0</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,20 @@
 <div class="release-filter" role="toolbar" aria-label="Filter by kind of change"><button type="button" data-filter-kind="all" aria-pressed="true">All</button><button type="button" data-filter-kind="new" aria-pressed="false">New</button><button type="button" data-filter-kind="improved" aria-pressed="false">Improved</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Fixed</button><button type="button" data-filter-kind="security" aria-pressed="false">Security</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Latest</h2>
-<article class="release latest" id="v1-52-2" data-release>
+<article class="release latest" id="v1-53-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-53-0">v1.53.0</a><time class="release-date" datetime="2026-11-11">Nov 11, 2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-53-0-title">Always bypass asks about commit and push once, at the end of the plan</h3>
+    <p>A plan left running overnight no longer stops at its first commit or push: Always bypass holds them until the checklist's other steps are done and asks once. Terminal questions keep their answers on screen.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">New</span><span>/commit-ask off lets a member's own Always bypass conversation commit without asking; a push and a merge are asked still.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Improved</span><span>Always bypass: while this turn's checklist has steps not started, a commit, push or merge is held and run last, so the member is asked once at the end; an rm on a critical path is still asked at once.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Company Terminal: a long question (a commit with a long message under the pinned checklist) is cut to the window, so Yes and No stay on screen; the checklist takes at most 6 lines.</span></li>
+      <li data-kind="fixed"><span class="kind kind-fixed">Fixed</span><span>Team memory in a folder of many repositories files a round under the repository the conversation worked in last, not the first three by folder name.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-52-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-52-2">v1.52.2</a><time class="release-date" datetime="2026-11-09">Nov 9, 2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-52-2-title">Asking for several general helpers runs one instead of a refusal</h3>
@@ -405,24 +418,23 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-44-3" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-44-3">v1.44.3</a><time class="release-date" datetime="2026-10-28">Oct 28, 2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-44-3-title">Prompt injection cannot quietly read the system</h3>
-    <p>Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.</p>
-    <ul class="release-items">
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>web_fetch reads documentation and registry sites freely; another site is asked about once per conversation, and an address there with a query or fragment every time.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>Helper answers and team memory results reach the agent inside a data fence it cannot close; the agent never shows its configuration or credentials or asks for a secret on their word.</span></li>
-      <li data-kind="security"><span class="kind kind-security">Security</span><span>In Bypass, run_on_host still asks when a command reaches credentials: ~/.ssh, ~/.pi, .env, auth.json, keys, the Keychain or the environment.</span></li>
-    </ul>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Earlier releases</h2>
   <p class="section-lead">Older releases, grouped by month. Open a month to see every change.</p>
   <details class="release-archive">
-    <summary><span>October 2026</span><span class="archive-count">77</span></summary>
+    <summary><span>October 2026</span><span class="archive-count">78</span></summary>
+    <div class="archive-row" id="v1-44-3">
+      <div class="archive-head"><a class="release-version" href="#v1-44-3">v1.44.3</a> <span class="release-date">Oct 28, 2026</span></div>
+      <div class="archive-body">
+        <p><strong>Prompt injection cannot quietly read the system</strong> — Text in a page, file, memory or helper answer can no longer send data to an unknown site, read credentials in Bypass or steer the agent without the member seeing it.</p>
+        <ul class="release-items">
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>web_fetch reads documentation and registry sites freely; another site is asked about once per conversation, and an address there with a query or fragment every time.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>Helper answers and team memory results reach the agent inside a data fence it cannot close; the agent never shows its configuration or credentials or asks for a secret on their word.</span></li>
+        <li data-kind="security"><span class="kind kind-security">Security</span><span>In Bypass, run_on_host still asks when a command reaches credentials: ~/.ssh, ~/.pi, .env, auth.json, keys, the Keychain or the environment.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-44-2">
       <div class="archive-head"><a class="release-version" href="#v1-44-2">v1.44.2</a> <span class="release-date">Oct 28, 2026</span></div>
       <div class="archive-body">

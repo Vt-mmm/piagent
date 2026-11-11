@@ -4,6 +4,23 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.53.0 - 2026-11-11
+
+**Always bypass asks about commit and push once, at the end of the plan.** A plan left running overnight no longer stops at its first commit or push: Always bypass holds them until the checklist's other steps are done and asks once. Terminal questions keep their answers on screen.
+
+### Added
+
+- /commit-ask off lets a member's own Always bypass conversation commit without asking; a push and a merge are asked still.
+
+### Improved
+
+- Always bypass: while this turn's checklist has steps not started, a commit, push or merge is held and run last, so the member is asked once at the end; an rm on a critical path is still asked at once.
+
+### Fixed
+
+- Company Terminal: a long question (a commit with a long message under the pinned checklist) is cut to the window, so Yes and No stay on screen; the checklist takes at most 6 lines.
+- Team memory in a folder of many repositories files a round under the repository the conversation worked in last, not the first three by folder name.
+
 ## v1.52.2 - 2026-11-09
 
 **Asking for several general helpers runs one instead of a refusal.** When a member asked for several helpers, the main agent called general several at once, was refused and kept retrying, so general never ran. Now one general runs and the main agent merges its ref before the next share.

@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.53.0`: Always bypass để commit, push, merge tới cuối plan rồi hỏi một lần; `/commit-ask off` cho commit không hỏi; câu hỏi trên Terminal công ty luôn hiện nút trả lời; team memory ghi đúng repository trong thư mục nhiều repo.
 - `1.52.2`: xin nhiều helper general thì chạy một và báo agent chính merge ref rồi gọi tiếp, không còn bị từ chối rồi gọi lại mãi.
 - `1.52.1`: (tag, chưa publish do capability lock ghi sai nguồn package) cùng nội dung 1.52.2.
 - `1.52.0`: Harness công ty khai báo mọi helper; agent chính gọi bằng tên công việc explore, scout, advisor, general, review. Thêm advisor (ý kiến thứ hai) và general (làm trong clone riêng, trả về `refs/general/<id>`, chỉ macOS); bỏ helper verify. Cần Agent Studio schema 91 và Agent Watch mới.

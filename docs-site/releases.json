@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.53.0",
+    "date": "2026-11-11",
+    "status": "stable",
+    "title": {
+      "en": "Always bypass asks about commit and push once, at the end of the plan",
+      "vi": "Always bypass hỏi commit và push một lần, ở cuối plan"
+    },
+    "summary": {
+      "en": "A plan left running overnight no longer stops at its first commit or push: Always bypass holds them until the checklist's other steps are done and asks once. Terminal questions keep their answers on screen.",
+      "vi": "Plan treo qua đêm không còn dừng ở commit hay push đầu tiên: Always bypass để chúng tới khi các bước khác của checklist xong rồi hỏi một lần. Câu hỏi trên Terminal luôn hiện nút trả lời."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "improved",
+        "en": "Always bypass: while this turn's checklist has steps not started, a commit, push or merge is held and run last, so the member is asked once at the end; an rm on a critical path is still asked at once.",
+        "vi": "Always bypass: khi checklist của lượt còn bước chưa làm, commit, push, merge được để chạy sau cùng, member chỉ bị hỏi một lần ở cuối; rm đường dẫn quan trọng vẫn hỏi ngay."
+      },
+      {
+        "kind": "new",
+        "en": "/commit-ask off lets a member's own Always bypass conversation commit without asking; a push and a merge are asked still.",
+        "vi": "/commit-ask off cho cuộc trò chuyện Always bypass của member commit không cần hỏi; push và merge vẫn hỏi."
+      },
+      {
+        "kind": "fixed",
+        "en": "Company Terminal: a long question (a commit with a long message under the pinned checklist) is cut to the window, so Yes and No stay on screen; the checklist takes at most 6 lines.",
+        "vi": "Terminal công ty: câu hỏi dài (commit có message dài dưới checklist ghim) được rút gọn theo cửa sổ nên luôn thấy Yes và No; checklist chiếm tối đa 6 dòng."
+      },
+      {
+        "kind": "fixed",
+        "en": "Team memory in a folder of many repositories files a round under the repository the conversation worked in last, not the first three by folder name.",
+        "vi": "Team memory trong thư mục có nhiều repository ghi mỗi lượt vào repository cuộc trò chuyện làm gần nhất, không còn dồn vào ba repository đầu theo tên thư mục."
+      }
+    ]
+  },
+  {
     "version": "1.52.2",
     "date": "2026-11-09",
     "status": "stable",
