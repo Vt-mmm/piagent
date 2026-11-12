@@ -4,6 +4,15 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.53.1 - 2026-11-12
+
+**A long conversation at xhigh is summarised instead of stopping at the token cap.** Summaries of a long company conversation no longer fail with "generation hit the token cap": they think at medium at most and may write twice as much.
+
+### Fixed
+
+- Company conversations: a summary thinks at medium at most and may write 26k tokens (was 13k at the conversation level), so Claude at xhigh no longer spends it all thinking. The conversation keeps its level.
+- A history summarised in parts reads Pi 1.3.0 arguments in the right places: stopping it works again and the summary is no longer told to focus on the word "threshold".
+
 ## v1.53.0 - 2026-11-11
 
 **Always bypass asks about commit and push once, at the end of the plan.** A plan left running overnight no longer stops at its first commit or push: Always bypass holds them until the checklist's other steps are done and asks once. Terminal questions keep their answers on screen.

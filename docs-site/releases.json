@@ -1,5 +1,31 @@
 [
   {
+    "version": "1.53.1",
+    "date": "2026-11-12",
+    "status": "stable",
+    "title": {
+      "en": "A long conversation at xhigh is summarised instead of stopping at the token cap",
+      "vi": "Cuộc trò chuyện dài ở mức xhigh được tóm tắt, không còn dừng vì hết token cap"
+    },
+    "summary": {
+      "en": "Summaries of a long company conversation no longer fail with \"generation hit the token cap\": they think at medium at most and may write twice as much.",
+      "vi": "Tóm tắt cuộc trò chuyện công ty dài không còn lỗi \"generation hit the token cap\": phần tóm tắt nghĩ tối đa ở mức medium và được viết dài gấp đôi."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "Company conversations: a summary thinks at medium at most and may write 26k tokens (was 13k at the conversation level), so Claude at xhigh no longer spends it all thinking. The conversation keeps its level.",
+        "vi": "Cuộc trò chuyện công ty: phần tóm tắt nghĩ tối đa ở mức medium và được viết 26k token (trước là 13k theo mức của cuộc trò chuyện), nên Claude ở xhigh không còn nghĩ hết ngân sách. Cuộc trò chuyện giữ nguyên mức."
+      },
+      {
+        "kind": "fixed",
+        "en": "A history summarised in parts reads Pi 1.3.0 arguments in the right places: stopping it works again and the summary is no longer told to focus on the word \"threshold\".",
+        "vi": "Lịch sử tóm tắt theo từng phần đọc đúng tham số của Pi 1.3.0: bấm dừng có tác dụng trở lại và phần tóm tắt không còn bị dặn tập trung vào chữ \"threshold\"."
+      }
+    ]
+  },
+  {
     "version": "1.53.0",
     "date": "2026-11-11",
     "status": "stable",

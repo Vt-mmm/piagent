@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:f08bbbfd82f8bef5760599c3330bb69fb57a66748c2f55f105808656fd100042",
+    "packageDigest": "sha256:5e2094f9818dede64fd65cf0922e44dcc1988962592229741ff0172100616e5b",
     "packageSource": "../",
-    "packageVersion": "1.53.0",
+    "packageVersion": "1.53.1",
     "runtimeFiles": [
       {
         "byteSize": 7157,
-        "digest": "sha256:b3c1bfa61934f8b5ad963afcc158703ed05efac3c68f5f5eec33b22106b8ac41",
+        "digest": "sha256:af5387b5135201cfcc355c1543b4c44c4a50b34e4ac0ce8d33eb4450d11467e7",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:8de0919a4e2c4223de45536ab59757cc57bf3c50607d1e254325a3b74883e679",
+        "digest": "sha256:127772b96873c5a888910296ac8bd25e4c53d82254fc8b55035d062c244a2915",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1273,8 +1273,8 @@
         "path": "packages/piagent-core/managed/command-tools.mjs"
       },
       {
-        "byteSize": 10234,
-        "digest": "sha256:0be4337f7f09307bbdd3f5df9d5187bf212a68f09f12ad0258355465c81aa7ee",
+        "byteSize": 11441,
+        "digest": "sha256:7c80a18eb7eeeb86ee7ed433ec58eb147e29058cd78d00496bc964c185fe8db0",
         "path": "packages/piagent-core/managed/compaction.mjs"
       },
       {
@@ -1398,6 +1398,11 @@
         "path": "packages/piagent-core/managed/memory-outbox.mjs"
       },
       {
+        "byteSize": 1948,
+        "digest": "sha256:9c9602c23164e926d722b263cfb932784d6a7296e14f01e6bc5c3d2bc29a2d54",
+        "path": "packages/piagent-core/managed/memory-repo-choice.mjs"
+      },
+      {
         "byteSize": 6102,
         "digest": "sha256:efb86e9d5390ecefb8862e3f90eb3862e536e097b5043e59e59a115f0a339b14",
         "path": "packages/piagent-core/managed/memory-repos.mjs"
@@ -1413,8 +1418,8 @@
         "path": "packages/piagent-core/managed/memory-tools.mjs"
       },
       {
-        "byteSize": 36221,
-        "digest": "sha256:e6d99209a0c66b69252bb254a0315de0458a62e793978469dd1900cb402b8ec2",
+        "byteSize": 34804,
+        "digest": "sha256:79e2408a46d6afcd30b58b3aeb1b709af0b8fa436e5259598f28e0528dc7a11d",
         "path": "packages/piagent-core/managed/memory.mjs"
       },
       {
@@ -1684,7 +1689,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:8de0919a4e2c4223de45536ab59757cc57bf3c50607d1e254325a3b74883e679",
+        "digest": "sha256:127772b96873c5a888910296ac8bd25e4c53d82254fc8b55035d062c244a2915",
         "path": "packages/piagent-core/package.json"
       },
       {
