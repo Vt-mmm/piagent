@@ -25,8 +25,19 @@ function addUsage(a, b) {
 // tokens per step (GPT doubles its price above 272k) and answers worse.
 // Summarise at 90% of the window, and never later than 300k tokens.
 export const COMPACT_SHARE = 0.9, COMPACT_CEILING_TOKENS = 300_000;
-// Pi's own reserve: the summary may write up to 80% of it.
+// Pi's own reserve: the trigger keeps it free below the window.
 export const SUMMARY_RESERVE_TOKENS = 16_384;
+// What a summary may write (Pi allows 80% of the reserve it is given), its
+// thinking included. Pi's 16k reserve gave 13k: a 300k-token conversation on
+// Claude at xhigh spent it all thinking and stopped at the cap ("generation
+// hit the token cap"), six times in a row on 2026-11-12. The summary gets 32k
+// and thinks at medium at most; the conversation itself keeps its level.
+export const SUMMARY_OUTPUT_RESERVE_TOKENS = 32_768, SUMMARY_THINKING_CAP = 'medium';
+const THINKING_ORDER = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+export function summaryThinking(level) {
+  const at = THINKING_ORDER.indexOf(level), cap = THINKING_ORDER.indexOf(SUMMARY_THINKING_CAP);
+  return at > cap ? SUMMARY_THINKING_CAP : level;
+}
 export function compactionTrigger(contextWindow) {
   return Math.min(Math.floor(contextWindow * COMPACT_SHARE), contextWindow - SUMMARY_RESERVE_TOKENS, COMPACT_CEILING_TOKENS);
 }
@@ -68,23 +79,30 @@ export function backOffFailedCompaction(session, now = Date.now) {
 // shrink again. Such a history is summarised in parts that fit, each part
 // updating the summary of the parts before.
 export async function stageCompaction(session, api, sdk) {
-  const whole = session._runDefaultCompaction?.bind(session);
-  if (!whole || !session._summarizationRetryCallbacks) throw Error('managed-sdk-version-unqualified');
+  const whole = session._runDefaultCompaction?.bind(session), auth = session._getSummarizationRequestAuth?.bind(session);
+  if (!whole || !auth || !session._summarizationRetryCallbacks) throw Error('managed-sdk-version-unqualified');
+  // Every summary Pi asks for itself (compaction, branch summary) thinks at
+  // the capped level.
+  session._getSummarizationRequestAuth = async (...args) => {
+    const request = await auth(...args);
+    return { ...request, thinkingLevel: summaryThinking(request.thinkingLevel) };
+  };
   const { computeFileLists, formatFileOperations } = await import(pathToFileURL(path.join(sdk, 'dist/core/compaction/utils.js')));
   // An unfinished plan is kept word for word: the summary would lose its steps.
   const withPlan = result => {
     const plan = currentPlan(session.sessionManager);
     return unfinished(plan) ? { ...result, summary: `${result.summary}\n\nCurrent plan (kept verbatim; keep it up to date with update_plan):\n${planText(plan)}` } : result;
   };
-  session._runDefaultCompaction = async (preparation, model, apiKey, headers, instructions, signal, env, reason) => {
+  // Pi 1.3.0 resolves the request (key, headers, env) inside the call.
+  session._runDefaultCompaction = async (preparation, model, instructions, signal, reason) => {
     // The reserve that set the trigger is not the summary's budget.
-    const settings = { ...preparation.settings, reserveTokens: Math.min(preparation.settings.reserveTokens, SUMMARY_RESERVE_TOKENS) };
+    const settings = { ...preparation.settings, reserveTokens: SUMMARY_OUTPUT_RESERVE_TOKENS };
     preparation = { ...preparation, settings };
     const { previousSummary } = preparation, room = model.contextWindow - settings.reserveTokens;
     const history = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
     const size = history.reduce((n, m) => n + api.estimateTokens(m), 0) + Math.ceil((previousSummary?.length ?? 0) / 4);
     if (size + 4096 <= room) {
-      try { return withPlan(await whole(preparation, model, apiKey, headers, instructions, signal, env, reason)); }
+      try { return withPlan(await whole(preparation, model, instructions, signal, reason)); }
       // Token estimates are rough, and Studio takes at most 4 MiB per body:
       // a single request refused as too large is retried in parts.
       catch (error) { if (signal?.aborted || !['upstream_request_rejected', 'request_too_large'].includes(failureCode(error?.message))) throw error; }
@@ -98,9 +116,10 @@ export async function stageCompaction(session, api, sdk) {
       else parts.push({ messages: [fitted], tokens });
     }
     let summary = previousSummary, usage;
+    const request = await session._getSummarizationRequestAuth(model, signal);
     for (const part of parts) {
-      const result = await api.generateSummaryWithUsage(part.messages, model, settings.reserveTokens, apiKey, headers, signal, instructions, summary,
-        session.thinkingLevel, session.agent.streamFunction, env, session.settingsManager.getRetrySettings(), session._summarizationRetryCallbacks({ source: 'compaction', reason }), undefined);
+      const result = await api.generateSummaryWithUsage(part.messages, request.model, settings.reserveTokens, request.apiKey, request.headers, signal, instructions, summary,
+        request.thinkingLevel, session.agent.streamFunction, request.env, session.settingsManager.getRetrySettings(), session._summarizationRetryCallbacks({ source: 'compaction', reason }), undefined);
       summary = result.text; usage = usage ? addUsage(usage, result.usage) : result.usage;
     }
     const { readFiles, modifiedFiles } = computeFileLists(preparation.fileOps);

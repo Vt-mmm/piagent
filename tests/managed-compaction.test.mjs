@@ -6,7 +6,7 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { boundRequestImages, backOffFailedCompaction, compactEarly, compactionTrigger } from '../packages/piagent-core/managed/compaction.mjs';
+import { boundRequestImages, backOffFailedCompaction, compactEarly, compactionTrigger, summaryThinking, SUMMARY_OUTPUT_RESERVE_TOKENS } from '../packages/piagent-core/managed/compaction.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Long tasks: a company conversation shrinks by summary before it outgrows the
@@ -29,7 +29,7 @@ async function studio(perToken = 4) {
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8'), body = JSON.parse(raw), tokens = Math.ceil(raw.length / perToken);
-    const summary = SUMMARY.test(raw), n = requests.push({ model: body.model, tokens, summary, previous: raw.includes('<previous-summary>'), raw: summary ? raw : null,
+    const summary = SUMMARY.test(raw), n = requests.push({ model: body.model, tokens, summary, cap: body.max_tokens ?? body.max_output_tokens, xhigh: raw.includes('"xhigh"'), previous: raw.includes('<previous-summary>'), raw: summary ? raw : null,
       compaction: req.headers['x-agent-compaction'], compacted: req.headers['x-agent-compacted'] });
     if (raw.length > 4 << 20) {
       requests[n - 1].refused = 'studio';
@@ -67,7 +67,7 @@ async function studio(perToken = 4) {
 }
 
 const MODELS = { sonnet: { id: 'claude-sonnet-5-5', provider_model_id: 'claude-sonnet-5-5', owned_by: 'claude' }, sol: { id: 'gpt-6-sol', provider_model_id: 'gpt-6-sol', owned_by: 'codex' } };
-function broker(authority, main, revision = 'r1') {
+function broker(authority, main, revision = 'r1', effort = 'medium') {
   const calls = [], role = randomUUID(); let fence = 0;
   return { calls, async request(action) {
     calls.push(action);
@@ -76,7 +76,7 @@ function broker(authority, main, revision = 'r1') {
     if (action === 'close') return true;
     const model = MODELS[main];
     return { ...authority, run_id: randomUUID(), role_id: role, role: 'main', fence: ++fence, provider: model.owned_by, model_id: model.id, provider_model_id: model.provider_model_id,
-      effort: 'medium', token: `as_run_${role}_${'x'.repeat(43)}` };
+      effort, token: `as_run_${role}_${'x'.repeat(43)}` };
   }, async dispose() {} };
 }
 const authorityOf = () => ({ studio_instance_id: randomUUID(), dataset_epoch: randomUUID(), auth_generation: 1 });
@@ -227,6 +227,29 @@ test('a 1M-token window is summarised at 300k, not when nearly full', { skip: !s
     assert.ok(server.requests.at(-1).tokens < 150000, 'the older part is now a summary');
     assert.equal(answers(managed).at(-1).stopReason, 'stop');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a summary of a conversation at xhigh thinks at medium and may write twice what Pi allows', { skip: !supported, timeout: 120000 }, async () => {
+  // 2026-11-12: Claude at xhigh spent the 13k summary budget thinking and
+  // stopped at the cap, six summaries in a row.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(), agent = broker(authorityOf(), 'sonnet', 'r1', 'xhigh');
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt(words('first', 200000));
+    await managed.session.prompt(words('second', 120000));
+    assert.equal(compactions(managed).length, 1);
+    const [summary] = server.requests.filter(request => request.summary), turns = server.requests.filter(request => !request.summary);
+    assert.ok(turns.every(request => request.xhigh), 'the conversation keeps xhigh');
+    assert.equal(summary.xhigh, false, 'the summary does not think at xhigh');
+    // Pi writes a history summary in 80% of the reserve and the start of a
+    // split turn (this one: a single long message) in 50%; both were 16k-based.
+    assert.ok([0.8, 0.5].map(share => Math.floor(share * SUMMARY_OUTPUT_RESERVE_TOKENS)).includes(summary.cap), String(summary.cap));
+    assert.equal(managed.session.thinkingLevel, 'xhigh');
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('summary thinking is capped at medium', () => {
+  assert.deepEqual(['off', 'low', 'medium', 'high', 'xhigh', 'max', undefined].map(summaryThinking), ['off', 'low', 'medium', 'medium', 'medium', 'medium', undefined]);
 });
 
 test('the trigger: 90% of the window, Pi\'s reserve kept, never past 300k', () => {
