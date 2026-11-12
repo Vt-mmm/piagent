@@ -6,7 +6,7 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { ManagedSession } from '../packages/piagent-core/managed/session.mjs';
-import { boundRequestImages, backOffFailedCompaction, compactEarly, compactionTrigger, summaryThinking, SUMMARY_OUTPUT_RESERVE_TOKENS } from '../packages/piagent-core/managed/compaction.mjs';
+import { boundRequestImages, backOffFailedCompaction, compactEarly, compactionTrigger, SUMMARY_OUTPUT_RESERVE_TOKENS } from '../packages/piagent-core/managed/compaction.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
 // Long tasks: a company conversation shrinks by summary before it outgrows the
@@ -24,13 +24,19 @@ const SUMMARY = /context summarization assistant/;
 // estimates four; Vietnamese and code are denser), report that as usage, and
 // refuse (as the connector does) a request larger than their window. Studio
 // itself refuses a body over 4 MiB.
-async function studio(perToken = 4) {
+async function studio(perToken = 4, granted) {
   const requests = [];
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8'), body = JSON.parse(raw), tokens = Math.ceil(raw.length / perToken);
     const summary = SUMMARY.test(raw), n = requests.push({ model: body.model, tokens, summary, cap: body.max_tokens ?? body.max_output_tokens, xhigh: raw.includes('"xhigh"'), previous: raw.includes('<previous-summary>'), raw: summary ? raw : null,
       compaction: req.headers['x-agent-compaction'], compacted: req.headers['x-agent-compacted'] });
+    // Studio's run grant fixes the thinking level: another one is refused.
+    if (granted && !raw.includes(`"effort":"${granted}"`)) {
+      requests[n - 1].refused = 'grant';
+      res.writeHead(401, { 'Content-Type': 'application/json', 'X-Should-Retry': 'false' });
+      res.end(JSON.stringify({ error: { code: 'invalid_run_grant', message: 'invalid_run_grant', request_id: randomUUID() } })); return;
+    }
     if (raw.length > 4 << 20) {
       requests[n - 1].refused = 'studio';
       res.writeHead(413, { 'Content-Type': 'application/json', 'X-Should-Retry': 'false' });
@@ -229,27 +235,24 @@ test('a 1M-token window is summarised at 300k, not when nearly full', { skip: !s
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('a summary of a conversation at xhigh thinks at medium and may write twice what Pi allows', { skip: !supported, timeout: 120000 }, async () => {
+test('a summary of a conversation at xhigh keeps its run\'s level and may write four times what Pi allows', { skip: !supported, timeout: 120000 }, async () => {
   // 2026-11-12: Claude at xhigh spent the 13k summary budget thinking and
-  // stopped at the cap, six summaries in a row.
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(), agent = broker(authorityOf(), 'sonnet', 'r1', 'xhigh');
+  // stopped at the cap, six summaries in a row; a summary at medium was then
+  // refused by Studio, whose run grant fixes the level.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(4, 'xhigh'), agent = broker(authorityOf(), 'sonnet', 'r1', 'xhigh');
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   try {
     await managed.session.prompt(words('first', 200000));
     await managed.session.prompt(words('second', 120000));
     assert.equal(compactions(managed).length, 1);
-    const [summary] = server.requests.filter(request => request.summary), turns = server.requests.filter(request => !request.summary);
-    assert.ok(turns.every(request => request.xhigh), 'the conversation keeps xhigh');
-    assert.equal(summary.xhigh, false, 'the summary does not think at xhigh');
+    assert.ok(server.requests.every(request => !request.refused), 'Studio admits every request');
+    const [summary] = server.requests.filter(request => request.summary);
+    assert.ok(server.requests.every(request => request.xhigh), 'the summary thinks at the grant\'s level');
     // Pi writes a history summary in 80% of the reserve and the start of a
     // split turn (this one: a single long message) in 50%; both were 16k-based.
     assert.ok([0.8, 0.5].map(share => Math.floor(share * SUMMARY_OUTPUT_RESERVE_TOKENS)).includes(summary.cap), String(summary.cap));
     assert.equal(managed.session.thinkingLevel, 'xhigh');
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
-});
-
-test('summary thinking is capped at medium', () => {
-  assert.deepEqual(['off', 'low', 'medium', 'high', 'xhigh', 'max', undefined].map(summaryThinking), ['off', 'low', 'medium', 'medium', 'medium', 'medium', undefined]);
 });
 
 test('the trigger: 90% of the window, Pi\'s reserve kept, never past 300k', () => {

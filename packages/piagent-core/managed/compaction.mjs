@@ -27,17 +27,14 @@ function addUsage(a, b) {
 export const COMPACT_SHARE = 0.9, COMPACT_CEILING_TOKENS = 300_000;
 // Pi's own reserve: the trigger keeps it free below the window.
 export const SUMMARY_RESERVE_TOKENS = 16_384;
-// What a summary may write (Pi allows 80% of the reserve it is given), its
-// thinking included. Pi's 16k reserve gave 13k: a 300k-token conversation on
-// Claude at xhigh spent it all thinking and stopped at the cap ("generation
-// hit the token cap"), six times in a row on 2026-11-12. The summary gets 32k
-// and thinks at medium at most; the conversation itself keeps its level.
-export const SUMMARY_OUTPUT_RESERVE_TOKENS = 32_768, SUMMARY_THINKING_CAP = 'medium';
-const THINKING_ORDER = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-export function summaryThinking(level) {
-  const at = THINKING_ORDER.indexOf(level), cap = THINKING_ORDER.indexOf(SUMMARY_THINKING_CAP);
-  return at > cap ? SUMMARY_THINKING_CAP : level;
-}
+// What a summary may write (Pi allows 80% of the reserve it is given, 50% for
+// the start of a split turn), its thinking included. Pi's 16k reserve gave
+// 13k: a 300k-token conversation on Claude at xhigh spent it all thinking and
+// stopped at the cap ("generation hit the token cap"), six times in a row on
+// 2026-11-12. The summary thinks at the run's own level (Studio's run grant
+// fixes it: a summary at another level is refused as invalid_run_grant), so
+// it gets room instead: 52k, 32k for a split turn.
+export const SUMMARY_OUTPUT_RESERVE_TOKENS = 65_536;
 export function compactionTrigger(contextWindow) {
   return Math.min(Math.floor(contextWindow * COMPACT_SHARE), contextWindow - SUMMARY_RESERVE_TOKENS, COMPACT_CEILING_TOKENS);
 }
@@ -79,14 +76,8 @@ export function backOffFailedCompaction(session, now = Date.now) {
 // shrink again. Such a history is summarised in parts that fit, each part
 // updating the summary of the parts before.
 export async function stageCompaction(session, api, sdk) {
-  const whole = session._runDefaultCompaction?.bind(session), auth = session._getSummarizationRequestAuth?.bind(session);
-  if (!whole || !auth || !session._summarizationRetryCallbacks) throw Error('managed-sdk-version-unqualified');
-  // Every summary Pi asks for itself (compaction, branch summary) thinks at
-  // the capped level.
-  session._getSummarizationRequestAuth = async (...args) => {
-    const request = await auth(...args);
-    return { ...request, thinkingLevel: summaryThinking(request.thinkingLevel) };
-  };
+  const whole = session._runDefaultCompaction?.bind(session);
+  if (!whole || !session._getSummarizationRequestAuth || !session._summarizationRetryCallbacks) throw Error('managed-sdk-version-unqualified');
   const { computeFileLists, formatFileOperations } = await import(pathToFileURL(path.join(sdk, 'dist/core/compaction/utils.js')));
   // An unfinished plan is kept word for word: the summary would lose its steps.
   const withPlan = result => {
@@ -109,7 +100,7 @@ export async function stageCompaction(session, api, sdk) {
     }
     // Half the window per part leaves room for dense text (Vietnamese, code),
     // the previous summary and the answer.
-    const budget = Math.max(8192, Math.floor(room / 2) - settings.reserveTokens), parts = [];
+    const budget = Math.max(8192, Math.floor(room / 2) - SUMMARY_RESERVE_TOKENS), parts = [];
     for (const message of history) {
       const fitted = clip(message, budget), tokens = api.estimateTokens(fitted), part = parts.at(-1);
       if (part && part.tokens + tokens <= budget) { part.messages.push(fitted); part.tokens += tokens; }
