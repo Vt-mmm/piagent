@@ -16,7 +16,7 @@ import { describeFailure, failureCode, failureText } from '../runtime/managed-fa
 import { enableCompanyTurnRetry, wrapRoleStreams, conversationSession } from './request-stream.mjs'; import { StudioLink, closeRun } from './studio-link.mjs';
 import { trackToolFailures } from './tool-failures.mjs'; import { fastServed, fastSetter, fastState, recordFast, restoreFast } from './fast-mode.mjs';
 import { runHelper } from './helper-run.mjs'; import { sweepGeneral } from './general-clone.mjs'; import { askTool } from './member-questions.mjs';
-import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction, boundRequestImages } from './compaction.mjs';
+import { stageCompaction, compactEarly, backOffFailedCompaction, trackCompaction, boundRequestImages } from './compaction.mjs'; import { compactInOwnRun } from './manual-compaction.mjs';
 import { readPatchDigest, readPatchSnapshot, readChangedFiles, readHead, readRepositoryHeads } from './patch-snapshot.mjs';
 import { memberTurn } from './continuation.mjs'; import { setTimeout as sleep } from 'node:timers/promises';
 import { workflowPolicy, repositoryChecks, sessionPlanTool, currentPlan, workflowPrompt, RunProcess, completionGate, pendingBaseline, pendingPaths, pendingHead, processEditTools } from './workflow.mjs';
@@ -184,7 +184,7 @@ export class ManagedSession {
       if (event?.type === 'tool_execution_end' && event.isError && textContent(event.result ?? {}) === `Tool ${event.toolName} not found`) self.run && (self.run.unknownTools += 1);
     });
     await stageCompaction(self.session, self.api, self.sdk);
-    compactEarly(settings); backOffFailedCompaction(self.session); trackCompaction(self, self.session);
+    compactEarly(settings); backOffFailedCompaction(self.session); trackCompaction(self, self.session); compactInOwnRun(self);
     trackToolFailures(self, self.session); trackMemoryLessons(self);
     self.publishHelpers();
     const setThinking=self.session.setThinkingLevel.bind(self.session);
@@ -209,8 +209,8 @@ export class ManagedSession {
       return () => { listeners.delete(listener); off(); };
     };
     const prompt = self.session.prompt.bind(self.session);
-    // One run: started for the round's request, closed with its report.
-    const runRound = async (text, deliver) => {
+    // A run for `text`: its grant (again after a fresh enrollment when stale), model and level.
+    self.openRun = async text => {
       const start = async () => {
         // The Harness (now possibly changed) decides which levels exist; ask
         // for the member's level, or the nearest one it offers.
@@ -220,31 +220,31 @@ export class ManagedSession {
         catch (error) { try { await self.broker.request('close'); } catch { /* the run expires on its own */ } throw error; }
         return grant;
       };
+      // Agent Watch may hold this conversation's key again (or another one now).
+      if (!self.grant) await self.enrollIfChanged();
+      if (self.blocked) throw Error(self.blocked);
+      if (!self.grant) {
+        let grant;
+        try { grant = await start(); }
+        catch (error) { if (!self.renewBroker || !STALE.test(String(error?.message))) throw error; await self.enroll(); grant = await start(); }
+        self.grant = grant; self.helperCalls = new Map();
+        manager.appendCustomEntry('agent-watch-run', { run_id: grant.run_id, state: 'active' });
+      }
+      const actual = self.installModel(self.modelRuntime, self.grant); self.installing = true;
+      try { await self.session.setModel(actual); } finally { self.installing = false; }
+      // Studio's run decides the level (a Harness may fix the main agent's);
+      // requests at any other level would be refused.
+      const level = self.grant.effort || 'off'; if (self.session.thinkingLevel !== level) self.runThinking(level);
+      return actual;
+    };
+    // One run: started for the round's request, closed with its report.
+    const runRound = async (text, deliver) => {
       self.starting = (async () => {
         self.preflight = null; self.run = null;
         // A run that cannot start still becomes a turn: the message is kept and
         // answered with the reason, instead of failing without a trace.
         try {
-          // Agent Watch may hold this conversation's key again (or another one now).
-          if (!self.grant) await self.enrollIfChanged();
-          if (self.blocked) throw Error(self.blocked);
-          if (!self.grant) {
-            let grant;
-            try { grant = await start(); }
-            catch (error) {
-              if (!self.renewBroker || !STALE.test(String(error?.message))) throw error;
-              await self.enroll(); grant = await start();
-            }
-            self.grant = grant; self.helperCalls = new Map();
-            manager.appendCustomEntry('agent-watch-run', { run_id: grant.run_id, state: 'active' });
-          }
-          const actual = self.installModel(self.modelRuntime, self.grant);
-          self.installing = true;
-          try { await self.session.setModel(actual); } finally { self.installing = false; }
-          // Studio's run decides the level (a Harness may fix the main agent's);
-          // requests at any other level would be refused.
-          const level = self.grant.effort || 'off';
-          if (self.session.thinkingLevel !== level) self.runThinking(level);
+          const actual = await self.openRun(text);
           // Persist only public capabilities, never native routing or tokens. The
           // WebUI must display the selected route's window after Auto switches
           // provider, including when reading a completed session after restart.

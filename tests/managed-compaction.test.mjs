@@ -255,6 +255,26 @@ test('a summary of a conversation at xhigh keeps its run\'s level and may write 
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('/compact between turns opens a run of its own and closes it', { skip: !supported, timeout: 120000 }, async () => {
+  // 2026-11-13: a conversation too long to continue could not be summarised
+  // by hand either: "no company run is active".
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(4, 'xhigh'), agent = broker(authorityOf(), 'sonnet', 'r1', 'xhigh');
+  const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
+  try {
+    await managed.session.prompt(words('first', 60000));
+    await managed.session.prompt(words('second', 40000));
+    assert.equal(compactions(managed).length, 0, 'under the trigger');
+    const starts = agent.calls.filter(call => call === 'start').length, closes = agent.calls.filter(call => call === 'close').length;
+    await managed.session.compact();
+    assert.equal(compactions(managed).length, 1);
+    assert.ok(server.requests.at(-1).summary && !server.requests.at(-1).refused);
+    assert.equal(agent.calls.filter(call => call === 'start').length, starts + 1, 'one run for the summary');
+    assert.equal(agent.calls.filter(call => call === 'close').length, closes + 1, 'and it is closed');
+    await managed.session.prompt('third');
+    assert.equal(answers(managed).at(-1).stopReason, 'stop', answers(managed).at(-1).errorMessage);
+  } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('the trigger: 90% of the window, Pi\'s reserve kept, never past 300k', () => {
   assert.equal(compactionTrigger(272000), 244800);
   assert.equal(compactionTrigger(1000000), 300000);
