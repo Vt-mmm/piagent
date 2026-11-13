@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.53.2" title="v1.53.2 docs · VI"><span class="dot"></span>v1.53.2</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.53.3" title="v1.53.3 docs · VI"><span class="dot"></span>v1.53.3</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,17 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-53-2" data-release>
+<article class="release latest" id="v1-53-3" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-53-3">v1.53.3</a><time class="release-date" datetime="2026-11-13">13/11/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-53-3-title">/compact chạy được giữa các lượt trong cuộc trò chuyện công ty</h3>
+    <p>Tóm tắt gọi tay giữa các lượt tự mở một lượt chạy công ty thay vì lỗi &quot;no company run is active&quot;.</p>
+    <ul class="release-items">
+      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Cuộc trò chuyện công ty: /compact giữa các lượt mở một lượt chạy cho phần tóm tắt rồi đóng lại, nên cuộc trò chuyện quá dài vẫn tóm tắt tay được.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-53-2" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-53-2">v1.53.2</a><time class="release-date" datetime="2026-11-13">13/11/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-53-2-title">Studio nhận lại phần tóm tắt của cuộc trò chuyện ở mức xhigh</h3>
@@ -400,26 +410,24 @@
     <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.50.0 và Agent Watch 0.15.17 (Windows 0.1.18) để subagent chạy song song</p>
   </div>
 </article>
-<article class="release" id="v1-46-0" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-46-0">v1.46.0</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-46-0-title">Piagent chạy trong Pi home riêng, pi của bạn giữ nguyên bản gốc</h3>
-    <p>Piagent cài vào ~/.piagent/agent và mở bằng <code>piagent</code>. <code>pi</code> thường không còn nạp Piagent, add-on, danh sách model hay panel footer.</p>
-    <ul class="release-items">
-      <li data-kind="breaking"><span class="kind kind-breaking">Thay đổi lớn</span><span>Piagent cài vào Pi home riêng ~/.piagent/agent và mở bằng <code>piagent</code>. <code>pi</code> thường trong ~/.pi/agent giữ nguyên bản gốc.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Lần cài đầu trong terminal hỏi cài add-on nào và có dùng lại login của pi không; cờ dòng lệnh trả lời trước được.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span><code>piagent restore-pi --apply</code> dời bản cài cũ khỏi ~/.pi/agent, có sao lưu; installer tự làm khi cập nhật.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Khi cài pi-mcp-adapter, Piagent tắt mcp có sẵn của Pi trong home của mình nên /mcp không còn xung đột.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Watch 0.15.16 để thấy session cá nhân của Piagent</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">80</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">81</span></summary>
+    <div class="archive-row" id="v1-46-0">
+      <div class="archive-head"><a class="release-version" href="#v1-46-0">v1.46.0</a> <span class="release-date">28/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Piagent chạy trong Pi home riêng, pi của bạn giữ nguyên bản gốc</strong> — Piagent cài vào ~/.piagent/agent và mở bằng <code>piagent</code>. <code>pi</code> thường không còn nạp Piagent, add-on, danh sách model hay panel footer.</p>
+        <ul class="release-items">
+        <li data-kind="breaking"><span class="kind kind-breaking">Thay đổi lớn</span><span>Piagent cài vào Pi home riêng ~/.piagent/agent và mở bằng <code>piagent</code>. <code>pi</code> thường trong ~/.pi/agent giữ nguyên bản gốc.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Lần cài đầu trong terminal hỏi cài add-on nào và có dùng lại login của pi không; cờ dòng lệnh trả lời trước được.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span><code>piagent restore-pi --apply</code> dời bản cài cũ khỏi ~/.pi/agent, có sao lưu; installer tự làm khi cập nhật.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>Khi cài pi-mcp-adapter, Piagent tắt mcp có sẵn của Pi trong home của mình nên /mcp không còn xung đột.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-45-0">
       <div class="archive-head"><a class="release-version" href="#v1-45-0">v1.45.0</a> <span class="release-date">28/10/2026</span></div>
       <div class="archive-body">

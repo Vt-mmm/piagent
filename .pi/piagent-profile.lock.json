@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:131faa3e7c0f7b08d347b5c9d4f5a98dcf53da8d8cc2b7378c513f7ae9c2a4ab",
+    "packageDigest": "sha256:b575426e9d748c6bdfa3c39d77deb7b7fdd4cbcb319deb56d76fb5d541b82d93",
     "packageSource": "../",
-    "packageVersion": "1.53.2",
+    "packageVersion": "1.53.3",
     "runtimeFiles": [
       {
         "byteSize": 7157,
-        "digest": "sha256:519c673391cb5aba3749ae14d2bc3d5f69f8c6cb0bb34b42a7174ed83fb96f5d",
+        "digest": "sha256:cd412d509e0f959780cb02309fdd12babf7e4fef1b22d26cd8e4bc9d098dca1f",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:aa6baebe131f2d1b17edbe60c5ea246f4ccd243c902a78650801ccc90e0fcd6d",
+        "digest": "sha256:5fd73002cc6e639199382a0a6f1e169cf13dcc3aa6368d108dd4ff66008ea17c",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1378,6 +1378,11 @@
         "path": "packages/piagent-core/managed/linux-sandbox.mjs"
       },
       {
+        "byteSize": 1304,
+        "digest": "sha256:b8843f385172b0485f809f508c0855e2b5ad56eba96047e52d053f1a9b61f899",
+        "path": "packages/piagent-core/managed/manual-compaction.mjs"
+      },
+      {
         "byteSize": 6895,
         "digest": "sha256:72360b86f972145e8dbf991f13c152992f46982a21c11f84d06de5e0e2d99182",
         "path": "packages/piagent-core/managed/member-mcp.mjs"
@@ -1513,8 +1518,8 @@
         "path": "packages/piagent-core/managed/session-mutation-observations.mjs"
       },
       {
-        "byteSize": 43424,
-        "digest": "sha256:5f7023c201a2edd5df778fc29b8585d61690cf7121f73e5969329215e66a9607",
+        "byteSize": 43597,
+        "digest": "sha256:af5430fd82e1ea14f48dd7f1c28b0a3111e2cce5aa7abc6438ad1f433154b495",
         "path": "packages/piagent-core/managed/session.mjs"
       },
       {
@@ -1689,7 +1694,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:aa6baebe131f2d1b17edbe60c5ea246f4ccd243c902a78650801ccc90e0fcd6d",
+        "digest": "sha256:5fd73002cc6e639199382a0a6f1e169cf13dcc3aa6368d108dd4ff66008ea17c",
         "path": "packages/piagent-core/package.json"
       },
       {

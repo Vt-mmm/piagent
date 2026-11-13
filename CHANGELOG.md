@@ -4,6 +4,14 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.53.3 - 2026-11-13
+
+**/compact works between turns in company conversations.** A summary asked by hand between turns opens a company run of its own instead of failing with "no company run is active".
+
+### Fixed
+
+- Company conversations: /compact between turns opens a run for the summary and closes it after, so a conversation too long to continue can be summarised by hand.
+
 ## v1.53.2 - 2026-11-13
 
 **Summaries of an xhigh conversation are admitted by Studio again.** 1.53.1 lowered a summary to medium thinking, which Studio's run grant refuses (invalid_run_grant). A summary keeps its run's level and has 52k tokens to write.

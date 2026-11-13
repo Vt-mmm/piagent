@@ -1,5 +1,26 @@
 [
   {
+    "version": "1.53.3",
+    "date": "2026-11-13",
+    "status": "stable",
+    "title": {
+      "en": "/compact works between turns in company conversations",
+      "vi": "/compact chạy được giữa các lượt trong cuộc trò chuyện công ty"
+    },
+    "summary": {
+      "en": "A summary asked by hand between turns opens a company run of its own instead of failing with \"no company run is active\".",
+      "vi": "Tóm tắt gọi tay giữa các lượt tự mở một lượt chạy công ty thay vì lỗi \"no company run is active\"."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "Company conversations: /compact between turns opens a run for the summary and closes it after, so a conversation too long to continue can be summarised by hand.",
+        "vi": "Cuộc trò chuyện công ty: /compact giữa các lượt mở một lượt chạy cho phần tóm tắt rồi đóng lại, nên cuộc trò chuyện quá dài vẫn tóm tắt tay được."
+      }
+    ]
+  },
+  {
     "version": "1.53.2",
     "date": "2026-11-13",
     "status": "stable",
