@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:5e2094f9818dede64fd65cf0922e44dcc1988962592229741ff0172100616e5b",
+    "packageDigest": "sha256:131faa3e7c0f7b08d347b5c9d4f5a98dcf53da8d8cc2b7378c513f7ae9c2a4ab",
     "packageSource": "../",
-    "packageVersion": "1.53.1",
+    "packageVersion": "1.53.2",
     "runtimeFiles": [
       {
         "byteSize": 7157,
-        "digest": "sha256:af5387b5135201cfcc355c1543b4c44c4a50b34e4ac0ce8d33eb4450d11467e7",
+        "digest": "sha256:519c673391cb5aba3749ae14d2bc3d5f69f8c6cb0bb34b42a7174ed83fb96f5d",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:127772b96873c5a888910296ac8bd25e4c53d82254fc8b55035d062c244a2915",
+        "digest": "sha256:aa6baebe131f2d1b17edbe60c5ea246f4ccd243c902a78650801ccc90e0fcd6d",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1273,8 +1273,8 @@
         "path": "packages/piagent-core/managed/command-tools.mjs"
       },
       {
-        "byteSize": 11441,
-        "digest": "sha256:7c80a18eb7eeeb86ee7ed433ec58eb147e29058cd78d00496bc964c185fe8db0",
+        "byteSize": 10951,
+        "digest": "sha256:074c5df2d7931395a1c8c65a562aa0399d00dc80680aa791c642b6aab637844c",
         "path": "packages/piagent-core/managed/compaction.mjs"
       },
       {
@@ -1689,7 +1689,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:127772b96873c5a888910296ac8bd25e4c53d82254fc8b55035d062c244a2915",
+        "digest": "sha256:aa6baebe131f2d1b17edbe60c5ea246f4ccd243c902a78650801ccc90e0fcd6d",
         "path": "packages/piagent-core/package.json"
       },
       {

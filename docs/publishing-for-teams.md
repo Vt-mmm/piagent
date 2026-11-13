@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.53.2`: phần tóm tắt giữ mức thinking của lượt chạy (run grant của Studio từ chối mức khác) và được viết 52k token; sửa lỗi `invalid_run_grant` khi tự compact ở 1.53.1.
 - `1.53.1`: cuộc trò chuyện dài ở mức thinking xhigh được tóm tắt bình thường, không còn dừng vì hết token cap; phần tóm tắt nghĩ tối đa ở mức medium với ngân sách gấp đôi.
 - `1.53.0`: Always bypass để commit, push, merge tới cuối plan rồi hỏi một lần; `/commit-ask off` cho commit không hỏi; câu hỏi trên Terminal công ty luôn hiện nút trả lời; team memory ghi đúng repository trong thư mục nhiều repo.
 - `1.52.2`: xin nhiều helper general thì chạy một và báo agent chính merge ref rồi gọi tiếp, không còn bị từ chối rồi gọi lại mãi.

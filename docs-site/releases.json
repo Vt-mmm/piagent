@@ -1,5 +1,26 @@
 [
   {
+    "version": "1.53.2",
+    "date": "2026-11-13",
+    "status": "stable",
+    "title": {
+      "en": "Summaries of an xhigh conversation are admitted by Studio again",
+      "vi": "Studio nhận lại phần tóm tắt của cuộc trò chuyện ở mức xhigh"
+    },
+    "summary": {
+      "en": "1.53.1 lowered a summary to medium thinking, which Studio's run grant refuses (invalid_run_grant). A summary keeps its run's level and has 52k tokens to write.",
+      "vi": "1.53.1 hạ phần tóm tắt xuống mức medium, Studio từ chối vì run grant (invalid_run_grant). Phần tóm tắt giữ mức của lượt chạy và được viết 52k token."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "Company conversations: a summary thinks at its run's level, as Studio's grant requires, and may write 52k tokens (32k for a split turn; was 13k), so Claude at xhigh has room to think and write.",
+        "vi": "Cuộc trò chuyện công ty: phần tóm tắt nghĩ đúng mức của lượt chạy như run grant của Studio yêu cầu và được viết 52k token (32k khi tách lượt; trước là 13k), nên Claude ở xhigh đủ chỗ nghĩ và viết."
+      }
+    ]
+  },
+  {
     "version": "1.53.1",
     "date": "2026-11-12",
     "status": "stable",

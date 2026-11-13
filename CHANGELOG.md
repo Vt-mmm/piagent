@@ -4,6 +4,14 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.53.2 - 2026-11-13
+
+**Summaries of an xhigh conversation are admitted by Studio again.** 1.53.1 lowered a summary to medium thinking, which Studio's run grant refuses (invalid_run_grant). A summary keeps its run's level and has 52k tokens to write.
+
+### Fixed
+
+- Company conversations: a summary thinks at its run's level, as Studio's grant requires, and may write 52k tokens (32k for a split turn; was 13k), so Claude at xhigh has room to think and write.
+
 ## v1.53.1 - 2026-11-12
 
 **A long conversation at xhigh is summarised instead of stopping at the token cap.** Summaries of a long company conversation no longer fail with "generation hit the token cap": they think at medium at most and may write twice as much.
