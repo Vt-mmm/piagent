@@ -29,7 +29,7 @@ test('studio --rpc carries one company conversation across messages and answers 
     emit({ type: 'message_start', message: { id: 'msg_' + requests.length, type: 'message', role: 'assistant', model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 12, output_tokens: 0 } } });
     const sent = JSON.stringify(body.messages.filter(m => m.role !== 'system').at(-1));
     if (requests.length === 1) {
-      const input = { questions: [{ header: 'Gói', question: 'Which plan should the price use?', options: [{ label: 'Basic' }, { label: 'Pro' }] }] };
+      const input = { questions: [{ header: 'Gói', question: 'Which plan should the price use?', options: [{ label: 'Basic' }, { label: 'Pro' }], evidence: 'src/cart.js:1 đã dùng LocalStorage' }] };
       emit({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_ask', name: 'ask_user', input: {} } });
       emit({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) } });
       emit({ type: 'content_block_stop', index: 0 });

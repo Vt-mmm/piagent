@@ -23,8 +23,8 @@ import { piSdkRoot } from './helpers/pi-sdk.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 const expectedPiVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).peerDependencies['@earendil-works/pi-coding-agent'];
 const sdkRoot = piSdkRoot();
-const Q_STORE=[{header:'Kho',question:'Lưu giỏ hàng ở đâu?',options:[{label:'LocalStorage',description:'Mất khi đổi máy'},{label:'Server',description:'Cần API mới'}]}];
-const Q_COLOR=[{header:'Màu',question:'Màu nút chính?',options:[{label:'Xanh'},{label:'Đỏ'}]}];
+const Q_STORE=[{header:'Kho',question:'Lưu giỏ hàng ở đâu?',options:[{label:'LocalStorage',description:'Mất khi đổi máy'},{label:'Server',description:'Cần API mới'}], evidence:'src/cart.js:1 đã dùng LocalStorage'}];
+const Q_COLOR=[{header:'Màu',question:'Màu nút chính?',options:[{label:'Xanh'},{label:'Đỏ'}], evidence:'src/cart.js:1 đã dùng LocalStorage'}];
 
 test('questions come one at a time and other conversations announce what they need',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:240000},async()=>{
  ensureWebUiBuild(root);

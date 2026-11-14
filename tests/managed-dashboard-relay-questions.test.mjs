@@ -24,7 +24,7 @@ import { piSdkRoot } from './helpers/pi-sdk.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 const expectedPiVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).peerDependencies['@earendil-works/pi-coding-agent'];
 const sdkRoot = piSdkRoot();
-const QUESTIONS=[{header:'Kho',question:'Lưu giỏ hàng ở đâu?',options:[{label:'LocalStorage',description:'Mất khi đổi máy'},{label:'Server',description:'Cần API mới'}]}];
+const QUESTIONS=[{header:'Kho',question:'Lưu giỏ hàng ở đâu?',options:[{label:'LocalStorage',description:'Mất khi đổi máy'},{label:'Server',description:'Cần API mới'}], evidence:'src/cart.js:1 đã dùng LocalStorage'}];
 
 test('a company agent question is shown and answered in the personal dashboard through the relay',{skip:process.platform!=='darwin'||!fs.existsSync(sdkRoot),timeout:150000},async()=>{
  ensureWebUiBuild(root);
