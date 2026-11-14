@@ -1,5 +1,46 @@
 [
   {
+    "version": "1.54.0",
+    "date": "2026-11-14",
+    "status": "stable",
+    "title": {
+      "en": "See what each agent does, why it recommends it, and let a long task run on",
+      "vi": "Thấy từng agent đang làm gì, khuyến nghị dựa vào đâu, và để task dài chạy liên tục"
+    },
+    "summary": {
+      "en": "A phase shows its original and added steps and stops growing after two rounds; every opinion leads with a recommendation and evidence; Always bypass can run commit and push unasked for the whole conversation.",
+      "vi": "Phase hiện bước gốc và bước phát sinh, dừng nở sau hai vòng; mọi ý kiến có khuyến nghị và evidence; Always bypass có thể commit và push không hỏi suốt cuộc trò chuyện."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "new",
+        "en": "Company plans: a phase keeps original steps apart from added ones with their source (review, advisor). After two rounds only a blocking fix joins; other work is left for the next phase.",
+        "vi": "Plan công ty: phase tách bước gốc và bước phát sinh kèm nguồn (review, advisor). Sau hai vòng chỉ bước sửa lỗi blocking được thêm, việc khác để phase sau."
+      },
+      {
+        "kind": "new",
+        "en": "Explore, scout and advisor answer with a recommendation as option 1 and evidence; the harness checks each file:line and marks an answer without evidence unverified. ask_user shows option 1 as recommended.",
+        "vi": "Explore, scout, advisor trả lời với khuyến nghị là option 1 kèm evidence; harness kiểm từng file:line, câu trả lời thiếu evidence bị ghi chưa kiểm chứng. ask_user hiện option 1 là Khuyến nghị."
+      },
+      {
+        "kind": "improved",
+        "en": "A conflict that stops a task shows each side: what the subagent concluded and its evidence, what the main agent checked, and the advisor's recommendation.",
+        "vi": "Conflict làm dừng task hiện từng bên: subagent kết luận gì và evidence, main đã kiểm gì, advisor khuyến nghị gì."
+      },
+      {
+        "kind": "new",
+        "en": "Always bypass: when you write that the work runs on without asking, or with /autopilot on, commit, push and merge run unasked for the whole conversation, however the plan grows. A critical rm is still asked.",
+        "vi": "Always bypass: khi bạn viết là cứ chạy không cần hỏi, hoặc /autopilot on, commit, push, merge không hỏi suốt cuộc trò chuyện dù plan sinh thêm bước. Xoá đường dẫn quan trọng vẫn hỏi."
+      },
+      {
+        "kind": "improved",
+        "en": "Terminal and dashboard: the subagent panel shows each role, its job, its latest step, time and steps, and those that ended with their recommendation.",
+        "vi": "Terminal và dashboard: panel subagent hiện từng role, việc đang làm, bước mới nhất, thời gian, số bước, và subagent đã xong kèm khuyến nghị."
+      }
+    ]
+  },
+  {
     "version": "1.53.3",
     "date": "2026-11-13",
     "status": "stable",

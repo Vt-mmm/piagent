@@ -37,7 +37,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/whats-new" data-docs-version="v1.53.3" title="v1.53.3 docs · VI"><span class="dot"></span>v1.53.3</a>
+      <a class="version-badge" href="/whats-new" data-docs-version="v1.54.0" title="v1.54.0 docs · VI"><span class="dot"></span>v1.54.0</a>
       <nav class="top-nav" aria-label="Tài liệu">
         <a href="/quickstart">Tài liệu</a>
         <a href="/whats-new" aria-current="page">Changelog</a>
@@ -108,7 +108,21 @@
 <div class="release-filter" role="toolbar" aria-label="Lọc theo loại thay đổi"><button type="button" data-filter-kind="all" aria-pressed="true">Tất cả</button><button type="button" data-filter-kind="new" aria-pressed="false">Mới</button><button type="button" data-filter-kind="improved" aria-pressed="false">Cải thiện</button><button type="button" data-filter-kind="fixed" aria-pressed="false">Sửa lỗi</button><button type="button" data-filter-kind="security" aria-pressed="false">Bảo mật</button></div>
 <section class="section releases" data-releases>
 <h2 id="latest" class="sr-only">Mới nhất</h2>
-<article class="release latest" id="v1-53-3" data-release>
+<article class="release latest" id="v1-54-0" data-release>
+  <div class="release-meta"><a class="release-version" href="#v1-54-0">v1.54.0</a><time class="release-date" datetime="2026-11-14">14/11/2026</time></div>
+  <div class="release-body">
+    <h3 data-toc-skip id="v1-54-0-title">Thấy từng agent đang làm gì, khuyến nghị dựa vào đâu, và để task dài chạy liên tục</h3>
+    <p>Phase hiện bước gốc và bước phát sinh, dừng nở sau hai vòng; mọi ý kiến có khuyến nghị và evidence; Always bypass có thể commit và push không hỏi suốt cuộc trò chuyện.</p>
+    <ul class="release-items">
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Plan công ty: phase tách bước gốc và bước phát sinh kèm nguồn (review, advisor). Sau hai vòng chỉ bước sửa lỗi blocking được thêm, việc khác để phase sau.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Explore, scout, advisor trả lời với khuyến nghị là option 1 kèm evidence; harness kiểm từng file:line, câu trả lời thiếu evidence bị ghi chưa kiểm chứng. ask_user hiện option 1 là Khuyến nghị.</span></li>
+      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Always bypass: khi bạn viết là cứ chạy không cần hỏi, hoặc /autopilot on, commit, push, merge không hỏi suốt cuộc trò chuyện dù plan sinh thêm bước. Xoá đường dẫn quan trọng vẫn hỏi.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Conflict làm dừng task hiện từng bên: subagent kết luận gì và evidence, main đã kiểm gì, advisor khuyến nghị gì.</span></li>
+      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Terminal và dashboard: panel subagent hiện từng role, việc đang làm, bước mới nhất, thời gian, số bước, và subagent đã xong kèm khuyến nghị.</span></li>
+    </ul>
+  </div>
+</article>
+<article class="release" id="v1-53-3" data-release>
   <div class="release-meta"><a class="release-version" href="#v1-53-3">v1.53.3</a><time class="release-date" datetime="2026-11-13">13/11/2026</time></div>
   <div class="release-body">
     <h3 data-toc-skip id="v1-53-3-title">/compact chạy được giữa các lượt trong cuộc trò chuyện công ty</h3>
@@ -395,27 +409,25 @@
     </ul>
   </div>
 </article>
-<article class="release" id="v1-46-1" data-release>
-  <div class="release-meta"><a class="release-version" href="#v1-46-1">v1.46.1</a><time class="release-date" datetime="2026-10-28">28/10/2026</time></div>
-  <div class="release-body">
-    <h3 data-toc-skip id="v1-46-1-title">Phản biện có sổ ghi, review một nhịp, subagent song song khi được yêu cầu</h3>
-    <p>Harness công ty ghi một sổ phản biện cùng quyết định của main, review một nhịp mỗi lượt, và chỉ chạy 2–3 helper cùng role song song khi member yêu cầu.</p>
-    <ul class="release-items">
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Phản biện brief, finding review và claim fail chung một sổ; main ghi quyết định bằng resolve_objection, phản biện sai tiền đề chặn sửa file đến khi được quyết.</span></li>
-      <li data-kind="new"><span class="kind kind-new">Mới</span><span>Mặc định mỗi role một helper; khi member yêu cầu 2–3 helper cùng role, chúng chạy song song, mỗi helper một grant với Agent Studio 0.50.0 và Agent Watch 0.15.17.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Review một nhịp mỗi lượt: review bắt buộc do harness làm, review lại sau khi sửa chỉ đọc file đã đổi, finding minor chỉ liệt kê.</span></li>
-      <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Terminal công ty hiện checklist và việc từng subagent đang làm ngay trên ô nhập.</span></li>
-      <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>piagent studio cài fd ở lần mở đầu tiên nên gợi ý @ hiện file và thư mục; trước đây fd không bao giờ được tải, kể cả khi đã có ở /opt/homebrew/bin.</span></li>
-    </ul>
-    <p class="release-requires"><strong>Cần:</strong> Agent Studio 0.50.0 và Agent Watch 0.15.17 (Windows 0.1.18) để subagent chạy song song</p>
-  </div>
-</article>
 </section>
 <section class="section archive">
   <h2 id="archive">Các bản trước</h2>
   <p class="section-lead">Bản cũ hơn, gom theo tháng. Mở một tháng để xem từng thay đổi.</p>
   <details class="release-archive">
-    <summary><span>Tháng 10/2026</span><span class="archive-count">81</span></summary>
+    <summary><span>Tháng 10/2026</span><span class="archive-count">82</span></summary>
+    <div class="archive-row" id="v1-46-1">
+      <div class="archive-head"><a class="release-version" href="#v1-46-1">v1.46.1</a> <span class="release-date">28/10/2026</span></div>
+      <div class="archive-body">
+        <p><strong>Phản biện có sổ ghi, review một nhịp, subagent song song khi được yêu cầu</strong> — Harness công ty ghi một sổ phản biện cùng quyết định của main, review một nhịp mỗi lượt, và chỉ chạy 2–3 helper cùng role song song khi member yêu cầu.</p>
+        <ul class="release-items">
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Phản biện brief, finding review và claim fail chung một sổ; main ghi quyết định bằng resolve_objection, phản biện sai tiền đề chặn sửa file đến khi được quyết.</span></li>
+        <li data-kind="new"><span class="kind kind-new">Mới</span><span>Mặc định mỗi role một helper; khi member yêu cầu 2–3 helper cùng role, chúng chạy song song, mỗi helper một grant với Agent Studio 0.50.0 và Agent Watch 0.15.17.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Review một nhịp mỗi lượt: review bắt buộc do harness làm, review lại sau khi sửa chỉ đọc file đã đổi, finding minor chỉ liệt kê.</span></li>
+        <li data-kind="improved"><span class="kind kind-improved">Cải thiện</span><span>Terminal công ty hiện checklist và việc từng subagent đang làm ngay trên ô nhập.</span></li>
+        <li data-kind="fixed"><span class="kind kind-fixed">Sửa lỗi</span><span>piagent studio cài fd ở lần mở đầu tiên nên gợi ý @ hiện file và thư mục; trước đây fd không bao giờ được tải, kể cả khi đã có ở /opt/homebrew/bin.</span></li>
+        </ul>
+      </div>
+    </div>
     <div class="archive-row" id="v1-46-0">
       <div class="archive-head"><a class="release-version" href="#v1-46-0">v1.46.0</a> <span class="release-date">28/10/2026</span></div>
       <div class="archive-body">

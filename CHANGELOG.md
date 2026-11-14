@@ -4,6 +4,21 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.54.0 - 2026-11-14
+
+**See what each agent does, why it recommends it, and let a long task run on.** A phase shows its original and added steps and stops growing after two rounds; every opinion leads with a recommendation and evidence; Always bypass can run commit and push unasked for the whole conversation.
+
+### Added
+
+- Company plans: a phase keeps original steps apart from added ones with their source (review, advisor). After two rounds only a blocking fix joins; other work is left for the next phase.
+- Explore, scout and advisor answer with a recommendation as option 1 and evidence; the harness checks each file:line and marks an answer without evidence unverified. ask_user shows option 1 as recommended.
+- Always bypass: when you write that the work runs on without asking, or with /autopilot on, commit, push and merge run unasked for the whole conversation, however the plan grows. A critical rm is still asked.
+
+### Improved
+
+- A conflict that stops a task shows each side: what the subagent concluded and its evidence, what the main agent checked, and the advisor's recommendation.
+- Terminal and dashboard: the subagent panel shows each role, its job, its latest step, time and steps, and those that ended with their recommendation.
+
 ## v1.53.3 - 2026-11-13
 
 **/compact works between turns in company conversations.** A summary asked by hand between turns opens a company run of its own instead of failing with "no company run is active".
