@@ -8,6 +8,7 @@ import { askCheckScope, asksFullChecks, beforeCheckOrPush, checkScope, suitePart
 import { recordCheck, relevantChecks } from './check-evidence.mjs';
 import { LANE_LIMITS, patchStats, changeLane, lanePolicy } from './risk-lanes.mjs';
 import { briefCounts, decisionsText, ledgerGuard, ledgerOf, ledgerWords, reviewFocus, saveLedger, setStatus, settleLedger } from './ledger.mjs';
+import { planPhase, phaseHead, PHASE_PROMPT } from './plan-phase.mjs';
 
 // The process layer of the company harness: a plan for multi-step work, the
 // repository's checks after a code change, an independent review of the patch.
@@ -34,7 +35,7 @@ export function normalizePlan(args) {
   if (plan.length < 1 || plan.length > 30 || plan.some(p => typeof p?.step !== 'string' || !p.step.trim() || p.step.length > 200 || !STATUS.includes(p.status)))
     throw Error('managed-plan-invalid: send 1 to 30 steps, each {step, status} with status pending, in_progress, completed or deferred.');
   if (plan.filter(p => p.status === 'in_progress').length > 1) throw Error('managed-plan-invalid: mark at most one step in_progress.');
-  return { plan: plan.map(p => ({ step: p.step.trim(), status: p.status })), explanation: typeof args.explanation === 'string' ? args.explanation.slice(0, 300) : '' };
+  return { plan: plan.map(p => ({ step: p.step.trim(), status: p.status, ...(typeof p.source === 'string' && p.source.trim() ? { source: p.source.trim().slice(0, 60) } : {}) })), explanation: typeof args.explanation === 'string' ? args.explanation.slice(0, 300) : '' };
 }
 export function currentPlan(manager) {
   return manager.getEntries().filter(e => e.type === 'custom' && e.customType === PLAN_ENTRY).at(-1)?.data ?? null;
@@ -47,7 +48,7 @@ export function planTool(run) {
   return { name: 'update_plan', label: 'Plan',
     description: 'Keep a short checklist for work with several steps. Send the whole list each time; mark the step you work on in_progress and finished steps completed. Mark a step deferred when the member asked to leave it for later or it is no longer needed, and say why in your answer; never mark completed a step you did not do. The member sees the checklist next to the conversation.',
     parameters: { type: 'object', properties: { explanation: { type: 'string', maxLength: 300 }, plan: { type: 'array', minItems: 1, maxItems: 30,
-      items: { type: 'object', properties: { step: { type: 'string', minLength: 1, maxLength: 200 }, status: { type: 'string', enum: STATUS } }, required: ['step', 'status'], additionalProperties: false } } },
+      items: { type: 'object', properties: { step: { type: 'string', minLength: 1, maxLength: 200 }, status: { type: 'string', enum: STATUS }, source: { type: 'string', maxLength: 60, description: 'For a step added after the first checklist: where it came from (review o3, advisor, explore, member).' } }, required: ['step', 'status'], additionalProperties: false } } },
       required: ['plan'], additionalProperties: false },
     // Some models send the list as a JSON string; it is read as the list.
     prepareArguments: args => {
@@ -60,16 +61,18 @@ export function planTool(run) {
 // Session persistence belongs to the plan tool, not session orchestration.
 export function sessionPlanTool(owner) {
   return planTool(async plan => {
-    owner.session.sessionManager.appendCustomEntry(PLAN_ENTRY, { ...plan, at: new Date().toISOString() });
+    const manager = owner.session.sessionManager, phase = planPhase(owner.run, currentPlan(manager), plan), entry = { ...plan, phase, at: new Date().toISOString() };
+    phase.head = phaseHead(entry); // what the Terminal and the dashboard show above the checklist
+    manager.appendCustomEntry(PLAN_ENTRY, entry);
     if (owner.run) owner.run.planUpdated = true;
-    return { content: [{ type: 'text', text: `Plan updated: ${plan.plan.filter(p => p.status === 'completed').length}/${plan.plan.length} steps completed.` }], details: { plan: plan.plan } };
+    return { content: [{ type: 'text', text: `Plan updated: ${plan.plan.filter(p => p.status === 'completed').length}/${plan.plan.length} steps completed. ${phaseHead(entry)}.` }], details: { plan: plan.plan, phase } };
   });
 }
 
 // The guidance a policy adds to the main agent's system prompt.
 export function workflowPrompt(policy, checks) {
   const lines = [];
-  if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with pending steps sends you back to the next one until every step is completed or deferred: if you cannot go on without the member, ask with ask_user. Mark a step deferred only when the member asked to leave it for later or it is no longer needed; never mark completed a step you did not do.' : ''}`);
+  if (policy.plan !== 'off') lines.push(`- Plan: for work with several steps keep a checklist with update_plan and update it as you go. When the member asks for several items (plans, files, tickets), put every item in the checklist and work through all of them; do not end your turn to report between items.${policy.plan === 'require' ? ' For a complex task, file edits are refused until a plan exists. A checklist left with pending steps sends you back to the next one until every step is completed or deferred: if you cannot go on without the member, ask with ask_user. Mark a step deferred only when the member asked to leave it for later, it is no longer needed, or the phase is full; never mark completed a step you did not do.' : ''}${PHASE_PROMPT}`);
   if (policy.verify !== 'off') {
     const list = checks.commands.length ? `${checks.commands.map(c => '`' + c + '`').join(', ')}${checks.source === 'detected' ? ' (detected; the repository declares none in AGENTS.md "## Checks")' : ''}` : 'none declared: choose the tests, type check or build that cover the change';
     lines.push(`- Verify: after changing code, run the tests that cover the change (one file, a filter, one package) and fix failures before you finish; after a failure rerun the part that failed. Do not choose the whole test suite yourself: it can take long, so the harness asks the member before a full run and before a push. Repository checks: ${list}.${policy.verify === 'require' ? ' The turn does not end until a check has passed on the final code.' : ''} Only the member may skip the checks: when they ask to, call waive_checks with their words; never skip them on your own.`);

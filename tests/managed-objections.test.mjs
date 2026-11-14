@@ -210,7 +210,7 @@ test('a helper key names its slot to the broker; the terminal panel lists the ch
   assert.equal(stepText('web_search', { query: 'pi release   date' }), 'tìm trên web pi release date');
   assert.equal(helperLines([]), undefined);
   assert.deepEqual(helperLines([{ role: 'scout', slot: 1, job: 'Find callers', step: 'tìm discount' }, { role: 'review', slot: 1, job: 'Review a.js' }, { role: 'scout', slot: 2, job: 'Find callers', step: 'đọc cart.js' }]),
-    ['Subagent đang chạy · 3', '  ⟳ scout 1 · Find callers — tìm discount', '  ⟳ review · Review a.js', '  ⟳ scout 2 · Find callers — đọc cart.js']);
+    ['Subagent · 3 đang chạy', '  ⟳ Explore 1 · Find callers', '      → tìm discount', '  ⟳ Review · Review a.js', '  ⟳ Explore 2 · Find callers', '      → đọc cart.js']);
   assert.equal(planWidget(null), undefined);
   assert.equal(planWidget({ plan: [{ step: 'a', status: 'completed' }] }), undefined, 'a finished checklist leaves the panel');
   assert.deepEqual(planWidget({ plan: [{ step: 'Search', status: 'completed' }, { step: 'Compare', status: 'in_progress' }, { step: 'Report', status: 'pending' }] }),

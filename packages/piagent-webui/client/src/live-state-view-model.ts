@@ -214,6 +214,26 @@ function elapsed(ms: number, locale: "vi" | "en"): string {
   return locale === "vi" ? `Đã chạy ${minutes} phút` : `Running for ${minutes}m`;
 }
 
+// The subagent panel (owner, 2026-11-14): one row per subagent of the running
+// turn with its role, what it does now and how many steps it took; no model.
+const HELPER_ROLE: Record<string, string> = { scout: "Explore", research: "Scout", advisor: "Advisor", general: "General", review: "Review" };
+const HELPER_VERB: Record<string, [string, string]> = { read: ["đọc", "reading"], grep: ["tìm", "searching"], find: ["tìm file", "finding files"], ls: ["xem thư mục", "listing"],
+  bash: ["chạy", "running"], web_search: ["tìm trên web", "searching the web"], web_fetch: ["đọc trang", "reading a page"], edit: ["sửa", "editing"], write: ["ghi", "writing"] };
+export type HelperRow = { agent: string; role: string; doing: string; steps: number; running: boolean; startedAt?: string };
+export function helperRows(activities: readonly LiveActivity[], locale: "vi" | "en" = "vi"): HelperRow[] {
+  const rows = new Map<string, HelperRow>();
+  for (const activity of activities) {
+    if (!activity.agent) continue;
+    const [base, slot] = activity.agent.split("#");
+    const role = `${HELPER_ROLE[base] ?? base}${slot ? ` ${slot}` : ""}`;
+    const verb = HELPER_VERB[activity.toolLabel]?.[locale === "vi" ? 0 : 1] ?? activity.toolLabel;
+    const row = rows.get(activity.agent) ?? { agent: activity.agent, role, doing: "", steps: 0, running: false, startedAt: activity.startedAt };
+    row.steps += 1; row.doing = `${verb}${activity.detail ? ` ${activity.detail}` : ""}`.slice(0, 160); row.running = activity.state === "running";
+    rows.set(activity.agent, row);
+  }
+  return [...rows.values()];
+}
+
 // Helpers work while the main agent is quiet, so the Activity panel has no tool
 // of the turn to show: each helper is its own running row.
 export function helperActivities(helpers: RunningHelpers | undefined): LiveActivity[] {

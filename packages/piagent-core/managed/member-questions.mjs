@@ -155,19 +155,34 @@ async function askInTerminal(ui, questions, signal) {
 const QUESTION_SCHEMA = { type: 'object', properties: {
   header: { type: 'string', maxLength: 24, description: 'A short label for the question, 1–3 words (e.g. "Phạm vi", "Dữ liệu").' },
   question: { type: 'string', minLength: 1, maxLength: 400, description: 'One clear question in the member\'s language, ending with a question mark.' },
-  options: { type: 'array', minItems: 2, maxItems: 4, description: 'The real choices, most likely first. "Other" (the member\'s own words) is always added for the member: never add an "Other" option yourself.',
+  options: { type: 'array', minItems: 2, maxItems: 4, description: 'The real choices, your recommendation first: option 1 is shown to the member as Khuyến nghị. "Other" (the member\'s own words) is always added for the member: never add an "Other" option yourself.',
     items: { type: 'object', properties: { label: { type: 'string', minLength: 1, maxLength: 80 }, description: { type: 'string', maxLength: 200, description: 'What choosing it means for the work.' } }, required: ['label'], additionalProperties: false } },
-  multiSelect: { type: 'boolean', description: 'True when several options may be chosen together.' } },
-  required: ['question', 'options'], additionalProperties: false };
+  multiSelect: { type: 'boolean', description: 'True when several options may be chosen together.' },
+  evidence: { type: 'string', minLength: 8, maxLength: 300, description: 'Why option 1 is recommended, from what you checked: file:line, a source URL, or a command and its result. Shown to the member under the question.' } },
+  required: ['question', 'options', 'evidence'], additionalProperties: false };
+
+// Option 1 is the agent's recommendation and the evidence it rests on is
+// shown with the question (owner, 2026-11-14): the member sees what the agent
+// would pick and why, not only a list.
+const RECOMMENDED = ' (Khuyến nghị)';
+export function recommendedQuestions(questions, raw) {
+  return questions.map((q, i) => {
+    const evidence = text(raw?.[i]?.evidence, 300);
+    const options = q.options.map((o, n) => n === 0 && !/khuyến nghị|recommended/i.test(o.label) ? { ...o, label: (o.label.slice(0, 80 - RECOMMENDED.length) + RECOMMENDED) } : o);
+    return { ...q, options, ...(evidence ? { question: `${q.question}\nCăn cứ: ${evidence}`, evidence } : {}) };
+  });
+}
 
 // The tool of the main agent. `managed` is the ManagedSession.
 export function askTool(managed) {
   return { name: 'ask_user', label: 'Hỏi thành viên',
-    description: 'Ask the member 1–4 questions and wait for the answers, when the request leaves a decision open that changes the result and the code, the docs or a subagent cannot settle it: scope, expected behaviour, data shape, a trade-off, a name the member will see. Ask before acting on a guess, all questions in one call, each with 2–4 concrete numbered options (most likely first); the member can always answer in their own words or leave the choice to you. Do not ask what you can find out yourself, to confirm what the member already said, or for permission to do what was asked.',
+    description: 'Ask the member 1–4 questions and wait for the answers, when the request leaves a decision open that changes the result and the code, the docs or a subagent cannot settle it: scope, expected behaviour, data shape, a trade-off, a name the member will see. Ask before acting on a guess, all questions in one call, each with 2–4 concrete numbered options, your recommendation first, and the evidence for it (research first: read the code, the docs or ask a helper); the member can always answer in their own words or leave the choice to you. Do not ask what you can find out yourself, to confirm what the member already said, or for permission to do what was asked.',
     parameters: { type: 'object', properties: { questions: { type: 'array', minItems: 1, maxItems: 4, items: QUESTION_SCHEMA } }, required: ['questions'], additionalProperties: false },
     execute: async (toolCallId, args, signal, _onUpdate, ctx) => {
-      const questions = normalizeQuestions(args?.questions);
-      if (!questions) throw Error('managed-question-invalid: give 1–4 questions, each with a question and 2–4 options with distinct labels.');
+      const asked = normalizeQuestions(args?.questions);
+      if (!asked) throw Error('managed-question-invalid: give 1–4 questions, each with a question and 2–4 options with distinct labels.');
+      if (args.questions.some(q => text(q?.evidence, 300).length < 8)) throw Error('managed-question-evidence: put your recommendation as option 1 and give each question its evidence: what you checked that supports option 1 (file:line, a source URL, or a command and its result). Check first if you have not.');
+      const questions = recommendedQuestions(asked, args.questions);
       const sessionId = managed.session?.sessionManager?.getSessionId?.();
       let answer;
       const cancelled = (error) => { throw error?.message === 'managed-question-cancelled' ? Error(CANCELLED) : error; };

@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import { memberQuestions, normalizeQuestions, normalizeAnswer, answerText, askTool } from '../packages/piagent-core/managed/member-questions.mjs';
 
 const QUESTIONS = [
-  { header: 'Phạm vi', question: 'Xuất CSV toàn bộ hay chỉ trang đang xem?', options: [{ label: 'Trang đang xem', description: 'Nhanh, đúng thứ người dùng thấy' }, { label: 'Toàn bộ' }] },
-  { question: 'Cột nào cần thêm?', options: [{ label: 'Tồn kho' }, { label: 'Giá' }, { label: 'Nhà cung cấp' }], multiSelect: true },
+  { header: 'Phạm vi', question: 'Xuất CSV toàn bộ hay chỉ trang đang xem?', options: [{ label: 'Trang đang xem', description: 'Nhanh, đúng thứ người dùng thấy' }, { label: 'Toàn bộ' }], evidence: 'src/export.js:12 chỉ đọc trang hiện tại' },
+  { question: 'Cột nào cần thêm?', options: [{ label: 'Tồn kho' }, { label: 'Giá' }, { label: 'Nhà cung cấp' }], multiSelect: true, evidence: 'yêu cầu của member nhắc tồn kho' },
 ];
 
 // The questions the agent asks have a fixed shape: 1–4 questions, each with
@@ -67,7 +67,7 @@ test('the tool asks on the WebUI, in the Terminal, or tells the agent no one can
   assert.match(web.content[0].text, /→ 2\. Toàn bộ[\s\S]+→ Other: Ngày nhập/); assert.equal(web.details.answer.answers[0].selected[0], 1);
   unbind();
   // Terminal: option 1 of the first question; the second picks 3, then "Other" typed, then done.
-  const picks = ['1. Trang đang xem — Nhanh, đúng thứ người dùng thấy', '3. Nhà cung cấp', '4. Khác (tự nhập)', 'Xong'], titles = [];
+  const picks = ['1. Trang đang xem (Khuyến nghị) — Nhanh, đúng thứ người dùng thấy', '3. Nhà cung cấp', '4. Khác (tự nhập)', 'Xong'], titles = [];
   const ui = { select: async (title, choices) => { titles.push(title); const next = picks.shift(); assert.ok(choices.includes(next), `${next} in ${choices}`); return next; }, input: async () => 'Ngày nhập' };
   const terminal = await tool.execute('c-2', { questions: QUESTIONS }, undefined, undefined, { hasUI: true, ui });
   assert.deepEqual(terminal.details.answer, { skipped: false, answers: [{ selected: [0], other: null }, { selected: [2], other: 'Ngày nhập' }] });
@@ -77,6 +77,8 @@ test('the tool asks on the WebUI, in the Terminal, or tells the agent no one can
   assert.equal(escaped.details.answer.skipped, true);
   // No screen.
   const none = await tool.execute('c-4', { questions: QUESTIONS }, undefined, undefined, { hasUI: false });
+  assert.match(titles[0], /\nCăn cứ: src\/export\.js:12/, 'the evidence is shown with the question');
+  await assert.rejects(tool.execute('c-5', { questions: QUESTIONS.map(({ evidence, ...q }) => q) }, undefined, undefined, { hasUI: false }), /managed-question-evidence/);
   assert.match(none.content[0].text, /No member can answer right now/); assert.equal(none.details.surface, 'none');
 });
 

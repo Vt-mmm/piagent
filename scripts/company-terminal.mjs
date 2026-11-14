@@ -14,9 +14,10 @@ import { registerStyleCommand } from '../packages/piagent-core/runtime/terminal/
 import { parseFailure } from '../packages/piagent-core/runtime/managed-failure.mjs';
 import { checkpointsOf } from '../packages/piagent-core/managed/checkpoints.mjs';
 import { bypassAllowed, effectivePermission } from '../packages/piagent-core/managed/permission.mjs';
-import { registerCommitAskCommand } from './company-commit-ask.mjs';
+import { autopilotNotice, registerAutopilotCommand, registerCommitAskCommand } from './company-commit-ask.mjs';
 import { memoryOn } from '../packages/piagent-core/managed/memory.mjs';
 import { currentPlan, unfinished } from '../packages/piagent-core/managed/workflow.mjs';
+import { phaseHead, sourceName } from '../packages/piagent-core/managed/plan-phase.mjs';
 import { fitPrompt, planPanelLines, promptRows } from './company-terminal-fit.mjs';
 import { companyFailureText } from '../packages/piagent-webui/shared/company-copy.ts';
 import { headlineText, outcomeText, processItems } from '../packages/piagent-webui/shared/process-copy.ts';
@@ -64,7 +65,7 @@ export function memoryResultLines(text, expanded = false) {
 const branchOf = (cwd) => new Promise((resolve) => execFile('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000 },
   (error, out) => resolve(error ? null : String(out).trim() || null)));
 export const HELP_TEXT = [
-  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass always|on|full|off|status quyền của cuộc trò chuyện · /commit-ask on|off ở Always bypass, commit có hỏi không · /fast on|off|status (khi Harness cho phép) · /style giao diện Terminal · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
+  'Cuộc trò chuyện công ty: /undo hoàn tác file lượt trước đã sửa · /bypass always|on|full|off|status quyền của cuộc trò chuyện · /commit-ask on|off ở Always bypass, commit có hỏi không · /autopilot on|off chạy liên tục, commit/push không hỏi cả cuộc trò chuyện · /fast on|off|status (khi Harness cho phép) · /style giao diện Terminal · /skill:<tên> hoặc /<lệnh> của bạn và của project.',
   'Pi: /session thông tin cuộc trò chuyện · /resume mở cuộc trò chuyện công ty khác · /new cuộc mới · /compact nén ngữ cảnh · /tree, /fork nhánh · /name đặt tên · /copy, /export · /hotkeys toàn bộ phím tắt · /quit thoát.',
   'Phím: ! <lệnh> chạy shell · Esc dừng lượt đang chạy · Ctrl+C xoá ô nhập, hai lần để thoát · Ctrl+O xem thêm.',
   'Mở lại sau: piagent studio --project <thư mục>, rồi /resume. Đừng mở cuộc trò chuyện công ty bằng pi cá nhân.',
@@ -74,7 +75,7 @@ const ASK = 'Hỏi trước (mặc định)', FULL = 'Toàn quyền: hỏi việ
 const PERMISSION_TEXT = {
   'workspace-write': 'Hỏi trước: mọi lệnh ra ngoài sandbox (internet, Docker, trên máy) đều hỏi bạn.',
   'trusted-full-access': 'Toàn quyền: lệnh cần internet hoặc Docker chạy luôn; vẫn hỏi việc bàn giao (push, PR, publish, deploy, upload, ssh), migration, xoá không rõ đích, sudo và từng lệnh trên máy.',
-  'always-bypass': 'Always bypass: cảnh báo, quyền này do bạn quyết định. Không sandbox: mọi lệnh chạy thẳng trên máy bằng quyền của bạn, gồm cả internet, MCP, deploy, xoá và thông tin đăng nhập; chỉ hỏi khi commit, push code và xoá đường dẫn quan trọng (như rm -rf ~); plan còn bước chưa làm thì commit và push để tới cuối, hỏi một lần; /commit-ask off để commit không hỏi. Web hay file lừa được agent thì cũng không có gì chặn. Output vẫn che secret, /undo vẫn dùng được.',
+  'always-bypass': 'Always bypass: cảnh báo, quyền này do bạn quyết định. Không sandbox: mọi lệnh chạy thẳng trên máy bằng quyền của bạn, gồm cả internet, MCP, deploy, xoá và thông tin đăng nhập; chỉ hỏi khi commit, push code và xoá đường dẫn quan trọng (như rm -rf ~); plan còn bước chưa làm thì commit và push để tới cuối, hỏi một lần; /commit-ask off để commit không hỏi; /autopilot on (hoặc bạn viết "tự commit, push, không cần hỏi") để chạy liên tục, commit và push không hỏi tới hết cuộc trò chuyện. Web hay file lừa được agent thì cũng không có gì chặn. Output vẫn che secret, /undo vẫn dùng được.',
   bypass: 'Bypass: việc làm chạy luôn (internet, Docker, lệnh trên máy, migration); việc bàn giao vẫn hỏi (push, PR, publish, deploy, upload, ssh, MCP ghi ra ngoài) cùng lệnh đụng thông tin đăng nhập. Lệnh thường vẫn trong sandbox, /undo vẫn dùng được.',
 };
 const PERMISSION_NAME = { 'workspace-write': 'Hỏi trước', 'trusted-full-access': 'Toàn quyền', bypass: 'Bypass', 'always-bypass': 'Always bypass' };
@@ -155,13 +156,26 @@ export function planLines(plan) {
 // is open (at most 6 lines, so a question under it keeps its answers on
 // screen), and each subagent running now with its job and latest step.
 export function planWidget(plan) {
-  return unfinished(plan) ? planPanelLines(plan.plan) : undefined;
+  if (!unfinished(plan)) return undefined;
+  const added = new Map((plan.phase?.added ?? []).filter((a) => a.round > 0).map((a) => [a.step.toLowerCase().replace(/\s+/g, ' ').trim(), sourceName(a.source)]));
+  return planPanelLines(plan.plan, 6, { head: plan.phase ? plan.phase.head ?? phaseHead(plan) : undefined, addedFrom: (p) => added.get(p.step.toLowerCase().replace(/\s+/g, ' ').trim()) });
 }
-export function helperLines(helpers) {
+const HELPER_LABEL = { scout: 'Explore', research: 'Scout', advisor: 'Advisor', general: 'General', review: 'Review' };
+const ENDED = { succeeded: 'xong', failed: 'lỗi', cancelled: 'đã dừng', unverifiable: 'chưa kiểm chứng được' };
+const age = (since, now) => { const s = Math.max(0, Math.floor((now - Date.parse(since ?? '')) / 1000)); return Number.isFinite(s) ? (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`) : ''; };
+// The subagent panel above the input: each subagent's role, its job and what
+// it does now, how long and how many steps; then the ones that ended in this
+// message with how they ended and their recommendation (owner, 2026-11-14).
+export function helperLines(helpers, done = [], now = Date.now()) {
   const list = Array.isArray(helpers) ? helpers.filter((h) => typeof h?.role === 'string') : [];
-  if (!list.length) return undefined;
+  const ended = Array.isArray(done) ? done.filter((d) => typeof d?.role === 'string') : [];
+  if (!list.length && !ended.length) return undefined;
   const many = (role) => list.filter((h) => h.role === role).length > 1;
-  return [`Subagent đang chạy · ${list.length}`, ...list.map((h) => `  ⟳ ${h.role}${many(h.role) ? ` ${h.slot ?? 1}` : ''}${h.job ? ` · ${String(h.job).slice(0, 60)}` : ''}${h.step ? ` — ${String(h.step).slice(0, 70)}` : ''}`)];
+  const name = (role) => HELPER_LABEL[role] ?? role;
+  return [`Subagent · ${list.length} đang chạy${ended.length ? ` · ${ended.length} đã xong` : ''}`,
+    ...list.flatMap((h) => [`  ⟳ ${name(h.role)}${many(h.role) ? ` ${h.slot ?? 1}` : ''}${h.job ? ` · ${String(h.job).slice(0, 100)}` : ''}${h.startedAt ? ` · ${age(h.startedAt, now)}` : ''}${Number.isInteger(h.steps) ? ` · ${h.steps} bước` : ''}`,
+      ...(h.step ? [`      → ${String(h.step).slice(0, 110)}`] : [])]),
+    ...ended.map((d) => `  ${d.outcome === 'succeeded' && !d.unverified ? '✓' : '!'} ${name(d.role)}${d.job ? ` · ${String(d.job).slice(0, 70)}` : ''} · ${d.unverified ? 'thiếu evidence' : ENDED[d.outcome] ?? d.outcome}${d.recommendation ? ` · khuyến nghị: ${String(d.recommendation).slice(0, 90)}` : ''}`)];
 }
 
 // A harness note's details, in the shape the shared copy reads.
@@ -340,8 +354,9 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     registerStyleCommand(pi, { remember: true });
 
     // Ask first, Full access or Bypass, kept with the conversation like the dashboard's switch.
-    const showPermission = (ctx) => { const mode = managed() ? effectivePermission(managed()) : null; ctx.ui?.setStatus?.(PERMISSION_STATUS, mode && mode !== 'workspace-write' ? `${PERMISSION_NAME[mode]}${mode === 'always-bypass' && managed().commitAsk === false ? ' · commit không hỏi' : ''}` : undefined); };
+    const showPermission = (ctx) => { const mode = managed() ? effectivePermission(managed()) : null; ctx.ui?.setStatus?.(PERMISSION_STATUS, mode && mode !== 'workspace-write' ? `${PERMISSION_NAME[mode]}${mode === 'always-bypass' && managed().autopilot?.on ? ' · chạy liên tục' : mode === 'always-bypass' && managed().commitAsk === false ? ' · commit không hỏi' : ''}` : undefined); };
     registerCommitAskCommand(pi, { managed, completions: argumentCompletions, refresh: showPermission });
+    registerAutopilotCommand(pi, { managed, completions: argumentCompletions, refresh: showPermission });
     pi.on('session_start', async (_event, ctx) => showPermission(ctx));
     pi.registerCommand('bypass', {
       description: 'Quyền của cuộc trò chuyện công ty này: always (Always bypass: không sandbox, chỉ hỏi commit, push và rm đường dẫn quan trọng), on (Bypass, khi Harness cho phép), full (Toàn quyền), off (Hỏi trước), hoặc để trống để chọn',
@@ -456,8 +471,10 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
       showPlan();
       const hear = (event) => {
         if (event?.type === 'tool_execution_end' && event.toolName === 'update_plan' || event?.type === 'agent_end') showPlan();
-        if (event?.type === 'managed_helper_state') ctx.ui?.setWidget?.('agent-watch-helpers', helperLines(event.helpers));
+        if (event?.type === 'agent_start') ctx.ui?.setWidget?.('agent-watch-helpers', undefined); // a new message: the last one's subagents leave
+        if (event?.type === 'managed_helper_state') ctx.ui?.setWidget?.('agent-watch-helpers', helperLines(event.helpers, event.done));
         if (event?.type === 'managed_helpers') ctx.ui?.setStatus?.('agent-watch-helpers', event.active ? `Subagent ${event.active}/${event.maximum}` : undefined);
+        if (event?.type === 'managed_autopilot') { showPermission(ctx); ctx.ui?.notify?.(autopilotNotice(managed()), 'info'); }
         if (event?.type === 'managed_project_warning') ctx.ui?.notify?.(projectWarningText(event.warnings, event.team, LOCALE), 'warning');
         const end = event?.type === 'managed_turn_end' ? turnEndOf(event.end) : null;
         if (!end) return;

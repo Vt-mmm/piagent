@@ -427,6 +427,7 @@ export type SessionRow = {
   };
   managedFast?: "off" | "on";
   managedPlan?: {
+    head?: string;
     /**
      * @minItems 1
      * @maxItems 30
@@ -435,10 +436,12 @@ export type SessionRow = {
       {
         step: string;
         status: "pending" | "in_progress" | "completed" | "deferred";
+        source?: string;
       },
       ...{
         step: string;
         status: "pending" | "in_progress" | "completed" | "deferred";
+        source?: string;
       }[]
     ];
   };

@@ -23,6 +23,7 @@ import { answeredSettlement, failedSettlement, settleHelper, OUTCOME_WORDS } fro
 import { viaLink } from './studio-link.mjs';
 import { unsandboxedBash } from './command-tools.mjs';
 import { alwaysBypass } from './permission.mjs';
+import { OPINION_ROLES, opinionNote, opinionWords, readOpinion } from './opinion.mjs';
 
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
 // A helper failure that another model of its role may not have: the model's
@@ -105,13 +106,18 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     managed.session.sessionManager.appendCustomEntry('agent-watch-review', details);
   }
   const report = result.report ?? answeredSettlement(role, reply, details, managed.helperSpecs?.get(role) ?? {}); details.outcome = report.outcome;
+  // Explore, scout and advisor answer with a recommendation and evidence (opinion.mjs).
+  const opinion = OPINION_ROLES.has(role) && !snapshot ? readOpinion(role, reply, managed.cwd) : null;
+  if (opinion && managed.run) (managed.run.opinions ??= []).push({ role, recommendation: opinion.recommendation, evidence: opinion.checked.slice(0, 6) });
+  if (opinion) details.opinion = { recommendation: opinion.recommendation, options: opinion.options.map(o => o.label), evidence: opinion.checked.slice(0, 12), issues: opinion.issues };
+  helperEnded(managed, role, { job: title || task.split('\n').find(line => line.trim()) || '', outcome: report.outcome, recommendation: opinion?.recommendation, unverified: !!opinion?.issues.length });
   await managed.session.sendCustomMessage({ customType: 'agent-watch-helper-receipt', display: true,
-    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
+    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''}${opinionWords(opinion)} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
   // An objection to the brief comes with the answer; a stale review has none to act on.
   const objection = stale ? '' : await relayObjection(managed, role, reply, harness);
   const ending = `Outcome: ${report.outcome}${report.outcome === 'unverifiable' ? ` (${report.summary})` : ''}.\n\n`;
   // The helper read untrusted content: its answer is data for the main agent.
-  return { content: [{ type: 'text', text: ending + (stale ? 'Review is stale: the patch changed during review. Ask for another review only after fixing blocking findings; under a required review the harness reviews the final patch.' : fenced(`${setup.label} helper's answer`, reply) + objection) }], details };
+  return { content: [{ type: 'text', text: ending + (stale ? 'Review is stale: the patch changed during review. Ask for another review only after fixing blocking findings; under a required review the harness reviews the final patch.' : fenced(`${setup.label} helper's answer`, reply) + (opinion ? opinionNote(setup.label, opinion) : '') + objection) }], details };
 }
 
 // One grant of the role (`key`: the role, or role#slot) and the helper
@@ -202,6 +208,9 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     const stale = snapshot ? (await (from ? readPatchDigest(managed.boundary, null, from.base) : managed.patchDigest())) !== snapshot.digest : false;
     const findings = snapshot ? (review ? review.findings : reviewFindings(reply)) : null;
     report = answeredSettlement(role, reply, snapshot ? { stale, parsed: review ? review.parsed : !!findings, findings: findings ?? [] } : {}, spec);
+    // An opinion without evidence or a recommendation is not what the role needs (opinion.mjs).
+    const opinion = OPINION_ROLES.has(role) && !snapshot ? readOpinion(role, reply, cwd) : null;
+    if (opinion?.issues.some(i => /^no /.test(i))) report = { ...report, outcome: 'unverifiable', summary: `Unverified: ${opinion.issues.join('; ')}. ${report.summary}`.slice(0, 600) };
     return { reply, usage, review, stale, from, grant, report };
   } catch (error) { report = failedSettlement(role, error, signal, spec); throw error; }
   finally {
@@ -219,7 +228,13 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
 export function helperState(managed, key, state) {
   const states = managed.helperStates ??= new Map();
   if (state) states.set(key, state); else states.delete(key);
-  managed.notify?.({ type: 'managed_helper_state', helpers: [...states].map(([k, s]) => ({ key: k, role: baseRole(k), slot: slotArgs(k).slot ?? 1, ...s })) });
+  managed.notify?.({ type: 'managed_helper_state', helpers: [...states].map(([k, s]) => ({ key: k, role: baseRole(k), slot: slotArgs(k).slot ?? 1, ...s })), done: managed.helperDone ?? [] });
+}
+// A subagent that ended stays on the panel with how it ended and its
+// recommendation, until the member's next message (the four latest).
+export function helperEnded(managed, role, { job = '', outcome, recommendation = '', unverified = false } = {}) {
+  managed.helperDone = [...(managed.helperDone ?? []), { role, job: String(job).slice(0, 120), outcome, recommendation: String(recommendation).slice(0, 160), unverified, at: new Date().toISOString() }].slice(-4);
+  helperState(managed, '', null); // tells the panel
 }
 // What a helper is doing, for the terminal's subagent panel: the job and its
 // latest tool step, told to listeners as it changes (company-terminal.mjs).
@@ -227,12 +242,12 @@ function watchHelper(managed, key, session, task, title) {
   const job = String(title || task.split('\n').find(line => line.trim()) || '').trim().slice(0, 120);
   const logs = managed.helperLogs ??= new Map();
   const log = logs.get(key) ?? { job, startedAt: new Date().toISOString(), total: 0, steps: [] }; logs.set(key, log);
-  helperState(managed, key, { job, step: 'đọc brief' });
+  helperState(managed, key, { job, step: 'đọc brief', startedAt: log.startedAt, steps: log.total });
   session.subscribe?.(event => {
     if (event?.type !== 'tool_execution_start') return;
     const args = stepArgs(event.args);
     log.total += 1; log.steps.push({ tool: String(event.toolName), args, at: new Date().toISOString() }); log.steps.splice(0, log.steps.length - HELPER_STEPS_KEPT);
-    helperState(managed, key, { job, step: stepText(event.toolName, event.args), tool: String(event.toolName), args });
+    helperState(managed, key, { job, step: stepText(event.toolName, event.args), tool: String(event.toolName), args, startedAt: log.startedAt, steps: log.total });
   });
 }
 // A helper's session lives in memory: what it called is kept here so the

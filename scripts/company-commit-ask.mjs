@@ -31,3 +31,25 @@ export function registerCommitAskCommand(pi, { managed, completions, refresh }) 
       ctx.ui.notify(commitAskNotice(owner), 'info');
     } });
 }
+
+// /autopilot: chạy liên tục (managed/autopilot.mjs). The agent turns it on by
+// quoting the member's own words; the member turns it on or off here.
+export function autopilotNotice(owner) {
+  const state = owner?.autopilot;
+  const text = state?.on ? `Chạy liên tục: commit, push và merge không hỏi tới hết cuộc trò chuyện${state.words ? ` (theo lời bạn: "${state.words}")` : ''}. Xoá đường dẫn quan trọng vẫn hỏi. Tắt: /autopilot off.` : 'Chạy liên tục đang tắt: commit và push hỏi như Always bypass (cuối plan, một lần).';
+  return effectivePermission(owner) === 'always-bypass' ? text : `${text} ${COMMIT_ASK_TEXT.other}`;
+}
+export function registerAutopilotCommand(pi, { managed, completions, refresh }) {
+  pi.registerCommand('autopilot', {
+    description: 'Always bypass: on để chạy liên tục (commit, push, merge không hỏi cả cuộc trò chuyện), off để hỏi lại, status để xem',
+    getArgumentCompletions: completions(['on', 'off', 'status']),
+    handler: async (args, ctx) => {
+      const owner = managed();
+      if (typeof owner?.session?.managedSetAutopilot !== 'function') { ctx.ui.notify('Cuộc trò chuyện này chưa sẵn sàng.', 'error'); return; }
+      const arg = args.trim().toLowerCase();
+      if (!['', 'on', 'off', 'status'].includes(arg)) { ctx.ui.notify('Cách dùng: /autopilot on|off|status', 'warning'); return; }
+      if (arg === 'on' || arg === 'off') owner.session.managedSetAutopilot(arg === 'on', { words: arg === 'on' ? '/autopilot on' : '', by: 'member' });
+      refresh(ctx);
+      ctx.ui.notify(autopilotNotice(owner), 'info');
+    } });
+}

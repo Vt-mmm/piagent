@@ -17,7 +17,7 @@ import { piSdkRoot } from './helpers/pi-sdk.mjs';
 const R = path.resolve(import.meta.dirname, '..');
 const sdkRoot = piSdkRoot();
 const sha = f => createHash('sha256').update(fs.readFileSync(f)).digest('hex'), studioScript = fs.realpathSync(path.join(R, 'scripts/piagent-studio.mjs'));
-const QUESTIONS = [{ header: 'Phạm vi', question: 'Sửa cả màn hình admin không?', options: [{ label: 'Chỉ trang khách' }, { label: 'Cả admin' }] }];
+const QUESTIONS = [{ header: 'Phạm vi', question: 'Sửa cả màn hình admin không?', options: [{ label: 'Chỉ trang khách' }, { label: 'Cả admin' }], evidence: 'src/admin/index.js:1 dùng chung component' }];
 
 test('a question left waiting when the Gateway goes down is asked again after one click on continue', { skip: process.platform !== 'darwin' || !fs.existsSync(sdkRoot), timeout: 180000 }, async () => {
   ensureWebUiBuild(R);

@@ -4,21 +4,24 @@
 // of many lines) pushed the answers off the screen, under the checklist.
 
 const MARK = { completed: '☑', in_progress: '☐', deferred: '⊘', pending: '☐' };
-const stepLine = (p) => `  ${MARK[p.status] ?? '☐'} ${p.step}${p.status === 'in_progress' ? '  ← đang làm' : p.status === 'deferred' ? '  (để sau)' : ''}`;
+const stepLine = (p, added) => `  ${MARK[p.status] ?? '☐'} ${p.step}${added?.(p) ? `  [+${added(p)}]` : ''}${p.status === 'in_progress' ? '  ← đang làm' : p.status === 'deferred' ? '  (để phase sau)' : ''}`;
 
 // The checklist in at most `max` lines: the steps done before the first open
 // one fold into a count, and the open steps that do not fit into another.
-export function planPanelLines(plan, max = 6) {
+// `phase` (managed/plan-phase.mjs): the header with original and added steps,
+// and where an added step came from.
+export function planPanelLines(plan, max = 6, phase = null) {
   const steps = Array.isArray(plan) ? plan : [];
-  const head = `Plan · ${steps.filter((p) => p.status === 'completed').length}/${steps.length} bước xong`;
-  if (steps.length + 1 <= max) return [head, ...steps.map(stepLine)];
+  const head = phase?.head ?? `Plan · ${steps.filter((p) => p.status === 'completed').length}/${steps.length} bước xong`;
+  const line = (p) => stepLine(p, phase?.addedFrom);
+  if (steps.length + 1 <= max) return [head, ...steps.map(line)];
   const first = steps.findIndex((p) => p.status !== 'completed');
   const done = first < 0 ? steps.length : first;
   const lines = [head];
   if (done) lines.push(`  ☑ ${done} bước đầu đã xong`);
   const rest = steps.slice(done), room = max - lines.length;
-  if (rest.length <= room) return [...lines, ...rest.map(stepLine)];
-  return [...lines, ...rest.slice(0, room - 1).map(stepLine), `  … ${rest.length - room + 1} bước nữa`];
+  if (rest.length <= room) return [...lines, ...rest.map(line)];
+  return [...lines, ...rest.slice(0, room - 1).map(line), `  … ${rest.length - room + 1} bước nữa`];
 }
 
 // The rows a question's text may take: the window less the question's frame

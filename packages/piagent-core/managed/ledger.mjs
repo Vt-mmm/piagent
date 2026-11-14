@@ -2,6 +2,7 @@ import { callName } from './role-names.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { briefIssues } from './workflow.mjs';
+import { conflictText, CONFLICT_ASK } from './conflict.mjs';
 
 // The objection ledger: what a helper holds against the main agent's work in
 // one run (one member message), and what the main agent decided about it.
@@ -131,7 +132,7 @@ export async function settleLedger(managed, run, { note, send, signal }) {
     catch { return true; }
     if (!briefIssues(reply)?.length) { setStatus(rejected, 'withdrawn'); return true; }
     setStatus(rejected, 'disputed'); run.disputes.push({ source: rejected.role, brief: true });
-    await note(`Harness: the ${callName(rejected.role)} subagent keeps its objection; the member decides.\n${itemText(rejected)}`, { phase: 'dispute', role: rejected.role, id: rejected.id });
+    await note(`Harness: the ${callName(rejected.role)} subagent keeps its objection; the member decides.\n${conflictText(run, [rejected])}\n${CONFLICT_ASK}`, { phase: 'dispute', role: rejected.role, id: rejected.id, conflict: conflictText(run, [rejected]) });
     return true;
   }
   const asked = run.decidedAsked ??= new Set(), pending = undecided(run).filter(item => !asked.has(item.id));

@@ -9,9 +9,13 @@ export function managedProjection(context: any, entries: any[]) {
   const capabilities = last('agent-watch-model')?.managedThinkingLevels;
   const levels = ['off','minimal','low','medium','high','xhigh','max'];
   // The agent's checklist (update_plan) and how its last code-changing turn ended.
-  const plan = last('agent-watch-plan')?.plan;
+  const planEntry = last('agent-watch-plan'), plan = planEntry?.plan;
+  // The phase (plan-phase.mjs): its header, and where each step added since the first checklist came from.
+  const key = (text: unknown) => String(text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const added = new Map<string, string>((Array.isArray(planEntry?.phase?.added) ? planEntry.phase.added : []).filter((a: any) => a?.round > 0 && typeof a.kind === 'string' && a.kind.trim()).map((a: any) => [key(a.step), String(a.kind).trim().slice(0, 20)]));
+  const head = typeof planEntry?.phase?.head === 'string' && planEntry.phase.head.trim() ? planEntry.phase.head.trim().slice(0, 200) : null;
   const steps = Array.isArray(plan) && plan.length >= 1 && plan.length <= 30 && plan.every((p: any) => typeof p?.step === 'string' && p.step.trim() && STATUS.includes(p.status))
-    ? plan.map((p: any) => ({ step: p.step.trim().slice(0, 200), status: p.status })) : null;
+    ? plan.map((p: any) => ({ step: p.step.trim().slice(0, 200), status: p.status, ...(added.get(key(p.step)) ? { source: added.get(key(p.step)) } : {}) })) : null;
   const final = entries.filter(e => e.type === 'custom_message' && e.customType === 'agent-watch-process' && e.details?.phase === 'final').at(-1)?.details;
   const process = final && OUTCOMES.includes(final.outcome) ? { outcome: final.outcome, verified: final.verified === true, reviewed: final.reviewed === true,
     blockingOpen: Number.isInteger(final.blockingOpen) && final.blockingOpen >= 0 ? Math.min(final.blockingOpen, 1000) : 0, ...(final.planSkipped === true ? { planSkipped: true as const } : {}) } : null;
@@ -51,5 +55,5 @@ export function managedProjection(context: any, entries: any[]) {
   const projectWarning = projectWarnings.length ? { warnings: projectWarnings, ...(typeof project.team === 'string' && project.team.trim() ? { team: project.team.trim().slice(0, 80) } : {}) } : null;
   return {modelLabel:'agent-watch-auto', managedPermission: permission, ...(bypassAllowed ? {managedBypass: true as const} : {}), ...(fast?.allowed === true ? {managedFast: fast.enabled === true ? 'on' as const : 'off' as const} : {}), managedHelpers:{active, maximum, ...(roles.length ? {roles} : {}), ...(typeof since === 'string' ? {since} : {})},
     ...(Array.isArray(capabilities)?{managedThinkingLevels:levels.filter(level=>capabilities.includes(level))}:{}),
-    ...(steps ? {managedPlan:{steps}} : {}), ...(process ? {managedProcess:process} : {}), ...(turnEnd ? {managedTurnEnd:turnEnd} : {}), ...(review ? {managedReview:review} : {}), ...(projectWarning ? {managedProjectWarning:projectWarning} : {})};
+    ...(steps ? {managedPlan:{...(head ? {head} : {}), steps}} : {}), ...(process ? {managedProcess:process} : {}), ...(turnEnd ? {managedTurnEnd:turnEnd} : {}), ...(review ? {managedReview:review} : {}), ...(projectWarning ? {managedProjectWarning:projectWarning} : {})};
 }

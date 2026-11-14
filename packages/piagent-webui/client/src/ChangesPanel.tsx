@@ -19,7 +19,7 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import type { SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { PiagentWebUISourceChangeViewV1 } from "../../contracts/generated/source-change-v1.ts";
 import { readSessionSourceChanges } from "./api.ts";
-import type { LiveConversation } from "./live-state-view-model.ts";
+import { helperRows, type LiveConversation } from "./live-state-view-model.ts";
 import { compactTokens } from "./timeline-view-model.ts";
 import { liveToolKind } from "./ToolCard.tsx";
 import { toneText, type Tone } from "./tone.ts";
@@ -68,7 +68,7 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
   // A Harness without helpers shows no helper count.
   const helpers = session.managedHelpers?.maximum === 0 ? undefined : session.managedHelpers, plan = session.managedPlan, process = session.managedProcess;
   const done = plan?.steps.filter((step) => step.status === "completed").length ?? 0;
-  const helperRuns = (live?.activities ?? []).filter((activity) => liveToolKind(activity.toolLabel) === "subagent");
+  const helperRuns = (live?.activities ?? []).filter((activity) => liveToolKind(activity.toolLabel) === "subagent"), subagents = helperRows(live?.activities ?? [], locale);
   return <Box role="region" sx={{ height: "100%", overflowY: "auto", bgcolor: "background.paper" }} aria-label={localize(locale, "Thay đổi và ngữ cảnh", "Changes and context")}>
     <Stack direction="row" sx={{ alignItems: "center", gap: 1, px: 2, minHeight: 52, borderBottom: 1, borderColor: "divider" }}>
       <Typography sx={{ fontWeight: 600, flex: 1 }}>{localize(locale, "Workspace", "Workspace")}</Typography>
@@ -97,14 +97,14 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
           {(file.stats?.deletions ?? 0) > 0 && <Box component="span" sx={toneText("error")}>−{file.stats.deletions}</Box>}</Typography>
       </Stack>)}</Stack>
     </Section>
-    {(plan || process) && <Section title={plan ? localize(locale, `Plan · ${done}/${plan.steps.length}`, `Plan · ${done}/${plan.steps.length}`) : localize(locale, "Tiến trình", "Process")}>
+    {(plan || process) && <Section title={plan ? plan.head ?? localize(locale, `Plan · ${done}/${plan.steps.length}`, `Plan · ${done}/${plan.steps.length}`) : localize(locale, "Tiến trình", "Process")}>
       {plan && <Stack component="ol" spacing={.25} sx={{ m: 0, p: 0, listStyle: "none" }} aria-label={localize(locale, "Plan của agent", "Agent plan")}>{plan.steps.map((step, index) => {
         const Icon = step.status === "completed" ? CheckBoxRounded : step.status === "in_progress" ? PlayCircleOutlineRounded : step.status === "deferred" ? RemoveCircleOutlineRounded : CheckBoxOutlineBlankRounded;
         return <Stack component="li" key={index} direction="row" sx={{ alignItems: "flex-start", gap: .75, py: .25 }}
           aria-label={`${step.step}: ${step.status === "completed" ? localize(locale, "xong", "done") : step.status === "in_progress" ? localize(locale, "đang làm", "in progress") : step.status === "deferred" ? localize(locale, "để sau", "left for later") : localize(locale, "chưa làm", "pending")}`}>
           <Icon sx={{ fontSize: 16, mt: .2, color: step.status === "in_progress" ? "primary.main" : "text.secondary" }} />
           <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", ...(step.status === "completed" ? { color: "text.secondary", textDecoration: "line-through" } : step.status === "deferred" ? { color: "text.disabled", fontStyle: "italic" } : {}),
-            ...(step.status === "in_progress" ? { fontWeight: 600 } : {}) }}>{step.step}</Typography></Stack>;
+            ...(step.status === "in_progress" ? { fontWeight: 600 } : {}) }}>{step.step}{step.source && <Box component="span" sx={{ ml: .75, color: "text.secondary", fontSize: 11.5 }}>+{step.source}</Box>}{step.status === "deferred" && <Box component="span" sx={{ ml: .75, fontSize: 11.5 }}>{localize(locale, "(để phase sau)", "(next phase)")}</Box>}</Typography></Stack>;
       })}</Stack>}
       {process && process.outcome !== "no_change" && <Typography variant="body2" role="status" sx={{ mt: plan ? 1 : 0, ...toneText(processTone(process)) }}>
         {localize(locale, "Lượt sửa code gần nhất: ", "Last code-changing turn: ")}{outcomeText(process, locale)}</Typography>}
@@ -116,10 +116,17 @@ export function ChangesPanel({ session, snapshot, live, locale, onOpenReview, on
       <LinearProgress variant="determinate" value={Math.min(100, Math.max(0, percent ?? 0))} sx={{ height: 6, borderRadius: 1 }}
         color={(percent ?? 0) > 85 ? "warning" : "primary"} aria-label={localize(locale, "Mức dùng ngữ cảnh", "Context usage")} />
     </Section>
-    {(helpers || helperRuns.length > 0) && <Section title="Subagent">
+    {(helpers || helperRuns.length > 0 || subagents.length > 0) && <Section title="Subagent">
       {helpers && <Typography variant="body2" color="text.secondary" sx={{ mb: helperRuns.length ? .75 : 0 }}>
         {localize(locale, `${helpers.active ?? 0}/${helpers.maximum} đang chạy`, `${helpers.active ?? 0}/${helpers.maximum} running`)}</Typography>}
-      {helperRuns.map((run) => <Stack key={run.toolCallRef} direction="row" sx={{ alignItems: "center", gap: .75, py: .25 }}>
+      {subagents.length > 0 && <Stack component="ul" spacing={.25} sx={{ m: 0, mb: helperRuns.length ? .75 : 0, p: 0, listStyle: "none" }} aria-label={localize(locale, "Subagent và việc đang làm", "Subagents and what they do")}>
+        {subagents.map((row) => <Stack component="li" key={row.agent} direction="row" sx={{ alignItems: "flex-start", gap: .75, py: .25 }}>
+          <AccountTreeOutlined sx={{ fontSize: 15, mt: .25, color: row.running ? "primary.main" : "text.secondary" }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 600 }}>{row.role}
+            <Box component="span" sx={{ ml: .75, fontWeight: 400, color: "text.secondary", fontSize: 12 }}>{row.running ? localize(locale, "đang chạy", "running") : localize(locale, "xong", "done")} · {localize(locale, `${row.steps} bước`, `${row.steps} steps`)}</Box></Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontFamily: MONO, overflowWrap: "anywhere" }}>{row.doing}</Typography></Box>
+        </Stack>)}</Stack>}
+      {subagents.length === 0 && helperRuns.map((run) => <Stack key={run.toolCallRef} direction="row" sx={{ alignItems: "center", gap: .75, py: .25 }}>
         <AccountTreeOutlined sx={{ fontSize: 15, color: "text.secondary" }} />
         <Typography variant="body2" sx={{ flex: 1 }}>{run.fileLabel ?? "subagent"}</Typography>
         <Typography variant="caption" color={run.state === "failed" ? "error" : "text.secondary"}>{run.state === "running"

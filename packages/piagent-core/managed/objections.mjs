@@ -1,6 +1,7 @@
 import { callName } from './helper-roles.mjs';
 import { briefIssues, currentPlan, planText } from './workflow.mjs';
 import { addItems, itemText, ledgerOf, setStatus } from './ledger.mjs';
+import { conflictText, CONFLICT_ASK } from './conflict.mjs';
 export { resolveTool } from './ledger.mjs';
 
 // A helper may object to the brief it was given, with evidence. It never
@@ -68,10 +69,10 @@ export async function relayObjection(managed, role, reply, harness) {
   const second = ledgerOf(run).some(i => i.source === 'brief' && i.role === role), items = addItems(managed, 'brief', role, issues), list = items.map(itemText).join('\n');
   if (second) { run.disputes.push({ source: role, brief: true }); for (const item of items) setStatus(item, 'disputed'); }
   await managed.session.sendCustomMessage({ customType: 'agent-watch-process', display: true,
-    content: second ? `Harness: the ${callName(role)} subagent objected to a brief a second time for this message; the exchange stops and the member decides.\n${list}`
+    content: second ? `Harness: the ${callName(role)} subagent objected to a brief a second time for this message; the exchange stops and the member decides.\n${conflictText(run, ledgerOf(run).filter(i => i.source === 'brief' && i.role === role))}`
       : `Harness: the ${callName(role)} subagent objected to the brief the main agent gave it:\n${list}`,
     details: { phase: second ? 'dispute' : 'objection', role, by: 'main', issues: issues.map(({ kind, detail }) => ({ kind, detail })), ids: items.map(i => i.id) } }, { triggerTurn: false });
-  if (second) return `\n\n[Harness] The ${callName(role)} subagent objected to your brief again. This is its second objection for this message, so the harness ends the exchange: do not delegate to it again before the member's next message. Tell the member plainly what it objects to and what you decided, and let them decide.`;
+  if (second) return `\n\n[Harness] The ${callName(role)} subagent objected to your brief again. This is its second objection for this message, so the harness ends the exchange: do not delegate to it again before the member's next message. ${CONFLICT_ASK}`;
   const blocking = items.filter(i => i.required);
   return `\n\n[Harness] The ${callName(role)} subagent objected to your brief:\n${list}\nCheck each at the place its evidence names, then record your decision with resolve_objection (accepted with what you changed, or rejected with what you checked and why).${blocking.length ? ` Until you do, file changes are refused: ${blocking.map(i => i.id).join(', ')} say${blocking.length === 1 ? 's' : ''} the brief rests on a wrong premise or conflicts with the request.` : ''} A rejected objection goes back to the helper; a second objection from it for this message goes to the member.`;
 }

@@ -25,7 +25,7 @@ import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut,
 import { HELPER_CALLS, HELPER_ROLES, ROLE_NAMES, callName, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
-import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs';
+import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs'; import { autopilotTool, autopilotSetter, restoreAutopilot } from './autopilot.mjs';
 import { commandTools, hostBash, servicesPrompt, unsandboxedBash } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
@@ -126,7 +126,7 @@ export class ManagedSession {
     if (roles.length) customTools.push({ name: 'delegate', label: 'Subagent', description: delegateDescription(roles) + SPEC_PROMPT,
       parameters: delegateParameters(), // the brief and its structured fields (helper-settlement.mjs)
       execute: (_id, args, signal) => self.delegate(delegateArgs(self, args), signal) });
-    customTools.push(sessionPlanTool(self), waiveChecksTool(self), ...(roles.length ? [resolveTool(self)] : [])); // the member's waiver of checks (check-waiver.mjs), the objection ledger's decisions (ledger.mjs)
+    customTools.push(sessionPlanTool(self), waiveChecksTool(self), autopilotTool(self), ...(roles.length ? [resolveTool(self)] : [])); // the member's waiver of checks (check-waiver.mjs), the objection ledger's decisions (ledger.mjs)
     // The member decides what the request leaves open: numbered options, or their own words.
     customTools.push(workflowContextTool(() => self.session.sessionManager));
     customTools.push(askTool(self), ...memoryToolsFor(self, agentDir)); // team memory's tools, once Studio answered memory here (memory.mjs)
@@ -168,7 +168,7 @@ export class ManagedSession {
     self.turnRetry = enableCompanyTurnRetry(self.session, settings, self.studioLink);
     // The member's access for this conversation: Ask first, Full access or Bypass (permission.mjs).
     self.permission = restorePermission(manager); recordBypass(self, manager); self.session.managedSetPermission = permissionSetter(self, manager); self.boundary.unsandboxed = () => alwaysBypass(self);
-    self.commitAsk = restoreCommitAsk(manager); self.session.managedSetCommitAsk = commitAskSetter(self, manager); self.session.managedCommitAsk = () => self.commitAsk !== false;
+    self.commitAsk = restoreCommitAsk(manager); self.session.managedSetCommitAsk = commitAskSetter(self, manager); self.session.managedCommitAsk = () => self.commitAsk !== false; self.autopilot = restoreAutopilot(manager); self.session.managedSetAutopilot = autopilotSetter(self, manager); self.session.managedAutopilot = () => self.autopilot; // chạy liên tục (autopilot.mjs)
     // Fast mode, where the Harness allows it (fast-mode.mjs): off until the member turns it on.
     self.fast = restoreFast(manager); recordFast(self, manager); self.session.managedSetFast = fastSetter(self, manager); self.session.managedFastState = () => fastState(self); // null where the Harness does not allow it
     self.session.managedFastServed = () => { const route = self.routes.get(self.modelRuntime); return route ? fastServed(route) : null; };
@@ -255,7 +255,7 @@ export class ManagedSession {
             managedThinkingLevels: managedThinkingLevels(self.manifest,self.modelRuntime,actual),
           });
           self.checks = repositoryChecks(projectInstructions(self.cwd, self.boundary.repositoryTop), self.cwd, self.boundary.repositoryTop);
-          self.run = new RunProcess(workflowPolicy(self.manifest), { request: text, complex: taskClass(text) === 'complex', checks: self.checks });
+          self.run = new RunProcess(workflowPolicy(self.manifest), { request: text, complex: taskClass(text) === 'complex', checks: self.checks }); self.helperDone = [];
           // The files this conversation changed and has not settled: carried
           // over from a turn that was cut, otherwise none yet. The code is
           // compared with the commit the turn started from, so a commit made
