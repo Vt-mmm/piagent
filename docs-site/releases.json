@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.54.1",
+    "date": "2026-11-15",
+    "status": "stable",
+    "title": {
+      "en": "Summaries follow each model's real context, subagents included; reviews skip image bytes",
+      "vi": "Tóm tắt theo context thật của từng model, cả subagent; review bỏ qua mã binary của ảnh"
+    },
+    "summary": {
+      "en": "GPT conversations are summarised before Codex refuses them, subagents are summarised too, and a review of many screenshots reads the code in a few parts.",
+      "vi": "Cuộc trò chuyện GPT được tóm tắt trước khi Codex từ chối, subagent cũng được tóm tắt, và review nhiều ảnh chụp chỉ đọc code trong vài phần."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "Company conversations summarise at 85% of what the model really takes, with room for one large step: GPT through Codex at 212k (it takes about 252k), Claude 1M at 300k.",
+        "vi": "Cuộc trò chuyện công ty tóm tắt ở 85% context model thật sự nhận, chừa chỗ cho một bước lớn: GPT qua Codex ở 212k (nhận khoảng 252k), Claude 1M ở 300k."
+      },
+      {
+        "kind": "improved",
+        "en": "Subagents (review, general, explore, scout, advisor) are summarised at the same trigger as the main agent.",
+        "vi": "Subagent (review, general, explore, scout, advisor) được tóm tắt cùng ngưỡng với agent chính."
+      },
+      {
+        "kind": "fixed",
+        "en": "A review reads a binary, a generated or a large data file as one line, and opens at most 6 images: a guide with 176 screenshots went from 72 parts to 3.",
+        "vi": "Review đọc file binary, file sinh tự động hay file dữ liệu lớn thành một dòng, mở tối đa 6 ảnh: trang hướng dẫn 176 ảnh từ 72 phần còn 3."
+      },
+      {
+        "kind": "improved",
+        "en": "A subagent receipt splits its tokens into new reading, cache read again at each step, and output.",
+        "vi": "Receipt của subagent tách token thành phần đọc mới, phần đọc lại từ cache ở mỗi bước và output."
+      }
+    ]
+  },
+  {
     "version": "1.54.0",
     "date": "2026-11-14",
     "status": "stable",

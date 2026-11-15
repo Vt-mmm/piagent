@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.54.1`: tóm tắt theo context thật của từng model (GPT qua Codex ở 212k, Claude 1M ở 300k), subagent cũng được tóm tắt; review đọc ảnh, file sinh tự động và file dữ liệu lớn thành một dòng, mở tối đa 6 ảnh; receipt tách token mới, đọc lại cache và output.
 - `1.54.0`: phase tách bước gốc và bước phát sinh, tối đa hai vòng phát sinh; explore, scout, advisor và `ask_user` đưa khuyến nghị là option 1 kèm evidence; thẻ conflict hiện từng bên; Always bypass chạy liên tục (`/autopilot`, hoặc trích lời member) không hỏi commit, push suốt cuộc trò chuyện; panel subagent hiện role và việc đang làm.
 - `1.53.3`: `/compact` giữa các lượt tự mở lượt chạy công ty cho phần tóm tắt, không còn lỗi `managed-run-required`.
 - `1.53.2`: phần tóm tắt giữ mức thinking của lượt chạy (run grant của Studio từ chối mức khác) và được viết 52k token; sửa lỗi `invalid_run_grant` khi tự compact ở 1.53.1.

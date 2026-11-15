@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.54.1 - 2026-11-15
+
+**Summaries follow each model's real context, subagents included; reviews skip image bytes.** GPT conversations are summarised before Codex refuses them, subagents are summarised too, and a review of many screenshots reads the code in a few parts.
+
+### Improved
+
+- Subagents (review, general, explore, scout, advisor) are summarised at the same trigger as the main agent.
+- A subagent receipt splits its tokens into new reading, cache read again at each step, and output.
+
+### Fixed
+
+- Company conversations summarise at 85% of what the model really takes, with room for one large step: GPT through Codex at 212k (it takes about 252k), Claude 1M at 300k.
+- A review reads a binary, a generated or a large data file as one line, and opens at most 6 images: a guide with 176 screenshots went from 72 parts to 3.
+
 ## v1.54.0 - 2026-11-14
 
 **See what each agent does, why it recommends it, and let a long task run on.** A phase shows its original and added steps and stops growing after two rounds; every opinion leads with a recommendation and evidence; Always bypass can run commit and push unasked for the whole conversation.
