@@ -207,7 +207,7 @@ test('explore and advisor helpers run with their own tools and only when the Har
     mainRelease.resolve(); await prompt;
     const receipts=managed.session.sessionManager.getEntries().filter(e=>e.type==='custom_message'&&e.customType==='agent-watch-helper-receipt').map(e=>e.content);
     assert.equal(receipts.length,2);
-    assert.match(receipts[0],/^Explore: \d+ tokens · evidence 1 \(1 file:line có thật\) · done\.$/); assert.match(receipts[1],/^Advisor: \d+ tokens · khuyến nghị: Move the check into CI · evidence 1 \(1 file:line có thật\) · done\.$/);
+    assert.match(receipts[0],/^Explore: \d+ tokens \(mới \d+k? · đọc lại cache \d+k? · output \d+k?\) · evidence 1 \(1 file:line có thật\) · done\.$/); assert.match(receipts[1],/^Advisor: \d+ tokens \(mới \d+k? · đọc lại cache \d+k? · output \d+k?\) · khuyến nghị: Move the check into CI · evidence 1 \(1 file:line có thật\) · done\.$/);
     assert.deepEqual(calls.filter(c=>c.action==='child').map(c=>c.role),['scout','advisor']);
     assert.deepEqual(calls.filter(c=>c.action==='close'&&c.role).map(c=>c.role),['scout','advisor']);
   } finally {

@@ -1,3 +1,4 @@
+import { slimPatch, slimSection } from './review-slim.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -142,8 +143,8 @@ export function reviewText(snapshot) {
     : f.mode === 'directory' ? `=== new folder ${f.path} (a repository of its own, not reviewed)`
     : f.mode === 'outside' ? `=== changed file ${unread(f)}`
     : f.encoding === 'omitted' ? `=== new file ${f.path} (${f.bytes} bytes, too large to review)`
-    : f.encoding === 'utf8' ? `=== new file ${f.path}\n${f.contents}` : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`);
-  return `Patch snapshot ${snapshot.digest}:\n--- ${against(value, snapshot.from)} ---\n${value.patch || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
+    : f.encoding === 'utf8' ? slimSection(f.path, `=== new file ${f.path}\n${f.contents}`, 'new') : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`);
+  return `Patch snapshot ${snapshot.digest}:\n--- ${against(value, snapshot.from)} ---\n${slimPatch(value.patch) || '(no changes to tracked files)'}\n${files.length ? `--- new files ---\n${files.join('\n\n')}` : ''}`;
 }
 
 // A patch larger than one reviewer reads at once (REVIEW_PART_BYTES, about
@@ -167,11 +168,12 @@ export function reviewParts(snapshot, size = REVIEW_PART_BYTES) {
   const sections = [];
   for (const text of String(value.patch ?? '').split(/(?=^diff --git )/m).filter(Boolean)) {
     const file = /^diff --git (?:"?a\/(.+?)"? )"?b\/(.+?)"?$/m.exec(text)?.[2] ?? text.slice(0, 200).split('\n')[0];
-    sections.push({ file, kind: 'diff', text, bytes: Buffer.byteLength(text) });
+    const slim = slimSection(file, text, 'diff'); // binary, generated and large data files are one line (review-slim.mjs)
+    sections.push({ file, kind: 'diff', text: slim, bytes: Buffer.byteLength(slim) });
   }
   for (const f of value.untracked ?? []) {
     if (f.encoding === 'omitted') continue;
-    const text = f.mode === 'symlink' ? `=== new symlink ${f.path} -> ${f.target}` : f.encoding === 'utf8' ? `=== new file ${f.path}\n${f.contents}` : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`;
+    const text = f.mode === 'symlink' ? `=== new symlink ${f.path} -> ${f.target}` : f.encoding === 'utf8' ? slimSection(f.path, `=== new file ${f.path}\n${f.contents}`, 'new') : `=== new binary file ${f.path} (${Math.round(f.contents.length * 0.75)} bytes)`;
     sections.push({ file: f.path, kind: 'new', text, bytes: Buffer.byteLength(text) });
   }
   const groups = [];

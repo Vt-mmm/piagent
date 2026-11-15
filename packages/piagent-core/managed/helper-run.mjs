@@ -23,6 +23,8 @@ import { answeredSettlement, failedSettlement, settleHelper, OUTCOME_WORDS } fro
 import { viaLink } from './studio-link.mjs';
 import { unsandboxedBash } from './command-tools.mjs';
 import { alwaysBypass } from './permission.mjs';
+import { backOffFailedCompaction, compactEarly } from './compaction.mjs';
+import { IMAGE, REVIEW_IMAGE_READS } from './review-slim.mjs';
 import { OPINION_ROLES, opinionNote, opinionWords, readOpinion } from './opinion.mjs';
 
 const textContent = result => result.content?.filter(p => p.type === 'text').map(p => p.text).join('\n') ?? '';
@@ -90,10 +92,11 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
     try { results = await Promise.all(Array.from({ length: fan.n }, (_, i) => answerUnder(managed, i ? `${role}#${i + 1}` : role, task, both, harness, snapshot, parts, opts, [copyNote(role, i, fan)]).catch(error => { stop.abort(); throw error; }))); }
     catch (error) { throw signal?.aborted ? Error('managed-helper-cancelled') : error; }
     const merged = mergeCopies(role, setup.label, results, { findingsOf: reviewFindings, issuesOf: briefIssues });
-    result = { ...results[0], reply: merged.reply, usage: merged.usage, review: merged.findings ? merged : null, stale: results.some(r => r.stale), report: null };
+    result = { ...results[0], reply: merged.reply, usage: merged.usage, review: merged.findings ? merged : null, stale: results.some(r => r.stale), report: null,
+      tally: Object.fromEntries(Object.keys(results[0].tally ?? {}).map(k => [k, results.reduce((n, r) => n + (r.tally?.[k] ?? 0), 0)])) };
   }
-  const { reply, usage, review, stale, from, grant } = result;
-  const details = { role, runID: grant.run_id, tokens: usage, patchDigest: snapshot?.digest, stale, ...(fan ? { helpers: fan.n, ...(slotsReady(managed) ? { slots: true } : {}) } : {}), ...(from ? { since: { kind: from.kind, ref: from.ref, base: from.base } } : {}) };
+  const { reply, usage, review, stale, from, grant, tally } = result;
+  const details = { role, runID: grant.run_id, tokens: usage, ...(tally ? { tokenParts: tally } : {}), patchDigest: snapshot?.digest, stale, ...(fan ? { helpers: fan.n, ...(slotsReady(managed) ? { slots: true } : {}) } : {}), ...(from ? { since: { kind: from.kind, ref: from.ref, base: from.base } } : {}) };
   if (snapshot) {
     // Severity-graded findings decide whether the harness sends the agent back.
     const findings = review ? review.findings : reviewFindings(reply);
@@ -112,7 +115,7 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
   if (opinion) details.opinion = { recommendation: opinion.recommendation, options: opinion.options.map(o => o.label), evidence: opinion.checked.slice(0, 12), issues: opinion.issues };
   helperEnded(managed, role, { job: title || task.split('\n').find(line => line.trim()) || '', outcome: report.outcome, recommendation: opinion?.recommendation, unverified: !!opinion?.issues.length });
   await managed.session.sendCustomMessage({ customType: 'agent-watch-helper-receipt', display: true,
-    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''}${opinionWords(opinion)} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
+    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${helperTokens(tally)}${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''}${opinionWords(opinion)} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
   // An objection to the brief comes with the answer; a stale review has none to act on.
   const objection = stale ? '' : await relayObjection(managed, role, reply, harness);
   const ending = `Outcome: ${report.outcome}${report.outcome === 'unverifiable' ? ` (${report.summary})` : ''}.\n\n`;
@@ -144,6 +147,8 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
   } catch (error) { throw Error(`managed-helper-failed: ${describeFailure(role, failureText(error))}`); }
   let boundary, report = null, clone = null, liveRoot = null;
   const sessions = new Set(), watched = new Set(), spec = managed.helperSpecs?.get(role) ?? {};
+  // What the tokens were (helperTokens): new input, cache read again at each step, output.
+  const tally = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 }, imageReads = { n: 0 };
   const renew = renewer(managed, key, g => verifyGrant(g, managed.manifest, key));
   try {
     const runtime = await managed.api.ModelRuntime.create({ credentials: new managed.ai.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false, allowModelNetwork: false });
@@ -162,10 +167,11 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     // level from Studio (fixed by the Harness, or its main agent's).
     const ask = async (extra, note = '', who = key) => {
       const { session } = await managed.api.createAgentSession({ cwd, model, modelRuntime: runtime, thinkingLevel: grant.effort || 'off',
-        settingsManager: managed.api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' }),
+        settingsManager: compactEarly(managed.api.SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' })), // summarised at the main agent's trigger (compaction.mjs)
         sessionManager: managed.api.SessionManager.inMemory(cwd), noTools: 'builtin', tools: [...(setup.writes ? WRITE_TOOLS : READ_TOOLS), ...(setup.web ? ['web_search', 'web_fetch'] : []), ...memory.map(tool => tool.name)],
-        customTools: [...(setup.writes ? boundary.tools(managed.api).filter(tool => WRITE_TOOLS.includes(tool.name)) : unsandboxedBash(managed, boundary.tools(managed.api)).filter(tool => READ_TOOLS.includes(tool.name))),
+        customTools: [...(setup.writes ? boundary.tools(managed.api).filter(tool => WRITE_TOOLS.includes(tool.name)) : limitImages(role, unsandboxedBash(managed, boundary.tools(managed.api)).filter(tool => READ_TOOLS.includes(tool.name)), imageReads)),
           ...(setup.web ? managed.webTools(runtime, key) : []), ...memory], resourceLoader: managedResourceLoader(managed.api, { systemPrompt: setup.prompt + HELPER_UNTRUSTED_RULE }) });
+      try { backOffFailedCompaction(session); } catch { /* an older host: Pi's own pace */ }
       sessions.add(session); trackToolFailures(managed, session, role); watched.add(who); watchHelper(managed, who, session, task, title);
       const abort = () => void session.abort(); signal?.addEventListener('abort', abort, { once: true });
       try { if (signal?.aborted) throw Error('managed-helper-cancelled'); await session.prompt(anchorText(managed.session.sessionManager, harness) + task + note + helperWorkflowPrompt(currentWorkflow(managed.session.sessionManager)) + extra, { expandPromptTemplates: false }); }
@@ -175,6 +181,7 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
       if (messages.at(-1)?.stopReason === 'error') throw Error(`managed-helper-failed: ${messages.at(-1).errorMessage}`);
       // Stopped by the member: say so, rather than that the helper failed.
       if (!messages.length || messages.at(-1).stopReason === 'aborted') throw Error(signal?.aborted ? 'managed-helper-cancelled' : 'managed-helper-failed');
+      for (const m of messages) for (const k of Object.keys(tally)) tally[k] += m.usage?.[k] ?? 0;
       return { reply: messages.map(textContent).join('\n'), usage: messages.reduce((n, m) => n + (m.usage?.totalTokens ?? 0), 0) };
     };
     // One helper's answer: the brief (with the whole patch, or the patch in parts for a large review).
@@ -211,7 +218,7 @@ async function answerUnder(managed, key, task, signal, harness, snapshot, parts,
     // An opinion without evidence or a recommendation is not what the role needs (opinion.mjs).
     const opinion = OPINION_ROLES.has(role) && !snapshot ? readOpinion(role, reply, cwd) : null;
     if (opinion?.issues.some(i => /^no /.test(i))) report = { ...report, outcome: 'unverifiable', summary: `Unverified: ${opinion.issues.join('; ')}. ${report.summary}`.slice(0, 600) };
-    return { reply, usage, review, stale, from, grant, report };
+    return { reply, usage, review, stale, from, grant, report, tally };
   } catch (error) { report = failedSettlement(role, error, signal, spec); throw error; }
   finally {
     if (clone) { discardClone(clone); recordGeneral(managed, clone, 'discarded'); }
@@ -267,4 +274,25 @@ const STEP = { read: 'đọc', grep: 'tìm', find: 'tìm file', ls: 'xem thư m�
 export function stepText(tool, args = {}) {
   const what = args?.path ?? args?.pattern ?? args?.command ?? args?.query ?? args?.url ?? '';
   return `${STEP[tool] ?? tool}${what ? ' ' + String(what).replace(/\s+/g, ' ').slice(0, 80) : ''}`;
+}
+
+// The receipt's token line, split (owner, 2026-11-15): a helper re-sends its
+// whole context at each step, so most of a long review is the same text read
+// again from the cache, not new reading. "25,368,580 tokens" alone read as if
+// the review held 25M tokens.
+const short = n => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n);
+export function helperTokens(tally) {
+  if (!tally || !(tally.input + tally.cacheRead + tally.cacheWrite + tally.output)) return '';
+  return ` (mới ${short(tally.input + tally.cacheWrite)} · đọc lại cache ${short(tally.cacheRead)} · output ${short(tally.output)})`;
+}
+
+// A reviewer opens at most REVIEW_IMAGE_READS images in one review, all its
+// parts together (review-slim.mjs): an image read stays in the context and is
+// sent again at every later step of the part.
+function limitImages(role, tools, count) {
+  if (role !== 'review') return tools;
+  return tools.map(tool => tool.name !== 'read' ? tool : { ...tool, execute: async (id, args, ...rest) => {
+    if (IMAGE.test(String(args?.path ?? '')) && ++count.n > REVIEW_IMAGE_READS) throw Error(`managed-review-images: this review already opened ${REVIEW_IMAGE_READS} images. Judge the rest through the code that uses them (each referenced file exists, each new image is used) and say which images you did not look at.`);
+    return tool.execute(id, args, ...rest);
+  } });
 }

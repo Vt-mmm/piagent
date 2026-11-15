@@ -167,12 +167,13 @@ test('a request refused as too long is followed by a summary; continuing goes on
 });
 
 test('dense text the estimate undercounts: continuing after the refusal summarises first', { skip: !supported, timeout: 120000 }, async () => {
-  // Two characters per token: Pi's estimate stays under its threshold.
+  // Two characters per token: Pi's estimate stays under its threshold (212k
+  // for GPT): the first answer reports about 60k, the next message adds 110k by estimate.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-compaction-')), server = await studio(2), agent = broker(authorityOf(), 'sol');
   const managed = await ManagedSession.create({ sdkRoot, cwd: root, origin: server.origin, broker: agent });
   try {
-    await managed.session.prompt(words('first', 70000));
-    await managed.session.prompt(words('second', 70000));
+    await managed.session.prompt(words('first', 30000));
+    await managed.session.prompt(words('second', 110000));
     assert.equal(server.requests[1].refused, true);
     assert.equal(compactions(managed).length, 0, 'Pi did not see it coming');
     await managed.session.prompt('continue');
@@ -275,14 +276,16 @@ test('/compact between turns opens a run of its own and closes it', { skip: !sup
   } finally { await managed.dispose(); await server.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('the trigger: 90% of the window, Pi\'s reserve kept, never past 300k', () => {
-  assert.equal(compactionTrigger(272000), 244800);
-  assert.equal(compactionTrigger(1000000), 300000);
-  assert.equal(compactionTrigger(128000), 111616);
+test('the trigger follows the model: 85% of what it really takes, room for one large step, never past 300k', () => {
+  assert.equal(compactionTrigger({ contextWindow: 272000, api: 'openai-responses' }), 212000, 'GPT through Codex takes about 252k');
+  assert.equal(compactionTrigger({ contextWindow: 500000, api: 'openai-codex-responses' }), 212000, 'a larger reported GPT window changes nothing');
+  assert.equal(compactionTrigger({ contextWindow: 1000000, api: 'anthropic-messages' }), 300000);
+  assert.equal(compactionTrigger({ contextWindow: 200000, api: 'anthropic-messages' }), 160000);
+  assert.equal(compactionTrigger(128000), 88000);
   const settings = { getCompactionSettings: () => ({ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 }) };
-  compactEarly(settings);
+  assert.equal(compactEarly(settings), settings);
   assert.deepEqual(settings.getCompactionSettings({ contextWindow: 1000000 }), { enabled: true, reserveTokens: 700000, keepRecentTokens: 20000 });
-  assert.equal(settings.getCompactionSettings({ contextWindow: 272000 }).reserveTokens, 27200);
+  assert.equal(settings.getCompactionSettings({ contextWindow: 272000, api: 'openai-responses' }).reserveTokens, 60000);
   assert.equal(settings.getCompactionSettings(undefined).reserveTokens, 16384);
 });
 

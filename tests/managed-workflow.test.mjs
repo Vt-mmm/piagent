@@ -642,14 +642,14 @@ test('a large patch is reviewed in parts and the findings merge', async () => {
   const diff = name => `diff --git a/${name} b/${name}\nindex 1..2 100644\n--- a/${name}\n+++ b/${name}\n@@ -1 +1 @@\n-old\n+${'y'.repeat(50_000)}\n`;
   const small = { digest: 'd'.repeat(64), patch: JSON.stringify({ patch: diff('a.js').slice(0, 200), untracked: [] }) };
   assert.deepEqual(reviewParts(small), { parts: [{ files: null, text: reviewText(small) }], omitted: [] }, 'a patch one reviewer reads is one part, as before');
-  const snapshot = { digest: 'e'.repeat(64), patch: JSON.stringify({ patch: ['a.js', 'b.js', 'c.js'].map(diff).join('') + diff('package-lock.json').replace('y'.repeat(50_000), 'z'.repeat(500_000)),
+  const snapshot = { digest: 'e'.repeat(64), patch: JSON.stringify({ patch: ['a.js', 'b.js', 'c.js'].map(diff).join('') + diff('huge.js').replace('y'.repeat(50_000), 'z'.repeat(500_000)),
     untracked: [{ path: 'n.js', mode: 420, encoding: 'utf8', contents: 'x'.repeat(30_000) }, { path: 'blob.bin', mode: 420, encoding: 'omitted', bytes: 900_000, sha256: 'f'.repeat(64) }] }) };
   const review = reviewParts(snapshot);
   assert.deepEqual(review.parts.map(p => p.files), [['a.js', 'b.js'], ['c.js', 'n.js']]);
-  assert.deepEqual(review.omitted.map(o => o.path).sort(), ['blob.bin', 'package-lock.json']);
+  assert.deepEqual(review.omitted.map(o => o.path).sort(), ['blob.bin', 'huge.js']);
   for (const [i, part] of review.parts.entries()) {
     assert.match(part.text, new RegExp(`^Patch snapshot e{64}, part ${i + 1} of 2\\.`));
-    assert.match(part.text, /Not read: blob\.bin \(900000 bytes, too large to review\), package-lock\.json \(\d+ bytes, too large to review\)\./);
+    assert.match(part.text, /Not read: blob\.bin \(900000 bytes, too large to review\), huge\.js \(\d+ bytes, too large to review\)\./);
     assert.ok(Buffer.byteLength(part.text) < 125_000);
   }
   assert.doesNotMatch(review.parts[0].text, /c\.js|=== new file/); assert.match(review.parts[1].text, /=== new file n\.js/);
