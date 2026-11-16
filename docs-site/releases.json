@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.54.3",
+    "date": "2026-11-16",
+    "status": "stable",
+    "title": {
+      "en": "Work across repositories is kept; only another process's changes are left out",
+      "vi": "Việc làm qua nhiều repo được giữ; chỉ bỏ thay đổi của tiến trình khác"
+    },
+    "summary": {
+      "en": "In a folder of several repositories, a change is left out only when another process was seen changing that repository, and the member is told.",
+      "vi": "Trong folder nhiều repo, một thay đổi chỉ bị bỏ khi thấy tiến trình khác đang sửa repo đó, và member được báo."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A repository is left out only when it changed while none of the conversation's commands ran; a generator or script writing into another repository counts again.",
+        "vi": "Repo chỉ bị bỏ khi nó đổi lúc cuộc trò chuyện không chạy lệnh nào; script hay generator ghi sang repo khác lại được tính như trước."
+      },
+      {
+        "kind": "improved",
+        "en": "Left-out files are told to the member and the agent, and are taken back once the conversation works in that repository.",
+        "vi": "File bị bỏ được báo cho member và agent, và được nhận lại khi cuộc trò chuyện làm việc trong repo đó."
+      },
+      {
+        "kind": "fixed",
+        "en": "The repositories a conversation works in are kept with it, so files carried from an earlier version no longer pull another repository in.",
+        "vi": "Danh sách repo đang làm được lưu cùng cuộc trò chuyện, nên file mang sang từ bản cũ không còn kéo repo khác vào."
+      },
+      {
+        "kind": "improved",
+        "en": "The main agent answers in the language of the member's latest message.",
+        "vi": "Agent chính trả lời bằng ngôn ngữ của tin nhắn mới nhất của member."
+      }
+    ]
+  },
+  {
     "version": "1.54.2",
     "date": "2026-11-16",
     "status": "stable",

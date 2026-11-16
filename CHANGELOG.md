@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.54.3 - 2026-11-16
+
+**Work across repositories is kept; only another process's changes are left out.** In a folder of several repositories, a change is left out only when another process was seen changing that repository, and the member is told.
+
+### Improved
+
+- Left-out files are told to the member and the agent, and are taken back once the conversation works in that repository.
+- The main agent answers in the language of the member's latest message.
+
+### Fixed
+
+- A repository is left out only when it changed while none of the conversation's commands ran; a generator or script writing into another repository counts again.
+- The repositories a conversation works in are kept with it, so files carried from an earlier version no longer pull another repository in.
+
 ## v1.54.2 - 2026-11-16
 
 **Conversations sharing a folder no longer take each other's changes.** In a folder of several repositories a conversation owns only the repositories it works in, a review overtaken by another process stops after two tries, and an unchecked turn says so.
