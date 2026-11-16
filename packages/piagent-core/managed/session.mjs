@@ -25,7 +25,7 @@ import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut,
 import { HELPER_CALLS, HELPER_ROLES, ROLE_NAMES, callName, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
-import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs'; import { autopilotTool, autopilotSetter, restoreAutopilot } from './autopilot.mjs';
+import { ownedChanges } from './claim-scope.mjs'; import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs'; import { autopilotTool, autopilotSetter, restoreAutopilot } from './autopilot.mjs';
 import { commandTools, hostBash, servicesPrompt, unsandboxedBash } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
@@ -443,11 +443,10 @@ export class ManagedSession {
     const relative = path.relative(this.cwd, path.resolve(this.cwd, file));
     if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) this.ownPaths.add(relative.split(path.sep).join('/'));
   }
-  async claimChanges(before) {
-    if (!before) return;
-    const after = await this.changedFiles();
+  async claimChanges(before, command = '') { // in a folder of several repositories, only the ones the command works in (claim-scope.mjs)
+    const after = before ? await this.changedFiles() : null;
     if (!after) return;
-    for (const name of new Set([...before.keys(), ...after.keys()])) if (before.get(name) !== after.get(name)) this.ownPaths.add(name);
+    for (const name of ownedChanges(this.cwd, command, [...new Set([...before.keys(), ...after.keys()])].filter(name => before.get(name) !== after.get(name)), this.ownPaths)) this.ownPaths.add(name);
   }
 
   async refreshReview() {

@@ -275,6 +275,7 @@ export type SessionRow = {
     planDone: number;
     planDeferred?: number;
     reason?: "idle" | "limit" | "policy";
+    unchecked?: true;
   };
   gitBranch?: {
     name: string;

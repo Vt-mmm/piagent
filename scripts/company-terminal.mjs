@@ -162,6 +162,10 @@ export function planWidget(plan) {
 }
 const HELPER_LABEL = { scout: 'Explore', research: 'Scout', advisor: 'Advisor', general: 'General', review: 'Review' };
 const ENDED = { succeeded: 'xong', failed: 'lỗi', cancelled: 'đã dừng', unverifiable: 'chưa kiểm chứng được' };
+const tokenWord = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n);
+// A receipt's English words, as the member reads them in the Terminal.
+export const receiptText = (text) => String(text ?? '').replace(/(\d[\d,]*) tokens/, '$1 token').replace('review is stale (code changed during the review)', 'đã cũ (code đổi trong lúc review)').replace('review is stale', 'review đã cũ')
+  .replace(/ · (\d+) parts/, ' · $1 phần').replace(/ · (\d+) helpers/, ' · $1 helper').replace(/ · done\.$/, ' · xong.').replace(/ · failed\.$/, ' · lỗi.').replace(/ · stopped\.$/, ' · đã dừng.').replace(/ · unverifiable\.$/, ' · chưa kiểm chứng được.');
 const age = (since, now) => { const s = Math.max(0, Math.floor((now - Date.parse(since ?? '')) / 1000)); return Number.isFinite(s) ? (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`) : ''; };
 // The subagent panel above the input: each subagent's role, its job and what
 // it does now, how long and how many steps; then the ones that ended in this
@@ -175,7 +179,7 @@ export function helperLines(helpers, done = [], now = Date.now()) {
   return [`Subagent · ${list.length} đang chạy${ended.length ? ` · ${ended.length} đã xong` : ''}`,
     ...list.flatMap((h) => [`  ⟳ ${name(h.role)}${many(h.role) ? ` ${h.slot ?? 1}` : ''}${h.job ? ` · ${String(h.job).slice(0, 100)}` : ''}${h.startedAt ? ` · ${age(h.startedAt, now)}` : ''}${Number.isInteger(h.steps) ? ` · ${h.steps} bước` : ''}`,
       ...(h.step ? [`      → ${String(h.step).slice(0, 110)}`] : [])]),
-    ...ended.map((d) => `  ${d.outcome === 'succeeded' && !d.unverified ? '✓' : '!'} ${name(d.role)}${d.job ? ` · ${String(d.job).slice(0, 70)}` : ''} · ${d.unverified ? 'thiếu evidence' : ENDED[d.outcome] ?? d.outcome}${d.recommendation ? ` · khuyến nghị: ${String(d.recommendation).slice(0, 90)}` : ''}`)];
+    ...ended.map((d) => `  ${d.outcome === 'succeeded' && !d.unverified && !d.stale ? '✓' : '!'} ${name(d.role)}${d.job ? ` · ${String(d.job).slice(0, 70)}` : ''}${d.runs > 1 ? ` · ${d.runs} lần${d.staleRuns ? `, ${d.staleRuns} lần đã cũ` : ''}` : ''}${d.tokens ? ` · ${tokenWord(d.tokens)} token` : ''} · ${d.stale ? 'đã cũ (code đổi trong lúc review)' : d.unverified ? 'thiếu evidence' : ENDED[d.outcome] ?? d.outcome}${d.recommendation ? ` · khuyến nghị: ${String(d.recommendation).slice(0, 90)}` : ''}`)];
 }
 
 // A harness note's details, in the shape the shared copy reads.
@@ -489,7 +493,7 @@ export function companyTerminalExtension({ managed, packageRoot, sdkRoot, bindin
     pi.registerMessageRenderer('agent-watch-review-status', (_message, _options, theme) =>
       box('Review đã cũ: code đổi sau khi review. Chỉ cần review lại khi đã sửa lỗi blocking.', theme, 'warning'));
     pi.registerMessageRenderer('agent-watch-helper-receipt', (message, _options, theme) =>
-      box(String(message.content ?? '').replace(/(\d[\d,]*) tokens/, '$1 token').replace('review is stale', 'review đã cũ'), theme, 'dim'));
+      box(receiptText(message.content), theme, 'dim'));
 
     // A failed request says what it means and what to do, as on the dashboard.
     pi.on('message_end', async (event, ctx) => {

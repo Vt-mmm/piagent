@@ -30,7 +30,7 @@ export function managedProjection(context: any, entries: any[]) {
   const lastUser = lastIndex(e => e.type === 'message' && e.message?.role === 'user');
   const endAt = lastIndex(e => e.type === 'custom' && e.customType === 'agent-watch-turn-end');
   const end = endAt > lastUser ? turnEndOf(entries[endAt].data) : null;
-  const turnEnd = end ? { state: end.state, planSteps: end.planSteps, planDone: end.planDone, ...(end.planDeferred ? { planDeferred: end.planDeferred } : {}), ...(end.reason ? { reason: end.reason } : {}) } : null;
+  const turnEnd = end ? { state: end.state, planSteps: end.planSteps, planDone: end.planDone, ...(end.planDeferred ? { planDeferred: end.planDeferred } : {}), ...(end.reason ? { reason: end.reason } : {}), ...(end.unchecked ? { unchecked: true as const } : {}) } : null;
   // Helpers the Harness enables (up to four); a conversation recorded before
   // that was known says two.
   const maximum = Number.isInteger(counter?.maximum) && counter.maximum >= 0 && counter.maximum <= 4 ? counter.maximum : 2;

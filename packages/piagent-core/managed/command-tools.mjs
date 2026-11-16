@@ -170,7 +170,7 @@ function commandTool(self, kind) {
       } finally {
         // What the command installed (a JDK, Node) is there for the next one.
         if (kind === 'host') self.boundary.refreshEnvironment();
-        await self.claimChanges(before); await self.run?.afterTool('bash', args, ok, () => self.digest(), self); await self.refreshReview();
+        await self.claimChanges(before, args.command); await self.run?.afterTool('bash', args, ok, () => self.digest(), self); await self.refreshReview();
       }
     } };
 }

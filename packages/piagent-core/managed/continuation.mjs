@@ -58,12 +58,14 @@ export class Continuation {
 // How a member's message ended: every step done (or answered without a
 // checklist), stopped with steps open (and why the harness did not go on),
 // failed (which role, which kind) or stopped by the member.
-export function turnEnd(continuation, plan, { stopped, failure }) {
+export function turnEnd(continuation, plan, { stopped, failure, unchecked = false }) {
   const steps = continuation.touched ? plan?.plan?.length ?? 0 : 0, done = continuation.touched ? completed(plan) : 0;
   const state = stopped ? 'cancelled' : failure ? 'failed' : continuation.touched && unfinished(plan) ? 'midway' : 'done';
   const later = continuation.touched ? deferred(plan) : 0;
   return { state, planSteps: steps, planDone: done, ...(later ? { planDeferred: later } : {}), rounds: continuation.rounds,
     ...(state === 'midway' && continuation.reason ? { reason: continuation.reason } : {}),
+    // Done, but no check passed on the final code: said beside "done" (owner, 2026-11-16).
+    ...(state === 'done' && unchecked ? { unchecked: true } : {}),
     ...(state === 'failed' ? { role: failure.role ?? 'main', code: String(failure.code || 'unknown').toLowerCase().replace(/[^a-z0-9_]+/g, '_').slice(0, 64) } : {}),
     at: new Date().toISOString() };
 }
@@ -146,7 +148,7 @@ export async function memberTurn(self, { manager, prompt, runRound }, text, deli
       } else if (message) {
         text = message.content;
         deliver = () => { self.nextPurpose = 'continue'; return self.session.sendCustomMessage(message, { triggerTurn: true }); };
-      } else { ended = turnEnd(continuation, plan, { stopped, failure }); break; }
+      } else { ended = turnEnd(continuation, plan, { stopped, failure, unchecked: self.run?.uncheckedEnd === true }); break; }
     }
   } finally {
     self.between = false;
@@ -170,5 +172,5 @@ export function turnEndText(end) {
   if (end.state === 'failed') return `Turn failed: ${end.role} agent, ${end.code}. Send "continue" to go on.`;
   if (end.state === 'midway') return `Turn ended with ${end.planSteps - end.planDone - (end.planDeferred ?? 0)} of ${end.planSteps} checklist step(s) open${end.reason === 'idle' ? `: the agent stopped ${IDLE_ROUNDS} times in a row without progress` : end.reason === 'limit' ? `: ${MAX_ROUNDS} rounds reached` : ''}. Send "continue" to go on.`;
   if (end.planDeferred) return `Done: ${end.planDone} of ${end.planSteps} checklist steps completed, ${end.planDeferred} left for later.`;
-  return end.planSteps ? `Done: all ${end.planSteps} checklist steps completed.` : 'Done.';
+  return `${end.planSteps ? `Done: all ${end.planSteps} checklist steps completed.` : 'Done.'}${end.unchecked ? ' No check passed on the final code.' : ''}`;
 }

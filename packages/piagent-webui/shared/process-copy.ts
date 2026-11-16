@@ -3,7 +3,7 @@
 import { failureRoleText, type CopyLocale, type FailureRole } from "./company-copy.ts";
 
 export type ProcessCopyInput = {
-  phase?: string; outcome?: string; loop?: number; maxLoops?: number; verified?: boolean; reviewed?: boolean; blockingOpen?: number;
+  phase?: string; files?: string[]; outcome?: string; loop?: number; maxLoops?: number; verified?: boolean; reviewed?: boolean; blockingOpen?: number;
   planOpen?: number; planDone?: number; planSteps?: number; round?: number; maxRounds?: number; idle?: number; planSkipped?: boolean; partOnly?: boolean; verifyPolicy?: string; reviewPolicy?: string; reviewUnavailable?: string; role?: FailureRole;
   disputes?: number; unchanged?: boolean;
   findings?: Array<{ severity: string; file?: string; line?: number | null; issue: string }>;
@@ -63,6 +63,9 @@ export function headlineText(process: ProcessCopyInput, locale: CopyLocale): str
       if (u?.result === "none") return pick(locale, "Không có lượt nào để hoàn tác (chỉ áp dụng cho project là git repository, từ khi mở cuộc trò chuyện).", "There is no turn to undo (git repositories only, since the conversation opened).");
       return pick(locale, "Không đọc được trạng thái project; không hoàn tác.", "The project's state could not be read; nothing was undone.");
     }
+    // The review went stale twice while the main agent waited: something else changes the files.
+    case "review-overtaken": return pick(locale, `Harness: review đã cũ 2 lần liên tiếp vì file bị tiến trình khác sửa trong lúc review (phiên khác trong cùng folder, watcher, script sinh file); dừng review lượt này. File đổi: ${(process.files ?? []).slice(0, 5).join(", ")}${(process.files?.length ?? 0) > 5 ? ` và ${(process.files?.length ?? 0) - 5} file khác` : ""}`,
+      `Harness: the review went stale twice because something else changed files during it (another conversation in this folder, a watcher, a generator); no more reviews this turn. Changed: ${(process.files ?? []).slice(0, 5).join(", ")}${(process.files?.length ?? 0) > 5 ? ` and ${(process.files?.length ?? 0) - 5} more` : ""}`);
     case "dispute": return pick(locale, `Main agent và ${who} vẫn conflict sau 2 lượt, bạn quyết định`, `The main agent and the ${who} still disagree after two rounds; your call`);
     default: return "";
   }

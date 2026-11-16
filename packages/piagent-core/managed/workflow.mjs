@@ -9,6 +9,7 @@ import { recordCheck, relevantChecks } from './check-evidence.mjs';
 import { LANE_LIMITS, patchStats, changeLane, lanePolicy } from './risk-lanes.mjs';
 import { briefCounts, decisionsText, ledgerGuard, ledgerOf, ledgerWords, reviewFocus, saveLedger, setStatus, settleLedger } from './ledger.mjs';
 import { planPhase, phaseHead, PHASE_PROMPT } from './plan-phase.mjs';
+import { reviewOvertaken } from './review-overtaken.mjs';
 
 // The process layer of the company harness: a plan for multi-step work, the
 // repository's checks after a code change, an independent review of the patch.
@@ -307,7 +308,8 @@ export async function completionGate(managed, run, signal) {
         // The answer so far is not the result yet: the dashboard marks it so.
         // An entry, not a message: the model has nothing to do with it.
         session.sessionManager.appendCustomEntry('agent-watch-review-start', {});
-        try { await managed.delegate({ role: 'review', task: brief }, signal, { harness: true }); }
+        const filesBefore = await managed.changedFiles?.();
+        try { await managed.delegate({ role: 'review', task: brief, title: 'Review patch cuối của lượt' }, signal, { harness: true }); if (await reviewOvertaken(managed, run, filesBefore, note)) break; }
         catch (error) {
           run.reviewUnavailable = !stopped(); run.reviewUnavailableReason = reviewUnavailableReason(error?.message); interrupted = stopped();
           // Why the review could not run: its code, and the redacted words of a
@@ -365,8 +367,9 @@ export async function completionGate(managed, run, signal) {
   const finalPlan = currentPlan(session.sessionManager), planOpen = run.planUpdated ? finalPlan?.plan?.filter(p => p.status === 'pending' || p.status === 'in_progress').length ?? 0 : 0;
   const status = { verified: run.verified, reviewed: run.reviewed, blockingOpen: run.blockingOpen, checks: run.checksRun, fixLoops: run.fixLoops,
     ...(planOpen ? { planOpen } : {}), ...(run.planSkipped ? { planSkipped: true } : {}), ...(!run.verified && run.waivedDigest === digest ? { checksWaived: true } : {}), ...(run.verified && run.partOnlyOn(digest) ? { partOnly: true } : {}), ...(run.disputes.length ? { disputes: run.disputes.length } : {}), ...(run.changed ? {} : { unchanged: true }) };
+  run.uncheckedEnd = run.changed && !run.verified && policy.verify !== 'off' && !run.docsOnly && run.waivedDigest !== digest; // the turn's end says it (continuation.mjs)
   const words = [...(run.changed ? [run.partOnlyOn(digest) && run.verified ? 'only part of the test suite passed on the final code' : run.verified ? 'a check passed on the final code' : policy.verify === 'off' ? null : run.docsOnly ? 'only documentation changed: no check needed' : run.waivedDigest === digest ? 'no check passed on the final code: the member waived the checks' : 'no check passed on the final code',
-    run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
+    run.reviewOvertaken ? `not reviewed: files changed during each review by something other than this conversation (${run.reviewOvertaken.slice(0, 5).join(', ')})` : run.reviewed ? (run.blockingOpen ? `review: ${run.blockingOpen} blocking issue(s) still open` : 'review: no blocking issue') : policy.review === 'off' ? null : run.reviewUnavailable ? `review could not run (${run.reviewUnavailableReason})` : 'not reviewed',
     run.planSkipped ? 'code was changed before the required plan existed' : null, planOpen ? `plan: ${planOpen} step(s) not completed` : null] : []),
     run.disputes.length ? `${run.disputes.length} disagreement(s) between the main agent and a subagent go to the member` : null, ledgerWords(run)].filter(Boolean);
   await session.sendCustomMessage({ customType: 'agent-watch-process', content: `Process status for this turn: ${run.changed ? 'code changed' : 'no code changed'}; ${words.join('; ') || 'no process step configured'}.`, display: true,
@@ -402,7 +405,7 @@ export function processEditTools(session, tools) {
         let result;
         try { result = await execute(...args); ok = !result?.isError; }
         catch (error) { if (session.run && /managed-operation-denied/.test(String(error?.message))) session.run.approvalDeclined = true; throw error; }
-        finally { if (tool.name === 'bash') await session.claimChanges?.(before); else if (ok) session.claimPath?.(args[1]?.path); }
+        finally { if (tool.name === 'bash') await session.claimChanges?.(before, args[1]?.command); else if (ok) session.claimPath?.(args[1]?.path); }
         // The file's TypeScript errors right after the change (ts-diagnostics.mjs).
         const note = ok && tool.name !== 'bash' && session.boundary?.spawnSandboxed ? await (session.tsDiagnostics ??= new TsDiagnostics(session.boundary)).check(args[1]?.path) : '';
         if (note) result = { ...result, content: [...(result.content ?? []), { type: 'text', text: note }] };

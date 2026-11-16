@@ -113,9 +113,9 @@ async function helperAttempt(managed, role, task, signal, harness, snapshot, par
   const opinion = OPINION_ROLES.has(role) && !snapshot ? readOpinion(role, reply, managed.cwd) : null;
   if (opinion && managed.run) (managed.run.opinions ??= []).push({ role, recommendation: opinion.recommendation, evidence: opinion.checked.slice(0, 6) });
   if (opinion) details.opinion = { recommendation: opinion.recommendation, options: opinion.options.map(o => o.label), evidence: opinion.checked.slice(0, 12), issues: opinion.issues };
-  helperEnded(managed, role, { job: title || task.split('\n').find(line => line.trim()) || '', outcome: report.outcome, recommendation: opinion?.recommendation, unverified: !!opinion?.issues.length });
+  helperEnded(managed, role, { job: title || task.split('\n').find(line => line.trim()) || '', outcome: report.outcome, recommendation: opinion?.recommendation, unverified: !!opinion?.issues.length, stale: !!stale, tokens: usage });
   await managed.session.sendCustomMessage({ customType: 'agent-watch-helper-receipt', display: true,
-    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${helperTokens(tally)}${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''}${opinionWords(opinion)} · ${OUTCOME_WORDS[report.outcome]}.`, details }, { triggerTurn: false });
+    content: `${setup.label}: ${usage.toLocaleString('en-US')} tokens${helperTokens(tally)}${fan ? ` · ${fan.n} helpers` : review ? ` · ${parts.parts.length} parts` : ''}${snapshot ? (stale ? ' · review is stale (code changed during the review)' : ' · patch ' + snapshot.digest.slice(0, 12)) : ''}${opinionWords(opinion)}${stale ? '' : ` · ${OUTCOME_WORDS[report.outcome]}`}.`, details }, { triggerTurn: false });
   // An objection to the brief comes with the answer; a stale review has none to act on.
   const objection = stale ? '' : await relayObjection(managed, role, reply, harness);
   const ending = `Outcome: ${report.outcome}${report.outcome === 'unverifiable' ? ` (${report.summary})` : ''}.\n\n`;
@@ -239,8 +239,13 @@ export function helperState(managed, key, state) {
 }
 // A subagent that ended stays on the panel with how it ended and its
 // recommendation, until the member's next message (the four latest).
-export function helperEnded(managed, role, { job = '', outcome, recommendation = '', unverified = false } = {}) {
-  managed.helperDone = [...(managed.helperDone ?? []), { role, job: String(job).slice(0, 120), outcome, recommendation: String(recommendation).slice(0, 160), unverified, at: new Date().toISOString() }].slice(-4);
+export function helperEnded(managed, role, { job = '', outcome, recommendation = '', unverified = false, stale = false, tokens = 0 } = {}) {
+  // The same job run again (a review gone stale, a second question) is one
+  // line with how many times it ran (owner, 2026-11-16).
+  const done = managed.helperDone ?? [], key = `${role}\u0000${String(job).slice(0, 120)}`, last = done.find(d => `${d.role}\u0000${d.job}` === key);
+  const entry = { role, job: String(job).slice(0, 120), outcome, recommendation: String(recommendation).slice(0, 160), unverified, stale,
+    runs: (last?.runs ?? 0) + 1, staleRuns: (last?.staleRuns ?? 0) + (stale ? 1 : 0), tokens: (last?.tokens ?? 0) + (Number(tokens) || 0), at: new Date().toISOString() };
+  managed.helperDone = [...done.filter(d => d !== last), entry].slice(-4);
   helperState(managed, '', null); // tells the panel
 }
 // What a helper is doing, for the terminal's subagent panel: the job and its

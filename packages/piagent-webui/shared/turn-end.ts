@@ -6,7 +6,7 @@ import { failureRoleText, type CopyLocale, type FailureRole } from "./company-co
 
 export type TurnEndState = "done" | "midway" | "failed" | "cancelled";
 export type TurnEnd = { state: TurnEndState; planSteps: number; planDone: number; planDeferred?: number; rounds: number;
-  reason?: "idle" | "limit" | "policy"; role?: FailureRole; code?: string };
+  reason?: "idle" | "limit" | "policy"; role?: FailureRole; code?: string; unchecked?: boolean };
 const ROLES: FailureRole[] = ["main", "scout", "research", "advisor", "general", "verify", "review"];
 // The harness gives up after this many rounds in a row without progress, and
 // runs at most this many (packages/piagent-core/managed/continuation.mjs).
@@ -20,6 +20,7 @@ export function turnEndOf(details: any): TurnEnd | null {
     || details.planDone + (details.planDeferred ?? 0) > details.planSteps) return null;
   const out: TurnEnd = { state: details.state, planSteps: details.planSteps, planDone: details.planDone, rounds: details.rounds };
   if (details.planDeferred) out.planDeferred = details.planDeferred;
+  if (details.state === "done" && details.unchecked === true) out.unchecked = true;
   if (details.state === "midway" && ["idle", "limit", "policy"].includes(details.reason)) out.reason = details.reason;
   if (details.state === "failed") {
     out.role = ROLES.includes(details.role) ? details.role : "main";
@@ -54,15 +55,20 @@ export function turnEndCopy(end: TurnEnd, locale: CopyLocale): TurnEndCopy {
   // Steps left for later at the member's word (or no longer needed): done as asked, not all done.
   if (later) return { tone: "info", continuable: true, title: pick(locale, `Dừng theo yêu cầu · ${end.planDone}/${end.planSteps} bước xong, ${later} bước để sau`, `Stopped as asked · ${end.planDone} of ${end.planSteps} steps done, ${later} left for later`),
     text: pick(locale, "Các bước còn lại được để sau theo yêu cầu hoặc vì không cần nữa: câu trả lời cuối nói lý do. Bấm Tiếp tục khi muốn làm nốt.", "The other steps were left for later as asked, or are no longer needed: the last answer says why. Choose Continue to do them.") + rounds };
+  // Every step done, but no check passed on the final code: not a plain success.
+  if (end.unchecked) return { tone: "warning", continuable: false,
+    title: end.planSteps ? pick(locale, `Xong ${end.planSteps}/${end.planSteps} bước · chưa có check pass trên code cuối`, `Done ${end.planSteps}/${end.planSteps} steps · no check passed on the final code`) : pick(locale, "Xong lượt · chưa có check pass trên code cuối", "Turn finished · no check passed on the final code"),
+    text: pick(locale, "Code đã đổi nhưng chưa có lần chạy test hay build nào pass trên đúng code cuối cùng: xem dòng Tiến trình ở trên.", "The code changed, but no test or build passed on the final code: see the process line above.") + rounds };
   return { tone: "success", continuable: false, title: end.planSteps ? pick(locale, `Hoàn thành · ${end.planSteps}/${end.planSteps} bước`, `Done · ${end.planSteps}/${end.planSteps} steps`) : pick(locale, "Xong lượt", "Turn finished"),
     text: (end.planSteps ? pick(locale, "Mọi bước trong checklist đã xong.", "Every checklist step is completed.") : pick(locale, "Main agent đã trả lời xong; lượt này không có checklist.", "The main agent finished its answer; this turn had no checklist.")) + rounds };
 }
 
 // The short label of the session list.
-export function turnEndShort(end: Pick<TurnEnd, "state" | "planSteps" | "planDone" | "planDeferred">, locale: CopyLocale): string {
+export function turnEndShort(end: Pick<TurnEnd, "state" | "planSteps" | "planDone" | "planDeferred"> & { unchecked?: boolean }, locale: CopyLocale): string {
   if (end.state === "done" && end.planDeferred) return pick(locale, `Xong ${end.planDone}/${end.planSteps}, để sau ${end.planDeferred}`, `Done ${end.planDone}/${end.planSteps}, ${end.planDeferred} later`);
   if (end.state === "midway") return pick(locale, `Dừng giữa chừng ${end.planDone}/${end.planSteps}`, `Stopped ${end.planDone}/${end.planSteps}`);
   if (end.state === "failed") return pick(locale, "Lỗi, chưa xong", "Failed");
   if (end.state === "cancelled") return pick(locale, "Đã dừng", "Stopped");
-  return end.planSteps ? pick(locale, `Xong ${end.planSteps}/${end.planSteps}`, `Done ${end.planSteps}/${end.planSteps}`) : pick(locale, "Xong", "Done");
+  const bare = end.planSteps ? pick(locale, `Xong ${end.planSteps}/${end.planSteps}`, `Done ${end.planSteps}/${end.planSteps}`) : pick(locale, "Xong", "Done");
+  return "unchecked" in end && end.unchecked ? `${bare}${pick(locale, ", chưa check", ", unchecked")}` : bare;
 }
