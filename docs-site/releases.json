@@ -1,5 +1,41 @@
 [
   {
+    "version": "1.54.2",
+    "date": "2026-11-16",
+    "status": "stable",
+    "title": {
+      "en": "Conversations sharing a folder no longer take each other's changes",
+      "vi": "Các cuộc trò chuyện chung một folder không còn nhận nhầm thay đổi của nhau"
+    },
+    "summary": {
+      "en": "In a folder of several repositories a conversation owns only the repositories it works in, a review overtaken by another process stops after two tries, and an unchecked turn says so.",
+      "vi": "Trong folder nhiều repo, cuộc trò chuyện chỉ nhận repo mình làm việc; review bị tiến trình khác làm cũ dừng sau hai lần; lượt chưa có check pass nói rõ."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A command owns the changes of the repositories it names or already works in, so another conversation's files in the same folder are not reviewed or checked as this one's.",
+        "vi": "Một lệnh chỉ nhận thay đổi trong repo nó nhắc tới hoặc đang làm, nên file của cuộc trò chuyện khác trong cùng folder không bị review hay check như của mình."
+      },
+      {
+        "kind": "fixed",
+        "en": "A harness review that goes stale twice while the main agent waits stops and names the files something else changed, instead of running again and again.",
+        "vi": "Review của harness bị cũ hai lần trong lúc main agent chờ thì dừng và nêu tên file bị tiến trình khác sửa, thay vì chạy lại mãi."
+      },
+      {
+        "kind": "improved",
+        "en": "A turn with every step done but no check passed on the final code ends as \"done, no check passed\" in warning colours.",
+        "vi": "Lượt xong mọi bước nhưng chưa có check pass trên code cuối kết thúc bằng \"Xong · chưa có check pass trên code cuối\", màu cảnh báo."
+      },
+      {
+        "kind": "improved",
+        "en": "Terminal: a stale review reads as stale, a job run again is one subagent line with its runs and tokens, and receipts read in Vietnamese.",
+        "vi": "Terminal: review cũ ghi rõ \"đã cũ\", việc chạy lại gộp một dòng kèm số lần và token, receipt đọc bằng tiếng Việt."
+      }
+    ]
+  },
+  {
     "version": "1.54.1",
     "date": "2026-11-15",
     "status": "stable",

@@ -4,6 +4,20 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.54.2 - 2026-11-16
+
+**Conversations sharing a folder no longer take each other's changes.** In a folder of several repositories a conversation owns only the repositories it works in, a review overtaken by another process stops after two tries, and an unchecked turn says so.
+
+### Improved
+
+- A turn with every step done but no check passed on the final code ends as "done, no check passed" in warning colours.
+- Terminal: a stale review reads as stale, a job run again is one subagent line with its runs and tokens, and receipts read in Vietnamese.
+
+### Fixed
+
+- A command owns the changes of the repositories it names or already works in, so another conversation's files in the same folder are not reviewed or checked as this one's.
+- A harness review that goes stale twice while the main agent waits stops and names the files something else changed, instead of running again and again.
+
 ## v1.54.1 - 2026-11-15
 
 **Summaries follow each model's real context, subagents included; reviews skip image bytes.** GPT conversations are summarised before Codex refuses them, subagents are summarised too, and a review of many screenshots reads the code in a few parts.
