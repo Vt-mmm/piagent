@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { containerEngine, engineEnvironment } from '../packages/piagent-core/managed/container-engine.mjs';
 import { commandTools, servicesPrompt } from '../packages/piagent-core/managed/command-tools.mjs';
 import { sandboxDiagnostic } from '../packages/piagent-core/managed/sandbox-diagnostic.mjs';
+import { toolFailureCode } from '../packages/piagent-core/managed/tool-failures.mjs';
 import { ManagedToolBoundary } from '../packages/piagent-core/managed/tool-boundary.mjs';
 import { piSdkRoot } from './helpers/pi-sdk.mjs';
 
@@ -75,6 +76,18 @@ test('a failure names the way to Docker: run_with_docker, or the engine is not r
   assert.match(sandboxDiagnostic(refused, {}), /^managed-docker-unavailable/);
   assert.match(sandboxDiagnostic(refused, { network: true, docker: true }), /^managed-docker-unreachable/);
   assert.match(sandboxDiagnostic('Could not find a valid Docker environment', { engine: true }), /^managed-docker-blocked/);
+});
+
+test('a download that fails inside a Docker build names the container network and the failing line, not the machine', () => {
+  const build = '#5 [internal] load build context\n#5 DONE 0.1s\n\n#6 [2/5] WORKDIR /app\n#6 DONE 0.0s\n\n#7 [3/5] RUN pip install -r requirements.txt\n'
+    + "#7 4.120 WARNING: Retrying (Retry(total=4)) after connection broken by 'NewConnectionError(\"Failed to establish a new connection: [Errno -3] Temporary failure in name resolution\")': /simple/scrapling/\n"
+    + 'ERROR: failed to solve: process "/bin/sh -c pip install -r requirements.txt" did not complete successfully: exit code: 1';
+  const said = sandboxDiagnostic(build, { network: true, docker: true });
+  assert.match(said, /^managed-docker-network-unreachable: .*--network=none.*ask_user.*Dòng lỗi: #7 4\.120 WARNING: .*Failed to establish a new connection/);
+  assert.ok(said.endsWith(build), 'the whole output stays after the note');
+  assert.equal(toolFailureCode(said), 'managed_docker_network_unreachable');
+  // A host-side download in a Docker-approved command (mvnw fetching Maven) is the machine's network.
+  assert.match(sandboxDiagnostic('curl: (6) Could not resolve host: repo.maven.apache.org', { network: true, docker: true }), /^managed-network-unreachable: .*ask_user.*Dòng lỗi: curl: \(6\) Could not resolve host/);
 });
 
 test('run_with_docker is offered with Docker on the machine; Full access runs it without asking, the default mode asks', async () => {
