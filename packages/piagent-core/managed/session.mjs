@@ -25,7 +25,7 @@ import { beforeDelegate, resolveTool } from './objections.mjs'; import { fanOut,
 import { HELPER_CALLS, HELPER_ROLES, ROLE_NAMES, callName, helperRoles, helperPrompt, webPrompt, delegateDescription, mainWebLookups, limitedWebTools } from './helper-roles.mjs'; import { delegateParameters, delegateArgs, SPEC_PROMPT } from './helper-settlement.mjs';
 import { loadAgentResources } from './agent-skills.mjs';
 import { loadPiagentThemes } from '../runtime/terminal/terminal-style.mjs';
-import { ownedChanges } from './claim-scope.mjs'; import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs'; import { autopilotTool, autopilotSetter, restoreAutopilot } from './autopilot.mjs';
+import { claimCommand, claimEdit, claimState } from './claim-scope.mjs'; import { claimsSaved, restoreClaims } from './claim-notes.mjs'; import { alwaysBypass, restorePermission, recordBypass, permissionSetter, restoreCommitAsk, commitAskSetter } from './permission.mjs'; import { autopilotTool, autopilotSetter, restoreAutopilot } from './autopilot.mjs';
 import { commandTools, hostBash, servicesPrompt, unsandboxedBash } from './command-tools.mjs'; import { waiveChecksTool } from './check-waiver.mjs'; import { attachMemory, memoryToolsFor, openRound, closeRound, prepareMemoryContext, trackMemoryLessons } from './memory.mjs';
 
 const PROVIDER = 'agent_watch_managed';
@@ -261,7 +261,7 @@ export class ManagedSession {
           // compared with the commit the turn started from, so a commit made
           // during the turn is still its change.
           const pending = pendingBaseline(manager);
-          self.ownPaths = new Set(pending !== null ? pendingPaths(manager) : []);
+          self.ownPaths = new Set(pending !== null ? pendingPaths(manager) : []); restoreClaims(self, manager);
           self.base = (pending !== null ? pendingHead(manager) : null) ?? await readHead(self.boundary); self.repositoryBases = await readRepositoryHeads(self.boundary);
           self.run.startDigest = pending ?? await self.digest(); await openRound(self, manager, text); // sends what waited; a new conversation gets the team brief
         } catch (error) { self.preflight = describeFailure('main', failureText(error)); }
@@ -441,12 +441,11 @@ export class ManagedSession {
     if (typeof raw !== 'string' || !raw) return;
     const value = raw.replace(/^@/, ''), file = value === '~' || value.startsWith('~/') ? path.join(this.boundary.userHome ?? os.homedir(), value.slice(1)) : value;
     const relative = path.relative(this.cwd, path.resolve(this.cwd, file));
-    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) this.ownPaths.add(relative.split(path.sep).join('/'));
+    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) for (const name of [relative.split(path.sep).join('/'), ...claimEdit(this.cwd, this.claims ??= claimState(), relative.split(path.sep).join('/'))]) this.ownPaths.add(name);
   }
-  async claimChanges(before, command = '') { // in a folder of several repositories, only the ones the command works in (claim-scope.mjs)
-    const after = before ? await this.changedFiles() : null;
-    if (!after) return;
-    for (const name of ownedChanges(this.cwd, command, [...new Set([...before.keys(), ...after.keys()])].filter(name => before.get(name) !== after.get(name)), this.ownPaths)) this.ownPaths.add(name);
+  async claimChanges(before, command = '') { // in a folder of several repositories, not another process's changes (claim-scope.mjs)
+    const after = before ? await this.changedFiles() : null, claim = after && claimCommand(this.cwd, this.claims ??= claimState(), command, before, after);
+    if (claim) { for (const name of claim.owned) this.ownPaths.add(name); await claimsSaved(this, claim.skipped); }
   }
 
   async refreshReview() {

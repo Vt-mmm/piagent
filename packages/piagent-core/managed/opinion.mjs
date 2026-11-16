@@ -55,4 +55,4 @@ export function opinionWords(opinion) {
 }
 
 // The main agent's own rule, in every mode and Harness (command-tools.mjs servicesPrompt).
-export const MAIN_OPINION_PROMPT = ' Whenever you give the member a recommendation or a choice (in ask_user, a report, a conflict between helpers), research first, put your recommendation first as option 1, and say what it rests on: file:line, a source URL, or a command and what it printed. A helper\'s point the harness marks unverified is not a fact until you checked it.';
+export const MAIN_OPINION_PROMPT = ' Answer the member in the language of their latest message (file names, commands and code stay as they are). Whenever you give the member a recommendation or a choice (in ask_user, a report, a conflict between helpers), research first, put your recommendation first as option 1, and say what it rests on: file:line, a source URL, or a command and what it printed. A helper\'s point the harness marks unverified is not a fact until you checked it.';

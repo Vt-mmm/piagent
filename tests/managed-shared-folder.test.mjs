@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { commandRepositories, ownedChanges } from '../packages/piagent-core/managed/claim-scope.mjs';
+import { claimCommand, claimEdit, claimState, commandRepositories, FOREIGN_MS, restoreWorkRepos, saveWorkRepos } from '../packages/piagent-core/managed/claim-scope.mjs';
 import { reviewOvertaken } from '../packages/piagent-core/managed/review-overtaken.mjs';
 import { turnEnd } from '../packages/piagent-core/managed/continuation.mjs';
 import { turnEndCopy, turnEndOf, turnEndShort } from '../packages/piagent-webui/shared/turn-end.ts';
@@ -17,15 +17,36 @@ const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pa-shared-fo
 for (const repo of ['app', 'portal', 'wt/ea-fe']) { fs.mkdirSync(path.join(root, repo), { recursive: true }); fs.writeFileSync(path.join(root, repo, '.git'), 'gitdir: x\n'); }
 after(() => fs.rmSync(root, { recursive: true, force: true }));
 
-test('a command owns the changes of the repositories it names or already works in', () => {
+const map = obj => new Map(Object.entries(obj));
+test('work across repositories is kept; only a repository seen changing between commands is left out', () => {
   assert.deepEqual([...commandRepositories(root, `cd ${root}/wt/ea-fe && npm test && git -C app status`)].sort(), ['app', 'wt/ea-fe']);
-  assert.deepEqual([...commandRepositories(root, 'npm test')], []);
-  const changed = ['app/src/a.ts', 'portal/shots/1.webp', 'portal/shots/2.webp', 'wt/ea-fe/src/b.tsx'];
-  assert.deepEqual(ownedChanges(root, 'cd app && npm test', changed, new Set()), ['app/src/a.ts']);
-  assert.deepEqual(ownedChanges(root, 'npm test', changed, new Set(['wt/ea-fe/src/x.ts'])), ['wt/ea-fe/src/b.tsx'], 'no repository named: the ones it already works in');
-  assert.deepEqual(ownedChanges(root, 'npm test', changed, new Set()), changed, 'nothing to go by yet: the old rule');
+  const state = claimState();
+  // A generator in the front end writes into the back end: nothing else touches app, so it is this conversation's.
+  let r = claimCommand(root, state, 'cd wt/ea-fe && npm run gen', map({}), map({ 'wt/ea-fe/src/a.ts': '1', 'app/src/gen.ts': '1' }), 1000);
+  assert.deepEqual(r.owned.sort(), ['app/src/gen.ts', 'wt/ea-fe/src/a.ts']); assert.equal(r.skipped.size, 0);
+  // Between commands portal changed (another session); this conversation's own edit in wt/ea-fe is not taken for another process.
+  claimEdit(root, state, 'wt/ea-fe/src/b.ts');
+  const before = map({ 'wt/ea-fe/src/a.ts': '1', 'app/src/gen.ts': '1', 'wt/ea-fe/src/b.ts': '1', 'portal/shot.webp': '1' });
+  r = claimCommand(root, state, 'npm test', before, map({ ...Object.fromEntries(before), 'portal/shot.webp': '2', 'portal/new.webp': '1', 'app/src/gen.ts': '2' }), 2000);
+  assert.deepEqual(r.owned, ['app/src/gen.ts'], 'app: nobody else seen there');
+  assert.deepEqual([...r.skipped], [['portal', ['portal/shot.webp', 'portal/new.webp']]]);
+  assert.ok(!state.foreign.has('wt/ea-fe'), 'its own edit is not another process');
+  // The conversation turns to portal itself: what was left out is taken back.
+  r = claimCommand(root, state, 'cd portal && npm run build', map({}), map({}), 3000);
+  assert.deepEqual(r.owned.sort(), ['portal/new.webp', 'portal/shot.webp']);
+  // Seen long ago: no longer held against the repository.
+  const old = claimState(); old.foreign.set('portal', 0); old.last = map({});
+  assert.deepEqual(claimCommand(root, old, 'make', map({}), map({ 'portal/x': '1' }), FOREIGN_MS + 1).owned, ['portal/x']);
   const single = fs.mkdtempSync(path.join(os.tmpdir(), 'pa-one-repo-')); fs.writeFileSync(path.join(single, '.git'), 'gitdir: x\n');
-  try { assert.deepEqual(ownedChanges(single, 'cd sub && x', ['a', 'b/c'], new Set()), ['a', 'b/c'], 'one repository: everything'); } finally { fs.rmSync(single, { recursive: true, force: true }); }
+  try { assert.deepEqual(claimCommand(single, claimState(), 'x', map({}), map({ a: '1', 'b/c': '1' })).owned, ['a', 'b/c'], 'one repository: everything'); } finally { fs.rmSync(single, { recursive: true, force: true }); }
+});
+
+test('the repositories worked in are kept with the conversation, not read from carried files', () => {
+  const entries = [], manager = { getEntries: () => entries, appendCustomEntry: (customType, data) => entries.push({ type: 'custom', customType, data }) };
+  const state = claimState(); claimEdit(root, state, 'app/src/a.ts');
+  const saved = saveWorkRepos(manager, state, '');
+  assert.equal(saveWorkRepos(manager, state, saved), saved); assert.equal(entries.length, 1, 'written once');
+  assert.deepEqual(restoreWorkRepos(manager), ['app']);
 });
 
 test('a review stale twice while the main agent waits stops, naming what changed', async () => {
