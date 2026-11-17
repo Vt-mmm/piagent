@@ -27,7 +27,7 @@ const api = await import(pathToFileURL(sdkPath).href);
 const factories = { read: api.createReadToolDefinition, write: api.createWriteToolDefinition,
   edit: api.createEditToolDefinition, bash: api.createBashToolDefinition,
   grep: api.createGrepToolDefinition, find: api.createFindToolDefinition, ls: api.createLsToolDefinition };
-let active = false, controller, network = false, isolated = false, docker = false, engine = false;
+let active = false, controller, network = false, isolated = false, docker = false, engine = false, command = '';
 const emit = value => process.stdout.write(JSON.stringify(value) + '\n');
 const input = createInterface({ input: process.stdin });
 input.on('line', async line => {
@@ -35,7 +35,7 @@ input.on('line', async line => {
     const message = JSON.parse(line);
     if (message.cancel === true) { controller?.abort(); return; }
     if (active || (message.name !== 'workspace' && !Object.hasOwn(factories, message.name))) throw new Error('managed-worker-request-invalid');
-    active = true; controller = new AbortController(); network = message.network === true; isolated = message.isolated === true; docker = message.docker === true; engine = message.engine === true;
+    active = true; controller = new AbortController(); network = message.network === true; isolated = message.isolated === true; docker = message.docker === true; engine = message.engine === true; command = typeof message.args?.command === 'string' ? message.args.command : '';
     if (message.name === 'workspace') {
       const { inspectManagedWorkspace, inspectManagedSource } = await import('./dist/workspace/worker.mjs');
       const assets = fileURLToPath(new URL('./dist/workspace/assets/', import.meta.url));
@@ -62,7 +62,7 @@ input.on('line', async line => {
     // returns an isError result with the same text instead: read as the throw.
     if (result?.isError === true) throw new Error((result.content ?? []).filter(part => part.type === 'text').map(part => part.text).join('\n') || 'managed-worker-failed');
     emit({ result, freshness: finishFreshness(), mutationObservation: finishObservation() });
-  } catch (error) { emit({ error: sandboxDiagnostic(error instanceof Error ? error.message : 'managed-worker-failed', { network, isolated, docker, engine }) }); }
+  } catch (error) { emit({ error: sandboxDiagnostic(error instanceof Error ? error.message : 'managed-worker-failed', { network, isolated, docker, engine, command }) }); }
   finally { if (active) { input.close(); process.stdin.destroy(); } }
 });
 process.stdin.on('end', () => controller?.abort());

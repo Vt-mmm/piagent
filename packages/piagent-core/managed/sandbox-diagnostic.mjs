@@ -24,30 +24,41 @@ const TOOLCHAIN = /Unable to locate a Java Runtime|No Java runtime present|JAVA_
 // The iOS Simulator (CoreSimulator) and Android's adb/emulator, which the
 // sandbox does not reach.
 const SIMULATOR = /CoreSimulator|simctl|Unable to boot device|Unable to lookup in current state|Failed to start launchd_sim|adb: (?:cannot connect|failed to check server version|no devices|device offline)|cannot connect to daemon|\bemulator: (?:ERROR|PANIC)|Unable to find a destination matching|xcodebuild: error: Unable to find a destination/i;
-// A Docker build's own output (BuildKit steps "#8 [3/5] RUN …", its final
-// "failed to solve"): a download there failed inside a container, whose
-// network is Docker's (its VM, DNS, a VPN such as Cloudflare WARP on the
-// Mac), not the machine's. The engine answered; the member's network may too.
-const BUILDKIT = /(?:^|\n)#\d+ (?:\[|\d)|failed to solve|did not complete successfully/i;
-// The line that says which host was not reached, quoted in the first line so
-// the agent reads the cause in a long output (2026-11-16: an agent saw only
-// the start of a build log and could not tell which download failed).
+// Docker output is long (a build, then the tests it runs) and a crawler's
+// tests print network errors of their own, so a matching word anywhere is
+// no cause (2026-11-16: a failing pytest in a --network=none container was
+// labelled "network unreachable"). Docker's note needs a step of a failed
+// build that could not reach a host ("#7 4.120 … Failed to establish a new
+// connection", then "failed to solve"): the container's network is Docker's
+// (its VM and DNS, a VPN such as Cloudflare WARP on the Mac), not the
+// machine's. Otherwise a network line counts only near the end of the output,
+// where the command failed, and never for a command run with --network=none.
+const BUILD_STEP = /^#\d+ \d+(?:\.\d+)? /, BUILD_FAILED = /failed to solve|did not complete successfully/i;
+const NO_NETWORK = /--net(?:work)?[= ]none\b|network_mode:\s*["']?none/i, TAIL_LINES = 40;
+// The line that says which host was not reached (the last one: nearest the
+// failure), quoted in the note so the agent reads the cause in a long output.
 function offlineLine(text) {
-  const line = text.split('\n').find(entry => OFFLINE.test(entry))?.trim() ?? '';
+  const line = text.split('\n').findLast(entry => OFFLINE.test(entry))?.trim() ?? '';
   return line.length > 300 ? `${line.slice(0, 300)}…` : line;
+}
+function dockerNetwork(text, command) {
+  const lines = text.split('\n'), last = lines.findLastIndex(entry => OFFLINE.test(entry));
+  if (BUILD_FAILED.test(text) && BUILD_STEP.test(lines[last].trim())) return 'build';
+  return NO_NETWORK.test(command) || lines.length - last > TAIL_LINES ? 'none' : 'machine';
 }
 // The member's sign-in, which the sandbox does not have.
 const SIGN_IN = /could not read (?:Username|Password) for|terminal prompts disabled|Authentication failed for|Permission denied \(publickey|Host key verification failed|not logged into any GitHub hosts|please run:\s+gh auth login|Could not open a connection to your authentication agent|\bENEEDAUTH\b|\bE401\b|\b401 Unauthorized|requires authentication|denied: requested access to the resource is denied|pull access denied/i;
 
-export function sandboxDiagnostic(message, { network = false, isolated = false, docker = false, engine = false } = {}) {
-  const text=String(message);
+export function sandboxDiagnostic(message, { network = false, isolated = false, docker = false, engine = false, command = '' } = {}) {
+  const text=String(message), container=docker&&!DENIAL.test(text)&&OFFLINE.test(text)?dockerNetwork(text, String(command)):null;
   if(!network&&SIMULATOR.test(text))return 'managed-simulator-unreachable: Lệnh bash trong sandbox không tới được iOS Simulator hay Android emulator. Chạy lệnh simulator (xcrun simctl, xcodebuild cho simulator, adb, emulator, ./gradlew installDebug, flutter, npx expo) bằng run_on_simulator.\n'+text;
   if(docker&&DOCKER_DAEMON.test(text))return 'managed-docker-unreachable: Lệnh chạy với Docker nhưng Docker engine không trả lời (Docker Desktop/Colima/OrbStack chưa chạy hoặc đang khởi động). Gọi start_docker để xin member duyệt mở Docker, rồi chạy lại đúng lệnh này bằng run_with_docker.\n'+text;
   if(!docker&&DOCKER_DAEMON.test(text))return (engine?'managed-docker-blocked: Lệnh bash thường không dùng được Docker trong chế độ công ty. Lệnh docker, docker compose, hoặc test cần Docker (Testcontainers) chạy qua run_with_docker để người dùng duyệt đúng lệnh đó.\n':'managed-docker-unavailable: Docker engine trên máy chưa chạy. Gọi start_docker để xin member duyệt mở Docker, rồi chạy lệnh bằng run_with_docker.\n')+text;
   if(TOOLCHAIN.test(text))return 'managed-toolchain-missing: Máy thiếu runtime/công cụ mà lệnh cần, hoặc sai version project yêu cầu. Đừng dừng ở đây: xem project cần gì (pom.xml, build.gradle, .nvmrc, .tool-versions, package.json engines…) rồi dùng run_on_host để xin member duyệt cài trên máy (ví dụ brew install openjdk@21, brew install node@22, sdk install java 21-tem), sau đó chạy lại lệnh. Nếu project build được trong Docker thì có thể đề xuất run_with_docker. Trình cài cần mật khẩu (sudo, file .pkg) thì hỏi member bằng ask_user.\n'+text;
   if(SIGN_IN.test(text))return 'managed-credentials-unavailable: Lệnh cần tài khoản đăng nhập của member (git qua HTTPS/SSH, registry riêng, image riêng), sandbox không có. git fetch dùng fetch_origin; git pull, git push, cài từ registry riêng hoặc pull image riêng thì dùng run_on_host để member duyệt chạy đúng lệnh đó trên máy bằng tài khoản của họ.\n'+text;
   if(isolated&&!/CONNECT tunnel failed|tunneling socket|statusCode=403|response 403/i.test(text)&&/ECONNREFUSED|EPERM|connect|Connection refused|could not connect|fetch failed/i.test(text))return 'managed-loopback-blocked: Máy đang chạy một proxy cục bộ, nên lệnh không có mạng cũng không được kết nối tới server trên localhost (proxy có thể đưa lệnh ra internet). Test cần server hoặc database trên localhost: dùng run_with_network để người dùng duyệt đúng lệnh đó.\n'+text;
-  if(docker&&!DENIAL.test(text)&&OFFLINE.test(text)&&BUILDKIT.test(text))return `managed-docker-network-unreachable: Docker engine chạy được, nhưng bên trong container của bước build không tới được host. Mạng trong container là mạng của Docker (VM, DNS của Docker Desktop), khác mạng của máy; trên Mac hay gặp khi bật VPN như Cloudflare WARP. Build với --network=none thì bước tải package chắc chắn lỗi, đừng dùng nó để thử. Kiểm tra bằng run_with_docker với một container nhỏ tới đúng host đó (ví dụ docker run --rm alpine nslookup <host>). Nếu cũng lỗi: hỏi member bằng ask_user, nói rõ host không tới được và gợi ý tắt VPN/WARP hoặc loại trừ mạng Docker trong VPN rồi khởi động lại Docker, kèm lựa chọn "Đã chỉnh mạng/VPN, chạy lại" và "Bỏ qua bước này". Dòng lỗi: ${offlineLine(text)}\n`+text;
+  if(container==='build')return `managed-docker-network-unreachable: Docker engine chạy được, nhưng bên trong container của bước build không tới được host. Mạng trong container là mạng của Docker (VM, DNS của Docker Desktop), khác mạng của máy; trên Mac hay gặp khi bật VPN như Cloudflare WARP. Build với --network=none thì bước tải package chắc chắn lỗi, đừng dùng nó để thử. Kiểm tra bằng run_with_docker với một container nhỏ tới đúng host đó (ví dụ docker run --rm alpine nslookup <host>). Nếu cũng lỗi: hỏi member bằng ask_user, nói rõ host không tới được và gợi ý tắt VPN/WARP hoặc loại trừ mạng Docker trong VPN rồi khởi động lại Docker, kèm lựa chọn "Đã chỉnh mạng/VPN, chạy lại" và "Bỏ qua bước này". Dòng lỗi: ${offlineLine(text)}\n`+text;
+  if(container==='none')return text;
   if(network&&!DENIAL.test(text)&&OFFLINE.test(text))return `managed-network-unreachable: Lệnh đã được duyệt và chạy có mạng nhưng không tới được host (máy offline, cần VPN/proxy công ty, hoặc sai tên host). Hỏi member bằng ask_user, kèm lựa chọn "Đã kết nối mạng/VPN, chạy lại" và "Bỏ qua bước này"; member trả lời xong thì làm theo. Dòng lỗi: ${offlineLine(text)}\n`+text;
   if(!DENIAL.test(text)&&OFFLINE.test(text))return 'managed-network-blocked: Lệnh bash thường không có mạng trong chế độ công ty. Nếu lệnh thật sự cần mạng (cài package, tải dữ liệu), dùng run_with_network để người dùng duyệt đúng lệnh đó.\n'+text;
   if(!DENIAL.test(text))return text;

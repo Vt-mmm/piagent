@@ -86,6 +86,13 @@ test('a download that fails inside a Docker build names the container network an
   assert.match(said, /^managed-docker-network-unreachable: .*--network=none.*ask_user.*Dòng lỗi: #7 4\.120 WARNING: .*Failed to establish a new connection/);
   assert.ok(said.endsWith(build), 'the whole output stays after the note');
   assert.equal(toolFailureCode(said), 'managed_docker_network_unreachable');
+  // A build that passed, then tests in a container without network: the tests' own output, no label (2026-11-16).
+  const tests = '#6 [internal] load build context\n#6 DONE 0.1s\n#9 naming to docker.io/library/vnexus-crawler-scrapling:local done\n'
+    + 'FAILED tests/test_bds_stage_local.py::test_list - httpx.ConnectError: [Errno -3] Temporary failure in name resolution (getaddrinfo)\n1 failed, 55 passed in 3.2s';
+  assert.equal(sandboxDiagnostic(tests, { network: true, docker: true, command: 'docker compose build x && docker run --rm --network=none img -m pytest -q' }), tests);
+  // A network word far above where the command failed is not the cause.
+  const early = 'retry: getaddrinfo EAI_AGAIN registry.npmjs.org\n' + Array.from({ length: 60 }, (_, i) => `line ${i}`).join('\n') + '\nAssertionError: expected 2';
+  assert.equal(sandboxDiagnostic(early, { network: true, docker: true, command: 'docker compose run --rm app npm test' }), early);
   // A host-side download in a Docker-approved command (mvnw fetching Maven) is the machine's network.
   assert.match(sandboxDiagnostic('curl: (6) Could not resolve host: repo.maven.apache.org', { network: true, docker: true }), /^managed-network-unreachable: .*ask_user.*Dòng lỗi: curl: \(6\) Could not resolve host/);
 });
