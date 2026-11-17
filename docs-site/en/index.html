@@ -36,7 +36,7 @@
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" width="28" height="28" /></span>
         <span class="brand-name"><b>Piagent</b> <span>Platform</span></span>
       </a>
-      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.54.3" title="v1.54.3 docs · EN"><span class="dot"></span>v1.54.3</a>
+      <a class="version-badge" href="/en/whats-new" data-docs-version="v1.54.4" title="v1.54.4 docs · EN"><span class="dot"></span>v1.54.4</a>
       <nav class="top-nav" aria-label="Documentation">
         <a href="/en/quickstart">Docs</a>
         <a href="/en/whats-new">Changelog</a>
@@ -56,7 +56,7 @@
   <div class="hero-bg" aria-hidden="true"></div>
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="home-wrap">
-    <a class="hero-pill" href="/en/whats-new#v1-54-3"><b>v1.54.3</b><span>Work across repositories is kept; only another process's changes are left out</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
+    <a class="hero-pill" href="/en/whats-new#v1-54-4"><b>v1.54.4</b><span>Docker failures name their real cause</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></a>
     <h1>A coding agent for the whole team, <span class="grad">checked at every step.</span></h1>
     <p class="hero-sub">A guard stops risky tool calls before they run. The team's Harness runs checks and has a subagent review the change. One dashboard for Terminal and the browser, with your model or the company's.</p>
     <div class="hero-cta">
@@ -99,7 +99,7 @@
       <div><strong><span data-count="54">54</span><em>/54</em></strong><span>tasks resolved in the production benchmark</span><small>codex-cli, same model: 48/54</small></div>
       <div><strong>−<span data-count="61">61</span><em>%</em></strong><span>fresh tokens on the same workload</span><small>95% confidence: at least −51.6%</small></div>
       <div><strong><span data-count="52">52</span><em>/52</em></strong><span>secret patterns redacted from output</span><small>0/30 ordinary texts redacted by mistake</small></div>
-      <div><strong><span data-count="152">152</span></strong><span>releases since 2026-07-21</span><small>4,400+ automated tests on macOS and Linux</small></div>
+      <div><strong><span data-count="153">153</span></strong><span>releases since 2026-07-21</span><small>4,400+ automated tests on macOS and Linux</small></div>
     </div>
   </div>
 </section>
@@ -280,6 +280,12 @@ pi                    # Terminal</code></pre></div></div>
       <p>Each release says what changed and which Studio or Agent Watch it needs. <a href="/en/whats-new">See the full changelog</a>.</p>
     </div>
     <div class="updates">
+      <a class="update" href="/en/whats-new#v1-54-4" data-reveal>
+        <span class="update-meta"><span class="release-version">v1.54.4</span>Nov 17, 2026</span>
+        <h3>Docker failures name their real cause</h3>
+        <p>A network error printed by a build or by tests in a container no longer labels a Docker command as offline; a download that fails inside a build names the container network.</p>
+        <span class="update-more">Read more <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
+      </a>
       <a class="update" href="/en/whats-new#v1-54-3" data-reveal>
         <span class="update-meta"><span class="release-version">v1.54.3</span>Nov 16, 2026</span>
         <h3>Work across repositories is kept; only another process's changes are left out</h3>
@@ -290,12 +296,6 @@ pi                    # Terminal</code></pre></div></div>
         <span class="update-meta"><span class="release-version">v1.54.2</span>Nov 16, 2026</span>
         <h3>Conversations sharing a folder no longer take each other's changes</h3>
         <p>In a folder of several repositories a conversation owns only the repositories it works in, a review overtaken by another process stops after two tries, and an unchecked turn says so.</p>
-        <span class="update-more">Read more <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
-      </a>
-      <a class="update" href="/en/whats-new#v1-54-1" data-reveal>
-        <span class="update-meta"><span class="release-version">v1.54.1</span>Nov 15, 2026</span>
-        <h3>Summaries follow each model's real context, subagents included; reviews skip image bytes</h3>
-        <p>GPT conversations are summarised before Codex refuses them, subagents are summarised too, and a review of many screenshots reads the code in a few parts.</p>
         <span class="update-more">Read more <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrow-right"/></svg></span>
       </a>
     </div>

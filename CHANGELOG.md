@@ -4,6 +4,19 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.54.4 - 2026-11-17
+
+**Docker failures name their real cause.** A network error printed by a build or by tests in a container no longer labels a Docker command as offline; a download that fails inside a build names the container network.
+
+### Improved
+
+- A download that fails inside a Docker build says the container network (Docker DNS, a VPN) is at fault, not the machine, and how to check it.
+- Network failures quote the line that names the unreachable host.
+
+### Fixed
+
+- A Docker command is labelled offline only when its failing step could not reach a host; tests in a --network=none container keep their own output.
+
 ## v1.54.3 - 2026-11-16
 
 **Work across repositories is kept; only another process's changes are left out.** In a folder of several repositories, a change is left out only when another process was seen changing that repository, and the member is told.

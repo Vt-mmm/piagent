@@ -1,5 +1,36 @@
 [
   {
+    "version": "1.54.4",
+    "date": "2026-11-17",
+    "status": "stable",
+    "title": {
+      "en": "Docker failures name their real cause",
+      "vi": "Lỗi Docker nêu đúng nguyên nhân thật"
+    },
+    "summary": {
+      "en": "A network error printed by a build or by tests in a container no longer labels a Docker command as offline; a download that fails inside a build names the container network.",
+      "vi": "Lỗi mạng do build hay test trong container in ra không còn làm lệnh Docker bị coi là mất mạng; tải hỏng trong bước build được báo là mạng của container."
+    },
+    "requires": null,
+    "items": [
+      {
+        "kind": "fixed",
+        "en": "A Docker command is labelled offline only when its failing step could not reach a host; tests in a --network=none container keep their own output.",
+        "vi": "Lệnh Docker chỉ bị coi là mất mạng khi đúng bước bị lỗi không tới được host; test trong container --network=none giữ nguyên output của nó."
+      },
+      {
+        "kind": "improved",
+        "en": "A download that fails inside a Docker build says the container network (Docker DNS, a VPN) is at fault, not the machine, and how to check it.",
+        "vi": "Tải hỏng trong bước build Docker được báo là do mạng của container (DNS của Docker, VPN), không phải máy, kèm cách kiểm tra."
+      },
+      {
+        "kind": "improved",
+        "en": "Network failures quote the line that names the unreachable host.",
+        "vi": "Lỗi mạng trích đúng dòng nêu host không tới được."
+      }
+    ]
+  },
+  {
     "version": "1.54.3",
     "date": "2026-11-16",
     "status": "stable",

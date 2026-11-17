@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.54.4`: lệnh Docker chỉ bị coi là mất mạng khi đúng bước bị lỗi không tới được host (test trong container `--network=none` giữ nguyên output); tải hỏng trong bước build báo là mạng của container (DNS của Docker, VPN); lỗi mạng trích dòng nêu host.
 - `1.54.3`: trong folder nhiều repo, chỉ bỏ thay đổi ở repo vừa thấy tiến trình khác sửa (việc làm qua nhiều repo được giữ), báo member file bị bỏ và nhận lại khi làm việc trong repo đó; danh sách repo đang làm lưu cùng cuộc trò chuyện; agent trả lời theo ngôn ngữ của member.
 - `1.54.2`: trong folder nhiều repo, cuộc trò chuyện chỉ nhận thay đổi của repo mình làm việc; review bị tiến trình khác làm cũ dừng sau hai lần và nêu tên file; lượt xong mà chưa có check pass ghi rõ; Terminal gộp review chạy lại thành một dòng.
 - `1.54.1`: tóm tắt theo context thật của từng model (GPT qua Codex ở 212k, Claude 1M ở 300k), subagent cũng được tóm tắt; review đọc ảnh, file sinh tự động và file dữ liệu lớn thành một dòng, mở tối đa 6 ảnh; receipt tách token mới, đọc lại cache và output.
