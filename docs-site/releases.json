@@ -1,6 +1,6 @@
 [
   {
-    "version": "1.55.0",
+    "version": "1.55.1",
     "date": "2026-11-18",
     "status": "stable",
     "title": {
@@ -32,6 +32,37 @@
         "vi": "Fast mode dùng được trên GPT-6.2 Astra và Sol như Studio phục vụ; tier Ultrafast của Sol không được dùng."
       }
     ]
+  },
+  {
+    "version": "1.55.0",
+    "date": "2026-11-18",
+    "status": "unpublished",
+    "title": {
+      "en": "GPT-6.2 Astra and Sol in company sessions",
+      "vi": "GPT-6.2 Astra và Sol trong session công ty"
+    },
+    "summary": {
+      "en": "Tagged but not published: a new picomatch advisory in the web build tools stopped the dependency audit. Superseded by 1.55.1.",
+      "vi": "Đã tag nhưng chưa publish: advisory picomatch mới trong công cụ build web làm kiểm tra dependency fail. Thay bằng 1.55.1."
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "GPT-6.2 Astra and Sol: 128k output, efforts low to max, list prices ($8/$40 and $2/$10 per 1M), higher rates above 272k.",
+        "vi": "GPT-6.2 Astra và Sol: output 128k, mức suy luận low đến max, giá niêm yết ($8/$40 và $2/$10 mỗi 1M), giá cao hơn khi vượt 272k."
+      },
+      {
+        "kind": "improved",
+        "en": "Both keep the 272k window of their base price; Sol stays at 272k even when a newer Pi offers 500k.",
+        "vi": "Cả hai giữ cửa sổ 272k của mức giá gốc; Sol vẫn ở 272k kể cả khi Pi mới hơn cho 500k."
+      },
+      {
+        "kind": "new",
+        "en": "Fast mode works on GPT-6.2 Astra and Sol, as Studio serves it; Sol's Ultrafast tier is not used.",
+        "vi": "Fast mode dùng được trên GPT-6.2 Astra và Sol như Studio phục vụ; tier Ultrafast của Sol không được dùng."
+      }
+    ],
+    "requires": null
   },
   {
     "version": "1.54.4",
