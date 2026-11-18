@@ -1,5 +1,39 @@
 [
   {
+    "version": "1.55.0",
+    "date": "2026-11-18",
+    "status": "stable",
+    "title": {
+      "en": "GPT-6.2 Astra and Sol in company sessions",
+      "vi": "GPT-6.2 Astra và Sol trong session công ty"
+    },
+    "summary": {
+      "en": "Company sessions run GPT-6.2 Astra and Sol through Studio with reviewed windows, prices and Fast mode, although the pinned Pi does not know them yet.",
+      "vi": "Session công ty chạy GPT-6.2 Astra và Sol qua Studio với cửa sổ, giá và Fast mode đã duyệt, dù Pi đang ghim chưa biết hai model này."
+    },
+    "requires": {
+      "en": "Agent Studio 0.55.0 for GPT-6.2 Astra and Sol",
+      "vi": "Agent Studio 0.55.0 để dùng GPT-6.2 Astra và Sol"
+    },
+    "items": [
+      {
+        "kind": "new",
+        "en": "GPT-6.2 Astra and Sol: 128k output, efforts low to max, list prices ($8/$40 and $2/$10 per 1M), higher rates above 272k.",
+        "vi": "GPT-6.2 Astra và Sol: output 128k, mức suy luận low đến max, giá niêm yết ($8/$40 và $2/$10 mỗi 1M), giá cao hơn khi vượt 272k."
+      },
+      {
+        "kind": "improved",
+        "en": "Both keep the 272k window of their base price; Sol stays at 272k even when a newer Pi offers 500k.",
+        "vi": "Cả hai giữ cửa sổ 272k của mức giá gốc; Sol vẫn ở 272k kể cả khi Pi mới hơn cho 500k."
+      },
+      {
+        "kind": "new",
+        "en": "Fast mode works on GPT-6.2 Astra and Sol, as Studio serves it; Sol's Ultrafast tier is not used.",
+        "vi": "Fast mode dùng được trên GPT-6.2 Astra và Sol như Studio phục vụ; tier Ultrafast của Sol không được dùng."
+      }
+    ]
+  },
+  {
     "version": "1.54.4",
     "date": "2026-11-17",
     "status": "stable",

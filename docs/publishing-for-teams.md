@@ -41,6 +41,7 @@ pi install /path/to/piagent
 
 ## Versioning
 
+- `1.55.0`: session công ty chạy GPT-6.2 Astra và Sol qua Studio 0.55.0 (cửa sổ 272k, giá niêm yết, Fast mode; Ultrafast không dùng).
 - `1.54.4`: lệnh Docker chỉ bị coi là mất mạng khi đúng bước bị lỗi không tới được host (test trong container `--network=none` giữ nguyên output); tải hỏng trong bước build báo là mạng của container (DNS của Docker, VPN); lỗi mạng trích dòng nêu host.
 - `1.54.3`: trong folder nhiều repo, chỉ bỏ thay đổi ở repo vừa thấy tiến trình khác sửa (việc làm qua nhiều repo được giữ), báo member file bị bỏ và nhận lại khi làm việc trong repo đó; danh sách repo đang làm lưu cùng cuộc trò chuyện; agent trả lời theo ngôn ngữ của member.
 - `1.54.2`: trong folder nhiều repo, cuộc trò chuyện chỉ nhận thay đổi của repo mình làm việc; review bị tiến trình khác làm cũ dừng sau hai lần và nêu tên file; lượt xong mà chưa có check pass ghi rõ; Terminal gộp review chạy lại thành một dòng.

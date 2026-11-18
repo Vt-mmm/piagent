@@ -4,6 +4,21 @@ Every release of Pi Agent Platform (`@piagent/platform`), newest first. Versions
 
 This file is generated from `docs-site/releases.json` by `node scripts/build-docs-site.mjs`, which also renders the [Changelog page](https://piagent.io.vn/en/whats-new). Edit the JSON, not this file. When publishing a tag, copy the version's block into the GitHub Release.
 
+## v1.55.0 - 2026-11-18
+
+**GPT-6.2 Astra and Sol in company sessions.** Company sessions run GPT-6.2 Astra and Sol through Studio with reviewed windows, prices and Fast mode, although the pinned Pi does not know them yet.
+
+### Added
+
+- GPT-6.2 Astra and Sol: 128k output, efforts low to max, list prices ($8/$40 and $2/$10 per 1M), higher rates above 272k.
+- Fast mode works on GPT-6.2 Astra and Sol, as Studio serves it; Sol's Ultrafast tier is not used.
+
+### Improved
+
+- Both keep the 272k window of their base price; Sol stays at 272k even when a newer Pi offers 500k.
+
+Requires: Agent Studio 0.55.0 for GPT-6.2 Astra and Sol.
+
 ## v1.54.4 - 2026-11-17
 
 **Docker failures name their real cause.** A network error printed by a build or by tests in a container no longer labels a Docker command as offline; a download that fails inside a build names the container network.

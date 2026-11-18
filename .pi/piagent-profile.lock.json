@@ -123,18 +123,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:77b71b9b0d9fafcc44e6152735b557bc8f78aaf8d03109e3586e4c51a8749483",
+    "packageDigest": "sha256:f988de98fda3e78c24309cd379a5c3173dd89e30d6c5083b2958ac89816fcacc",
     "packageSource": "../",
-    "packageVersion": "1.54.4",
+    "packageVersion": "1.55.0",
     "runtimeFiles": [
       {
         "byteSize": 7157,
-        "digest": "sha256:83ae3d075921c4eab03db2499ad0a4b7ac035859a91e9b8a06fefd2bec27685c",
+        "digest": "sha256:44b4e4f1b9789140d05bac0a56d1fef620dd047b0f0087d1d8d2c79ff8994523",
         "path": "package.json"
       },
       {
         "byteSize": 935,
-        "digest": "sha256:8b313dc326b5be33f20c4dd2043a7c5a67a700e43ad81386c8c8b93acae9b324",
+        "digest": "sha256:b42f2267486fe93a3df4f4c008e230888bb1d4180619031cf7c3041b64a5db81",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1338,8 +1338,8 @@
         "path": "packages/piagent-core/managed/doctor.mjs"
       },
       {
-        "byteSize": 4713,
-        "digest": "sha256:3dff25227130604ecfe8c54ab79e178b127d7b9c1aca6d0ac76feb7878ba9d50",
+        "byteSize": 4829,
+        "digest": "sha256:b9eee6f748f78ae91ff76f99d91fd9167f12427c6a91738c5224b1cbfdef47ec",
         "path": "packages/piagent-core/managed/fast-mode.mjs"
       },
       {
@@ -1448,8 +1448,8 @@
         "path": "packages/piagent-core/managed/memory.mjs"
       },
       {
-        "byteSize": 4547,
-        "digest": "sha256:f92ef2c34f97486c5b77ffee3edeb8ec0746b3e45156aa8e92014107dc680e1c",
+        "byteSize": 5462,
+        "digest": "sha256:b839ed2c08c58d655075fc7352e49229b0fdae505be4e34991a47e7ed0c75067",
         "path": "packages/piagent-core/managed/native-catalog.mjs"
       },
       {
@@ -1734,7 +1734,7 @@
       },
       {
         "byteSize": 935,
-        "digest": "sha256:8b313dc326b5be33f20c4dd2043a7c5a67a700e43ad81386c8c8b93acae9b324",
+        "digest": "sha256:b42f2267486fe93a3df4f4c008e230888bb1d4180619031cf7c3041b64a5db81",
         "path": "packages/piagent-core/package.json"
       },
       {
