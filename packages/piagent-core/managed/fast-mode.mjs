@@ -36,12 +36,13 @@ export function fastSetter(owner, manager) {
 // Where fast mode is served, as Studio admits it (ledger.FastWeightMilli; a
 // model missing here simply runs at standard speed):
 //   - Codex (Responses): service_tier "priority" on the models OpenAI's speed
-//     documentation names, checked 2026-10-13.
+//     documentation names, checked 2026-10-13; GPT-6.2 Astra and Sol added
+//     2026-11-18 (Sol's Ultrafast tier is not served).
 //   - Claude (Messages): not served. Anthropic's fast mode is another protocol
 //     (speed "fast" with a beta header, Opus 5.5 / 5 / 4.8 only) and is billed
 //     to a subscription's usage credits, outside the plan.
 //   - API-key vendors (Chat Completions): none documents a fast tier.
-const CODEX_FAST = new Set(['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.5']);
+const CODEX_FAST = new Set(['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.5']);
 export const fastServed = route => route?.provider === 'codex' && CODEX_FAST.has(route.native);
 // Studio's refusal of the tier (the Harness or the model list changed), or
 // the provider's of a request carrying it: asked again once without it.

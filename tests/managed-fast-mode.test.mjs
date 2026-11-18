@@ -47,7 +47,7 @@ test('a call of any agent on a model that serves fast mode asks for the priority
     assert.equal(fastServed(route), false, JSON.stringify(route));
     assert.equal(fastPayload(on, route, earlier), earlier, JSON.stringify(route));
   }
-  for (const native of ['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.5']) assert.equal(fastServed({provider: 'codex', native}), true, native);
+  for (const native of ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.5']) assert.equal(fastServed({provider: 'codex', native}), true, native);
 });
 
 // A Claude main agent with Codex subagents: each call takes fast mode by its own model.

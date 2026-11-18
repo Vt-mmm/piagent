@@ -132,3 +132,17 @@ test("company sessions know Claude Haiku 5.5 although the pinned Pi does not", a
   const native = { id: "claude-haiku-5-5", contextWindow: 1 };
   assert.equal(nativeManagedModel({ getModel: () => native }, "anthropic", "claude-haiku-5-5"), native, "a Pi that knows it wins");
 });
+test("company sessions know GPT-6.2 Astra and Sol at the 272k window of their base price", async () => {
+  const { nativeManagedModel } = await import("../packages/piagent-core/managed/native-catalog.mjs");
+  const runtime = { getModel: () => undefined };
+  const astra = nativeManagedModel(runtime, "openai-codex", "gpt-6.2-astra");
+  const sol = nativeManagedModel(runtime, "openai-codex", "gpt-6.2-sol");
+  assert.deepEqual([astra.name, astra.provider, astra.contextWindow, astra.maxTokens, astra.cost.input, astra.cost.output, astra.cost.cacheRead, astra.cost.tiers[0].output],
+    ["GPT-6.2 Astra", "openai-codex", 272000, 128000, 8, 40, 0.4, 60]);
+  assert.deepEqual([sol.name, sol.contextWindow, sol.cost.input, sol.cost.output, sol.cost.tiers[0].inputTokensAbove], ["GPT-6.2 Sol", 272000, 2, 10, 272000]);
+  assert.equal(astra.thinkingLevelMap.max, "max"); assert.equal(astra.thinkingLevelMap.off, null);
+  astra.cost.tiers[0].input = 99;
+  assert.equal(nativeManagedModel(runtime, "openai-codex", "gpt-6.1-sol").cost.tiers[0].input, 4, "the shared GPT-6.1 Sol shape is not changed by a caller");
+  const host = { id: "gpt-6.2-sol", contextWindow: 500000 };
+  assert.equal(nativeManagedModel({ getModel: () => host }, "openai-codex", "gpt-6.2-sol").contextWindow, 272000, "a newer Pi that offers 500k is held to 272k");
+});

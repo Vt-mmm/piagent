@@ -40,7 +40,20 @@ const sol61 = {
   compat: { supportsOpenAIGrammarTools: true, supportsAdditionalTools: true, supportsToolSearch: true, supportsMidConvoSystemMessages: true },
   inputLimits: { images: { resize: { maxWidth: 2000, maxHeight: 2000, maxBytes: 4718592, jpegQuality: 80 } } },
 };
-const GAPS = { anthropic: [sonnet55, haiku55], 'openai-codex': [sol61] };
+// GPT-6.2 Astra and Sol through Codex, released 2026-11-17, checked
+// 2026-11-18 (Pi 1.3.0 has neither): same shape as GPT-6.1 Sol. Astra keeps
+// Codex's 272k window; Sol is offered 500k but company sessions keep 272k,
+// the window of its base price, as 6.1 Sol. Astra $8/$40 per 1M, cached
+// $0.40, cache write $10; Sol $2/$10, cached $0.10, cache write $2.50. Above
+// 272k input and cache cost 2x and output 1.5x.
+// https://developers.openai.com/api/docs/models/gpt-6.2-astra
+// https://developers.openai.com/api/docs/models/gpt-6.2-sol
+const astra62 = {
+  ...sol61, id: 'gpt-6.2-astra', name: 'GPT-6.2 Astra',
+  cost: { input: 8, output: 40, cacheRead: 0.4, cacheWrite: 10, tiers: [{ inputTokensAbove: 272000, input: 16, output: 60, cacheRead: 0.8, cacheWrite: 20 }] },
+};
+const sol62 = { ...sol61, id: 'gpt-6.2-sol', name: 'GPT-6.2 Sol' };
+const GAPS = { anthropic: [sonnet55, haiku55], 'openai-codex': [sol61, sol62, astra62] };
 // Studio's providers: the Claude and Codex subscriptions, or an API-key
 // vendor (DeepSeek, Kimi, GLM, MiMo, Qwen, OpenCode, Grok) whose id is Pi's
 // own provider id; Studio runs vendors as OpenAI Chat Completions.
@@ -52,7 +65,7 @@ export function studioPath(provider) { return provider === 'claude' ? '/claude' 
 // Reviewed limits that win over a newer host catalog. Pi 1.3.0 gives Sol the
 // 500k window Codex now allows; company sessions keep 272k, the window of
 // Codex's base price (doubled above it), so a host update changes no cost.
-const CAPS = { 'openai-codex': { 'gpt-6.1-sol': 272000 } };
+const CAPS = { 'openai-codex': { 'gpt-6.1-sol': 272000, 'gpt-6.2-sol': 272000, 'gpt-6.2-astra': 272000 } };
 export function nativeManagedModel(runtime, provider, id) {
   const gap = GAPS[provider]?.find(model => model.id === id);
   const model = runtime.getModel(provider, id);
