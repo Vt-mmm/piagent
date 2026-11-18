@@ -87,7 +87,7 @@ jobs:
         run: npm run release:identity
 
       - name: Dependency audit
-        run: npm audit --audit-level=high
+        run: bash scripts/audit-repo.sh
 
       - name: Pi host and pinned add-on dependency audit
         run: npm run audit:runtime

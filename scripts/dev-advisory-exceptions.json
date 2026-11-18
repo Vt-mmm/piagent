@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "exceptions": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "node": "node_modules/picomatch",
+      "decided": "2026-11-18",
+      "until": "2026-12-02",
+      "reason": "ReDoS from a crafted extglob pattern. picomatch is reached only through the private webui's build tools (vite, @vitejs/plugin-react, json-schema-to-typescript), which run at build time on our own fixed patterns and are not in the published package; `npm audit --omit=dev` is clean. Every picomatch release up to 4.0.7 is affected and none is patched. Owner accepted 2026-11-18 to ship 1.55.0; remove when picomatch ships a fix."
+    }
+  ]
+}
